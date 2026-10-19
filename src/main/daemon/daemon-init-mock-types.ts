@@ -31,6 +31,7 @@ export type MockAdapter = {
   shutdown: Mock
   dispose: Mock
   disconnectOnly: Mock
+  hasRetiredForIdle: Mock
   onData: Mock
   onExit: Mock
   // Why: the router calls onData/onExit on each adapter; the stub returns a no-op unsubscribe so router subscription doesn't explode.

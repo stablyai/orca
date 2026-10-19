@@ -7,7 +7,7 @@ import { agentSessionFailureWords } from '../../shared/agent-session-failure-wor
 import { BoundedMap } from '../../shared/bounded-map'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
-import { AcpAgentError, AcpAuthRequiredError } from './acp-errors'
+import { AcpAgentError, AcpAuthRequiredError, AcpSignInPromptError } from './acp-errors'
 import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 
 /** Ends the provider failed, rather than ones it chose (a refusal, a token limit). */
@@ -20,6 +20,10 @@ function acpStopReasonFailed(stopReason: string): boolean {
 /** The provider's words in its error answer to `session/prompt`. Agents often answer a generic
  *  message ("Internal error") and keep their own words in `data`. */
 export function acpPromptErrorDetail(dialect: AcpDialect, error: AcpAgentError): string {
+  // Empty: the sign-in sentence alone says what to do.
+  if (error instanceof AcpSignInPromptError) {
+    return ''
+  }
   return dialect.promptErrorDetail?.(error) ?? acpErrorDataWords(error.data) ?? error.message
 }
 

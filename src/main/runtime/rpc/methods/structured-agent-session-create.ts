@@ -20,11 +20,18 @@ import type {
 } from '../../../../shared/structured-agent-session-create'
 import { structuredAgentSessionOptionOverridesRefusal } from '../../../native-chat/agent-session-wire/structured-agent-session-options-read'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import {
+  captureStructuredAgentCliSource,
+  type StructuredAgentCliSourceEvidence
+} from '../../../native-chat/structured-agent-cli-source'
 import type { StructuredAgentId } from '../../../../shared/agent-session-provider-handle'
 import {
   resolveUncommittedStructuredCreate,
   type StructuredCreateRefused
 } from './structured-agent-session-precommit-refusal'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
+import { structuredLaunchSeedOnSavedListing } from '../../session-tabs/structured-launch-seed-listing'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
@@ -71,6 +78,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   agent: StructuredAgentId
   caller: StructuredAgentSessionCaller
   resumeFrom?: StructuredAgentSessionResumeSource
+  structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
   options?: Readonly<Record<string, string>>
   /** The tab id the caller reserved for this chat, taken when its tab is published; absent, the tab
@@ -79,6 +87,11 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   firstMessage?: StructuredAgentSessionFirstMessage
   atRest?: boolean
 }): Promise<PreparedStructuredAgentSessionCreate> {
+  const structuredAgentCliSourceEvidence =
+    args.structuredAgentCliSourceEvidence ??
+    (args.resumeFrom?.cliSource
+      ? captureStructuredAgentCliSource(() => args.runtime.getAgentProviderSessionRows())
+      : undefined)
   // Adoption replay may need the record loaded from disk before source discovery can be skipped.
   let host = args.resumeFrom ? await args.ensureHost() : null
   const resolved = await args.runtime.resolveStructuredAgentSessionCreateIntent({
@@ -86,6 +99,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     worktree: args.worktree,
     agent: args.agent,
     callerKey: args.caller.callerKey,
+    structuredAgentCliSourceEvidence,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
   })
   const attachFingerprint = computeAgentSessionPayloadFingerprint({
@@ -124,20 +138,26 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     hostLaunchDirectory,
     ...resolvedAttach
   } = resolved
+  // The ledger covers explicit overrides, never defaults that settings can change on replay.
+  // Explicit picks replace the saved selection; the permission default is the chat's own.
+  const picked = args.options
+    ? atRest
+      ? { ...resolved.options, ...args.options }
+      : { ...seededPermissionMode(resolved.options), ...args.options }
+    : resolved.options
+  // After the fingerprints: a remembered model the saved listing no longer names moves, with the
+  // effort the create runs under it. A model the create names itself is never moved.
+  const options = args.options?.model
+    ? picked
+    : await structuredLaunchSeedOnSavedListing(host, args.agent, picked, () =>
+        args.runtime.resolveStructuredAgentSessionLocalWorkspacePath(args.worktree)
+      )
   return {
     host,
     ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
     attachParams: {
       ...resolvedAttach,
-      // The ledger covers explicit overrides, never defaults that settings can change on replay.
-      // Explicit picks replace the saved selection; the permission default is the chat's own.
-      ...(args.options
-        ? {
-            options: atRest
-              ? { ...resolved.options, ...args.options }
-              : { ...seededPermissionMode(resolved.options), ...args.options }
-          }
-        : {}),
+      ...(options ? { options } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
       agent: resolved.agent,
@@ -168,16 +188,20 @@ export async function commitStructuredAgentSessionCreate(args: {
         : {}),
       ...(tab
         ? {
+            // A chat closed while it was being made gets no tab to show before main closes it.
             publishTab: () =>
-              args.runtime.publishStructuredAgentSessionTab({
-                workspaceId: tab.workspaceId,
-                sessionId: prepared.attachParams.envelope.sessionId,
-                agent: tab.agent,
-                activate: args.activate,
-                ...(prepared.attachParams.surfaceTabId
-                  ? { tabId: prepared.attachParams.surfaceTabId }
-                  : {})
-              })
+              ORCA_LAYOUT_OWNER_IS_MAIN &&
+              structuredAgentSessionClosedBeforeCreate(prepared.attachParams.envelope.sessionId)
+                ? Promise.resolve()
+                : args.runtime.publishStructuredAgentSessionTab({
+                    workspaceId: tab.workspaceId,
+                    sessionId: prepared.attachParams.envelope.sessionId,
+                    agent: tab.agent,
+                    activate: args.activate,
+                    ...(prepared.attachParams.surfaceTabId
+                      ? { tabId: prepared.attachParams.surfaceTabId }
+                      : {})
+                  })
           }
         : {})
     })
@@ -188,6 +212,13 @@ export async function commitStructuredAgentSessionCreate(args: {
       })
     : await prepared.host.attach(args.caller, prepared.attachParams)
   if (!result.ok || !prepared.tab) {
+    return result
+  }
+  // A chat closed while it was being made gets no tab to show before main closes it.
+  if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    structuredAgentSessionClosedBeforeCreate(result.value.sessionId)
+  ) {
     return result
   }
   const surfaceTabId = prepared.attachParams.surfaceTabId

@@ -1,3 +1,4 @@
+import '../runtime/desktop-browser-bridge/desktop-browser-bridge-allowlist.spec'
 import { mkdtempSync } from 'node:fs'
 import { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
@@ -228,6 +229,9 @@ function createMockGuest(
   return {
     guest,
     sendCommandMock,
+    setTree(tree: AXNode[]) {
+      currentTree = tree
+    },
     emitDebugger(event: string, ...args: unknown[]) {
       for (const handler of debuggerListeners.get(event) ?? []) {
         handler(...args)
@@ -464,7 +468,7 @@ describe('Browser automation pipeline (integration)', () => {
   // ── Fill ──
 
   it('chunks large browser fill text before CDP insertText', async () => {
-    await rpc('browser.goto', { url: 'https://search.example.com' })
+    activeGuestHarness.setTree(SEARCH_PAGE_TREE)
     await rpc('browser.snapshot')
 
     const text = 'x'.repeat(BROWSER_TEXT_INSERT_CHUNK_BYTES + 5)

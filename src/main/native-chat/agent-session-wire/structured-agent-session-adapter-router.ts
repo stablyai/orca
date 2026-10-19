@@ -5,16 +5,18 @@ import type {
   AgentSessionExecutionLocation
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type { StructuredAgentSessionAcquisitionReceipt } from './structured-agent-session-startup-attempt-contract'
 import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
 import type {
   StructuredAgentRegistration,
   StructuredAgentRegistry
 } from './structured-agent-registry'
 
-type SessionRoute = {
-  registration: StructuredAgentRegistration
-  state: 'live' | 'stopped'
-}
+import {
+  acquireSessionRoute,
+  releaseSessionRoute,
+  type SessionRoute
+} from './structured-agent-session-acquisition-route'
 
 /** Routes each session to the adapter its agent is registered with. Adding an agent is one more
  *  registration; nothing here names one. */
@@ -44,28 +46,19 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
       throw new Error('structured session adapter router is closed')
     }
     const registration = this.requireAgent(input.identity)
-    const acquired = await registration.adapter.acquire(input)
-    if (this.allAdaptersClosed) {
-      throw new Error('structured session adapter router is closed')
-    }
-    this.routes.set(input.identity.sessionId, { registration, state: 'live' })
-    return acquired
+    return acquireSessionRoute(input, registration, this.routes, () => this.allAdaptersClosed)
   }
 
   async releaseAcquisition(input: { sessionId: string }): Promise<boolean> {
-    const route = this.routes.get(input.sessionId)
-    if (route) {
-      try {
-        return (await route.registration.adapter.releaseAcquisition?.(input)) === true
-      } finally {
-        this.routes.delete(input.sessionId)
-      }
+    return releaseSessionRoute(input, this.routes, () => this.adapters())
+  }
+
+  open: NonNullable<StructuredAgentSessionAdapter['open']> = (input) => {
+    const adapter = this.owner(input.sessionId)
+    if (!adapter.open) {
+      return Promise.reject(new Error('The provider cannot open a published child.'))
     }
-    let released = false
-    for (const candidate of this.adapters()) {
-      released = (await candidate.releaseAcquisition?.(input)) === true || released
-    }
-    return released
+    return adapter.open(input)
   }
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
@@ -124,6 +117,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 
+  heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
+    this.liveOwnerOrNull(sessionId)?.heldSends?.(sessionId)
+
   holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsLiveProviderProcess?.(sessionId, acquisitionGeneration) ??
     false
@@ -163,8 +159,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     this.owner(input.sessionId).setOption(input)
 
-  awaitOptionWritable = (sessionId: string): Promise<void> =>
-    this.liveOwnerOrNull(sessionId)?.awaitOptionWritable?.(sessionId) ?? Promise.resolve()
   startAnswered = (sessionId: string): boolean | undefined =>
     this.liveOwnerOrNull(sessionId)?.startAnswered?.(sessionId)
 
@@ -233,6 +227,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     if (route.state === 'stopped') {
       return true
     }
+    if (route.state === 'acquiring') {
+      return this.releaseAcquisition({ sessionId })
+    }
     const { adapter } = route.registration
     const stop = selectStop(adapter)
     const stopped = await stop?.call(adapter, sessionId)
@@ -241,6 +238,21 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
       return true
     }
     return false
+  }
+
+  hasOwnedAcquisition = (sessionId: string): boolean => {
+    const route = this.routes.get(sessionId)
+    return (
+      (route?.state === 'stopped' && !!route.acquisition) ||
+      route?.registration.adapter.hasOwnedAcquisition?.(sessionId) === true
+    )
+  }
+
+  stoppedAcquisition = (
+    sessionId: string
+  ): StructuredAgentSessionAcquisitionReceipt | undefined => {
+    const route = this.routes.get(sessionId)
+    return route?.state === 'stopped' ? route.acquisition : undefined
   }
 
   async closeAll(): Promise<void> {
@@ -269,8 +281,13 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   }
 
   /** Drops a per-session stop receipt after the host releases its durable owner. */
-  acknowledgeSessionRelease = (sessionId: string): void => {
-    this.routes.delete(sessionId)
+  acknowledgeSessionRelease = (
+    sessionId: string,
+    acquisition?: StructuredAgentSessionAcquisitionReceipt
+  ): void => {
+    if (!acquisition || this.stoppedAcquisition(sessionId) === acquisition) {
+      this.routes.delete(sessionId)
+    }
   }
 
   private owner(sessionId: string): StructuredAgentSessionAdapter {

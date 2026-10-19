@@ -6,13 +6,19 @@ import {
   type NativeChatAttachmentOwner
 } from './native-chat-attachment-upload'
 
-type ClipboardImageOwner = Extract<NativeChatAttachmentOwner, { kind: 'local' | 'runtime-session' }>
+type ClipboardImageOwner =
+  | Extract<NativeChatAttachmentOwner, { kind: 'local' | 'runtime-session' }>
+  | { kind: 'remote'; clipboardImageEnvironmentId: string }
 
 /** Owners whose attachment path is a file this client can write right now. */
 export function ownerAcceptsClipboardImage(
   owner: NativeChatAttachmentOwner
 ): owner is ClipboardImageOwner {
-  return owner.kind === 'local' || owner.kind === 'runtime-session'
+  return (
+    owner.kind === 'local' ||
+    owner.kind === 'runtime-session' ||
+    (owner.kind === 'remote' && Boolean(owner.clipboardImageEnvironmentId))
+  )
 }
 
 /** Where the clipboard image is saved: this machine, or the chat's store on its paired server,
@@ -25,6 +31,10 @@ async function clipboardImageSaveArgs(
 > {
   if (owner.kind === 'local') {
     return { ok: true, args: { forNativeChatDraft: true } }
+  }
+  // A terminal-backed chat's agent reads the path from the server's own temp dir, as a terminal paste does.
+  if (owner.kind === 'remote') {
+    return { ok: true, args: { runtimeEnvironmentId: owner.clipboardImageEnvironmentId } }
   }
   const prepared = await prepareNativeChatSessionAttachmentUpload(owner)
   if (!prepared.ok) {
@@ -56,8 +66,7 @@ export async function saveNativeChatClipboardImage(
     return { status: 'failed' }
   }
   try {
-    // SSH panes save the image on the remote host (SFTP) so the attached
-    // path is readable by the remote agent, matching terminal image paste.
+    // Remote panes save the image on the agent's host so the attached path is readable there.
     const target = await clipboardImageSaveArgs(owner)
     if (!target.ok) {
       report.setNotice(target.notice, target.cause)
@@ -80,4 +89,30 @@ export async function saveNativeChatClipboardImage(
     )
     return { status: 'failed' }
   }
+}
+
+/** A paste's save. Beside pasted text, a server too old to store the image drops only the image
+ *  rendition quietly, as an owner that takes no images does. */
+export function saveNativeChatPastedClipboardImage(
+  owner: NativeChatAttachmentOwner,
+  paste: {
+    besideText: boolean
+    canNotify: () => boolean
+    setNotice: (notice: string, errorText?: string) => void
+    ready?: () => void
+  }
+): ReturnType<typeof saveNativeChatClipboardImage> {
+  return saveNativeChatClipboardImage(owner, {
+    ready: paste.ready,
+    setNotice: (notice, cause, errorText) => {
+      if ((cause === 'serverTooOld' && paste.besideText) || !paste.canNotify()) {
+        return
+      }
+      if (errorText) {
+        paste.setNotice(notice, errorText)
+      } else {
+        paste.setNotice(notice)
+      }
+    }
+  })
 }

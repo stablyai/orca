@@ -163,8 +163,8 @@ export function useFileExplorerWatch({
         expandedRef.current.has(dirPath),
       dirConcurrency: fileExplorerRefreshConcurrency(owner),
       // Why 0ms for every transport: each producer already flushes on the shared
-      // WATCH_BATCH_* window — local/SSH via filesystem-watcher, runtime files.watch via
-      // createFileWatchEventBatcher — so a second 150ms here only adds latency, not coalescing.
+      // watch batch window — local/SSH via filesystem-watcher, runtime files.watch via
+      // createFileWatchEventBatcher — so a second window here only adds latency, not coalescing.
       // A new transport must batch at the producer before joining this path.
       trailingMs: 0,
       maxWaitMs: 0

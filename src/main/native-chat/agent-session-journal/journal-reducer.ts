@@ -32,6 +32,7 @@ import { acceptSubmissionFromProviderItem, applyJournalSubmission } from './jour
 import { applyJournalDispatchRow } from './journal-dispatch-reducer'
 import { isWriteFailureSubmission } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { projectJournalStopNote } from './journal-stop-note-projection'
+import { journalItemExecutionFence } from './journal-item-provenance'
 import { retireRewoundJournalSubmission } from './journal-rewind-submission-retirement'
 import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session-context-clear'
 import {
@@ -54,6 +55,8 @@ export type JournalReducerState = {
   /** Each item's execution provenance (`JournalItemRow.ownerFence`): the generation whose work it
    *  is, which decides whether it is current. */
   itemFences: Map<string, number>
+  /** The run executing a reusable child's item now (`JournalItemRow.executionOwner`), when one said. */
+  itemExecutionOwners: Map<string, number>
   /** Latest saved output per owner, rebuilt during the existing row fold. */
   providerActivityAt: Map<number, number>
   /** Revision of a removed item, so a late lower revision cannot resurrect it. */
@@ -86,6 +89,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     highestFence: 0,
     items: new Map(),
     itemFences: new Map(),
+    itemExecutionOwners: new Map(),
     providerActivityAt: new Map(),
     tombstones: new Map(),
     removedTurnIds: new Set(),
@@ -122,9 +126,9 @@ export function applyJournalRow(
       itemId,
       row.revision,
       journalRenderItem(itemId, row.revision, row.body, row, statedOrDerivedTurnScope(state, row)),
-      { fence: row.fence, ownerFence: row.ownerFence }
+      { fence: row.fence, ownerFence: row.ownerFence, executionOwner: row.executionOwner }
     )
-    const fence = state.itemFences.get(itemId) ?? row.fence
+    const fence = journalItemExecutionFence(state, itemId) ?? row.fence
     observeJournalProviderActivity(state, row, row.itemId, row.body, savedAt, fence)
     return
   }
@@ -158,7 +162,7 @@ export function applyJournalRow(
           fence: row.fence,
           ownerFence: mutation.ownerFence
         })
-        const fence = state.itemFences.get(itemId) ?? row.fence
+        const fence = journalItemExecutionFence(state, itemId) ?? row.fence
         observeJournalProviderActivity(state, row, mutation.itemId, body, savedAt, fence)
       } else {
         removeJournalItem(state, resolveItemId(state, mutation.itemId), mutation.revision)

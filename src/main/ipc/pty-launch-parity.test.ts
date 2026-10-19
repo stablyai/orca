@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { classifyErrorMock, trackMock } from './pty-ipc-mock-registry'
+import { classifyErrorMock, statSyncMock, trackMock } from './pty-ipc-mock-registry'
 import {
   providerFacts,
   recordOf,
@@ -11,9 +11,12 @@ import {
 } from './pty-launch-parity.test-fixture'
 import {
   POSIX_PATH,
-  WINDOW_LAUNCH_CASES
+  WIN_PATH,
+  WINDOW_LAUNCH_CASES,
+  WSL_PATH
 } from '../../shared/launch-parity-window-cases.test-fixture'
 import { PLUS_LAUNCH_CASES } from '../../shared/launch-parity-plus-cases.test-fixture'
+import { WORKSPACE_START_LAUNCH_CASES } from '../../shared/launch-parity-workspace-start-cases.test-fixture'
 import {
   expectedWindowProvider,
   launchWorkspaceId,
@@ -53,6 +56,7 @@ import {
   resolveOpenCodeDirectModelExecutable
 } from '../opencode/opencode-model-availability'
 import { probeOpenCodeLaunchModelContext } from '../opencode/opencode-launch-model-context'
+import { readOpenSshDefaultShell } from '../../shared/openssh-default-shell'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -120,6 +124,8 @@ vi.mock('../antigravity/native-account-launch', () => ({
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
+// Why: the OpenSSH DefaultShell registry read; only a managed SSH host's case answers it.
+vi.mock('../../shared/openssh-default-shell', () => ({ readOpenSshDefaultShell: vi.fn(() => '') }))
 
 type WindowLaneCase = {
   label: string
@@ -133,7 +139,7 @@ type WindowLaneCase = {
 }
 
 const WINDOW_LANE_CASES: WindowLaneCase[] = [
-  ...[...WINDOW_LAUNCH_CASES, ...PLUS_LAUNCH_CASES].map((c) => ({
+  ...[...WINDOW_LAUNCH_CASES, ...PLUS_LAUNCH_CASES, ...WORKSPACE_START_LAUNCH_CASES].map((c) => ({
     ...c,
     label: `row ${c.row}: ${c.name}`,
     request: windowSpawnRequest(c),
@@ -147,7 +153,7 @@ const WINDOW_LANE_CASES: WindowLaneCase[] = [
   }))
 ]
 
-// Pins main's current launch behaviour as the convergence parity baseline (rows 1, 2, 5 and 6, main
+// Pins main's current launch behaviour as the convergence parity baseline (rows 1, 2, 5, 6 and 8, main
 // half): each table request, fed to pty:spawn, reaches the provider with these facts (the pane's
 // measured size, never hidden), one agent_started, and a pane binding.
 // C2 (row 1), C5a-e and C6 check the merged spawn pipeline against it.
@@ -427,6 +433,30 @@ describe('launch facts outside the tables', () => {
     expect(lanes.reveal.mock.calls[0]?.[1]).not.toHaveProperty('presentation')
   })
 
+  // createAgentSession on the host planner keeps this refusal when no launch can be built.
+  it('row 7: a paired agent session with no buildable launch refuses before any spawn', async () => {
+    setMainPlatform('linux')
+    const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
+    const aiderDraft: HostLaunchCase = {
+      ...WORKER,
+      row: '7',
+      call: {
+        kind: 'rpc',
+        method: 'terminal.createAgentSession',
+        params: {
+          worktree: `id:${launchWorkspaceId(POSIX_REPO)}`,
+          agent: 'aider',
+          prompt: 'fix it',
+          promptDelivery: 'draft'
+        }
+      }
+    }
+    await expect(runHostCall(lanes, aiderDraft)).rejects.toMatchObject({
+      message: 'agent_session_identity_required'
+    })
+    expect(lanes.provider).not.toHaveBeenCalled()
+  })
+
   // C5c (pane identity built once in main): main rewrites stale pane keys from the request's tab and
   // leaf; workspace keys pass.
   it('window lane: the provider gets the pane keys main derives, not the stale ones sent', async () => {
@@ -449,5 +479,114 @@ describe('launch facts outside the tables', () => {
       ORCA_PANE_KEY: `${tabId}:${leafId}`,
       ORCA_TAB_ID: tabId
     })
+  })
+})
+
+const WSL_UBUNTU = { kind: 'wsl', distro: 'Ubuntu' } as const
+// What the renderer sends for a WSL project (it reads a never-saved \\wsl$ path the same way).
+const WSL_PROJECT_SENT = {
+  status: 'resolved',
+  runtime: {
+    kind: 'wsl',
+    hostPlatform: 'wsl',
+    projectId: 'repo-1',
+    distro: 'Ubuntu',
+    reason: 'project-override',
+    cacheKey: 'repo-1:wsl:Ubuntu'
+  }
+}
+const LOGIN_SHELL = String.raw`C:\Program Files\PowerShell\7\pwsh.exe`
+
+// Pins main's current spawn preflight (row 3, C5b): where the two lanes resolve a plain terminal's
+// start differently today. Row 13a removes the missing-folder split; row 13b the runtime split.
+describe('spawn preflight: where the lanes differ today', () => {
+  const suite = setupPtyIpcSuite()
+  afterEach(() => {
+    restoreMainPlatform()
+    vi.unstubAllEnvs()
+  })
+
+  async function spawnBoth(
+    lanes: ParityLanes,
+    workspace: LaunchWorkspace,
+    window: Record<string, unknown>,
+    host: Record<string, unknown> = {}
+  ): Promise<Record<'window' | 'host', Record<string, unknown>>> {
+    const worktreeId = launchWorkspaceId(workspace)
+    const result = recordOf(
+      await lanes.spawnWindow({ cols: 80, rows: 24, cwd: workspace.path, worktreeId, ...window })
+    )
+    const windowFacts = { ...(await providerFacts(lanes.provider)), result }
+    await lanes.runtime.createTerminal(`id:${worktreeId}`, host)
+    return { window: windowFacts, host: await providerFacts(lanes.provider) }
+  }
+
+  // The host hands the provider the missing folder, and the provider's own check then refuses it
+  // ("Working directory ... does not exist").
+  it('a deleted folder: the window starts in the workspace root and says so; the host does not', async () => {
+    setMainPlatform('darwin')
+    const missing = `${POSIX_PATH}/deleted`
+    statSyncMock.mockImplementation((target: string) => {
+      if (target === missing) {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return { isDirectory: () => true, mode: 0o755 }
+    })
+    const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
+    const facts = await spawnBoth(
+      lanes,
+      POSIX_REPO,
+      { cwd: missing, cwdFallback: 'worktree' },
+      { cwd: missing }
+    )
+
+    expect(facts.window).toMatchObject({
+      cwd: POSIX_PATH,
+      result: { startupCwdFallback: { kind: 'worktree', cwd: POSIX_PATH } }
+    })
+    expect(facts.host).toMatchObject({ cwd: missing })
+  })
+
+  it.each([
+    {
+      name: 'a folder containing a WSL-project repo',
+      workspace: {
+        kind: 'folder',
+        path: String.raw`C:\Users\alice`,
+        repoPath: WIN_PATH,
+        projectRuntime: WSL_UBUNTU
+      } satisfies LaunchWorkspace,
+      host: { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null }
+    },
+    {
+      name: 'a \\wsl$ repo with no saved runtime',
+      workspace: { kind: 'repo', path: WSL_PATH } satisfies LaunchWorkspace,
+      // The distro comes from the path, but the shell stays the settings' PowerShell.
+      host: { shellOverride: 'powershell.exe', terminalWindowsWslDistro: 'Ubuntu' }
+    }
+  ])('Windows plain terminal, $name: the window uses the sent runtime', async (c) => {
+    setMainPlatform('win32')
+    const lanes = startParityLanes(suite, { workspace: c.workspace })
+    const facts = await spawnBoth(lanes, c.workspace, { projectRuntime: WSL_PROJECT_SENT })
+
+    expect(facts.window).toMatchObject({
+      shellOverride: 'wsl.exe',
+      terminalWindowsWslDistro: 'Ubuntu'
+    })
+    expect(facts.host).toMatchObject(c.host)
+  })
+
+  // One resolution reads it for both lanes. Only an SSH-launched orcad has this env, and it has no
+  // window (no pty:spawn), so the window lane never meets it in practice.
+  it('Windows managed SSH host: both lanes open the OpenSSH login shell', async () => {
+    setMainPlatform('win32')
+    vi.stubEnv('ORCA_ORCAD_MANAGED_ACTIVATION_ROOT', '/activation')
+    vi.mocked(readOpenSshDefaultShell).mockReturnValue(LOGIN_SHELL)
+    const workspace = { kind: 'repo', path: WIN_PATH } satisfies LaunchWorkspace
+    const lanes = startParityLanes(suite, { workspace })
+    const facts = await spawnBoth(lanes, workspace, {})
+
+    expect(facts.window).toMatchObject({ shellOverride: LOGIN_SHELL })
+    expect(facts.host).toMatchObject({ shellOverride: LOGIN_SHELL })
   })
 })

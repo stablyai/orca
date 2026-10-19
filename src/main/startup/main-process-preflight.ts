@@ -75,7 +75,7 @@ import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem-watcher'
 import { setDefaultProxySessionResolver } from '../network/proxy-settings'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence'
 import { applyMacPressAndHoldDefaultAtStartup } from '../macos-press-and-hold-default'
-import { initSessionParseCachePersistence } from '../ai-vault/session-parse-cache-persistence'
+import { configureSessionParseCachePersistence } from '../ai-vault/session-parse-cache-persistence'
 import { initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { recoverPendingProfileProjectMoves } from '../orca-profiles/profile-project-move-intent'
@@ -340,7 +340,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // itself lands for the next launch (see macos-press-and-hold-default.ts).
   applyMacPressAndHoldDefaultAtStartup(getCanonicalUserDataPath())
   // Why: use the canonical userData path — late app.getPath('userData') can resolve differently across restarts, defeating persistence.
-  initSessionParseCachePersistence({
+  configureSessionParseCachePersistence({
     filePath: join(getCanonicalUserDataPath(), 'ai-vault', 'session-parse-cache.json'),
     appVersion: app.getVersion()
   })

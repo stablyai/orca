@@ -47,6 +47,12 @@ export function nativeChatPermissionModeDescription(
         "Asks before edits and commands your settings don't allow"
       )
     case 'accept-edits':
+      if (agent === 'antigravity') {
+        return translate(
+          'components.native-chat.composer.permissionAcceptEditsAntigravityDescription',
+          'Approves file edits; asks for the rest'
+        )
+      }
       return translate(
         'components.native-chat.composer.permissionAcceptEditsDescription',
         'Approves file edits and file commands; asks for the rest'

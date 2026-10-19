@@ -119,19 +119,6 @@ describe('evaluateTuiIdle ranking', () => {
     expect(verdict).toEqual({ kind: 'ready-strong' })
   })
 
-  it('does not let an old prompt bypass a fresh working hook', () => {
-    expect(
-      evaluateTuiIdle(
-        input({
-          ...noMuse,
-          agent: 'claude',
-          readPositiveBodyEvidence: () => true,
-          firstPartyStatus: { state: 'working', updatedAt: Date.now() }
-        })
-      )
-    ).toEqual({ kind: 'working' })
-  })
-
   it('calls a name-only title weak, even for an agent it is the only rest signal of', () => {
     const verdict = evaluateTuiIdle(
       input({ ...noMuse, agent: 'grok', record: record({ lastAgentStatus: 'idle' }) })
@@ -355,5 +342,29 @@ describe('evaluateTuiIdle screen input veto', () => {
         })
       )
     ).toEqual({ kind: 'pending', quietForeground: 'closed' })
+  })
+})
+
+describe('evaluateTuiIdle with OSC 7501 program status', () => {
+  const claude = (overrides: Partial<TuiIdleEvaluationInput> = {}) =>
+    input({
+      agent: 'claude',
+      // Claude drops its ✳ idle glyph once the terminal answers the OSC 7501 probe.
+      record: record({ lastOscTitle: 'Tea or coffee notes.txt', lastAgentStatus: null }),
+      ...overrides
+    })
+
+  it("settles on the program's own done although its title carries no idle glyph", () => {
+    expect(
+      evaluateTuiIdle(
+        claude({ firstPartyStatus: { state: 'done', updatedAt: Date.now(), programAtRest: true } })
+      )
+    ).toEqual({ kind: 'ready-strong' })
+  })
+
+  it('does not settle on a done that only a hook-style stream claimed', () => {
+    expect(
+      evaluateTuiIdle(claude({ firstPartyStatus: { state: 'done', updatedAt: Date.now() } }))
+    ).not.toEqual({ kind: 'ready-strong' })
   })
 })

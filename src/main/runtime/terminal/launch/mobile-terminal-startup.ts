@@ -2,9 +2,19 @@ import { OrcaRuntimeWithRunCreateMobileSessionTerminal } from './mobile-terminal
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import {
+  isResumableTuiAgent,
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig,
+  type SleepingAgentSessionRecord
+} from '../../../../shared/agent-session-resume'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
+import {
+  buildAgentResumeStartupPlan,
+  buildAgentStartupPlan
+} from '../../../../shared/tui-agent-startup'
+import { resolveResumeLaunchRecipe } from '../../../../shared/tui-agent-launch-defaults'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
 import {
   agentLaunchQuotingShell,
@@ -33,7 +43,62 @@ export type MobileTerminalCommand = {
   launchRuntime?: AgentLaunchRuntime
 }
 
+export type MobileTerminalResumeCommand = MobileTerminalCommand & {
+  command: string
+  resumeProviderSession: AgentProviderSessionMetadata
+}
+
+function normalizeOriginConnectionId(connectionId: string | null | undefined): string | null {
+  return connectionId?.trim() || null
+}
+
 export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRuntimeWithRunCreateMobileSessionTerminal {
+  /** The `--resume` launch for a pane's recorded agent session, as the host window's cold restore builds it. */
+  protected resolveMobileSessionResumeCommand(
+    workspace: TerminalWorkspaceLaunchScope,
+    record: SleepingAgentSessionRecord
+  ): MobileTerminalResumeCommand | null {
+    const providerSession = normalizeAgentProviderSession(record.providerSession)
+    if (!this.store || !providerSession || !isResumableTuiAgent(record.agent)) {
+      return null
+    }
+    // Why: a session id names a transcript on the machine that captured it; elsewhere it cannot resume.
+    if (
+      record.connectionId !== undefined &&
+      normalizeOriginConnectionId(record.connectionId) !==
+        normalizeOriginConnectionId(workspace.connectionId)
+    ) {
+      return null
+    }
+    const settings = this.store.getSettings()
+    if (!isTuiAgentEnabled(record.agent, settings.disabledTuiAgents)) {
+      return null
+    }
+    const launchRuntime = this.resolveAgentLaunchRuntime(workspace, record.agent)
+    const { launchConfig } = record
+    const startupPlan = buildAgentResumeStartupPlan({
+      agent: record.agent,
+      providerSession,
+      cmdOverrides: settings.agentCmdOverrides ?? {},
+      ...resolveResumeLaunchRecipe(launchConfig),
+      platform: launchRuntime.platform,
+      shell: agentLaunchQuotingShell(launchRuntime),
+      isRemote: Boolean(workspace.connectionId)
+    })
+    if (!startupPlan) {
+      return null
+    }
+    return {
+      command: startupPlan.launchCommand,
+      env: startupPlan.env,
+      launchConfig: startupPlan.launchConfig,
+      launchAgent: record.agent,
+      startupCommandDelivery: startupPlan.startupCommandDelivery,
+      launchRuntime,
+      resumeProviderSession: providerSession
+    }
+  }
+
   protected async resolveMobileSessionTerminalCommand(
     workspace: TerminalWorkspaceLaunchScope,
     opts: MobileTerminalCommandOptions

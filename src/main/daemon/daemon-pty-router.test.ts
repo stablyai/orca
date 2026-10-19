@@ -463,11 +463,13 @@ describe('DaemonPtyRouter', () => {
 
   it('drops a legacy mapping after the routed session exits', async () => {
     const current = createAdapter('current')
-    const legacy = createAdapter('legacy', ['legacy-session'])
+    const legacySessions = ['legacy-session']
+    const legacy = createAdapter('legacy', legacySessions)
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
     await router.discoverLegacySessions()
 
+    legacySessions.length = 0
     legacy.emitExit('legacy-session', 0)
     await router.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
 

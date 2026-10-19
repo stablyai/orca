@@ -44,10 +44,7 @@ export async function withManagedHost(
     await body(fixture)
   } finally {
     try {
-      if (fixture.app) {
-        await session.close(fixture.app)
-      }
-      await session.dispose()
+      await session.dispose(fixture.app ?? undefined)
     } finally {
       host.cleanup()
     }

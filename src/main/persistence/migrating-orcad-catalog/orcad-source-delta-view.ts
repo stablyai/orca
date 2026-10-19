@@ -8,7 +8,7 @@ import type {
   OrcadMigrationDormantStatePayload,
   OrcadMigrationManifest,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'

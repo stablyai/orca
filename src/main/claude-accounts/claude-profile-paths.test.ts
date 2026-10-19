@@ -15,7 +15,8 @@ import {
   describeClaudeProfile,
   prepareClaudeProfileDirectory,
   readClaudeProfileObject,
-  readUserClaudeConfigDir
+  readUserClaudeConfigDir,
+  readUserClaudeConfigDirAsSet
 } from './claude-profile-paths'
 
 // Case-only aliases exist only on a case-insensitive filesystem (default APFS, NTFS).
@@ -149,6 +150,17 @@ describe('Claude profile namespace', () => {
         ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/data/claude-profiles/a/home'
       })
     ).toBe(resolve('/cfg/claude'))
+  })
+  it("keeps the user's own CLAUDE_CONFIG_DIR spelled as set, through an outer Orca too", () => {
+    expect(readUserClaudeConfigDirAsSet({ CLAUDE_CONFIG_DIR: '/cfg/claude/' })).toBe('/cfg/claude/')
+    const outer = {
+      CLAUDE_CONFIG_DIR: '/data/claude-profiles/a/home',
+      ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/data/claude-profiles/a/home'
+    }
+    expect(readUserClaudeConfigDirAsSet(outer)).toBeUndefined()
+    expect(
+      readUserClaudeConfigDirAsSet({ ...outer, ORCA_CLAUDE_USER_CONFIG_DIR: 'C:/Claude Config/' })
+    ).toBe('C:/Claude Config/')
   })
   it("refuses a profile at or around the user's own CLAUDE_CONFIG_DIR", () => {
     const userHome = root()

@@ -1,5 +1,5 @@
 import type { DeviceScope } from '../../shared/runtime-types'
-import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
+import type { RelayDeviceBinding } from './mobile-cloud-relay/relay-revoke-outbox'
 import type { DeviceEntry } from './device-registry'
 import { parseMobilePushRegistration } from '../../shared/mobile-push-contract'
 import { isDevicePublicKeyB64 } from '../../shared/device-key-proof'

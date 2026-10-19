@@ -32,7 +32,6 @@ function resolver(
   record: AgentSessionRecord,
   options: {
     launchEnv?: Record<string, string>
-    fullAccess?: boolean
     probeVersion?: Parameters<typeof createAcpStructuredLaunchResolver>[1]['probeVersion']
   } = {}
 ) {
@@ -42,7 +41,6 @@ function resolver(
     resolveWorkspacePath: async () => '/repo/worktree',
     resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
     resolveLaunchEnv: () => options.launchEnv ?? {},
-    resolveFullAccess: () => options.fullAccess ?? false,
     resolveCommand: (command) => `/resolved/${command}`,
     inheritedEnv: {},
     probeVersion: options.probeVersion ?? (async (_input, supports) => supports('17.0.5'))
@@ -50,9 +48,11 @@ function resolver(
 }
 
 describe('OMP ACP launch resolution', () => {
-  it('runs `omp acp` pointed at the agent directory the chat pinned, with or without full access', async () => {
-    for (const fullAccess of [false, true]) {
-      const launch = await resolver(ompRecord(), { fullAccess })({ identity })
+  // OMP has no bypass flag: the chat's own mode alone decides whether Orca answers its requests.
+  it("runs `omp acp` pointed at the agent directory the chat pinned, in the chat's own mode", async () => {
+    for (const permissionMode of ['ask', 'full-access'] as const) {
+      const launch = await resolver(ompRecord())({ identity, spawnToken: 'token', permissionMode })
+      const fullAccess = permissionMode === 'full-access'
       expect(launch).toMatchObject({ command: '/resolved/omp', args: ['acp'], fullAccess })
       expect(launch.env.PI_CODING_AGENT_DIR).toBe('/home/user/.omp/agent')
     }

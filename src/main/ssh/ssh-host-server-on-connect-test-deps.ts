@@ -29,6 +29,7 @@ export function hostServerDepsStub(
     report: vi.fn(),
     autoUpdate: vi.fn(async () => ({ outcome: 'skipped' as const, reason: 'current' as const })),
     recordedUpdateFailure: () => null,
+    failedThisLaunch: () => true,
     recordUpdateFailure: vi.fn(),
     clearUpdateFailure: vi.fn(),
     ...overrides

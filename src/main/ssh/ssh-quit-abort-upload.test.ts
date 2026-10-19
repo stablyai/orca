@@ -6,7 +6,7 @@ import { Writable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { SFTPWrapper } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
-import { uploadSshDirectory } from './ssh-connection-file-transfers'
+import { uploadSshDirectory } from './connection/ssh-connection-file-transfers'
 
 const target: SshTarget = { id: 'ssh-1', label: 'Box', host: 'box', port: 22, username: 'me' }
 

@@ -372,6 +372,7 @@ export function createRelayServer(
           mode: effectiveAdmitMode,
           directorContact: () => reserveDeadMan?.contact(),
           reregisterInFlight: () => options.cellFlags?.().flags.reregisterInFlight,
+          phonePath: () => options.cellFlags?.().flags.phonePath ?? 'db',
           ticketEnforce: () => options.cellFlags?.().flags.ticketCheck === 'enforce',
           dryRunEnabled: () => options.cellFlags?.().flags.reserveDryRun === true,
           databaseShedding: () => databaseShedding(),
@@ -444,6 +445,7 @@ export function createRelayServer(
             effectiveAdmitMode() === 'reserve' || sessions.reregistrationPending() > 0
               ? 'reserve'
               : 'db',
+          cellPhonePathEffective: () => sessions.phonePathEffective(),
           cellDemote: (request: DemoteRequest) => sessions.demote(request),
           cellReserveCounts: () => sessions.reserveCounts(),
           cellPlacementCeiling: placementCeiling
@@ -872,6 +874,7 @@ export function createRelayServer(
     controls.close()
     clients.close()
     dataSockets.close()
+    store.resumeAudit.stop()
   })
   const runtimeCounts = () => {
     const ledgerCounts = connectionLedger?.counts()

@@ -66,6 +66,22 @@ export function getLeafIdFromPaneKey(paneKey: string): string | null {
   return leafId.length > 0 ? leafId : null
 }
 
+/** Open non-terminal tabs (chats) whose rows their own projection writes and removes, so terminal
+ *  cleanup must leave them alone. Terminal owners must still exist in the terminal inventory
+ *  instead; unified metadata can lag a close. */
+export function openNonTerminalTabIds(
+  state: Pick<AppState, 'unifiedTabsByWorktree'>,
+  worktreeId: string
+): Set<string> {
+  const tabIds = new Set<string>()
+  for (const tab of state.unifiedTabsByWorktree[worktreeId] ?? []) {
+    if (tab.contentType !== 'terminal') {
+      tabIds.add(tab.id)
+    }
+  }
+  return tabIds
+}
+
 export function findCompletedOrphanPaneKeysForTabClose(
   state: AgentStatusTabPrefixDropState,
   worktreeId: string | undefined,
@@ -74,12 +90,9 @@ export function findCompletedOrphanPaneKeysForTabClose(
   if (!worktreeId) {
     return []
   }
-  const openTabIds = new Set((state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
-  // Terminal owners must still exist in the terminal inventory; unified metadata can lag a close.
-  for (const tab of state.unifiedTabsByWorktree[worktreeId] ?? []) {
-    if (tab.contentType !== 'terminal') {
-      openTabIds.add(tab.id)
-    }
+  const openTabIds = openNonTerminalTabIds(state, worktreeId)
+  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+    openTabIds.add(tab.id)
   }
   const paneKeys: string[] = []
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {

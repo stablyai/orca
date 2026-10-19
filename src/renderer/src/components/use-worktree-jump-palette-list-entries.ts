@@ -11,6 +11,7 @@ import {
   type PaletteListEntry
 } from './worktree-jump-palette-model'
 import { buildPaletteListEntryRenderKeys } from '@/components/cmd-j/palette-list-entry-render-keys'
+import { BROWSER_NAVIGATION_ACTION_ID } from '@/components/cmd-j/browser-navigation-action'
 import type { WorktreeJumpPaletteSections } from './use-worktree-jump-palette-sections'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
@@ -39,7 +40,7 @@ export function useWorktreeJumpPaletteListEntries({
     const {
       visibleWorktreeItems,
       visibleProjectTargetItems,
-      visibleMiddleItems,
+      visibleMiddleItems: middleItems,
       visibleOpenTabItems,
       worktreeOverflowCount,
       projectTargetOverflowCount,
@@ -48,6 +49,15 @@ export function useWorktreeJumpPaletteListEntries({
       multiPrimaryFirstScreen,
       multiPrimaryLayout
     } = paletteSections
+    // Exact entity matches keep priority; issue/PR URLs keep their jump and create rows first.
+    const browserNavigationItem =
+      taskSourceUrl || !paletteSections.hasExactEntityDestination
+        ? middleItems.find(
+            (item) =>
+              item.type === 'quick-action' && item.result.id === BROWSER_NAVIGATION_ACTION_ID
+          )
+        : undefined
+    const visibleMiddleItems = middleItems.filter((item) => item !== browserNavigationItem)
     const pushTasks = (): void => {
       if (taskItems.length) {
         entries.push({
@@ -164,12 +174,18 @@ export function useWorktreeJumpPaletteListEntries({
       if (showCreateAction) {
         entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
       }
+      if (browserNavigationItem) {
+        entries.push(browserNavigationItem)
+      }
       return entries
     }
     if (!hasQuery) {
       pushOpenTabSection()
       pushWorktreeSection()
       return entries
+    }
+    if (browserNavigationItem) {
+      entries.push(browserNavigationItem)
     }
     if (multiPrimaryFirstScreen && multiPrimaryLayout) {
       const leadingSectionKey = openTabsLeadSections ? 'open-tabs' : 'worktrees'

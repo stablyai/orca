@@ -1,3 +1,7 @@
+import type {
+  AgentSessionLaunchPlan,
+  AgentSessionLaunchRequest
+} from '@/lib/agent-session-launch-plan'
 import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
@@ -9,7 +13,7 @@ import {
   launchNewTabPromptThroughHost,
   newTabPromptLaunchesThroughHost
 } from '@/lib/launch-agent-new-tab-host-route'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
 import {
@@ -24,12 +28,12 @@ import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-s
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
-import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 import {
   launchOnceHostAnswered,
   routeNewTabLaunch
 } from '@/lib/launch-agent-in-new-tab-host-agents'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 
 /** The user action this launch serves: minted where that action is handled, or carried by the
  *  route the caller already planned for it. */
@@ -42,8 +46,12 @@ type LaunchAgentInNewTabRequest =
     }
 
 export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
+  requestedSurface?: AgentSessionLaunchRequest['requestedSurface']
+  selectedExecutionHostId?: AgentSessionLaunchRequest['selectedExecutionHostId']
   agent: TuiAgent
   worktreeId: string
+  /** Captured at a new-chat action before the host can delay route selection. */
+  focusIntent?: NativeChatComposerFocusIntent
   /** Tab group the user launched from; keeps split-group launches in that pane instead of the active group. */
   groupId?: string
   /** Optional initial prompt; delivery depends on `promptDelivery` and the agent's prompt mode. */
@@ -132,6 +140,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   const store = useAppStore.getState()
   const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
   if (!executionContext) {
+    args.focusIntent?.cancel()
     return null
   }
   const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
@@ -166,6 +175,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
 
   if (!startupPlan) {
+    args.focusIntent?.cancel()
     return null
   }
 
@@ -173,6 +183,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   // server included, so only a non-structured route falls through to the host-published terminal.
   const route = routeNewTabLaunch(store, args, {
     agent,
+    requestedSurface: args.requestedSurface,
+    selectedExecutionHostId: args.selectedExecutionHostId,
     workspace: { kind: workspaceKind, worktreeId },
     prompt: trimmedPrompt,
     promptDelivery: routePromptDelivery,
@@ -188,6 +200,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     const structured = launchStructuredAgentFromNewTab({
       plan,
       worktreeId,
+      ...(args.focusIntent ? { focusIntent: args.focusIntent } : {}),
       ...(groupId ? { groupId } : {}),
       ...(beforeSurfaceOpen ? { beforeSurfaceOpen } : {}),
       ...(args.onStructuredHostDeclined ? { onHostDeclined: args.onStructuredHostDeclined } : {}),
@@ -200,10 +213,15 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
           agentSessionLaunchPlan: terminalPlan
         })
     })
-    return structured && { ...structured, startupPlan }
+    if (!structured) {
+      args.focusIntent?.cancel()
+      return null
+    }
+    return { ...structured, startupPlan }
   }
 
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
+  args.focusIntent?.cancel()
+  const runtimeEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
       return null

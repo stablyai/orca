@@ -110,12 +110,14 @@ export function createCodexStructuredLaunchResolver(
 /** Unsealed unless a token is passed: the env an agent part produced, before the seal. */
 export function createAcpStructuredLaunchResolver(
   spec: AcpLaunchSpec,
-  deps: LaunchTestSources & AcpStructuredLaunchPartDeps
+  deps: LaunchTestSources &
+    Omit<AcpStructuredLaunchPartDeps, 'dataDirectory'> &
+    Partial<Pick<AcpStructuredLaunchPartDeps, 'dataDirectory'>>
 ) {
   return withTestSpawnToken(
     acpStructuredAgentDefinition(spec),
     launchSources(deps),
-    acpStructuredLaunchPart(spec, deps),
+    acpStructuredLaunchPart(spec, { dataDirectory: '/orca-data', ...deps }),
     null
   )
 }

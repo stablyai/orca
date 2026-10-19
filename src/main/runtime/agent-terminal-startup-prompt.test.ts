@@ -19,7 +19,11 @@ vi.mock('electron', () => ({
 
 // The shell the host names for a local line; bash takes no multi-line line, zsh does.
 function runtimeWithAgentLaunch(
-  options: { terminalDefaultShell?: string; connectionId?: string } = {}
+  options: {
+    terminalDefaultShell?: string
+    connectionId?: string
+    agentDefaultEnv?: Record<string, Record<string, string>>
+  } = {}
 ): {
   runtime: OrcaRuntimeService
   spawn: ReturnType<typeof vi.fn>
@@ -31,7 +35,10 @@ function runtimeWithAgentLaunch(
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
   }
   internal.store = {
-    getSettings: () => ({ terminalDefaultShell: options.terminalDefaultShell ?? '/bin/bash' })
+    getSettings: () => ({
+      terminalDefaultShell: options.terminalDefaultShell ?? '/bin/bash',
+      agentDefaultEnv: options.agentDefaultEnv
+    })
   }
   vi.spyOn(internal, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
     id: 'wt-1',
@@ -57,6 +64,42 @@ function spawnedCommand(spawn: ReturnType<typeof vi.fn>): string {
 }
 
 describe('a terminal create that is handed a launch prompt', () => {
+  it.each([
+    { supported: undefined, flag: undefined },
+    { supported: true, flag: undefined },
+    { supported: false, flag: '0' }
+  ])('applies viewer policy after startupAgent resolution (%s)', async ({ supported, flag }) => {
+    vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES', undefined)
+    try {
+      const { runtime, spawn } = runtimeWithAgentLaunch()
+      await runtime.createTerminal('id:wt-1', {
+        startupAgent: 'claude',
+        terminalImageViewerSupported: supported
+      })
+      expect(spawn.mock.calls[0]?.[0]?.env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe(flag)
+      expect(spawn.mock.calls[0]?.[0]?.launchAgent).toBe('claude')
+      expect(spawnedCommand(spawn)).toContain('claude')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('keeps a configured image flag after resolving startupAgent for an older viewer', async () => {
+    vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES', undefined)
+    try {
+      const { runtime, spawn } = runtimeWithAgentLaunch({
+        agentDefaultEnv: { claude: { CLAUDE_CODE_FORCE_TERMINAL_IMAGES: '1' } }
+      })
+      await runtime.createTerminal('id:wt-1', {
+        startupAgent: 'claude',
+        terminalImageViewerSupported: false
+      })
+      expect(spawn.mock.calls[0]?.[0]?.env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe('1')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('folds an argv agent’s prompt into the command it spawns, and says it did', async () => {
     const { runtime, spawn } = runtimeWithAgentLaunch()
     const onStartupPromptCarry = vi.fn()

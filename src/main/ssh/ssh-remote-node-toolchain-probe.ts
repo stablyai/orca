@@ -1,6 +1,6 @@
 import { posix as posixPath } from 'node:path'
-import { shellEscape } from './ssh-connection-utils'
-import { powerShellLiteral } from './ssh-remote-powershell'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../shared/powershell-native-argument'
 
 /** The host-Node floor for the npm path. */
 export const MIN_HOST_NODE_MAJOR = 18
@@ -9,14 +9,14 @@ const NPM_VERSION_MARKER = '__ORCA_NPM_VERSION__'
 
 export function buildPosixNodeToolchainProbe(nodePath: string): string {
   const nodeBinDir = posixPath.dirname(nodePath)
-  const node = shellEscape(nodePath)
+  const node = quotePosixShell(nodePath)
   return [
     `printf '%s\\n' '${NODE_VERSION_MARKER}'`,
     `${node} --version`,
     `printf '%s\\n' '${NPM_VERSION_MARKER}'`,
     // Why: deploy prepends nodeBinDir before running bare npm; requiring a
     // colocated executable rejects valid split layouts (#9165).
-    `PATH=${shellEscape(nodeBinDir)}:$PATH npm --version`
+    `PATH=${quotePosixShell(nodeBinDir)}:$PATH npm --version`
   ].join(' && ')
 }
 

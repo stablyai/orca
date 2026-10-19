@@ -5,7 +5,7 @@
  * a wall-clock start time would then mistake a live process for a new one, or the reverse.
  */
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
-import { execCommand } from '../ssh/ssh-relay-exec-command'
+import { execCommand } from '../ssh/remote-exec/remote-exec-command'
 
 export type WslGuestIdentity = {
   /** `<boot_id>:<pid 1 start ticks>`; a distro restart (or a VM restart) changes it. */

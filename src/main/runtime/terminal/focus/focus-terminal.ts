@@ -1,5 +1,9 @@
 import { OrcaRuntimeWithWaitForLeafPtyId } from '../view/renderer-terminal-snapshot'
 import type { RuntimeTerminalFocus } from '../../../../shared/runtime-types'
+import type {
+  RuntimeTerminalReveal,
+  TerminalPaneRevealTarget
+} from '../../../../shared/terminal-pane-reveal'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
 import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
@@ -161,6 +165,14 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
         }
       }
     })
+  }
+
+  async revealTerminalPane(target: TerminalPaneRevealTarget): Promise<RuntimeTerminalReveal> {
+    const notifier = this.notifier
+    if (!notifier?.revealTerminalPane) {
+      throw new Error('renderer_unavailable')
+    }
+    return { ...target, navigated: await notifier.revealTerminalPane(target) }
   }
 
   protected getPtyIdsForExplicitTabClose(worktreeId: string, tabId: string): string[] {

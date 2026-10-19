@@ -1,17 +1,17 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RouteDependencies = {
   pathnames: string[]
   hostId: string | string[]
-  nativeRenders: number
+  refusals: number
 }
 
 const dependencies = vi.hoisted((): RouteDependencies => ({
   pathnames: [],
   hostId: 'host-1',
-  nativeRenders: 0
+  refusals: 0
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -27,19 +27,11 @@ vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ hostId: dependencies.hostId })
 }))
 
-vi.mock('../components/WorkspaceDetailPlaceholder', () => ({
-  WorkspaceDetailPlaceholder: () => null
-}))
-
-vi.mock('../host-screen/HostScreen', () => ({
-  HostScreen: () => {
-    dependencies.nativeRenders += 1
+vi.mock('./PageRouteUnavailableScreen', () => ({
+  PageRouteUnavailableScreen: () => {
+    dependencies.refusals += 1
     return null
   }
-}))
-
-vi.mock('../layout/responsive-layout', () => ({
-  useResponsiveLayout: () => ({ isWideLayout: false })
 }))
 
 vi.mock('./MobileWebShellScreen', () => ({
@@ -58,16 +50,11 @@ async function renderRoute(): Promise<void> {
   })
 }
 
-describe('the native worktree-list route that hands off to the shell', () => {
+describe('the worktree-list route that hands off to the shell', () => {
   beforeEach(() => {
     dependencies.pathnames.length = 0
-    dependencies.nativeRenders = 0
+    dependencies.refusals = 0
     dependencies.hostId = 'host-1'
-    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', 'ota')
-  })
-
-  afterEach(() => {
-    vi.unstubAllEnvs()
   })
 
   it('encodes the host id into the pathname, like the shell route already does', async () => {
@@ -82,19 +69,17 @@ describe('the native worktree-list route that hands off to the shell', () => {
     }
   })
 
-  it('keeps a dot-segment host id native instead of handing over a route the page refuses', async () => {
+  it('refuses a dot-segment host id instead of handing over a route the page refuses', async () => {
     // `encodeURIComponent` leaves a dot alone and `%2e%2e` is a dot segment to the URL parser too,
-    // so this one cannot be encoded into a pathname the bridge accepts. Handed over it reaches the
-    // phone as an `init` naming no screen and the page paints "Update Orca to open this
-    // workspace" over the native list that is sitting right behind this switch.
+    // so this one cannot be encoded into a pathname the bridge accepts.
     for (const hostId of ['..', '.']) {
       dependencies.hostId = hostId
       dependencies.pathnames.length = 0
-      dependencies.nativeRenders = 0
+      dependencies.refusals = 0
       await renderRoute()
       expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test(`/h/${hostId}`), hostId).toBe(false)
       expect(dependencies.pathnames, hostId).toEqual([])
-      expect(dependencies.nativeRenders, hostId).toBeGreaterThan(0)
+      expect(dependencies.refusals, hostId).toBeGreaterThan(0)
     }
   })
 
@@ -107,10 +92,10 @@ describe('the native worktree-list route that hands off to the shell', () => {
     expect(dependencies.pathnames).toEqual(['/h/host-1'])
   })
 
-  it('stays native for an empty repeated host id, which names no host at all', async () => {
+  it('refuses an empty repeated host id, which names no host at all', async () => {
     dependencies.hostId = []
     await renderRoute()
     expect(dependencies.pathnames).toEqual([])
-    expect(dependencies.nativeRenders).toBeGreaterThan(0)
+    expect(dependencies.refusals).toBeGreaterThan(0)
   })
 })

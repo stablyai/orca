@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 // The two in-place edit methods on the wire: registered and advertised apart from the dark
 // mid-turn queue, the caller taken from the authenticated transport, strict params, and a lease
 // release that cleanup admission always lets through.

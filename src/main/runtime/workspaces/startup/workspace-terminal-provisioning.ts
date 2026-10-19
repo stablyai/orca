@@ -46,7 +46,6 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
       canSpawn: () => Boolean(this.ptyController?.spawn),
       createTerminal: (selector, options) =>
         this.createTerminal(selector, options, createdWorktree),
-      splitTerminal: (handle, options) => this.splitTerminal(handle, options, createdWorktree),
       setTabTitle: async (handle, title) => {
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         // Why not renameTerminal: it writes the pane's title, stamped to outrank every later
@@ -54,14 +53,16 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         this.notifier?.renameTerminal(tabId, title, { recordInteraction: false })
         if (!this.getAvailableAuthoritativeWindow()) {
           this.persistHeadlessTerminalTitle(worktreeId, tabId, title)
-          this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, { title })
+          this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, {
+            title,
+            customTitle: title.trim() || null
+          })
         }
       },
       setTabColor: async (handle, color) => {
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         await this.setMobileSessionTabProps(`id:${worktreeId}`, { tabId, color })
       },
-      getSettings: () => this.requireStore().getSettings(),
       getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
       recordSetupCompletionToken: (ptyId, token) =>
         this.setupCompletionTokenByPtyId.set(ptyId, token)

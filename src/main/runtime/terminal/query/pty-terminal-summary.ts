@@ -3,10 +3,8 @@ import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
-import {
-  runtimeWorktreeIdentityKey,
-  type ResolvedWorktree
-} from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import type { RuntimeTerminalRead, RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
@@ -49,11 +47,15 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     const title =
       getLatestPtyTitle(this.getPtyDisplayRecord(pty)) ??
       (orphaned ? null : this.getSavedTerminalTabCustomTitle(pty.worktreeId, pty.tabId))
+    const paneTitle =
+      orphaned || !pty.tabId || !pane
+        ? null
+        : this.getSavedPaneTitle(pty.worktreeId, pty.tabId, pane.leafId)
     // A live process awaiting its pane binding is not evidence of an orphan.
     if (
       orphaned &&
       (this.pendingPtyRegistrationIncarnations.has(pty.ptyId) ||
-        this.terminalMutationLock.hasActiveSpawns(runtimeWorktreeIdentityKey(pty.worktreeId)))
+        this.terminalMutationLock.hasActiveSpawns(worktreeIdentityKey(pty.worktreeId)))
     ) {
       throw new Error('terminal_surface_ownership_unavailable')
     }
@@ -72,6 +74,7 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
       // SAFETY: A later binding read does not prove the cached pane was present.
       leafId: orphaned ? `pty:${pty.ptyId}` : pane!.leafId,
       title,
+      ...(paneTitle ? { paneTitle } : {}),
       connected: pty.connected,
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,

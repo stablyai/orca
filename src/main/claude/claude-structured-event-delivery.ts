@@ -45,13 +45,6 @@ export function emitClaudeStructuredSessionEvent({
   const retired =
     event.type === 'message' && session ? retireClaudeLaunchedModel(session, event.message) : null
   if (session && retired !== null) {
-    deps.onEvent?.({
-      type: 'options-skipped',
-      sessionId: event.sessionId,
-      fence: session.fence,
-      acquisitionGeneration: session.acquisitionGeneration,
-      options: { model: retired }
-    })
     resetClaudeRetiredModel(session, deps, event.sessionId, retired)
   }
   publishChildWork(event.sessionId, session, event.type === 'message' ? event.message : null)

@@ -12,9 +12,9 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   indexWorktreeHostClaims,
-  mergeWorkspaceSessionsWithHostShadow,
-  pickPrimaryHostForClaims
+  mergeWorkspaceSessionsWithHostShadow
 } from './workspace-session-host-contention'
+import { pickPrimaryHostForClaims } from '../../../shared/workspace-session-contested-primary-host'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from './workspace-session-host-hydration'
 import {
   buildHostIdByWorktreeId,

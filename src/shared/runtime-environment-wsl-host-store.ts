@@ -17,6 +17,7 @@ import {
   writeEnvironmentStore
 } from './runtime-environment-store-file'
 import { resolveEnvironmentFromStore } from './runtime-environment-store'
+import { findCollidingEnvironmentName } from './runtime-environment-name-collision'
 import {
   readWslHostDeployments,
   writeWslHostDeployment,
@@ -72,10 +73,11 @@ export function addWslHostEnvironment(
       `A server with id "${args.id}" already exists.`
     )
   }
-  if (known.some((entry) => entry.name === args.name)) {
+  const namesake = findCollidingEnvironmentName(known, args.name)
+  if (namesake) {
     throw new RuntimeEnvironmentStoreError(
       'invalid_argument',
-      `A server named "${args.name}" already exists.`
+      `A server named "${namesake.name}" already exists.`
     )
   }
   const now = args.now ?? Date.now()

@@ -1,11 +1,15 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
-import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
+import {
+  toWorktreeRemovalTarget,
+  type WorktreeRemovalTarget
+} from '../../../../shared/worktree/removal'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { useAppStore } from '../../store'
 import { getWorktreeOnHostFromState } from '../../store/selectors'
 import { runWorktreeBatchDelete } from '../sidebar/delete-worktree-flow'
+import { dismissDeleteWorktreeFailureToast } from '../sidebar/delete-worktree-failure-toast'
 import { showWorkspaceListChangedToast } from '../sidebar/stale-workspace-list-toast'
 import { toWorktreeDeleteIdentities } from '../sidebar/worktree-delete-request'
 import { prepareActiveWorktreeFocusAfterDelete } from '../sidebar/active-worktree-focus-after-delete'
@@ -32,9 +36,13 @@ export function useWorkspaceSpaceManagerPanel() {
     sortKey
   } = bindings
   const refresh = useCallback((): void => {
-    void refreshWorkspaceSpace().catch(() => {
-      /* scanError is stored by the slice */
-    })
+    void refreshWorkspaceSpace()
+      .then((analysis) => {
+        void window.api.workspaceSpace.publishWindowAnalysis?.(analysis)
+      })
+      .catch(() => {
+        /* scanError is stored by the slice */
+      })
   }, [refreshWorkspaceSpace])
 
   const cancelScan = useCallback((): void => {
@@ -99,7 +107,11 @@ export function useWorkspaceSpaceManagerPanel() {
         return
       }
       removeWorkspaceSpaceWorktrees(deletedTargets)
-      const deletedIdentities = new Set(
+      for (const target of deletedTargets) {
+        dismissDeleteWorktreeFailureToast(target)
+      }
+      void window.api.workspaceSpace.requestWorktreeRefresh?.()
+      const deletedIdentities = new Set<string>(
         deletedTargets.map((target) =>
           composeWorktreeHostIdentity(target.executionHostId ?? undefined, target.id)
         )
@@ -180,6 +192,12 @@ export function useWorkspaceSpaceManagerPanel() {
       // Why: Space keeps normal deletes non-force so uncommitted work is not
       // discarded silently; a failed row gets this explicit recovery path.
       const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktree.worktreeId)
+      // The failure toast is keyed by the store row's host, which a host-less saved Space row lacks.
+      const storeRow = getWorktreeOnHostFromState(
+        useAppStore.getState(),
+        worktree.worktreeId,
+        worktree.executionHostId ?? undefined
+      )
       // Why (#11960): explicit force recovery, so it may also waive PTY-stop proof.
       void removeWorktree(
         { id: worktree.worktreeId, executionHostId: worktree.executionHostId ?? null },
@@ -198,6 +216,9 @@ export function useWorkspaceSpaceManagerPanel() {
             return
           }
           commitFocus()
+          if (storeRow) {
+            dismissDeleteWorktreeFailureToast(toWorktreeRemovalTarget(storeRow))
+          }
           handleDeletedWorktrees([
             { id: worktree.worktreeId, executionHostId: worktree.executionHostId ?? null }
           ])

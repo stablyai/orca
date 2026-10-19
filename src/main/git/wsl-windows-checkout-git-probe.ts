@@ -15,6 +15,7 @@ import {
   isFresh,
   isWslWindowsCheckoutCandidate,
   LINE_ENDING_SAMPLE_LIMIT,
+  LINE_ENDING_SCAN_LIMIT,
   parseHostAutocrlf,
   recordHostAutocrlf,
   recordLineEndingSample,
@@ -29,11 +30,12 @@ const SAMPLE_PROBE_TIMEOUT_MS = 15_000
 const RETRY_BASE_MS = 30_000
 const RETRY_MAX_MS = 10 * 60_000
 const HOST_CONFIG_ARGS = ['config', '--show-origin', '--get-regexp', '^core\\.(autocrlf|eol)$']
-// Exit 3 carries rev-parse's own diagnostic; the pipeline is bounded by head, not by git.
-const SAMPLE_SCRIPT = [
+// Exit 3 carries rev-parse's own diagnostic. The first head bounds what git reads even when grep
+// matches nothing; the second bounds the sample.
+export const SAMPLE_SCRIPT = [
   'git -C "$1" rev-parse --is-inside-work-tree >/dev/null || exit 3',
   "tab=$(printf '\\t')",
-  'git -C "$1" ls-files --eol | grep "^i/lf  *w/[a-z]*  *attr/ *$tab" | head -n "$2"'
+  'git -C "$1" ls-files --eol | head -n "$3" | grep "^i/lf  *w/[a-z]*  *attr/ *$tab" | head -n "$2"'
 ].join('\n')
 
 export type HostGitResult = {
@@ -159,7 +161,11 @@ async function probeSample(
       (deps.runWsl ?? runWslProcess)({
         distro: options.wslDistro,
         script: SAMPLE_SCRIPT,
-        args: [translateArgForWsl(options.cwd), String(LINE_ENDING_SAMPLE_LIMIT)],
+        args: [
+          translateArgForWsl(options.cwd),
+          String(LINE_ENDING_SAMPLE_LIMIT),
+          String(LINE_ENDING_SCAN_LIMIT)
+        ],
         loginPath: 'preferred',
         timeoutMs: SAMPLE_PROBE_TIMEOUT_MS,
         maxOutputBytes: 1024 * 1024

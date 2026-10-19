@@ -74,8 +74,7 @@ vi.mock('./local-worktree-runtime-options', () => ({
 }))
 
 vi.mock('./markdown-documents', () => ({
-  listMarkdownDocuments: vi.fn(),
-  markdownDocumentsFromRelativePaths: vi.fn()
+  listMarkdownDocuments: vi.fn()
 }))
 
 import { registerFilesystemHandlers } from './filesystem'

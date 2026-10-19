@@ -11,7 +11,10 @@ import {
   worktreeMatchesVisibleHost
 } from './visible-worktree-host-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
+import {
+  buildWorktreeComparator,
+  sortWorktreesSmart
+} from '../../../../shared/sidebar-list/smart-sort'
 export {
   EMPTY_STRUCTURED_CHAT_WORKTREE_IDS,
   getWorktreeIdsWithStructuredChat

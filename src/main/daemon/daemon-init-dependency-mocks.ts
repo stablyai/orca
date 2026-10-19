@@ -123,6 +123,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     readonly shutdown: Mock
     readonly dispose: Mock
     readonly disconnectOnly: Mock
+    readonly hasRetiredForIdle: Mock
     readonly onData: Mock
     readonly onExit: Mock
     readonly callOrder: string[]
@@ -152,6 +153,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
           throw disconnectOnlyError
         }
       })
+      this.hasRetiredForIdle = vi.fn(() => false)
       this.onData = vi.fn(() => {
         if (routerSubscriptionError.current) {
           const error = routerSubscriptionError.current

@@ -65,6 +65,18 @@ describe('recorded Pi message and extension shapes', () => {
     expect(dialog?.body).toMatchObject({ kind: 'question', question: 'Choose\n\nUse staging' })
   })
 
+  it('leaves the answer hint to the card when Pi sends an empty placeholder', () => {
+    // Captured from @juicesharp/rpiv-ask-user-question 2.13.8's "Type something." follow-up on Pi 1.2.0.
+    const dialog = piRpcDialogPresentation({
+      type: 'extension_ui_request',
+      id: 'ff1e0726-9fe9-4dfd-8d58-3e64a0f84160',
+      method: 'input',
+      title: '[Repro] Which color?\n\n1. Red — warm\n2. Blue — cool\n\nType your answer:',
+      placeholder: ''
+    })
+    expect(dialog?.body).toHaveProperty('freeTextInput', { allowEmpty: true })
+  })
+
   it('labels an empty select value while delivering its original string', () => {
     const dialog = piRpcDialogPresentation({
       id: 'select',

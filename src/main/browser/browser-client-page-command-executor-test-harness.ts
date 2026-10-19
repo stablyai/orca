@@ -1,3 +1,4 @@
+import type { BrowserRoutePreparePageInput } from './browser-route-session-state'
 import type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
 import { vi } from 'vitest'
 import { BrowserClientPageCommandExecutor } from './browser-client-page-command-executor'
@@ -89,7 +90,7 @@ export function createHarness(options: { maxPages?: number } = {}) {
     }),
     selectRenderer: vi.fn(() => renderer),
     routeSessions: {
-      preparePage: vi.fn(async () => {
+      preparePage: vi.fn(async (_input: BrowserRoutePreparePageInput) => {
         order.push('prepare-page')
         return routeSession
       })
@@ -100,7 +101,7 @@ export function createHarness(options: { maxPages?: number } = {}) {
       bind: vi.fn(() => {
         order.push('bind-guest')
       }),
-      release: vi.fn(() => {
+      release: vi.fn((_registration: BrowserRoutePageGuestIdentity) => {
         order.push('release-guest')
       })
     },

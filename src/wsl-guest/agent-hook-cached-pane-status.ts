@@ -1,11 +1,32 @@
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookSource } from '../shared/agent-hook-relay'
+import type { AgentHookRelayEnvelope, AgentHookSource } from '../shared/agent-hook-relay'
+import type { ClaudeSettledRequest } from '../shared/agent-hook-listener/claude-settled-permission-requests'
+import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 
-export type CachedPaneEnvelopeMeta = { source: AgentHookSource; env?: string; version?: string }
+export type CachedPaneEnvelopeMeta = {
+  source: AgentHookSource
+  env?: string
+  version?: string
+  claudeSettledRequests?: readonly ClaudeSettledRequest[]
+}
 
 export type CachedPaneReplaySelection = {
   event: AgentHookEventPayload
   meta: CachedPaneEnvelopeMeta
+}
+
+/** The cached row as a replay; ended Claude requests ride beside it so older receivers see one status. */
+export function buildCachedPaneReplayEnvelope({
+  event,
+  meta
+}: CachedPaneReplaySelection): AgentHookRelayEnvelope {
+  const envelope = buildRelayHookEnvelope(event, meta.source, meta.env, meta.version, {
+    isReplay: true
+  })
+  // Why not on a wait: a replayed wait replaces any held one, so the evidence would be unused.
+  return meta.claudeSettledRequests && event.payload.state !== 'waiting'
+    ? { ...envelope, claudeSettledRequests: meta.claudeSettledRequests }
+    : envelope
 }
 
 /**

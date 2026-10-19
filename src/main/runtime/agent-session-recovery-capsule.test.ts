@@ -11,9 +11,9 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-restart-resume-test-harness'
 import {
   AgentSessionRecoveryCapsule,
-  AGENT_SESSION_RECOVERY_CAPSULE_FILE,
-  type AgentSessionResumeFailureInput
+  AGENT_SESSION_RECOVERY_CAPSULE_FILE
 } from './agent-session-recovery-capsule'
+import type { AgentSessionResumeFailureInput } from './agent-session-recovery-capsule-entries'
 
 let directory: string
 let filePath: string

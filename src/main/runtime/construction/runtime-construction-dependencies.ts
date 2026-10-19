@@ -1,7 +1,11 @@
+import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
-import type { RuntimeTerminalAgentStatusEvent } from '../runtime-terminal-contracts'
+import type {
+  RuntimeTerminalAgentStatusEvent,
+  RuntimeTerminalProgramStatusFacetEvent
+} from '../runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal-side-effect-facts'
 import type { ClaudeTerminalEvidence } from '../../../shared/claude-terminal-interrupt'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
@@ -22,6 +26,7 @@ export type RuntimeConstructionDependencies = {
   prepareClaudeAuth?: PrepareClaudeAuth
   onPtyStopped?: (ptyId: string) => void
   onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
+  onTerminalProgramStatusFacet?: (event: RuntimeTerminalProgramStatusFacetEvent) => void
   onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
   onClaudeTerminalEvidence?: (paneKey: string, evidence: ClaudeTerminalEvidence) => void
   getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
@@ -37,8 +42,15 @@ export type RuntimeConstructionDependencies = {
     terminalProvenance: 'current_runtime' | 'restored'
   }) => AgentHookAuthorityAttestation | null
   retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
-  checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
+  readHookCliWriterObservation?: (row: AgentStatusIpcPayload) => CliWriterObservation | null
+  /** `exitedSince`: also answer `exited` for an exit the hook store proved at or after it. */
+  checkHookAgentPresence?: (
+    paneKey: string,
+    exitedSince?: number
+  ) => Promise<'live' | 'unverifiable' | 'exited' | null>
   reconcileAgentStatusForEndedProcess?: (paneKeys: Iterable<string>) => void
+  /** A worker attached to these panes; an exit the hook store proved before then is not its own. */
+  forgetHookAgentExit?: (paneKeys: Iterable<string>) => void
   dropAgentStatusForRemovedWorktree?: (worktreeId: string, host?: ExecutionHostScope) => void
   canRecoverPersistentLocalPtys?: () => boolean
   getPairedDeviceName?: (pairedDeviceId: string) => string | null

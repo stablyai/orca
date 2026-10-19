@@ -18,30 +18,43 @@ import {
 } from '../persistence-test-harness'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { Store } from '../persistence/loading-store/store'
-import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-journal'
+import {
+  listOrcadMigrationCutoverChainForTarget,
+  listOrcadMigrationSourceCutovers,
+  writeOrcadMigrationSourceCutover
+} from './orcad-migration-cutover-journal'
 import { fakeOrcadMigrationDestination } from './orcad-migration-destination-fake'
 import { keepOrcadServerVersion, runOrcadDeltaMove } from './orcad-migration-delta-move'
-import { planOrcadDeltaMove } from './orcad-migration-delta-plan'
+import { orcadSourceStoreWithout, planOrcadDeltaMove } from './orcad-migration-delta-plan'
+import {
+  createOrcadMigrationManifest,
+  orcadMigrationCatalogIds
+} from './orcad-migration-manifest-export'
 import { latestOrcadMigrationInto } from './orcad-migration-rollback-mark'
 import { retainOrcadMigrationSource } from './orcad-migration-source-retention'
 import { reconcileManagedOrcadSshTargets, visibleRepos } from './orcad-retained-source'
-import { SshConnectionStore } from './ssh-connection-store'
+import { SshConnectionStore } from './connection/ssh-connection-store'
 import { resolveHostServerOnConnect } from './ssh-host-server-on-connect'
 import { hostServerDepsStub } from './ssh-host-server-on-connect-test-deps'
-import { runTargetLifecycle } from '../ipc/ssh-target-lifecycle-queue'
+import { runTargetLifecycle } from '../ipc/ssh/ssh-target-lifecycle-queue'
 
 const mocks = vi.hoisted(() => {
   const state: { targetStore: unknown } = { targetStore: null }
   return { state, deploy: vi.fn(), ensureTunnel: vi.fn() }
 })
-vi.mock('./ssh-target-registry', () => ({
+vi.mock('./targets/ssh-target-registry', () => ({
   getSshConnectionManager: () => ({}),
   getSshTargetRegistryStore: () => mocks.state.targetStore
 }))
-vi.mock('./orcad-runtime-deployment', () => ({ createManagedOrcadEnvironment: mocks.deploy }))
-vi.mock('./orcad-managed-tunnel', () => ({ ensureOrcadManagedTunnel: mocks.ensureTunnel }))
+vi.mock('../managed-server/lifecycle/orcad-runtime-deployment', () => ({
+  createManagedOrcadEnvironment: mocks.deploy
+}))
+vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
+  ensureOrcadManagedTunnel: mocks.ensureTunnel
+}))
 
-const { convertSshTargetToManagedOrcad } = await import('./orcad-runtime-conversion')
+const { convertSshTargetToManagedOrcad } =
+  await import('../managed-server/lifecycle/orcad-runtime-conversion')
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',
@@ -123,7 +136,7 @@ async function convertedThenChangedOnOlderBuild(): Promise<void> {
     })
   ).resolves.toMatchObject({ outcome: 'converted' })
   store.addRepo(repo('repo-2', '/srv/tool'))
-  store.updateRepo('repo-1', { displayName: 'app-renamed' })
+  store.updateRepo(store.getRepo('repo-1')!, { displayName: 'app-renamed' })
   reconcileManagedOrcadSshTargets(userDataPath, store, now)
   expect(store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt).toBeDefined()
 }
@@ -403,6 +416,44 @@ describe('moving what an older build added to a converted host', () => {
     expect(destination.commits).toBe(2)
     expect(listOrcadMigrationSourceCutovers(userDataPath)).toHaveLength(2)
     expect(store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt).toBeUndefined()
+  })
+
+  // Codex repro: an older build's delta exported the moved group its new row sits in.
+  it('resumes an older build’s interrupted delta that exported a moved group', async () => {
+    const group = store.createProjectGroup({
+      name: 'Apps',
+      parentPath: '/srv',
+      connectionId: TARGET.id,
+      createdFrom: 'manual'
+    })
+    store.moveProjectToGroup('repo-1', group.id)
+    await convertedThenChangedOnOlderBuild()
+    store.moveProjectToGroup('repo-2', group.id)
+    const reconnect = loseContactAtDeltaCommit()
+    await expect(deltaMove()).rejects.toThrow('socket closed')
+    const target = store.getSshTarget(TARGET.id)!
+    const [first, delta] = listOrcadMigrationCutoverChainForTarget(userDataPath, TARGET.id)
+    // The delta source an older build cut, which still exported every group a new row sits in.
+    const olderSource = orcadSourceStoreWithout(
+      store,
+      target,
+      orcadMigrationCatalogIds([first!.manifest.payload]),
+      first!.destinationEnvironmentId
+    )
+    const manifest = createOrcadMigrationManifest(olderSource, target, {
+      migrationId: delta!.migrationId,
+      destinationEnvironmentId: delta!.destinationEnvironmentId,
+      now: () => new Date(delta!.manifest.createdAt)
+    })
+    expect(manifest.payload.projectGroups.map((entry) => entry.id)).toEqual([group.id])
+    writeOrcadMigrationSourceCutover(userDataPath, {
+      ...delta!,
+      manifest,
+      manifestSha256: manifest.manifestSha256
+    })
+
+    reconnect()
+    await expect(deltaMove()).resolves.toMatchObject({ outcome: 'moved' })
   })
 
   it('backs out an interrupted delta the source has since outgrown, then moves afresh', async () => {

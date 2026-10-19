@@ -158,6 +158,7 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
       cause,
       ...('quit' in ending && ending.quit ? { quit: true as const } : {}),
       reason: ('reason' in ending ? ending.reason : undefined) ?? null,
+      ...('failure' in ending && ending.failure ? { failure: ending.failure } : {}),
       recorded,
       requestedAt: session.journal.cursor()
     }
@@ -197,6 +198,7 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         journal: session.journal,
         sessionId,
         fence: child.fence,
+        rowFence: Math.max(child.fence, record?.lease.runtimeFence ?? child.fence),
         generation: child.generation ?? 'unknown',
         turnItemId: quitCuts,
         trigger: ending.quit,

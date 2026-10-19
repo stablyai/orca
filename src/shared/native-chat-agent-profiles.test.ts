@@ -29,6 +29,11 @@ describe('native chat agent picker profiles', () => {
     })
   })
 
+  // OpenCode 2.x reads the same skill folders as 1.x.
+  it("lists OpenCode's skills for OpenCode 2", () => {
+    expect(getNativeChatAgentProfile('opencode2')).toMatchObject({ skillSourceOwner: 'opencode' })
+  })
+
   it('does not grant custom or unverified agents a skill grammar', () => {
     expect(getNativeChatAgentProfile('custom-agent')).toBeNull()
   })

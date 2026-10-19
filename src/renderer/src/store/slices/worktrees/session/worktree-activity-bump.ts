@@ -2,13 +2,14 @@ import type { WorktreeSlice } from '../../worktree-helpers'
 import { tryRuntimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import {
   applyDetectedWorktreeUpdates,
   findKnownWorktreeById
 } from '../listing/detected-worktree-meta'
 import { getFolderWorkspaceActivityPersistence } from './folder-workspace-activity'
-import { warnAmbiguousOwnerOnce } from '../listing/worktree-owner-settings'
+import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
 import { persistWorktreeMeta } from '../metadata/worktree-meta-persist'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 
@@ -17,6 +18,10 @@ export function createBumpWorktreeActivity(
   get: WorktreeSliceGet
 ): WorktreeSlice['bumpWorktreeActivity'] {
   return (worktreeId) => {
+    // Switch point: the owning host writes Recent stamps; terminal start and exit are not events.
+    if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+      return
+    }
     const now = Date.now()
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {

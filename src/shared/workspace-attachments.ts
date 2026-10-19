@@ -29,6 +29,33 @@ export function matchesLegacyWorkspaceAttachment(
   )
 }
 
+/** How each numbered reference reads; the desktop passes its translated wording. */
+export type WorkspaceAttachmentLabelFormats = {
+  pr: (number: number) => string
+  mr: (number: number) => string
+  issue: (number: number) => string
+}
+
+const ENGLISH_ATTACHMENT_LABELS: WorkspaceAttachmentLabelFormats = {
+  pr: (number) => `PR #${number}`,
+  mr: (number) => `MR !${number}`,
+  issue: (number) => `Issue #${number}`
+}
+
+/** A reference as people say it: the tracker's own key for Linear and Jira, else `PR #12`-style. */
+export function workspaceAttachmentReferenceLabel(
+  item: Pick<
+    WorkspaceAttachment,
+    'provider' | 'type' | 'number' | 'identifier' | 'linearIdentifier' | 'jiraIdentifier'
+  >,
+  formats: WorkspaceAttachmentLabelFormats = ENGLISH_ATTACHMENT_LABELS
+): string {
+  if (item.provider === 'linear' || item.provider === 'jira') {
+    return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? `#${item.number}`
+  }
+  return formats[item.type](item.number)
+}
+
 export function getWorkspaceAttachments(
   meta: WorkspaceAttachmentMetadata | null | undefined
 ): WorkspaceAttachment[] {

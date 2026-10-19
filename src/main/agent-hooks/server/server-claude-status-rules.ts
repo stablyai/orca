@@ -5,6 +5,7 @@ import {
 } from '../../../shared/claude-subagent-roster'
 import { isAskUserQuestionTool } from '../../../shared/agent-question-answered-intent'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import { isClaudePermissionSettledByReplay } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
 /** The shell fact a Claude row stores beside its `mainAgent`; restart seeds a settled main agent only
@@ -80,6 +81,9 @@ export function shouldKeepClaudePermissionVisible(
   if (isClaudePermissionOwningChildEnding(previous, next)) {
     return false
   }
+  if (isClaudePermissionSettledByReplay(previous, next)) {
+    return false
+  }
   if (isClaudePermissionResumingApprovedTool(previous, next)) {
     return false
   }
@@ -142,6 +146,13 @@ function isClaudePermissionResumingApprovedTool(
     hasMatchingToolUseId &&
     previous.payload.toolInput === undefined &&
     next.payload.toolInput === undefined
+
+  // Why: failure events arrive with tool name/input cleared, so only the exact request and owner settle the wait.
+  if (next.hookEventName === 'PostToolUseFailure') {
+    return (
+      hasMatchingToolUseId && previousAgentId === nextAgentId && previousAgentType === nextAgentType
+    )
+  }
 
   return (
     (next.hookEventName === 'PreToolUse' || next.hookEventName === 'PostToolUse') &&

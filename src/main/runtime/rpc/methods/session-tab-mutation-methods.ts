@@ -96,7 +96,8 @@ export const SESSION_TAB_MUTATION_METHODS = [
         root: params.root,
         expandedLeafId: params.expandedLeafId ?? null,
         chatLeafId: params.chatLeafId,
-        titlesByLeafId: params.titlesByLeafId
+        titlesByLeafId: params.titlesByLeafId,
+        renamedLeafIds: params.renamedLeafIds
       })
     }
   }),
@@ -117,7 +118,8 @@ export const SESSION_TAB_MUTATION_METHODS = [
         tabId: params.tabId,
         ...(params.color !== undefined ? { color: params.color } : {}),
         ...(params.isPinned !== undefined ? { isPinned: params.isPinned } : {}),
-        ...(params.viewMode !== undefined ? { viewMode: params.viewMode } : {})
+        ...(params.viewMode !== undefined ? { viewMode: params.viewMode } : {}),
+        ...(params.customTitle !== undefined ? { customTitle: params.customTitle } : {})
       })
     }
   })

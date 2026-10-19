@@ -8,6 +8,7 @@ import {
 } from './agent-launch-scope-runtime'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import { agentLaunchQuotingShell } from '../../shared/agent-launch-runtime'
+import { buildMobileTerminalChatFork } from './terminal/launch/mobile-terminal-chat-fork'
 
 const WIN = 'C:\\repo'
 const SHARE = '\\\\wsl$\\Ubuntu\\home\\a\\repo'
@@ -116,6 +117,33 @@ it('quotes for the shell the PTY gets, not a setting the runtime replaced', () =
   expect(agentLaunchQuotingShell(local)).toBe('powershell')
   // A `\\wsl$` path runs in WSL whatever the setting says, so it is written for Linux there.
   expect(claudeRuntime(windowsHost, scope(SHARE, { repo: repo(SHARE) })).platform).toBe('linux')
+})
+
+it('builds a native Windows chat fork for the project shell even when the global shell is WSL', () => {
+  const fact = claudeRuntime(
+    store({ project: { kind: 'windows-host' }, shell: 'wsl.exe' }),
+    scope(WIN, { repo: repo(WIN) })
+  )
+  const startup = buildMobileTerminalChatFork({
+    prepared: {
+      useRealCodexHome: false,
+      cliForkSource: {
+        agent: 'codex',
+        sourceAgent: 'codex',
+        sessionId: 'chat-1',
+        filePath: 'C:\\sessions\\chat-1.jsonl',
+        cwd: WIN,
+        codexHome: 'C:\\codex-home',
+        executionHostPlatform: 'win32'
+      }
+    },
+    settings: { agentDefaultArgs: { codex: '' } },
+    runtime: fact
+  })
+  expect(startup.launchRuntime).toBe(fact)
+  expect(fact.pty.shellOverride).toBe('powershell.exe')
+  expect(startup.command).toContain('CODEX_HOME')
+  expect(startup.command).not.toContain('wsl.exe')
 })
 
 // TEMPORARY until STA-10231. Only folders reach it: every local repo has a project runtime.

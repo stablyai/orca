@@ -41,8 +41,7 @@ function composerAcceptsImages(reported: boolean | undefined): boolean | undefin
       optionPickerRequest: null,
       setOptionPickerRequest: () => {},
       onError: () => {},
-      onSubmitted: () => {},
-      queuedMessages: { queueHold: undefined, queueResume: undefined }
+      onSubmitted: () => {}
     })
   )
   return result.current.acceptsImages

@@ -78,6 +78,23 @@ export function assertReleaseMacBuildRunIdentity(run, options, expected) {
   return run
 }
 
+async function readDispatchedReleaseMacBuildRun(api, options, runId, deps) {
+  const sleep = deps.sleep ?? sleepMilliseconds
+  for (let attempt = 0; ; attempt += 1) {
+    const run = await api.request('GET', `/repos/${api.owner}/${api.repo}/actions/runs/${runId}`)
+    try {
+      return assertReleaseMacBuildRunIdentity(run, options, { id: runId })
+    } catch (error) {
+      if (attempt >= 6) {
+        throw error
+      }
+      // GitHub can return incomplete metadata immediately after dispatch.
+      console.log(`Waiting for dispatched mac release build ${runId} metadata to settle.`)
+      await sleep(5_000)
+    }
+  }
+}
+
 export async function finishReleaseMacBuildWorkflow(options, workflowRunId, deps = {}) {
   const api = createGitHubApiClient(options, deps)
   const completedRun = await waitForReleaseMacBuildRun(api, workflowRunId, options, deps)
@@ -284,11 +301,7 @@ export async function executeReleaseMacBuildMode(mode, env = process.env, deps =
       requireDirectRunId: true
     })
     const api = createGitHubApiClient(options, deps)
-    const run = assertReleaseMacBuildRunIdentity(
-      await api.request('GET', `/repos/${api.owner}/${api.repo}/actions/runs/${dispatched.id}`),
-      options,
-      { id: dispatched.id }
-    )
+    const run = await readDispatchedReleaseMacBuildRun(api, options, dispatched.id, deps)
     const now = deps.now ?? Date.now
     const deadlineMs = now() + options.timeoutMinutes * 60 * 1000
     const appendOutput = deps.appendOutput ?? appendFileSync

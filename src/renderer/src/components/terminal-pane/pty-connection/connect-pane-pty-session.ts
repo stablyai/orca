@@ -10,6 +10,7 @@ export type ConnectPanePtySession = {
   deps: PtyConnectionDeps
   // Why typed: every PTY write must name its input kind, and the bag's `any` would hide a missing one.
   transport: PtyTransport
+  hiddenOutputRestoreUnhideSeq: number | null
   // oxlint-disable-next-line typescript/no-explicit-any -- session bag for mechanical extract
   [key: string]: any
 }

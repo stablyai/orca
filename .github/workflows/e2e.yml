@@ -33,6 +33,12 @@ on:
         required: false
         type: string
         default: ''
+      # Why only the app builds read it: the orcad template build refuses a dark switch.
+      layout_owner:
+        description: Set to main to build with ORCA_LAYOUT_OWNER=main and record save-divergence reports
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       ref:
@@ -106,7 +112,13 @@ jobs:
       - name: Build E2E outputs
         env:
           VITE_EXPOSE_STORE: 'true'
-        run: pnpm run build:electron-vite:parallel --mode e2e
+          ORCA_CI_MAIN_SOURCEMAPS: '0'
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
+        run: |
+          if [ -n "$LAYOUT_OWNER" ]; then
+            export ORCA_LAYOUT_OWNER="$LAYOUT_OWNER"
+          fi
+          pnpm run build:electron-vite:parallel --mode e2e
 
       # The CLI emits into out/main too; start only after Electron finishes clearing that tree.
       - name: Build shared E2E CLI
@@ -124,6 +136,11 @@ jobs:
 
       - wait: e2e-cli
 
+      # The switch-on specs skip, rather than fail, when the build left no marker.
+      - name: Check layout-owner build marker
+        if: inputs.layout_owner == 'main'
+        run: test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+
       - name: Check shared native runtime action
         id: native-runtime-action
         run: |
@@ -132,6 +149,10 @@ jobs:
           else
             echo 'available=false' >> "$GITHUB_OUTPUT"
           fi
+
+      # The orcad builds downstream refuse to run without the page; older refs predate the action.
+      - uses: ./.github/actions/build-mobile-web-bundle
+        if: hashFiles('.github/actions/build-mobile-web-bundle/action.yml') != ''
 
       # Only the completed output upload overlaps the change from Node to Electron ABI.
       - name: Upload E2E build output
@@ -320,6 +341,7 @@ jobs:
       - name: Run changed E2E specs
         env:
           TEST_FILES_JSON: ${{ inputs.test_files }}
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
         run: |
           if [ -f config/scripts/ci-e2e-job-selection.mjs ]; then
             printf '%s\n' "$TEST_FILES_JSON" | node config/scripts/ci-e2e-job-selection.mjs > "$RUNNER_TEMP/general-e2e-specs"
@@ -331,6 +353,7 @@ jobs:
               . != "tests/e2e/orcad-serve-mode-switch.spec.ts" and
               . != "tests/e2e/workspace-layout-oracle-headless.spec.ts" and
               . != "tests/e2e/windows-missing-appdata-startup.spec.ts" and
+              . != "tests/e2e/file-explorer-copy-file-windows.spec.ts" and
               (startswith("tests/e2e/ssh-orcad-") | not)
             )' <<<"$TEST_FILES_JSON" > "$RUNNER_TEMP/general-e2e-specs"
           fi
@@ -341,11 +364,42 @@ jobs:
           fi
           E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
           E2E_PROJECT_ARGS=()
+          if [ -n "$LAYOUT_OWNER" ]; then
+            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+            mkdir -p layout-divergence
+            E2E_ENV+=(ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/window-specs.jsonl")
+            E2E_ENV+=(PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/window-specs-results.json")
+            E2E_PROJECT_ARGS+=('--reporter=list,json')
+          fi
           if grep -l '@headful' "${TEST_FILES[@]}" >/dev/null; then
             E2E_PROJECT_ARGS+=(--project=electron-headful)
           fi
           xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env "${E2E_ENV[@]}" \
             pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
+
+      - name: Summarize layout save divergence
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        run: &summarize_layout_divergence |
+          # Either file names a run: a log with no report is unattributed, a report with no log is zero.
+          shopt -s nullglob
+          runs=(layout-divergence/*.jsonl layout-divergence/*-results.json)
+          for run in $(printf '%s\n' "${runs[@]%.jsonl}" | sed 's/-results\.json$//' | sort -u); do
+            node config/scripts/layout-save-divergence-summary.mjs "$run.jsonl" "$run-summary.json" "$run-results.json"
+            if [ -f "$run-results.json" ]; then
+              node config/scripts/ci-e2e-failure-summary.mjs "$run-results.json"
+            fi
+          done
+
+      - name: Upload layout save divergence report
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: layout-divergence-changed${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
+          path: layout-divergence/
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Upload Playwright traces
         if: failure() || cancelled()
@@ -404,11 +458,18 @@ jobs:
       # The packaged orcad slot the T6-11 launcher runs: its own node-pty under the pinned Node.
       # The template is what `orca serve`'s default selection materializes that slot from.
       - name: Build this runner's orcad slot and template
+        env:
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
         run: |
           slot="$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "$slot"
-          pnpm build:orcad
+          # The headless oracle's orcad host must hold the same layout owner as the Electron host.
+          if [ -n "$LAYOUT_OWNER" ]; then
+            ORCA_LAYOUT_OWNER="$LAYOUT_OWNER" pnpm build:orcad
+          else
+            pnpm build:orcad
+          fi
           node config/scripts/build-orcad-template.mjs --targets "$slot"
       - name: Switch serve hosts on one profile
         if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')
@@ -425,7 +486,30 @@ jobs:
         env:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/workspace-layout-oracle-headless.spec.ts --project=electron-headless --workers=1
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
+        run: |
+          REPORT_ARGS=()
+          if [ -n "$LAYOUT_OWNER" ]; then
+            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+            mkdir -p layout-divergence
+            export ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/headless-oracle.jsonl"
+            export PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/headless-oracle-results.json"
+            REPORT_ARGS=('--reporter=list,json')
+          fi
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/workspace-layout-oracle-headless.spec.ts --project=electron-headless --workers=1 "${REPORT_ARGS[@]}"
+      - name: Summarize layout save divergence
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        run: *summarize_layout_divergence
+      - name: Upload layout save divergence report
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: layout-divergence-headless${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
+          path: layout-divergence/
+          retention-days: 14
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -470,7 +554,6 @@ jobs:
         run: |
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc
-          pnpm build:orcad
           node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
           mv out/orcad-template "$RUNNER_TEMP/orcad-convert-template"
       # The Windows CLI matrix collects here too and skips: it needs a Windows host descriptor.
@@ -481,9 +564,32 @@ jobs:
           ORCA_E2E_ORCAD_CONVERT_HOST: docker
           ORCA_E2E_FORWARD_APP_LOGS: '1'
           SHARD: ${{ matrix.shard }}
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
+          SHARD_INDEX: ${{ strategy.job-index }}
         run: |
           export ORCA_E2E_ORCAD_CONVERT_TEMPLATE="$RUNNER_TEMP/orcad-convert-template"
-          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-orcad- --project=electron-headless --workers=1 --shard="$SHARD"
+          REPORT_ARGS=()
+          if [ -n "$LAYOUT_OWNER" ]; then
+            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+            mkdir -p layout-divergence
+            export ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/managed-ssh-$SHARD_INDEX.jsonl"
+            export PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/managed-ssh-$SHARD_INDEX-results.json"
+            REPORT_ARGS=('--reporter=list,json')
+          fi
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-orcad- --project=electron-headless --workers=1 --shard="$SHARD" "${REPORT_ARGS[@]}"
+      - name: Summarize layout save divergence
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        run: *summarize_layout_divergence
+      - name: Upload layout save divergence report
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: layout-divergence-managed-ssh-${{ strategy.job-index }}${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
+          path: layout-divergence/
+          retention-days: 14
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -494,10 +600,10 @@ jobs:
 
   # D7 on Windows: both hosts share <userData>\daemon and so one daemon pipe. Built here rather than
   # from the Linux e2e build because the slot, template and addons are Windows-native. Also runs the
-  # missing-AppData startup check, which needs the same Windows e2e build.
+  # missing-AppData startup check and the explorer file-copy check, which need the same Windows e2e build.
   orcad-serve-mode-switch-windows:
     name: orca serve on Windows (D7 mode switch, missing AppData)
-    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts') || contains(inputs.test_files, 'tests/e2e/windows-missing-appdata-startup.spec.ts')
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts') || contains(inputs.test_files, 'tests/e2e/windows-missing-appdata-startup.spec.ts') || contains(inputs.test_files, 'tests/e2e/file-explorer-copy-file-windows.spec.ts')
     runs-on: windows-2022
     timeout-minutes: 45
     env:
@@ -518,14 +624,17 @@ jobs:
       - uses: ./.github/actions/prepare-windows-cli-launcher
         with:
           arches: x64
+      - uses: ./.github/actions/build-mobile-web-bundle
       - name: Build the e2e app, CLI, orcad slot and template
         shell: bash
+        env:
+          ORCA_REUSE_PREPARED_WINDOWS_SECURITY: 'true'
         run: |
           pnpm run build:wsl-guest
           pnpm exec electron-vite build --mode e2e
           pnpm run build:cli
           pnpm build:orcad
-          node config/scripts/build-windows-process-tree-addon.mjs --arch=x64
+          node config/scripts/build-windows-process-tree-addon.mjs --arch=x64 --reuse-prepared-runtime
           node config/scripts/build-orcad-template.mjs --targets win32-x64
       # A profile-less Windows session has no roaming AppData; Electron 43 used to crash natively there.
       - name: Start serve with no AppData folder
@@ -534,6 +643,13 @@ jobs:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
         run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/windows-missing-appdata-startup.spec.ts --project=electron-headless --workers=1
+      # Explorer pastes only a real CF_HDROP, which needs the Windows clipboard and shell.
+      - name: Copy a file from the explorer
+        if: ${{ !cancelled() && (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/file-explorer-copy-file-windows.spec.ts')) }}
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/file-explorer-copy-file-windows.spec.ts --project=electron-headless --workers=1
       - name: Switch serve hosts on one profile
         if: ${{ !cancelled() && (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')) }}
         env:

@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithMarkPtyLivenessUnverifiable } from './terminal-input-floor'
 import type { ApplyLayoutResult, DriverState } from '../../orca-runtime-core'
-import { clampTerminalViewport } from '../../terminal-viewport'
+import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
 
 export abstract class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMarkPtyLivenessUnverifiable {
   abstract applyMobileDisplayMode(ptyId: string): Promise<boolean>

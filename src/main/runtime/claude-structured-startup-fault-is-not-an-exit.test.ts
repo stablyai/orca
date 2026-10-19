@@ -101,9 +101,8 @@ describe('a Claude start that Orca fails while the CLI is still running', () => 
       ok: true
     })
     const held = await send(host, 'hello')
-    await vi.waitFor(() =>
-      expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
-    )
+    await vi.waitFor(() => expect(claude.child(SESSION).initializing).toBe(true))
+    expect(await submission(host, held)).toMatchObject({ dispatchState: 'pending' })
     expect(claude.child(SESSION).calls).not.toContain('send')
 
     claude.child(SESSION).answerInit()

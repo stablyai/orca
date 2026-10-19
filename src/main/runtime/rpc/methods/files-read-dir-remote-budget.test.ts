@@ -1,7 +1,7 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { DirEntry } from '../../../../shared/filesystem-entry-types'
 import { FILE_METHODS } from './files'
 
@@ -12,9 +12,17 @@ const HUGE_LISTING: DirEntry[] = Array.from({ length: 80_000 }, (_, index) => ({
 }))
 
 function dispatcherWithListing(entries: DirEntry[]) {
-  const runtime = new OrcaRuntimeService()
-  vi.spyOn(runtime, 'readFileExplorerDir').mockResolvedValue(entries)
-  return new RpcDispatcher({ runtime, methods: FILE_METHODS })
+  const runtime: Pick<OrcaRuntimeService, 'getRuntimeId' | 'readFileExplorerDir'> = {
+    getRuntimeId: () => 'test-runtime',
+    readFileExplorerDir: vi
+      .fn<OrcaRuntimeService['readFileExplorerDir']>()
+      .mockResolvedValue(entries)
+  }
+  return new RpcDispatcher({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: files.readDir uses readFileExplorerDir; its response envelope reads only getRuntimeId.
+    runtime: runtime as OrcaRuntimeService,
+    methods: FILE_METHODS
+  })
 }
 
 async function readDir(clientKind: 'runtime' | undefined) {

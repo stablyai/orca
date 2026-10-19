@@ -34,6 +34,8 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
       acknowledgeOutput: true,
       acknowledgeOutputSourceRanges: false,
       supportsOutputPause: false,
+      supportsPausedOutputDropNotice: false,
+      pausedOutputGapExpected: false,
       supportsInputAck: false,
       inputLedgerId: null,
       outputPaused: false,
@@ -56,6 +58,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
       resyncPendingSend: false,
       resyncTimer: null,
       resyncAttempts: 0,
+      resyncUnansweredTimeouts: 0,
       capacityRejected: false,
       watchdog: createRemoteTerminalStreamWatchdog((stall) => {
         if (e2eDisableRemoteTerminalStallRecovery) {
@@ -116,6 +119,8 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
         return claimed && resized
       },
       setOutputPaused: (paused) => this.setOutputPaused(state, paused),
+      reportsPausedOutputDrops: () =>
+        this.isRegisteredStream(state) && state.supportsPausedOutputDropNotice,
       serializeBuffer: (opts) => this.requestSnapshot(state, opts),
       serializeBufferOutcome: (opts) => this.requestSnapshotOutcome(state, opts),
       close: () => {
@@ -146,8 +151,11 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
             ackOutput: 1,
             ackOutputSourceRanges: 1,
             outputPause: 1,
+            outputPauseDropNotice: 1,
             writeUnavailable: 1,
-            ...(args.client.type === 'desktop' ? { desktopViewportClaims: 1 } : {}),
+            ...(args.client.type === 'desktop'
+              ? { desktopViewportClaims: 1, endpointLossNotice: 1 }
+              : {}),
             ...(args.inputSessionId ? { inputAck: 1 } : {})
           },
           ...(args.inputSessionId ? { inputSessionId: args.inputSessionId } : {})

@@ -6,7 +6,7 @@ import {
 } from '../persistence'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { registerMobileHandlers } from '../ipc/mobile'
-import { createRuntimeEnvironmentMobileRelayHosts } from '../ipc/runtime-environment-mobile-relay-hosts'
+import { createRuntimeEnvironmentMobileRelayHosts } from '../ipc/runtime-environments/runtime-environment-mobile-relay-hosts'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { registerHeadlessPtyRuntime } from '../ipc/pty/register-headless-runtime'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
@@ -94,7 +94,8 @@ function installRuntimeRpc(
       ? {
           wsPort: serveOptions.wsPort,
           // Why: only explicit `orca serve --port` overrides a stale STA-1511 fallback (issue #8535); default/dev stay fallback-first for pairing stability.
-          preferPinnedWsPort: true
+          preferPinnedWsPort: true,
+          requirePinnedWsPort: true
         }
       : {}),
     webClientRoot: getBundledWebClientRoot()

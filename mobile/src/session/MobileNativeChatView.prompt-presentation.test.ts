@@ -51,6 +51,8 @@ vi.mock('lucide-react-native', () =>
       'ChevronsUpDown',
       'ShieldQuestion',
       'ImagePlus',
+      'Package',
+      'Plus',
       'Mic',
       'Square',
       'X'
@@ -61,15 +63,12 @@ vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMess
 vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
 vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
-vi.mock('./MobileAgentWorkingIndicator', () => ({
-  MobileAgentWorkingIndicator: 'WorkingIndicator'
-}))
 vi.mock('./MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
-vi.mock('./MobileNativeChatComposerSuggestions', () => ({
-  MobileNativeChatComposerSuggestions: 'Suggestions',
-  composerSuggestionInsertText: () => ''
+vi.mock('./MobileNativeChatComposerMenu', () => ({
+  MobileNativeChatComposerMenu: 'Suggestions',
+  composerMenuInsertText: () => ''
 }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))

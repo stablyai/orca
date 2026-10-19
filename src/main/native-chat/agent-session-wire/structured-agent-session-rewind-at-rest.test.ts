@@ -29,6 +29,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const caller = { callerKey: 'desktop' }
 const KEPT = { provider: 'codex' as const, threadId: THREAD, turnId: 'kept', ordinal: 0 }
@@ -44,39 +45,43 @@ const rewindSupport = vi.fn<NonNullable<StructuredAgentSessionAdapter['rewindSup
 const dispatch = vi.fn<StructuredAgentSessionAdapter['dispatch']>()
 
 function adapter(): StructuredAgentSessionAdapter {
-  return {
-    supportsCreate: (_location, agent) => agent === 'codex',
-    supportsLocation: () => true,
-    acquire: async (input) => {
-      acquires += 1
-      sink = input.events!
-      return {
-        process: {
-          hostId: 'local',
-          pid: 4000 + acquires,
-          processStartTimeMs: HOST_TEST_NOW,
-          spawnToken: input.spawnToken
-        },
-        acquisitionGeneration: `generation-${acquires}`,
-        link: {
-          linkId: `link-${acquires}`,
-          mintedAtFence: input.fence,
-          observedAt: HOST_TEST_NOW,
-          origin: acquires === 1 ? 'created' : 'resumed',
-          handle: codexProviderHandle(THREAD)
+  return startsWhenPublished(
+    {
+      supportsCreate: (_location, agent) => agent === 'codex',
+      supportsLocation: () => true,
+      acquire: async (input) => {
+        acquires += 1
+        sink = input.events!
+        return {
+          providerChildPhase: 'starting' as const,
+          process: {
+            hostId: 'local',
+            pid: 4000 + acquires,
+            processStartTimeMs: HOST_TEST_NOW,
+            spawnToken: input.spawnToken
+          },
+          acquisitionGeneration: `generation-${acquires}`,
+          link: {
+            linkId: `link-${acquires}`,
+            mintedAtFence: input.fence,
+            observedAt: HOST_TEST_NOW,
+            origin: acquires === 1 ? 'created' : 'resumed',
+            handle: codexProviderHandle(THREAD)
+          }
         }
-      }
+      },
+      dispatch,
+      cancelTurn: async () => ({ cancelled: false }),
+      answerPrompt: async () => {},
+      setOption: async () => {},
+      rewindSupport,
+      rewind,
+      recoverRewind,
+      releaseAcquisition: async () => true,
+      closeSession: async () => true
     },
-    dispatch,
-    cancelTurn: async () => ({ cancelled: false }),
-    answerPrompt: async () => {},
-    setOption: async () => {},
-    rewindSupport,
-    rewind,
-    recoverRewind,
-    releaseAcquisition: async () => true,
-    closeSession: async () => true
-  }
+    () => host
+  )
 }
 
 function openHost(): StructuredAgentSessionHost {
@@ -97,10 +102,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   acquires = 0
   rewind.mockReset()
-  recoverRewind.mockReset().mockResolvedValue({
-    ok: true,
-    items: [{ identity: KEPT, body: hostTestMessage('verified history') }]
-  })
+  recoverRewind.mockReset().mockResolvedValue({ ok: true })
   rewindSupport.mockReset().mockReturnValue({ supported: true })
   dispatch.mockReset().mockImplementation(async (input): Promise<AgentSessionDispatchOutcome> => ({
     state: 'accepted',

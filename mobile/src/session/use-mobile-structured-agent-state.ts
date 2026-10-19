@@ -1,3 +1,5 @@
+import { openTranscriptAfterHold } from './mobile-structured-transcript-subscription'
+import { startMobileStructuredTranscriptRead } from './mobile-structured-transcript-read'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
@@ -28,7 +30,10 @@ import {
   type MobileQueuePause
 } from './mobile-structured-queued-message-feed'
 
-type QueuedFeed = { messages: MobileQueuedMessageFeed; pause: MobileQueuePause }
+type QueuedFeed = {
+  messages: MobileQueuedMessageFeed
+  pause: MobileQueuePause
+}
 const NO_QUEUED_FEED: QueuedFeed = { messages: null, pause: null }
 
 const MAX_RETAINED_SESSION_STATES = 32
@@ -36,41 +41,6 @@ const MAX_RETAINED_SESSION_STATES = 32
 const OLDER_PAGE_ANCHOR_ATTEMPTS = 3
 /** Bounds the pages one Load-earlier reads past that hold only subagent rows. */
 const OLDER_PAGES_PER_LOAD = 8
-
-/**
- * Opens the transcript stream once the hold settles, either way: a refused hold is an older host
- * saying it could not start the agent — which the next send does — never a reason to hide the
- * transcript. Returns what ends the stream, opened or not yet. Outside the effect so its cleanup
- * rule can see the stream is owned.
- */
-function openTranscriptAfterHold(
-  client: RpcClient,
-  sessionId: string,
-  held: Promise<unknown>,
-  onFrame: (raw: unknown) => void
-): () => void {
-  let ended = false
-  let close = (): void => {}
-  void held
-    .catch(() => undefined)
-    .then(() => {
-      if (!ended) {
-        close = client.subscribe('agentSession.subscribe', { sessionId }, onFrame)
-      }
-    })
-  return () => {
-    ended = true
-    close()
-  }
-}
-
-function isSubscribeEvent(value: unknown): value is AgentSessionSubscribeEvent {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const type = (value as { type?: unknown }).type
-  return type === 'snapshot' || type === 'batch' || type === 'reset' || type === 'end'
-}
 
 export function useMobileStructuredAgentState(args: {
   client: RpcClient | null
@@ -193,20 +163,20 @@ export function useMobileStructuredAgentState(args: {
       return
     }
     apply({ type: 'loading' })
+    const generation = streamGenerationRef.current
     const holderId = structuredAgentSessionHolderId('mobile-chat')
     const held = callAgentSession(client, 'agentSession.hold', {
       sessionId,
       holderId
     })
-    const endStream = openTranscriptAfterHold(client, sessionId, held, (raw) => {
-      if (typeof raw === 'object' && raw !== null && 'type' in raw && raw.type === 'error') {
-        applyReadFailure(raw)
-        return
-      }
-      if (isSubscribeEvent(raw)) {
-        apply({ type: 'event', event: raw })
-        applyQueued(raw)
-      }
+    const endStream = startMobileStructuredTranscriptRead({
+      sessionId,
+      open: (onFrame) => openTranscriptAfterHold(client, sessionId, held, onFrame),
+      read: (request) => callAgentSession(client, 'agentSession.currentRequests', request),
+      apply,
+      applyQueued,
+      error: applyReadFailure,
+      isCurrent: () => generation === streamGenerationRef.current
     })
     return () => {
       endStream()
@@ -252,7 +222,10 @@ export function useMobileStructuredAgentState(args: {
         // Mobile draws only the session's own rows, so a page of a subagent's rows alone
         // would land as nothing; read on until a page adds a row the reader can see. Older
         // hosts send one for any burst; current ones when the page's byte bound cuts it short.
-        const pages: { requestedCursor: AgentJournalCursor; page: AgentSessionHistoryPage }[] = []
+        const pages: {
+          requestedCursor: AgentJournalCursor
+          page: AgentSessionHistoryPage
+        }[] = []
         let requestedCursor = cursor
         while (pages.length < OLDER_PAGES_PER_LOAD) {
           const result = await callAgentSession<AgentSessionHistoryResult>(

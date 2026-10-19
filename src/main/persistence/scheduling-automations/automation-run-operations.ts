@@ -199,7 +199,8 @@ export function updateAutomationRun(
     usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
     error: result.error ?? null,
     startedAt: current.startedAt ?? now,
-    dispatchedAt: result.status === 'dispatched' ? now : current.dispatchedAt
+    dispatchedAt:
+      result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt
   }
   // Replaced, not patched in place: the list projection caches on array identity.
   operations.state.automationRuns = operations.state.automationRuns.map((run) =>

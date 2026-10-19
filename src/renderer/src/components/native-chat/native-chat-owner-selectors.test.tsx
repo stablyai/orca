@@ -208,7 +208,8 @@ describe('native chat ownership selectors', () => {
     expect(select(current)).toEqual({
       worktreeId: 'chat-owner',
       worktreePath: '/after',
-      runtimeEnvironmentId: 'owning-runtime'
+      runtimeEnvironmentId: 'owning-runtime',
+      sourceTabId: 'chat'
     })
     useAppStore.setState(current)
     expect(select(initial)?.worktreePath).toBe('/before')

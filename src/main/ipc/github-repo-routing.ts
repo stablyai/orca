@@ -76,6 +76,18 @@ export function assertRegisteredGitHubRepo(
   return result.repo
 }
 
+/** Pure: a project is still registered at the candidate's path on its execution host (the queue key's identity). */
+export function isPRRefreshCandidateRegistered(
+  candidate: GitHubPRRefreshCandidate,
+  repos: readonly Repo[]
+): boolean {
+  const repoPath = resolve(candidate.repoPath)
+  const hostId = getRepoExecutionHostId(candidate)
+  return repos.some(
+    (repo) => resolve(repo.path) === repoPath && getRepoExecutionHostId(repo) === hostId
+  )
+}
+
 export function getGitHubRepoConnectionId(repo: Repo): string | null {
   return repo.connectionId ?? null
 }

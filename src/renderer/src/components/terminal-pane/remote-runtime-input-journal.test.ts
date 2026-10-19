@@ -40,6 +40,21 @@ describe('remote runtime input journal', () => {
     vi.useRealTimers()
   })
 
+  it('reports typed input the host has not applied, ignoring query replies', () => {
+    const current = recordingStream()
+    const journal = createRemoteRuntimeInputJournal({
+      currentStream: () => ({ stream: current.stream, endpoint })
+    })
+    journal.send(current.stream, endpoint, [{ text: '\x1b[1;1R', queryReply: true }])
+    expect(journal.hasUnacknowledgedInput()).toBe(false)
+
+    journal.send(current.stream, endpoint, typed('echo alive\r'))
+    expect(journal.hasUnacknowledgedInput()).toBe(true)
+
+    journal.acknowledge(2, 'applied')
+    expect(journal.hasUnacknowledgedInput()).toBe(false)
+  })
+
   it('resends after the host ack, filling withdrawn input and query replies with empty text', () => {
     let current = recordingStream()
     const journal = createRemoteRuntimeInputJournal({

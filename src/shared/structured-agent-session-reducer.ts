@@ -1,3 +1,16 @@
+import type { AgentSessionCurrentRequestsMarker } from './agent-session-current-requests-wire'
+import {
+  hostClockField,
+  replacePage,
+  mergeItems,
+  liveItemsWithinWindow
+} from './structured-agent-session-history-state'
+import {
+  currentRequestsAfterEvent,
+  currentRequestsState,
+  applyCurrentRequestsMarker,
+  type AgentSessionCurrentRequestsState
+} from './agent-session-current-requests'
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem,
@@ -23,7 +36,6 @@ import {
   ownItemCount,
   trimRetainedItems
 } from './structured-agent-session-item-retention'
-import { compareAgentJournalItems } from './agent-session-journal-position'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 import { queuePublicationField } from './structured-agent-session-queue-publication-field'
 import {
@@ -46,7 +58,7 @@ export type StructuredAgentHostClock = {
   receivedAt: number
 }
 
-export type StructuredAgentSessionState = {
+export type StructuredAgentSessionState = AgentSessionCurrentRequestsState & {
   epoch: string | null
   cursor: AgentJournalCursor | null
   fence: number | null
@@ -93,12 +105,26 @@ export type StructuredAgentSessionState = {
 
 export type StructuredAgentSessionAction =
   | { type: 'loading' }
+  | { type: 'requests-marker'; marker: AgentSessionCurrentRequestsMarker }
+  | {
+      type: 'requests-complete'
+      marker: AgentSessionCurrentRequestsMarker
+      items: AgentJournalRenderItem[]
+    }
   | { type: 'error'; message: string; refusal?: AgentSessionRefusalReference }
   /** `opensSubscription`: the first frame of a new subscription, which states the roster even
    *  when it resumes from a cursor; a host that omits it there has none to report. */
-  | { type: 'event'; event: AgentSessionSubscribeEvent; opensSubscription?: boolean }
+  | {
+      type: 'event'
+      event: AgentSessionSubscribeEvent
+      opensSubscription?: boolean
+    }
   | { type: 'history-page'; page: AgentSessionHistoryPage }
-  | { type: 'older-page'; requestedCursor: AgentJournalCursor; page: AgentSessionHistoryPage }
+  | {
+      type: 'older-page'
+      requestedCursor: AgentJournalCursor
+      page: AgentSessionHistoryPage
+    }
 
 export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
   epoch: null,
@@ -112,101 +138,41 @@ export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
   status: 'idle'
 }
 
-/** A frame without `hostNow` (older host) leaves the previous sample in place. */
-function hostClockField(
-  hostNow: number | undefined,
-  receivedAt: number,
-  previous: StructuredAgentHostClock | undefined
-): { hostClock?: StructuredAgentHostClock } {
-  const hostClock = hostNow !== undefined ? { hostNow, receivedAt } : previous
-  return hostClock ? { hostClock } : {}
-}
-
-function replacePage(
-  page: AgentSessionHistoryPage,
-  fence: number | null,
-  backgroundTasks?: AgentSessionBackgroundTaskState | null,
-  activity?: AgentSessionTurnActivity | null
-): StructuredAgentSessionState {
-  return {
-    epoch: page.epoch,
-    cursor: page.liveCursor ?? page.window.nextCursor,
-    fence,
-    items: [...page.items].sort(compareAgentJournalItems),
-    submissions: page.submissions,
-    retainedOwnItemLimit: Math.max(MAX_RETAINED_OWN_ITEMS, ownItemCount(page.items)),
-    retainedItemCap: Math.max(MAX_RETAINED_ITEMS, page.items.length),
-    hasOlder: page.hasOlder,
-    status: 'ready',
-    subagentRoster: foldStructuredAgentSubagentRosterPage(undefined, page),
-    activity: activity ?? null,
-    ...(page.latestTurn !== undefined ? { latestTurn: page.latestTurn } : {}),
-    ...(page.actionablePromptIds !== undefined
-      ? { actionablePromptIds: page.actionablePromptIds }
-      : {}),
-    ...(page.working !== undefined ? { working: page.working } : {}),
-    ...(backgroundTasks !== undefined
-      ? { backgroundTasks }
-      : page.backgroundTasks !== undefined
-        ? { backgroundTasks: admitAgentSessionBackgroundTaskState(page.backgroundTasks) }
-        : {})
-  }
-}
-
-function mergeItems(
-  current: readonly AgentJournalRenderItem[],
-  incoming: readonly AgentJournalRenderItem[],
-  removedIds: readonly string[]
-): AgentJournalRenderItem[] {
-  const removed = new Set(removedIds)
-  const byId = new Map(
-    current.filter((item) => !removed.has(item.itemId)).map((item) => [item.itemId, item])
-  )
-  for (const item of incoming) {
-    const prior = byId.get(item.itemId)
-    if (!prior || item.revision >= prior.revision) {
-      byId.set(item.itemId, item)
-    }
-  }
-  return [...byId.values()].sort(compareAgentJournalItems)
-}
-
-/**
- * Live rows the loaded window can take. The window is a contiguous suffix of the
- * journal, and its oldest row is the load-older anchor. A revision of a row older
- * than the window keeps that row's original sequence, so admitting it would move
- * the anchor below the window and paging `before` it would skip every row between.
- * The journal keeps the revision; the page reader serves it once the window
- * reaches the row. With nothing older on the host the window is the whole journal
- * and a row below the head (a revived tombstone) leaves no hole, so it is admitted.
- */
-function liveItemsWithinWindow(
-  state: StructuredAgentSessionState,
-  incoming: readonly AgentJournalRenderItem[]
-): readonly AgentJournalRenderItem[] {
-  const head = state.items[0]
-  if (!head || !state.hasOlder) {
-    return incoming
-  }
-  return incoming.filter((item) => item.sequence >= head.sequence)
-}
-
 /** `receivedAt` is the client clock at apply time; callers pass it so the reducer stays pure. */
 export function reduceStructuredAgentSession(
   state: StructuredAgentSessionState,
   action: StructuredAgentSessionAction,
   receivedAt: number = Date.now()
 ): StructuredAgentSessionState {
+  if (action.type === 'requests-marker') {
+    return { ...state, ...applyCurrentRequestsMarker(state, action.marker) }
+  }
+  if (action.type === 'requests-complete') {
+    return action.marker.version === state.requestMarker?.version
+      ? { ...state, currentRequests: action.items, requestAuthority: action.marker }
+      : state
+  }
   if (action.type === 'loading') {
     // Keep the last transcript visible while a reconnect rehydrates the stream.
-    return { ...state, status: 'loading', error: undefined, readRefusal: undefined }
+    return {
+      ...state,
+      status: 'loading',
+      error: undefined,
+      readRefusal: undefined
+    }
   }
   if (action.type === 'error') {
-    return { ...state, status: 'error', error: action.message, readRefusal: action.refusal }
+    return {
+      ...state,
+      status: 'error',
+      error: action.message,
+      readRefusal: action.refusal
+    }
   }
   if (action.type === 'history-page') {
     return {
       ...replacePage(action.page, action.page.fence ?? null, state.backgroundTasks, state.activity),
+      ...currentRequestsState(state),
       commands: state.commands,
       // Live subscription state stays authoritative over a possibly stale history answer.
       ...queuePublicationField(state, action.page),
@@ -242,6 +208,7 @@ export function reduceStructuredAgentSession(
     return state
   }
   if (event.type === 'snapshot' || event.type === 'reset') {
+    const requests = currentRequestsAfterEvent(state, event, true)
     return {
       ...replacePage(
         event.page,
@@ -249,6 +216,8 @@ export function reduceStructuredAgentSession(
         admitAgentSessionBackgroundTaskState(event.backgroundTasks),
         event.activity
       ),
+      ...requests,
+      status: 'ready',
       commands: event.commands,
       // A snapshot omits the list when unchanged since the last frame sent to this subscriber.
       ...queuePublicationField(event, event.page, state),
@@ -261,6 +230,7 @@ export function reduceStructuredAgentSession(
   if (state.cursor && event.batch.cursor.sequence < state.cursor.sequence) {
     return state
   }
+  const requests = currentRequestsAfterEvent(state, event, action.opensSubscription === true)
   const backgroundTasks =
     event.backgroundTasks !== undefined
       ? admitAgentSessionBackgroundTaskState(event.backgroundTasks, state.backgroundTasks)
@@ -294,7 +264,10 @@ export function reduceStructuredAgentSession(
     activity?.turnId === state.activity?.turnId &&
     activity?.text === state.activity?.text &&
     state.status === 'ready' &&
-    state.error === undefined
+    state.error === undefined &&
+    requests.currentRequests === state.currentRequests &&
+    requests.requestMarker === state.requestMarker &&
+    requests.requestAuthority === state.requestAuthority
   ) {
     return state
   }
@@ -311,6 +284,7 @@ export function reduceStructuredAgentSession(
   const lostTurnRow = outsideWindow.some((item) => readAgentJournalTurn(item.body) !== null)
   return {
     ...state,
+    ...requests,
     cursor: event.batch.cursor,
     fence: event.fence ?? state.fence,
     items,

@@ -109,6 +109,22 @@ export function findNodeRuntimePinProblems({
       `NODE_RUNTIME_PIN.version ${pin.version} is not package.json engines.node major ${engineMajor}`
     )
   }
+  const runtimeMajor = majorOf(pin.version)
+  const declaredNodeTypes =
+    packageJson.devDependencies?.['@types/node'] ?? packageJson.dependencies?.['@types/node']
+  if (majorOf(declaredNodeTypes) !== runtimeMajor) {
+    problems.push(
+      `package.json @types/node is ${declaredNodeTypes}, but NODE_RUNTIME_PIN.version major is ${runtimeMajor}`
+    )
+  }
+  const lockedNodeTypes = lockedVersion(
+    rootImporter.devDependencies?.['@types/node'] ?? rootImporter.dependencies?.['@types/node']
+  )
+  if (majorOf(lockedNodeTypes) !== runtimeMajor) {
+    problems.push(
+      `pnpm-lock.yaml resolves @types/node ${lockedNodeTypes}, but NODE_RUNTIME_PIN.version major is ${runtimeMajor}`
+    )
+  }
   if (!Number.isInteger(pin.napi) || pin.napi < 1) {
     problems.push(`NODE_RUNTIME_PIN.napi must be a positive integer, got ${pin.napi}`)
   }

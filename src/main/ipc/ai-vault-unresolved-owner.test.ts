@@ -24,7 +24,7 @@ vi.mock('../wsl', () => ({
   hasCachedWslDistros: vi.fn(() => false)
 }))
 
-vi.mock('./ssh', () => ({
+vi.mock('./ssh/ssh', () => ({
   getActiveSshAiVaultHostInfo: vi.fn(),
   getActiveSshAiVaultHostInfos: vi.fn(() => []),
   requestActiveSshAiVaultSessionList: vi.fn(),

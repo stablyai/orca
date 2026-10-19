@@ -227,12 +227,20 @@ describe('orcad migration shell history through the store', () => {
     const reloaded = bashHostStore()
     expect(hostHistory(DORMANT_WORKTREE_ID, 'bash_history')).toBeNull()
     expect(existsSync(receivedPath(input, blobs[0].descriptor.key))).toBe(true)
+    expect(reloaded.hasPendingOrcadMigrationShellHistory()).toBe(true)
 
     reloaded.installPendingOrcadMigrationReceivedBlobs({ worktreeHasLiveShells: () => true })
     expect(hostHistory(DORMANT_WORKTREE_ID, 'bash_history')).toBeNull()
+    expect(reloaded.hasPendingOrcadMigrationShellHistory()).toBe(true)
 
     reloaded.installPendingOrcadMigrationReceivedBlobs({ worktreeHasLiveShells: noLiveShells })
     expect(hostHistory(DORMANT_WORKTREE_ID, 'bash_history')).toBe(BASH)
     expect(existsSync(receivedPath(input, blobs[0].descriptor.key))).toBe(false)
+    // Every later orcad start skips the post-attach pass and its terminal inventory.
+    expect(reloaded.hasPendingOrcadMigrationShellHistory()).toBe(false)
+  })
+
+  it('reports nothing pending on a host that never received a migration', () => {
+    expect(bashHostStore().hasPendingOrcadMigrationShellHistory()).toBe(false)
   })
 })

@@ -110,6 +110,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
             // Why: SSH users can hit this dialog from Add Project after
             // dismissing onboarding, bypassing the local addNonGitFolder path.
             const launch = resolveDismissedOnboardingFolderAgentLaunch({
+              worktreeId: folderWorktree.id,
               store: useAppStore.getState(),
               onboarding,
               hasExistingProject: hadProjectBeforeAdd,

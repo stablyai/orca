@@ -1,3 +1,4 @@
+import type { PopupCompatibilityStatus } from './browser-popup-compatibility-status'
 import { spawnProcess } from '@orca/process-host'
 import { createServer } from 'node:http'
 import { createServer as createPortServer } from 'node:net'
@@ -43,40 +44,7 @@ export const artifactDir = process.env.ORCA_POPUP_FIXTURE_ARTIFACT_DIR
 export const snapshots: ReturnType<typeof status>[] = []
 export const expectedSecurity = { sandbox: true, contextIsolation: true, nodeIntegration: false }
 
-export function status(): {
-  revision: number
-  ready?: boolean
-  error?: string
-  windowsHidden: boolean
-  tabOpens: { url: string; activate: boolean }[]
-  blocked: number[]
-  inputs: string[]
-  childRequests: {
-    adopted: boolean
-    native: boolean
-    sessionMatches: boolean
-    security: typeof expectedSecurity
-    permission?: string
-  }[]
-  routeGranted: boolean
-  routeContents: { security: typeof expectedSecurity; webRtcPolicy: string }[]
-  native: {
-    presentationCalls: string[]
-    requests: { disposition: string; features: string; frameName: string; post: boolean }[]
-    creation: {
-      firstNavigationPolicy: string
-      firstNavigationOwner: number | null
-      firstNavigationTitle: string
-    }[]
-    windows: {
-      closed: boolean
-      title: string
-      fullscreen: boolean
-      focused: boolean
-      contentSize: number[]
-    }[]
-  }
-} {
+export function status(): PopupCompatibilityStatus {
   return JSON.parse(readFileSync(statusPath, 'utf8'))
 }
 
@@ -116,7 +84,9 @@ const server = createServer((request, response) => {
     }
     response.setHeader('Content-Type', 'text/html')
     response.end(
-      ['/local', '/route', '/local-control', '/route-control'].includes(path)
+      ['/local', '/route', '/local-control', '/route-control', '/probe-one', '/probe-two'].includes(
+        path
+      )
         ? popupFixtureHtml(origin)
         : `<title>Hostile synthetic title</title><body>${path}<script>if(window.opener)window.opener.postMessage('callback:'+document.cookie,'*')</script></body>`
     )
@@ -194,7 +164,8 @@ beforeAll(async () => {
       ORCA_BACKGROUND_LAUNCH: '1',
       ORCA_POPUP_FIXTURE_ORIGIN: origin,
       ORCA_POPUP_FIXTURE_STATUS: statusPath,
-      ORCA_POPUP_FIXTURE_NATIVE_CONTROLS: nativeControls ? '1' : '0'
+      ORCA_POPUP_FIXTURE_NATIVE_CONTROLS: nativeControls ? '1' : '0',
+      ORCA_POPUP_FIXTURE_ADAPTER_PROBE: adapterProbe ? '1' : '0'
     },
     stdio: ['ignore', 'pipe', 'pipe']
   })
@@ -215,9 +186,13 @@ beforeAll(async () => {
     return current.ready === true
   })
   expect(status()).toMatchObject({ ready: true, windowsHidden: true })
-  for (const name of nativeControls
-    ? ['local', 'route', 'local-control', 'route-control']
-    : ['local', 'route']) {
+  const names = [
+    'local',
+    'route',
+    ...(nativeControls ? ['local-control', 'route-control'] : []),
+    ...(adapterProbe ? ['probe-one', 'probe-two'] : [])
+  ]
+  for (const name of names) {
     await waitForFixture(() =>
       Boolean(
         browser
@@ -306,6 +281,10 @@ export async function closeChildren(page: Page): Promise<void> {
 
 let evidenceName = 'electron-evidence.json'
 let nativeControls = false
+let adapterProbe = false
+export function enablePopupAdapterProbe(): void {
+  adapterProbe = true
+}
 export function enablePopupFixtureNativeControls(): void {
   nativeControls = true
 }

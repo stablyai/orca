@@ -136,15 +136,28 @@ export async function acpPromptBlocks(
   return blocks
 }
 
+/** A message that is only one of the dialect's withheld commands, with no attachment. */
+function isWithheldCommand(body: AgentJournalMessageItem, withheld: readonly string[]): boolean {
+  const [block, ...rest] = body.blocks
+  const text = block?.type === 'text' && rest.length === 0 ? block.text.trim() : ''
+  return text.startsWith('/') && withheld.includes(text.slice(1))
+}
+
 /** The prompt for `body` to `session`'s agent, or Orca's refusal of it in words that name the
  *  agent. Images go only where `acpSessionAcceptsImages` allows them. */
 export async function acpDispatchPrompt(
   body: AgentJournalMessageItem,
   session: {
-    spec: Pick<AcpLaunchSpec, 'agent' | 'imagePrompts'>
+    spec: Pick<AcpLaunchSpec, 'agent' | 'imagePrompts' | 'dialect'>
     connection: Pick<AcpStructuredConnection, 'initialize'>
   }
 ): Promise<ContentBlock[] | AgentJournalDispatchRejection> {
+  if (isWithheldCommand(body, session.spec.dialect.withheldCommands ?? [])) {
+    return agentSessionFailureWords(agentSessionFailureFact('commandUnavailable'), {
+      surface: 'rejection',
+      agentName: acpAgentName(session.spec.agent)
+    })
+  }
   try {
     return await acpPromptBlocks(body, await acpSessionAcceptsImages(session))
   } catch (error) {

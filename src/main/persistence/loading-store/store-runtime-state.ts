@@ -2,6 +2,7 @@ import { removeStaleDurableWriteTempFiles } from '../../durable-file-write'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionWriteListener } from './workspace-session-write-listeners'
+import type { StateWriteListener } from './write-scheduling'
 import type { ActiveViewPreference } from '../../active-view-preference'
 import {
   getProfileTerminalScrollbackSnapshotRoot,
@@ -73,6 +74,11 @@ export class StoreRuntimeState {
   quitFlushPromise: Promise<void> | null = null
   lastWrittenStateHash: string | null = null
   lastDurableWriteGeneration = -1
+  /**
+   * The write generation each migration committed by this process needs on disk before its
+   * received blobs may be consumed; a receipt missing here was read from disk.
+   */
+  readonly orcadMigrationCommitWriteGenerations = new Map<string, number>()
   firstPendingSaveAt: number | null = null
   /** Known dirty domains, or null when a caller requires a complete-document fallback. */
   dirtyProfileStateDomains: Set<string> | null = new Set()
@@ -98,6 +104,8 @@ export class StoreRuntimeState {
   uiChangeListeners = new Set<(ui: PersistedState['ui']) => void>()
   /** Observers of persisted workspace-session writes; see notifyWorkspaceSessionWritten. */
   readonly workspaceSessionWriteListeners = new Set<WorkspaceSessionWriteListener>()
+  /** Observers of every write; see WriteSchedulingOperations.onStateWritten. */
+  readonly stateWriteListeners = new Set<StateWriteListener>()
   projectHostOperations: ProjectHostPersistenceOperations | null = null
   projectGroupOperations: ProjectGroupPersistenceOperations | null = null
   folderWorkspaceOperations: FolderWorkspacePersistenceOperations | null = null

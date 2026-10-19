@@ -76,7 +76,7 @@ const CELLS = [SOURCE, ...TARGETS, US_CELL]
 const RELEASED_ACTIVITY = `control:${SOURCE.id}:1`
 
 // The desktop client books each host's next /v1/assign 5-5.5s after its last
-// one, whatever Retry-After says (src/main/runtime/relay/relay-assign-rate-gate.ts).
+// one, whatever Retry-After says (src/main/runtime/mobile-cloud-relay/relay-assign-rate-gate.ts).
 const HOST_ASSIGN_MIN_INTERVAL_MS = 5_000
 const HOST_ASSIGN_INTERVAL_JITTER_MS = 500
 // A host still unplaced this long after its release counts as never placed.

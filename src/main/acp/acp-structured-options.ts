@@ -56,7 +56,9 @@ function isSelect(option: SessionConfigOption): option is SelectOption {
 }
 
 export class AcpStructuredOptions {
-  constructor(private readonly dialect: Pick<AcpDialect, 'modelEfforts'> = {}) {}
+  constructor(
+    private readonly dialect: Pick<AcpDialect, 'modelEfforts' | 'withheldCommands'> = {}
+  ) {}
 
   private configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
@@ -96,12 +98,15 @@ export class AcpStructuredOptions {
   }
 
   adoptCommands(commands: readonly AvailableCommand[]): void {
-    this.commands = commands.map((command) => ({
-      name: command.name,
-      kind: 'command',
-      ...(command.description ? { description: command.description } : {}),
-      ...(command.input?.hint ? { argumentHint: command.input.hint } : {})
-    }))
+    const withheld = this.dialect.withheldCommands ?? []
+    this.commands = commands
+      .filter((command) => !withheld.includes(command.name))
+      .map((command) => ({
+        name: command.name,
+        kind: 'command',
+        ...(command.description ? { description: command.description } : {}),
+        ...(command.input?.hint ? { argumentHint: command.input.hint } : {})
+      }))
   }
 
   readCommands(): AgentSessionSlashCommand[] | undefined {
@@ -198,6 +203,11 @@ export class AcpStructuredOptions {
       ...(current.model ? { model: current.model } : {}),
       ...(current.effort ? { effort: current.effort } : {})
     }
+  }
+
+  /** The session's mode is its `mode`-category select, whatever the agent names it. */
+  modeConfigId(): string {
+    return this.select('mode')?.id ?? 'mode'
   }
 
   private select(category: string): SelectOption | null {

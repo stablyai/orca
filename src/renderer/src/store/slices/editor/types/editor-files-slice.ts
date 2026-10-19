@@ -21,11 +21,23 @@ import type {
   EditorTabSelection,
   OpenFile
 } from './open-file'
+import type { EditorOpenLinkIntent, EditorOpenResult } from './editor-open-link-intent'
 import type { OpenFilePathRekey, RekeyOpenFilesResult } from './open-file-path-rekey'
 import type {
   RestoredEditorOwnerMigration,
   RestoredEditorOwnerResult
 } from './restored-editor-owner'
+
+export type OpenFileOptions = {
+  preview?: boolean
+  targetGroupId?: string
+  recordReplacedPreview?: boolean
+  suppressActiveRuntimeFallback?: boolean
+  forceContentReload?: boolean
+  focusEditor?: boolean
+  reopenId?: string
+  selection?: EditorTabSelection
+}
 
 export type EditorFilesSlice = {
   // Open files / editor tabs
@@ -35,19 +47,13 @@ export type EditorFilesSlice = {
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType> // worktreeId -> last active tab type
   activeTabType: WorkspaceVisibleTabType
   setActiveTabType: (type: WorkspaceVisibleTabType, worktreeId: string | null) => void
-  openFile: (
+  openFile: (file: Omit<OpenFile, 'id' | 'isDirty'>, options?: OpenFileOptions) => string
+  /** openFile for a captured link activation; returns the actual view, or null when refused. */
+  openFileForLink: (
     file: Omit<OpenFile, 'id' | 'isDirty'>,
-    options?: {
-      preview?: boolean
-      targetGroupId?: string
-      recordReplacedPreview?: boolean
-      suppressActiveRuntimeFallback?: boolean
-      forceContentReload?: boolean
-      focusEditor?: boolean
-      reopenId?: string
-      selection?: EditorTabSelection
-    }
-  ) => string
+    options: Omit<OpenFileOptions, 'targetGroupId' | 'focusEditor' | 'selection'> | undefined,
+    intent: EditorOpenLinkIntent | null
+  ) => EditorOpenResult | null
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
@@ -74,7 +80,8 @@ export type EditorFilesSlice = {
   ) => void
   makePreviewFilePermanent: (fileId: string, tabId?: string) => void
   pinFile: (fileId: string, tabId?: string) => void
-  closeFile: (fileId: string) => void
+  /** captureRecentlyClosed false keeps a cleanup close out of the reopen stack. */
+  closeFile: (fileId: string, opts?: { captureRecentlyClosed?: boolean }) => void
   closeAllFiles: () => void
   /** Most recently closed editor tabs per worktree (for Cmd/Ctrl+Shift+T). */
   recentlyClosedEditorTabsByWorktree: Record<string, ClosedEditorTabSnapshot[]>
@@ -82,7 +89,6 @@ export type EditorFilesSlice = {
   /** Activation uses the file's workspace unless a target is supplied; global selection
    *  moves only when that workspace is active. */
   setActiveFile: (fileId: string, targetWorktreeId?: string) => void
-  reorderFiles: (fileIds: string[]) => void
   markFileDirty: (fileId: string, dirty: boolean) => void
   setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
   setLastKnownDiskSignature: (fileId: string, signature: string) => void

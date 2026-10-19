@@ -97,6 +97,9 @@ describe('registerGitHubHandlers', () => {
       })
     )
     expect(candidate).not.toHaveProperty('localGitOptions')
+    // A re-added project gets a new id; queued work keyed by path and host must still run.
+    const isRegistered = mocks.prRefresh.setPRRefreshRegistrationCheck.mock.lastCall?.[0]
+    expect(isRegistered?.({ ...candidate, repoId: 're-added-repo' })).toBe(true)
   })
 
   it('keeps manual PR refresh validation strict', async () => {

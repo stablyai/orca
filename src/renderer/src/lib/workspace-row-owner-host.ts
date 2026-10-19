@@ -1,7 +1,7 @@
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { getFolderWorkspaceHostId } from '../store/folder-workspaces/folder-workspace-catalog'
+import { getFolderWorkspaceHostId } from '../../../shared/folder-workspace-execution-host'
 import type { AppState } from '../store/types'
 
 /**

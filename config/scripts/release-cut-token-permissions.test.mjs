@@ -21,6 +21,7 @@ const EXPECTED_MATRIX = {
   '.github/workflows/node-server-tests.yml#linux_glibc217_compat': { contents: 'read' },
   '.github/workflows/node-server-tests.yml#linux_glibc_floor': { contents: 'read' },
   '.github/workflows/node-server-tests.yml#linux_musl': { contents: 'read' },
+  '.github/workflows/node-server-tests.yml#mobile_web_bundle': { contents: 'read' },
   '.github/workflows/node-server-tests.yml#persistence': { contents: 'read' },
   '.github/workflows/release-mac-build.yml#build-mac': { actions: 'read', contents: 'write' },
   [`${RELEASE_WORKFLOW}#build`]: { actions: 'read', contents: 'write' },
@@ -57,6 +58,10 @@ const EXPECTED_MATRIX = {
   [`${RELEASE_WORKFLOW}#orcad-template -> .github/workflows/node-server-tests.yml#linux_musl`]: {
     contents: 'read'
   },
+  [`${RELEASE_WORKFLOW}#orcad-template -> .github/workflows/node-server-tests.yml#mobile_web_bundle`]:
+    {
+      contents: 'read'
+    },
   [`${RELEASE_WORKFLOW}#orcad-template -> .github/workflows/node-server-tests.yml#persistence`]: {
     contents: 'read'
   },

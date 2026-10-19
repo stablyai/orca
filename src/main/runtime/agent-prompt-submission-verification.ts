@@ -1,4 +1,3 @@
-export { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
 import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 

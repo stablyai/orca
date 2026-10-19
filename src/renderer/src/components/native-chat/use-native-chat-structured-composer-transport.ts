@@ -7,7 +7,6 @@ import type {
 } from './native-chat-composer-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
-import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 
 /** What the composer of a structured chat sends, picks and runs through, from the chat's controller. */
 export function useNativeChatStructuredComposerTransport(args: {
@@ -26,10 +25,12 @@ export function useNativeChatStructuredComposerTransport(args: {
   setOptionPickerRequest: Dispatch<SetStateAction<NativeChatOptionPickerRequest | null>>
   onError: NativeChatStructuredComposerTransport['onError']
   onSubmitted: () => void
-  queuedMessages: Pick<StructuredAgentSessionQueuedMessagesController, 'queueHold' | 'queueResume'>
+  /** Present while this chat's host may not take a turn; Send is held and a send refused. */
+  sendBlockedReason?: string | null
 }): NativeChatStructuredComposerTransport {
   const { props, controller, sendThroughLaunch, starting, worktreeId, optionPickerRequest } = args
-  const { setOptionPickerRequest, onError, onSubmitted, queuedMessages } = args
+  const { setOptionPickerRequest, onError, onSubmitted } = args
+  const sendBlockedReason = args.sendBlockedReason ?? null
   const acceptsImages = useStructuredAgentAcceptsImages(
     props.target,
     props.agent,
@@ -37,11 +38,15 @@ export function useNativeChatStructuredComposerTransport(args: {
   )
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
-    const setThreadGoalObjective = threadGoal
-      ? (objective: string) => threadGoal.change({ kind: 'set', objective })
+    const setThreadGoalObjective = threadGoal?.hostChanges
+      ? (objective: string) =>
+          sendBlockedReason === null
+            ? threadGoal.change({ kind: 'set', objective })
+            : Promise.resolve(false)
       : null
     return {
       send: (text, attachments) =>
+        sendBlockedReason === null &&
         sendThroughLaunch(text, attachments.length > 0, () =>
           controller.send(
             text,
@@ -67,6 +72,7 @@ export function useNativeChatStructuredComposerTransport(args: {
         }),
       ...(setThreadGoalObjective ? { threadGoal: { setObjective: setThreadGoalObjective } } : {}),
       sendOut: controller.sendOut || starting,
+      ...(sendBlockedReason !== null ? { sendBlockedReason } : {}),
       optionsSurface: controller.optionSurface,
       conversationCommands: controller.conversationCommands,
       optionSnapshot: controller.optionSnapshot,
@@ -80,9 +86,7 @@ export function useNativeChatStructuredComposerTransport(args: {
       runtime: props.target.kind === 'local' ? 'local' : 'remote',
       sessionId: props.sessionId,
       runtimeEnvironmentId:
-        props.target.kind === 'local' ? null : (props.target.environmentId ?? null),
-      queueHold: queuedMessages.queueHold,
-      queueResume: queuedMessages.queueResume
+        props.target.kind === 'local' ? null : (props.target.environmentId ?? null)
     }
   }, [
     acceptsImages,
@@ -94,7 +98,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     props.agent,
     props.sessionId,
     props.target,
-    queuedMessages,
+    sendBlockedReason,
     sendThroughLaunch,
     setOptionPickerRequest,
     starting

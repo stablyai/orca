@@ -20,7 +20,8 @@ export async function releaseEphemeralVmRuntimeEnvironments(
       removeEnvironment(userDataPath, environment.id)
       continue
     }
-    const { closeOrcadManagedTunnel } = await import('./ssh/orcad-managed-tunnel')
+    const { closeOrcadManagedTunnel } =
+      await import('./managed-server/lifecycle/orcad-managed-tunnel')
     await closeOrcadManagedTunnel(environment.id).catch(() => undefined)
     removeManagedOrcadEnvironment(userDataPath, environment.id)
   }

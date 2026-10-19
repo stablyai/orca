@@ -10,11 +10,8 @@ import { join } from 'node:path'
 import { RELAY_INSTALL_LOCK_NAME } from '../../shared/relay-install-lock-name'
 import { hasErrorCode } from '../daemon/daemon-process-inspection'
 import type { RuntimeRpcClientActivity } from '../runtime/runtime-rpc/runtime-rpc-shutdown'
-import {
-  ORCAD_MANAGED_ACTIVATION_ROOT_ENV,
-  ORCAD_IDLE_EXIT_TIMEOUT_MS,
-  readOrcadE2EIdleTimeoutMs
-} from '../../shared/orcad-idle-exit'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
+import { ORCAD_IDLE_EXIT_TIMEOUT_MS, readOrcadE2EIdleTimeoutMs } from '../../shared/orcad-idle-exit'
 import {
   OrcadIdleExitMonitor,
   type OrcadIdleExitEvidence,

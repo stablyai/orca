@@ -7,7 +7,7 @@ import { detectAgentSendTitleStatus } from './agent-send-title-status'
 import {
   resolveRuntimePaneTitleLeafResolution,
   type RuntimePaneTitleLeafResolution
-} from './runtime-pane-title-leaf-id'
+} from '../../../shared/runtime-pane-title-leaf-id'
 import {
   deriveRunningAgentSendTargets,
   deriveStatuslessStructuredAgentSendTargets,

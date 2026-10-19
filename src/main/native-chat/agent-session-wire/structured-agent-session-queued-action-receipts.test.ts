@@ -66,17 +66,13 @@ function writeUnreadableReceipt(id: string, method: string): void {
     .run(id, SESSION, CALLER.callerKey, method)
 }
 
-/** What a rewind does to the conversation: a new epoch rebuilt with none of the old rows. */
+/** Simulates an older host retiring the whole epoch, including its unsent submissions. */
 async function rewindConversation(): Promise<void> {
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
   if (!journal) {
     throw new Error('expected an open conversation')
   }
-  await journal.replaceEpochItems(
-    'handle_forked',
-    rig.store.getRecord(SESSION)!.lease.runtimeFence,
-    []
-  )
+  await journal.rollEpoch('handle_forked', rig.store.getRecord(SESSION)!.lease.runtimeFence)
 }
 
 /** A stop that leaves a waiting card paused, which only a Resume lifts. */

@@ -10,12 +10,19 @@
  * stops it with that scope for any reason, including ones that kill the death watch.
  *
  * `ORCA_TERMINAL_PROCESS_CEILING` sets TasksMax on each terminal's scope (Linux) or job
- * (Windows); it stays off by default.
+ * (Windows); it stays off by default. Opt-in memory limits: see terminal-memory-limits.ts.
  */
 import { accessSync, constants, existsSync } from 'node:fs'
 import { basename, delimiter, dirname, isAbsolute, join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import { userManagerEnv } from './daemon-cgroup-scope'
+import {
+  enforcedTerminalMemoryLimits,
+  requestedTerminalMemoryLimits,
+  TERMINAL_MEMORY_LIMIT_FILES,
+  terminalMemoryLimitsReport,
+  type TerminalMemoryLimitsReport
+} from './terminal-memory-limits'
 import type {
   PtyProcessCeilingOffReason,
   PtyProcessCeilingState
@@ -27,9 +34,11 @@ export const PTY_PROCESS_CEILING_ENV = 'ORCA_TERMINAL_PROCESS_CEILING'
 /** Below this a shell, its prompt hooks and one build step already collide. */
 const MIN_CEILING = 64
 const CGROUP_ROOT = '/sys/fs/cgroup'
-/** Prints the probe scope's cgroup and, with pids delegated, the limit the kernel enforces on it. */
+/** Prints the probe scope's cgroup, then `file=value` for each limit file its controllers expose. */
 const PROBE_SCRIPT =
-  'read -r line < /proc/self/cgroup; echo "$line"; cat "/sys/fs/cgroup${line#0::}/pids.max" 2>/dev/null || :'
+  'read -r line < /proc/self/cgroup; echo "$line"; d="/sys/fs/cgroup${line#0::}"; ' +
+  `for f in pids.max ${TERMINAL_MEMORY_LIMIT_FILES.join(' ')}; do ` +
+  '[ -r "$d/$f" ] && printf "%s=%s\\n" "$f" "$(cat "$d/$f")"; done; :'
 
 type Runner = (
   program: string,
@@ -59,6 +68,8 @@ export type TerminalScopeResolution = {
   /** Off says why terminals share the daemon's cgroup, for the daemon log. */
   /** `timedOut` is log-only: a busy user manager, not one that refused. */
   scopes: { on: TerminalScopeRuntime } | { off: PtyProcessCeilingOffReason; timedOut?: true }
+  /** Present only when a memory limit was requested; log-only. */
+  memory?: TerminalMemoryLimitsReport
 }
 
 export function parsePtyProcessCeiling(
@@ -111,23 +122,34 @@ type ResolveInput = {
 export function resolveTerminalScopes(input: ResolveInput): TerminalScopeResolution {
   const parsed = parsePtyProcessCeiling(input.env[PTY_PROCESS_CEILING_ENV])
   const limit = parsed.kind === 'limit' ? parsed.limit : null
+  const memoryRequest = requestedTerminalMemoryLimits(input.env)
+  const memoryRequested = memoryRequest.properties.length + memoryRequest.invalid.length > 0
+  const withMemory = (
+    resolution: TerminalScopeResolution,
+    applied: string[] = []
+  ): TerminalScopeResolution =>
+    memoryRequested
+      ? { ...resolution, memory: terminalMemoryLimitsReport(memoryRequest, applied) }
+      : resolution
   const ceilingOff = (reason: PtyProcessCeilingOffReason): PtyProcessCeilingState => ({
     state: 'off',
     reason:
       parsed.kind === 'off' ? 'disabled' : parsed.kind === 'invalid' ? 'invalid_limit' : reason
   })
-  const off = (reason: PtyProcessCeilingOffReason, timedOut = false): TerminalScopeResolution => ({
-    ceiling: ceilingOff(reason),
-    scopes: timedOut ? { off: reason, timedOut } : { off: reason }
-  })
+  const off = (reason: PtyProcessCeilingOffReason, timedOut = false): TerminalScopeResolution =>
+    withMemory({
+      ceiling: ceilingOff(reason),
+      scopes: timedOut ? { off: reason, timedOut } : { off: reason }
+    })
   if (input.platform === 'win32') {
-    return {
+    // Memory limits are Linux-only; Windows jobs could hold one but nothing sets it yet.
+    return withMemory({
       ceiling:
         limit !== null && input.setWindowsLimit?.(limit)
           ? { state: 'on', limit, mechanism: 'windows-job', unit: null }
           : ceilingOff('native_unavailable'),
       scopes: { off: 'unsupported_platform' }
-    }
+    })
   }
   if (input.platform !== 'linux') {
     return off('unsupported_platform')
@@ -185,7 +207,13 @@ export function resolveTerminalScopes(input: ResolveInput): TerminalScopeResolut
     // Why probe, not parse a version: some systemd releases reject OOMPolicy on scopes, and an
     // unknown property fails the whole start, which would fail every terminal.
     const base = ['TimeoutStopSec=5s', ...(limit !== null ? [`TasksMax=${limit}`] : [])]
-    for (const properties of [['OOMPolicy=continue', ...base], base]) {
+    const tiers = [['OOMPolicy=continue', ...base], base]
+    // Why the memory-less tiers: a rejected memory property must not turn terminal scopes off.
+    const candidates =
+      memoryRequest.properties.length > 0
+        ? [...tiers.map((tier) => [...tier, ...memoryRequest.properties]), ...tiers]
+        : tiers
+    for (const properties of candidates) {
       const probe = run(
         systemdRun,
         [
@@ -202,37 +230,54 @@ export function resolveTerminalScopes(input: ResolveInput): TerminalScopeResolut
         ],
         managerEnv
       )
-      const [cgroupLine, pidsMax] = probe.stdout.trim().split('\n')
+      const [cgroupLine, ...limitLines] = probe.stdout.trim().split('\n')
       if (probe.code !== 0 || probe.timedOut || !cgroupLine?.startsWith('0::/')) {
         probeTimedOut ||= probe.timedOut
+        // Why stop: a manager that timed out once will not answer the next tier inside the
+        // launcher's wait either.
+        if (probe.timedOut) {
+          break
+        }
         continue
       }
+      const cgroupValues = Object.fromEntries(
+        limitLines.map((line) => {
+          const at = line.indexOf('=')
+          return [line.slice(0, at), line.slice(at + 1).trim()]
+        })
+      )
       const sliceControlGroup = dirname(cgroupLine.slice('0::'.length))
       // Why verify: managers without pids delegation accept TasksMax and enforce nothing.
-      const enforced = limit !== null && pidsMax?.trim() === String(limit)
-      return {
-        ceiling: enforced
-          ? {
-              state: 'on',
-              limit,
-              mechanism: 'systemd-slice',
-              unit: slice,
-              controlGroup: sliceControlGroup
+      const enforced = limit !== null && cgroupValues['pids.max'] === String(limit)
+      const memoryApplied = enforcedTerminalMemoryLimits(properties, cgroupValues)
+      return withMemory(
+        {
+          ceiling: enforced
+            ? {
+                state: 'on',
+                limit,
+                mechanism: 'systemd-slice',
+                unit: slice,
+                controlGroup: sliceControlGroup
+              }
+            : ceilingOff('controller_unavailable'),
+          scopes: {
+            on: {
+              slice,
+              sliceCgroupPath: join(CGROUP_ROOT, sliceControlGroup),
+              systemdRun,
+              envBinary,
+              launchId,
+              properties: properties.filter((property) =>
+                property.startsWith('TasksMax=')
+                  ? enforced
+                  : !memoryRequest.properties.includes(property) || memoryApplied.includes(property)
+              )
             }
-          : ceilingOff('controller_unavailable'),
-        scopes: {
-          on: {
-            slice,
-            sliceCgroupPath: join(CGROUP_ROOT, sliceControlGroup),
-            systemdRun,
-            envBinary,
-            launchId,
-            properties: enforced
-              ? properties
-              : properties.filter((property) => !property.startsWith('TasksMax='))
           }
-        }
-      }
+        },
+        memoryApplied
+      )
     }
     run('systemctl', ['--user', '--no-block', 'stop', slice], managerEnv)
     return off('slice_unavailable', probeTimedOut)

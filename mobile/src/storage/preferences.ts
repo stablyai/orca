@@ -118,25 +118,6 @@ export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise
   await persistMirrored(AUTOCOMPLETE_KEY, value)
 }
 
-export type MobileShellBuildKind = 'native' | 'ota'
-
-/**
- * Which shell this binary was built for, and the only place the build-time constant is spelled.
- *
- * `babel-preset-expo`'s inline-env-vars plugin replaces a literal `process.env.EXPO_PUBLIC_*`
- * member expression with the build machine's value, so in a release bundle this function has no
- * variable left in it. That rewrite only fires on a literal member expression: a destructure, a
- * computed key or a copy through another binding is not inlined and would read `undefined` on a
- * device, which is why every caller goes through this one and never through `process.env`.
- *
- * Anything but the exact string `ota` — unset, empty, a typo, a value from a stale shell — is
- * native. A build without the variable, development or release, is the native app; the hybrid shell
- * mounts only in a build made with it, and nothing stored can change that.
- */
-export function mobileShellBuildKind(): MobileShellBuildKind {
-  return process.env.EXPO_PUBLIC_MOBILE_SHELL === 'ota' ? 'ota' : 'native'
-}
-
 const TERMINAL_LIVE_INPUT_DISABLED_PREFIX = 'orca:terminalLiveInputDisabled:'
 
 export type DisabledTerminalLiveInputHandlesPreference = {

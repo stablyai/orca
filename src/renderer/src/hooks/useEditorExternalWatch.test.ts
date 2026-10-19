@@ -21,7 +21,8 @@ vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
 
 import {
   buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
-  collectOverflowEditorExternalReloadTargets as getOverflowExternalReloadTargets
+  collectOverflowEditorExternalReloadTargets as getOverflowExternalReloadTargets,
+  EXTERNAL_MUTATION_DEBOUNCE_MS
 } from './editor-external-watch-event-reconciliation'
 import { getEditorExternalWatchTargetKey as getWatchedTargetKey } from './editor-external-watch-targets'
 import { useAppStore } from '@/store'
@@ -257,7 +258,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     handleFsChanged(payload([{ kind: 'delete', absolutePath: '/repo/notes.md' }]))
 
     expect(setExternalMutation).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'deleted')
 
     dispose()
@@ -538,7 +539,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
 
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
     expect(notifyEditorExternalFileChange).not.toHaveBeenCalled()
@@ -568,7 +569,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
 
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
     expect(notifyEditorExternalFileChange).toHaveBeenCalledWith({
@@ -652,6 +653,42 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     dispose()
   })
 
+  it('does not let a later write join an echo-verification read that started before it', async () => {
+    const dirtyFile = {
+      ...fileNotes,
+      isDirty: true
+    }
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [dirtyFile],
+      setExternalMutation
+    } as never)
+    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([dirtyFile] as never)
+    let resolveEchoRead: (value: { content: string; isBinary: boolean }) => void = () => {}
+    const readFile = vi
+      .fn()
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveEchoRead = resolve
+        })
+      )
+      .mockResolvedValue({ content: 'agent content', isBinary: false })
+    vi.stubGlobal('window', { api: { fs: { readFile } } })
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
+
+    recordSelfWrite('/repo/notes.md', 'orca save')
+    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+    await vi.advanceTimersByTimeAsync(50)
+    // An agent writes while the slow echo read is still in flight.
+    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+    await vi.advanceTimersByTimeAsync(50)
+    resolveEchoRead({ content: 'orca save', isBinary: false })
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(readFile).toHaveBeenCalledTimes(2)
+    expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
+    dispose()
+  })
+
   it('marks a lone dirty unstaged-diff tab changed-on-disk', () => {
     const dirtyDiffTab = {
       id: 'diff-notes',
@@ -671,7 +708,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
 
     expect(setExternalMutation).toHaveBeenCalledWith('diff-notes', 'changed')
     expect(notifyEditorExternalFileChange).not.toHaveBeenCalled()
@@ -692,7 +729,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
 
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', null)
     dispose()
@@ -737,7 +774,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
     handleFsChanged(payload([{ kind: 'delete', absolutePath: '/repo/notes.md' }]), 'env-1')
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
 
     expect(setExternalMutation).toHaveBeenCalledWith('runtime-notes', 'deleted')
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'deleted')

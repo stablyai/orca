@@ -9,6 +9,9 @@ import { createWorkspaceSourceResolver } from './scripts/workspace-source-export
 
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
 const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
+const paletteMeasurementFile =
+  'src/renderer/src/lib/palette-match/palette-match-performance.test.ts'
+const measurementFiles = [measurementFile, paletteMeasurementFile]
 const transforms = {
   define: {
     ORCA_FEATURE_WALL_ENABLED: 'true',
@@ -29,6 +32,7 @@ const transforms = {
 const testOptions = {
   environment: 'node',
   clearMocks: false,
+  ...(balancedShards ? { silent: 'passed-only' as const } : {}),
   // Persistent transforms can miss source additions; only explicit cache experiments opt in.
   fsModuleCache: Boolean(process.env.ORCA_UNIT_MODULE_CACHE_PATH),
   ...(process.env.ORCA_UNIT_MODULE_CACHE_PATH
@@ -58,30 +62,28 @@ const nodeProject = {
     name: process.versions.bun ? 'node-runtime' : 'node',
     env: { ORCA_VITEST_RUNTIME: process.versions.bun ? 'node-runtime' : 'node' },
     include: process.versions.bun ? NODE_RUNTIME_INCLUDE : UNIT_INCLUDE,
-    exclude: [...testOptions.exclude, measurementFile],
+    exclude: [...testOptions.exclude, ...measurementFiles],
     sequence: { groupOrder: 1 },
     ...(process.versions.bun
       ? { pool: 'node-runtime', poolRunner: nodeRuntimePool }
       : { pool: 'forks' })
   }
 }
+const bunProject = {
+  extends: false,
+  ...transforms,
+  test: {
+    ...testOptions,
+    name: 'bun',
+    env: { ORCA_VITEST_RUNTIME: 'bun' },
+    pool: 'forks',
+    exclude: [...testOptions.exclude, ...NODE_RUNTIME_INCLUDE, ...measurementFiles],
+    sequence: { groupOrder: 1 }
+  }
+}
+const paletteRuntimeProject = process.versions.bun ? bunProject : nodeProject
 const projects = [
-  ...(process.versions.bun
-    ? [
-        {
-          extends: false,
-          ...transforms,
-          test: {
-            ...testOptions,
-            name: 'bun',
-            env: { ORCA_VITEST_RUNTIME: 'bun' },
-            pool: 'forks',
-            exclude: [...testOptions.exclude, ...NODE_RUNTIME_INCLUDE, measurementFile],
-            sequence: { groupOrder: 1 }
-          }
-        }
-      ]
-    : []),
+  ...(process.versions.bun ? [bunProject] : []),
   nodeProject,
   // Keep the event-loop measurement free of other suites without weakening its limits.
   {
@@ -93,6 +95,18 @@ const projects = [
       exclude: testOptions.exclude,
       maxWorkers: 1,
       sequence: { groupOrder: 2 }
+    }
+  },
+  // Preserve the palette test's runtime and budgets while keeping other suites off its CPU.
+  {
+    ...paletteRuntimeProject,
+    test: {
+      ...paletteRuntimeProject.test,
+      name: 'palette-measurement',
+      include: [paletteMeasurementFile],
+      exclude: testOptions.exclude,
+      maxWorkers: 1,
+      sequence: { groupOrder: 3 }
     }
   }
 ]

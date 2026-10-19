@@ -130,18 +130,29 @@ function ownershipLookup():
     }
   }
   return (row) => {
-    const owner = historyRowOwner(row.agent)
-    return owner ? (byProviderSession.get(`${owner}\0${row.sessionId}`) ?? null) : null
+    for (const owner of historyRowOwners(row.agent)) {
+      const ownership = byProviderSession.get(`${owner}\0${row.sessionId}`)
+      if (ownership) {
+        return ownership
+      }
+    }
+    return null
   }
 }
 
-/** The agent whose chats own history rows listed under `rowAgent`; null when none does. */
-function historyRowOwner(rowAgent: string): StructuredAgentId | null {
-  return (
-    STRUCTURED_AGENT_RUNTIME_METADATA.find(({ sessionHistory }) =>
-      sessionHistory.rowAgents.some((agent) => agent === rowAgent)
-    )?.definition.agent ?? null
-  )
+/** The agents whose chats own history rows listed under each row agent: one CLI can run as several. */
+const HISTORY_ROW_OWNERS = new Map<string, StructuredAgentId[]>()
+for (const { definition, sessionHistory } of STRUCTURED_AGENT_RUNTIME_METADATA) {
+  for (const rowAgent of sessionHistory.rowAgents) {
+    HISTORY_ROW_OWNERS.set(rowAgent, [
+      ...(HISTORY_ROW_OWNERS.get(rowAgent) ?? []),
+      definition.agent
+    ])
+  }
+}
+
+function historyRowOwners(rowAgent: string): readonly StructuredAgentId[] {
+  return HISTORY_ROW_OWNERS.get(rowAgent) ?? []
 }
 
 export function assertLegacyAiVaultResumeAllowed(args: AiVaultPrepareSessionResumeArgs): void {
@@ -177,35 +188,18 @@ export async function assertLegacyAiVaultResumeCommandAllowed(
 export function findResumeOwnership(
   args: Pick<AiVaultPrepareSessionResumeArgs, 'agent' | 'sessionId' | 'filePath'>
 ): StructuredProviderSessionOwnership | null {
-  const owner = historyRowOwner(args.agent)
-  if (!owner) {
+  const owners = new Set(historyRowOwners(args.agent))
+  if (owners.size === 0) {
     return null
   }
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    return null
-  }
-  const exact = args.sessionId ? findOwnership(owner, args.sessionId) : null
-  if (exact) {
-    return exact
-  }
+  const owned = listOwnership().filter((ownership) => owners.has(ownership.provider))
   const fileName = args.filePath.split(/[\\/]/).at(-1) ?? ''
   return (
-    listOwnership().find(
-      (ownership) => ownership.provider === owner && fileName.includes(ownership.providerSessionId)
-    ) ?? null
-  )
-}
-
-function findOwnership(
-  provider: StructuredAgentId,
-  providerSessionId: string
-): StructuredProviderSessionOwnership | null {
-  return (
-    listOwnership().find(
-      (ownership) =>
-        ownership.provider === provider && ownership.providerSessionId === providerSessionId
-    ) ?? null
+    (args.sessionId
+      ? owned.find((ownership) => ownership.providerSessionId === args.sessionId)
+      : undefined) ??
+    owned.find((ownership) => fileName.includes(ownership.providerSessionId)) ??
+    null
   )
 }
 
@@ -241,10 +235,11 @@ type ResumeInvocation = StructuredAgentResumeInvocation & {
 }
 
 function parseResumeInvocations(command: string): ResumeInvocation[] {
-  const binaries = new Map<string, StructuredAgentRuntimeMetadata>()
+  // One binary can run the chats of several agents; a resume of it is checked against each.
+  const binaries = new Map<string, StructuredAgentRuntimeMetadata[]>()
   for (const registration of STRUCTURED_AGENT_RUNTIME_METADATA) {
     for (const name of sessionHistoryBinaryNames(registration.sessionHistory)) {
-      binaries.set(name, registration)
+      binaries.set(name, [...(binaries.get(name) ?? []), registration])
     }
   }
   // Only a command's program can resume: a name elsewhere is an argument or prompt text
@@ -252,18 +247,16 @@ function parseResumeInvocations(command: string): ResumeInvocation[] {
   const invocations: ResumeInvocation[] = []
   for (const words of shellCommands(command)) {
     const program = commandProgramIndex(words)
-    const registration = binaries.get(commandName(words[program] ?? ''))
-    if (!registration) {
-      continue
-    }
-    const history = registration.sessionHistory
-    const invocation = history.parseResumeArgs(words.slice(program + 1))
-    if (invocation) {
-      invocations.push({
-        ...invocation,
-        provider: registration.definition.agent,
-        history
-      })
+    for (const registration of binaries.get(commandName(words[program] ?? '')) ?? []) {
+      const history = registration.sessionHistory
+      const invocation = history.parseResumeArgs(words.slice(program + 1))
+      if (invocation) {
+        invocations.push({
+          ...invocation,
+          provider: registration.definition.agent,
+          history
+        })
+      }
     }
   }
   return invocations

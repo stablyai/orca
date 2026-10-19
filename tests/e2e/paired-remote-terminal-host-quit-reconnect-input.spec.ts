@@ -30,7 +30,7 @@ import {
   holdWindowGraphPublication,
   releaseWindowGraphPublication
 } from './helpers/hold-window-graph-publication'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-host-quit-input-'))
 const fixturePath = path.join(scratch, 'paired-host-quit-terminal.mjs')

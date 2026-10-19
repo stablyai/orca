@@ -101,6 +101,7 @@ export interface RelayRuntimeObserver {
     fallback: boolean
   }): void
   recordControlClose?(code: number): void
+  recordPostProofClose?(reason: string): void
   recordSpliceClose?(trigger: string): void
   recordClientAcceptAbandoned?(stage: RelayClientAcceptStage, elapsedMs: number): void
   recordClientAcceptCompleted?(sample: RelayClientAcceptSample): void
@@ -200,6 +201,7 @@ type RelayMetricDeltas = {
   regionFallbacks: Record<string, number>
   unavailableRegions: Record<string, number>
   controlClosesByCode: Record<string, number>
+  postProofClosesByReason: Record<string, number>
   spliceClosesByTrigger: Record<string, number>
   clientAcceptsAbandonedByStage: Record<string, number>
   clientAcceptAbandonedMsMax: number
@@ -288,6 +290,7 @@ const emptyDeltas = (): RelayMetricDeltas => ({
   regionFallbacks: {},
   unavailableRegions: {},
   controlClosesByCode: {},
+  postProofClosesByReason: {},
   spliceClosesByTrigger: {},
   clientAcceptsAbandonedByStage: {},
   clientAcceptAbandonedMsMax: 0,
@@ -529,6 +532,10 @@ export class RelayObservability implements RelayRuntimeObserver {
     this.deltas.controlClosesByCode[key] = (this.deltas.controlClosesByCode[key] ?? 0) + 1
   }
 
+  recordPostProofClose(reason: string): void {
+    increment(this.deltas.postProofClosesByReason, reason)
+  }
+
   recordSpliceClose(trigger: string): void {
     this.deltas.spliceClosesByTrigger[trigger] =
       (this.deltas.spliceClosesByTrigger[trigger] ?? 0) + 1
@@ -670,6 +677,8 @@ export class RelayObservability implements RelayRuntimeObserver {
       regionFallbacksDelta: deltas.regionFallbacks,
       unavailableRegionsDelta: deltas.unavailableRegions,
       controlClosesByCodeDelta: deltas.controlClosesByCode,
+      // Closes after a host proof but before its control was wired; none is in the line above.
+      postProofClosesByReasonDelta: deltas.postProofClosesByReason,
       spliceClosesByTriggerDelta: deltas.spliceClosesByTrigger,
       clientAcceptsAbandonedByStageDelta: deltas.clientAcceptsAbandonedByStage,
       clientAcceptAbandonedMsMax: roundMs(deltas.clientAcceptAbandonedMsMax),

@@ -91,8 +91,8 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with: { package_json_file: cloud/package.json }
+      - uses: pnpm/setup@v2
+        with: { package-json-file: cloud/package.json, install: false }
 
       - uses: actions/setup-node@v4
         with:
@@ -441,9 +441,15 @@ jobs:
             if .regionalRehomeProtocol == null then "regionalRehomeProtocol" else empty end
           ] | if length > 0 then "runtime predecessor normalized legacy fields=" + join(",") else empty end' \
             <<< "${CURRENT_RUNTIME}"
-          CURRENT_DIRECTOR_STATUS="$(admin_post current-cell-status \
+          if ! CURRENT_DIRECTOR_STATUS="$(admin_post current-cell-status \
             "${DIRECTOR_ORIGIN}/v1/admin/cell-status" \
-            "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"
+            "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"; then
+            if jq -e '.error == "cell_in_reserve_mode"' \
+              "${RUNNER_TEMP}/current-cell-status.json" >/dev/null 2>&1; then
+              echo "${TARGET_CELL_ID} is in reserve mode: flip it to admitMode=db with the cell-flags workflow and wait for it to record db before rolling it, then flip it back to reserve" >&2
+            fi
+            exit 1
+          fi
           SOURCE_INCARNATION="$(jq -er '.status.runtime.cellIncarnation' \
             <<< "${CURRENT_DIRECTOR_STATUS}")"
           if test "${ROLLBACK_RESUME}" = true && ! jq -e \

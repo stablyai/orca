@@ -10,6 +10,7 @@ import {
   parseCountBaseline,
   parseCountNotes,
   parseEntryBaseline,
+  runCountRatchet,
   runEntryRatchet
 } from './ratchet-baseline.mjs'
 
@@ -64,6 +65,68 @@ describe('runEntryRatchet', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     expect(runEntryRatchet(ratchet(['a.ts', 'c.ts']), root, '--prune')).toBe(1)
     expect(readFileSync(join(root, 'baseline.txt'), 'utf8')).toBe('# header\na.ts\n')
+  })
+})
+
+describe('runCountRatchet', () => {
+  let root
+  afterEach(() => {
+    vi.restoreAllMocks()
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  function ratchet(current) {
+    root = mkdtempSync(join(tmpdir(), 'orca-count-ratchet-'))
+    writeFileSync(join(root, 'baseline.txt'), '# header\n2 a.ts # why\n1 b.ts\n')
+    return {
+      name: 'demo',
+      baselinePath: 'baseline.txt',
+      header: ['# header'],
+      collect: () => new Map(current),
+      unit: 'thing(s)',
+      fix: ['Fix the file.']
+    }
+  }
+
+  it('fails growth and an unpruned shrink, and passes the baseline as-is', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    expect(
+      runCountRatchet(
+        ratchet([
+          ['a.ts', 3],
+          ['b.ts', 1]
+        ]),
+        root
+      )
+    ).toBe(1)
+    expect(error.mock.calls.join('\n')).toContain('a.ts: 3 thing(s), baseline allows 2.')
+    expect(runCountRatchet(ratchet([['a.ts', 2]]), root)).toBe(1)
+    expect(error.mock.calls.join('\n')).toContain('b.ts: now 0, baseline 1.')
+    expect(
+      runCountRatchet(
+        ratchet([
+          ['b.ts', 1],
+          ['a.ts', 2]
+        ]),
+        root
+      )
+    ).toBe(0)
+  })
+
+  it('prunes rows down only, keeping their notes', () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    expect(
+      runCountRatchet(
+        ratchet([
+          ['a.ts', 1],
+          ['c.ts', 4]
+        ]),
+        root,
+        '--prune'
+      )
+    ).toBe(0)
+    expect(readFileSync(join(root, 'baseline.txt'), 'utf8')).toBe('# header\n1 a.ts # why\n')
   })
 })
 

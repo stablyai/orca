@@ -14,8 +14,7 @@ import {
   getTerminalMacOptionSearchEntries,
   getTerminalMacYenSearchEntries,
   getTerminalPaneInteractionSearchEntries,
-  getTerminalRenderingSearchEntries,
-  getTerminalSetupScriptSearchEntries
+  getTerminalRenderingSearchEntries
 } from './terminal-search'
 import {
   getTerminalRightClickToPasteSearchEntry,
@@ -27,7 +26,6 @@ import { ManageSessionsSection } from './ManageSessionsSection'
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 import { TerminalInteractionSection } from './TerminalInteractionSection'
 import { TerminalRenderingSection } from './TerminalRenderingSection'
-import { TerminalSetupScriptSection } from './TerminalSetupScriptSection'
 import { TerminalWindowsShellSection } from './TerminalWindowsShellSection'
 import { TerminalWindowsAdministratorSection } from './TerminalWindowsAdministratorSection'
 import { TerminalCustomShellInput } from './TerminalCustomShellInput'
@@ -329,13 +327,6 @@ export function TerminalPane({
         settings={settings}
         updateSettings={updateSettings}
         searchQuery={searchQuery}
-      />
-    ) : null,
-    matchesSettingsSearch(searchQuery, getTerminalSetupScriptSearchEntries()) ? (
-      <TerminalSetupScriptSection
-        key="setup-script"
-        settings={settings}
-        updateSettings={updateSettings}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getManageSessionsSearchEntries()) ? (

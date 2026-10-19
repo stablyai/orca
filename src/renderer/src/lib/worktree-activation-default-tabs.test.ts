@@ -4,7 +4,7 @@ import {
   createMockStore,
   registerWorktreeActivationReset,
   createdTabStartups
-} from './worktree-activation-test-harness'
+} from './worktree-activation.test-fixture'
 
 registerWorktreeActivationReset()
 
@@ -19,7 +19,6 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(createdTabStartups(store)).toEqual({})
-    expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
   })
 
   it('does not recreate a terminal after the user closed the last one', () => {
@@ -182,7 +181,6 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.createTab).not.toHaveBeenCalled()
     expect(store.setActiveTab).not.toHaveBeenCalled()
     expect(createdTabStartups(store)).toEqual({})
-    expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
     expect(store.queueTabIssueCommandSplit).not.toHaveBeenCalled()
   })
 

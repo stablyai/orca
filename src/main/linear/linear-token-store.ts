@@ -1,5 +1,5 @@
-import { getSecretStore } from '../../shared/secret-store'
-import { unlinkSync, writeFileSync } from 'node:fs'
+import { unlinkSync } from 'node:fs'
+import { writeEncryptedCredential } from '../integration-credential-file'
 import {
   LEGACY_WORKSPACE_ID,
   ensureOrcaDir,
@@ -26,24 +26,14 @@ import type { LinearWorkspace } from '../../shared/linear/workspace-types'
 import { readCredentialFileProtection } from '../credential-file-protection'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
-function writeEncryptedToken(path: string, apiKey: string): void {
-  if (getSecretStore().isEncryptionAvailable()) {
-    const encrypted = getSecretStore().encryptString(apiKey)
-    writeFileSync(path, encrypted, { mode: 0o600 })
-    return
-  }
-
-  console.warn('[linear] secret encryption unavailable — storing token in plaintext')
-  writeFileSync(path, apiKey, { encoding: 'utf-8', mode: 0o600 })
-}
-
 export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
   ensureOrcaDir()
   if (workspaceId !== LEGACY_WORKSPACE_ID) {
     ensureWorkspaceTokenDir()
   }
   const tokenPath = getWorkspaceTokenPath(workspaceId)
-  writeEncryptedToken(tokenPath, apiKey)
+  // Why the shared writer: it re-applies 0600 to an existing file and never truncates it mid-write.
+  writeEncryptedCredential('Linear', tokenPath, apiKey)
   workspaceTokenFileCache.forget(workspaceId)
 }
 

@@ -21,7 +21,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 // @ts-expect-error -- minimal API stub for the store under test
 globalThis.window = { api: {} }
-import { createTestStore } from './store-test-helpers'
+import { createRuntimeDetectedAgentsPairingTestStore as createTestStore } from './runtime-detected-agents-pairing.test-fixture'
 import { getRuntimeAgentInventoryKey } from './runtime-agent-inventory-key'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 

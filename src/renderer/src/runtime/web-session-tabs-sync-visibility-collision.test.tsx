@@ -6,12 +6,11 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
-import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
 
 const mocks = vi.hoisted(() => ({
   createTerminal: vi.fn(),
-  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn(),
+  ownerEnvironmentIdForWorkspace: vi.fn(),
   recoverSnapshot: vi.fn(),
   runtimeSessionMirrorEnvironmentKey: vi.fn()
 }))
@@ -23,13 +22,10 @@ vi.mock('./use-runtime-session-mirror-environment-key', () => ({
   })
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeRuntimeOwnerModule>()
-  return {
-    ...actual,
-    getExplicitRuntimeEnvironmentIdForWorktree: mocks.getExplicitRuntimeEnvironmentIdForWorktree
-  }
-})
+vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
+  mirroredRuntimeEnvironmentIdForWorkspace: (state: unknown, workspaceId: string | null) =>
+    workspaceId ? (mocks.ownerEnvironmentIdForWorkspace(state, workspaceId) ?? null) : null
+}))
 
 vi.mock('./web-session-terminal-orphan-recovery', () => ({
   recoverWebSessionTerminalOrphansBeforeApply: mocks.recoverSnapshot
@@ -44,7 +40,7 @@ import { useAppStore } from '@/store'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { AppState } from '@/store/types'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { subscribeAcceptedWebSessionTerminalHandle } from './web-session-terminal-handle-events'
 import {
   _getWebSessionTabsReceiptTrackingCountsForTest,
@@ -250,7 +246,7 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
     runtimeSubscribe.mockClear()
     mocks.createTerminal.mockReset().mockResolvedValue(undefined)
     mocks.recoverSnapshot.mockReset().mockImplementation(async (_state, snapshot) => snapshot)
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReset().mockReturnValue(ENV_A)
+    mocks.ownerEnvironmentIdForWorkspace.mockReset().mockReturnValue(ENV_A)
     mocks.runtimeSessionMirrorEnvironmentKey.mockReset().mockReturnValue(MIRROR_KEY)
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -272,7 +268,7 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
   })
 
   it('resumes the active host before lexicographically earlier global mirrors', async () => {
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReturnValue(ENV_B)
+    mocks.ownerEnvironmentIdForWorkspace.mockReturnValue(ENV_B)
     const hook = renderHook(() => useWebSessionTabsSync())
     await act(settle)
 

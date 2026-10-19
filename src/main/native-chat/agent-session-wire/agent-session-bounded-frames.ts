@@ -67,14 +67,26 @@ function boundedHistoryFrame(event: HistoryFrame): HistoryFrame {
       : {})
   }
   if (frame.type === 'batch') {
-    const { latestTurn, ...batch } = frame
+    const { actionablePromptIds, ...batchFields } = frame
+    const bounded =
+      actionablePromptIds === undefined ||
+      within(actionablePromptIds, BOUNDED_FRAME_LATEST_TURN_BYTES)
+        ? frame
+        : batchFields
+    const { latestTurn, ...batch } = bounded
     return latestTurn === undefined || within(latestTurn, BOUNDED_FRAME_LATEST_TURN_BYTES)
-      ? frame
+      ? bounded
       : batch
   }
-  const { latestTurn, ...page } = frame.page
+  const { actionablePromptIds, ...pageFields } = frame.page
+  const boundedPage =
+    actionablePromptIds === undefined ||
+    within(actionablePromptIds, BOUNDED_FRAME_LATEST_TURN_BYTES)
+      ? frame.page
+      : pageFields
+  const { latestTurn, ...page } = boundedPage
   return latestTurn === undefined || within(latestTurn, BOUNDED_FRAME_LATEST_TURN_BYTES)
-    ? frame
+    ? { ...frame, page: boundedPage }
     : { ...frame, page }
 }
 

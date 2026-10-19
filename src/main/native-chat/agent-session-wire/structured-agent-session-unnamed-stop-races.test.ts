@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { publishCodexTurnLifecycle } from '../../codex/codex-structured-journal-translation-turns'
 import {
@@ -7,6 +7,9 @@ import {
   THREAD_ID as CODEX_THREAD
 } from '../../codex/codex-structured-session-adapter-fixture'
 import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
+import { settledWithin } from '../../codex/codex-structured-dispatch-test-support'
+import { CODEX_TURN_OPEN_WAIT_MS } from '../../codex/codex-structured-turn-open-wait'
+import type * as CodexTurnOpenWait from '../../codex/codex-structured-turn-open-wait'
 import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
 import {
   createRestTestRig,
@@ -26,13 +29,53 @@ import {
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
 
+const openWaits = vi.hoisted(() => {
+  const state: {
+    turnIds: string[]
+    ended: string[]
+    began: (() => void) | null
+    releaseAll: (() => void) | null
+  } = { turnIds: [], ended: [], began: null, releaseAll: null }
+  return state
+})
+vi.mock('../../codex/codex-structured-turn-open-wait', async (importOriginal) => {
+  const actual = await importOriginal<typeof CodexTurnOpenWait>()
+  return {
+    ...actual,
+    createCodexTurnOpenWaits: () => {
+      const waits = actual.createCodexTurnOpenWaits()
+      openWaits.releaseAll = waits.releaseAll
+      return {
+        ...waits,
+        wait: (turnId: string, withinMs: number) => {
+          openWaits.turnIds.push(turnId)
+          const pending = waits.wait(turnId, withinMs)
+          openWaits.began?.()
+          return pending.then(() => {
+            openWaits.ended.push(turnId)
+          })
+        }
+      }
+    }
+  }
+})
+
 // The Stop names no turn: the host stops whatever the chat has in flight, including a send the
 // agent has not echoed yet.
 
 let restRig: RestTestRig | undefined
 let adapter: CodexStructuredSessionAdapter | undefined
 let queuedRig: QueuedMessageTestRig | undefined
+beforeEach(() => {
+  openWaits.turnIds.length = 0
+  openWaits.ended.length = 0
+  openWaits.began = null
+  openWaits.releaseAll = null
+})
 afterEach(async () => {
+  openWaits.began = null
+  openWaits.releaseAll?.()
+  vi.useRealTimers()
   vi.restoreAllMocks()
   await adapter?.closeAll()
   await restRig?.dispose()
@@ -113,7 +156,28 @@ it('Codex: reaches a turn admitted before its started notification or user echo'
 
 it('Codex: never answers a quiet success while an admitted turn cannot yet take an interrupt', async () => {
   const { current, interrupts } = await admittedCodexSend()
-  const response = await current.host.cancel(CALLER, unnamedStop())
+  await current.host.flushStreamedEvents(SESSION)
+  const began = Promise.withResolvers<void>()
+  openWaits.began = began.resolve
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  const stopping = current.host.cancel(CALLER, unnamedStop())
+  try {
+    await began.promise
+    expect(openWaits.turnIds).toEqual(['turn-1'])
+    const held = settledWithin(stopping, CODEX_TURN_OPEN_WAIT_MS - 1)
+    await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS - 1)
+    expect(openWaits.ended).toEqual([])
+    expect(await held).toBe('held')
+    expect(interrupts()).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(openWaits.ended).toEqual(['turn-1'])
+  } finally {
+    openWaits.began = null
+    openWaits.releaseAll?.()
+    vi.useRealTimers()
+    await stopping
+  }
+  const response = await stopping
   expect(interrupts().length).toBeGreaterThan(0)
   const child = current.host.collaboratorsForTests().sessions.get(SESSION)?.child
   if (response.ok) {

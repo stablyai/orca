@@ -22,6 +22,20 @@ function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedSt
   return normalizeLoadedGlobalSettings(parsed, terminal, profile)
 }
 
+describe('retired setup placement', () => {
+  it.each(['split-vertical', 'split-horizontal', 'new-tab', undefined])(
+    'drops saved setup location %s without changing terminal preferences',
+    (setupScriptLaunchMode) => {
+      const normalized = normalizeLegacyProfile({
+        setupScriptLaunchMode,
+        terminalFocusFollowsMouse: true
+      })
+      expect(normalized).not.toHaveProperty('setupScriptLaunchMode')
+      expect(normalized.terminalFocusFollowsMouse).toBe(true)
+    }
+  )
+})
+
 describe('retired Agents sidebar setting', () => {
   it('does not mark new profiles as migrated', () => {
     expect(normalizeLegacyProfile({}).agentsSidebarMigratedFromExperimental).toBe(false)

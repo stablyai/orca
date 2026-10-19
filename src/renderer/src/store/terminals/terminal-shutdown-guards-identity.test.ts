@@ -29,7 +29,7 @@ function harness(initial: Partial<AppState>, exitGuardPtyIds: readonly string[])
     get: (() => current) as never,
     keepIdentifiers: false,
     rendererShutdownPtyIds: exitGuardPtyIds,
-    runtimeEnvironmentId: null,
+    runtimeOwnsRemotePtys: false,
     set: set as never,
     tabs: []
   })

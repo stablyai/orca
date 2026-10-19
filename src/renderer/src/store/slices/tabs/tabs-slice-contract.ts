@@ -108,7 +108,12 @@ export type TabsSlice = {
   reorderUnifiedTabs: (
     groupId: string,
     tabIds: string[],
-    opts?: { recordInteraction?: boolean }
+    /** `layoutOwnerHandled`: the caller already asked main for this order, or main cannot take it. */
+    opts?: {
+      recordInteraction?: boolean
+      projectedMoveTabId?: string
+      layoutOwnerHandled?: boolean
+    }
   ) => void
   setTabLabel: (tabId: string, label: string) => void
   /** Set a tab's view mode (terminal vs native chat). Patches only that tab. */
@@ -126,7 +131,14 @@ export type TabsSlice = {
   closeOtherTabs: (tabId: string) => string[]
   closeTabsToRight: (tabId: string) => string[]
   closeTabsToLeft: (tabId: string) => string[]
-  ensureWorktreeRootGroup: (worktreeId: string) => string
+  ensureWorktreeRootGroup: (
+    worktreeId: string,
+    orderSlot?: {
+      tabId: string
+      targetGroupId?: string
+      precedingTabIds: readonly string[]
+    }
+  ) => string
   focusGroup: (worktreeId: string, groupId: string) => void
   closeEmptyGroup: (worktreeId: string, groupId: string) => boolean
   createEmptySplitGroup: (
@@ -146,6 +158,8 @@ export type TabsSlice = {
       groupId: string
       index?: number
       splitDirection?: TabSplitDirection
+      /** The split's new group id, as main minted it; layout-owner builds only. */
+      newGroupId?: string
     }
   ) => boolean
   setTabGroupSplitRatio: (worktreeId: string, nodePath: string, ratio: number) => void

@@ -9,10 +9,10 @@ import { EphemeralVmRecipeSshTargetSchema } from '../../shared/ephemeral-vm-reci
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { getOrcadSshDeployment } from '../../shared/runtime-environments'
 import { normalizeSshConfigAlias } from '../../shared/ssh-config-alias'
-import { runTargetLifecycle } from '../ipc/ssh-target-lifecycle-queue'
+import { runTargetLifecycle } from '../ipc/ssh/ssh-target-lifecycle-queue'
 import { normalizeSshTarget } from '../persistence/leasing-ssh-ptys/ssh-normalization'
-import { requireManagedOrcadTargetStore } from './orcad-managed-runtime-context'
-import { createManagedOrcadEnvironment } from './orcad-runtime-deployment'
+import { requireManagedOrcadTargetStore } from '../managed-server/lifecycle/orcad-managed-runtime-context'
+import { createManagedOrcadEnvironment } from '../managed-server/lifecycle/orcad-runtime-deployment'
 import { rotateSshProviderAuthority } from './ssh-provider-authority'
 
 // Why no port forwards: a managed server is only created on an empty host.

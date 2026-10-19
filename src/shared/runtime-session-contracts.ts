@@ -300,6 +300,7 @@ export type RuntimeMobileSessionCreateTerminalResult = {
   tab: RuntimeMobileSessionTerminalClientTab
   publicationEpoch: string
   snapshotVersion: number
+  warning?: 'desktop-tab-not-shown'
 }
 
 export type RuntimeMobileSessionTabsRemovedResult = RuntimeMobileSessionTabsResult & {

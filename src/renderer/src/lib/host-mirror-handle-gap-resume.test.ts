@@ -1,8 +1,13 @@
 import path from 'node:path'
+import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
+import {
+  makeSnapshot,
+  resetWebSessionTabsSyncTestState
+} from '@/runtime/web-session-tabs-sync-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore, type AppState } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
-import { makeCreatedAgentWorktree } from '@/lib/worktree-activation-created-agent-test-state'
+import { makeCreatedAgentWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   markHostSessionMirrorHydrated,
@@ -16,6 +21,7 @@ import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-typ
 import {
   HOST_MIRROR_HANDLE_GAP_DEADLINE_MS,
   countParkedHostMirrorHandleGapPanesForTests,
+  hasHostMirrorHandleWaitExpired,
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
 
@@ -89,23 +95,7 @@ function seedMirroredWorkspace(worktree: ReturnType<typeof makeCreatedAgentWorkt
   useAppStore.setState(state as AppState)
 }
 
-/**
- * The first frame of a SPLIT mirrored tab whose sibling surface is already `ready` while the
- * record's own surface is still `pending-handle` and has never been bound.
- *
- * Why "never been bound" and not "went pending": `retainPendingTerminalBindings`
- * (web-session-tabs-sync/terminal-build.ts) carries a pending surface's PRIOR binding forward, so a
- * leaf that has ever held a handle keeps it across the gap and this shape cannot arise from one. It
- * needs a cold start or a re-pair — no existing layout to retain from.
- *
- * No wait is armed here for a separate reason: `ptyIdsByTabId[tab]` is non-empty, so the pane reads
- * decidable at the tab-granular gate before the per-pane wait is ever considered. That is the
- * residual, and it is decided on the first frame.
- *
- * And not "the tab published a handle no leaf is bound to": `ptyIdsByTabId[tab]` is built from the
- * very map written to `terminalLayoutsByTabId[tab].ptyIdsByLeafId`, so those two cannot disagree
- * about which PTY ids exist.
- */
+/** A cold split mirror whose sibling is ready before this leaf has ever held a binding. */
 function seedSplitTabWithOnlySiblingReady(
   worktree: ReturnType<typeof makeCreatedAgentWorktree>
 ): void {
@@ -289,12 +279,48 @@ describe('resume across the mirror handle gap', () => {
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
   })
 
-  // The counterweight to the park, and the reason the hydration short-circuit could not simply be
-  // dropped: a pane with nothing outstanding must still resume. Here no leaf of the published row
-  // binds a PTY this environment minted, so there is no handle on its way and no wait to arm —
-  // parking would be the latch-that-never-releases defect, since mirror settlement has already run
-  // and will not replay the sweep a second time.
-  it('still resumes a published row no leaf of which binds this environment', () => {
+  it('holds a slept binding retained through a pending snapshot without replacing it', () => {
+    resetWebSessionTabsSyncTestState()
+    const worktree = makeRuntimeOwnedWorktree()
+    seedMirroredWorkspace(worktree)
+    const paneKey = seedActiveSleepingRecord(worktree.id)
+    markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
+    const snapshot = makeSnapshot(
+      [
+        {
+          type: 'terminal',
+          id: `host-tab-1::${LEAF_ID}`,
+          title: 'Claude',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'pending-handle',
+          terminal: null
+        }
+      ],
+      { worktree: worktree.id }
+    )
+    useAppStore.setState(
+      applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, RUNTIME_ENV_ID, Date.now())
+    )
+
+    expect(
+      useAppStore.getState().terminalLayoutsByTabId[WEB_TAB_ID]?.ptyIdsByLeafId?.[LEAF_ID]
+    ).toBe('remote:env-handle-gap@@term_1')
+    expect(useAppStore.getState().ptyIdsByTabId[WEB_TAB_ID] ?? []).toEqual([])
+    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
+    expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
+    vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS - 1)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
+    vi.advanceTimersByTime(1)
+    // The deadline ends the wait, but an unverifiable binding never authorizes a replacement.
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
+    resetWebSessionTabsSyncTestState()
+  })
+
+  it('does not resume a published host row without a PTY binding', () => {
     const worktree = makeRuntimeOwnedWorktree()
     seedMirroredWorkspace(worktree)
     seedActiveSleepingRecord(worktree.id)
@@ -312,7 +338,7 @@ describe('resume across the mirror handle gap', () => {
     } as never)
     markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
 
-    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(1)
+    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(0)
   })
 
@@ -337,60 +363,47 @@ describe('resume across the mirror handle gap', () => {
     expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
   })
 
-  // KNOWN RESIDUAL, pinned as current behaviour rather than as desired behaviour. The gate this
-  // wait sits behind is tab-granular (`host-mirrored-pane-liveness.ts`: any published handle for
-  // the tab makes the pane decidable), while everything below it is leaf-aware. A split tab whose
-  // sibling surface is `ready` while this one is still `pending-handle` therefore reads decidable,
-  // no wait is armed at all, and the sweep resumes a pane the host has not answered for — #19735's
-  // own shape, narrowed to a split tab's first frame.
-  //
-  // It is not closable inside this module: such a leaf has NO binding, and the binding is what
-  // names the pane in a verdict, so a leaf-keyed wait has nothing to key on. It needs the
-  // per-surface `pending-handle` status the host publishes (runtime-mobile-session-projection.ts)
-  // and the client consumes without retaining per leaf. Tracked separately; this case exists so
-  // the residual cannot be mistaken for a covered one.
-  it('resumes a pending leaf when a sibling leaf of the same tab holds the only handle', () => {
+  it('does not resume a pending leaf merely because its sibling holds a handle', () => {
     const worktree = makeRuntimeOwnedWorktree()
     seedSplitTabWithOnlySiblingReady(worktree)
     const paneKey = seedActiveSleepingRecord(worktree.id)
     markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
 
-    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(1)
-    // The residual in one assertion: nothing was ever parked for this pane.
+    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
+    // A sibling handle does not authorize a second writer for this leaf.
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(0)
 
     const after = useAppStore.getState()
     const resumeTabIds = (after.tabsByWorktree[worktree.id] ?? [])
       .map((tab) => tab.id)
       .filter((id) => id !== WEB_TAB_ID)
-    expect(resumeTabIds).toHaveLength(1)
-    expect(after.automaticAgentResumeClaimsByTabId[resumeTabIds[0]!]?.providerSession).toEqual({
-      key: 'session_id',
-      id: 'handle-gap-session'
-    })
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    expect(resumeTabIds).toHaveLength(0)
+    expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
+    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
   })
 
-  it('releases when the host retracts the row and resumes into a fresh tab', () => {
+  it.each([true, false])('does not resume a retracted host row (parked=%s)', (parked) => {
     const worktree = makeRuntimeOwnedWorktree()
     seedMirroredWorkspace(worktree)
     const paneKey = seedActiveSleepingRecord(worktree.id)
     markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
-    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
+    if (parked) {
+      expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
+    }
 
     useAppStore.setState({ tabsByWorktree: { [worktree.id]: [] } })
+    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
+    vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS * 2)
 
     const after = useAppStore.getState()
-    const tabs = after.tabsByWorktree[worktree.id] ?? []
-    expect(tabs).toHaveLength(1)
-    expect(after.automaticAgentResumeClaimsByTabId[tabs[0]!.id]?.providerSession).toEqual({
-      key: 'session_id',
-      id: 'handle-gap-session'
-    })
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    expect(after.tabsByWorktree[worktree.id]).toEqual([])
+    expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
+    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('releases at the deadline and resumes rather than holding the pane forever', () => {
+  it('releases the handle wait at its deadline without authorizing a resume', () => {
     const worktree = makeRuntimeOwnedWorktree()
     seedMirroredWorkspace(worktree)
     const paneKey = seedActiveSleepingRecord(worktree.id)
@@ -405,12 +418,11 @@ describe('resume across the mirror handle gap', () => {
     const resumeTabIds = (after.tabsByWorktree[worktree.id] ?? [])
       .map((tab) => tab.id)
       .filter((id) => id !== WEB_TAB_ID)
-    expect(resumeTabIds).toHaveLength(1)
-    expect(after.automaticAgentResumeClaimsByTabId[resumeTabIds[0]!]?.providerSession).toEqual({
-      key: 'session_id',
-      id: 'handle-gap-session'
-    })
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    expect(resumeTabIds).toHaveLength(0)
+    expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
+    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(hasHostMirrorHandleWaitExpired(RUNTIME_ENV_ID, WEB_TAB_ID)).toBe(true)
+    expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(0)
   })
 
   it('keeps the original deadline when a second sweep re-parks the same pane', () => {
@@ -426,8 +438,9 @@ describe('resume across the mirror handle gap', () => {
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS / 2)
 
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
-    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(1)
+    expect(hasHostMirrorHandleWaitExpired(RUNTIME_ENV_ID, WEB_TAB_ID)).toBe(true)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
   })
 
   it('re-arms the wait after a reconnect instead of inheriting the expired verdict', () => {
@@ -437,7 +450,7 @@ describe('resume across the mirror handle gap', () => {
     markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
     expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
-    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(1)
+    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
 
     // A host restart: the same row, a new connection, its handle unknown again.
     seedMirroredWorkspace(worktree)
@@ -470,8 +483,8 @@ describe('resume across the mirror handle gap', () => {
     // Re-armed, not held: the new connection gets its own budget and then decides.
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
-    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(1)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
   })
 
   // The journey: the network drops mid-turn on a paired runtime. Nothing is unpaired and no
@@ -505,8 +518,8 @@ describe('resume across the mirror handle gap', () => {
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
 
     const after = useAppStore.getState()
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
-    expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(1)
+    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
   })
 
   // The same outage as the shape main actually publishes: a status snapshot with the transport
@@ -554,8 +567,8 @@ describe('resume across the mirror handle gap', () => {
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
 
     const after = useAppStore.getState()
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
-    expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(1)
+    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
   })
 
   it('releases only the pane whose handle landed when two panes share the environment', () => {
@@ -587,7 +600,8 @@ describe('resume across the mirror handle gap', () => {
     // would look identical right now and silently restart its budget. Its own deadline still has
     // to land on the original schedule.
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS / 2)
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[secondPaneKey]).toBeUndefined()
+    expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(0)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[secondPaneKey]).toBeDefined()
   })
 
   it('does not release or reschedule a park because another environment published a handle', () => {
@@ -606,7 +620,9 @@ describe('resume across the mirror handle gap', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     // The unrelated handle must not have restarted this pane's budget.
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS / 2)
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(hasHostMirrorHandleWaitExpired(RUNTIME_ENV_ID, WEB_TAB_ID)).toBe(true)
+    expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(0)
   })
 
   it('leaves no waiter or timer behind when the environment tears its rows down mid-park', () => {

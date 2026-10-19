@@ -27,7 +27,7 @@ describe('useHostProjectSections', () => {
         client,
         connState: 'connected',
         hostId,
-        state: { clientRef, setServedProjectSections: () => {} }
+        state: { clientRef, setServedProjectSections: () => {}, setHostProjectGroups: () => {} }
       })
       return null
     }

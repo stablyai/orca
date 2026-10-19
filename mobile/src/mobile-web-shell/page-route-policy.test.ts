@@ -3,9 +3,9 @@ import { z } from 'zod'
 import { MobileWebBundleRouteSchema } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   matchesRoutePattern,
-  pageRendersRoute,
   MOBILE_WEB_SHELL_GRANTS,
   grantsForRoute,
+  pageRouteRefusalVerdict,
   routePatternRefusal,
   routeViewOf
 } from './page-route-policy'
@@ -18,6 +18,13 @@ import {
   BRIDGE_NATIVE_VERBS
 } from './bridge/bridge-native-verbs'
 import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
+
+/** Whether a narrow session on `pathname` would be served the page under `routes`. */
+function servesRoute(routes: Parameters<typeof routeViewOf>[0], pathname: string): boolean {
+  return routeViewOf(routes, pathname).pageRoutes.some((pattern) =>
+    matchesRoutePattern(pathname, pattern)
+  )
+}
 
 /**
  * The patterns a session would be told it may keep, read through the view the reducer builds.
@@ -126,7 +133,7 @@ describe('a pattern with a rest segment', () => {
 
   it('serves such a route and grants it what it declared', () => {
     const routes = [{ pathname: PATTERN, grants: ['navigate', 'storage'] }]
-    expect(pageRendersRoute(routes, '/h/a/insights/deep/er')).toBe(true)
+    expect(servesRoute(routes, '/h/a/insights/deep/er')).toBe(true)
     expect(grantsForRoute(routes, '/h/a/insights/deep/er')).toEqual(['navigate', 'storage'])
   })
 
@@ -170,14 +177,14 @@ describe('the routes this shell will render from the page', () => {
 
   it('answers nothing for a desktop older than the field', () => {
     expect(pageRoutesOf(undefined)).toEqual([])
-    expect(pageRendersRoute(undefined, '/h/host-1')).toBe(false)
+    expect(servesRoute(undefined, '/h/host-1')).toBe(false)
   })
 
   it('answers the two halves of the negotiation together', () => {
     const routes = [{ pathname: '/h/[hostId]', grants: ['navigate'] }]
-    expect(pageRendersRoute(routes, '/h/host-1')).toBe(true)
-    expect(pageRendersRoute(routes, '/h/host-1/tasks')).toBe(false)
-    expect(pageRendersRoute([], '/h/host-1')).toBe(false)
+    expect(servesRoute(routes, '/h/host-1')).toBe(true)
+    expect(servesRoute(routes, '/h/host-1/tasks')).toBe(false)
+    expect(servesRoute([], '/h/host-1')).toBe(false)
   })
 })
 
@@ -197,6 +204,7 @@ describe('the grants this app implements', () => {
       'native.media.pick',
       'native.media.read',
       'native.media.release',
+      'native.media.name',
       'native.audio.start',
       'native.audio.read',
       'native.audio.stop',
@@ -590,5 +598,18 @@ describe('a shell whose policy has never heard of the optional lane', () => {
     // The control: same manifest, this build's policy, one more grant. Without it the arms above
     // are also what a policy that ignored the lane entirely would report.
     expect(grantsForRoute(written, opened)).toEqual(['navigate', 'storage', 'screencastBinary'])
+  })
+})
+
+describe('why the page does not serve a route', () => {
+  const reasonFor = (...args: Parameters<typeof pageRouteRefusalVerdict>) =>
+    pageRouteRefusalVerdict(...args)?.reason
+
+  it('blames the desktop on a wide layout when its page cannot own the host area', () => {
+    const routes = [{ pathname: '/h/[hostId]', grants: [] }]
+    expect(reasonFor(routes, '/h/a', true)).toBe('page-route-unlisted')
+    expect(
+      reasonFor([{ ...routes[0]!, grants: ['teleport'], canOwnHostArea: true }], '/h/a', true)
+    ).toBe('page-route-grant-missing')
   })
 })

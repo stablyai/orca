@@ -1,7 +1,6 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import type { SetupSplitDirection } from '../../../shared/worktree/launch-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -47,10 +46,6 @@ export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   setTabColor: (tabId: string, color: string | null) => void
   markDefaultTerminalTabsApplied: (worktreeId: string) => void
   reconcileWorktreeTabModel: (worktreeId: string) => { renderableTabCount: number }
-  queueTabSetupSplit: (
-    tabId: string,
-    startup: { command: string; env?: Record<string, string>; direction: SetupSplitDirection }
-  ) => void
   queueTabIssueCommandSplit: (
     tabId: string,
     startup: { command: string; env?: Record<string, string> }

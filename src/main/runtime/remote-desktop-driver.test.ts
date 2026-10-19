@@ -176,6 +176,17 @@ describe('remote desktop viewer width driver', () => {
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 1024, rows: 40 })
   })
 
+  // #27425: a pane taller than 120 rows must get a PTY of the same height.
+  it('keeps a tall desktop viewport through resize', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 292, 137)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 292, rows: 137 })
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 292, 500)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 292, rows: 500 })
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 292, 5000)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 292, rows: 500 })
+  })
+
   it('sizes the PTY to the latest active desktop viewer', async () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 40)

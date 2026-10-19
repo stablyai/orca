@@ -45,12 +45,6 @@ export const LAUNCH_RACE_LANES: LaunchRaceLane[] = ['ipc', 'runtime']
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test doubles implement only the members the two spawn lanes read.
 const testDouble = <T>(value: unknown): T => value as T
 
-export const flushMacrotasks = async (rounds = 20): Promise<void> => {
-  for (let index = 0; index < rounds; index++) {
-    await new Promise<void>((resolve) => setImmediate(resolve))
-  }
-}
-
 /** One stable pane per test; reservation maps are module state, so names must not repeat. */
 export function launchRacePane(tag: string, leafId: string) {
   const worktreeId = `repo-1::/tmp/${tag}`

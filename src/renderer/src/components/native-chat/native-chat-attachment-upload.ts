@@ -7,14 +7,13 @@ import { translate } from '@/i18n/i18n'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import {
   getConnectionExecutionHostId,
+  parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import {
-  getExplicitRuntimeEnvironmentIdForWorktree,
-  getKnownExecutionHostIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -44,7 +43,12 @@ export type NativeChatAttachmentOwner =
   /** Refuses client files: a terminal-backed chat on a paired server (its agent may run on that
    *  server's SSH or WSL host, which the server's store cannot reach), or an `ssh:` host, which
    *  only its paired server serves. */
-  | { kind: 'remote' }
+  | {
+      kind: 'remote'
+      /** The paired server whose own host runs this terminal's agent, so a clipboard image
+       *  saved there is readable to it, as a terminal paste is. Absent for a nested SSH host. */
+      clipboardImageEnvironmentId?: string
+    }
   /** Store not hydrated / worktree unknown. Callers must not attach local
    *  paths in this window — the worktree may turn out to be remote, and the
    *  agent would silently receive paths it cannot read (see #6648). */
@@ -84,7 +88,12 @@ export function resolveNativeChatAttachmentHost(
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return getKnownExecutionHostIdForWorktree(state, worktreeId)
   }
-  const runtimeId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
+  // Why: an upload writes files; with two hosts publishing this id it must not land on either.
+  if (owner.kind === 'ambiguous') {
+    return null
+  }
+  const runtimeId = owner.environmentId
   const connectionId = getConnectionIdFromState(state, worktreeId)
   if (!runtimeId && connectionId === undefined) {
     return null
@@ -105,6 +114,11 @@ export function resolveNativeChatAttachmentOwnerForWorktree(
   }
   if (hostId === 'local') {
     return { kind: 'local' }
+  }
+  const host = parseExecutionHostId(hostId)
+  // Why null only: a non-null connectionId names the server's nested SSH host, which it does not serve.
+  if (host?.kind === 'runtime' && getConnectionIdFromState(state, worktreeId) === null) {
+    return { kind: 'remote', clipboardImageEnvironmentId: host.environmentId }
   }
   return { kind: 'remote' }
 }

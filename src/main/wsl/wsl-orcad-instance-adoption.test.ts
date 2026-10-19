@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   emptyOrcadActivationRecord,
   type OrcadActivationRecord
-} from '../ssh/orcad-activation-record'
+} from '../managed-server/activation/orcad-activation-record'
 import type { OrcadSlotOptions } from '../ssh/orcad-recovery-slot'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 
@@ -34,11 +34,11 @@ const host = vi.hoisted((): FakeHost => ({
   fenced: false
 }))
 
-vi.mock('../ssh/orcad-remote-record-file', () => ({
+vi.mock('../managed-server/install/orcad-remote-record-file', () => ({
   readBoundedOrcadRemoteRecord: async () =>
     host.lock === null ? { state: 'absent' } : { state: 'present', raw: host.lock }
 }))
-vi.mock('../ssh/orcad-remote-runtime-control', () => ({
+vi.mock('../managed-server/install/orcad-remote-runtime-control', () => ({
   execOrcadRemote: async (_slot: unknown, command: string) => {
     host.commands.push(command)
     const kill = /kill -0 (\d+)/.exec(command)
@@ -59,7 +59,7 @@ vi.mock('../ssh/orcad-remote-runtime-control', () => ({
     return ''
   }
 }))
-vi.mock('../ssh/orcad-managed-remote-stop', () => ({
+vi.mock('../managed-server/lifecycle/orcad-managed-remote-stop', () => ({
   readRemoteOrcadManagedStopTarget: async () => host.stopTarget
 }))
 vi.mock('../ssh/orcad-recovery-slot', () => ({
@@ -70,7 +70,7 @@ vi.mock('../ssh/orcad-recovery-slot', () => ({
     buildHash: host.slotBuildHash
   })
 }))
-vi.mock('../ssh/orcad-activation-gate', () => ({
+vi.mock('../managed-server/activation/orcad-activation-gate', () => ({
   evaluateOrcadActivation: (
     readiness: { health?: { buildHash?: string } } | null,
     expected: { buildHash: string }
@@ -79,16 +79,16 @@ vi.mock('../ssh/orcad-activation-gate', () => ({
       ? { decision: 'accept' }
       : { decision: 'reject', reason: 'its build does not match the installed slot.' }
 }))
-vi.mock('../ssh/orcad-activation-record-store', () => ({
+vi.mock('../managed-server/activation/orcad-activation-record-store', () => ({
   readOrcadActivationRecord: async () => host.record,
   writeOrcadActivationRecord: async (_slot: unknown, record: unknown) => {
     host.writes.push(record)
   }
 }))
-vi.mock('../ssh/orcad-activation-transaction-store', () => ({
+vi.mock('../managed-server/activation/orcad-activation-transaction-store', () => ({
   readOrcadActivationTransaction: async () => host.transaction
 }))
-vi.mock('../ssh/orcad-activation-lock', () => ({
+vi.mock('../managed-server/activation/orcad-activation-lock', () => ({
   withOrcadActivationLock: async (
     _slot: unknown,
     run: () => Promise<unknown>,

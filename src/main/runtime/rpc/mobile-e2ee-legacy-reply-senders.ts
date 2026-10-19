@@ -1,5 +1,5 @@
 import type { WebSocket } from 'ws'
-import { encrypt } from './e2ee-crypto'
+import { encrypt } from '../../../shared/e2ee-crypto'
 import type { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import {
   isMobileE2EEBinaryPayloadWithinLimit,

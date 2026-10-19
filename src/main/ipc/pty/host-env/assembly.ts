@@ -1,9 +1,10 @@
+import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType
 } from '../../../../shared/pi-agent-kind'
-import { applyTerminalGitCredentialPromptGuard } from '../../terminal-git-credential-guard'
+import { applyTerminalGitCredentialPromptGuard } from '../../../../shared/terminal-git-credential-guard'
 import { ensureOpenCodeStartupPromptForLaunch } from '../../../opencode/opencode-startup-prompt-installer'
 import { mimoCodeHookService } from '../../../mimo/hook-service'
 import { agentHookServer } from '../../../agent-hooks/server'
@@ -26,9 +27,9 @@ import {
   isMimoLaunchCommand,
   resolveMimocodeSourceHome,
   resolvePiAgentSourceDir,
-  resolveScopedPiAgentSourceDir,
-  restoreOrStripOverlayEnv
+  resolveScopedPiAgentSourceDir
 } from './pi-agent'
+import { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
 import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
 import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
@@ -47,6 +48,16 @@ export function buildPtyHostEnv(
 ): Record<string, string> {
   mergePersistedWindowsPath(baseEnv)
   Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
+
+  // Claude currently recognizes image support only in a short terminal allowlist.
+  if (
+    opts.launchAgent === 'claude' &&
+    resolveTerminalInlineImagesEnabled(opts.terminalInlineImages) &&
+    baseEnv.CLAUDE_CODE_FORCE_TERMINAL_IMAGES === undefined &&
+    process.env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES === undefined
+  ) {
+    baseEnv.CLAUDE_CODE_FORCE_TERMINAL_IMAGES = '1'
+  }
 
   const openCodeConfig = captureOpenCodeSourceConfig(baseEnv, opts.userDataPath)
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)

@@ -1,14 +1,14 @@
 /**
  * A Docker SSH host left exactly as a 1.4.224 desktop leaves it on quit: that release's relay
  * running detached with a live shell, under `~/.orca-remote/relay-<version>/`.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay-bridge/.
+ * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
  */
 import { execFileSync } from 'node:child_process'
 import { cpSync, mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { quotePosixShell } from '../../../src/shared/wsl-login-shell-command'
-import { relaySocketNameForInstanceId } from '../../../src/main/ssh/ssh-relay-instance-id'
+import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
+import { relaySocketNameForInstanceId } from '../../../src/main/ssh/legacy-relay/ssh-relay-instance-id'
 import { SshChannelMultiplexer } from '../../../src/main/ssh/ssh-channel-multiplexer'
 import {
   leaveShellInReleasedRelay,

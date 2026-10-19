@@ -3,10 +3,12 @@ import {
   serializeOrcadMigrationValue,
   type OrcadMigrationImportReceipt,
   type OrcadMigrationManifest
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationEditorDraft } from '../../../shared/orcad-migration/orcad-migration-editor-drafts'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { isRepoOnCatalogHost } from '../../../shared/execution-host'
 import { assertOrcadMigrationStagedCatalogClaims } from './orcad-staged-catalog-claims'
 import {
   toOrcadDestinationFolderWorkspace,
@@ -47,7 +49,8 @@ export function assertSameOrcadMigrationManifest(
 // Dormant only: no live PTY reaches the destination, so the incoming session is compared as is.
 export function prepareOrcadMigrationCatalog(
   manifest: OrcadMigrationManifest,
-  state: StoreRuntimeState['state']
+  state: StoreRuntimeState['state'],
+  editorDrafts?: readonly OrcadMigrationEditorDraft[]
 ): PreparedOrcadMigrationCatalog {
   assertOrcadMigrationStagedCatalogClaims(manifest, state.orcadMigrationStagedCatalogs ?? [])
   const repositories = manifest.payload.repositories.map(toOrcadDestinationRepository)
@@ -76,7 +79,7 @@ export function prepareOrcadMigrationCatalog(
     folderWorkspaces,
     existingProjectGroups: state.projectGroups
   })
-  const dormantState = prepareOrcadMigrationDormantState(manifest, state)
+  const dormantState = prepareOrcadMigrationDormantState(manifest, state, editorDrafts)
   return {
     repositories,
     projectGroups,
@@ -138,7 +141,8 @@ function assertNoRepositoryPathConflicts(incoming: Repo[], existing: Repo[]): vo
     }
     incomingByPath.set(key, repo.id)
   }
-  for (const repo of existing) {
+  // Incoming rows land on this machine; a same-path row on another host is a different checkout.
+  for (const repo of existing.filter(isRepoOnCatalogHost)) {
     if (
       !incomingIdSet.has(repo.id) &&
       incomingByPath.has(normalizeRuntimePathForComparison(repo.path))

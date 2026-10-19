@@ -36,7 +36,7 @@ export function collectUnsupportedSessionItems(
   if (sourceHostPartition) {
     for (const [ownerKey, files] of Object.entries(session.openFilesByWorktree ?? {})) {
       if (!owns(ownerKey)) {
-        items.push(...unsavedDrafts(files, ownerKey))
+        items.push(...unsavedDraftItems(files, ownerKey))
       }
     }
   }
@@ -63,7 +63,7 @@ export function collectUnsupportedSessionItems(
         (file) => file.externalSshTargetId !== undefined || Boolean(file.runtimeEnvironmentId)
       )
       items.push(
-        ...unsavedDrafts(hostBound, ownerKey),
+        ...unsavedDraftItems(hostBound, ownerKey),
         ...hostBound
           .filter((file) => file.dirtyDraftContent === undefined)
           .map((file) => `the editor tab for ${file.filePath}, which another host opened: close it`)
@@ -88,13 +88,19 @@ export function collectUnsupportedSessionItems(
   return items
 }
 
-function unsavedDrafts(files: readonly PersistedOpenFile[], ownerKey: string): string[] {
+const UNSAVED_DRAFT_PREFIX = 'unsaved changes to '
+
+export function unsavedDraftItems(files: readonly PersistedOpenFile[], ownerKey: string): string[] {
   return files
     .filter((file) => file.dirtyDraftContent !== undefined)
     .map(
       (file) =>
-        `unsaved changes to ${file.filePath} in ${worktreeLabel(ownerKey)}: save or discard them`
+        `${UNSAVED_DRAFT_PREFIX}${file.filePath} in ${worktreeLabel(ownerKey)}: save or discard them`
     )
+}
+
+export function isUnsavedDraftItem(item: string): boolean {
+  return item.startsWith(UNSAVED_DRAFT_PREFIX)
 }
 
 /** The path a worktree id carries, which is what the user sees in the sidebar. */
@@ -135,7 +141,10 @@ export function projectDormantSessionFocus(
 }
 
 /** Older builds stamped 'local' on tabs created in an SSH worktree; its owner key proves the host. */
-function isOrcadSourceTabHost(executionHostId: string, scope: OrcadMigrationSourceScope): boolean {
+export function isOrcadSourceTabHost(
+  executionHostId: string,
+  scope: OrcadMigrationSourceScope
+): boolean {
   return executionHostId === scope.hostId || executionHostId === LOCAL_EXECUTION_HOST_ID
 }
 

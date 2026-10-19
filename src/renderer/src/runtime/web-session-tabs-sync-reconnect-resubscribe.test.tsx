@@ -6,12 +6,11 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
 
 const mocks = vi.hoisted(() => ({
-  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn(),
+  ownerEnvironmentIdForWorkspace: vi.fn(),
   recheckUnconfirmedLaunches: vi.fn()
 }))
 
@@ -19,13 +18,10 @@ vi.mock('@/lib/structured-agent-session-launch-unconfirmed-recheck', () => ({
   recheckUnconfirmedStructuredAgentLaunches: mocks.recheckUnconfirmedLaunches
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeRuntimeOwnerModule>()
-  return {
-    ...actual,
-    getExplicitRuntimeEnvironmentIdForWorktree: mocks.getExplicitRuntimeEnvironmentIdForWorktree
-  }
-})
+vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
+  mirroredRuntimeEnvironmentIdForWorkspace: (state: unknown, workspaceId: string | null) =>
+    workspaceId ? (mocks.ownerEnvironmentIdForWorkspace(state, workspaceId) ?? null) : null
+}))
 
 import { useAppStore } from '@/store'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
@@ -148,7 +144,7 @@ describe('session-tabs mirror across an outage and its recovery', () => {
     subscriptions.length = 0
     runtimeCall.mockClear()
     runtimeSubscribe.mockClear()
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReset().mockReturnValue(ENV_A)
+    mocks.ownerEnvironmentIdForWorkspace.mockReset().mockReturnValue(ENV_A)
     mocks.recheckUnconfirmedLaunches.mockClear()
     Object.defineProperty(window, 'api', {
       configurable: true,

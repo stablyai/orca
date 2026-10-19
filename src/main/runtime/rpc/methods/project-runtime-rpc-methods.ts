@@ -70,9 +70,9 @@ export const PROJECT_RUNTIME_METHODS = [
     name: 'projectHostSetup.update',
     permission: 'workspace',
     params: ProjectHostSetupUpdate,
-    handler: (params, context) => ({
+    handler: async (params, context) => ({
       result: projectRepoResultVisibilityForClient(
-        context.runtime.updateProjectHostSetup(params),
+        await context.runtime.updateProjectHostSetup(params),
         context
       )
     })

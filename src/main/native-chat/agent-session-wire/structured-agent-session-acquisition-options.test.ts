@@ -166,7 +166,6 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
-      optionRevision: () => 0,
       params: attachParams(CREATE_OPERATION, null),
       now: () => NOW,
       onAttached: (attached) => {
@@ -206,7 +205,6 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
-      optionRevision: () => 0,
       params: attachParams(RESUME_OPERATION, releasedFence),
       now: () => NOW + 1,
       onAttached: () => {}
@@ -240,7 +238,6 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
-      optionRevision: () => 0,
       params: attachParams(CREATE_OPERATION, null, options),
       now: () => NOW,
       recordPhase,
@@ -272,7 +269,6 @@ describe('structured session acquisition options', () => {
           probe: { outcome: 'reservation-unused' }
         },
         callerKey: 'client-1',
-        optionRevision: () => 0,
         params: attachParams(CREATE_OPERATION, null, options),
         now: () => NOW,
         onAttached: () => {}
@@ -305,7 +301,6 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
-      optionRevision: () => 0,
       params: attachParams(CREATE_OPERATION, null),
       now: () => NOW,
       onAttached: () => {}
@@ -344,7 +339,6 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
-      optionRevision: () => 0,
       params: attachParams(RESUME_OPERATION, releasedFence),
       now: () => NOW + 1,
       onAttached: () => {}
@@ -383,7 +377,6 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
-      optionRevision: () => 0,
       params: attachParams(CREATE_OPERATION, null, {
         model: 'gpt-standard',
         fastMode: 'true'
@@ -420,7 +413,6 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
-      optionRevision: () => 0,
       params: attachParams(CREATE_OPERATION, null, { model: 'gpt-saved', effort: 'medium' }),
       now: () => NOW,
       onAttached: () => {}
@@ -457,7 +449,6 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
-      optionRevision: () => 0,
       params: attachParams(CREATE_OPERATION, null, options),
       now: () => NOW,
       onAttached: () => {}
@@ -494,7 +485,6 @@ describe('structured session acquisition options', () => {
           probe: { outcome: 'reservation-unused' }
         },
         callerKey: 'client-1',
-        optionRevision: () => 0,
         params: attachParams(CREATE_OPERATION, null),
         now: () => NOW,
         onAttached: () => {}
@@ -590,7 +580,6 @@ describe('structured session acquisition options', () => {
             probe: { outcome: 'reservation-unused' }
           },
           callerKey: 'client-1',
-          optionRevision: () => 0,
           params: attachParams(operationId, fence),
           now: () => NOW,
           onAttached: () => {}
@@ -691,7 +680,6 @@ describe('the tab a create reserves', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
-      optionRevision: () => 0,
       // Beside the fingerprinted fields, like `options`: which tab shows the chat is not which
       // conversation this attaches to.
       params: {

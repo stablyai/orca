@@ -26,7 +26,7 @@ vi.mock('../text-generation/commit-message-text-generation', () => ({
 vi.mock('../text-generation/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: vi.fn(async () => ({ ok: true }))
 }))
-vi.mock('../ipc/worktree-logic', () => ({
+vi.mock('../ipc/worktree-branch-name', () => ({
   computeBranchName: vi.fn((leaf: string) => `you/${leaf}`),
   getConfiguredBranchPrefix: vi.fn(() => 'you')
 }))

@@ -37,12 +37,12 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   onSshFilesystemProviderRegistered: () => () => {}
 }))
 
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
 import {
-  closeAllWatchers,
   closeLocalWatcherForWorktreePath,
-  registerFilesystemWatcherHandlers,
   restoreLocalWatcherAfterFailedRemoval
-} from './filesystem-watcher'
+} from './filesystem-watcher-local-removal'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import { subscribeViaWatcherProcess } from './parcel-watcher-process'

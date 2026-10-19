@@ -68,7 +68,7 @@ type AddRepoLocalStartStepProps = {
   hostSelector?: ReactNode
   actionsDisabled?: boolean
   browseHostKind?: 'local' | 'runtime'
-  serverSshProjects?: 'supported' | 'unsupported' | 'unknown'
+  offersServerSshHosts?: boolean
   onBrowse: () => void
   onOpenCloneStep: () => void
   onOpenRemoteStep: () => void
@@ -85,7 +85,7 @@ export function AddRepoLocalStartStep({
   hostSelector,
   actionsDisabled = false,
   browseHostKind = 'local',
-  serverSshProjects,
+  offersServerSshHosts,
   onBrowse,
   onOpenCloneStep,
   onOpenRemoteStep,
@@ -101,7 +101,7 @@ export function AddRepoLocalStartStep({
     onOpenRemoteStep,
     onOpenCreateStep,
     browseHostKind,
-    serverSshProjects
+    offersServerSshHosts
   })
 
   // The white fill + ⏎ chip is a roving selection indicator, not a fixed "primary" badge:

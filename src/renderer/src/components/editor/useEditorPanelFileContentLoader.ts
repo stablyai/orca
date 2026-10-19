@@ -232,7 +232,8 @@ export function useEditorPanelFileContentLoader({
               expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
               includeLocalLogMetadata: isLiveTailLogTab,
               access,
-              terminalArtifactGrantId: restoredOpenFile?.terminalArtifactGrantId
+              terminalArtifactGrantId: restoredOpenFile?.terminalArtifactGrantId,
+              pageOversizedBinary: true
             },
             allowPagedPreview
           )

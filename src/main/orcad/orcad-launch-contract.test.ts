@@ -51,6 +51,13 @@ describe('parseArgs', () => {
     }
   })
 
+  it('accepts the browser client directory orca serve hands it', () => {
+    expect(parseArgs(['--web-client-root', '/app/out/web'])).toEqual({
+      webClientRoot: '/app/out/web'
+    })
+    expect(() => parseArgs(['--web-client-root'])).toThrow('--web-client-root expects a value')
+  })
+
   it('accepts --bind and leaves it unset when absent', () => {
     expect(parseArgs(['--bind', '0.0.0.0'])).toEqual({ bind: '0.0.0.0' })
     expect(parseArgs([])).toEqual({})

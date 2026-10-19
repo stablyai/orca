@@ -4,43 +4,56 @@ import type {
   AgentJournalThreadGoal
 } from '../../../../shared/agent-session-journal-types'
 import { currentAgentSessionThreadGoal } from '../../../../shared/agent-session-thread-goal'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
 import type {
-  AgentSessionOptionsResult,
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session-thread-goal-wire'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 
 export type StructuredAgentSessionThreadGoal = {
   goal: AgentJournalThreadGoal | null
   pending: boolean
+  /** False where only the agent's own `/goal` changes the goal: Orca sends it `/goal clear`, and
+   *  the agent has no pause. */
+  hostChanges: boolean
   /** Resolves false when the change was refused or not sent; the error surfaces separately. */
   change: (change: AgentSessionThreadGoalChange) => Promise<boolean>
 }
 
-/** Null unless the host reported it can change this session's goal. */
+const CLEAR_GOAL_COMMAND = '/goal clear'
+
+/** Null unless the host advertises goal changes or goal reports for this session. */
 export function useStructuredAgentSessionThreadGoal(args: {
   journalItems: readonly AgentJournalRenderItem[]
   support: AgentSessionOptionsResult['threadGoal']
+  reported: AgentSessionOptionsResult['reportedThreadGoal']
   journalEpoch?: string | null
   mutate: StructuredAgentSessionMutate
+  /** Sends the agent a command, for a goal only its own `/goal` changes. */
+  send: (text: string) => boolean | 'queued'
 }): StructuredAgentSessionThreadGoal | null {
-  const { journalItems, mutate, support, journalEpoch } = args
+  const { journalItems, mutate, support, reported, journalEpoch, send } = args
   const [pending, setPending] = useState(false)
   const pendingRef = useRef(false)
-  // The loaded window reaches the live head, so a goal row in it is newer than the
-  // host's whole-journal answer; that answer covers only rows older than the window.
+  const report = support ?? reported
+  // The loaded window reaches the live head, so a goal row in it is newer than the host's
+  // whole-journal answer; that answer covers only rows older than the window.
   const floor =
-    support?.contextFloor && (!journalEpoch || support.contextFloor.epoch === journalEpoch)
-      ? support.contextFloor.sequence
+    report?.contextFloor && (!journalEpoch || report.contextFloor.epoch === journalEpoch)
+      ? report.contextFloor.sequence
       : 0
   const loaded = useMemo(
     () => currentAgentSessionThreadGoal(journalItems, floor),
     [journalItems, floor]
   )
-  const goal = loaded === undefined ? (support?.current ?? null) : loaded
+  const goal = loaded === undefined ? (report?.current ?? null) : loaded
+  const hostChanges = support !== undefined
   const change = useCallback(
     async (next: AgentSessionThreadGoalChange): Promise<boolean> => {
+      if (!hostChanges) {
+        return next.kind === 'clear' && send(CLEAR_GOAL_COMMAND) !== false
+      }
       if (pendingRef.current) {
         return false
       }
@@ -58,7 +71,10 @@ export function useStructuredAgentSessionThreadGoal(args: {
         setPending(false)
       }
     },
-    [mutate]
+    [hostChanges, mutate, send]
   )
-  return support ? { goal, pending, change } : null
+  if (report === undefined || (!hostChanges && goal === null)) {
+    return null
+  }
+  return { goal, pending, hostChanges, change }
 }

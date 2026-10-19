@@ -3,7 +3,7 @@ import {
   isMobileWebBundleTransportFailure,
   readMobileWebBundleErrorCode
 } from '../transport/mobile-web-bundle-operations'
-import type { MobileWebBundleCompatVerdict } from '../transport/mobile-web-bundle-compat'
+import type { MobileWebShellBlockedVerdict } from './mobile-web-shell-session-contract'
 import {
   MOBILE_WEB_BUNDLE_FETCH_REFUSALS,
   MobileWebBundleFetchError
@@ -69,7 +69,9 @@ export function updateFailureCauseOf(error: unknown): MobileWebShellUpdateFailur
 /** What the shell put on screen instead of the generation it could not take. */
 export const MOBILE_WEB_SHELL_UPDATE_FAILURE_OUTCOMES = [
   'opened-cached',
+  // Written by builds that still fell back to native screens; kept so their records still read.
   'native-route',
+  'route-unavailable',
   'wall',
   'failed',
   'waiting'
@@ -83,13 +85,15 @@ export const MOBILE_WEB_SHELL_UPDATE_FAILURE_WALLS = [
   'bundle-unavailable',
   'bundle-shell-too-old',
   'host-too-old-for-bundle',
-  'bundle-too-old-for-host'
+  'bundle-too-old-for-host',
+  'page-route-unlisted',
+  'page-route-grant-missing'
 ] as const
 
 export type MobileWebShellUpdateFailureWall = (typeof MOBILE_WEB_SHELL_UPDATE_FAILURE_WALLS)[number]
 
 export function updateFailureWallOf(
-  verdict: Extract<MobileWebBundleCompatVerdict, { kind: 'blocked' }>
+  verdict: MobileWebShellBlockedVerdict
 ): MobileWebShellUpdateFailureWall {
   if (verdict.reason !== 'bundle-incompatible') {
     return verdict.reason

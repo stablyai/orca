@@ -83,6 +83,28 @@ describe('spawnSourceControlAgent', () => {
     expect(lastSpawnSpec()).toMatchObject({ program: 'C:/tools/agent.exe', args: ['--print'] })
     expect(lastSpawnSpec().env).not.toHaveProperty('ORCA_PROVIDER_SUPERVISOR_SPEC')
   })
+
+  it('hands an npm .cmd shim to process-host unwrapped, multi-line prompt included', () => {
+    // Why: wrapping the shim in cmd.exe here refused every argv prompt, which always has
+    // line breaks, before process-host could run the shim as node + script (#28768).
+    const shim = join(folder, 'copilot.cmd')
+    writeFileSync(shim, '')
+    spawnProcessMock.mockReturnValueOnce(fakeChild())
+    withPlatform('win32', () =>
+      spawnSourceControlAgent({
+        binary: 'copilot',
+        args: ['--prompt', 'Summarize:\n- staged change'],
+        env: { PATH: folder },
+        stdinMode: 'pipe',
+        useCwdForNative: false
+      })
+    )
+
+    expect(lastSpawnSpec()).toMatchObject({
+      program: shim,
+      args: ['--prompt', 'Summarize:\n- staged change']
+    })
+  })
 })
 
 describe.runIf(process.platform !== 'win32')('supervised agent processes', () => {

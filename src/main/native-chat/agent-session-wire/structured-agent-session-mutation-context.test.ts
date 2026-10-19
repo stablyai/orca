@@ -195,29 +195,48 @@ it('logs a wake error and still answers accepted', async () => {
   )
 })
 
-it('logs a receipt read error and refuses unknown without accepting or waking', async () => {
-  const ctx = context()
-  const request = params()
-  const error = new Error('receipt read failed')
-  const warn = vi.spyOn(ctx.deps.logger, 'warn')
-  vi.spyOn(rig.store, 'readCommandReceipt').mockImplementationOnce(() => {
-    throw error
-  })
-  expect(await sendStructuredAgentSessionTurn(ctx, CALLER, request)).toMatchObject({
-    ok: false,
-    refusal: { code: 'agent_session_operation_unknown', details: { reason: 'outcomeUnknown' } }
-  })
-  expect(warn).toHaveBeenCalledWith(
-    expect.any(String),
-    expect.objectContaining({
-      scope: 'command-receipt-read',
-      operationId: request.envelope.clientOperationId,
-      error
+it.each([false, true])(
+  'logs a receipt read error and refuses unknown without accepting or waking (rewind: %s)',
+  async (rewinding) => {
+    const ctx = context()
+    const request = params()
+    if (rewinding) {
+      await rig.store.transitionHandoff(SESSION, (record) => ({
+        ...record,
+        rewind: {
+          operationId: hostTestOperationId(),
+          callerKey: CALLER.callerKey,
+          itemId: 'prior-message',
+          providerItemId: 'prior-provider-item',
+          expectedEpoch: rig.host['sessions'].get(SESSION)!.journal.cursor().epoch,
+          phase: 'prepared',
+          retained: []
+        }
+      }))
+    }
+    const ensureAgent = vi.spyOn(ctx, 'ensureAgent')
+    const error = new Error('receipt read failed')
+    const warn = vi.spyOn(ctx.deps.logger, 'warn')
+    vi.spyOn(rig.store, 'readCommandReceipt').mockImplementationOnce(() => {
+      throw error
     })
-  )
-  expect(rig.host['sessions'].get(SESSION)?.journal.submissions()).toHaveLength(0)
-  expect(ctx.wakeDelivery).not.toHaveBeenCalled()
-})
+    expect(await sendStructuredAgentSessionTurn(ctx, CALLER, request)).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_unknown', details: { reason: 'outcomeUnknown' } }
+    })
+    expect(warn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        scope: 'command-receipt-read',
+        operationId: request.envelope.clientOperationId,
+        error
+      })
+    )
+    expect(rig.host['sessions'].get(SESSION)?.journal.submissions()).toHaveLength(0)
+    expect(ctx.wakeDelivery).not.toHaveBeenCalled()
+    expect(ensureAgent).not.toHaveBeenCalled()
+  }
+)
 
 it('wakes once for /compact and never for its replay', async () => {
   const ctx = context()

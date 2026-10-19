@@ -30,11 +30,11 @@ import {
   waitForBoundPanes
 } from './helpers/terminal-layout-journeys'
 import {
-  addHostCreatedSetupSplitWorktree,
-  openSetupSplitWorktree,
+  addHostCreatedSplitWorktree,
+  openHostSplitWorktree,
   sleepAgentPane,
   wakeByClick
-} from './helpers/setup-split-and-sleep-journeys'
+} from './helpers/host-split-and-sleep-journeys'
 import { runOracleScenario, type OracleRun } from './helpers/workspace-layout-oracle-session'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { unexpectedFindings } from './workspace-layout-oracle-known-on-main'
@@ -438,13 +438,13 @@ const SCENARIOS: Scenario[] = [
     }
   },
   {
-    // STA-9417: the CLI creates a worktree whose setup script runs in a split; first activation.
-    id: 'setup-split-first-activation',
+    // A host creates and manually splits a terminal, then the user returns to its saved layout.
+    id: 'host-split-reactivation',
     // Its own worktree's panes are checked in the journey; the seeded one is no longer shown.
     endMarkers: false,
-    setup: async (run) => addHostCreatedSetupSplitWorktree(run.page, run.userDataDir),
+    setup: async (run) => addHostCreatedSplitWorktree(run.page, run.userDataDir),
     journey: async (run) => {
-      const setupWorktreeId = await openSetupSplitWorktree(run.page, run.userDataDir)
+      const setupWorktreeId = await openHostSplitWorktree(run.page, run.userDataDir)
       run.worktreeIds.push(setupWorktreeId)
       await run.oracle.step('open setup worktree', {
         worktreeId: setupWorktreeId,

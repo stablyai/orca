@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentPaneLaunchRequest } from '../../shared/agent-pane-launch-request'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { statSyncMock } from './pty-ipc-mock-registry'
 import { registerPtyHandlers } from './pty/register-handlers'
 import {
   markAgentLaunchesClosedByUser,
@@ -108,7 +109,6 @@ describe('a pane that starts its own agent launch', () => {
   ): Promise<unknown> {
     return Promise.resolve(
       handlers.get('pty:spawn')!(null, {
-        ...pane,
         cols: 132,
         rows: 40,
         cwd: '/tmp/pane-launch',
@@ -116,7 +116,8 @@ describe('a pane that starts its own agent launch', () => {
         tabId,
         leafId,
         command: '',
-        agentLaunch
+        agentLaunch,
+        ...pane
       })
     )
   }
@@ -179,6 +180,25 @@ describe('a pane that starts its own agent launch', () => {
     expect(JSON.stringify(runtime.registerPty.mock.calls)).toContain(
       JSON.stringify({ launchToken: env.ORCA_AGENT_LAUNCH_TOKEN, launchAgent: 'claude' })
     )
+  })
+
+  // TEMPORARY parity (row 3 pin; spawn-agent-launch.ts drops cwdFallback): a launch into a deleted
+  // folder fails there, as the host's launch does, instead of starting in the workspace root.
+  it('starts in the requested folder even when it is gone, without the root fallback', async () => {
+    const missing = '/tmp/pane-launch/deleted'
+    statSyncMock.mockImplementation((target: string) => {
+      if (target === missing) {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return { isDirectory: () => true, mode: 0o755 }
+    })
+    const providerSpawn = vi.fn(async (_options: { cwd?: string }) => ({ id: 'pty-agent' }))
+    register(providerSpawn)
+
+    const result = await spawnPane(AI_BUTTON, { cwd: missing, cwdFallback: 'worktree' })
+
+    expect(providerSpawn.mock.calls[0]?.[0].cwd).toBe(missing)
+    expect(result).not.toHaveProperty('startupCwdFallback')
   })
 
   it('starts one agent when the pane spawns twice at once', async () => {

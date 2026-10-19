@@ -277,7 +277,7 @@ describe('CI dependency download caches', () => {
     }
   )
 
-  it('opts Windows server consumers out while preserving the main warmer store writer', () => {
+  it('opts Windows preparation out of download stores while retaining native caches', () => {
     const installer = './.github/actions/install-node-dependencies'
     const persistence = workflow('node-server-tests').jobs.persistence.steps.find(
       (step) => step.uses === installer
@@ -292,10 +292,10 @@ describe('CI dependency download caches', () => {
     expect(action.inputs['cache-pnpm-store'].default).toBe('true')
     expect(persistence.with['cache-pnpm-store']).toBe("${{ runner.os != 'Windows' }}")
     expect(ssh.with['cache-pnpm-store']).toBe('false')
-    expect(warmer.with['cache-pnpm-store']).toBeUndefined()
-    expect(warmer.with['cache-pnpm-store-lookup-only']).toBe('true')
+    expect(warmer.with['cache-pnpm-store']).toBe('false')
+    expect(warmer.with['native-runtime']).toBe('node')
     expect(persistence.with['cache-pnpm-store-lookup-only']).toBe('true')
-    for (const job of [workflow('ci-cache-warmup').jobs.warm, platformJobs['warm-linux-arm']]) {
+    for (const job of [workflow('ci-cache-warmup').jobs.warm, platformJobs['warm-linux-runtime']]) {
       const install = job.steps.find((step) => step.uses?.includes('install-node-dependencies'))
       expect(install.with['cache-pnpm-store-lookup-only']).toBe('true')
     }
@@ -314,6 +314,10 @@ describe('CI dependency download caches', () => {
       '.github/workflows/ci-cache-warmup-platforms.yml',
       '.github/workflows/ci-cache-warmup-platform-jobs.yml'
     ])
+    expect(platforms.concurrency).toEqual({
+      group: 'ci-cache-warmup-platforms-${{ github.event.pull_request.number || github.ref }}',
+      'cancel-in-progress': "${{ github.event_name == 'pull_request' }}"
+    })
     expect(shared.jobs['warm-platforms'].uses).toBe(platforms.jobs['warm-platforms'].uses)
     expect(shared.on.schedule).toEqual([{ cron: '41 */6 * * *' }])
     expect(shared.on).toHaveProperty('workflow_dispatch')
@@ -326,6 +330,7 @@ describe('CI dependency download caches', () => {
           '.github/workflows/ci-cache-warmup-platform-jobs.yml',
           '.github/actions/install-node-dependencies/**',
           '.github/actions/prepare-native-runtime/**',
+          'native/windows-security/**',
           'pnpm-lock.yaml'
         ])
       )
@@ -333,35 +338,50 @@ describe('CI dependency download caches', () => {
   })
 
   it.each([
-    ['pull_request', false, false],
-    ['push', true, false],
-    ['schedule', true, true],
-    ['workflow_dispatch', true, true]
-  ])('retains cache producers and Windows validation on %s', (event, armRuns, sharedPlatforms) => {
-    const shared = workflow('ci-cache-warmup')
-    const platforms = read(workflow('ci-cache-warmup-platforms').jobs['warm-platforms'].uses)
-    const context = { github: { event_name: event } }
-    expect(runInNewContext(platforms.jobs['warm-linux-arm'].if, context)).toBe(armRuns)
-    expect(runInNewContext(shared.jobs['warm-platforms'].if, context)).toBe(sharedPlatforms)
-    expect(shared.jobs.warm.if).toBeUndefined()
-    expect(platforms.jobs['warm-windows'].if).toBeUndefined()
-    expect(platforms.jobs['warm-windows'].strategy.matrix.os).toEqual([
-      'windows-2022',
-      'windows-11-arm'
-    ])
-  })
+    ['pull_request', false, true, false, false],
+    ['pull_request', true, false, false, false],
+    ['push', false, true, true, false],
+    ['schedule', false, true, true, true],
+    ['workflow_dispatch', false, true, true, true]
+  ])(
+    'retains eligible cache producers and Windows validation on %s (draft %s)',
+    (event, draft, admitted, armRuns, sharedPlatforms) => {
+      const shared = workflow('ci-cache-warmup')
+      const platformWorkflow = workflow('ci-cache-warmup-platforms')
+      const platforms = read(platformWorkflow.jobs['warm-platforms'].uses)
+      const contextFor = (isDraft) => ({
+        github: {
+          event_name: event,
+          event: event === 'pull_request' ? { pull_request: { draft: isDraft } } : {}
+        }
+      })
+      const context = contextFor(draft)
+      expect(runInNewContext(platforms.jobs['warm-linux-runtime'].if, context)).toBe(armRuns)
+      expect(runInNewContext(shared.jobs['warm-platforms'].if, context)).toBe(sharedPlatforms)
+      for (const guard of [shared.jobs.warm.if, platformWorkflow.jobs['warm-platforms'].if]) {
+        expect(runInNewContext(guard, context)).toBe(admitted)
+        expect(runInNewContext(guard, contextFor(!draft))).toBe(event !== 'pull_request' || draft)
+      }
+      expect(platforms.jobs['warm-windows'].if).toBeUndefined()
+      expect(platforms.jobs['warm-windows'].strategy.matrix.os).toEqual([
+        'windows-2022',
+        'windows-11-arm'
+      ])
+    }
+  )
 
-  it('validates the omitted ARM warmer preparation in the real PR consumers', () => {
+  it('validates the omitted Linux warmer preparation in the real PR consumers', () => {
     const platforms = read(workflow('ci-cache-warmup-platforms').jobs['warm-platforms'].uses)
-    const warm = platforms.jobs['warm-linux-arm']
+    const warm = platforms.jobs['warm-linux-runtime']
     const pr = workflow('pr')
     const units = workflow('unit-tests').jobs.test
     const installer = './.github/actions/install-node-dependencies'
     const warmInstall = warm.steps.find((step) => step.uses === installer)
     const unitInstall = units.steps.find((step) => step.uses === installer)
-    expect(warm['runs-on']).toBe('ubuntu-24.04-arm')
-    expect(pr.jobs.preflight['runs-on']).toBe(warm['runs-on'])
-    expect(pr.jobs.test.with.runner).toBe(warm['runs-on'])
+    expect(warm['runs-on']).toBe('${{ matrix.runner }}')
+    expect(warm.strategy.matrix.runner).toEqual(['ubuntu-24.04-arm', pr.jobs.test.with.runner])
+    expect(pr.jobs.preflight['runs-on']).toBe('blacksmith-8vcpu-ubuntu-2404')
+    expect(pr.jobs.test.with.runner).toBe('blacksmith-4vcpu-ubuntu-2404')
     expect(units['runs-on']).toBe('${{ inputs.runner }}')
     expect(JSON.parse(pr.jobs.test.with.node_versions)).toEqual(['24'])
     expect(warmInstall.if).toBeUndefined()

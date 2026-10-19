@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   listFavouriteFilters: vi.fn()
 }))
 vi.mock('electron', () => ({ ipcMain: { handle: mocks.handle } }))
-vi.mock('./preflight', () => ({ _resetPreflightCache: vi.fn() }))
+vi.mock('../preflight/agent-detection', () => ({ _resetPreflightCache: vi.fn() }))
 vi.mock('../jira/favourite-filters', () => ({ listFavouriteFilters: mocks.listFavouriteFilters }))
 vi.mock('../jira/client', () => ({
   connect: vi.fn(),

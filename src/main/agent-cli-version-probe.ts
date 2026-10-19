@@ -12,22 +12,33 @@ function warnRefused(program: string, why: string, output = ''): void {
   console.warn(`[agent-cli-version] ${program} --version: ${why}${said ? `: ${said}` : ''}`)
 }
 
-/** Runs `<program> --version` on this host and asks `supports` about the version it prints. False
- *  when it cannot tell: a failed spawn, a non-zero exit, a timeout, or output with no version. */
+/** What one `--version` run showed; `inconclusive` is no verdict on the installed release. */
+export type AgentCliVersionObservation = 'supported' | 'unsupported' | 'inconclusive'
+
+/** Runs `<program> --version` on this host and asks `supports` about the version it prints.
+ *  Inconclusive when it cannot tell: a failed spawn, a non-zero exit, a timeout, or no version. */
+export async function observeAgentCliVersion(
+  input: Pick<ProcessSpec, 'program' | 'cwd' | 'env'>,
+  supports: (version: string) => boolean
+): Promise<AgentCliVersionObservation> {
+  const result = await readAgentCliVersion(input)
+  if (result.version === null) {
+    return 'inconclusive'
+  }
+  if (!supports(result.version)) {
+    warnRefused(input.program, `${result.version} is not a supported release`)
+    return 'unsupported'
+  }
+  console.info(`[agent-cli-version] ${input.program} --version: ${result.version} is supported`)
+  return 'supported'
+}
+
+/** A launch's projection: only an observed supported release runs; an inconclusive run refuses. */
 export async function probeAgentCliVersion(
   input: Pick<ProcessSpec, 'program' | 'cwd' | 'env'>,
   supports: (version: string) => boolean
 ): Promise<boolean> {
-  const result = await readAgentCliVersion(input)
-  if (result.version === null) {
-    return false
-  }
-  if (!supports(result.version)) {
-    warnRefused(input.program, `${result.version} is not a supported release`)
-    return false
-  }
-  console.info(`[agent-cli-version] ${input.program} --version: ${result.version} is supported`)
-  return true
+  return (await observeAgentCliVersion(input, supports)) === 'supported'
 }
 
 export async function readAgentCliVersion(

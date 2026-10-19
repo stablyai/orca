@@ -1,3 +1,4 @@
+import { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -12,7 +13,6 @@ import {
   heldProviderChildReader,
   type ProviderChildSessions
 } from './structured-agent-session-provider-child'
-import { StructuredAgentSessionOptionRevisions } from './structured-agent-session-option-revisions'
 import { resolveStructuredSessionRecovery } from './structured-agent-session-recovery-resolution'
 import { recordAgentSessionStartup } from '../../observability/agent-session-instrumentation'
 import {
@@ -23,9 +23,9 @@ import {
 
 export class StructuredAgentSessionHostRuntimeState {
   private readonly eventSinks = new Map<string, DeferredStructuredAgentSessionEventSink>()
+  readonly deliveryOrder = new StructuredAgentSessionDeliveryOrder()
   readonly acquireAborts = new StructuredAgentSessionAcquireAborts()
   readonly startupAttempts: StructuredAgentSessionStartupAttempts
-  readonly optionRevisions = new StructuredAgentSessionOptionRevisions()
   private readonly leaseRenewer: StructuredAgentSessionLeaseRenewer
   private readonly onEventSinkFailure?: (sessionId: string, error: unknown) => void
 
@@ -42,14 +42,11 @@ export class StructuredAgentSessionHostRuntimeState {
       ...(deps.startupLimits ? { limits: deps.startupLimits } : {}),
       settled: recordAgentSessionStartup,
       expire: (expired) => {
-        if (expired.child === null) {
-          this.acquireAborts.abort(
-            expired.sessionId,
-            new StructuredAgentSessionStartupExpiredError()
-          )
-          return
+        // Still acquiring, or applying the picks made meanwhile: either wait ends now.
+        this.acquireAborts.abort(expired.sessionId, new StructuredAgentSessionStartupExpiredError())
+        if (expired.child !== null) {
+          onStartupExpired?.(expired)
         }
-        onStartupExpired?.(expired)
       }
     })
     this.leaseRenewer = new StructuredAgentSessionLeaseRenewer({

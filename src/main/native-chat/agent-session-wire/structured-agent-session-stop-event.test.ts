@@ -2,7 +2,7 @@
 // before the interrupt and before anything that ends the child, naming the turn, who asked and
 // the target it captured; never by a Stop that stopped nothing.
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
@@ -16,9 +16,15 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 
-let rig: QueuedMessageTestRig
+import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
 
-afterEach(() => rig.dispose())
+let rig: QueuedMessageTestRig
+const observationClock = createStructuredSessionObservationClock(() => rig.host, HOST_TEST_SESSION)
+beforeEach(() => observationClock.start())
+
+afterEach(async () => {
+  await observationClock.restoreBeforeCleanup(() => rig.dispose())
+})
 
 function journal() {
   const open = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.journal
@@ -146,7 +152,7 @@ describe("a Stop's event", () => {
       return true
     })
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await observationClock.observe(250)
     expect(await rig.handoff(held)).toBeUndefined()
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
     expect(rig.cancelTurn).not.toHaveBeenCalled()
@@ -231,7 +237,7 @@ describe("a Stop's event", () => {
     expect(stopEvents()).toHaveLength(2)
     await withdraw(await rig.handoffId(steered))
     await rig.settleAccepted(working, 'stopped')
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await observationClock.observe(250)
     expect(await rig.drafts()).toEqual([{ messageId: steered, state: 'waiting' }])
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
   })
@@ -298,7 +304,7 @@ describe("a Stop's event", () => {
     })
     await rig.settleAccepted(working, 'working')
     await eventually(() => expect(injected).toBe(true))
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await observationClock.observe(250)
     expect(await rig.handoff(draftId)).toBeUndefined()
     expect(await rig.drafts()).toEqual([{ messageId: draftId, state: 'waiting' }])
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })

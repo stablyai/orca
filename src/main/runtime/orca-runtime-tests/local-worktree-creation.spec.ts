@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   OrcaRuntimeService,
   addWorktree,
@@ -584,7 +584,10 @@ describe('OrcaRuntimeService', () => {
 
   it('creates a branchNameOverride worktree from the selected matching remote base ref', async () => {
     const runtime = new OrcaRuntimeService(store)
-    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+    const gitSpy = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockResolvedValue({ stdout: '', stderr: '' })
+    onTestFinished(() => gitSpy.mockRestore())
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/feature-something')
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/feature-something')
     vi.mocked(listWorktrees).mockResolvedValueOnce([

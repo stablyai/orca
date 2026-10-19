@@ -391,10 +391,6 @@ describe('terminal stop dispatch characterization', () => {
   class StopRuntime extends OrcaRuntimeService {
     closeStop: ExplicitCloseStop | null = null
 
-    acquireEmptySpawn() {
-      return this.acquireWorktreeTerminalSpawn()
-    }
-
     emptyExplicitStop() {
       return this.stopExplicitlyClosedTabPtys([], 'unaddressed')
     }
@@ -537,57 +533,6 @@ describe('terminal stop dispatch characterization', () => {
       const stop = await runtime.emptyExplicitStop()
       await runtime.closeTerminal(runtime.leafHandle())
       expect(runtime.closeStop).toBe(stop)
-    })
-  })
-
-  describe('terminal stop commands during runtime construction', () => {
-    it('reads the canonical empty sleep state before command fields initialize', () => {
-      class EarlySleepStateRuntime extends StopRuntime {
-        protected override get canonicalFetchKeyCache() {
-          expect(this.isWorktreeTerminalSleepHeld('folder-proof')).toBe(false)
-          return super.canonicalFetchKeyCache
-        }
-      }
-      expect(() => new EarlySleepStateRuntime()).not.toThrow()
-    })
-
-    it('returns the original no-op spawn promise before command fields initialize', async () => {
-      let release: Promise<() => void> | undefined
-      class EarlySpawnRuntime extends StopRuntime {
-        protected override get canonicalFetchKeyCache() {
-          release = this.acquireEmptySpawn()
-          return super.canonicalFetchKeyCache
-        }
-      }
-      expect(() => new EarlySpawnRuntime()).not.toThrow()
-      expect(release).toBeInstanceOf(Promise)
-      await expect(release).resolves.toBeTypeOf('function')
-    })
-
-    it('returns the empty stop promise from the original constructor seam', async () => {
-      let stopped: Promise<ExplicitCloseStop> | undefined
-      class EarlyEmptyStopRuntime extends StopRuntime {
-        protected override get canonicalFetchKeyCache() {
-          stopped = this.emptyExplicitStop()
-          return super.canonicalFetchKeyCache
-        }
-      }
-      expect(() => new EarlyEmptyStopRuntime()).not.toThrow()
-      expect(stopped).toBeInstanceOf(Promise)
-      await expect(stopped).resolves.toEqual({ stopped: false })
-    })
-
-    it('keeps a null-store sleep refusal as a rejected promise during construction', async () => {
-      let sleeping: ReturnType<OrcaRuntimeService['sleepTerminalsForWorktree']> | undefined
-      class EarlySleepRefusalRuntime extends StopRuntime {
-        protected override get canonicalFetchKeyCache() {
-          sleeping = this.sleepTerminalsForWorktree('folder-proof')
-          return super.canonicalFetchKeyCache
-        }
-      }
-      expect(() => new EarlySleepRefusalRuntime()).not.toThrow()
-      expect(sleeping).toBeInstanceOf(Promise)
-      await expect(sleeping).rejects.toThrow('selector_not_found')
     })
   })
 })

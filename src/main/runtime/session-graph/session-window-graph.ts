@@ -24,6 +24,19 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
   declare protected terminalGroupGridSizes?: RuntimeSyncWindowGraph['terminalGroupGridSizes']
   declare protected singleGroupWorkspaceGridSize?: RuntimeSyncWindowGraph['singleGroupWorkspaceGridSize']
 
+  // Why: a remounting pane publishes its leaf with no PTY until its transport reattaches the same
+  // session. Dropping it re-minted the handle every paired client was typing into (#23759).
+  private isLeafRemountingLivePty(
+    ptyId: string,
+    incomingPtyIds: ReadonlySet<string | null>
+  ): boolean {
+    return (
+      !incomingPtyIds.has(ptyId) &&
+      this.controllerKnowsPtyIsLive(ptyId) &&
+      this.getPtyLivenessVerdict(ptyId)?.status !== 'exited'
+    )
+  }
+
   shouldRelayTerminalBrowserOpens(): boolean {
     return this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
   }
@@ -69,6 +82,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
     }
     if (windowId === HEADLESS_RUNTIME_WINDOW_ID) {
       this.headlessGraphFallbackAvailable = true
+      this.servesHeadlessGraph = true
       this.rendererGeneration = null
     }
 
@@ -110,6 +124,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
     // Why: renderer reloads can briefly republish the same leaf with no ptyId;
     // keep live CLI handles usable while the UI graph rebuilds.
     const preserveLivePtysDuringReload = this.graphStatus === 'reloading'
+    const incomingPtyIds = new Set(lifecycleLeaves.map((leaf) => leaf.ptyId).filter(Boolean))
     for (const leaf of lifecycleLeaves) {
       if (leaf.ptyId) {
         if (leaf.parked) {
@@ -121,7 +136,10 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
       const existing = this.leaves.get(leafKey)
       const ptyId =
-        preserveLivePtysDuringReload && leaf.ptyId === null && existing?.ptyId
+        leaf.ptyId === null &&
+        existing?.ptyId &&
+        (preserveLivePtysDuringReload ||
+          this.isLeafRemountingLivePty(existing.ptyId, incomingPtyIds))
           ? existing.ptyId
           : leaf.ptyId
       const ptyGeneration =

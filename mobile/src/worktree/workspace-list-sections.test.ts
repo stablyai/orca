@@ -52,6 +52,7 @@ function withoutSectionListKeys(sections: ReturnType<typeof buildSections>) {
         lineageChildCount: _lineageChildCount,
         lineageCollapsed: _lineageCollapsed,
         isLastLineageChild: _isLastLineageChild,
+        showProjectName: _showProjectName,
         ...item
       }) => item
     )

@@ -5,7 +5,8 @@ import {
   acquired,
   adapterFor,
   fakeClaude,
-  identityFor
+  identityFor,
+  claudeOpened
 } from './claude-structured-session-test-support'
 
 /** Verbatim rows from Claude Code 2.1.280's list_models: `default` is the CLI's own
@@ -134,12 +135,10 @@ describe('Claude model before the first turn', () => {
     const events: ClaudeStructuredSessionEvent[] = []
     const adapter = await acquired(startedWithoutATurn(SETTINGS.noOverride), {}, events)
 
-    const started = events.find((event) => event.type === 'started')
+    const started = await claudeOpened(adapter, 'session-1')
     expect(started).toMatchObject({ reportedOptions: { model: 'opus[1m]' } })
     // Saved, it would be restored on every reopen past a later settings.json change.
-    expect(started?.type === 'started' ? started.reportedOptions : null).not.toHaveProperty(
-      'effort'
-    )
+    expect(started.reportedOptions).not.toHaveProperty('effort')
     const reported = events.find((event) => event.type === 'options-reported')
     expect(
       reported?.type === 'options-reported' ? reported.reportedOptions : null
@@ -174,8 +173,8 @@ describe('Claude model before the first turn', () => {
     })
 
     // `started` is persisted as the session's options; opus's effort must not ride along onto haiku.
-    const started = events.find((event) => event.type === 'started')
+    const started = await claudeOpened(adapter, 'session-1')
     expect(started).toMatchObject({ reportedOptions: { model: 'haiku' } })
-    expect(started?.type === 'started' ? started.reportedOptions.effort : null).toBeUndefined()
+    expect(started.reportedOptions.effort).toBeUndefined()
   })
 })

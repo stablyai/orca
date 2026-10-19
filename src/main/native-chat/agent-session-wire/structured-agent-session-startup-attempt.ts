@@ -11,6 +11,11 @@
 // attempt ends nothing.
 
 import { randomUUID } from 'node:crypto'
+import {
+  waitForStructuredAgentSessionStart,
+  type StructuredAgentSessionStartReadiness
+} from './structured-agent-session-start-readiness'
+export type { StructuredAgentSessionStartReadiness } from './structured-agent-session-start-readiness'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -30,7 +35,6 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
   permissionMode?: AgentChatPermissionMode
   events?: StructuredAgentSessionEventSink
   signal?: AbortSignal
-  optionRevision: () => number
 }): StructuredAgentSessionStartupAttempt {
   const { record } = input
   return {
@@ -46,8 +50,7 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
     ...(record.options ? { options: record.options } : {}),
     ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
     ...(input.events ? { events: input.events } : {}),
-    ...(input.signal ? { signal: input.signal } : {}),
-    optionRevision: input.optionRevision
+    ...(input.signal ? { signal: input.signal } : {})
   }
 }
 
@@ -97,6 +100,7 @@ type Tracked = {
   /** The limit's measure, held until an acquire it aborted settles: one that is ready anyway
    *  reports that instead. */
   expiry: StructuredAgentSessionStartupSettled | null
+  readiness: PromiseWithResolvers<'ready' | 'ended'>
 }
 
 /** Each session's open attempt and its startup clock. A session starts one child at a time, so a
@@ -134,7 +138,8 @@ export class StructuredAgentSessionStartupAttempts {
       lastOutputAt: 0,
       timer: null,
       expired: false,
-      expiry: null
+      expiry: null,
+      readiness: Promise.withResolvers()
     }
     this.open.set(sessionId, tracked)
     const current = (): boolean => this.open.get(sessionId) === tracked && !this.disposed
@@ -158,12 +163,26 @@ export class StructuredAgentSessionStartupAttempts {
     }
   }
 
-  /** The acquire returned: a `starting` child stays on the clock until it proves its start, and
+  /** Capture the attempt while the selected child still holds the session's queue. */
+  readiness(
+    sessionId: string,
+    child: StructuredAgentSessionProviderChildIdentity
+  ): StructuredAgentSessionStartReadiness | null {
+    const tracked = this.open.get(sessionId)
+    if (!tracked?.child || !sameProviderChild(tracked.child, child)) {
+      return null
+    }
+    return {
+      wait: (budgetMs) => waitForStructuredAgentSessionStart(tracked.readiness.promise, budgetMs)
+    }
+  }
+
+  /** The acquire returned: its `starting` child stays on the clock until it proves its start, and
    *  one published after the limit passed is expired now. */
   published(
     sessionId: string,
     attemptId: string,
-    child: StructuredAgentSessionProviderChildIdentity & { phase: 'starting' | 'ready' }
+    child: StructuredAgentSessionProviderChildIdentity & { phase?: 'starting' | 'ready' }
   ): void {
     const tracked = this.open.get(sessionId)
     if (tracked?.attempt.attemptId !== attemptId) {
@@ -182,6 +201,18 @@ export class StructuredAgentSessionStartupAttempts {
     if (tracked.spawnedAt === null && !this.disposed) {
       this.startClock(sessionId, tracked)
     }
+  }
+
+  /** Whether `child`'s start is still on its clock: false once its limit passed, so a `started`
+   *  that lost the race to the limit is never accepted. */
+  onClock(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): boolean {
+    const tracked = this.open.get(sessionId)
+    return (
+      !this.disposed &&
+      !!tracked?.child &&
+      !tracked.expired &&
+      sameProviderChild(tracked.child, child)
+    )
   }
 
   /** The child proved its start: its attempt is over. A stale child's proof ends nothing. */
@@ -217,6 +248,7 @@ export class StructuredAgentSessionStartupAttempts {
   dispose(): void {
     this.disposed = true
     for (const tracked of this.open.values()) {
+      tracked.readiness.resolve('ended')
       if (tracked.timer) {
         clearTimeout(tracked.timer)
       }
@@ -281,6 +313,7 @@ export class StructuredAgentSessionStartupAttempts {
   }
 
   private settle(sessionId: string, tracked: Tracked, outcome: 'ready' | 'ended'): void {
+    tracked.readiness.resolve(outcome)
     this.report(
       tracked.expired && outcome === 'ended' ? tracked.expiry : this.measure(tracked, outcome)
     )
@@ -313,6 +346,7 @@ export class StructuredAgentSessionStartupAttempts {
 
   private end(sessionId: string): void {
     const tracked = this.open.get(sessionId)
+    tracked?.readiness.resolve('ended')
     if (tracked?.timer) {
       clearTimeout(tracked.timer)
     }

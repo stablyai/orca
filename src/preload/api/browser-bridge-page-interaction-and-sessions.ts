@@ -82,8 +82,8 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.on('browser:agentInputFocusGuard', listener)
     return () => ipcRenderer.removeListener('browser:agentInputFocusGuard', listener)
   },
-  agentInputFocusGuardReady: (token: string): void => {
-    ipcRenderer.send('browser:agentInputFocusGuardReady', { token })
+  agentInputFocusGuardReady: (token: string, composing: boolean): void => {
+    ipcRenderer.send('browser:agentInputFocusGuardReady', { token, composing })
   },
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void

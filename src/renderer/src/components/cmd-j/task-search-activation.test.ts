@@ -27,7 +27,16 @@ it('uses the attachment source owner when a workspace executes on a different ho
 it('rejects source host/account/site collisions even when the issue URL matches', () => {
   for (const source of [
     { ...jiraTaskSource, hostId: 'runtime:other' as const },
-    { ...jiraTaskSource, accountLabel: 'someone@example.com' },
+    // Another login on the same site has its own siteId.
+    {
+      ...jiraTaskSource,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'other-site-second-login',
+        siteUrl: 'https://other.atlassian.net',
+        projectKey: 'DEMO'
+      }
+    },
     {
       ...jiraTaskSource,
       providerIdentity: {
@@ -43,6 +52,15 @@ it('rejects source host/account/site collisions even when the issue URL matches'
     })
     expect(findCmdJTaskWorkspace(jiraTaskResult, [workspace])).toBeUndefined()
   }
+})
+
+it('treats the Jira account label as display-only', () => {
+  const workspace = makeWorktree('labeled', 'Display name label', {
+    linkedItems: [
+      { ...attachment, taskSourceContext: { ...jiraTaskSource, accountLabel: 'Other' } }
+    ]
+  })
+  expect(findCmdJTaskWorkspace(jiraTaskResult, [workspace])).toBe(workspace)
 })
 
 it('rejects bare legacy identifiers and other Jira origins', () => {

@@ -4,7 +4,7 @@
 // ChildProcess instead of a ClientChannel.
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
-import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/relay-protocol'
+import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/remote-exec/remote-frame-protocol'
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 
 export const MAX_STARTUP_BUFFER_BYTES = 64 * 1024

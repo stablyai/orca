@@ -37,7 +37,13 @@ describe('publishWorkspaceLayout: the explicit published projection', () => {
       root: { type: 'leaf', leafId: leaf(3) },
       panes: [{ leafId: leaf(3), ptyId: `${GIT_KEY}@@aaaa0003` }],
       chatLeafId: leaf(3),
-      defaultTitle: 'Terminal 2'
+      defaultTitle: 'Terminal 2',
+      launchAgent: 'claude'
+    })
+    // A tab's launch inputs are published, so a window mounting it starts the same shell.
+    expect(workspace.tabs[5]!.terminal).toMatchObject({
+      startupCwd: '/Users/dev/orca/src',
+      shellOverride: 'zsh'
     })
     const json = JSON.stringify(workspace)
     for (const internal of [
@@ -48,9 +54,6 @@ describe('publishWorkspaceLayout: the explicit published projection', () => {
       'closedTerminalTabs',
       'terminalRowOwners',
       'topologyRevision',
-      'launchAgent',
-      'shellOverride',
-      'startupCwd',
       'dirtyDraftContent',
       'activeLeafId',
       'activeTabId'

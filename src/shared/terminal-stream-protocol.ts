@@ -34,7 +34,9 @@ export enum TerminalStreamOpcode {
   // Negotiated per stream because older clients reject unknown opcodes.
   WriteUnavailable = 17,
   // Host->client; `seq` is the cumulative input sequence the host applied (see encodeTerminalInputAck). Sent only after `inputAck` negotiation.
-  InputAck = 18
+  InputAck = 18,
+  // Host->client, empty payload; at most once per pause, when the host first discards output for a paused stream. Sent only after `outputPauseDropNotice` negotiation.
+  PausedOutputDropped = 19
 }
 
 export type TerminalInputAckKind = 'applied' | 'delivery-unknown' | 'resend'
@@ -165,6 +167,7 @@ function isTerminalStreamOpcode(value: number): value is TerminalStreamOpcode {
     value === TerminalStreamOpcode.OutputSpan ||
     value === TerminalStreamOpcode.SetOutputPaused ||
     value === TerminalStreamOpcode.WriteUnavailable ||
-    value === TerminalStreamOpcode.InputAck
+    value === TerminalStreamOpcode.InputAck ||
+    value === TerminalStreamOpcode.PausedOutputDropped
   )
 }

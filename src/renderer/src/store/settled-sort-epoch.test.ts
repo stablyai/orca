@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from './index'
-import { SORT_SETTLE_MS } from './settled-sort-epoch'
+import { SORT_SETTLE_MS } from '../../../shared/sidebar-list/sort-settle'
 import { applyWebSessionTabsStorePatch } from '@/runtime/web-session-tabs-sync/store-patch'
 import { makeWorktree } from '@/components/worktree-jump-palette-test-fixtures'
 

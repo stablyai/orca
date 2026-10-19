@@ -1,17 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { activateAndRevealFolderWorkspace, activateAndRevealWorktree } from './worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
-import type { AppStoreState } from './worktree-activation-test-harness'
+import type { AppStoreState } from './worktree-activation.test-fixture'
 import {
   createMockStore,
   registerWorktreeActivationReset,
   createdTabStartups
-} from './worktree-activation-test-harness'
+} from './worktree-activation.test-fixture'
 import { useAppStore } from '@/store'
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
-} from './worktree-activation-created-agent-test-state'
+} from './worktree-activation-created-agent.test-fixture'
 import {
   resetWebRuntimeWakeTerminalRespawnForTests,
   shouldSkipWebRuntimeWakeTerminalRespawn

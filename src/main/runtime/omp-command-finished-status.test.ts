@@ -58,7 +58,10 @@ async function settle(): Promise<void> {
   await new Promise<void>((resolve) => setImmediate(resolve))
 }
 
-async function createPane(getForegroundProcess: () => Promise<string | null>) {
+async function createPane(
+  getForegroundProcess: () => Promise<string | null>,
+  checkHookAgentPresence?: () => Promise<'live' | 'unverifiable' | 'exited' | null>
+) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-omp-lifetime-'))
   directories.push(directory)
   const server = new AgentHookServer()
@@ -103,6 +106,7 @@ async function createPane(getForegroundProcess: () => Promise<string | null>) {
     },
     undefined,
     {
+      checkHookAgentPresence,
       retireAgentHookCompatibilityAuthority: (paneKey) => server.retirePaneAuthority(paneKey),
       getAgentStatusSnapshot: () => server.getStatusSnapshot(),
       getAgentProviderSessionSnapshot: () => server.getStatusSnapshot(),
@@ -156,16 +160,76 @@ async function createPane(getForegroundProcess: () => Promise<string | null>) {
   return { runtime, server, controller, paneKey, handle, post, state }
 }
 
+it('keeps a live OMP row across its captured prompt-zone redraw', async () => {
+  const pane = await createPane(async () => 'omp')
+  await pane.post({ hook_event_name: 'agent_end' })
+  pane.runtime.onPtyData(PTY_ID, CAPTURED_OMP_COMMAND_FINISHED, Date.now())
+  await settle()
+  expect(pane.state()).toBe('done')
+  await pane.post({ hook_event_name: 'before_agent_start' })
+  expect(pane.state()).toBe('working')
+})
+
 for (const path of ['bytes', 'daemon'] as const) {
   const commandFinished = (runtime: OrcaRuntimeService): void => {
     if (path === 'bytes') {
-      runtime.onPtyData(PTY_ID, CAPTURED_OMP_COMMAND_FINISHED, Date.now())
+      runtime.onPtyData(PTY_ID, '\x1b]133;D;0\x07', Date.now())
     } else {
       runtime.emitDaemonPtyTransientFact(PTY_ID, { kind: 'command-finished', exitCode: 0 })
     }
   }
 
   describe(`OMP command-finished lifetime (${path})`, () => {
+    it.each(['live', 'unverifiable'] as const)(
+      'keeps a %s owner when a shell is foreground',
+      async (verdict) => {
+        const presence = vi
+          .fn<() => Promise<'live' | 'unverifiable' | 'exited'>>()
+          .mockResolvedValue(verdict)
+        const pane = await createPane(async () => 'zsh', presence)
+        await pane.post({ hook_event_name: 'agent_end' })
+        commandFinished(pane.runtime)
+        await settle()
+        expect(pane.state()).toBe('done')
+        expect(
+          pane.runtime.getOrchestrationDispatchAuthority(pane.handle)?.launchTokenHash
+        ).not.toBeNull()
+        presence.mockResolvedValue('exited')
+        commandFinished(pane.runtime)
+        await settle()
+        expect(pane.state()).toBeUndefined()
+        expect(
+          pane.runtime.getOrchestrationDispatchAuthority(pane.handle)?.launchTokenHash
+        ).toBeNull()
+      }
+    )
+
+    it('does not let a later marker reuse a shell read from before the current session', async () => {
+      let releaseForeground: ((process: string) => void) | undefined
+      const oldRead = new Promise<string>((resolve) => {
+        releaseForeground = resolve
+      })
+      const foreground = vi
+        .fn<() => Promise<string | null>>()
+        .mockReturnValueOnce(oldRead)
+        .mockResolvedValue('omp')
+      const pane = await createPane(foreground)
+      commandFinished(pane.runtime)
+      await settle()
+      await pane.post({ hook_event_name: 'before_agent_start', session_id: 'new-session' })
+      commandFinished(pane.runtime)
+      await settle()
+      releaseForeground?.('zsh')
+      await settle()
+      expect(pane.state()).toBe('working')
+      expect(pane.server.getStatusSnapshotForPane(pane.paneKey)[0]?.providerSession?.id).toBe(
+        'new-session'
+      )
+      expect(
+        pane.runtime.getOrchestrationDispatchAuthority(pane.handle)?.launchTokenHash
+      ).not.toBeNull()
+    })
+
     it.each([
       ['live OMP', async () => 'omp'],
       ['unknown foreground', async () => null],

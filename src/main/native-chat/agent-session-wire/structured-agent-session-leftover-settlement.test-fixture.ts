@@ -100,6 +100,24 @@ export async function exitWhileSettlementFails(current: QueuedMessageTestRig) {
   return { session, database, deadFence: child.fence }
 }
 
+/** The child exits on its own with nothing refused. */
+export async function exitChild(current: QueuedMessageTestRig): Promise<void> {
+  const context = current.host.collaboratorsForTests()
+  const child = context.sessions.get(SESSION)?.child
+  if (!child?.generation) {
+    throw new Error('expected a child')
+  }
+  await current.host.handleAdapterEvent({
+    type: 'ended',
+    sessionId: SESSION,
+    cause: 'unexpected-exit',
+    reason: 'observed exit',
+    fence: child.fence,
+    acquisitionGeneration: child.generation
+  })
+  await context.serialize(SESSION, async () => {})
+}
+
 /** A person's ordinary text send from the composer, with queueing on, at the current fence. */
 export function sendText(current: QueuedMessageTestRig, text: string) {
   const fence = current.store.getRecord(SESSION)?.lease.runtimeFence

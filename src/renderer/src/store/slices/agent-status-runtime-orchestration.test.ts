@@ -10,7 +10,7 @@ import type { AgentStatusObservation } from '../../../../shared/agent-status-obs
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { buildWorktreeAgentRows } from '@/components/sidebar/worktree-agent-rows'
 import { getAgentDotState } from '@/components/sidebar/worktree-card-agent-summary'
-import { resolveAttention } from '@/components/sidebar/smart-attention'
+import { resolveAttention } from '../../../../shared/sidebar-list/smart-attention'
 
 {
   describe('agent status runtime orchestration metadata', () => {

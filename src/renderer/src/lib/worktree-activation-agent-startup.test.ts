@@ -4,7 +4,7 @@ import {
   createMockStore,
   registerWorktreeActivationReset,
   createdTabStartups
-} from './worktree-activation-test-harness'
+} from './worktree-activation.test-fixture'
 
 registerWorktreeActivationReset()
 
@@ -28,7 +28,6 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(createdTabStartups(store)['tab-1']).toEqual({
       command: 'claude "Fix this bug"'
     })
-    expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
     expect(store.queueTabIssueCommandSplit).not.toHaveBeenCalled()
   })
 

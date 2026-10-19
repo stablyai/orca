@@ -42,6 +42,20 @@ export function agentSessionRecordIdentityFields(
 /** The fence a founded conversation starts at; every reservation moves it. */
 export const AGENT_SESSION_FOUNDING_FENCE = 1
 
+/** A founded row with no reservation, owner, or provider handle has never started an agent. */
+export function structuredSessionNeverStarted(record: AgentSessionRecord): boolean {
+  const { lease } = record
+  return (
+    lease.claimStatus === 'released' &&
+    lease.runtimeFence === AGENT_SESSION_FOUNDING_FENCE &&
+    lease.minimumNextFence === undefined &&
+    lease.ownerProcess === null &&
+    lease.reservedSpawnToken === null &&
+    lease.handoffStage === null &&
+    record.providerHandleChain.length === 0
+  )
+}
+
 /**
  * A conversation no agent has run yet, at rest: its first send starts one. The empty handle chain
  * is what makes that start a fresh conversation rather than a resume.

@@ -18,20 +18,14 @@ test('keeps same-path host models and undo history separate', async ({
   registerPostElectronShutdownCleanup(() => rm(filePath, { force: true }))
   const remoteId = buildOwnedEditorFileId(filePath, context.worktreeId, 'host-model-fixture')
 
-  // Controlled owner records exercise renderer identity; file transport remains local.
-  await orcaPage.evaluate(
-    ({ filePath, remoteId, worktreeId }) => {
+  // Both tabs open through the user's open path, so a layout-owner build's main holds them too.
+  // The second owner is keyed apart by a runtime id, then its record is pointed back at the
+  // fixture's SSH route with local transport before it first loads (it opens unselected).
+  const openedIds = await orcaPage.evaluate(
+    ({ filePath, worktreeId }) => {
       const store = window.__store
       if (!store) {
         throw new Error('Editor store unavailable')
-      }
-      const base = {
-        filePath,
-        relativePath: filePath.split(/[\\/]/).pop() ?? filePath,
-        worktreeId,
-        language: 'plaintext',
-        mode: 'edit' as const,
-        isDirty: true
       }
       const generation = {
         runtimeConnectionGeneration: null,
@@ -40,49 +34,58 @@ test('keeps same-path host models and undo history separate', async ({
         nestedSshGeneration: null,
         directSshGeneration: null
       }
+      const provenance = (
+        executionHostId: 'local' | 'ssh:fixture-target',
+        runtimeEnvironmentId: string | null
+      ) => ({
+        ownershipProjection: 'explicit' as const,
+        generation: { ...generation, route: { executionHostId, runtimeEnvironmentId } }
+      })
+      const file = {
+        filePath,
+        relativePath: filePath.split(/[\\/]/).pop() ?? filePath,
+        worktreeId,
+        language: 'plaintext',
+        mode: 'edit' as const
+      }
+      const localId = store.getState().openFile({
+        ...file,
+        runtimeEnvironmentId: null,
+        operationProvenance: provenance('local', null)
+      })
+      const remoteId = store.getState().openFile(
+        {
+          ...file,
+          runtimeEnvironmentId: 'host-model-fixture',
+          operationProvenance: provenance('ssh:fixture-target', 'host-model-fixture')
+        },
+        { selection: 'none' }
+      )
       store.setState((state) => ({
-        openFiles: [
-          {
-            ...base,
-            id: filePath,
-            operationProvenance: {
-              ownershipProjection: 'explicit',
-              generation: {
-                ...generation,
-                route: { executionHostId: 'local', runtimeEnvironmentId: null }
+        openFiles: state.openFiles.map((entry) =>
+          entry.id === remoteId
+            ? {
+                ...entry,
+                isDirty: true,
+                runtimeEnvironmentId: undefined,
+                operationProvenance: provenance('ssh:fixture-target', null)
               }
-            }
-          },
-          {
-            ...base,
-            id: remoteId,
-            operationProvenance: {
-              ownershipProjection: 'explicit',
-              generation: {
-                ...generation,
-                route: { executionHostId: 'ssh:fixture-target', runtimeEnvironmentId: null }
-              }
-            }
-          }
-        ],
+            : entry.id === localId
+              ? { ...entry, isDirty: true }
+              : entry
+        ),
         editorDrafts: {
           ...state.editorDrafts,
-          [filePath]: 'LOCAL_MARKER',
+          [localId]: 'LOCAL_MARKER',
           [remoteId]: 'REMOTE_MARKER'
-        },
-        activeFileId: filePath,
-        activeFileIdByWorktree: { ...state.activeFileIdByWorktree, [worktreeId]: filePath }
+        }
       }))
-      const state = store.getState()
-      const localTab = state.createUnifiedTab(worktreeId, 'editor', {
-        entityId: filePath,
-        label: 'Local file'
-      })
-      state.createUnifiedTab(worktreeId, 'editor', { entityId: remoteId, label: 'Remote file' })
-      store.getState().activateTab(localTab.id)
+      store.getState().setActiveFile(localId)
+      return { localId, remoteId }
     },
-    { filePath, remoteId, worktreeId: context.worktreeId }
+    { filePath, worktreeId: context.worktreeId }
   )
+  expect(openedIds).toEqual({ localId: filePath, remoteId })
 
   const editor = orcaPage.locator('.monaco-editor').first()
   await expect(editor).toBeVisible({ timeout: 25_000 })

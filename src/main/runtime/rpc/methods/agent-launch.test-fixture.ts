@@ -81,6 +81,9 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
   )
   return {
     getClientSettings: vi.fn(() => options.settings ?? STRUCTURED_PREFERENCE),
+    requireStore: vi.fn(() => ({
+      getSettings: () => options.settings ?? STRUCTURED_PREFERENCE
+    })),
     getStructuredAgentSessionCreateSupport: vi.fn(
       async () => options.createSupport ?? { supported: true }
     ),

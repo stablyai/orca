@@ -6,7 +6,7 @@ import type { AgentSessionMutationRequest } from './structured-agent-session-mut
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
 export function mutationTurnContext<TValue>(
-  request: AgentSessionMutationRequest<TValue>,
+  request: Omit<AgentSessionMutationRequest<TValue>, 'plan'>,
   journal: AgentSessionJournal,
   record: AgentSessionRecord
 ): AgentSessionTurnContext {

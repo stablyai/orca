@@ -31,7 +31,7 @@ vi.mock('node:crypto', async (importOriginal) => ({
 const { buildDetectedGitWorktrees } = await import('./ssh-worktree-fallback')
 const { getProjectHostSetupWorktreeMeta } =
   await import('../../../../shared/project-host-setup-lookup')
-const { mergeWorktree } = await import('../../worktree-logic')
+const { mergeWorktree } = await import('../../worktree-metadata-merge')
 const { resolveWorktreeMetaWithDiscoveryBackfill } = await import('./worktree-discovery-metadata')
 const ownership = await import('../../../../shared/worktree/ownership')
 const { projectResolvedWorktreeLineage } =
@@ -40,7 +40,7 @@ const { createWorktreeVisibilitySourceMatcher, resolveCustomWorktreeVisibilitySo
   await import('../../../../shared/worktree/visibility-sources')
 const { resolveConfiguredWorktreeBasePaths } =
   await import('../../../../shared/worktree/configured-worktree-base-path')
-const { dedupeWorktreesByPath } = await import('../../worktree-path-comparison')
+const { dedupeWorktreesByPath } = await import('../../../git/worktree-path-comparison')
 const { readWorktreeMetaForHost } =
   await import('../../../persistence/host-qualified-worktree-meta')
 const { getRepoOwnedWorktreeMeta } = await import('../../../worktree-metadata-ownership')

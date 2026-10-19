@@ -2,6 +2,7 @@
 import { ZodError, type ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
 import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
+import type { StructuredAgentCliSourceEvidence } from '../../native-chat/structured-agent-cli-source'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,
@@ -93,6 +94,7 @@ export type RpcContext = {
   connectionId?: string
   // An unsubscribe cannot retire a registration created after its dispatch began.
   subscriptionRegistrationVersion?: number
+  structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
   // Why: shared-control multiplexes many logical streams over one socket; the frame id lets handlers register cleanup per logical stream.
   requestId?: string
   // Why: paired mobile device token; state-owning handlers use it to clean up when that device disconnects.

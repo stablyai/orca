@@ -185,10 +185,11 @@ export class PaneManager {
     equalizeManagedPaneSizes(this.panes, this.root, this.options.onLayoutChanged)
   }
 
-  /** Applies a host layout's split orientation and ratios to mounted panes in place.
-   *  Why no onLayoutChanged: an applied host geometry must never persist or push back. */
-  applyLayoutGeometry(layout: TerminalPaneLayoutNode): boolean {
-    return applyPaneLayoutGeometry(this.host, layout)
+  /** Applies a host layout's split orientation and ratios to mounted panes in place; `followFrameTree`
+   *  also moves the same panes into another shape. Why no onLayoutChanged: an applied host
+   *  geometry must never persist or push back. */
+  applyLayoutGeometry(layout: TerminalPaneLayoutNode, followFrameTree = false): boolean {
+    return applyPaneLayoutGeometry(this.host, layout, followFrameTree)
   }
 
   getActivePane(): ManagedPane | null {

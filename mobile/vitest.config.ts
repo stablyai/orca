@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
 const vitestOxcConfig = { tsconfig: false } as never
@@ -7,6 +8,14 @@ export default defineConfig({
   // Why: the app tsconfig intentionally excludes tests; Vite 8's OXC transform
   // otherwise fails before Vitest can run the test modules.
   oxc: vitestOxcConfig,
+  resolve: {
+    // A faithful Node stand-in for the native module, rather than a mock in every test that reaches it.
+    alias: {
+      'expo-crypto': fileURLToPath(
+        new URL('./src/test-support/expo-crypto-node.ts', import.meta.url)
+      )
+    }
+  },
   test: {
     pool: 'threads',
     environment: 'node',

@@ -42,28 +42,28 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   }
 }))
 
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
 import {
-  closeAllWatchers,
   closeRemoteWatcherForWorktreePath,
   forgetRemoteWatcherRemovalSnapshot,
-  registerFilesystemWatcherHandlers,
   restoreRemoteWatcherAfterFailedRemoval
-} from './filesystem-watcher'
+} from './filesystem-watcher-remote-removal'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import { createWslWatcher } from './filesystem-watcher-wsl'
 import { resetWatcherChildRegistryForTest } from './parcel-watcher-child-registry'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
-import { WATCH_BATCH_TRAILING_MS } from '../../shared/filesystem-watch-batch-window'
+import { WATCH_BATCH_INTERVAL_MS } from '../../shared/filesystem-watch-batch-window'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
-/** Remote fs:changed rides the shared debounce window, so drain it before asserting sends. */
+/** Remote fs:changed rides the shared flush window, so drain it before asserting sends. */
 const emitRemote = async (onEvents: (e: unknown[]) => void, events: unknown[]) => {
   onEvents(events)
   await (vi.isFakeTimers()
-    ? vi.advanceTimersByTimeAsync(WATCH_BATCH_TRAILING_MS)
-    : new Promise((resolve) => setTimeout(resolve, WATCH_BATCH_TRAILING_MS + 25)))
+    ? vi.advanceTimersByTimeAsync(WATCH_BATCH_INTERVAL_MS)
+    : new Promise((resolve) => setTimeout(resolve, WATCH_BATCH_INTERVAL_MS + 25)))
 }
 
 describe('registerFilesystemWatcherHandlers', () => {

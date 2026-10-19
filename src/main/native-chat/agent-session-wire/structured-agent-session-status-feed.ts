@@ -30,7 +30,11 @@ import {
   type StructuredAgentSessionJournalProjection
 } from './structured-agent-session-status-journal-projection'
 import { structuredStatusSummariesEqual } from './structured-agent-session-status-summary-equality'
-import { StructuredAgentSessionStatusOwnership } from './structured-agent-session-status-ownership'
+import type { StructuredAgentSessionChildWorkProducer } from './structured-agent-session-subagent-rows'
+import {
+  StructuredAgentSessionStatusOwnership,
+  type CapturedChildWorkStops
+} from './structured-agent-session-status-ownership'
 
 export type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-ownership'
 export type { StructuredAgentSessionStatusFeedDeps } from './structured-agent-session-status-feed-deps'
@@ -284,9 +288,13 @@ export class StructuredAgentSessionStatusFeed {
 
   /** Child-work evidence for a session this feed publishes; a failing sink costs nothing else.
    *  The summary then re-reads the records, which is also what re-folds the parent's row. */
-  publishChildWork(sessionId: string, evidence: AgentChildWorkEvidence[]): void {
+  publishChildWork(
+    sessionId: string,
+    evidence: AgentChildWorkEvidence[],
+    producer?: StructuredAgentSessionChildWorkProducer
+  ): void {
     const session = this.deps.sessions.get(sessionId)
-    if (!session || !this.admitChildWork(sessionId, session, evidence)) {
+    if (!session || !this.admitChildWork(sessionId, session, evidence, producer)) {
       return
     }
     this.publish(sessionId)
@@ -303,8 +311,22 @@ export class StructuredAgentSessionStatusFeed {
     }
   }
 
-  childWorkIncomplete = (sessionId: string): boolean =>
-    this.ownership.childWorkIncomplete(sessionId)
+  childWorkOpen = (sessionId: string): boolean => this.ownership.childWorkOpen(sessionId)
+
+  captureChildWorkStops = (
+    sessionId: string,
+    handleIds: readonly string[]
+  ): CapturedChildWorkStops => this.ownership.captureChildWorkStops(sessionId, handleIds)
+
+  /** Reads the store, so a failing read costs only the strip's note, as `readChildWork`'s does. */
+  childWorkIncomplete = (sessionId: string): boolean => {
+    try {
+      return this.ownership.childWorkIncomplete(sessionId)
+    } catch (error) {
+      this.logFailure('child-work-read', 'child work read failed', sessionId, error)
+      return false
+    }
+  }
 
   /** The records the views project. Read only from the child-work observer, which already
    *  reports a failure. */
@@ -314,7 +336,8 @@ export class StructuredAgentSessionStatusFeed {
   private admitChildWork(
     sessionId: string,
     session: StatusFeedSession,
-    evidence: AgentChildWorkEvidence[]
+    evidence: AgentChildWorkEvidence[],
+    producer?: StructuredAgentSessionChildWorkProducer
   ): boolean {
     try {
       this.ownership.publishChildWork(sessionId, evidence, session.params.provider)
@@ -323,7 +346,7 @@ export class StructuredAgentSessionStatusFeed {
       return false
     }
     try {
-      this.deps.onChildWorkChanged?.(sessionId)
+      this.deps.onChildWorkChanged?.(sessionId, producer)
     } catch (error) {
       this.logFailure('child-work-observer', 'child work observer failed', sessionId, error)
     }

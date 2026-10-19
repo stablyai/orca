@@ -1,4 +1,4 @@
-import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
+import { wakeStoppedManagedOrcad } from '../managed-server/lifecycle/orcad-managed-wake'
 import type { OrcadSlotOptions } from './orcad-recovery-slot'
 
 /**

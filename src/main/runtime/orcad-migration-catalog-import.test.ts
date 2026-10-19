@@ -3,7 +3,7 @@ import type {
   OrcadMigrationCatalogAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 import {
   abortStagedOrcadMigrationCatalogDurably,
   commitStagedOrcadMigrationCatalogDurably,

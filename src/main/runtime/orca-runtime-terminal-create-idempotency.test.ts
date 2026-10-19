@@ -471,7 +471,7 @@ describe('launch runtime dispatch and allocation phases', () => {
     Object.defineProperty(runtime, 'resolveAgentTerminalCreateOptions', {
       value: async (_workspace: unknown, opts: unknown) => opts
     })
-    Object.defineProperty(runtime, 'buildTerminalWorkspaceEnv', { value: async () => ({}) })
+    Object.defineProperty(runtime, 'buildTerminalWorkspaceEnv', { value: () => ({}) })
     const pending = runtime.createTerminal('workspace')
     await entered.promise
     expect(events).toEqual(['admit'])
@@ -655,7 +655,7 @@ describe('launch runtime dispatch and allocation phases', () => {
     Object.defineProperty(runtime, 'resolveAgentTerminalCreateOptions', {
       value: async (_workspace: unknown, opts: unknown) => opts
     })
-    Object.defineProperty(runtime, 'buildTerminalWorkspaceEnv', { value: async () => ({}) })
+    Object.defineProperty(runtime, 'buildTerminalWorkspaceEnv', { value: () => ({}) })
     await expect(
       runtime.createTerminal('workspace', {
         get resumeProviderSession() {

@@ -30,7 +30,6 @@ import type {
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionUnavailable } from '../../../shared/agent-session-availability'
 import type { JournalItemLinkageVisitor } from '../agent-session-journal/journal-store-contracts'
-import type { StructuredAgentSessionChildWorkReads } from './structured-agent-session-idle-sweep'
 
 describe('a send after the agent said it is not signed in', () => {
   let rig: RestTestRig
@@ -199,9 +198,10 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
     stoppable: false,
     invocation: { invocationId: 'spawn-subagent-1', generation: 1 }
   }
-  const idle: StructuredAgentSessionChildWorkReads = {
+  const idle: Parameters<typeof retireOutgrownStructuredAgentSessionChild>[2]['work'] = {
     currentWork: () => ({ activeTurnId: () => null, hasActionablePrompt: () => false }),
     childWork: () => [],
+    childWorkOpen: () => false,
     hasOpenDispatch: () => false,
     providerHoldsDispatch: () => false
   }
@@ -233,7 +233,7 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
     // A pending prompt is the shared check's too; the idle sweep's tests cover that case.
     for (const kept of [
       await retire(signedOut, owing('turn-1', false)),
-      await retire(signedOut, { childWork: () => [liveChildWork] }),
+      await retire(signedOut, { childWorkOpen: () => true }),
       await retire(signedOut, { hasOpenDispatch: () => true }),
       await retire(signedOut, { providerHoldsDispatch: () => true })
     ]) {
@@ -289,7 +289,7 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
     it('is kept while it owes work, as a signed-out one is', async () => {
       for (const kept of [
         await retire(askChild, owing('turn-1', false), undefined, now('auto')),
-        await retire(askChild, { childWork: () => [liveChildWork] }, undefined, now('auto')),
+        await retire(askChild, { childWorkOpen: () => true }, undefined, now('auto')),
         await retire(askChild, owing(null, true), undefined, now('auto'))
       ]) {
         expect(kept.stopAgent).not.toHaveBeenCalled()
@@ -319,6 +319,7 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
           fetchedAt: 1,
           models: rows.map((row) => ({ ...row, label: row.id, efforts: [] }))
         })),
+        retainedLiveModelIds: vi.fn(async () => []),
         recordLiveListing: vi.fn(),
         prewarm: vi.fn(async () => undefined),
         stop: vi.fn(),

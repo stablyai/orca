@@ -114,7 +114,7 @@ describe('host-created workspaces awaiting their agent chat', () => {
         observeSetupCompletion: true,
         activate
       })
-      const commandCount = withDefaults ? 3 : setupScriptLaunchMode === 'new-tab' ? 1 : 2
+      const commandCount = withDefaults ? 3 : 1
       expect(spawn).toHaveBeenCalledTimes(commandCount)
       expect(spawn.mock.calls.filter(([args]) => args.command === 'pnpm dev')).toHaveLength(
         withDefaults ? 1 : 0
@@ -146,7 +146,7 @@ describe('host-created workspaces awaiting their agent chat', () => {
         ).initialSurfaceLaunch
       ).toBeUndefined()
       expect(snapshot.tabs).toHaveLength(commandCount)
-      if (setupScriptLaunchMode === 'new-tab' && !withDefaults) {
+      if (!withDefaults) {
         expect(snapshot.tabs[0]?.title).toBe('Setup')
       }
     }

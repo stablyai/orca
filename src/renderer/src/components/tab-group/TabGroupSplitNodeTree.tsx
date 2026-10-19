@@ -3,6 +3,8 @@ import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import TabGroupPanel, { type TabGroupPanelTabStrip } from './TabGroupPanel'
 import type { HoveredTabInsertion } from './useTabDragSplit'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { setGroupRatioThroughLayoutOwner } from './tab-group-layout-owner-commands'
 
 const MIN_RATIO = 0.15
 const MAX_RATIO = 0.85
@@ -241,7 +243,12 @@ function SplitNode({
       <ResizeHandle
         direction={node.direction}
         onResizeStart={() => recordFeatureInteraction('terminal-panes')}
-        onRatioChange={(nextRatio) => setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)}
+        onRatioChange={(nextRatio) =>
+          // Switch point: main saves the group sizes once the drag ends.
+          ORCA_LAYOUT_OWNER_IS_MAIN
+            ? setGroupRatioThroughLayoutOwner(worktreeId, nodePath, nextRatio)
+            : setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)
+        }
       />
       <div className="flex min-w-0 min-h-0 overflow-hidden" style={{ flex: `${1 - ratio} 1 0%` }}>
         <SplitNode

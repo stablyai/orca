@@ -58,7 +58,7 @@ function getMetadataPath(): string {
   return join(getOrcaDir(), 'bitbucket-credential.json')
 }
 
-function getSecretPath(): string {
+export function getSecretPath(): string {
   return join(getOrcaDir(), 'bitbucket-credential.enc')
 }
 

@@ -316,6 +316,16 @@ describe('route guest OAuth popups', () => {
     expect(contents.openWindow('https://accounts.example.com/step-2').action).toBe('allow')
   })
 
+  it('lets a popup page leave when it asks to confirm', () => {
+    const { guest } = attachRegisteredGuest()
+    guest.emitInput('mouseDown')
+    const contents = createPopupContents()
+    guest.openWindow('https://accounts.example.com/oauth').createWindow?.(popupOptions(contents))
+
+    // Why true: on will-prevent-unload, preventDefault is what lets the page leave.
+    expect(contents.navigate('https://accounts.example.com/next', 'will-prevent-unload')).toBe(true)
+  })
+
   it('guards blank descendants and redirects after the root loses authority', () => {
     const { registry, guest } = attachRegisteredGuest()
     guest.emitInput('mouseDown')

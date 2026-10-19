@@ -23,6 +23,7 @@ function harness() {
           { key: 'a', layout: { worktreeId: 'a' } },
           { key: 'b', layout: { worktreeId: 'b' } }
         ],
+        seq: 4,
         unsubscribe
       }
     },
@@ -63,14 +64,15 @@ describe('layout.subscribe', () => {
       {
         type: 'snapshot',
         subscriptionId: expect.any(String),
-        workspaces: [{ key: 'b', layout: { worktreeId: 'b' } }]
+        workspaces: [{ key: 'b', layout: { worktreeId: 'b' } }],
+        seq: 4
       }
     ])
-    publish({ type: 'removed', key: 'a' })
-    publish({ type: 'removed', key: 'b' })
+    publish({ type: 'removed', key: 'a', seq: 5 })
+    publish({ type: 'removed', key: 'b', seq: 6 })
     runtime.cleanupSubscription(cleanupKey!)
     await done
-    expect(emitted.slice(1)).toEqual([{ type: 'removed', key: 'b' }, { type: 'end' }])
+    expect(emitted.slice(1)).toEqual([{ type: 'removed', key: 'b', seq: 6 }, { type: 'end' }])
     expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
 

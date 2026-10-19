@@ -17,7 +17,7 @@ let serverStore: AgentSessionAttachmentStore
 let failMethod: string | null = null
 
 // The paired server, played by a real store: every call answers as the RPC handler would.
-vi.mock('./runtime-environment-transport-routing', () => ({
+vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: async (
     _userDataPath: string,
     _environmentId: string,
@@ -108,7 +108,7 @@ describe('uploadExternalPathsToAgentSessionAttachments', () => {
     for (const { path } of result.uploaded) {
       expect(path.startsWith(serverStore.rootDir)).toBe(true)
     }
-    expect(await readFile(result.uploaded[0].path)).toEqual(big)
+    expect((await readFile(result.uploaded[0].path)).equals(big)).toBe(true)
     expect(await readFile(result.uploaded[1].path, 'utf8')).toBe('# hi')
   })
 
@@ -124,6 +124,16 @@ describe('uploadExternalPathsToAgentSessionAttachments', () => {
       expect(call.revision).toBe(7)
       expect(call.options?.expectedEnvironmentRuntimeId).toBe('runtime-a')
     }
+  })
+
+  it('names an extensionless dropped image by its bytes', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d])
+    await writeFile(join(workDir, 'noname'), png)
+    await uploadExternalPathsToAgentSessionAttachments(context(), [join(workDir, 'noname')])
+    expect(calls[0]).toMatchObject({
+      method: 'agentSessionAttachment.uploadStart',
+      params: { name: 'noname.png' }
+    })
   })
 
   it('skips a folder as unsupported without walking into it', async () => {
@@ -157,7 +167,7 @@ describe('uploadBufferToAgentSessionAttachments', () => {
     const png = Buffer.alloc(900 * 1024, 3)
     const stored = await uploadBufferToAgentSessionAttachments(context(), 'orca-paste-1.png', png)
     expect(stored.name).toBe('orca-paste-1.png')
-    expect(await readFile(stored.path)).toEqual(png)
+    expect((await readFile(stored.path)).equals(png)).toBe(true)
     // 900 KiB in 384 KiB slices.
     expect(
       calls.filter((call) => call.method === 'agentSessionAttachment.uploadAppend')

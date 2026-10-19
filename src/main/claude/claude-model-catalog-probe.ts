@@ -27,6 +27,36 @@ export type ClaudeModelCatalogProbeDeps = ClaudeEnvDeps &
     runListing?: typeof runAgentModelCatalogListing
   }
 
+/** Asks Claude one control request without a session, under the SAME binary and environment the
+ *  structured session launch resolves, pinned to the chat's account. */
+export async function runClaudeListing(
+  deps: ClaudeModelCatalogProbeDeps,
+  request: {
+    accountHomePath: string
+    args: readonly string[]
+    stdin: string
+    site: string
+    cwd?: string
+    signal?: AbortSignal
+  }
+): Promise<string> {
+  // Same pin rule as the session spawn: naming the CLI's default dir would move
+  // it off the default Keychain item and list under another identity.
+  const { command, env } = await resolveClaudeStructuredInvocation(deps, (base) => ({
+    ...base,
+    ...claudeConfigDirEnvPatch(request.accountHomePath, { env: base })
+  }))
+  return (deps.runListing ?? runAgentModelCatalogListing)(
+    {
+      command,
+      args: [...request.args],
+      stdin: request.stdin,
+      ...(request.cwd ? { cwd: request.cwd } : {})
+    },
+    { site: request.site, inheritedEnv: env, signal: request.signal }
+  )
+}
+
 /**
  * Lists models without a live session: one `list_models` control request, under the SAME binary
  * and environment the structured session launch resolves, so a probe can never list under a
@@ -36,17 +66,13 @@ export function createClaudeModelCatalogProbe(
   deps: ClaudeModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
   return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
-    const accountHomePath = requireLegacyAgentSessionAccountHome(accountHome).path
-    // Same pin rule as the session spawn: naming the CLI's default dir would move
-    // it off the default Keychain item and list under another identity.
-    const { command, env } = await resolveClaudeStructuredInvocation(deps, (base) => ({
-      ...base,
-      ...claudeConfigDirEnvPatch(accountHomePath, { env: base })
-    }))
-    const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
-      { command, args: [...CLAUDE_MODEL_LIST_ARGS], stdin: CLAUDE_MODEL_LIST_STDIN },
-      { site: 'claude-model-catalog-probe', inheritedEnv: env, signal: options?.signal }
-    ).catch((error: unknown) => {
+    const stdout = await runClaudeListing(deps, {
+      accountHomePath: requireLegacyAgentSessionAccountHome(accountHome).path,
+      args: CLAUDE_MODEL_LIST_ARGS,
+      stdin: CLAUDE_MODEL_LIST_STDIN,
+      site: 'claude-model-catalog-probe',
+      ...(options?.signal ? { signal: options.signal } : {})
+    }).catch((error: unknown) => {
       // Claude has no pre-send sign-in verdict; a missing CLI is the one this probe can find.
       if (error instanceof AgentModelCatalogProbeError && error.executableMissing) {
         throw new AgentModelCatalogUnavailableError({ reason: 'cliMissing' })

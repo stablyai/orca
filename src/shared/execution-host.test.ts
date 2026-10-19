@@ -10,6 +10,9 @@ import {
   getSettingsFocusedExecutionHostId,
   getSshTargetIdForExecutionHost,
   getWorktreeExecutionHostId,
+  isOwnedSshTargetId,
+  isRepoOnCatalogHost,
+  isRuntimeOwnedSshTargetId,
   isUnresolvedOwnerHostId,
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
@@ -201,5 +204,30 @@ describe('unresolved-owner sentinel', () => {
     expect(parseRoutableExecutionHostId(UNRESOLVED_OWNER_HOST_ID)).toBeNull()
     expect(parseRoutableExecutionHostId('runtime:env-1')?.id).toBe('runtime:env-1')
     expect(isUnresolvedOwnerHostId('runtime:env-1')).toBe(false)
+  })
+})
+
+describe('isRepoOnCatalogHost', () => {
+  it('counts only rows whose files are on the catalog’s own machine', () => {
+    expect(isRepoOnCatalogHost({})).toBe(true)
+    expect(isRepoOnCatalogHost({ connectionId: null, executionHostId: 'local' })).toBe(true)
+    expect(isRepoOnCatalogHost({ connectionId: '  ' })).toBe(true)
+    expect(isRepoOnCatalogHost({ connectionId: 'ssh-1' })).toBe(false)
+    expect(isRepoOnCatalogHost({ executionHostId: 'ssh:ssh-1' })).toBe(false)
+    expect(isRepoOnCatalogHost({ executionHostId: 'runtime:env-1' })).toBe(false)
+    // A stale connection id contradicts `local`; an unknown host id is not proven local.
+    expect(isRepoOnCatalogHost({ executionHostId: 'local', connectionId: 'ssh-1' })).toBe(false)
+    expect(isRepoOnCatalogHost({ executionHostId: 'future:host' })).toBe(false)
+  })
+})
+
+describe('owned SSH target ids', () => {
+  it('hides recipe-VM and machine targets but keeps the recipe-VM meaning narrow', () => {
+    expect(isOwnedSshTargetId('runtime-ssh-vm-1')).toBe(true)
+    expect(isOwnedSshTargetId('machine-0123456789abcdef0123')).toBe(true)
+    expect(isOwnedSshTargetId('ssh-1792393612859-abc123')).toBe(false)
+    expect(isOwnedSshTargetId(null)).toBe(false)
+    // Only recipe VMs carry "replaced every provision" semantics.
+    expect(isRuntimeOwnedSshTargetId('machine-0123456789abcdef0123')).toBe(false)
   })
 })

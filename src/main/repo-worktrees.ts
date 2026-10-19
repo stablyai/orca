@@ -10,7 +10,7 @@ import {
 import { isFolderRepo } from '../shared/repo-kind'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { resolveGitRouteForHost } from './providers/execution-host-provider-dispatch'
-import { areWorktreePathsEqual } from './ipc/worktree-logic'
+import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 import { WorktreeCatalogUnavailableError } from '../shared/worktree/worktree-catalog-availability'
 
 type LocalRepoWorktreeListOptions = {
@@ -64,17 +64,7 @@ export async function listRepoWorktreesForDetectedScan(
   return listRoutedRepoWorktrees(repo, options, listWorktreesSharedStrictAllowingTrueEmpty)
 }
 
-async function listRoutedRepoWorktrees(
-  repo: Repo,
-  options: LocalRepoWorktreeListOptions | undefined,
-  listLocal: (
-    repoPath: string,
-    options?: LocalRepoWorktreeListOptions
-  ) => Promise<GitWorktreeInfo[]>
-): Promise<GitWorktreeInfo[]> {
-  if (isFolderRepo(repo)) {
-    return [createFolderWorktree(repo)]
-  }
+function assertLocalGitRoute(repo: Repo): void {
   const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
   if (route.kind === 'runtime') {
     // A runtime row's `connectionId` names a target in the *server's* namespace, not one this
@@ -90,6 +80,20 @@ async function listRoutedRepoWorktrees(
       `Worktree catalog unavailable for ${repo.path}: SSH connection "${route.connectionId}" is not connected.`
     )
   }
+}
+
+async function listRoutedRepoWorktrees(
+  repo: Repo,
+  options: LocalRepoWorktreeListOptions | undefined,
+  listLocal: (
+    repoPath: string,
+    options?: LocalRepoWorktreeListOptions
+  ) => Promise<GitWorktreeInfo[]>
+): Promise<GitWorktreeInfo[]> {
+  if (isFolderRepo(repo)) {
+    return [createFolderWorktree(repo)]
+  }
+  assertLocalGitRoute(repo)
   const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listLocal(repo.path, options)
     : await listLocal(repo.path)
@@ -110,13 +114,9 @@ export async function listRepoWorktreeGraph(
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
-  const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
-  // An unreachable remote host answers `[]` here, unlike listRepoWorktrees above, which throws.
-  // Preserved as-is: this call site's callers treat the graph as best-effort. The inconsistency is
-  // real but is a separate behavior decision from resolving the host correctly.
-  if (route.kind !== 'local') {
-    return []
-  }
+  // Why throw: `[]` reads as "no such worktree", so hosted review answered "does not belong to
+  // repository" for a live remote worktree whose host is merely unreachable (#18272).
+  assertLocalGitRoute(repo)
   const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreeGraph(repo.path, options)
     : await listWorktreeGraph(repo.path)

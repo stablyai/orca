@@ -21,7 +21,8 @@ export type ConnectCallbacks = {
   onError?: (msg: string) => void
   onErrorCleared?: (msg: string) => void
   onWriteUnavailable?: () => void
-  onOutputPauseChanged?: (paused: boolean, supported: boolean) => void
+  onOutputPauseChanged?: (paused: boolean, supported: boolean, dropsReported?: boolean) => void
+  onPausedOutputDropped?: () => void
 }
 
 export type MockTransport = {

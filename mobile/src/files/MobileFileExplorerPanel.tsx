@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronLeft, X } from 'lucide-react-native'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
-import { useForceReconnect } from '../transport/client-context'
+import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { getWorktreeLabel } from '../session/worktree-label'

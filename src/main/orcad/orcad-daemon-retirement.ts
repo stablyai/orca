@@ -19,6 +19,8 @@ export type OrcadDaemonRetirement = {
   retirement: OrcadDaemonRetirementVerdict
   liveSessions: number | null
   reason: string | null
+  /** After a timeout: whether the attempt still pending then went on to retire the daemon. */
+  lateRetirement?: Promise<boolean>
 }
 
 /** Live sessions across every daemon generation, or `null` when any could not answer. */
@@ -55,10 +57,16 @@ export async function retireOrcadDaemonIfIdle(
     timeoutMs,
     { state: 'timed-out' }
   )
-  if (result.state === 'timed-out') {
-    // The fence cannot reopen while the attempt is pending; reopen it once a late refusal lands.
-    void attempt.then((late) => late.state !== 'retiring' && releaseFence())
-  }
+  // The fence cannot reopen while the attempt is pending; reopen it once a late refusal lands.
+  const lateRetirement =
+    result.state === 'timed-out'
+      ? attempt.then((late) => {
+          if (late.state !== 'retiring') {
+            releaseFence()
+          }
+          return late.state === 'retiring'
+        })
+      : undefined
   if (result.state === 'retiring') {
     return { retirement: 'retired', liveSessions: 0, reason: null }
   }
@@ -80,6 +88,7 @@ export async function retireOrcadDaemonIfIdle(
   return {
     retirement: 'unverifiable',
     liveSessions,
+    ...(lateRetirement ? { lateRetirement } : {}),
     reason:
       result.state === 'unsupported'
         ? 'The terminal daemon predates idle retirement, so it was left running.'

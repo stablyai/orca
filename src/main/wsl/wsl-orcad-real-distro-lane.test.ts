@@ -5,7 +5,7 @@
 //   launch  - deploy, RPC, kill orcad => relaunch + census, `wsl --terminate` => terminals exited;
 //             then an app update (E1): deferred over a live terminal, forced past it with the
 //             terminal kept, silent with none, and silent again after a reboot
-//   survive - >= 60 s after launch exited: distros still Running, holders adopted live, reconnect,
+//   survive - >= 60 s after launch exited: distros still Running, holders adopted live, reconnect, structured chat in git/folder projects,
 //             teardown leaves no bridge or holder processes, WSLInterop intact
 // .github/workflows/wsl-orcad-e2e.yml imports the distros and runs both phases.
 //
@@ -30,11 +30,12 @@ import {
   ORCAD_TEMPLATE_MANIFEST_FILENAME
 } from '../../shared/orcad-artifacts'
 import { requestOrcadTerminalCensus } from '../ssh/orcad-terminal-census-client'
-import { execCommand } from '../ssh/ssh-relay-exec-command'
+import { execCommand } from '../ssh/remote-exec/remote-exec-command'
 import { readConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
 import { readWindowsProcessTableFresh } from '../windows/windows-process-table'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
+import { proveWslStructuredChat } from './wsl-orcad-structured-chat-contract'
 import { WSL_DISTRO_HOLDER_MARKER } from './wsl-distro-holder-command'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
@@ -554,10 +555,26 @@ async function survivePhase(): Promise<void> {
     expect(adopted).toContainEqual({ distro: name, state: 'live' })
   }
   for (const { name } of DISTROS) {
-    const connection = await manager.ensure(name)
+    let connection = await manager.ensure(name)
     await rpc(connection, 'status.get')
     receipt[`${name}.detachedSession`] = await proveDetachedSession(connection, name)
     receipt[`${name}.census`] = await requestOrcadTerminalCensus(pairedConnection(connection), 0)
+    if (connection.pid === null) {
+      throw new Error('Missing guest runtime PID')
+    }
+    receipt[`${name}.chat`] = await proveWslStructuredChat({
+      rpc: (method, params) => rpc(connection, method, params),
+      guest: (command) => guest(name, command),
+      pairing: () => pairedConnection(connection),
+      runtimePid: connection.pid,
+      reconnect: async (whileDisconnected) => {
+        const { localPort, pid } = connection
+        await connection.close()
+        await whileDisconnected()
+        connection = await manager.ensure(name, { localPort })
+        expect(connection.pid, 'bridge loss must preserve the guest runtime').toBe(pid)
+      }
+    })
   }
 
   // Teardown: bridges closed, holders released, distros terminated.

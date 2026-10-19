@@ -4,13 +4,8 @@ import { MobileAgentSessionHistoryPanel } from '../../../../src/agent-history/Mo
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 
 /**
- * Web sibling for agent session history.
- *
- * This page is what the shell renders for this route, so there is no shell to mount here and no
- * flag to read: the switch already happened natively. Its native file also reaches
- * OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a
- * browser, and one throwing route module takes the whole bundle down because the manifest imports
- * them all.
+ * The page's route for agent session history: the screen itself. The native route file mounts the shell, whose
+ * native view module throws at import in a browser, and the manifest imports every route.
  */
 export default withWorkspaceRoute(function MobileAgentSessionHistoryScreen() {
   const params = useLocalSearchParams<{

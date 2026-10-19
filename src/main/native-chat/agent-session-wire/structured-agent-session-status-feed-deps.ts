@@ -8,6 +8,7 @@ import type {
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { StructuredAgentSessionChildWorkProducer } from './structured-agent-session-subagent-rows'
 import type { StructuredAgentSessionStatusObserverOptions } from './structured-agent-session-status-observation'
 import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-ownership'
 
@@ -38,8 +39,12 @@ export type StructuredAgentSessionStatusFeedDeps = {
   /** Resolved on every call: the host builds this feed in a field initializer, before its own
    *  deps are assigned. The sink holds the session's child records; the summary reads them there. */
   statusSink?: () => StructuredAgentSessionStatusSink | undefined
-  /** The session's child records changed, so every other reader of them republishes. */
-  onChildWorkChanged?: (sessionId: string) => void
+  /** The session's child records changed, so every other reader of them republishes; `producer`
+   *  is the write path of the child whose report changed them. */
+  onChildWorkChanged?: (
+    sessionId: string,
+    producer?: StructuredAgentSessionChildWorkProducer
+  ) => void
   /** The session's agent proved a start: its row's phase became `ready`. */
   onAgentStarted?: (sessionId: string) => void
 }

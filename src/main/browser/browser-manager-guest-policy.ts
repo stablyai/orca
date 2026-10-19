@@ -4,6 +4,7 @@ import {
   type PopupOwnerContext
 } from './browser-manager-types'
 import { BrowserManagerGuestCleanup } from './browser-manager-guest-cleanup'
+import { allowPageUnload } from './browser-guest-unload-policy'
 import { installDocPreviewGuestPolicy } from './doc-preview-guest-policy'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
@@ -54,10 +55,12 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       this.cleanupGuestPolicyAttachment(guest.id)
     }
     guest.on('destroyed', handleDestroyed)
+    guest.on('will-prevent-unload', allowPageUnload)
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeDocPolicy()
       try {
         guest.off('destroyed', handleDestroyed)
+        guest.off('will-prevent-unload', allowPageUnload)
       } catch {
         // guest may already be destroyed
       }

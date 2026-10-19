@@ -24,11 +24,13 @@ function canLoadFullFirstPrompt(
 
 export function FirstPromptCard({
   session,
-  preview
+  preview,
+  copyHidden = false
 }: {
   session: AiVaultSession
   /** Short list-scan text, replaced by the full opening ask when available. */
   preview: AiVaultSessionPromptPreview | null
+  copyHidden?: boolean
 }): React.JSX.Element {
   // Loading starts true when an on-demand re-parse is possible so the mount effect
   // does not need a sync setState (react-doctor: no-adjust-state-on-prop-change).
@@ -174,24 +176,26 @@ export function FirstPromptCard({
               <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground/70" />
             ) : null}
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            draggable={false}
-            disabled={copying || (!displayText && !loading)}
-            onClick={(event) => {
-              event.stopPropagation()
-              copyFirstPrompt()
-            }}
-            className="h-6 shrink-0 gap-1 px-1.5 text-[10px] text-muted-foreground"
-            aria-label={copyPromptLabel(displaySource)}
-          >
-            {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-            {copied
-              ? translate('auto.components.right.sidebar.AiVaultSessionDetails.copied', 'Copied')
-              : translate('auto.components.right.sidebar.AiVaultSessionDetails.copy', 'Copy')}
-          </Button>
+          {copyHidden ? null : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              draggable={false}
+              disabled={copying || (!displayText && !loading)}
+              onClick={(event) => {
+                event.stopPropagation()
+                copyFirstPrompt()
+              }}
+              className="h-6 shrink-0 gap-1 px-1.5 text-[10px] text-muted-foreground"
+              aria-label={copyPromptLabel(displaySource)}
+            >
+              {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+              {copied
+                ? translate('auto.components.right.sidebar.AiVaultSessionDetails.copied', 'Copied')
+                : translate('auto.components.right.sidebar.AiVaultSessionDetails.copy', 'Copy')}
+            </Button>
+          )}
         </div>
         {showEmpty ? (
           <p className="text-[11px] leading-4 text-muted-foreground">

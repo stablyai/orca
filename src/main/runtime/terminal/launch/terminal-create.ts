@@ -6,6 +6,7 @@ import { createIdempotentCallback } from '../../orca-runtime-report-pty-spawn-co
 import { recordPtySurface, spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
 import { agentLaunchTokenFor } from '../../../agent-launch/agent-launch-token'
 import { migratedPaneRestoreHint } from '../../migrated-pane-restore-cwd'
+import { resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
 
 export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   async createTerminal(
@@ -40,15 +41,12 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         session?.activeGroupIdByWorktree?.[workspace.id]
       // A workspace not shown since launch has no measured group; with at most one group, its tab
       // opens in a lone group, which every workspace sizes alike.
-      const singleGroupSize =
+      const singleGroup =
         (session?.tabGroups?.[workspace.id]?.length ?? 0) <= 1
           ? this.singleGroupWorkspaceGridSize
           : undefined
-      // Why 120x40: no window measured the group the tab opens in: none attached (serve, orcad), a
-      // multi-group workspace not shown since launch, or no pane at the default font mounted yet.
-      // #1707's original size.
-      const initialSize = (groupId && this.terminalGroupGridSizes?.[groupId]) ||
-        singleGroupSize || { cols: 120, rows: 40 }
+      const group = groupId ? this.terminalGroupGridSizes?.[groupId] : undefined
+      const initialSize = resolvePtyFirstSize({ pane: opts.initialSize, group, singleGroup })
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
       let { tabId, leafId, paneKey } = dependencies.allocateTerminalPaneIdentity(launchOpts)
@@ -110,7 +108,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           releaseStablePaneCreate?.()
           throw error
         }
-        const env = await this.buildTerminalWorkspaceEnv(
+        const env = this.buildTerminalWorkspaceEnv(
           workspace,
           {
             ...baseEnv,
@@ -120,8 +118,6 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
                 }
               : {})
           },
-          paneKey,
-          tabId,
           agentTeamsPlan?.env
         )
         const terminalColorQueryReplies = dependencies.getTerminalViewerColors()
@@ -183,6 +179,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               : {}),
             ...(adoptedBeforeLaunch ? { adoptedStablePane: adoptedBeforeLaunch } : {}),
             ...dependencies.newTabIn(launchOpts),
+            ...(launchOpts.afterTabId ? { afterTabId: launchOpts.afterTabId } : {}),
             ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
             ...(!adoptedBeforeLaunch && launchOpts.isNewSession ? { isNewSession: true } : {}),
             ...dependencies.BACKGROUND_TERMINAL_SPAWN_FLAGS

@@ -8,6 +8,8 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
+import { resolveProgramStatusPresentation } from '../../../../shared/program-status/presentation'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   applyAgentPaneActivityFlags,
@@ -21,11 +23,18 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 // skip the card's retained-done promotion — see resolveTerminalTabActivityStatus).
 export type TerminalTabActivityStatus = WorktreeStatus
 
+// The tab statuses whose dot draws a progress ring (see AgentStateDot).
+type ProgressRingStatus = Extract<TerminalTabActivityStatus, 'working' | 'permission'>
+
+type PaneProgramProgress = { progress: number; updatedAt: number }
+
 // Per-tab live-hook flags, folded by the same applyAgentPaneActivityFlags as the worktree card.
 type TerminalTabActivityFlags = AgentPaneActivityFlags & {
   paneIds: Set<string>
   /** Panes whose row went stale; suppress generated permission labels only. */
   stalePaneIds: Set<string>
+  /** Newest program progress per status it would drive, so ring tone and percent share a pane. */
+  programProgress: Partial<Record<ProgressRingStatus, PaneProgramProgress>>
 }
 
 type FlagsCache = {
@@ -82,6 +91,7 @@ function getTerminalTabActivityFlags(
     const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
     flags.paneIds.add(identity.paneId)
     applyAgentPaneActivityFlags(flags, entry)
+    recordPaneProgramProgress(flags, entry)
   }
 
   flagsCache = { agentStatusByPaneKey, agentStatusEpoch, flagsByTabId }
@@ -103,11 +113,37 @@ function getOrCreateTerminalTabActivityFlags(
       hasUnconfirmed: false,
       hasLiveDone: false,
       paneIds: new Set(),
-      stalePaneIds: new Set()
+      stalePaneIds: new Set(),
+      programProgress: {}
     }
     flagsByTabId.set(tabId, flags)
   }
   return flags
+}
+
+// Mirrors applyAgentPaneActivityFlags: monitoring and verdict-marked rows drive no ring status.
+function progressRingStatusForEntry(entry: AgentStatusEntry): ProgressRingStatus | null {
+  if (entry.state === 'blocked' || entry.state === 'waiting') {
+    return 'permission'
+  }
+  return entry.state === 'working' &&
+    entry.workingMode !== 'monitoring' &&
+    agentVerdictDisplayMark(entry) === null
+    ? 'working'
+    : null
+}
+
+function recordPaneProgramProgress(flags: TerminalTabActivityFlags, entry: AgentStatusEntry): void {
+  const progress = resolveProgramStatusPresentation(entry).progress
+  const status = progress === undefined ? null : progressRingStatusForEntry(entry)
+  if (progress === undefined || status === null) {
+    return
+  }
+  // A split tab with several reporting panes shows the most recently updated one.
+  const current = flags.programProgress[status]
+  if (!current || current.updatedAt < entry.updatedAt) {
+    flags.programProgress[status] = { progress, updatedAt: entry.updatedAt }
+  }
 }
 
 // Why: mirror the sidebar summary's parse — live entries on restored/imported
@@ -172,6 +208,28 @@ export function resolveTerminalTabActivityStatus({
     // a tab reflects its own live panes and title only.
     hasRetainedDone: false
   })
+}
+
+/**
+ * The program-reported percentage for a tab's dot, taken from a pane whose row drives the tab's
+ * resolved `status`. Shares the activity flag pass, so the same freshness and pane-key rules apply.
+ */
+export function resolveTerminalTabProgramProgress({
+  tabId,
+  status,
+  agentStatusByPaneKey,
+  agentStatusEpoch
+}: {
+  tabId: string
+  status: TerminalTabActivityStatus
+  agentStatusByPaneKey?: Record<string, AgentStatusEntry>
+  agentStatusEpoch?: number
+}): number | undefined {
+  if (status !== 'working' && status !== 'permission') {
+    return undefined
+  }
+  return getTerminalTabActivityFlags(agentStatusByPaneKey, agentStatusEpoch).get(tabId)
+    ?.programProgress[status]?.progress
 }
 
 /** True while the tab shows a live in-turn signal (spinner or needs-input). */

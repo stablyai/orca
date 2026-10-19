@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { reclaimWorktreeSpace } from './reclaim-worktree-space.mjs'
 import { runProcess } from '@orca/process-host'
+import { retainViteCache, VITE_CACHE_USAGE_DIRECTORY } from './vite-cache-activity.mjs'
 
 const roots = []
 afterEach(async () => {
@@ -18,17 +19,17 @@ async function fixture() {
   return { commonDirectory: root, repoRoot: root, execute }
 }
 
-it('previews historical test caches and both Electron cleanup operations', async () => {
+it('previews historical test caches, Electron cleanup, and Vite caches', async () => {
   const options = { ...(await fixture()), testsStopped: true }
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(3)
+  expect(options.execute).toHaveBeenCalledTimes(4)
   expect(options.execute.mock.calls.flatMap(([spec]) => spec.args)).not.toContain('--apply')
 })
 
 it('forwards apply and repository selection to all cleanup operations', async () => {
   const options = { ...(await fixture()), apply: true, testsStopped: true }
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(3)
+  expect(options.execute).toHaveBeenCalledTimes(4)
   for (const [spec] of options.execute.mock.calls) {
     expect(spec.args).toContain('--apply')
     expect(spec.args).toContain(options.repoRoot)
@@ -42,10 +43,10 @@ it('forwards apply and repository selection to all cleanup operations', async ()
   }
 })
 
-it('applies Electron cleanup while retaining unacknowledged test caches', async () => {
+it('applies Electron and Vite cleanup while retaining unacknowledged test caches', async () => {
   const options = { ...(await fixture()), apply: true }
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(2)
+  expect(options.execute).toHaveBeenCalledTimes(3)
   expect(options.execute.mock.calls.flatMap(([spec]) => spec.args).join(' ')).not.toContain(
     'reclaim-release-test-caches'
   )
@@ -110,6 +111,13 @@ it('runs the CLI outside the repository and retains historical caches until ackn
   const marker = join(cache, 'checkout-stamp.json')
   await writeFile(marker, JSON.stringify({ commit, format: 4 }))
   await utimes(cache, new Date(0), new Date(0))
+  const viteCache = join(options.repoRoot, '.cache', 'vite')
+  const releaseCache = await retainViteCache(viteCache)
+  await releaseCache()
+  await mkdir(join(viteCache, 'renderer', 'deps'), { recursive: true })
+  const dependency = join(viteCache, 'renderer', 'deps', 'react.js')
+  await writeFile(dependency, 'export const cached = true')
+  await utimes(join(viteCache, VITE_CACHE_USAGE_DIRECTORY), new Date(0), new Date(0))
   const run = (flags = []) =>
     runProcess({
       program: process.env.ORCA_TEST_NODE_EXECUTABLE ?? process.execPath,
@@ -128,10 +136,13 @@ it('runs the CLI outside the repository and retains historical caches until ackn
   expect(preview.code, preview.stderr).toBe(0)
   expect(preview.stdout).toContain('Would remove 1 cache(s)')
   expect(await readFile(marker, 'utf8')).toContain(commit)
+  expect(await readFile(dependency, 'utf8')).toContain('cached')
   const safe = await run(['--apply'])
   expect(safe.code, safe.stderr).toBe(0)
   expect(safe.stdout).toContain('Historical test caches retained')
   expect(await readFile(marker, 'utf8')).toContain(commit)
+  expect(safe.stdout).toContain('Removed 1 Vite cache(s)')
+  await expect(readFile(dependency)).rejects.toMatchObject({ code: 'ENOENT' })
   const applied = await run(['--apply', '--tests-stopped'])
   expect(applied.code, applied.stderr).toBe(0)
   expect(applied.stdout).toContain('Removed 1 cache(s)')
@@ -161,7 +172,7 @@ it('rejects competing sweeps and releases the lock after a failed operation', as
   await rejected
   options.execute.mockResolvedValue({ code: 0, timedOut: false })
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(4)
+  expect(options.execute).toHaveBeenCalledTimes(5)
 })
 
 it('preserves the cleanup failure and reports a concurrent lock release failure separately', async () => {
@@ -188,5 +199,5 @@ it('fails if cleanup succeeds but the repository lock cannot be released', async
   await expect(reclaimWorktreeSpace({ ...options, acquireLock: async () => release })).rejects.toBe(
     failure
   )
-  expect(options.execute).toHaveBeenCalledTimes(3)
+  expect(options.execute).toHaveBeenCalledTimes(4)
 })

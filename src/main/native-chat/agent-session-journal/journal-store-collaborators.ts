@@ -27,6 +27,7 @@ import type { AgentSessionJournal } from './journal-store'
 import type { JournalWriteBody } from './journal-write-queue'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
+import { isJournalStreamedTextRevision } from './journal-streamed-text-revision'
 
 export type JournalStoreHost = {
   /** Fires the journal's commit listener for a durable change that appended no
@@ -75,6 +76,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     database: host.database,
     readOnly: host.readOnly,
     highestFence: () => host.state().highestFence,
+    state: host.state,
     queuePauseRestatement: () =>
       journalQueuePauseRestatement(
         host.state().queuePauseMarks,
@@ -116,7 +118,8 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     // Every rejection is a dispatch row through this one writer; the draft
     // returned-transition rides it so no path can bypass the hook.
     inTransaction: (db, row) => queuedMessages.onRowInTransaction(db, row),
-    rolledBack: () => queuedMessages.invalidate()
+    rolledBack: () => queuedMessages.invalidate(),
+    streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row)
   })
   const lifecycleBatchAppender = new JournalLifecycleBatchAppender({
     state: host.state,

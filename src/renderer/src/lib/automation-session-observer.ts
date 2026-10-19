@@ -2,7 +2,7 @@ import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-
 import { subscribeToPtyExit } from '@/components/terminal-pane/pty-dispatcher'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { getRemoteRuntimeTerminalMultiplexer } from '@/runtime/remote-runtime-terminal-multiplexer'
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { getRemoteRuntimePtyOwner } from '@/runtime/runtime-terminal-stream'
 import { useAppStore } from '@/store'
 import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'

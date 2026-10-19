@@ -1,8 +1,11 @@
 // A scripted ACP agent behind the real adapter: a fake connection over in-memory stdio, the real
 // protocol runtime, translator and assembler, and a real on-disk journal to read back.
 
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -22,6 +25,7 @@ import { AcpStructuredSessionAdapter } from './acp-structured-session-adapter'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 
 export const GROK = acpLaunchSpecFor('grok')!
+const RIG_ENV = { PATH: '/usr/bin', ORCA_PANE_KEY: 'tab-1:pane-1', ORCA_AGENT_HOOK_PORT: '1234' }
 export const PROVIDER_SESSION = 'acp-session-1'
 export const PID = 4242
 
@@ -146,6 +150,7 @@ export type AcpAdapterRig = {
     fence?: number
     onSpawned?: () => Promise<void>
     signal?: AbortSignal
+    permissionMode?: AgentChatPermissionMode
   }): ReturnType<AcpStructuredSessionAdapter['acquire']>
   /** Frames Orca wrote to the agent with this method. */
   sent(method: string): FakeFrame[]
@@ -170,6 +175,10 @@ export async function openAcpAdapterRig(
   const lifecycle: StructuredAgentSessionLifecycleEvent[] = []
   const settled: AcpAdapterRig['settled'] = []
   const spec = options.spec ?? GROK
+  // A start readies the account folder its row pins; here a scratch one.
+  const { prepare, resolve, environment } = spec.account
+  const scratch = { launchEnv: {}, stateDirectory: tmpdir() }
+  const account = prepare ? environment(await resolve(scratch), {}) : {}
   const resolveLaunch: AcpStructuredSessionAdapterDeps['resolveLaunch'] =
     options.deps?.resolveLaunch ??
     (async () => ({
@@ -177,7 +186,7 @@ export async function openAcpAdapterRig(
       command: `/opt/bin/${spec.command}`,
       args: spec.args({ fullAccess: false, pluginDir: null }),
       cwd: '/workspace/project',
-      env: { PATH: '/usr/bin', ORCA_PANE_KEY: 'tab-1:pane-1', ORCA_AGENT_HOOK_PORT: '1234' },
+      env: { ...RIG_ENV, ...account },
       envToDelete: [],
       fullAccess: false,
       resume: null,
@@ -212,10 +221,15 @@ export async function openAcpAdapterRig(
       agent.on('session/load', (frame) =>
         agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS })
       )
+      // A row that enforces its permission mode sets it at every start; the agent confirms it.
+      if (spec.permissionModeConfig) {
+        agent.confirmConfigOptions(GROK_CONFIG_OPTIONS)
+      }
       options.script?.(agent)
       return child
     },
     readProcessStartTime: async () => 1_700_000_000_000,
+    dataDirectory: join(tmpdir(), 'orca-acp-adapter-rig'),
     onEvent: (event) => lifecycle.push(event),
     onDispatchSettledLate: (settlement) => settled.push(settlement),
     mintGeneration: () => 'gen-acp',
@@ -248,6 +262,7 @@ export async function openAcpAdapterRig(
         spawnToken: 'spawn-1',
         events: rig.eventSink,
         ...(acquireOptions.signal ? { signal: acquireOptions.signal } : {}),
+        ...(acquireOptions.permissionMode ? { permissionMode: acquireOptions.permissionMode } : {}),
         onSpawned: async () => {
           spawned.push('onSpawned')
           await acquireOptions.onSpawned?.()

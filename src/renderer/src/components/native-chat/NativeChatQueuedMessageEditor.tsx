@@ -11,11 +11,14 @@ import type { QueuedMessageInlineEditor } from './use-structured-agent-session-q
  *  not the composer, so it stays usable while a question or approval holds the composer's slot. */
 export function NativeChatQueuedMessageEditor({
   editor,
-  sender
+  sender,
+  images
 }: {
   editor: QueuedMessageInlineEditor
   /** The card's "From <name>" line, kept beside the label. */
   sender?: ReactNode
+  /** The card's images, which saving the text keeps. */
+  images?: ReactNode
 }): React.JSX.Element {
   const field = useRef<HTMLTextAreaElement>(null)
   useLayoutEffect(() => {
@@ -49,11 +52,11 @@ export function NativeChatQueuedMessageEditor({
             <div className="min-w-0">{sender}</div>
           </>
         ) : null}
+        <div className="ml-auto flex items-center">{images}</div>
         <Button
           type="button"
           variant="ghost"
           size="icon-xs"
-          className="ml-auto"
           aria-label={translate(
             'components.native-chat.queuedMessages.cancelEditing',
             'Cancel editing'

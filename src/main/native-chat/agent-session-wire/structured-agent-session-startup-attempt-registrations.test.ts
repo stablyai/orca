@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionProviderOpenResult } from './structured-agent-session-provider-open-contract'
 // Every agent this build registers starts under the host's one startup attempt and its hold on
 // delivery. Iterates the runtime's real registration list, so an agent registered later is covered
 // without being named here.
@@ -64,6 +65,7 @@ async function hostFor(definition: StructuredAgentDefinition): Promise<{
   store: AgentSessionRecordStore
   acquire: Mock<StructuredAgentSessionAdapter['acquire']>
   dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
+  opened: PromiseWithResolvers<StructuredAgentSessionProviderOpenResult>
 }> {
   root = await mkdtemp(join(tmpdir(), 'orca-startup-registrations-'))
   resetHostTestOperationIds()
@@ -90,7 +92,9 @@ async function hostFor(definition: StructuredAgentDefinition): Promise<{
   const dispatch: Mock<StructuredAgentSessionAdapter['dispatch']> = vi.fn(async () => ({
     state: 'admitted' as const
   }))
+  const opened = Promise.withResolvers<StructuredAgentSessionProviderOpenResult>()
   const adapter: StructuredAgentSessionAdapter = {
+    open: () => opened.promise,
     acquire,
     dispatch,
     closeSession: vi.fn(async () => true),
@@ -114,7 +118,7 @@ async function hostFor(definition: StructuredAgentDefinition): Promise<{
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
     now: () => NOW
   })
-  return { host, store, acquire, dispatch }
+  return { host, store, acquire, dispatch, opened }
 }
 
 describe.each(
@@ -123,7 +127,7 @@ describe.each(
   )
 )('%s starts under the host attempt', (agent, definition) => {
   it('acquires under a host-minted attempt and is handed nothing until it proves its start', async () => {
-    const { host, store, acquire, dispatch } = await hostFor(definition)
+    const { host, store, acquire, dispatch, opened } = await hostFor(definition)
     try {
       const attached = await host.attach(
         CALLER,
@@ -160,20 +164,12 @@ describe.each(
       })
       expect(sent).toMatchObject({ ok: true })
       await vi.waitFor(() =>
-        expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(
-          false
-        )
+        expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(true)
       )
       expect(dispatch).not.toHaveBeenCalled()
 
-      await host.handleAdapterEvent({
-        type: 'started',
-        sessionId: SESSION,
-        fence: record.lease.runtimeFence,
-        acquisitionGeneration: 'generation-1',
-        reportedOptions: { model: 'default' },
-        restoreSkippedOptions: [],
-        optionRevision: host.collaboratorsForTests().runtimeState.optionRevisions.current(SESSION)
+      opened.resolve({
+        reportedOptions: { model: 'default' }
       })
 
       await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())

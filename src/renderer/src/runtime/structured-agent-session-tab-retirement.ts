@@ -1,3 +1,4 @@
+import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
   markStructuredAgentSessionLaunchesPublished,
@@ -111,13 +112,15 @@ export function beginStructuredAgentSessionTabClose(args: {
   worktreeId: string
   sessionId: string
   provisional: boolean
+  layoutOwner: StructuredLaunchSlotOwner
   onError?: (error: unknown) => void
 }): void {
   if (args.provisional) {
     markStructuredAgentSessionLaunchCancelled(
       args.worktreeId,
       args.sessionId,
-      executionHostIdForStructuredTarget(args.target)
+      executionHostIdForStructuredTarget(args.target),
+      args.layoutOwner
     )
     discardStructuredAgentSessionChatSends(args.sessionId)
   } else {

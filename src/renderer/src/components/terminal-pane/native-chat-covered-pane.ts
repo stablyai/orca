@@ -1,4 +1,5 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { focusNativeChatPromptCard } from '../native-chat/use-native-chat-prompt-card-focus'
 
 const NATIVE_CHAT_COVER_SELECTOR = '.native-chat-pane-shell'
 
@@ -26,8 +27,11 @@ export function focusNativeChatCover(pane: { container: Pick<Element, 'querySele
     return false
   }
   // Focus already in the chat (a click, the composer) stays where it is.
-  if (!cover.contains(cover.ownerDocument.activeElement)) {
-    cover.focus({ preventScroll: true })
+  const active = cover.ownerDocument.activeElement
+  if (active === cover || !cover.contains(active)) {
+    if (!focusNativeChatPromptCard(cover, null)) {
+      cover.focus({ preventScroll: true })
+    }
   }
   return true
 }

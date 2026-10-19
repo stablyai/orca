@@ -134,7 +134,7 @@ describe('createNewTerminalTab', () => {
     expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
-      command: 'pwsh',
+      shell: 'pwsh',
       activate: true
     })
     expect(createTab).not.toHaveBeenCalled()
@@ -158,7 +158,7 @@ describe('createNewTerminalTab', () => {
     expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'owner-runtime',
-      command: 'pwsh',
+      shell: 'pwsh',
       activate: true
     })
     expect(createTab).not.toHaveBeenCalled()

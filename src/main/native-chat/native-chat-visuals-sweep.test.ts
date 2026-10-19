@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import type { StructuredAgentSessionLogger } from './agent-session-wire/structured-agent-session-logger'
 import { nativeChatScratchFolderFor, nativeChatScratchRootFor } from './native-chat-scratch-folder'
+import { migrateLegacyNativeChatVisualsFolders } from './native-chat-scratch-folder-migration'
 import {
   runNativeChatScratchSave,
   trackNativeChatScratchExpiryCandidate
@@ -109,8 +110,6 @@ describe('the visuals folder sweep', () => {
     const edited = visualsFor(state, 'chat-nested')
     mkdirSync(join(edited, 'drafts'))
     writeFileSync(join(edited, 'drafts', 'v2.html'), '<p>v2</p>')
-    const legacy = join(state, 'native-chat-visuals', 'a'.repeat(32))
-    mkdirSync(legacy, { recursive: true })
     age(nativeChatScratchRootFor(state))
     const fresh = new Date()
     utimesSync(join(edited, 'drafts', 'v2.html'), fresh, fresh)
@@ -126,7 +125,55 @@ describe('the visuals folder sweep', () => {
     expect(existsSync(`${unused}.expired`)).toBe(false)
     expect(existsSync(talkedTo)).toBe(true)
     expect(existsSync(edited)).toBe(true)
-    expect(existsSync(join(state, 'native-chat-visuals'))).toBe(false)
+  })
+
+  it('gives migrated files one fresh window and expires recovered conflicts with the chat', async () => {
+    const state = stateDirectory()
+    const legacyRoot = join(state, 'native-chat-visuals')
+    const legacyFor = (sessionId: string, body: string): string => {
+      const folder = join(legacyRoot, basename(nativeChatScratchFolderFor(state, sessionId)))
+      mkdirSync(folder, { recursive: true })
+      writeFileSync(join(folder, 'chart.html'), body)
+      return folder
+    }
+    // Idle since long before the update: moved, and the first sweep must not take it.
+    age(legacyFor('chat-old', '<p>old</p>'))
+    age(legacyFor('chat-both', '<p>older</p>'))
+    const both = visualsFor(state, 'chat-both')
+    age(both)
+    const { logger } = deps(state, [])
+    await migrateLegacyNativeChatVisualsFolders(state, logger)
+
+    const result = await sweepNativeChatVisualsFolders(
+      deps(state, ['chat-old', 'chat-both'], { journal: { 'chat-old': Date.now() - 40 * DAY_MS } })
+    )
+
+    expect(result).toEqual({ removed: 0, failed: 0 })
+    expect(
+      readFileSync(join(nativeChatScratchFolderFor(state, 'chat-old'), 'chart.html'), 'utf8')
+    ).toBe('<p>old</p>')
+    expect(readFileSync(join(both, 'chart.html'), 'utf8')).toBe('<p>chart</p>')
+    const recovery = readdirSync(both, { withFileTypes: true }).filter((entry) =>
+      entry.isDirectory()
+    )
+    expect(recovery).toHaveLength(1)
+    expect(readFileSync(join(both, recovery[0].name, 'files', 'chart.html'), 'utf8')).toBe(
+      '<p>older</p>'
+    )
+    expect(existsSync(legacyRoot)).toBe(false)
+
+    // A later install does not renew retention; both copies expire and nothing comes back.
+    age(both)
+    await migrateLegacyNativeChatVisualsFolders(state, logger)
+    await expect(
+      sweepNativeChatVisualsFolders(
+        deps(state, ['chat-old', 'chat-both'], {
+          journal: { 'chat-both': Date.now() - 40 * DAY_MS }
+        })
+      )
+    ).resolves.toEqual({ removed: 1, failed: 0 })
+    await migrateLegacyNativeChatVisualsFolders(state, logger)
+    expect(existsSync(both)).toBe(false)
   })
 
   it('keeps a chat past 30 days while the host runs its agent', async () => {
@@ -187,11 +234,15 @@ describe('the visuals folder sweep', () => {
   it('removes nothing when the held chats cannot be read', async () => {
     const state = stateDirectory()
     const folder = visualsFor(state, 'chat-a')
+    const legacy = join(state, 'native-chat-visuals', basename(folder))
+    mkdirSync(legacy, { recursive: true })
+    writeFileSync(join(legacy, 'chart.html'), '<p>awaiting migration retry</p>')
     await expect(sweepNativeChatVisualsFolders(deps(state, null))).resolves.toEqual({
       removed: 0,
       failed: 0
     })
     expect(existsSync(folder)).toBe(true)
+    expect(readFileSync(join(legacy, 'chart.html'), 'utf8')).toBe('<p>awaiting migration retry</p>')
   })
 
   it('never touches entries it did not mint, symlinks included', async () => {

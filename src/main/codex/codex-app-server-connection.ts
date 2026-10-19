@@ -51,7 +51,7 @@ export async function openCodexAppServerConnection(
     site: 'codex-app-server-teardown',
     ...(handlers.onOutput ? { onOutput: handlers.onOutput } : {})
   })
-  const { child, terminateTree: terminateProcessTree } = managed
+  const { child } = managed
 
   let nextRequestId = 1
   let closing = false
@@ -71,7 +71,7 @@ export async function openCodexAppServerConnection(
     writeResponse,
     onProtocolFailure: (error) => {
       handleUnexpectedEnd(error)
-      void terminateProcessTree()
+      void managed.close()
     }
   })
 
@@ -108,7 +108,7 @@ export async function openCodexAppServerConnection(
       return
     }
     handleUnexpectedEnd(error)
-    void terminateProcessTree()
+    void managed.close()
   })
 
   const recordReader = createProviderRecordReader({
@@ -129,7 +129,7 @@ export async function openCodexAppServerConnection(
     },
     onFatal: (error) => {
       handleUnexpectedEnd(error)
-      void terminateProcessTree()
+      void managed.close()
     }
   })
 
@@ -151,7 +151,7 @@ export async function openCodexAppServerConnection(
   function request(
     method: string,
     params?: Record<string, unknown>,
-    options: { timeoutMs?: number } = {}
+    options: { timeoutMs?: number; onReply?: () => void } = {}
   ): Promise<unknown> {
     if (closing) {
       return Promise.reject(new Error(`codex app-server connection is closed (${method})`))
@@ -171,7 +171,7 @@ export async function openCodexAppServerConnection(
         dispatcher.timeOutPending(id)
         reject(new CodexAppServerTimeoutError(`codex app-server ${method} exceeded ${timeoutMs}ms`))
       }, timeoutMs)
-      dispatcher.addPending(id, { method, resolve, reject, timer })
+      dispatcher.addPending(id, { method, resolve, reject, timer, onReply: options.onReply })
       try {
         sendLine(params === undefined ? { method, id } : { method, id, params })
       } catch (error) {

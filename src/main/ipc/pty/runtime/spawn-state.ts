@@ -60,6 +60,7 @@ export type RuntimePtySpawnState = {
   requestedAgentTeamsPath: string | undefined
   selectedCodexHomePath: string | null
   codexResumeHomeSelected: boolean
+  codexResumeArgvDropped: boolean
   skipCodexHomeEnv: boolean
   stripInheritedOrcaCodexHome: boolean
   spawnOptions: PtySpawnOptions
@@ -175,6 +176,7 @@ export function createRuntimePtySpawnState(
     requestedAgentTeamsPath: undefined,
     selectedCodexHomePath: null,
     codexResumeHomeSelected: false,
+    codexResumeArgvDropped: false,
     skipCodexHomeEnv: false,
     stripInheritedOrcaCodexHome: false,
     spawnOptions: { cols: args.cols, rows: args.rows },

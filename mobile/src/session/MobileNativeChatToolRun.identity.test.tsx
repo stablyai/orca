@@ -2,16 +2,47 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { ToolRun } from './MobileNativeChatToolRun'
 
-vi.mock('react-native', () => ({ Text: 'span', View: 'div', Pressable: 'button' }))
+vi.mock('react-native', () => ({
+  Animated: {
+    Text: 'span',
+    Value: class {
+      setValue(): void {}
+    }
+  },
+  Platform: { OS: 'ios' },
+  Pressable: 'button',
+  ScrollView: 'div',
+  StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+  Text: 'span',
+  View: 'div',
+  useWindowDimensions: () => ({ width: 400, height: 800 })
+}))
 vi.mock('lucide-react-native', () => ({
+  Bot: () => null,
+  Brain: () => null,
+  Check: () => null,
   ChevronDown: () => null,
+  ChevronRight: () => null,
+  Eye: () => null,
+  FileMinus2: () => null,
+  FilePen: () => null,
+  FilePlus2: () => null,
+  Folder: () => null,
+  Globe: () => null,
+  ListChecks: () => null,
+  MessageSquareMore: () => null,
+  Pencil: () => null,
+  Plug: () => null,
+  Search: () => null,
   SquareChevronRight: () => null,
   SquareTerminal: () => null,
   Wrench: () => null
 }))
-vi.mock('./mobile-native-chat-message-styles', () => ({ styles: {} }))
+
+vi.mock('../components/MobileSourceCopyButton', () => ({ MobileSourceCopyButton: 'CopyButton' }))
+
+import { ToolRun } from './MobileNativeChatToolRun'
 
 let tree: ReactTestRenderer | undefined
 afterEach(async () => {
@@ -31,8 +62,7 @@ async function update(next: NativeChatBlock[]): Promise<ReactTestRenderer> {
     const element = createElement(ToolRun, {
       blocks: next,
       defaultExpanded: true,
-      expandChildren: false,
-      activeCall: null
+      expandChildren: false
     })
     if (tree) {
       tree.update(element)

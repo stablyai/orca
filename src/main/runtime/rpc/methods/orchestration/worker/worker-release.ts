@@ -3,8 +3,8 @@ import { defineMethod } from '../../../core'
 import { releaseFederatedWorker } from '../federation/federated-worker-release'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
 import { resolvePinnedFederatedServer } from './worker-observation'
+import { archiveSummary } from './worker-terminal-resource-presentation'
 import {
-  archiveSummary,
   completeWorkerTerminalRelease,
   type WorkerReleaseReceipt
 } from './worker-release-completion'

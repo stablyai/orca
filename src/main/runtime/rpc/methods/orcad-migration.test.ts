@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationManifest
-} from '../../../../shared/orcad-migration-manifest'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import { computeOrcadMigrationManifestSha256 } from '../../../orcad/orcad-migration-manifest-digest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../core'

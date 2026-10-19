@@ -125,7 +125,8 @@ beforeEach(async () => {
     }),
     openClaudeConnection: claude.openConnection,
     readProcessStartTime: async () => HOST_TEST_NOW,
-    onLifecycleEvent: () => {}
+    // A rewind runs only once the agent has proven its start, which the host learns from these.
+    onLifecycleEvent: (event) => void host.handleAdapterEvent(event)
   })
   log = recordingStructuredAgentSessionLogger()
   // Only Claude sessions are attached here; the router supplies the production create gate.

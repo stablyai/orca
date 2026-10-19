@@ -21,6 +21,7 @@ import {
   reposReorder,
   reposUpdate,
   runtimeEnvironmentCall,
+  runtimeEnvironmentsList,
   sshRepo
 } from './repos-runtime-routing-fixture'
 
@@ -615,6 +616,7 @@ describe('repo slice runtime routing', () => {
   })
 
   it('removes repos through their owning runtime environment', async () => {
+    runtimeEnvironmentsList.mockResolvedValue([{ id: 'env-1' }])
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-3',
       ok: true,
@@ -638,7 +640,10 @@ describe('repo slice runtime routing', () => {
       params: { repo: remoteRepo.id },
       timeoutMs: 15_000
     })
-    expect(reposRemoveForHost).not.toHaveBeenCalled()
+    expect(reposRemoveForHost).toHaveBeenCalledWith({
+      repoId: remoteRepo.id,
+      hostId: 'runtime:env-1'
+    })
   })
 
   it('removes SSH-owned repos through local IPC even when a runtime is focused', async () => {
@@ -682,6 +687,7 @@ describe('repo slice runtime routing', () => {
   })
 
   it('drops persisted visit timestamps for removed unhydrated runtime repos', async () => {
+    runtimeEnvironmentsList.mockResolvedValue([{ id: 'env-1' }])
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-remove-runtime-unhydrated',
       ok: true,
@@ -711,7 +717,10 @@ describe('repo slice runtime routing', () => {
       params: { repo: remoteRepo.id },
       timeoutMs: 15_000
     })
-    expect(reposRemoveForHost).not.toHaveBeenCalled()
+    expect(reposRemoveForHost).toHaveBeenCalledWith({
+      repoId: remoteRepo.id,
+      hostId: 'runtime:env-1'
+    })
   })
 
   it('evicts GitHub caches for removed repos using repo id and legacy path keys', async () => {
@@ -741,6 +750,7 @@ describe('repo slice runtime routing', () => {
   })
 
   it('stops remote runtime terminals instead of killing remote ids through local pty IPC', async () => {
+    runtimeEnvironmentsList.mockResolvedValue([{ id: 'env-1' }])
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-remote',
       ok: true,

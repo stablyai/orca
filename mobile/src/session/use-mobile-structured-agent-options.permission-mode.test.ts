@@ -45,7 +45,13 @@ function optionsClient(...modes: (string | undefined)[]) {
 }
 
 type Controller = ReturnType<typeof useMobileStructuredAgentOptions>
-type ProbeProps = { client: RpcClient; fence: number; optionStamp: string; agent?: string }
+type ProbeProps = {
+  client: RpcClient
+  fence: number
+  optionStamp: string
+  agent?: string
+  hostAdvertisesPermissionModes?: boolean | null
+}
 
 const mutate: StructuredAgentSessionMutate = vi.fn()
 
@@ -60,7 +66,10 @@ async function mountOptions(props: ProbeProps) {
       fence: probe.fence,
       mutate,
       optionStamp: probe.optionStamp,
-      takesSendOptions: true
+      hostSupport:
+        probe.hostAdvertisesPermissionModes === null
+          ? null
+          : { permissionModes: probe.hostAdvertisesPermissionModes ?? true }
     })
     return null
   }
@@ -102,6 +111,44 @@ async function mountOptions(props: ProbeProps) {
     unmount: () => act(async () => renderer?.unmount())
   }
 }
+
+// STA-10671: a 1.4.224 host ignores per-chat modes and runs its own Agent Permissions.
+describe('the permission pill against a host predating per-chat modes', () => {
+  it("says the chat runs the host's Agent Permissions, and offers nothing to pick", async () => {
+    const options = await mountOptions({
+      client: optionsClient(undefined).client,
+      fence: 1,
+      optionStamp: 'gpt-live|',
+      hostAdvertisesPermissionModes: false
+    })
+    expect(options.permission()).toBe('host')
+    expect(options.offered()).toEqual(['host'])
+    await options.unmount()
+  })
+
+  // 1.4.225–1.4.226 apply modes without advertising the capability: their stated mode wins.
+  it('shows the mode a host states even when it does not advertise per-chat modes', async () => {
+    const options = await mountOptions({
+      client: optionsClient('ask').client,
+      fence: 1,
+      optionStamp: 'gpt-live|ask',
+      hostAdvertisesPermissionModes: false
+    })
+    expect(options.permission()).toBe('ask')
+    await options.unmount()
+  })
+
+  it('shows no host pill before the host capability probe answers', async () => {
+    const options = await mountOptions({
+      client: optionsClient(undefined).client,
+      fence: 1,
+      optionStamp: 'gpt-live|',
+      hostAdvertisesPermissionModes: null
+    })
+    expect(options.permission()).toBeNull()
+    await options.unmount()
+  })
+})
 
 describe('the permission mode on the phone', () => {
   it('re-reads once when the host status moves, so a desktop pick shows here', async () => {

@@ -232,9 +232,9 @@ const DIRECTOR_DRAIN_FIELDS = [
 ]
 
 // Five instances at one sample per 30 s is ~100 per 10-min sub-window; this many is truncation.
-const DIRECTOR_METRICS_LIMIT = 1000
+export const DIRECTOR_METRICS_LIMIT = 1000
 
-async function readDirectorDrainReturn(reader, { config, window }) {
+export async function readDirectorDrainReturn(reader, { config, window }) {
   const projection = `json(timestamp,${DIRECTOR_DRAIN_FIELDS
     .map((field) => `jsonPayload.${field}`)
     .join(',')})`

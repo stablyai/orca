@@ -7,15 +7,13 @@ import type {
   WorktreeLineage
 } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeHostIdentity
-} from '../../../../../../shared/worktree/host-qualified-identity'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
 import WorktreeCard from '../../WorktreeCard'
-import type { WorktreeGroupBy } from '../grouping/row-types'
+import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getFolderWorkspaceRowGeometry } from './indentation'
 import { getFolderWorkspaceCardPrDisplay } from '../../folder-workspace-card-pr-display'
@@ -64,11 +62,10 @@ export function renderFolderWorkspaceVirtualRow(args: {
   const { ctx, row, vItem } = args
   const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
   const folderWorktreeIdentity = getWorktreeHostIdentity(folderWorktree)
-  const isActiveWorktree =
-    ctx.activeWorktreeId === folderWorktree.id &&
-    (!ctx.activeWorkspaceExecutionHostId ||
-      folderWorktreeIdentity ===
-        composeWorktreeHostIdentity(ctx.activeWorkspaceExecutionHostId, folderWorktree.id))
+  const isActiveWorktree = isActiveSidebarWorkspace(folderWorktree, {
+    worktreeId: ctx.activeWorktreeId,
+    hostId: ctx.activeWorkspaceExecutionHostId ?? null
+  })
   const pathStatus = ctx.getCachedFolderWorkspacePathStatus({
     scope: 'folder-workspace',
     folderWorkspaceId: row.folderWorkspace.id

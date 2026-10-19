@@ -90,7 +90,7 @@ type PersistedTerminalPtyIds = {
   orphaned: string[]
 }
 
-function readPersistedTerminalPtyIds(
+export function readPersistedTerminalPtyIds(
   session: WorkspaceSessionState,
   tab: TerminalTab
 ): PersistedTerminalPtyIds {

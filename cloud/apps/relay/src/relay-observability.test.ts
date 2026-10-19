@@ -508,6 +508,8 @@ describe('relay observability', () => {
     observability.recordControlClose(1006)
     observability.recordControlClose(1006)
     observability.recordControlClose(4402)
+    observability.recordPostProofClose('relay draining')
+    observability.recordPostProofClose('relay draining')
     observability.recordSpliceClose('host-oversize-frame')
     observability.recordSpliceClose('queue-limit')
     observability.recordClientAcceptAbandoned('activity', 14_250.4)
@@ -518,12 +520,14 @@ describe('relay observability', () => {
 
     expect(entries[0]).toMatchObject({
       controlClosesByCodeDelta: { 1006: 2, 4402: 1 },
+      postProofClosesByReasonDelta: { 'relay draining': 2 },
       spliceClosesByTriggerDelta: { 'host-oversize-frame': 1, 'queue-limit': 1 },
       clientAcceptsAbandonedByStageDelta: { activity: 2, credential: 1 },
       clientAcceptAbandonedMsMax: 14_250.4
     })
     expect(entries[1]).toMatchObject({
       controlClosesByCodeDelta: {},
+      postProofClosesByReasonDelta: {},
       spliceClosesByTriggerDelta: {},
       clientAcceptsAbandonedByStageDelta: {},
       clientAcceptAbandonedMsMax: 0

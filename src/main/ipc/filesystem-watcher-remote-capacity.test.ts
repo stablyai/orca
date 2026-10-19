@@ -19,7 +19,8 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 }))
 
 import { WATCH_ROOT_CAPACITY_REFUSAL_MESSAGE } from '../../shared/watch-root-capacity-refusal'
-import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { getRemoteWatcherKey } from './filesystem-watcher-paths'
 

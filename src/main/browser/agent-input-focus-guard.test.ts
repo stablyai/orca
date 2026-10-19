@@ -101,6 +101,17 @@ describe('guardPaneFocusForAgentInput', () => {
     await vi.advanceTimersByTimeAsync(150)
     expect(settled).toBe('refused')
   })
+  it('refuses the input at once and ends the guard while the user composes', async () => {
+    const { sent, renderer } = fakeRenderer(7, false)
+
+    const guarded = guardPaneFocusForAgentInput(renderer, 'page-1')
+    const [listener] = ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL) ?? []
+    listener({ sender: { id: 7 } }, { token: sent[0].data.token, composing: true })
+
+    await expect(guarded).rejects.toMatchObject({ code: 'browser_user_composing' })
+    expect(sent.map(({ data }) => data.active)).toEqual([true, false])
+    expect(ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL)).toEqual([])
+  })
 })
 
 describe('isFocusTakingCdpInput', () => {

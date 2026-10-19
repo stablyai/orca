@@ -1,4 +1,5 @@
 import type { WebContents } from 'electron'
+import { assertRemoteCliPageAccess } from './remote-cli-page-admission'
 
 // Why: Orca's guest shortcut and grab handlers act on keys the page receives, and an unhandled key
 // can reach the app menu. Keys an agent injects must do neither (#20595), whichever path sends them.
@@ -13,6 +14,7 @@ export async function withAgentInputInjection<T>(
   webContents: WebContents,
   run: () => Promise<T>
 ): Promise<T> {
+  assertRemoteCliPageAccess(webContents.id)
   const depth = injectionDepth.get(webContents) ?? 0
   injectionDepth.set(webContents, depth + 1)
   if (depth === 0) {

@@ -8,6 +8,7 @@ import type {
 } from '../../shared/agent-launch-tab-publication'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
+import type { TerminalPaneRevealTarget } from '../../shared/terminal-pane-reveal'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
@@ -70,6 +71,9 @@ export type RuntimeNotifier = {
       launchToken?: string
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
+      targetGroupId?: string
+      afterTabId?: string
+      shellOverride?: string
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
@@ -115,7 +119,11 @@ export type RuntimeNotifier = {
   ): void
   /** `recordInteraction: false` marks a title the host applied, not one the user typed. */
   renameTerminal(tabId: string, title: string | null, options?: { recordInteraction: false }): void
+  /** False when the window could not be reached; absent on notifiers that predate pane titles. */
+  setPaneTitle?(tabId: string, leafId: string, title: string | null): boolean
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
+  /** Raises the window onto a pane it shows; resolves false when the window does not know the worktree. */
+  revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void

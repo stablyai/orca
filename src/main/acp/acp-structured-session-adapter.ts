@@ -3,8 +3,6 @@
 // them; compaction is the agent's own `/compact` prompt, for an agent whose launch spec offers it.
 
 import { randomUUID } from 'node:crypto'
-import { agentSessionFailureFact } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import {
@@ -19,12 +17,12 @@ import {
   type StructuredAgentSessionAdapter,
   type StructuredAgentSessionSetOptionInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { acpAgentName, acquireAcpStructuredSession } from './acp-structured-acquire'
 import {
   closeAcpSessionJournal,
   endAcpStructuredSession,
+  rejectedAcpDispatch,
   type AcpStructuredSession
 } from './acp-structured-session'
 import {
@@ -44,6 +42,7 @@ import { readAcpLiveOptions, writeAcpSessionOption } from './acp-structured-opti
 import { readAcpRecoveryHistory } from './acp-recovery-history'
 import { stopAcpChildren, acpChildStopCapabilities } from './acp-structured-child-stop'
 import { AcpConversationCopies } from './acp-conversation-copies'
+import { supportsAcpStructuredLocation } from './acp-structured-location-support'
 
 export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   /** Live children, and ones whose exit is not yet proven; a proven exit removes its entry. */
@@ -64,12 +63,15 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     this.copies.copy(input)
 
   // The child runs on this runtime's own machine; Windows needs process start-time proof.
-  supportsLocation = (location: AgentSessionExecutionLocation): boolean =>
-    supportsSupervisedProviderChildLocation(location, this.deps.isWindowsProcessStartTimeAvailable)
+  supportsLocation = (location: AgentSessionExecutionLocation): boolean => {
+    const { spec, isWindowsProcessStartTimeAvailable } = this.deps
+    return supportsAcpStructuredLocation(spec, location, isWindowsProcessStartTimeAvailable)
+  }
 
   async acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> {
     const sessionId = input.identity.sessionId
-    const attempt = this.starts.begin(input.signal)
+    const gate = this.deps.spec.launchGate?.enter(input.signal)
+    const attempt = this.starts.begin(gate?.signal ?? input.signal)
     try {
       if (!(await this.stop(sessionId))) {
         throw new AgentSessionAcquisitionExitUnprovenError(
@@ -78,9 +80,10 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
           )
         )
       }
-      return await this.start(input, attempt)
+      return await this.start({ ...input, signal: attempt.signal }, attempt)
     } finally {
       this.starts.end(attempt)
+      gate?.leave()
     }
   }
 
@@ -96,7 +99,10 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
         deps: this.deps,
         generation,
         abandoned: () => attempt.signal.aborted,
-        track: (connection) => this.starts.track(attempt, connection),
+        track: (connection) => {
+          this.starts.track(attempt, connection)
+          this.deps.spec.launchGate?.retain(connection)
+        },
         onExit: (session) => {
           if (session && this.sessions.get(sessionId) === session) {
             this.finish(session, this.now())
@@ -157,7 +163,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     const lost = this.sessions.get(input.sessionId)
     if (lost && lost.journalClosed !== null) {
       // The connection broke and the exit is not yet proven: the message never left Orca.
-      return this.rejected(lost, 'providerExited')
+      return rejectedAcpDispatch(lost)
     }
     const session = this.live(input.sessionId)
     const prompt = await acpDispatchPrompt(input.body, session)
@@ -166,7 +172,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     }
     if (this.sessions.get(input.sessionId) !== session || session.journalClosed !== null) {
       // The child ended while its attachments were read: nothing left Orca.
-      return this.rejected(session, 'providerExited')
+      return rejectedAcpDispatch(session)
     }
     await input.beforeDispatch?.()
     session.turns.dispatch({
@@ -244,13 +250,13 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     input
   ) => stopAcpChildren(this.live(input.sessionId), input.fence, input.taskIds, input.acknowledge)
 
-  backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
-    sessionId
-  ) => acpChildStopCapabilities(this.sessions.get(sessionId))
+  backgroundTaskStops = (id: string) => acpChildStopCapabilities(this.sessions.get(id))
 
   closeSession = (sessionId: string): Promise<boolean> => this.close(sessionId)
   disposeSession = (sessionId: string): Promise<boolean> => this.close(sessionId)
   releaseAcquisition = (input: { sessionId: string }) => this.close(input.sessionId)
+  hasOwnedAcquisition = (sessionId: string): boolean =>
+    this.sessions.has(sessionId) || this.starts.failedSessionIds().includes(sessionId)
   /** After a sink failure: the exit is recovered as unexpected. */
   forceCloseSession = (sessionId: string): Promise<boolean> => this.stop(sessionId, false)
 
@@ -333,23 +339,10 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     }
     closeAcpSessionJournal(
       session,
-      `${session.spec.agent} ACP connection closed: ${error.message || error.name}`
+      `${session.spec.agent} ACP connection closed: ${error.message || error.name}`,
+      error
     )
     void this.stop(session.sessionId, false)
-  }
-
-  /** Only for a send refused before its prompt was written. */
-  private rejected(
-    session: AcpStructuredSession,
-    kind: 'providerExited'
-  ): AgentSessionDispatchOutcome {
-    return {
-      state: 'rejected',
-      ...agentSessionFailureWords(agentSessionFailureFact(kind, { neverReachedAgent: true }), {
-        surface: 'rejection',
-        agentName: acpAgentName(session.spec.agent)
-      })
-    }
   }
 
   private live(sessionId: string): AcpStructuredSession {

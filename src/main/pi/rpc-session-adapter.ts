@@ -263,6 +263,9 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   releaseAcquisition(input: { sessionId: string }): Promise<boolean> {
     return this.closeSession(input.sessionId)
   }
+  hasOwnedAcquisition(sessionId: string): boolean {
+    return this.sessions.has(sessionId)
+  }
   forceCloseSession(id: string): Promise<boolean> {
     this.sessions.get(id)?.fail(new Error('Pi event sink failed'))
     return this.closeSession(id, false)

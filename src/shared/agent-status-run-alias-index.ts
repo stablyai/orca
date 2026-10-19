@@ -8,13 +8,11 @@ import {
   parseAgentStatusExecutionScope,
   type AgentStatusExecutionScope
 } from './agent-status-subject'
-import { AGENT_STATUS_STORE_LIMITS } from './agent-status-store-contract'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 import { measureUtf8ByteLength } from './utf8-byte-limits'
 
 const PROVIDER_ALIAS_KEY_PREFIX = 'agent-status-provider-alias-v1:'
 const MAX_ALIAS_INDEX_ENTRIES = 4096
-const MAX_RUN_IDS_PER_ALIAS = AGENT_STATUS_STORE_LIMITS.parents
 const MAX_ALIAS_INDEX_RUN_REFERENCES = 16_384
 const MAX_ALIAS_INDEX_SERIALIZED_BYTES = 4 * 1024 * 1024
 const ALIAS_INDEX_JSON_STRUCTURE_LIMITS = {
@@ -150,11 +148,7 @@ export function serializeAgentStatusRunAliasIndex(
   const entries: SerializedAliasIndexEntry[] = []
   let runReferenceCount = 0
   for (const [aliasKey, runIds] of index) {
-    if (
-      !deserializeAgentStatusProviderAliasKey(aliasKey) ||
-      runIds.size === 0 ||
-      runIds.size > MAX_RUN_IDS_PER_ALIAS
-    ) {
+    if (!deserializeAgentStatusProviderAliasKey(aliasKey) || runIds.size === 0) {
       throw new Error('Invalid agent status alias index entry')
     }
     const serializedRunIds = [...runIds]
@@ -207,7 +201,6 @@ export function deserializeAgentStatusRunAliasIndex(
       !deserializeAgentStatusProviderAliasKey(entry.alias) ||
       !Array.isArray(entry.runIds) ||
       entry.runIds.length === 0 ||
-      entry.runIds.length > MAX_RUN_IDS_PER_ALIAS ||
       !entry.runIds.every(isAgentStatusRunId) ||
       new Set(entry.runIds).size !== entry.runIds.length ||
       index.has(entry.alias)

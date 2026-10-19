@@ -253,6 +253,10 @@ export function buildAgentDraftLaunchPlan(args: {
     agentCommand: baseCommand.commandWithoutSessionOptions
   })
   let plan: AgentDraftLaunchPlan | null = null
+  if (config.draftPromptFlag && shell === 'cmd' && /[\r\n]/.test(trimmed)) {
+    // Why: cmd.exe cannot quote a newline, so each one would submit the line early; paste instead.
+    return null
+  }
   if (config.draftPromptFlag) {
     const quoted = quoteStartupArg(trimmed, shell)
     plan = {

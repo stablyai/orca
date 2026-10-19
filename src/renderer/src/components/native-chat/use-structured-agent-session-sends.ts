@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionAttachment } from '../../../../shared/structured-agent-session-send-mutation'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
@@ -26,6 +29,7 @@ export function useStructuredAgentSessionSends(args: {
   sessionId: string
   target: RuntimeClientTarget
   fence: number | null
+  cursor?: AgentJournalCursor | null
   submissions: readonly AgentJournalSubmission[]
   queuedMessageIds: readonly string[]
   queue: StructuredAgentSessionQueueDelivery
@@ -39,6 +43,7 @@ export function useStructuredAgentSessionSends(args: {
   sendOptions?: () => Readonly<Record<string, string>> | undefined
 }) {
   const {
+    cursor,
     fence,
     historyLoaded,
     isWorking = false,
@@ -67,8 +72,8 @@ export function useStructuredAgentSessionSends(args: {
   }, [fence, sessionId])
 
   useEffect(() => {
-    settleStructuredAgentSessionSendsFromJournal(sessionId, submissions, queuedMessageIds)
-  }, [pending, queuedMessageIds, sessionId, submissions])
+    settleStructuredAgentSessionSendsFromJournal(sessionId, submissions, queuedMessageIds, cursor)
+  }, [cursor, pending, queuedMessageIds, sessionId, submissions])
 
   const recoverLegacy = historyLoaded && fence !== null
   useEffect(() => {
@@ -93,7 +98,7 @@ export function useStructuredAgentSessionSends(args: {
       if (!text.trim() && attachments.length === 0) {
         return false
       }
-      const delivery = structuredAgentSessionQueueRequest(queue, attachments)
+      const delivery = structuredAgentSessionQueueRequest(queue)
       const options = sendOptions?.()
       const sent = sendStructuredAgentSessionMessage({
         sessionId,

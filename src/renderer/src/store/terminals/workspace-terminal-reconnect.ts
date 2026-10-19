@@ -2,6 +2,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { buildByIdIndex, buildWorktreeByIdIndex } from '../slices/worktree-by-id-index'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export function createWorkspaceTerminalReconnectActions(
   set: TerminalStoreSet,
@@ -117,7 +118,10 @@ export function createWorkspaceTerminalReconnectActions(
         return
       }
       set({
-        ...(reconnectedTabsByWorktree ? { tabsByWorktree: reconnectedTabsByWorktree } : {}),
+        // Switch point: main's frames draw the rows, with main's own bindings.
+        ...(reconnectedTabsByWorktree && !ORCA_LAYOUT_OWNER_IS_MAIN
+          ? { tabsByWorktree: reconnectedTabsByWorktree }
+          : {}),
         ...(reconnectedPtyIdsByTabId ? { ptyIdsByTabId: reconnectedPtyIdsByTabId } : {}),
         workspaceSessionReady: true,
         pendingReconnectWorktreeIds: [],

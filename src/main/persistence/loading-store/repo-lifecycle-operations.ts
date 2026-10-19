@@ -1,6 +1,7 @@
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import {
   removeRepoFromHostWorkspaceSessions,
@@ -97,8 +98,11 @@ export class RepoLifecycleOperations {
       delete this[repoLifecycleOperationsContext].runtime.state.retiredWorktreeNamesByRepo?.[id]
     }
     syncProjectHostSetupCompatibilityState(this)
-    pruneWorktreeStateForRepo(this, id, idStillPresent ? hostId : null)
-    if (!idStillPresent) {
+    // Why host-scoped: a paired client never registers that host's repos, so `idStillPresent` is
+    // false even when another paired host (or a re-pairing of this one) holds rows under the same id.
+    const pairedHost = parseExecutionHostId(hostId)?.kind === 'runtime'
+    pruneWorktreeStateForRepo(this, id, idStillPresent || pairedHost ? hostId : null)
+    if (!idStillPresent && !pairedHost) {
       this[repoLifecycleOperationsContext].runtime.state.workspaceSession = removeLocalRepoSession(
         this[repoLifecycleOperationsContext].runtime.state.workspaceSession,
         id
@@ -108,7 +112,7 @@ export class RepoLifecycleOperations {
           this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId,
           id
         )
-    } else if (parseExecutionHostId(hostId)?.kind === 'runtime') {
+    } else if (pairedHost) {
       const session =
         this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
       if (session) {
@@ -148,7 +152,7 @@ export class RepoLifecycleOperations {
   }
 
   updateRepo(
-    id: string,
+    target: RepoHostTarget,
     updates: Partial<
       Pick<
         Repo,
@@ -182,10 +186,9 @@ export class RepoLifecycleOperations {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
-    },
-    hostId?: ExecutionHostId
+    }
   ): Repo | null {
-    return getRepoUpdateOperations(this).updateRepo(id, updates, hostId)
+    return getRepoUpdateOperations(this).updateRepo(target, updates)
   }
 }
 
@@ -271,7 +274,7 @@ export function getProjectHostSetupOperations(
   owner[repoLifecycleOperationsContext].runtime.projectHostSetupOperations ??=
     new ProjectHostSetupPersistenceOperations({
       state: owner[repoLifecycleOperationsContext].runtime.state,
-      updateRepo: (id, updates, hostId) => owner.updateRepo(id, updates, hostId),
+      updateRepo: (target, updates) => owner.updateRepo(target, updates),
       scheduleSave: () => scheduleSave(owner[repoLifecycleOperationsContext].scheduling)
     })
   return owner[repoLifecycleOperationsContext].runtime.projectHostSetupOperations

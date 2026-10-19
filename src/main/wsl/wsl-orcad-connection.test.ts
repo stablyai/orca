@@ -2,9 +2,9 @@ import { connect, type Server, type Socket } from 'node:net'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, parsePairingCode, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import type { ServeReadiness } from '../server/serve-readiness'
-import { OrcadManagedIdentityError } from '../ssh/orcad-managed-tunnel-identity'
+import { OrcadManagedIdentityError } from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import { checkOrcadStdioBridge, openOrcadStdioBridgeChannel } from '../ssh/orcad-stdio-bridge'
-import { startEchoServer } from '../ssh/orcad-stdio-bridge-test-channel'
+import { startEchoServer } from '../managed-server/lifecycle/orcad-stdio-bridge-test-channel'
 import { fakeWslBridgeChildren, posixOrcadStdioBridge } from './wsl-orcad-bridge-test-child'
 import {
   WslOrcadConnectionManager,

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../shared/execution-host'
+import { getRepoExecutionHostId } from '../shared/execution-host'
 import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import type { Repo } from '../shared/repo-types'
+import type { RepoHostTarget } from '../shared/repo-host-identity'
+import { repoTarget } from './persistence/repo-host-target-matcher.test-fixture'
 import { type GitRemoteIdentityProbe, probeGitRemoteIdentity } from './repo-git-remote-identity'
 import {
   enrichMissingRepoGitRemoteIdentities,
@@ -17,9 +19,8 @@ type RepoIdentityStore = {
   getRepos: () => Repo[]
   getRepo: (id: string) => Repo | undefined
   updateRepo: (
-    id: string,
-    updates: Pick<Partial<Repo>, 'gitRemoteIdentity'>,
-    hostId?: ExecutionHostId
+    target: RepoHostTarget,
+    updates: Pick<Partial<Repo>, 'gitRemoteIdentity'>
   ) => Repo | null
 }
 
@@ -47,18 +48,19 @@ function makeStore(...repos: Repo[]): RepoIdentityStore & { updateRepo: ReturnTy
   return {
     getRepos: () => repos,
     getRepo: (id) => repos.find((candidate) => candidate.id === id),
-    // Mirrors the real store: `hostId` is matched against the row's own stamp, so a write
-    // addressed to the wrong host finds no row (src/main/persistence/tracking-repos).
-    updateRepo: vi.fn((id, updates, hostId) => {
-      const target = repos.find(
+    // Mirrors the real store: the target's host is matched against the row's own stamp, so a
+    // write addressed to the wrong host finds no row (src/main/persistence/tracking-repos).
+    updateRepo: vi.fn((target: RepoHostTarget, updates) => {
+      const row = repos.find(
         (candidate) =>
-          candidate.id === id && (!hostId || getRepoExecutionHostId(candidate) === hostId)
+          candidate.id === target.id &&
+          getRepoExecutionHostId(candidate) === getRepoExecutionHostId(target)
       )
-      if (!target) {
+      if (!row) {
         return null
       }
-      Object.assign(target, updates)
-      return target
+      Object.assign(row, updates)
+      return row
     })
   }
 }
@@ -170,11 +172,9 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
       'local',
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
-    expect(store.updateRepo).toHaveBeenCalledWith(
-      'repo-1',
-      { gitRemoteIdentity: remoteIdentity },
-      'runtime:env-a'
-    )
+    expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('repo-1', 'runtime:env-a'), {
+      gitRemoteIdentity: remoteIdentity
+    })
     expect(repo.gitRemoteIdentity).toEqual(remoteIdentity)
   })
 
@@ -238,7 +238,9 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     enrichMissingRepoGitRemoteIdentities(store)
     await flushRepoGitRemoteIdentityEnrichmentForTests()
 
-    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: null }, 'local')
+    expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('repo-1', 'local'), {
+      gitRemoteIdentity: null
+    })
     expect(repo.gitRemoteIdentity).toBeNull()
   })
 
@@ -273,11 +275,9 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     enrichMissingRepoGitRemoteIdentities(store)
     await flushRepoGitRemoteIdentityEnrichmentForTests()
 
-    expect(store.updateRepo).toHaveBeenCalledWith(
-      'repo-1',
-      { gitRemoteIdentity: remoteIdentity },
-      'local'
-    )
+    expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('repo-1', 'local'), {
+      gitRemoteIdentity: remoteIdentity
+    })
   })
 
   it('does not re-probe a resolved identity before the refresh window elapses', async () => {
@@ -330,11 +330,9 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged })
     await drainEnrichmentSweep()
 
-    expect(store.updateRepo).toHaveBeenCalledWith(
-      'repo-1',
-      { gitRemoteIdentity: movedIdentity },
-      'local'
-    )
+    expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('repo-1', 'local'), {
+      gitRemoteIdentity: movedIdentity
+    })
     expect(repo.gitRemoteIdentity).toEqual(movedIdentity)
     expect(onChanged).toHaveBeenCalledTimes(1)
   })
@@ -502,7 +500,7 @@ describe('retiring probes for removed repos', () => {
     return {
       getRepos: () => live,
       getRepo: (id) => live.find((candidate) => candidate.id === id),
-      updateRepo: vi.fn((id, updates) => {
+      updateRepo: vi.fn(({ id }: RepoHostTarget, updates) => {
         const target = live.find((candidate) => candidate.id === id)
         if (!target) {
           return null

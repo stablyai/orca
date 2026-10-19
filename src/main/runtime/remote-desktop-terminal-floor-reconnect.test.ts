@@ -5,13 +5,14 @@ const PTY = 'pty-1'
 // Spawn-size host geometry the floor reclaims to when no remote viewer owns the PTY.
 const HOST = { cols: 120, rows: 40 }
 
-function createFloor() {
+function createFloor({ hostShowsTerminals = true }: { hostShowsTerminals?: boolean } = {}) {
   let size = { ...HOST }
   const layouts: { kind: string; cols: number; rows: number }[] = []
   const floor = new RemoteDesktopTerminalFloor({
     isMobileDriven: () => false,
     getTerminalSize: () => size,
     resolveHostTarget: () => HOST,
+    hostShowsTerminals: () => hostShowsTerminals,
     applyLayout: async (_ptyId, target) => {
       layouts.push({ kind: target.kind, cols: target.cols, rows: target.rows })
       size = { cols: target.cols, rows: target.rows }
@@ -97,5 +98,52 @@ describe('remote desktop floor across a client reconnect', () => {
 
     expect(floor.isResizeDriven(PTY)).toBe(false)
     expect(size()).toEqual({ cols: 132, rows: 42 })
+  })
+})
+
+describe('remote desktop floor on a windowless host', () => {
+  it('keeps the last owner grid when that owner leaves', async () => {
+    const { floor, layouts, size } = createFloor({ hostShowsTerminals: false })
+    await floor.updateViewer(PTY, 'multiplex:old:1', 'pane-A', 159, 69)
+    layouts.splice(0)
+
+    await floor.unregisterViewers(PTY, ['multiplex:old:1'])
+
+    expect(layouts).toEqual([])
+    expect(size()).toEqual({ cols: 159, rows: 69 })
+    expect(floor.isResizeDriven(PTY)).toBe(false)
+  })
+
+  it('resumes the parked owner at its grid without a resize', async () => {
+    const { floor, layouts, size } = createFloor({ hostShowsTerminals: false })
+    await floor.updateViewer(PTY, 'multiplex:old:1', 'pane-A', 159, 69)
+    await floor.unregisterViewers(PTY, ['multiplex:old:1'])
+    layouts.splice(0)
+
+    await floor.updateViewer(PTY, 'multiplex:new:1', 'pane-A', 159, 69, false)
+
+    expect(floor.isViewerOwner(PTY, 'multiplex:new:1')).toBe(true)
+    expect(size()).toEqual({ cols: 159, rows: 69 })
+    expect(layouts.every((layout) => layout.cols === 159 && layout.rows === 69)).toBe(true)
+  })
+
+  it('still hands the seat to an active peer when the owner leaves', async () => {
+    const { floor, size } = createFloor({ hostShowsTerminals: false })
+    await floor.updateViewer(PTY, 'multiplex:peer:1', 'pane-B', 100, 30)
+    await floor.updateViewer(PTY, 'multiplex:old:1', 'pane-A', 159, 69)
+
+    await floor.unregisterViewers(PTY, ['multiplex:old:1'])
+
+    expect(floor.isViewerOwner(PTY, 'multiplex:peer:1')).toBe(true)
+    expect(size()).toEqual({ cols: 100, rows: 30 })
+  })
+
+  it('still gives a host with a window its grid back', async () => {
+    const { floor, size } = createFloor()
+    await floor.updateViewer(PTY, 'multiplex:old:1', 'pane-A', 159, 69)
+
+    await floor.unregisterViewers(PTY, ['multiplex:old:1'])
+
+    expect(size()).toEqual(HOST)
   })
 })

@@ -2,6 +2,7 @@ import type {
   AgentSessionMutationResult,
   AgentSessionWireRefusalCode
 } from '../../../src/shared/agent-session-wire'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 import {
   agentSessionRefusalNotice,
@@ -25,7 +26,7 @@ import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './mobile-native-chat-se
 export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 
 export type StructuredAgentSessionMutationCallResult<TValue> =
-  | { status: 'accepted'; value: TValue }
+  | { status: 'accepted'; value: TValue; cursor?: AgentJournalCursor }
   | { status: 'refused'; code: AgentSessionWireRefusalCode; message: string }
   | { status: 'failed'; message: string }
   | { status: 'unknown' }
@@ -169,7 +170,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       return { status: 'unknown' }
     }
     return result.ok
-      ? { status: 'accepted', value: result.value }
+      ? { status: 'accepted', value: result.value, cursor: result.cursor }
       : {
           status: 'refused',
           code: result.refusal.code,

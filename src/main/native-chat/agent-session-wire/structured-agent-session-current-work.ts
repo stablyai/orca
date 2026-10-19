@@ -1,3 +1,4 @@
+import { currentRequestsProjection } from './agent-session-current-requests'
 // The host's one operational projection of a chat's current work: the live generation's running
 // turn, the prompts it raised that still wait on the person, the sends it owes, and the queued
 // sends this process may hand over. Every host reader asks here; none keeps a rule of its own.
@@ -20,16 +21,19 @@ import {
   type AgentJournalSubmission,
   type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
+import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionLatestTurn } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
 import { isUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-unanswered-dispatch'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
+import { structuredAgentSessionHandingOver } from './structured-agent-session-handing-over'
 
 export type StructuredAgentSessionCurrentWorkJournal = Pick<
   AgentSessionJournal,
-  'runningTurn' | 'itemFence' | 'visitItems' | 'submissions' | 'wroteBeforeOpen'
+  'runningTurn' | 'itemFence' | 'visitItems' | 'submissions' | 'wroteBeforeOpen' | 'item' | 'cursor'
 >
 
 /** What the host knows of who runs the chat now. */
@@ -42,13 +46,17 @@ export type StructuredAgentSessionWorkEvidence = {
   /** The runtimes this one replaced for the chat (`AgentSessionRecordStore.replacedRuntime`). */
   replaced?: StructuredAgentSessionReplacedEnd | undefined
   /** This host's live child (`StructuredAgentSessionHostSession.child`); absent: not known. */
-  child?: { fence: number } | null
+  child?: { fence: number; heldSends?: () => ReadonlySet<string> | undefined } | null
 }
 
 /** Every fence at or below `fence` was granted by a runtime this one replaced. */
 type StructuredAgentSessionReplacedEnd = { fence: number }
 
-type StructuredAgentSessionSeenEnd = { fence: number; rootGone?: boolean; cause?: string }
+type StructuredAgentSessionSeenEnd = {
+  fence: number
+  rootGone?: boolean
+  cause?: string
+}
 
 /** The live or reserved generation's fence, or null when no generation is live. With no record
  *  nothing has ended: fence 0, under which every item is current, as before records scoped work. */
@@ -110,7 +118,15 @@ function structuredAgentSessionHandsOver(
   )
 }
 
-/** One read of a chat's current work; build a fresh one per decision, since nothing is cached. */
+type PromptProjection = {
+  epoch: string
+  sequence: number
+  fence: number | null
+  items: AgentJournalRenderItem[]
+}
+const promptProjections = new WeakMap<StructuredAgentSessionCurrentWorkJournal, PromptProjection>()
+
+/** Read lease evidence afresh per decision; immutable prompt records share a cursor/fence cache. */
 export class StructuredAgentSessionCurrentWork {
   /** The shared projections' form of this answer (`StructuredAgentSessionWorkScope`). */
   readonly scope: StructuredAgentSessionWorkScope = {
@@ -128,7 +144,9 @@ export class StructuredAgentSessionCurrentWork {
     private readonly ended?: StructuredAgentSessionSeenEnd,
     private readonly replaced?: StructuredAgentSessionReplacedEnd,
     /** `structuredAgentSessionOwnerUnverifiable`. */
-    private readonly ownerUnverifiable = false
+    private readonly ownerUnverifiable = false,
+    /** The live child's `heldSends`; absent, or answering undefined, every unanswered send is held. */
+    private readonly heldSends?: () => ReadonlySet<string> | undefined
   ) {}
 
   /** What a reader that published this answer compares to learn it changed with no row: the live
@@ -136,6 +154,56 @@ export class StructuredAgentSessionCurrentWork {
    *  moves on every generation-end signal: an end that changed nothing is published once. */
   viewKey(): string {
     return `${this.liveFence}${this.ownerUnverifiable ? ':unverifiable' : ''}`
+  }
+
+  /** What a subscriber was last told of current work: the view, whether the agent works, and which
+   *  unanswered sends it holds. Not `viewKey`, which also owns the published requests marker. */
+  workViewKey(): string {
+    const sends = this.unansweredSends().map(
+      (submission) => `${submission.clientMessageId}:${this.holds(submission) ? 1 : 0}`
+    )
+    return `${this.viewKey()}|${this.working() ? 1 : 0}|${sends.join(',')}`
+  }
+
+  /** A send as clients are told it. One handed to the live child that it no longer holds, with no
+   *  answer, reads in doubt: no client counts it as work, and its echo or refusal still settles it. */
+  publishedSubmission = (submission: AgentJournalSubmission): AgentJournalSubmission =>
+    this.unanswered(submission) && !this.holds(submission)
+      ? {
+          ...submission,
+          dispatchState: 'unknown',
+          recovered: true,
+          reason: submission.reason ?? DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED
+        }
+      : submission
+
+  /** Handed to the live generation and neither answered nor refused. */
+  private unanswered(submission: AgentJournalSubmission): boolean {
+    return (
+      !isQueuedAgentJournalSubmission(submission) &&
+      this.liveFence !== null &&
+      isUnansweredStructuredAgentSessionDispatch(submission, this.liveFence)
+    )
+  }
+
+  private unansweredSends(): AgentJournalSubmission[] {
+    return this.journal.submissions().filter((submission) => this.unanswered(submission))
+  }
+
+  /** Every unanswered send as clients are told it, for a page or frame to restate: what the child
+   *  holds changes with no row, so no row's batch would carry it. */
+  restatedSubmissions(): AgentJournalSubmission[] {
+    return this.unansweredSends().map(this.publishedSubmission)
+  }
+
+  /** The live child still holds this send as its work, or the host is still handing it over. */
+  private holds(submission: AgentJournalSubmission): boolean {
+    const held = this.heldSends?.()
+    return (
+      held === undefined ||
+      held.has(submission.clientMessageId) ||
+      structuredAgentSessionHandingOver(this.journal).has(submission.clientMessageId)
+    )
   }
 
   /** Whether the live generation's execution produced this item. */
@@ -155,15 +223,13 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   /** A send still owed: one this process may hand over, or one handed to the live generation that
-   *  it has neither answered nor refused (`isUnansweredStructuredAgentSessionDispatch`). */
+   *  it has neither answered nor refused and still holds. Working reads what the child holds, never
+   *  whether a delivery row was written: a send whose echo never comes stops being work. */
   owesSend(submission: AgentJournalSubmission): boolean {
     if (isQueuedAgentJournalSubmission(submission)) {
       return this.handsOver(submission)
     }
-    return (
-      this.liveFence !== null &&
-      isUnansweredStructuredAgentSessionDispatch(submission, this.liveFence)
-    )
+    return this.unanswered(submission) && this.holds(submission)
   }
 
   /** The live generation's running turn, with its record's item. */
@@ -184,18 +250,45 @@ export class StructuredAgentSessionCurrentWork {
 
   /** The approvals and questions the live generation raised that wait on the person, a
    *  subagent's included. */
-  actionablePromptIds(): string[] {
-    const ids: string[] = []
+  actionablePrompts(): AgentJournalRenderItem[] {
+    const cursor = this.journal.cursor()
+    const prior = promptProjections.get(this.journal)
+    if (
+      prior?.epoch === cursor.epoch &&
+      prior.sequence === cursor.sequence &&
+      prior.fence === this.liveFence
+    ) {
+      return prior.items
+    }
+    const items: AgentJournalRenderItem[] = []
     this.journal.visitItems((itemId, _sequence, body) => {
       if (
         (body.kind === 'approval' || body.kind === 'question') &&
         body.resolution.state === 'pending' &&
         this.isCurrentItem(itemId)
       ) {
-        ids.push(itemId)
+        const item = this.journal.item(itemId)
+        if (item) {
+          items.push(item)
+        }
       }
     })
-    return ids
+    items.sort(compareAgentJournalItems)
+    const stable =
+      prior?.items.length === items.length &&
+      items.every((item, index) => item === prior.items[index])
+        ? prior.items
+        : items
+    promptProjections.set(this.journal, { ...cursor, fence: this.liveFence, items: stable })
+    return stable
+  }
+
+  requestProjection(sessionId: string) {
+    return currentRequestsProjection(this.journal, sessionId, this)
+  }
+
+  actionablePromptIds(): string[] {
+    return this.actionablePrompts().map((item) => item.itemId)
   }
 
   hasActionablePrompt(): boolean {
@@ -253,7 +346,8 @@ export function structuredAgentSessionCurrentWork(
     evidence.revision,
     evidence.ended,
     evidence.replaced,
-    structuredAgentSessionOwnerUnverifiable(evidence)
+    structuredAgentSessionOwnerUnverifiable(evidence),
+    evidence.child?.heldSends
   )
 }
 

@@ -442,15 +442,68 @@ describe('getFailedChecksForDetails', () => {
 })
 
 describe('CheckJobLogTail', () => {
+  it.each([
+    ['completed', 'failure', 'No log excerpt is available.'],
+    ['in_progress', null, 'Log output is not available yet.'],
+    ['completed', 'success', null],
+    ['completed', 'skipped', null]
+  ])(
+    'shows truthful legacy absence for %s / %s without empty Copy',
+    (status, conclusion, expected) => {
+      const markup = renderWithTooltips(
+        React.createElement(CheckJobLogTail, {
+          job: { status, conclusion, logTail: null },
+          surface: 'sidebar'
+        })
+      )
+      if (expected) {
+        expect(markup).toContain(expected)
+      } else {
+        expect(markup).toBe('')
+      }
+      expect(markup).not.toContain('Copy log excerpt')
+      expect(markup).not.toContain('expired')
+    }
+  )
   it('renders a labeled monospace log tail with copy affordance', () => {
     const markup = renderToStaticMarkup(
-      React.createElement(CheckJobLogTail, {
-        logTail: 'Error: expected true to be false'
-      })
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(CheckJobLogTail, {
+          surface: 'sidebar',
+          job: {
+            logTail: 'Error: expected true to be false',
+            status: 'completed',
+            conclusion: 'failure'
+          }
+        })
+      )
     )
 
     expect(markup).toContain('Log excerpt')
     expect(markup).toContain('Error: expected true to be false')
     expect(markup).toContain('Copy log excerpt')
+  })
+
+  it('uses a taller viewport when expanded for failed-job details', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(CheckJobLogTail, {
+          surface: 'details',
+          job: {
+            logTail: 'Error: expected true to be false',
+            status: 'completed',
+            conclusion: 'failure'
+          },
+          expanded: true
+        })
+      )
+    )
+
+    expect(markup).toContain('min-h-48')
+    expect(markup).toContain('max-h-[min(50vh,32rem)]')
   })
 })

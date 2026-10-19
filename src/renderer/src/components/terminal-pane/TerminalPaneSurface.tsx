@@ -9,6 +9,7 @@ import CloseTerminalDialog from './CloseTerminalDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
 import { isPaneOwnerUnverifiedError, TerminalErrorToast } from './TerminalErrorToast'
+import { openTerminalBesideTab } from './open-terminal-beside-tab'
 import { AgentLaunchPaneNoticePortal } from './AgentLaunchPaneNotice'
 import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
@@ -136,7 +137,10 @@ export function TerminalPaneSurface({
         data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
         style={terminalContainerStyle}
         onContextMenuCapture={contextMenu.onContextMenuCapture}
-        onMouseDownCapture={handlePrimarySelectionMiddleMouseDown}
+        onMouseDownCapture={(event) => {
+          contextMenu.onMouseDownCapture(event)
+          handlePrimarySelectionMiddleMouseDown(event)
+        }}
         onAuxClickCapture={handlePrimarySelectionAuxClick}
         onDragOver={(event) => {
           if (
@@ -220,6 +224,9 @@ export function TerminalPaneSurface({
                     }
                   : undefined
               }
+              onOpenNewTerminal={() => {
+                openTerminalBesideTab(tabId)
+              }}
             />,
             activePane.container,
             `terminal-error-${activePane.id}`

@@ -146,7 +146,13 @@ export function startParityLanes(
 ): ParityLanes {
   const settings = parityMainSettings(args.settings)
   const persistPtyBinding = vi.fn(async () => true)
-  const { repo, folderWorkspace } = launchScope(args.workspace)
+  const { repo: scopeRepo, folderWorkspace } = launchScope(args.workspace)
+  // A folder's contained repo is saved too, so the host can borrow its runtime if it would.
+  const repo =
+    scopeRepo ??
+    (args.workspace.repoPath
+      ? launchScope({ kind: 'repo', path: args.workspace.repoPath }).repo
+      : null)
   const store = {
     getSettings: () => settings,
     getProjects: () => [

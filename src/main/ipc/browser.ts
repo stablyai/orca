@@ -118,7 +118,7 @@ export function registerBrowserHandlers(): void {
       if (typeof args?.targetId !== 'string' || args.targetId.length === 0) {
         throw new Error('browser_local_route_target_invalid')
       }
-      const { getSshConnectionStore } = await import('./ssh')
+      const { getSshConnectionStore } = await import('./ssh/ssh')
       const { requireLocalSshBrowserRouteTarget } =
         await import('../browser/local-ssh-browser-route')
       requireLocalSshBrowserRouteTarget(

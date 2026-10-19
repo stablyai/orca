@@ -1,4 +1,4 @@
-import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 
 export const WSL_SESSION_BRIDGE_TIMEOUT_MS = 30_000
 

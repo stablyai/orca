@@ -131,11 +131,16 @@ describe('the wide host-area session', () => {
     })
   })
 
-  it('stays native for no page and for a page without the declaration, host route or detail', () => {
+  it('walls the desktop for no page and for a page without the declaration, host route or detail', () => {
     for (const pathname of [HOST_ROUTE, '/h/host-1/session/wt-1']) {
-      for (const routes of [null, desktopRoutes(false)]) {
-        expect(wideStateFor(routes, pathname).state.kind).toBe('native-route')
-      }
+      expect(wideStateFor(null, pathname).state).toEqual({
+        kind: 'wall',
+        verdict: { kind: 'blocked', reason: 'bundle-unavailable' }
+      })
+      expect(wideStateFor(desktopRoutes(false), pathname).state).toEqual({
+        kind: 'wall',
+        verdict: { kind: 'blocked', reason: 'page-route-unlisted' }
+      })
     }
   })
 

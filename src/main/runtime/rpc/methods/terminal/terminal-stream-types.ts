@@ -63,7 +63,12 @@ export type TerminalMultiplexStream = {
   ackInFlightBytes: number
   ackWindowBytes: number
   supportsOutputPause: boolean
+  // Why: lets the client skip the reveal snapshot when a pause discarded nothing.
+  supportsOutputPauseDropNotice: boolean
+  pausedOutputDropNoticeSent: boolean
   supportsWriteUnavailable: boolean
+  // Also sends WriteUnavailable unprompted when the PTY's daemon endpoint drops.
+  supportsEndpointLossNotice: boolean
   // Set only when the client negotiated `inputAck`; sequenced Input frames are then deduped and acked.
   inputSessionId: string | null
   outputPaused: boolean

@@ -24,6 +24,7 @@ import {
 } from './codex-structured-owner-identity'
 import { openCodexThread } from './codex-structured-thread-open'
 import { withCodexVisualsThreadConfig } from './codex-structured-visuals'
+import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
 import {
   closeCodexPublishedSession,
   handleCodexSessionExit
@@ -77,7 +78,7 @@ export async function acquireCodexStructuredSession(input: {
       ? provenHandle.nativeId
       : null
   const subagentExecutions = new CodexSubagentExecutions()
-  const dispatchEchoes = createCodexDispatchEchoes()
+  const dispatchEchoes = createCodexDispatchEchoes(() => deps.onHeldSendsChanged?.({ sessionId }))
   let account: AgentSessionAccountKind | undefined
   // Minted before the translator, which names this connection's frame rows with it.
   const acquisitionGeneration = mintCodexAcquisitionGeneration(deps)
@@ -137,6 +138,7 @@ export async function acquireCodexStructuredSession(input: {
           acquisition,
           sessionId,
           dispatchEchoes,
+          primaryThreadId: () => primaryThreadId,
           notificationRetries,
           deliver: input.deliver,
           now: deps.now ?? Date.now
@@ -192,7 +194,15 @@ export async function acquireCodexStructuredSession(input: {
       ...(deps.logger ? { logger: deps.logger } : {})
     })
     acquisitions.assertCurrent(sessionId, attempt)
-    const opened = await openCodexThread(connection, threadLaunch, deps.requestTimeoutMs)
+    const commandEnv = {
+      ...launch.commandEnv,
+      ...(launch.visuals ? { [NATIVE_CHAT_SCRATCH_DIR_ENV]: launch.visuals.folder } : {})
+    }
+    const opened = await openCodexThread(
+      connection,
+      { ...threadLaunch, commandEnv },
+      deps.requestTimeoutMs
+    )
     acquisitions.assertCurrent(sessionId, attempt)
     primaryThreadId = opened.threadId
     const restoreAdmission = translator?.restoreThread(opened.threadId, opened.thread ?? {})
@@ -224,7 +234,7 @@ export async function acquireCodexStructuredSession(input: {
     assertCodexConnectionOpen(connection, sessionId)
     acquisitions.deleteIfCurrent(sessionId, attempt)
     // Where this session's child work goes: the host's records, after each frame is journaled.
-    const sink = codexChildWorkSink(sessionId, deps)
+    const sink = codexChildWorkSink(sessionId, deps, acquireInput.events)
     const session: CodexSession = {
       account,
       connection,

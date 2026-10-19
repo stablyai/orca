@@ -13,11 +13,12 @@ import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { SkillInstallDestinationAuthority } from '../skills/skill-install-destinations'
 import {
   resolveEnvironmentSkillProviderRoots,
-  resolveWslGrokSkillProviderRoot,
+  resolveWslSkillProviderRoots,
   withClaudeSkillProviderRoot
 } from '../skills/skill-provider-runtime-roots'
-import type { SkillInstallRequest, SkillProviderRootOverrides } from './runtime-skill-types'
-import type { RuntimeSkillCommandHost } from './runtime-skill-command-surface'
+import type { SkillInstallRequest } from '../../shared/skill-install-contract'
+import type { SkillProviderRootOverrides } from '../skills/skill-provider-destinations'
+import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 
 /** Whether the destination lives on an SSH target; a workspace that cannot be placed throws. */
 export async function isSkillSshDestination(
@@ -84,13 +85,8 @@ export async function resolveSkillProviderRoots(
   if (destination.scope !== 'global') {
     return {}
   }
-  const grok = destination.wslDistro
-    ? await resolveWslGrokSkillProviderRoot(destination.wslDistro)
-    : null
   const roots = destination.wslDistro
-    ? grok
-      ? { grok }
-      : {}
+    ? await resolveWslSkillProviderRoots(destination.wslDistro)
     : resolveEnvironmentSkillProviderRoots()
   const config = host.getClaudeConfigDirectory?.(
     destination.wslDistro

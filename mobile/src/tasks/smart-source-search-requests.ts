@@ -17,7 +17,7 @@ import {
   linearAssignedIssueListRead,
   linearIssueSearchRead
 } from './mobile-task-source-search-operations'
-import { PER_REPO_FETCH_LIMIT } from './mobile-work-items'
+import { PER_REPO_FETCH_LIMIT } from '../../../src/shared/work-items'
 import type { MrStateFilter } from './mobile-composer-source-types'
 
 const GITLAB_PER_PAGE = 50

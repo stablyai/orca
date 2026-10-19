@@ -10,6 +10,14 @@ import { PluginCommandRegistry } from './plugin-command-registry'
 import { verifyInstructionalPluginContent } from './plugin-instructional-content-integrity'
 import type { KeybindingOverrides } from '../../shared/keybindings'
 
+type ContentFamily = {
+  reconcile: (
+    discovered: readonly DiscoveredPlugin[],
+    isApproved: (plugin: ValidDiscoveredPlugin) => boolean
+  ) => Promise<void>
+  error: (pluginKey: string) => string | null
+}
+
 export class PluginContentPackRegistry {
   readonly languagePacks: PluginLanguagePackRegistry
   readonly vmRecipes: PluginVmRecipeRegistry
@@ -70,10 +78,9 @@ export class PluginContentPackRegistry {
         approvedKeys.has(plugin.pluginKey) &&
         !excluded.has(plugin.pluginKey) &&
         !this.isKilled(plugin.pluginKey)
-      const languagePacks = this.languagePacks.reconcile(discovered, approveAtomically)
-      const vmRecipes = this.vmRecipes.reconcile(discovered, approveAtomically)
-      this.commands.reconcile(discovered, approveAtomically, keybindings)
-      await Promise.all([languagePacks, vmRecipes])
+      await Promise.all(
+        this.families(keybindings).map((family) => family.reconcile(discovered, approveAtomically))
+      )
 
       let foundNewError = false
       for (const pluginKey of approvedKeys) {
@@ -95,10 +102,25 @@ export class PluginContentPackRegistry {
   }
 
   private registryError(pluginKey: string): string | null {
-    return (
-      this.languagePacks.error(pluginKey) ??
-      this.vmRecipes.error(pluginKey) ??
-      this.commands.error(pluginKey)
-    )
+    for (const family of this.families()) {
+      const error = family.error(pluginKey)
+      if (error !== null) {
+        return error
+      }
+    }
+    return null
+  }
+
+  /** Every contribution family, in error-reporting order; a new family is one entry here. */
+  private families(keybindings: KeybindingOverrides = {}): readonly ContentFamily[] {
+    return [
+      this.languagePacks,
+      this.vmRecipes,
+      {
+        reconcile: async (discovered, isApproved) =>
+          this.commands.reconcile(discovered, isApproved, keybindings),
+        error: (pluginKey) => this.commands.error(pluginKey)
+      }
+    ]
   }
 }

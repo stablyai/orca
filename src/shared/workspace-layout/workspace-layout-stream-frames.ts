@@ -3,15 +3,26 @@
 
 import type { PublishedWorkspaceLayout } from './workspace-layout-published'
 
-export type WorkspaceLayoutEvent =
+/** `seq`: the stream's position after this frame. It rises by one per change frame for the host's
+ *  life, so a subscriber to every workspace sees each one. A `layout.apply` reply names the
+ *  position holding its effect. Absent from older hosts. */
+type Sequenced = { seq?: number }
+
+export type WorkspaceLayoutEvent = (
   | { type: 'workspace'; key: string; layout: PublishedWorkspaceLayout }
   | { type: 'removed'; key: string }
+) &
+  Sequenced
 
 export type WorkspaceLayoutSnapshotEntry = { key: string; layout: PublishedWorkspaceLayout }
 
 export type WorkspaceLayoutStreamFrame =
   // subscriptionId names the stream for `layout.unsubscribe`; a reader does not need it.
-  | { type: 'snapshot'; subscriptionId?: string; workspaces: WorkspaceLayoutSnapshotEntry[] }
+  | ({
+      type: 'snapshot'
+      subscriptionId?: string
+      workspaces: WorkspaceLayoutSnapshotEntry[]
+    } & Sequenced)
   | WorkspaceLayoutEvent
   | { type: 'end' }
 
@@ -38,6 +49,17 @@ function isPublishedWorkspaceLayout(value: unknown): value is PublishedWorkspace
   )
 }
 
+/** A frame's stream position, read even from a frame this build cannot read otherwise. */
+export function readWorkspaceLayoutFramePosition(value: unknown): number | undefined {
+  const seq = isRecord(value) ? value.seq : undefined
+  return typeof seq === 'number' && Number.isSafeInteger(seq) && seq >= 0 ? seq : undefined
+}
+
+function sequenced(value: Record<string, unknown>): Sequenced {
+  const seq = readWorkspaceLayoutFramePosition(value)
+  return seq === undefined ? {} : { seq }
+}
+
 function isSnapshotEntry(value: unknown): value is WorkspaceLayoutSnapshotEntry {
   return isRecord(value) && isKey(value.key) && isPublishedWorkspaceLayout(value.layout)
 }
@@ -50,14 +72,14 @@ export function readWorkspaceLayoutStreamFrame(value: unknown): WorkspaceLayoutS
   switch (value.type) {
     case 'snapshot':
       return Array.isArray(value.workspaces) && value.workspaces.every(isSnapshotEntry)
-        ? { type: 'snapshot', workspaces: value.workspaces }
+        ? { type: 'snapshot', workspaces: value.workspaces, ...sequenced(value) }
         : null
     case 'workspace':
       return isKey(value.key) && isPublishedWorkspaceLayout(value.layout)
-        ? { type: 'workspace', key: value.key, layout: value.layout }
+        ? { type: 'workspace', key: value.key, layout: value.layout, ...sequenced(value) }
         : null
     case 'removed':
-      return isKey(value.key) ? { type: 'removed', key: value.key } : null
+      return isKey(value.key) ? { type: 'removed', key: value.key, ...sequenced(value) } : null
     case 'end':
       return { type: 'end' }
     default:

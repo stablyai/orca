@@ -10,6 +10,7 @@ import {
   KEEP_HISTORY_STOP_SETTLE_MS
 } from '../delivery/visibility-state'
 import { clearProviderPtyState } from './state-cleanup'
+import type { PtyRetirementEvidence } from '../../../pty-exit-proof'
 
 export function normalizeNodePtySpawnError(err: unknown): Error {
   const rawMessage = err instanceof Error ? err.message : String(err)
@@ -102,13 +103,14 @@ export async function verifyPtyStopped(
 export function finishPtyShutdown(
   id: string,
   connectionId: string | null | undefined,
-  store: Store | undefined
+  store: Store | undefined,
+  evidence: PtyRetirementEvidence
 ): string | undefined {
   const incarnationId = ptyIncarnationById.get(id)
   clearProviderPtyState(id)
   if (connectionId) {
     // Keeps any relay-era undelivered stop on the lease: only host evidence may retire it.
-    store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
+    store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), evidence)
   }
   ptyOwnership.delete(id)
   return incarnationId

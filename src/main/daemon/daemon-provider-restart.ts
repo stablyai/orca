@@ -40,19 +40,30 @@ import {
   type DaemonSpawner
 } from './daemon-spawner'
 import { DaemonClient } from './client'
+import { endpointIsProvenDead, probeSocketConnect } from './daemon-endpoint-probe'
 import { clearSeveredDaemon } from './daemon-host-image-state'
 import { PROTOCOL_VERSION } from './types'
+import { recoverRetiredMacDaemonJobs } from './macos-retired-daemon-recovery'
 
 export type { RestartDaemonResult } from './daemon-restart-state'
 
 // Why: the 7-step restart sequence from docs/daemon-staleness-ux.md §Phase 1; current-protocol only (legacy adapters preserved).
 export async function restartDaemon(
-  options: { expectedDaemonPid?: number } = {}
+  options: {
+    expectedDaemonPid?: number
+    /** A retired daemon may already have left; only a different live owner aborts. */
+    endpointMayBeGone?: boolean
+  } = {}
 ): Promise<RestartDaemonResult> {
-  return runCoalescedDaemonRestart(() => runRestartDaemon(options.expectedDaemonPid))
+  return runCoalescedDaemonRestart(() =>
+    runRestartDaemon(options.expectedDaemonPid, options.endpointMayBeGone === true)
+  )
 }
 
-async function runRestartDaemon(expectedDaemonPid?: number): Promise<RestartDaemonResult> {
+async function runRestartDaemon(
+  expectedDaemonPid?: number,
+  endpointMayBeGone = false
+): Promise<RestartDaemonResult> {
   const currentSpawner = getDaemonSpawner()
   const currentAdapter = getDaemonProvider()
   if (!currentSpawner || !currentAdapter) {
@@ -60,16 +71,27 @@ async function runRestartDaemon(expectedDaemonPid?: number): Promise<RestartDaem
   }
 
   const runtimeDir = getRuntimeDir()
+  if (expectedDaemonPid === undefined) {
+    // Why not abort: a wedged leftover must never disable the restart that replaces the current daemon.
+    await recoverRetiredMacDaemonJobs(runtimeDir).catch((error: unknown) => {
+      console.warn(
+        `[daemon] Retired macOS terminal service recovery failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+    })
+  }
   if (expectedDaemonPid !== undefined) {
     // Why before any teardown: a targeted restart must not end a single terminal when the
     // endpoint now belongs to a replacement daemon.
-    await assertDaemonEndpointOwner(runtimeDir, expectedDaemonPid)
+    await assertDaemonEndpointOwner(runtimeDir, expectedDaemonPid, endpointMayBeGone)
   }
   // An operator asking for a restart is the deliberate "try again" that clears crash-loop
   // containment; without this a wedged host could never be recovered from the UI.
   currentSpawner.resetRespawnWindow()
   const currentOnly = getCurrentDaemonAdapter(currentAdapter)
-  const legacyAdapters = getLegacyDaemonAdapters(currentAdapter)
+  // A generation that accepted idle retirement is leaving; keeping its route would fail every inventory.
+  const legacyAdapters = getLegacyDaemonAdapters(currentAdapter).filter(
+    (legacy) => !legacy.hasRetiredForIdle()
+  )
 
   // Step 1: synthesize pty:exit for every active session BEFORE teardown — the daemon's shutdown path never fans onExit to clients (session.ts:246-252), so the renderer would otherwise never see exits.
   const fallbackKilledCount =
@@ -184,9 +206,18 @@ async function runRestartDaemon(expectedDaemonPid?: number): Promise<RestartDaem
   return { killedCount }
 }
 
-async function assertDaemonEndpointOwner(runtimeDir: string, expectedPid: number): Promise<void> {
+async function assertDaemonEndpointOwner(
+  runtimeDir: string,
+  expectedPid: number,
+  endpointMayBeGone: boolean
+): Promise<void> {
+  const socketPath = getDaemonSocketPath(runtimeDir, PROTOCOL_VERSION)
+  // Only a proven-dead endpoint skips the check; a timeout or EPERM proves nothing.
+  if (endpointMayBeGone && endpointIsProvenDead(await probeSocketConnect(socketPath))) {
+    return
+  }
   const client = new DaemonClient({
-    socketPath: getDaemonSocketPath(runtimeDir, PROTOCOL_VERSION),
+    socketPath,
     tokenPath: getDaemonTokenPath(runtimeDir, PROTOCOL_VERSION)
   })
   try {

@@ -22,6 +22,8 @@ import {
   pickRestoredActiveGroupId
 } from '../mobile-session-layout-projection'
 import {
+  appendChatTabOrder,
+  keepSnapshotChatTabs,
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
 } from '../mobile-session-tab-merge'
@@ -93,6 +95,20 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
   >
 
   protected abstract getAvailableAuthoritativeWindow(): BrowserWindow | null
+
+  /** A stored snapshot, or undefined when it is one this host built and left empty. */
+  private readRebuildableMobileSessionSnapshot(
+    worktreeId: string
+  ): RuntimeMobileSessionTabsSnapshot | undefined {
+    const stored = this.mobileSessionTabsByWorktree.get(worktreeId)
+    // Why: only the persisted session feeds a headless-built snapshot, so an empty one is never an
+    // answer — as a base it made the next pass seed browser rows alone and hide every terminal.
+    return stored &&
+      stored.tabs.length === 0 &&
+      this.isHeadlessBuiltMobileSessionPublicationBase(stored.publicationEpoch)
+      ? undefined
+      : stored
+  }
 
   hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
     worktreeId?: string,
@@ -169,10 +185,10 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
           continue
         }
       }
-      const existing = this.mobileSessionTabsByWorktree.get(entryWorktreeId)
+      const stored = this.readRebuildableMobileSessionSnapshot(entryWorktreeId)
       if (
-        existing &&
-        existing.tabs.length > 0 &&
+        stored &&
+        stored.tabs.length > 0 &&
         options.force !== true &&
         options.onlyRuntimeOwnedTerminals !== true
       ) {
@@ -180,10 +196,15 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         // offscreen browser tabs are live and may have been created/closed since.
         // Reconcile just the browser tabs against the live bridge instead of
         // leaving a stale snapshot that omits a freshly-opened browser tab.
-        this.reconcileHeadlessMobileSessionBrowserTabs(entryWorktreeId, existing)
+        this.reconcileHeadlessMobileSessionBrowserTabs(entryWorktreeId, stored)
         reconciledWorktreeIds.add(entryWorktreeId)
-        continue
+        // Why: closing the last browser row empties a browser-only snapshot; rebuild it now
+        // rather than serve that empty answer once.
+        if (this.readRebuildableMobileSessionSnapshot(entryWorktreeId)) {
+          continue
+        }
       }
+      const existing = this.readRebuildableMobileSessionSnapshot(entryWorktreeId)
       // Why: windowless, nothing publishes the other tabs, and a filtered seed would make the full pass skip this worktree.
       const runtimeOwnedOnly =
         options.onlyRuntimeOwnedTerminals === true &&
@@ -224,7 +245,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
       const mergedTabs =
         options.onlyRuntimeOwnedTerminals === true && existing
           ? mergeMobileSessionSnapshotTabs(existing.tabs, tabs)
-          : tabs
+          : keepSnapshotChatTabs(tabs, existing)
       const mergedActiveTab =
         existing?.tabs.find((tab) => tab.id === existing.activeTabId) ??
         activeTab ??
@@ -250,7 +271,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
           ? mergedActiveTab.parentTabId
           : mergedActiveTab.id
         : null
-      const nextTabGroups: RuntimeMobileSessionTabGroup[] = hasPersistedSplit
+      const rebuiltTabGroups: RuntimeMobileSessionTabGroup[] = hasPersistedSplit
         ? appendBrowserTabOrder(
             distributeHeadlessTabsAcrossGroups(
               persistedGroups.map((group) => ({
@@ -287,6 +308,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
                 tabOrder
               }
             ]
+      const nextTabGroups = appendChatTabOrder(rebuiltTabGroups, existing?.tabGroups, mergedTabs)
       // Why: merging runtime tabs INTO a renderer publication must not reclass
       // the snapshot as headless-built — the preservation predicate would then
       // treat the renderer's own tabs as runtime-owned and resurrect tabs the

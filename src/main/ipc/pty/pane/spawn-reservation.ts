@@ -82,6 +82,17 @@ export function clearPaneSpawnReservation(
   }
 }
 
+/** Whether a window or runtime spawn of this pane has begun and not yet bound or failed. */
+export function isPaneSpawnInFlight(worktreeId: string, paneKey: string): boolean {
+  for (const ownerKey of paneSpawnReservationsByOwnerKey.keys()) {
+    const parsed: unknown = JSON.parse(ownerKey)
+    if (Array.isArray(parsed) && parsed[1] === worktreeId && parsed[2] === paneKey) {
+      return true
+    }
+  }
+  return false
+}
+
 export function makePaneSpawnReservationKey(
   worktreeId: string | undefined,
   connectionId: string | null | undefined,

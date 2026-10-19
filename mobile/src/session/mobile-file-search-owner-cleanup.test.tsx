@@ -26,8 +26,13 @@ vi.mock('lucide-react-native', () => ({
   ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',
   ChevronRight: 'ChevronRight',
+  FileText: 'FileText',
   ImagePlus: 'ImagePlus',
   Mic: 'Mic',
+  Package: 'Package',
+  Plus: 'Plus',
+  ShieldAlert: 'ShieldAlert',
+  Terminal: 'Terminal',
   Square: 'Square',
   X: 'X'
 }))

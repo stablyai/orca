@@ -1,6 +1,7 @@
 import type { AgentSessionUnavailable } from '../../../shared/agent-session-availability'
 import type {
   AgentSessionFastModeSupport,
+  AgentSessionModelCatalogResult,
   AgentSessionModelOption
 } from '../../../shared/agent-session-wire'
 
@@ -120,6 +121,25 @@ export type AgentModelCatalogEntry = {
   fetchedAt: number
 }
 
+export function agentModelCatalogResultFromEntry(
+  entry: AgentModelCatalogEntry,
+  namesDefault: boolean,
+  listingNamesConfiguredModel: boolean
+): Exclude<AgentSessionModelCatalogResult, { origin: 'unknown' }> {
+  // A CLI-resolved default names the configured model even where the listing names none.
+  const namesConfigured = listingNamesConfiguredModel || entry.configured !== null
+  return {
+    origin: entry.origin,
+    // Without a default the picker names nothing until the chat reports its model.
+    models: entry.models.map((model) =>
+      namesDefault ? { ...model } : { ...model, isDefault: false }
+    ),
+    ...(entry.fastModeSupport ? { fastModeSupport: entry.fastModeSupport } : {}),
+    fetchedAt: entry.fetchedAt,
+    listingNamesConfiguredModel: namesDefault && namesConfigured
+  }
+}
+
 /** Which models exist and their menus follow the newer listing; the default model and effort are
  *  the CLI-resolved configured default's, else discovery's, else what a live child reported while
  *  its model offers it. */
@@ -189,6 +209,17 @@ export function agentModelCatalogEntry(
   }
 }
 
+/** Only a launch-added row needs independent account membership; ordinary incoming rows stand. */
+export function retainedAgentModelCatalogModels(
+  previous: Pick<AgentModelCatalogEntry, 'models'> | null | undefined,
+  listing: AgentModelCatalogLiveListing
+): AgentSessionModelOption[] {
+  const launchOnly = listing.launchOnlyModelId
+  return launchOnly !== undefined && !previous?.models.some((model) => model.id === launchOnly)
+    ? listing.models.filter((model) => model.id !== launchOnly)
+    : listing.models
+}
+
 /** The entry `success` makes of `previous`, replacing only the listing of its source. */
 export function agentModelCatalogEntryWithSuccess(
   previous: AgentModelCatalogEntry | undefined,
@@ -197,11 +228,7 @@ export function agentModelCatalogEntryWithSuccess(
   source: AgentModelCatalogSource,
   at: number
 ): AgentModelCatalogEntry | null {
-  const launchOnly = success.launchOnlyModelId
-  const models =
-    launchOnly !== undefined && !previous?.models.some((model) => model.id === launchOnly)
-      ? success.models.filter((model) => model.id !== launchOnly)
-      : success.models
+  const models = retainedAgentModelCatalogModels(previous, success)
   if (models.length === 0) {
     // An empty list identifies no model; it is doubt, not a catalog.
     return null

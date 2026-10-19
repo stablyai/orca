@@ -13,7 +13,7 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))

@@ -73,7 +73,9 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  inspectRuntimeTerminalProcess: mockInspectRuntimeTerminalProcess,
+  inspectRuntimeTerminalProcess: mockInspectRuntimeTerminalProcess
+}))
+vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: mockSendRuntimePtyInputVerified
 }))
 

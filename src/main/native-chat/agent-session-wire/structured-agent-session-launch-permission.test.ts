@@ -39,6 +39,7 @@ function launchPermission(
   })
   const modelCatalog = {
     read,
+    retainedLiveModelIds: vi.fn(async () => []),
     recordLiveListing: vi.fn(),
     prewarm: vi.fn(async () => undefined),
     stop: vi.fn(),
@@ -104,7 +105,7 @@ describe('the permission mode a chat starts with', () => {
   })
 
   it('has none for an agent with no modes', async () => {
-    await expect(launchPermission('grok', { permissionMode: 'full-access' }).result).resolves.toBe(
+    await expect(launchPermission('pi', { permissionMode: 'full-access' }).result).resolves.toBe(
       null
     )
   })

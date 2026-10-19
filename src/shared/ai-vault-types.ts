@@ -46,6 +46,17 @@ export function isAiVaultScanCancelledError(error: unknown): boolean {
 }
 
 export type AiVaultAgent = (typeof AI_VAULT_AGENTS)[number]
+
+export function isAiVaultAgent(value: unknown): value is AiVaultAgent {
+  return AI_VAULT_AGENTS.some((agent) => agent === value)
+}
+
+/** The agents Session History may list `agent`'s sessions under. */
+export function aiVaultHistoryAgents(agent: AiVaultAgent): AiVaultAgent[] {
+  // One OpenCode store holds both versions' sessions, and the scanner labels current ones `opencode2`.
+  return agent === 'opencode' || agent === 'opencode2' ? ['opencode', 'opencode2'] : [agent]
+}
+
 export type AiVaultScope = 'workspace' | 'project' | 'all'
 export type AiVaultSort = 'updated' | 'created'
 export const AI_VAULT_SEARCH_SORTS = ['relevance', 'newest'] as const
@@ -233,6 +244,8 @@ export type AiVaultListArgs = {
 }
 
 export type AiVaultListResult = {
+  /** Local scan entry that produced this result; absent for remote and merged results. */
+  scanId?: string
   fingerprint?: string
   /** Requires the caller to reuse the exact previously received body. */
   unchanged?: true

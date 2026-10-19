@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { createServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,8 +12,10 @@ import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
 import { readRuntimeMetadata } from '../runtime/runtime-metadata'
 import { spawnProcess } from '@orca/process-host'
 import { isProcessAlive } from '../../shared/serve-bundle-coordination'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime'
 import { electronIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
+import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
 import {
   ElectronSidecarTabRegistry,
@@ -77,6 +79,8 @@ function electronServeEnvironment(userDataPath: string): NodeJS.ProcessEnv {
   if (process.env.ORCA_E2E_USER_DATA_DIR || process.env.ORCA_E2E_HOME_DIR) {
     environment.ORCA_E2E_USER_DATA_DIR = userDataPath
   }
+  // Why not ORCA_BACKGROUND_LAUNCH: an older installed app would hide without handing opens to the desktop app.
+  environment.ORCA_ORCAD_SIDECAR = '1'
   return environment
 }
 
@@ -112,6 +116,7 @@ export class ElectronServeBrowserProcess {
         '--serve-json',
         '--serve-no-pairing',
         ...electronIsolatedProfileSwitches(process.env),
+        ...headlessServeOzonePlatformSwitches(process.platform),
         `--user-data-dir=${userDataPath}`
       ],
       env: { ...electronServeEnvironment(userDataPath), [BROWSER_SIDECAR_OWNER_ENV]: '1' },
@@ -157,6 +162,8 @@ export class ElectronServeBrowserProcess {
 
   createCommands(host: RuntimeBrowserCommandHost): RuntimeBrowserCommands {
     return new Proxy({} as RuntimeBrowserCommands, {
+      // Why: startup checks membership before invoking dynamically resolved commands.
+      has: (_target, property) => typeof property === 'string' && property !== 'then',
       get: (_target, property) => {
         if (property === 'then') {
           return undefined
@@ -191,7 +198,11 @@ export class ElectronServeBrowserProcess {
       }
     }
     if (sidecarDataPath) {
-      await rm(sidecarDataPath, { recursive: true, force: true })
+      // Why best-effort: on Windows the killed sidecar's helpers hold this throwaway profile for a
+      // moment, and a leftover temp dir must not fail orcad's stop and strand its instance lock.
+      await removeTree(sidecarDataPath).catch((error: unknown) =>
+        console.warn('[orcad] Electron browser sidecar data was not removed:', error)
+      )
     }
   }
 
@@ -216,7 +227,7 @@ export class ElectronServeBrowserProcess {
     const original = (args[0] ?? {}) as Record<string, unknown>
     const worktreeId =
       typeof original.worktree === 'string'
-        ? (await host.resolveWorktreeSelector(original.worktree)).id
+        ? (await host.resolveBrowserWorkspace(original.worktree)).id
         : undefined
     const params: Record<string, unknown> = { ...original, worktree: undefined }
     const requestedPageId = typeof original.page === 'string' ? original.page : undefined

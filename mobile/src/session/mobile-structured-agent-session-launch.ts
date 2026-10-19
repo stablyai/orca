@@ -16,7 +16,7 @@ import {
   structuredAgentSessionCreate,
   structuredAgentSupportProbe
 } from './mobile-session-launch-operations'
-import { structuredSessionRandomUuid } from './structured-session-operation-id'
+import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
 type StructuredCreateSupport = {
@@ -42,10 +42,10 @@ function createParamsFor(
   worktree: string
 ): StructuredAgentSessionCreateParams {
   return structuredAgentSessionCreateParams({
-    sessionId: createStructuredAgentSessionId(agent, structuredSessionRandomUuid),
+    sessionId: createStructuredAgentSessionId(agent, randomV4Uuid),
     worktree,
     agent,
-    randomUuid: structuredSessionRandomUuid
+    randomUuid: randomV4Uuid
   })
 }
 

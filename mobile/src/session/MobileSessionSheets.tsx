@@ -12,6 +12,7 @@ import { MobileDictationSetupSheet } from '../components/MobileDictationSetupShe
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import { MobileBrowserTabActionSheet } from './MobileBrowserTabActionSheet'
 import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sheet-actions'
+import { getMobileNativeChatCliForkActions } from './mobile-native-chat-cli-fork'
 import {
   getRepoIdFromMobileWorktreeId,
   isTerminalPhoneDisplayMode
@@ -62,6 +63,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     setShowDictationSetup,
     browserScreencastSupported,
     quickCommandsSupported,
+    quickCommandAgentPromptMaxLength,
     showToast,
     nativeChatTranscriptIsLocalReadable,
     nativeChatController,
@@ -113,6 +115,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             : getRepoIdFromMobileWorktreeId(worktreeId) || null
         }
         repoName={worktreeName || null}
+        agentPromptMaxLength={quickCommandAgentPromptMaxLength}
         onLaunch={launchQuickCommand}
       />
       <ActionSheetModal
@@ -279,9 +282,15 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       <ActionSheetModal
         visible={agentSessionActionTarget != null}
         title={agentSessionActionTarget?.title || 'Chat'}
-        actions={closeWithBulkActions(agentSessionActionTarget, () =>
-          setAgentSessionActionTarget(null)
-        )}
+        actions={[
+          ...getMobileNativeChatCliForkActions({
+            controller,
+            tab: agentSessionActionTarget,
+            workspaceOnPairedHost: onPairedHost,
+            onDismiss: () => setAgentSessionActionTarget(null)
+          }),
+          ...closeWithBulkActions(agentSessionActionTarget, () => setAgentSessionActionTarget(null))
+        ]}
         onClose={() => setAgentSessionActionTarget(null)}
       />
       <ActionSheetModal

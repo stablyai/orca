@@ -124,6 +124,7 @@ export function resolveGitCommandWithoutProbe(
   return resolveCommand('git', wslGitArgs(args, options), options.cwd, options.wslDistro, {
     useWslLoginShell: Boolean(options.wslDistro),
     captureLoginShellOutput,
+    env: options.env,
     terminationBarrier: options.terminationBarrier
   })
 }

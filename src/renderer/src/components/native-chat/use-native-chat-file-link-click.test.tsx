@@ -264,11 +264,21 @@ describe('tool and edit-card file activation', () => {
 })
 
 describe('useNativeChatFileLinkClick', () => {
-  it('does not underline a bare file name the click could not open, even when it exists', () => {
-    render(<Transcript markdown="I updated `deck.md` and 'notes.md'." />)
+  it('opens whole-code bare names from the chat folder', () => {
+    render(<Transcript markdown="Done. `decision-explainer.html` and `Makefile:7`." />)
 
-    expect(screen.queryByRole('link')).toBeNull()
-    expect(screen.getByText('deck.md').tagName).toBe('CODE')
+    expect(screen.getAllByRole('link').map((link) => link.textContent)).toEqual([
+      'decision-explainer.html',
+      'Makefile:7'
+    ])
+    clickLink('decision-explainer.html')
+
+    expect(mocks.openDetectedFilePath).toHaveBeenCalledWith(
+      '/repo/decision-explainer.html',
+      null,
+      null,
+      expect.objectContaining({ worktreeId: 'wt-1' })
+    )
   })
 
   it('reports a missing relative path instead of doing nothing', () => {

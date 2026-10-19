@@ -3,8 +3,8 @@ import {
   resolveAttention,
   type SmartClass,
   type TabPaneInputSources
-} from '@/components/sidebar/smart-attention'
-import { tabHasLivePty } from './tab-has-live-pty'
+} from '../../../shared/sidebar-list/smart-attention'
+import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
 import { isExplicitAgentStatusFresh } from './pane-agent-evidence'
 import type { WorktreeStatus } from './worktree-status'

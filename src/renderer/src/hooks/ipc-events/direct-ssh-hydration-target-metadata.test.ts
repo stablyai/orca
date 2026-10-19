@@ -6,8 +6,13 @@ import {
 } from '@/store/slices/runtime-environment-ssh'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
+import { resetSshConfigPassiveSyncForTests } from '../../lib/ssh-config-passive-sync'
 
 type SshApiStub = {
+  importConfig?: () => Promise<{
+    targets: { id: string; label: string }[]
+    repoReadoptions: never[]
+  }>
   listTargets: () => Promise<{ id: string; label: string }[]>
   listRemovedTargetLabels: () => Promise<Record<string, string>>
   getState: (args: { targetId: string }) => Promise<SshConnectionState | null>
@@ -53,6 +58,7 @@ describe('direct SSH hydration target metadata', () => {
   const unsubs: (() => void)[] = []
 
   beforeEach(() => {
+    resetSshConfigPassiveSyncForTests()
     onStateChangedHandler = null
     useAppStore.setState({
       sshTargetLabels: new Map(),
@@ -68,6 +74,32 @@ describe('direct SSH hydration target metadata', () => {
     }
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+  })
+
+  it('syncs ~/.ssh/config after the saved hosts load, so a newly added host shows up', async () => {
+    const importConfig = vi
+      .fn<NonNullable<SshApiStub['importConfig']>>()
+      .mockResolvedValue({ targets: [{ id: 'ssh-new', label: 'new-box' }], repoReadoptions: [] })
+    const listTargets = vi
+      .fn<SshApiStub['listTargets']>()
+      .mockResolvedValueOnce([{ id: 'ssh-old', label: 'old-box' }])
+      .mockResolvedValue([
+        { id: 'ssh-old', label: 'old-box' },
+        { id: 'ssh-new', label: 'new-box' }
+      ])
+    stubWindow({
+      importConfig,
+      listTargets,
+      listRemovedTargetLabels: () => Promise.resolve({}),
+      getState: () => Promise.resolve(null)
+    })
+
+    registerDirectSshStateIpcBridge(unsubs)
+    await settle()
+    await settle()
+
+    expect(importConfig).toHaveBeenCalledWith()
+    expect(useAppStore.getState().sshTargetLabels.get('ssh-new')).toBe('new-box')
   })
 
   it('names a ghost host once its tombstone label lands', async () => {

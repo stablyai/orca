@@ -1,6 +1,5 @@
 // Parked panes update command status without pane-specific input handling.
 import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { isShellProcess } from '../../../../shared/shell-process-detection'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
@@ -13,7 +12,7 @@ import {
   setCommandCodeDoneSettleExecutor
 } from './command-code-done-settle'
 import { canCommandCodeOutputOwnPane } from './command-code-output-ownership'
-import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty'
+import { isRemoteExecutionHostPtyId } from '../../../../shared/remote-execution-host-pty-id'
 
 export type ParkedTerminalCommandStatusPolicy = {
   onCommandFinished: (bestEffortExitCode: number | null) => void
@@ -127,7 +126,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       return
     }
     // Why: a parked pane holds no remote incarnation to fence host evidence with, so it has no answer.
-    const remote = isRemoteExecutionHostPtyId(ptyId) || parseAppSshPtyId(ptyId) !== null
+    const remote = isRemoteExecutionHostPtyId(ptyId)
     let processName: string | null = null
     if (!remote) {
       try {

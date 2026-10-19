@@ -1,6 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
+import { useAppStore } from '@/store'
+import {
+  resolveDismissedOnboardingFolderAgentLaunch,
+  revealOnboardingFolderWithAgentLaunch
+} from '@/lib/onboarding-folder-agent-launch'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+} from '../../../../shared/protocol-version'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 
 const worktreeActivation = vi.hoisted(() => ({
@@ -10,6 +19,13 @@ const worktreeActivation = vi.hoisted(() => ({
 vi.mock('../../lib/worktree-activation', () => ({
   activateAndRevealWorktree: worktreeActivation.activateAndRevealWorktree
 }))
+
+vi.mock('@/lib/new-workspace', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  CLIENT_PLATFORM: 'win32'
+}))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
+afterEach(() => vi.restoreAllMocks())
 
 const reposAdd = vi.fn()
 const worktreesList = vi.fn()
@@ -83,3 +99,73 @@ describe('repo slice skipped-onboarding folder startup', () => {
     )
   })
 })
+
+it.each(['paired-linux', 'local-bash', 'withheld', 'structured-withheld'] as const)(
+  'reveals onboarding folder using execution facts: %s',
+  async (target) => {
+    const store = createTestStore()
+    const hostId = target === 'local-bash' ? 'local' : 'runtime:box'
+    const worktree = makeWorktree({ id: 'repo::/folder', repoId: 'repo', path: '/folder', hostId })
+    store.setState({
+      repos: [{ id: 'repo', path: '/folder', displayName: 'Folder', badgeColor: '', addedAt: 1 }],
+      worktreesByRepo: { repo: [worktree] },
+      settings: {
+        ...getDefaultSettings('/tmp/orca-workspaces'),
+        defaultTuiAgent: 'claude',
+        experimentalNativeChat: true,
+        nativeChatProviders: { claude: target === 'structured-withheld' },
+        terminalWindowsShell: 'C:\\Program Files\\Git\\bin\\bash.exe',
+        agentDefaultArgs: { claude: '--append-system-prompt "don\'t edit"' }
+      },
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'box',
+          {
+            checkedAt: 1,
+            status: {
+              runtimeId: 'box',
+              rendererGraphEpoch: 0,
+              graphStatus: 'ready',
+              authoritativeWindowId: null,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              ...(target === 'paired-linux' ? { hostPlatform: 'linux' as const } : {}),
+              capabilities: [
+                STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+                STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+              ]
+            }
+          }
+        ]
+      ])
+    })
+    vi.spyOn(useAppStore, 'getState').mockImplementation(store.getState)
+    const launch = await resolveDismissedOnboardingFolderAgentLaunch({
+      store: store.getState(),
+      worktreeId: worktree.id,
+      executionHostId: hostId,
+      onboarding: { ...getDefaultOnboardingState(), outcome: 'dismissed' },
+      hasExistingProject: false
+    })
+    if (target === 'structured-withheld') {
+      expect(launch.plan?.route).toBe('structured-native-chat')
+      expect(launch.startup).toBeUndefined()
+      return
+    }
+    await revealOnboardingFolderWithAgentLaunch({
+      worktreeId: worktree.id,
+      executionHostId: undefined,
+      launch
+    })
+    expect(worktreeActivation.activateAndRevealWorktree).toHaveBeenCalledWith(
+      worktree.id,
+      target === 'withheld'
+        ? { sidebarRevealBehavior: 'auto' }
+        : expect.objectContaining({
+            startup: expect.objectContaining({
+              command: `claude '--append-system-prompt' 'don'"'"'t edit'`
+            })
+          })
+    )
+  }
+)

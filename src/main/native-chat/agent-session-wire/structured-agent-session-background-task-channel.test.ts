@@ -74,7 +74,7 @@ describe('the background-task channel', () => {
 
   // A task that finished while no pane listened, then an idle sweep that stopped the provider:
   // a pane resuming must read "none", not silence it would take as "unchanged" (#24227).
-  // An idle parent whose live background child the store had no room for: no row lists it, so
+  // An idle parent whose live background child the store refused: no row lists it, so
   // the strip must stay and say so rather than read as nothing running.
   it('keeps the strip, with its Stop, for work the host could not record', () => {
     const { sessions, channel, session } = channelOver(

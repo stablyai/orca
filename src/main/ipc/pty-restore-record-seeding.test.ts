@@ -576,10 +576,32 @@ describe('registerPtyHandlers', () => {
     clearProviderPtyState(first.id)
 
     expect(getPtyIdForPaneKey(stablePaneKey)).toBe(second.id)
-    expect(clearAgentHookPaneStateMock).not.toHaveBeenCalledWith(stablePaneKey)
+    expect(clearAgentHookPaneStateMock).not.toHaveBeenCalled()
 
     clearProviderPtyState(second.id)
     expect(getPtyIdForPaneKey(stablePaneKey)).toBeUndefined()
+    expect(clearAgentHookPaneStateMock).toHaveBeenCalledWith(stablePaneKey, {
+      forgetAgentExit: true
+    })
+  })
+  // Why: a disconnect that can reconnect is no death, so the hook store keeps the agent's proven exit.
+  it('keeps the proven agent exit when a PTY is cleared for a disconnect', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const stablePaneKey = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })
+    const ptyId = getPtyIdForPaneKey(stablePaneKey)
+    expect(ptyId).toBeDefined()
+    clearAgentHookPaneStateMock.mockClear()
+
+    clearProviderPtyState(ptyId ?? '', { preserveAgentSessionOwners: true })
+
     expect(clearAgentHookPaneStateMock).toHaveBeenCalledWith(stablePaneKey)
   })
   it('does not let restart-era alias cleanup clear a newer pane-key owner', async () => {

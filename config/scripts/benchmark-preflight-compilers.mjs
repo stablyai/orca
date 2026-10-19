@@ -32,8 +32,9 @@ const report = {
     memoryBytes: totalmem(),
     cores: availableParallelism()
   },
-  method:
-    'Four counterbalanced pairs per comparison. Cold removes build state, not filesystem caches. Warm immediately follows its cold run. Same commit and project registry for every arm.',
+  method: parityOnly
+    ? 'Diagnostic probes and normalized file-list parity for every registered project; no timing comparison.'
+    : 'Four counterbalanced pairs per comparison. Cold removes build state, not filesystem caches. Warm immediately follows its cold run. Same commit and project registry for every arm.',
   measurements: [],
   comparisons: {},
   parity: []
@@ -41,7 +42,15 @@ const report = {
 const save = () =>
   writeFileSync(path.join(output, `${reportName}.json`), `${JSON.stringify(report, null, 2)}\n`)
 const command = (program, args, label) =>
-  measurePreflightCommand({ program, args, label, root, output, env })
+  measurePreflightCommand({
+    program,
+    args,
+    label,
+    root,
+    output,
+    env,
+    ...(process.platform === 'win32' ? { timeoutMs: 900_000 } : {})
+  })
 const version = await command(bun, ['--version'], 'bun-version')
 if (version.code !== 0 || version.stdout.trim() !== '1.4.3') {
   throw new Error('Pin Bun 1.4.3 for this comparison')

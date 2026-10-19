@@ -121,7 +121,7 @@ export class StructuredAgentSessionJournalProjections {
         state: withDiedTurnVerdict(
           projectStructuredAgentSessionStatusState(
             snapshot.items,
-            snapshot.submissions,
+            snapshot.submissions.map(work.publishedSubmission),
             fence,
             work.scope
           ),

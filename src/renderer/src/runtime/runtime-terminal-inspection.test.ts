@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  inspectRuntimeTerminalProcess,
-  recordRuntimeTerminalInputForPtyId,
-  sendRuntimePtyInput,
-  sendRuntimePtyInputVerified
-} from './runtime-terminal-inspection'
+import { inspectRuntimeTerminalProcess, sendRuntimePtyInput } from './runtime-terminal-inspection'
+import { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
+import { sendRuntimePtyInputVerified } from './runtime-terminal-verified-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../shared/clipboard-text'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,

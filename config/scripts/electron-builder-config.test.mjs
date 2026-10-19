@@ -165,7 +165,7 @@ describe('electron-builder config', () => {
 
   // Why: out/electron-dev holds `pnpm dev`'s cached Electron.app copies (~270MB per branch).
   // CI never creates it, so only a local package would have hit this -- silently, as bulk.
-  it('keeps cached dev Electron bundles out of app.asar', () => {
+  it('keeps cached dev Electron bundles and Vite dependencies out of app.asar', () => {
     const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
     matcher.prependPattern('**/*')
     const isPacked = matcher.createFilter()
@@ -173,7 +173,10 @@ describe('electron-builder config', () => {
 
     for (const devBundlePath of [
       'out/electron-dev/1a2b3c4d5e6f/Orca: dev.app/Contents/MacOS/Electron',
-      'out/electron-dev/1a2b3c4d5e6f/orca-dev-electron-app.json'
+      'out/electron-dev/1a2b3c4d5e6f/orca-dev-electron-app.json',
+      '.cache/vite/renderer/deps/react.js',
+      '.cache/vite/web/deps/react.js',
+      '.cache/vite.lock/owner'
     ]) {
       expect(packs(devBundlePath)).toBe(false)
     }
@@ -410,6 +413,26 @@ describe('electron-builder config', () => {
     ).toBe(true)
   })
 
+  // Why: opening a packed file reads a one-time /tmp extract; once a /tmp sweep removes it, the
+  // web client answers an empty 500 and phone bundle reads fail until restart (#27976).
+  it('unpacks the web and mobile bundles a host serves by opening their files', () => {
+    const matcher = new FileMatcher(
+      '/app',
+      '/dest',
+      (value) => value,
+      electronBuilderConfig.asarUnpack
+    )
+    const isUnpacked = matcher.createFilter()
+    for (const webPath of [
+      'out/web/web-index.html',
+      'out/web/assets/index-abc123.js',
+      'out/mobile-web/manifest.json',
+      'out/mobile-web/assets/index-abc123.js'
+    ]) {
+      expect(isUnpacked(join('/app', webPath), { isDirectory: () => false })).toBe(true)
+    }
+  })
+
   it('keeps the worker-thread hang watchdog inside app.asar', () => {
     expect(electronBuilderConfig.asarUnpack).not.toContain(
       'out/main/main-thread-hang-watchdog-entry.js'
@@ -571,6 +594,20 @@ describe('arch-aware packaging guard', () => {
 
   it('allows packaging the host platform and architecture', () => {
     expect(() => packHost(HOST_ARCH)).not.toThrow()
+  })
+
+  it('refuses to package a dark layout-owner build', () => {
+    const previous = process.env.ORCA_LAYOUT_OWNER
+    process.env.ORCA_LAYOUT_OWNER = 'main'
+    try {
+      expect(() => packHost(HOST_ARCH)).toThrow('ORCA_LAYOUT_OWNER=main')
+    } finally {
+      if (previous === undefined) {
+        delete process.env.ORCA_LAYOUT_OWNER
+      } else {
+        process.env.ORCA_LAYOUT_OWNER = previous
+      }
+    }
   })
 
   it('requires the other architecture natives to be installed', () => {

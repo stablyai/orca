@@ -199,6 +199,7 @@
     "../src/main/codex/codex-trust-grant-ledger.ts",
     "../src/main/codex/codex-user-hook-trust-moves.ts",
     "../src/main/codex/codex-wsl-hook-install-plan.ts",
+    "../src/main/wsl-interop-spawn-directory.ts",
     "../src/main/codex/config-settings-baseline.ts",
     "../src/main/codex/config-settings-conflict-resolution.ts",
     "../src/main/codex/config-plugin-registration-promotion.ts",

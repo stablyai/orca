@@ -49,7 +49,7 @@ function controllerWith(forceReconnectHost: ForceReconnect) {
       pairingRejected: false,
       relayHostReachability: 'connecting'
     },
-    settings: { activeFilterCount: 0, selectedSortLabel: 'Recent' },
+    settings: { activeFilterCount: 0 },
     state: { hostName: 'Desk', view: { groupBy: 'none' }, showSearch: false }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the header reads only these members on a narrow, non-embedded layout; the rest of the controller is unreachable from it.

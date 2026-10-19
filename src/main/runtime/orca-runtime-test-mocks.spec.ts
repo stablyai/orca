@@ -220,6 +220,7 @@ export {
   listGitLabWorkItemsMock,
   listGitLabIssuesMock,
   listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
   listGitLabTodosMock,
   getGitLabProjectRefForRemoteMock,
   getGitLabWorkItemByProjectRefMock,

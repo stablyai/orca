@@ -1,10 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RouteDependencies = {
   routes: { pathname: string; params?: Record<string, string> }[]
-  natives: number
+  refusals: number
   /** `mount:<pathname>` / `unmount:<pathname>`, which is the only thing that tells a remount from
    *  a prop update — and a remount is what drops the old session's bridge and its grants. */
   lifecycle: string[]
@@ -15,7 +15,7 @@ type RouteDependencies = {
 
 const dependencies = vi.hoisted((): RouteDependencies => ({
   routes: [],
-  natives: 0,
+  refusals: 0,
   lifecycle: [],
   clears: [],
   params: {}
@@ -31,7 +31,7 @@ vi.mock('react-native', () => ({
 }))
 
 // The workspace route reads the desktop's connection to decide whether a server is reachable.
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: null, state: 'disconnected' })
 }))
 vi.mock('../transport/workspace-server', () => ({
@@ -46,9 +46,9 @@ vi.mock('expo-router', () => ({
   })
 }))
 
-vi.mock('../session/MobileSessionRouteScreen', () => ({
-  MobileSessionRouteScreen: () => {
-    dependencies.natives += 1
+vi.mock('./PageRouteUnavailableScreen', () => ({
+  PageRouteUnavailableScreen: () => {
+    dependencies.refusals += 1
     return null
   }
 }))
@@ -109,16 +109,11 @@ beforeEach(() => {
   dependencies.routes.length = 0
   dependencies.lifecycle.length = 0
   dependencies.clears.length = 0
-  dependencies.natives = 0
+  dependencies.refusals = 0
   dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1', name: 'my worktree' }
-  vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', 'ota')
 })
 
-afterEach(() => {
-  vi.unstubAllEnvs()
-})
-
-describe('the native session route that hands off to the shell', () => {
+describe('the session route that hands off to the shell', () => {
   it('opens the shell on this screen, with the name as the search half', async () => {
     await renderSession()
     expect(dependencies.routes).toEqual([
@@ -149,12 +144,14 @@ describe('the native session route that hands off to the shell', () => {
     expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test(pathname)).toBe(true)
   })
 
-  it('stays native for a dot-segment id the bridge would refuse', async () => {
+  it('refuses a dot-segment id the bridge would refuse', async () => {
     for (const hostId of ['.', '..']) {
       dependencies.params = { hostId, worktreeId: 'wt-1' }
       dependencies.routes.length = 0
+      dependencies.refusals = 0
       await renderSession()
       expect(dependencies.routes, hostId).toEqual([])
+      expect(dependencies.refusals, hostId).toBeGreaterThan(0)
     }
   })
 
@@ -169,13 +166,6 @@ describe('the native session route that hands off to the shell', () => {
       )
       expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test(pathname), hostId).toBe(true)
     }
-  })
-
-  it('renders the native screen in a build without the shell, which is every store build', async () => {
-    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', undefined)
-    await renderSession()
-    expect(dependencies.routes).toEqual([])
-    expect(dependencies.natives).toBeGreaterThan(0)
   })
 
   /**

@@ -10,8 +10,10 @@ export const LOCAL_READ_OPEN_FLAGS = constants.O_RDONLY | (constants.O_NONBLOCK 
 const LOCAL_WRITE_PROBE_FLAGS = constants.O_WRONLY | (constants.O_NONBLOCK ?? 0)
 const READ_CHUNK_BYTES = 1024 * 1024
 
+export class FileTooLargeError extends Error {}
+
 export function fileTooLargeError(size: number, limit: number): Error {
-  return new Error(
+  return new FileTooLargeError(
     `File too large: ${(size / 1024 / 1024).toFixed(1)}MB exceeds ${limit / 1024 / 1024}MB limit`
   )
 }

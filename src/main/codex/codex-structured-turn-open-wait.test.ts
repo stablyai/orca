@@ -23,9 +23,9 @@ const stop = (rig: Rig) => rig.adapter.cancelTurn({ sessionId: 'session-1', fenc
 /** A cold send Codex answered into `turn-1` and has not opened. */
 async function answeredColdSend(rig: Rig): Promise<void> {
   const sending = rig.send('client-1')
-  await vi.waitFor(() => expect(rig.turns.turnId).toBe('turn-1'))
   // The send is not held for the turn to open: its handover ends at the answer.
   expect(await settledWithin(sending)).toEqual(ADMITTED)
+  expect(rig.turns.turnId).toBe('turn-1')
 }
 
 const interruptedTurns = (rig: Rig) => rig.interrupts().map((call) => call.params?.turnId)

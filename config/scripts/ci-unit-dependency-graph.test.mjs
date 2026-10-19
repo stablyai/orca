@@ -1,8 +1,11 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
-import { collectUnitDependencyGraph } from './ci-unit-dependency-graph.mjs'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  buildUnitDependencyGraph,
+  collectUnitDependencyGraph
+} from './ci-unit-dependency-graph.mjs'
 import { selectUnitFiles } from './ci-unit-selection.mjs'
 
 const temporary = []
@@ -141,3 +144,35 @@ it.each([
     })
   }
 )
+
+describe('unit graph import resolution', () => {
+  it('keeps first-match precedence across literal paths, extensions and index files', () => {
+    const sources = new Map([
+      ['src/leaf', ''],
+      ['src/leaf.ts', ''],
+      ['src/leaf.tsx', ''],
+      ['src/component.tsx', ''],
+      ['src/component.js', ''],
+      ['src/folder/index.ts', ''],
+      ['src/folder/index.tsx', ''],
+      ['src/config.json', '{}'],
+      ['src/renderer/src/view.tsx', ''],
+      ['src/use.ts', "import './leaf'; import './component'; import './folder'; import './config'"],
+      ['src/aliases.ts', "import '@renderer/view'; import '@/view'; import 'external-package'"],
+      ['src/missing.ts', "import './missing-file'"],
+      ['src/dynamic.ts', 'import(variablePath)'],
+      ['config/owner.mjs', "import '../src/leaf'"],
+      ['tests/owner.ts', "import '../src/leaf'"]
+    ])
+    expect(buildUnitDependencyGraph(sources)).toEqual({
+      reverse: new Map([
+        ['src/leaf', new Set(['src/use.ts', 'config/owner.mjs', 'tests/owner.ts'])],
+        ['src/component.tsx', new Set(['src/use.ts'])],
+        ['src/folder/index.ts', new Set(['src/use.ts'])],
+        ['src/config.json', new Set(['src/use.ts'])],
+        ['src/renderer/src/view.tsx', new Set(['src/aliases.ts'])]
+      ]),
+      opaque: new Set(['src/missing.ts', 'src/dynamic.ts', 'config/owner.mjs', 'tests/owner.ts'])
+    })
+  })
+})

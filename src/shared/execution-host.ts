@@ -77,10 +77,26 @@ export function toRuntimeExecutionHostId(environmentId: string): `runtime:${stri
 // SSH/run-target surfaces. The renderer can't read the target.owner field, so it
 // recognizes them by their deterministic id prefix. getRuntimeOwnedSshTargetId
 // (main) builds on this same prefix to keep the two in sync.
+// The prefix also means "address and filesystem are replaced every provision", so only
+// on-demand-runtime owners may use it; main decides hidden-ness from `owner` alone.
 export const RUNTIME_OWNED_SSH_TARGET_ID_PREFIX = 'runtime-ssh-'
+/** Machine-provider targets: owned like recipe VMs, but persistent, so not `runtime-ssh-`. */
+export const MACHINE_SSH_TARGET_ID_PREFIX = 'machine-'
 
+/** A recipe VM's target, whose address and filesystem are replaced every provision. */
 export function isRuntimeOwnedSshTargetId(targetId: string | null | undefined): boolean {
   return typeof targetId === 'string' && targetId.startsWith(RUNTIME_OWNED_SSH_TARGET_ID_PREFIX)
+}
+
+/**
+ * Any target Orca owns as plumbing, by id because the renderer never sees `owner`: hidden from
+ * SSH-host surfaces and never dialed by the renderer, which would dispose its owner's session.
+ */
+export function isOwnedSshTargetId(targetId: string | null | undefined): boolean {
+  return (
+    isRuntimeOwnedSshTargetId(targetId) ||
+    (typeof targetId === 'string' && targetId.startsWith(MACHINE_SSH_TARGET_ID_PREFIX))
+  )
 }
 
 export function parseExecutionHostId(value: string | null | undefined): ParsedExecutionHost | null {
@@ -124,6 +140,15 @@ export function parseExecutionHostId(value: string | null | undefined): ParsedEx
     }
   }
   return null
+}
+
+/** Whether a host id names another machine; an absent or unparsable id reads as this one. */
+export function isLocalExecutionHost(value: string | null | undefined): boolean {
+  return parseExecutionHostId(value)?.kind === 'local'
+}
+
+export function isRemoteExecutionHostId(value: string | null | undefined): boolean {
+  return (parseExecutionHostId(value)?.kind ?? 'local') !== 'local'
 }
 
 /**
@@ -199,6 +224,21 @@ export function getRepoExecutionHostId(repo: {
     return executionHostId
   }
   return getConnectionExecutionHostId(normalizeHostPart(repo.connectionId))
+}
+
+/**
+ * Whether a row's files are on the machine whose catalog holds it. Strict: an unknown host id or a
+ * stale `connectionId` beside `local` reads as elsewhere, so it never matches a local checkout.
+ */
+export function isRepoOnCatalogHost(repo: {
+  connectionId?: string | null
+  executionHostId?: string | null
+}): boolean {
+  const executionHostId = normalizeHostPart(repo.executionHostId)
+  return (
+    (executionHostId === null || executionHostId === LOCAL_EXECUTION_HOST_ID) &&
+    normalizeHostPart(repo.connectionId) === null
+  )
 }
 
 export function getSshTargetIdForExecutionHost(

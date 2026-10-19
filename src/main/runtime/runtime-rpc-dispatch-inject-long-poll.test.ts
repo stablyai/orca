@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { readRuntimeMetadata } from './runtime-metadata'
-import { classifyRuntimeLongPoll, OrcaRuntimeRpcServer } from './runtime-rpc'
+import { classifyRuntimeLongPoll } from './runtime-rpc/runtime-rpc-long-poll'
+import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { openFramedSession, sleep } from './runtime-rpc-test-harness'
 
 // `dispatch --inject` into a chat waits for its agent to accept the turn, which can outlast the

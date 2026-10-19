@@ -48,7 +48,7 @@ export {
 export function createCodexStructuredItemStreams(
   deps: CodexItemStreamDeps
 ): CodexStructuredItemStreams {
-  const states = new CodexItemStreamRetention(deps.maxMetadataBytes)
+  const states = new CodexItemStreamRetention()
   const checkpointLengths = new Map<string, number>()
   const pendingCheckpoints = new Set<string>()
   // Which thread and turn produced each stream, resolved to its attribution per append
@@ -158,7 +158,7 @@ export function createCodexStructuredItemStreams(
     itemId: string,
     type: string,
     params: unknown
-  ): CodexItemStreamState | null => {
+  ): CodexItemStreamState => {
     const key = codexStructuredItemKey(threadId, itemId)
     const existing = states.get(key)
     if (existing) {
@@ -167,9 +167,7 @@ export function createCodexStructuredItemStreams(
     const item = { type, id: itemId }
     const turnId = deps.turnIdFor(threadId, params)
     const state = { item, identity: deps.identityFor(threadId, turnId, item) }
-    if (!states.retain(key, state)) {
-      return null
-    }
+    states.retain(key, state)
     producers.set(key, { threadId, turnId })
     trimStates()
     return state
@@ -214,19 +212,11 @@ export function createCodexStructuredItemStreams(
     get persistentCount() {
       return states.persistentSize
     },
-    canTrack: (threadId, item, identity) =>
-      states.canRetain(
-        codexStructuredItemKey(threadId, item.id),
-        codexItemStreamState(item, identity)
-      ),
     track: (threadId, turnId, item, identity, startedAt) => {
       const key = codexStructuredItemKey(threadId, item.id)
-      if (!states.retain(key, codexItemStreamState(item, identity, startedAt))) {
-        return false
-      }
+      states.retain(key, codexItemStreamState(item, identity, startedAt))
       producers.set(key, { threadId, turnId })
       trimStates()
-      return true
     },
     handle: (threadId, method, params) => {
       const paramsRecord = readCodexItemStreamRecord(params)
@@ -243,9 +233,6 @@ export function createCodexStructuredItemStreams(
         const key = codexStructuredItemKey(threadId, itemId)
         const streamFlushed = coalescer.flush(key)
         const state = ensureState(threadId, itemId, 'fileChange', params)
-        if (!state) {
-          return { handled: true, admission: { accepted: false, reason: 'failed' } }
-        }
         state.item = { ...state.item, changes: paramsRecord.changes }
         const translated = codexJournalItem(state.item)
         if (translated.body) {
@@ -285,9 +272,6 @@ export function createCodexStructuredItemStreams(
         return { handled: true, admission: { accepted: true } }
       }
       const state = ensureState(threadId, itemId, type ?? 'reasoning', params)
-      if (!state) {
-        return { handled: true, admission: { accepted: false, reason: 'failed' } }
-      }
       const delta = method === REASONING_PART_METHOD ? '\n' : paramsRecord.delta
       if (typeof delta === 'string') {
         const key = codexStructuredItemKey(threadId, state.item.id)

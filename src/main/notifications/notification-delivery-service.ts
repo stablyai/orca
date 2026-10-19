@@ -14,7 +14,7 @@ import type {
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from '../ipc/notification-options'
 import { translateMain } from '../i18n/main-i18n'
-import { reserveNotificationCooldown } from '../ipc/notification-burst-cooldown'
+import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 
 export type NotificationDeliveryDependencies = {
   readNotificationSettings: () => NotificationSettings

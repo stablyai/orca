@@ -4,9 +4,10 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import {
+  isLocalExecutionHost,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
@@ -105,7 +106,7 @@ function getSidebarWatchConsumer(
   worktreeId: string
 ): WatchConsumer {
   // Why: sidebar watcher must follow the selected worktree's host owner, not the host currently focused in the UI.
-  const owner = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  const owner = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
   if (owner) {
     return { owner, hostId: toRuntimeExecutionHostId(owner) }
   }
@@ -124,10 +125,6 @@ function addWatchConsumer(
     consumersByWorktreeId.set(worktreeId, consumers)
   }
   consumers.set(`${consumer.owner ?? ''}::${consumer.hostId ?? ''}`, consumer)
-}
-
-function isLocalHostStamp(value: string | null | undefined): boolean {
-  return parseExecutionHostId(value)?.kind === 'local'
 }
 
 function canWatchLocalWindowsWslAliases(args: {
@@ -150,14 +147,14 @@ function canWatchLocalWindowsWslAliases(args: {
     return (
       !!args.repo &&
       !args.worktree.runtimeOwnerEnvironmentId?.trim() &&
-      isLocalHostStamp(args.worktree.hostId) &&
-      isLocalHostStamp(args.repo.executionHostId)
+      isLocalExecutionHost(args.worktree.hostId) &&
+      isLocalExecutionHost(args.repo.executionHostId)
     )
   }
   return (
     !!args.folderWorkspace &&
-    isLocalHostStamp(args.folderWorkspace.executionHostId) &&
-    isLocalHostStamp(args.projectGroup?.executionHostId)
+    isLocalExecutionHost(args.folderWorkspace.executionHostId) &&
+    isLocalExecutionHost(args.projectGroup?.executionHostId)
   )
 }
 

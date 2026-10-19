@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -209,4 +209,46 @@ test('manual workflow freezes source and limits Windows occupancy without changi
   assert.equal(install.with['cache-pnpm-store'], 'false')
   assert.equal(workflow.jobs.compare.steps.at(-1).if, 'always()')
   assert(!Object.hasOwn(workflow.jobs, 'verify'))
+})
+
+test('source validation allows owned workflow receipts but rejects unrelated untracked source', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'orca-native-output-ignore-'))
+  const git = async (args) => {
+    const result = await runProcess({ program: 'git', args, cwd: directory, timeoutMs: 10_000 })
+    assert.equal(result.code, 0)
+    assert(!result.timedOut && !result.outputTruncated)
+    return result.stdout
+  }
+  try {
+    await git(['init', '--quiet'])
+    writeFileSync(
+      join(directory, '.gitignore'),
+      readFileSync(join(import.meta.dirname, '../../.gitignore'))
+    )
+    await git(['add', '.gitignore'])
+    const output = join(directory, '.build/windows-native-benchmark')
+    mkdirSync(join(output, 'security'), { recursive: true })
+    writeFileSync(
+      join(output, 'job-start.json'),
+      JSON.stringify({ startedAt: new Date().toISOString() })
+    )
+    writeFileSync(
+      join(output, 'security/receipt.json'),
+      JSON.stringify({ qualification: 'incomplete' })
+    )
+    const untracked = ['ls-files', '--others', '--exclude-standard']
+    assert.equal(await git(untracked), '')
+    mkdirSync(join(directory, 'config/scripts'), { recursive: true })
+    writeFileSync(
+      join(directory, 'config/scripts/untracked-source.mjs'),
+      'export const source = true'
+    )
+    writeFileSync(join(directory, '.build/unrelated-source.mjs'), 'export const source = true')
+    assert.deepEqual((await git(untracked)).trim().split('\n').sort(), [
+      '.build/unrelated-source.mjs',
+      'config/scripts/untracked-source.mjs'
+    ])
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
 })

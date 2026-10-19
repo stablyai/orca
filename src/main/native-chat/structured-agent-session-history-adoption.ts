@@ -2,6 +2,7 @@
 //
 // Credential homes and transcripts must come from runtime-owned facts, never client-supplied paths.
 
+import { chatAgentsShareConversations } from '../../shared/structured-agent-cli-conversation-adoption'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
 import type {
@@ -18,6 +19,7 @@ import {
 
 export type StructuredAgentSessionAdoptionOwnership = {
   sessionId: string
+  workspaceId: string
   /** Any agent's chat may hold the conversation, though only one with an importer adopts. */
   provider: StructuredAgentId
   providerSessionId: string
@@ -92,7 +94,7 @@ export function findConflictingStructuredAdoption(input: {
     input.ownership.find(
       (owner) =>
         owner.sessionId !== input.selfSessionId &&
-        owner.provider === input.agent &&
+        chatAgentsShareConversations(owner.provider, input.agent) &&
         owner.providerSessionId === input.providerSessionId
     ) ?? null
   )
@@ -107,7 +109,10 @@ export function structuredAdoptionConflictError(
     agentSessionLeaseAdmitsWriter(ownership.lease)
       ? 'agent_session_conflict'
       : 'agent_session_ownership_unknown',
-    { reason: 'conversationHeldElsewhere' }
+    {
+      reason: 'conversationHeldElsewhere',
+      owner: { sessionId: ownership.sessionId, workspaceId: ownership.workspaceId }
+    }
   )
 }
 

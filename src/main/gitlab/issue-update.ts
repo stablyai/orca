@@ -62,11 +62,9 @@ export async function updateIssue(
         ...glabHostEnvOptions(projectRef, connectionId)
       })
     } catch (err) {
+      // Why: glab exits 0 for an issue already in the target state, so every failure is real.
       const stderr = err instanceof Error ? err.message : String(err)
-      // Treat "already closed/reopened" as a no-op (matches gh path).
-      if (!stderr.toLowerCase().includes('already')) {
-        errors.push(classifyGlabError(stderr).message)
-      }
+      errors.push(classifyGlabError(stderr).message)
     } finally {
       release()
     }
@@ -111,12 +109,14 @@ export async function updateIssue(
     editArgs.push('--unlabel', label)
     hasEditArgs = true
   }
+  // Why: an unprefixed --assignee replaces every assignee and --unassign clears them all; glab
+  // reads a `+`/`-` prefix as add/remove (since at least v1.22).
   for (const assignee of updates.addAssignees ?? []) {
-    editArgs.push('--assignee', assignee)
+    editArgs.push(`--assignee=+${assignee}`)
     hasEditArgs = true
   }
   for (const assignee of updates.removeAssignees ?? []) {
-    editArgs.push('--unassignee', assignee)
+    editArgs.push(`--assignee=-${assignee}`)
     hasEditArgs = true
   }
 

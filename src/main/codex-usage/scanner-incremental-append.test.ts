@@ -129,7 +129,15 @@ vi.mock('../usage/jsonl-line-offsets', async () => {
   }
 })
 
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync, appendFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+  appendFileSync
+} from 'node:fs'
 import { scanCodexUsageFiles } from './scanner'
 import type { CodexUsagePersistedFile } from './types'
 
@@ -526,6 +534,8 @@ describe('scanCodexUsageFiles incremental append', () => {
     const original = `${sessionMeta('session-a')}${usageRecordRange(0, RESUMABLE_RECORDS)}`
     writeFileSync(rolloutPath, original, 'utf-8')
 
+    // Keep the rewrite observable on filesystems whose clock has not ticked yet.
+    utimesSync(rolloutPath, 1, 1)
     const first = await scanCodexUsageFiles([], [])
     expect(totalTokens(first.dailyAggregates)).toBe(RESUMABLE_RECORDS)
     expect(recordedResumeOffset(first.processedFiles, rolloutPath)).toBeGreaterThan(0)
@@ -536,6 +546,7 @@ describe('scanCodexUsageFiles incremental append', () => {
     writeFileSync(rolloutPath, replacement, 'utf-8')
     expect(statSync(rolloutPath).size).toBe(original.length)
 
+    expect(statSync(rolloutPath).mtimeMs).not.toBe(first.processedFiles[0]?.mtimeMs)
     const second = await scanCodexUsageFiles([], first.processedFiles)
     const fromScratch = await scanCodexUsageFiles([], [])
     expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)
@@ -608,12 +619,15 @@ describe('scanCodexUsageFiles incremental append', () => {
     expect(original.length - sharedHead.length).toBeLessThan(BOUNDARY_WINDOW_BYTES)
     writeFileSync(rolloutPath, original, 'utf-8')
 
+    // Keep the rewrite observable on filesystems whose clock has not ticked yet.
+    utimesSync(rolloutPath, 1, 1)
     const first = await scanCodexUsageFiles([], [])
     expect(totalTokens(first.dailyAggregates)).toBe(swappedTo)
     expect(recordedResumeOffset(first.processedFiles, rolloutPath)).toBeGreaterThan(0)
 
     writeFileSync(rolloutPath, replacement, 'utf-8')
 
+    expect(statSync(rolloutPath).mtimeMs).not.toBe(first.processedFiles[0]?.mtimeMs)
     const second = await scanCodexUsageFiles([], first.processedFiles)
     const fromScratch = await scanCodexUsageFiles([], [])
     expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)
@@ -628,12 +642,15 @@ describe('scanCodexUsageFiles incremental append', () => {
     const { original, replacement } = prefixSwapPair('session-prefix-rotated')
     writeFileSync(rolloutPath, original, 'utf-8')
 
+    // Keep the rewrite observable on filesystems whose clock has not ticked yet.
+    utimesSync(rolloutPath, 1, 1)
     const first = await scanCodexUsageFiles([], [])
     expect(totalTokens(first.dailyAggregates)).toBe(40)
 
     rmSync(rolloutPath)
     writeFileSync(rolloutPath, replacement, 'utf-8')
 
+    expect(statSync(rolloutPath).mtimeMs).not.toBe(first.processedFiles[0]?.mtimeMs)
     const second = await scanCodexUsageFiles([], first.processedFiles)
     const fromScratch = await scanCodexUsageFiles([], [])
     expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)
@@ -648,6 +665,8 @@ describe('scanCodexUsageFiles incremental append', () => {
     const { original, replacement } = prefixSwapPair('session-prefix-in-place')
     writeFileSync(rolloutPath, original, 'utf-8')
 
+    // Keep the rewrite observable on filesystems whose clock has not ticked yet.
+    utimesSync(rolloutPath, 1, 1)
     const first = await scanCodexUsageFiles([], [])
     expect(totalTokens(first.dailyAggregates)).toBe(40)
 
@@ -656,6 +675,7 @@ describe('scanCodexUsageFiles incremental append', () => {
     // Pins why this test is not a duplicate of the rotation case above.
     expect(statSync(rolloutPath).ino).toBe(inodeBefore)
 
+    expect(statSync(rolloutPath).mtimeMs).not.toBe(first.processedFiles[0]?.mtimeMs)
     const second = await scanCodexUsageFiles([], first.processedFiles)
     const fromScratch = await scanCodexUsageFiles([], [])
     expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)

@@ -5,8 +5,8 @@
  */
 import { connect, type Socket } from 'node:net'
 import type { ClientChannel } from 'ssh2'
-import type { SshConnection } from './ssh-connection'
-import type { StartedPortForward } from './ssh-port-forward-provider'
+import type { SshConnection } from './connection/ssh-connection'
+import type { StartedPortForward } from './port-forwarding/ssh-port-forward-provider'
 
 export type TcpForwardingVerdict = 'allowed' | 'refused' | 'unverifiable'
 

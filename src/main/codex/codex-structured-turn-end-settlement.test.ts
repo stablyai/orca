@@ -48,10 +48,10 @@ async function turnEndRig() {
     })
   // Codex answers a cold send before it opens the turn.
   const sendAndOpen = async (clientMessageId: string) => {
-    const sending = send(clientMessageId)
-    await vi.waitFor(() => expect(turns.turnId).not.toBeNull())
+    const outcome = await send(clientMessageId)
+    expect(turns.turnId).not.toBeNull()
     turns.start()
-    return sending
+    return outcome
   }
   const settledIds = () => settlements.map(({ clientMessageId }) => clientMessageId)
   const categoryOf = (settlement: LateSettlement | undefined) =>

@@ -34,14 +34,16 @@ import {
 import { getLocalWatcherRoot, getRemoteWatcherKey } from './filesystem-watcher-paths'
 import { reinstallRemoteWatchersForConnection } from './filesystem-watcher-remote-controller'
 import { reinstallRemoteWatchersForConnectionCore } from './filesystem-watcher-remote-provider-rearm'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
 import {
-  registerFilesystemWatcherHandlers,
-  closeAllWatchers,
   closeLocalWatcherForWorktreePath,
+  restoreLocalWatcherAfterFailedRemoval
+} from './filesystem-watcher-local-removal'
+import {
   closeRemoteWatcherForWorktreePath,
-  restoreLocalWatcherAfterFailedRemoval,
   restoreRemoteWatcherAfterFailedRemoval
-} from './filesystem-watcher'
+} from './filesystem-watcher-remote-removal'
 
 const handlers = new Map<string, (event: { sender: Sender }, args: WatchArgs) => Promise<void>>()
 function invoke(channel: string, sender: Sender, args: WatchArgs): Promise<void> {

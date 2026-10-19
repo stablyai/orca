@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ChecksPanelReviewHeader } from './ChecksPanel'
+import { ChecksPanelReviewHeader } from './checks-panel/review-header'
 import type { ChecksPanelHostedReviewModifierDestination } from './checks-panel-hosted-review-click-routing'
 
 vi.mock('@/components/ui/dropdown-menu', () => ({

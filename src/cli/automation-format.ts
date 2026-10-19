@@ -134,6 +134,14 @@ function formatAutomationRunPrecheck(run: AutomationRun): string {
   return output ? `${outcome}; ${output}` : outcome
 }
 
+export function formatAutomationRunsPage(result: {
+  runs: AutomationRun[]
+  nextCursor: string | null
+}): string {
+  const runs = formatAutomationRuns(result)
+  return result.nextCursor ? `${runs}\n\nNext page: --cursor ${result.nextCursor}` : runs
+}
+
 export function formatAutomationRuns(result: { runs: AutomationRun[] }): string {
   if (result.runs.length === 0) {
     return 'No automation runs found.'

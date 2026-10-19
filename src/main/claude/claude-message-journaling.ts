@@ -34,6 +34,7 @@ import type { ClaudeSubagentIdentities } from './claude-subagent-identities'
 import { claudeTurnOpenedBySendEcho, type ClaudeTurnSource } from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'
 import type { ClaudeAuthenticationFailures } from './claude-authentication-failures'
+import type { ClaudeThreadGoal } from './claude-thread-goal'
 
 export type ClaudeMessageJournalContext = {
   sink: StructuredAgentSessionEventSink
@@ -52,6 +53,7 @@ export type ClaudeMessageJournalContext = {
    *  latch; this module asks it rather than tracking a copy. */
   turn: ClaudeOpenTurn
   authenticationFailures: ClaudeAuthenticationFailures
+  threadGoal: ClaudeThreadGoal
 }
 
 export function journalClaudeMessage(
@@ -89,7 +91,11 @@ export function journalClaudeMessage(
       : envelope.parentToolUseId
   const stamp = ctx.corrections.stampFor(producerRef)
   const outputEnvelope = claudeOutputEnvelope(envelope)
-  const body = ctx.authenticationFailures.assistant(message) ?? claudeMessageBody(outputEnvelope)
+  ctx.threadGoal.observe(message)
+  const body =
+    ctx.authenticationFailures.assistant(message) ??
+    ctx.threadGoal.report(message, claudeMessageIdentity(envelope), observedAt) ??
+    claudeMessageBody(outputEnvelope)
   const identity =
     (body && envelope.role === 'assistant'
       ? ctx.streamedBlocks.reconcile(envelope)?.identity

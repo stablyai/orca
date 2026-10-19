@@ -4,7 +4,6 @@ import type {
   ManagedPaneInternal,
   PaneStyleOptions
 } from './pane-manager-types'
-import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { createDivider, disposeDivider } from './pane-divider'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
 import { safeFit } from './pane-fit'
@@ -27,8 +26,9 @@ type TreeOpsCallbacks = {
   getStyleOptions: () => PaneStyleOptions
   safeFit: (pane: ManagedPane) => void
   refitPanesUnder: (el: HTMLElement) => void
-  onLayoutChanged?: (intent?: PaneLayoutEditIntent) => void
+  onLayoutChanged?: () => void
   onDragActiveChange?: (active: boolean) => void
+  onDividerRatiosCommitted?: () => void
   isDestroyed?: () => boolean
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
 }
@@ -139,7 +139,8 @@ export function insertPaneNextTo(
   const divider = createDivider(isVertical, callbacks.getStyleOptions(), {
     refitPanesUnder: callbacks.refitPanesUnder,
     onLayoutChanged: callbacks.onLayoutChanged,
-    onDragActiveChange: callbacks.onDragActiveChange
+    onDragActiveChange: callbacks.onDragActiveChange,
+    onDividerRatiosCommitted: callbacks.onDividerRatiosCommitted
   })
 
   // Apply flex styles to both panes

@@ -1,3 +1,5 @@
+import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-image'
+
 /**
  * What picking media means to the screens, free of any device API.
  *
@@ -22,6 +24,27 @@ export type PickedMobileImage = {
   readonly uri?: string
 }
 
+/** Any file from the phone's file picker, read whole for the chat attachment upload. */
+export type PickedMobileFile = {
+  readonly name: string
+  readonly mime: string
+  readonly byteLength: number
+  // Raw base64 (no data: prefix).
+  readonly base64: string
+}
+
+/** The most a picked file may weigh: what the OTA shell stages, so both halves refuse alike. */
+export const MOBILE_PICKED_FILE_MAX_BYTES = CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
+
+export class MobileFileTooLargeError extends Error {
+  constructor(fileName: string | null) {
+    super(
+      `${fileName ?? 'That file'} is over ${Math.floor(MOBILE_PICKED_FILE_MAX_BYTES / (1024 * 1024))} MB`
+    )
+    this.name = 'MobileFileTooLargeError'
+  }
+}
+
 export class ImageLibraryPermissionError extends Error {
   constructor() {
     super('Photo library permission denied')
@@ -43,4 +66,6 @@ export class ImageLibraryPermissionError extends Error {
 export type MediaPicker = {
   pickImage: (source: MobileImageSource) => Promise<PickedMobileImage | null>
   pickImages: (source: MobileImageSource) => AsyncIterable<PickedMobileImage>
+  /** Files of any type, several at once; a cancelled picker yields nothing. */
+  pickFiles: () => AsyncIterable<PickedMobileFile>
 }

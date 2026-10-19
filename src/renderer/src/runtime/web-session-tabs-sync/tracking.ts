@@ -23,6 +23,7 @@ import {
   recordReceivedWebSessionTabsEnvironmentFrame
 } from './publisher-identity-fences'
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
+import { replayWebSessionClosesDueForSnapshot } from '../web-session-close-replay'
 
 export function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
   return (
@@ -110,6 +111,12 @@ export function recordReceivedWebSessionTabsSnapshot(
   // live one and locked it out of its own worktree.
   if (isRetiredSessionTabsPublicationEpoch(key, publicationEpoch)) {
     return frame
+  }
+  // Why at receipt: an unchanged snapshot is filtered before it is applied, and the reconnect
+  // snapshot is unchanged precisely when the host never received the close. Only a frame that
+  // states the worktree's contents may prove the host still holds, or no longer holds, the tab.
+  if (!isRetraction && hostSnapshotAffirmsWorktreeContents(snapshot)) {
+    replayWebSessionClosesDueForSnapshot(environmentId, snapshot)
   }
   // Neither a retraction nor a "nothing published yet" placeholder takes over publishing this
   // worktree, so neither may be noted as current: doing so retires the generation that is still

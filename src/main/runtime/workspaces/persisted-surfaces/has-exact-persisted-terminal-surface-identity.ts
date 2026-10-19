@@ -7,10 +7,7 @@ import type {
 } from '../../../../shared/runtime-types'
 
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
-import {
-  resolveTerminalSessionWorktreeId,
-  runtimeWorktreeIdsEqual
-} from '../../runtime-worktree-path-identity'
+import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { layoutContainsLeafId } from '../../../persistence/restoring-sessions/terminal-layout-normalization'
@@ -34,6 +31,7 @@ import type {
   ArtifactPublishedLink,
   ArtifactWriteRequest
 } from '../../../../shared/artifacts'
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends OrcaRuntimeWithAutomationOperations {
   protected abstract getOwnWorkspaceSessionForWorktree(
@@ -120,7 +118,7 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
     const pty = this.ptysById.get(candidate.ptyId)
     if (
       leaf?.ptyId === candidate.ptyId &&
-      runtimeWorktreeIdsEqual(leaf.worktreeId, candidate.worktreeId)
+      worktreeIdsEqual(leaf.worktreeId, candidate.worktreeId)
     ) {
       this.leaves.delete(leafKey)
       const surfaceHandle = this.handleByLeafKey.get(leafKey)
@@ -217,7 +215,7 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
     const identity = reveal?.identity
     return Boolean(
       identity &&
-      runtimeWorktreeIdsEqual(identity.worktreeId, candidate.worktreeId) &&
+      worktreeIdsEqual(identity.worktreeId, candidate.worktreeId) &&
       identity.tabId === candidate.tabId &&
       identity.leafId === candidate.leafId &&
       identity.ptyId === candidate.ptyId

@@ -8,7 +8,6 @@ import { selectExactWorkerProviderSession } from './orchestration/worker-provide
 import { sealedChildEnv } from './structured-session-child-env.test-support'
 import {
   StructuredWorkerIdentityRegistry,
-  isStructuredWorkerHandle,
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   sessionIdFromStructuredWorkerIncarnation,
@@ -18,6 +17,7 @@ import {
   structuredWorkerProcessIncarnation,
   structuredWorkerRecordIsCurrent
 } from './structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { ExecutionHostId } from '../../shared/execution-host'
 

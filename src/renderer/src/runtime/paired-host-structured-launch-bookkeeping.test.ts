@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
@@ -37,12 +38,18 @@ import {
   beginStructuredAgentSessionAuthoritativeInventory,
   resetStructuredAgentLaunchCancellationForTests,
   startStructuredAgentLaunchCancellationCleanup
-} from '@/lib/structured-agent-session-launch-cancellation'
+} from '@/lib/launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import {
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord
 } from '@/lib/structured-agent-session-launch-persistence'
 import { acceptPairedHostStructuredSessions } from './structured-agent-session-tab-retirement'
+
+const layoutOwner: StructuredLaunchSlotOwner = {
+  unifiedTabsByWorktree: {},
+  groupsByWorktree: {},
+  reorderUnifiedTabs: vi.fn()
+}
 
 const SERVER: RuntimeClientTarget = { kind: 'environment', environmentId: 'server-1' }
 const SERVER_HOST = 'runtime:server-1'
@@ -86,7 +93,7 @@ beforeEach(() => {
 
 describe('a chat closed before its create landed on a paired server', () => {
   it("survives this machine's inventory, so the server's late frame is still suppressed", () => {
-    markStructuredAgentSessionLaunchCancelled(WORKTREE, 'remote-chat', SERVER_HOST)
+    markStructuredAgentSessionLaunchCancelled(WORKTREE, 'remote-chat', SERVER_HOST, layoutOwner)
     // A local chat launch or resubscribe: an authoritative census of this machine only.
     retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
       new Set(['some-local-chat']),
@@ -102,7 +109,7 @@ describe('a chat closed before its create landed on a paired server', () => {
 
   // A tombstone guards a random session id, so it is inert once stale; its 30-day TTL ends it.
   it('after a reload is closed on the server when the chat appears, never on this machine', () => {
-    markStructuredAgentSessionLaunchCancelled(WORKTREE, 'remote-chat', SERVER_HOST)
+    markStructuredAgentSessionLaunchCancelled(WORKTREE, 'remote-chat', SERVER_HOST, layoutOwner)
     reload()
 
     const localCleanup = vi.fn(async () => 'closed')

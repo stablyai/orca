@@ -2,70 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   buildWindowsCmdShimCommandLine,
   isCmdInterpretedProgram,
+  parseWindowsCommandLine,
   quoteWindowsArgument
 } from './windows-command-line'
 import { WINDOWS_ARGUMENT_CORPUS } from './__fixtures__/windows-argument-corpus'
-
-/**
- * Decode a command line the way `CommandLineToArgvW` does, so the encoder is
- * checked against the parser it targets rather than against itself. `""` inside
- * a quoted run yields a literal quote, which is the property the cmd hop needs.
- */
-function parseCommandLineToArgv(line: string): string[] {
-  const argv: string[] = []
-  let current = ''
-  let quoted = false
-  let started = false
-  let index = 0
-  while (index < line.length) {
-    const char = line[index]!
-    if (!started && /\s/.test(char)) {
-      index += 1
-      continue
-    }
-    started = true
-    if (char === '\\') {
-      let backslashes = 0
-      while (line[index] === '\\') {
-        backslashes += 1
-        index += 1
-      }
-      if (line[index] === '"') {
-        current += '\\'.repeat(Math.floor(backslashes / 2))
-        if (backslashes % 2 === 1) {
-          current += '"'
-          index += 1
-        }
-      } else {
-        current += '\\'.repeat(backslashes)
-      }
-      continue
-    }
-    if (char === '"') {
-      if (quoted && line[index + 1] === '"') {
-        current += '"'
-        index += 2
-        continue
-      }
-      quoted = !quoted
-      index += 1
-      continue
-    }
-    if (!quoted && /\s/.test(char)) {
-      argv.push(current)
-      current = ''
-      started = false
-      index += 1
-      continue
-    }
-    current += char
-    index += 1
-  }
-  if (started) {
-    argv.push(current)
-  }
-  return argv
-}
 
 /** cmd tracks quote state by counting `"`; an odd count leaks operators. */
 function quoteParity(line: string): number {
@@ -74,13 +14,13 @@ function quoteParity(line: string): number {
 
 describe('quoteWindowsArgument', () => {
   it.each(WINDOWS_ARGUMENT_CORPUS)('round-trips $name through CommandLineToArgvW', ({ value }) => {
-    expect(parseCommandLineToArgv(quoteWindowsArgument(value))).toEqual([value])
+    expect(parseWindowsCommandLine(quoteWindowsArgument(value))).toEqual([value])
   })
 
   it('round-trips the whole corpus as a single multi-argument line', () => {
     const values = WINDOWS_ARGUMENT_CORPUS.map((entry) => entry.value)
     const line = values.map(quoteWindowsArgument).join(' ')
-    expect(parseCommandLineToArgv(line)).toEqual(values)
+    expect(parseWindowsCommandLine(line)).toEqual(values)
   })
 
   it('writes an embedded quote as "" so cmd quote parity stays even', () => {

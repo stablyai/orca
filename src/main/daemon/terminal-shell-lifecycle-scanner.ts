@@ -1,4 +1,5 @@
 import { buildProcessBoundaryGround } from '../../shared/terminal-mode-reset-profiles'
+import { closesAppOsc133Zone } from '../../shared/terminal-osc133-command-finished'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import { TerminalArmedInputModes } from './terminal-armed-input-modes'
 
@@ -20,10 +21,15 @@ const PRIVATE_MODE = /\x1b\[\?([0-9;]*)([hl])|\x9b\?([0-9;]*)([hl])/
 const KITTY_KEYBOARD = /\x1b\[([<>=])([0-9;]*)u|\x9b([<>=])([0-9;]*)u/
 // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
 const FULL_RESET = /\x1bc/
+// oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
+const MODIFY_OTHER_KEYS = /\x1b\[>4(?:;([0-9]*))?m|\x9b>4(?:;([0-9]*))?m/
 
-// Groups: 1 OSC 133 payload, 2/3 and 4/5 private-mode params + final, 6/7 and 8/9 kitty prefix + params.
+// Groups: 1 OSC 133 payload, 2/3 and 4/5 private-mode params + final, 6/7 and 8/9 kitty prefix + params,
+// 10 and 11 modifyOtherKeys level.
 const SEQUENCE_RE = new RegExp(
-  [LIFECYCLE_OSC, PRIVATE_MODE, KITTY_KEYBOARD, FULL_RESET].map((re) => re.source).join('|'),
+  [LIFECYCLE_OSC, PRIVATE_MODE, KITTY_KEYBOARD, FULL_RESET, MODIFY_OTHER_KEYS]
+    .map((re) => re.source)
+    .join('|'),
   'g'
 )
 
@@ -55,6 +61,8 @@ export class TerminalShellLifecycleScanner {
   private generationState = 0
   private altActive = false
   private commandEnteredAlternateScreen = false
+  // OSC 133 markers seen back to back since the last other output.
+  private adjacentMarkers = ''
   private readonly inputModes = new TerminalArmedInputModes()
 
   get owner(): TerminalOwner | undefined {
@@ -104,6 +112,9 @@ export class TerminalShellLifecycleScanner {
     // with no escape introducer must not pay the regex pass. Split sequences
     // stay correct because a partial one always left a non-empty scanTail.
     if (this.scanTail.length === 0 && !chunk.includes('\x1b') && !chunk.includes('\x9b')) {
+      if (chunk.length > 0) {
+        this.adjacentMarkers = ''
+      }
       return events
     }
     const previousTailLength = this.scanTail.length
@@ -112,8 +123,13 @@ export class TerminalShellLifecycleScanner {
     // The shared regex is safe because scan() is synchronous and never re-enters.
     SEQUENCE_RE.lastIndex = 0
     let match: RegExpExecArray | null
+    let outputEnd = 0
     while ((match = SEQUENCE_RE.exec(input)) !== null) {
       const oscPayload = match[1]
+      const markersBefore = match.index > outputEnd ? '' : this.adjacentMarkers
+      outputEnd = match.index + match[0].length
+      this.adjacentMarkers =
+        oscPayload === undefined ? '' : (markersBefore + oscPayload.slice(0, 1)).slice(-2)
       if (match[0] === '\x1bc') {
         this.revoke()
         this.inputModes.reset()
@@ -132,7 +148,8 @@ export class TerminalShellLifecycleScanner {
         if (marker === 'A') {
           this.inputModes.markPrompt()
         }
-        if (marker !== 'D') {
+        // Why: an app closing its own zone is still running, so its `D` proves no exit (#10923).
+        if (marker !== 'D' || closesAppOsc133Zone(markersBefore, oscPayload)) {
           continue
         }
         // An alternate screen or a command's input mode still up at command-finished
@@ -158,6 +175,15 @@ export class TerminalShellLifecycleScanner {
         if (cleanExit) {
           events.cleanExitCandidate = { generation: this.generationState }
         }
+        continue
+      }
+      if (match[0].endsWith('m')) {
+        // A disarm (level 0) is part of our own ground, so like kitty only an arm revokes.
+        const level = Number(match[10] ?? match[11] ?? '') || 0
+        if (level > 0) {
+          this.revoke()
+        }
+        this.inputModes.applyModifyOtherKeys(level)
         continue
       }
       const kittyPrefix = match[6] ?? match[8]
@@ -193,6 +219,9 @@ export class TerminalShellLifecycleScanner {
           }
         }
       }
+    }
+    if (input.length - this.scanTail.length > outputEnd) {
+      this.adjacentMarkers = ''
     }
     return events
   }

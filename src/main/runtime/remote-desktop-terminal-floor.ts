@@ -1,4 +1,4 @@
-import { clampTerminalViewport } from './terminal-viewport'
+import { clampTerminalViewport } from '../../shared/terminal-viewport'
 
 type Viewport = { cols: number; rows: number }
 type Viewer = Viewport & { clientId: string; activity: number }
@@ -10,6 +10,8 @@ export type RemoteDesktopTerminalFloorDependencies = {
   isMobileDriven: (ptyId: string) => boolean
   getTerminalSize: (ptyId: string) => Viewport | null
   resolveHostTarget: (ptyId: string) => Viewport
+  /** False on a headless host (orca serve, orcad), which has no pane to give a PTY's grid back to. */
+  hostShowsTerminals: () => boolean
   applyLayout: (ptyId: string, target: LayoutTarget) => Promise<{ ok: boolean }>
 }
 
@@ -202,9 +204,12 @@ export class RemoteDesktopTerminalFloor {
     }
     let changed = false
     let removedOwnerClientId: string | null = null
+    let removedOwnerViewport: Viewport | null = null
     for (const subscriptionKey of subscriptionKeys) {
       if (this.owners.get(ptyId) === subscriptionKey) {
-        removedOwnerClientId = viewers.get(subscriptionKey)?.clientId ?? null
+        const owner = viewers.get(subscriptionKey)
+        removedOwnerClientId = owner?.clientId ?? null
+        removedOwnerViewport = owner ? { cols: owner.cols, rows: owner.rows } : null
       }
       changed = viewers.delete(subscriptionKey) || changed
     }
@@ -236,7 +241,20 @@ export class RemoteDesktopTerminalFloor {
       }
     }
     this.bumpRevision(ptyId)
-    return removedOwnerClientId !== null ? this.applyLayout(ptyId) : Promise.resolve(true)
+    if (removedOwnerClientId === null) {
+      return Promise.resolve(true)
+    }
+    if (!this.owners.has(ptyId) && !this.dependencies.hostShowsTerminals()) {
+      // Why: reclaiming would restore the spawn grid nobody sees, so the next reveal replays a
+      // snapshot at a foreign grid and TUIs redraw twice (#15997). The orphan seat resumes it.
+      if (removedOwnerViewport) {
+        // Why the viewer's grid, not the PTY's: a phone may be fitting the PTY, and its later
+        // restore must return to the parked desktop grid rather than the spawn or phone grid.
+        this.hostReclaimTargets.set(ptyId, removedOwnerViewport)
+      }
+      return Promise.resolve(true)
+    }
+    return this.applyLayout(ptyId)
   }
 
   refreshViewer(

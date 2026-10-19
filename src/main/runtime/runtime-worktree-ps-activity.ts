@@ -17,7 +17,7 @@ import {
   mergeWorktreeSummaryStatus,
   type TitleDisplayClear
 } from './runtime-worktree-status-projection'
-import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
+import { worktreeIdsEqual } from '../../shared/worktree/id'
 
 export type RuntimeWorkingTerminalEvidence = {
   paneKey: string | null
@@ -65,7 +65,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     if (
       args.freshPtyLiveness !== null &&
       freshOwner?.connected &&
-      !runtimeWorktreeIdsEqual(freshOwner.worktreeId, leaf.worktreeId)
+      !worktreeIdsEqual(freshOwner.worktreeId, leaf.worktreeId)
     ) {
       continue
     }

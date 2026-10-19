@@ -1,4 +1,7 @@
 export const PROJECT_HOST_SETUP_RUNTIME_CAPABILITY = 'project-host-setup.v1' as const
+// Why: older hosts strip `hostId` from setup update/delete and act on the first same-id twin.
+export const PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY =
+  'project-host-setup.host-target.v1' as const
 export const TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY = 'task-source-context.v1' as const
 export const WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY = 'workspace-run-context.v1' as const
 export const WORKTREE_PROVISIONED_ROOT_RUNTIME_CAPABILITY = 'worktree.provisioned-root.v1' as const
@@ -94,6 +97,13 @@ export const SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY =
 // repeating the host's whole bounded list on every title tick.
 export const SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY =
   'session-tabs.retirement-proof-delta.v1' as const
+// Why: a client advertising this rebuilds each `updated` frame's tab list from the previous frame
+// on the same stream, so one tab's status change no longer re-sends every tab in the worktree.
+export const SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY = 'session-tabs.tab-delta.v1' as const
+// Why: a client advertising this reads `restoredUnconfirmed` agent rows as unverifiable; older
+// clients would read their last known state as live, so they keep the legacy `done` projection.
+export const AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY =
+  'agent-status.restored-unconfirmed.v1' as const
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
@@ -159,6 +169,11 @@ export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
 // A client offers Edit only when the host advertises it; there is no copy-and-delete fallback.
 export const AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY =
   'agent-session.queued-message-edit.v1' as const
+// Why: a client advertising this shows a queued card's images and edits its text in place, keeping
+// them. Released readers show only a card's text and edit by copying it and deleting the card, which
+// would drop the images, so the host publishes no card holding an image to a reader without it.
+export const AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY =
+  'agent-session.queued-image-cards.v1' as const
 // Why: `agentSession.conversationCommand`'s params are strict, so an older host rejects
 // `delivery`. A host advertising this holds a /compact sent while the agent works as a queued
 // card instead of refusing it. Clients ask only when queued-messages.v1 is advertised too:
@@ -183,6 +198,9 @@ export const AGENT_SESSION_REWIND_RECOVERY_CAPABILITY = 'agent-session.rewind-re
 // status form to clients that do not advertise this. Transitional: drop the downgrade once no
 // supported release lacks the capability.
 export const AGENT_SESSION_TURN_ITEM_CAPABILITY = 'agent-session.turn-item.v1' as const
+/** The client retires acknowledged echoes even when a catch-up snapshot skips their rows. */
+export const AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY =
+  'agent-session.snapshot-catch-up.v1' as const
 export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
   'agent-session.background-task-stop.v1' as const
 // Why: agentSession.respondToQuestion has a strict schema, so clients must not send structured
@@ -193,6 +211,9 @@ export const AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY =
 // (agentSessionAttachment.*); an older server has no store, so clients must refuse
 // the attach rather than hand the agent a path from this machine.
 export const AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY = 'agent-session.attachments.v1' as const
+// Why: hosts before this advertise attachments.v1 but refuse the upload methods from a phone.
+export const AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY =
+  'agent-session.attachments.phone.v1' as const
 // Why: the host now publishes rows for work that is live inside a turn, and such
 // a row carries `stoppable: false` because no targeted stop can reach it. A
 // reader that predates the field draws a per-row Stop on every row it is given,

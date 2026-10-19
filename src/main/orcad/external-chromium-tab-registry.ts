@@ -243,7 +243,7 @@ export class ExternalChromiumTabRegistry {
     worktree: unknown
   ): Promise<string | undefined> {
     return typeof worktree === 'string' && worktree
-      ? (await host.resolveWorktreeSelector(worktree)).id
+      ? (await host.resolveBrowserWorkspace(worktree)).id
       : undefined
   }
 }

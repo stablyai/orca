@@ -142,6 +142,21 @@ export function areTaskSourceContextsEqual(
   )
 }
 
+/** Jira identity is siteId (site + login); its label is display-only. Callers match providers first. */
+export function haveConflictingTaskSourceAccounts(
+  a: Pick<TaskSourceContext, 'provider' | 'providerIdentity' | 'accountLabel'>,
+  b: Pick<TaskSourceContext, 'provider' | 'providerIdentity' | 'accountLabel'>
+): boolean {
+  if (a.provider === 'jira') {
+    const left = a.providerIdentity?.provider === 'jira' ? a.providerIdentity.siteId : null
+    const right = b.providerIdentity?.provider === 'jira' ? b.providerIdentity.siteId : null
+    return Boolean(left && right && left !== right)
+  }
+  const left = a.accountLabel?.trim()
+  const right = b.accountLabel?.trim()
+  return Boolean(left && right && left !== right)
+}
+
 export function getTaskSourceRuntimeSettings(
   context: Pick<TaskSourceContext, 'hostId'> | null | undefined
 ): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> {

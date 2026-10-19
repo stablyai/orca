@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { getRelativePathInsideRoot } from '@/lib/path'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { HtmlDocPreview } from './HtmlDocPreview'
 import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
@@ -23,8 +23,8 @@ export function WorkspaceDocPagePane({
   const worktreeRoot = useAppStore((store) => store.getKnownWorktreeById(worktreeId)?.path ?? null)
   // Why resolved here rather than stored on the page: ownership moves. A page persisted before a
   // pairing or an SSH reconnect would otherwise route its document actions at yesterday's host.
-  const runtimeEnvironmentId = useAppStore(
-    (store) => getRuntimeEnvironmentIdForWorktree(store, worktreeId) ?? null
+  const runtimeEnvironmentId = useAppStore((store) =>
+    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(store, worktreeId)
   )
   const relativePath = useMemo(
     () => getRelativePathInsideRoot(filePath, worktreeRoot) ?? filePath,

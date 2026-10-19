@@ -12,14 +12,12 @@ import {
   type StructuredAgentSessionOptionState
 } from '../../../../shared/structured-agent-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import {
-  structuredAgentSessionOptionView,
-  type StructuredAgentSessionPendingPick
-} from '../../../../shared/structured-agent-session-option-view'
+import { structuredAgentSessionOptionView } from '../../../../shared/structured-agent-session-option-view'
 import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import { useStructuredAgentSessionHostCapability } from '@/runtime/structured-agent-session-host-capability'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { readHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+import { cloneNativeChatSessionOptionRecord } from '../../../../shared/native-chat-session-option-state'
 import {
   createCoalescedPollRunner,
   type CoalescedPollRunner
@@ -38,7 +36,7 @@ export function firstFrameOptionState(
   return snapshot ? applyStructuredAgentSessionModelCatalog(seeded, seed, snapshot, launch) : seeded
 }
 
-/** The picker's option state for one session: seeded, reset at each fence, re-read each turn. */
+/** The picker's option state for one session: seeded, kept across its fences, re-read each turn. */
 export function useStructuredAgentSessionOptionState(args: {
   agent: AgentType
   optionCatalog: AgentSessionOptionCatalog | null
@@ -79,6 +77,7 @@ export function useStructuredAgentSessionOptionState(args: {
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
     threadGoal: AgentSessionOptionsResult['threadGoal']
+    reportedThreadGoal: AgentSessionOptionsResult['reportedThreadGoal']
     contextUsage: AgentSessionOptionsResult['contextUsage']
     acceptsImages: boolean | undefined
     rewind: AgentSessionRewindSupport
@@ -104,7 +103,7 @@ export function useStructuredAgentSessionOptionState(args: {
   const optionStateRef = useRef(optionState)
   const activeOptionRecordRef = useRef(optionState.record)
   // A pick on its way to the host, which every send carries too.
-  const pendingOptionRef = useRef<StructuredAgentSessionPendingPick | null>(null)
+  const pendingOptionsRef = useRef<Record<string, string>>({})
   const optionMutationGeneration = useRef(0)
   const updateOptionState = useCallback(
     (update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState) => {
@@ -125,15 +124,20 @@ export function useStructuredAgentSessionOptionState(args: {
       seedsModel: launch.seedsModel,
       ...(launch.worktree ? { worktree: launch.worktree } : {})
     })
-    // A host answer is the account's, not the fence's: keep it rather than blank the default.
+    // The chat's next runtime starts with the picks the host saved, which this view last showed,
+    // and a starting agent is not read: keep them, and the account's list, until a read replaces them.
     const kept =
-      sameSession && (previous.catalogSource === 'host' || previous.catalogSource === 'builtin')
-        ? { ...seeded, catalog: previous.catalog, catalogSource: previous.catalogSource }
+      sameSession && previous.catalogSource !== 'seed' && previous.catalogSource !== null
+        ? {
+            ...previous,
+            record: cloneNativeChatSessionOptionRecord(previous.record),
+            pendingId: null
+          }
         : seeded
     // The chat's own, which a restart for a new mode keeps: the picker never blanks between them.
     const next = sameSession ? { ...kept, permissionMode: previous.permissionMode } : kept
     optionMutationGeneration.current += 1
-    pendingOptionRef.current = null
+    pendingOptionsRef.current = {}
     optionStateRef.current = next
     activeOptionRecordRef.current = next.record
     setOptionState(next)
@@ -159,6 +163,7 @@ export function useStructuredAgentSessionOptionState(args: {
           sessionId,
           commands: result.conversationCommands ?? [],
           threadGoal: result.threadGoal,
+          reportedThreadGoal: result.reportedThreadGoal,
           contextUsage: result.contextUsage,
           acceptsImages: result.acceptsImages,
           // A host that predates rewind does not name it.
@@ -208,25 +213,17 @@ export function useStructuredAgentSessionOptionState(args: {
     target,
     AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
   )
-  // What the picker shows and a send carries, for this session's host.
-  const optionView = useCallback(
-    (
-      state: StructuredAgentSessionOptionState,
-      seed: Readonly<Record<string, string>> | undefined,
-      held: Readonly<Record<string, string>>
-    ) => structuredAgentSessionOptionView(state, seed, held, takesSendOptions),
-    [takesSendOptions]
-  )
 
   return {
-    optionView,
+    // What the picker shows and a send carries.
+    optionView: structuredAgentSessionOptionView,
     takesSendOptions,
     conversationSupport,
     rereadOptions,
     optionState,
     optionStateRef,
     activeOptionRecordRef,
-    pendingOptionRef,
+    pendingOptionsRef,
     optionMutationGeneration,
     updateOptionState
   }

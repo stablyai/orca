@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import { splitWorktreeIdForFilesystem, worktreeIdComparisonKey } from '../../../shared/worktree/id'
+import { splitWorktreeIdForFilesystem, worktreeIdentityKey } from '../../../shared/worktree/id'
 import { branchSelectorMatches, runtimePathsEqual } from '../runtime-worktree-path-identity'
 import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../../../shared/execution-host'
 import type {
@@ -14,7 +14,8 @@ import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeWorkspaceCatalog } from './workspace-catalog'
-import { areWorktreePathsEqual, mergeWorktree } from '../../ipc/worktree-logic'
+import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
+import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
 
 export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree {
   protected abstract hasFreshResolvedWorktreeCache(
@@ -54,10 +55,10 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
       const worktreeId = explicitWorktreeId ?? selector.slice(3)
       candidates = worktrees.filter((worktree) => worktree.id === worktreeId)
       if (candidates.length === 0) {
-        const comparisonKey = worktreeIdComparisonKey(worktreeId)
-        candidates = comparisonKey
-          ? worktrees.filter((worktree) => worktreeIdComparisonKey(worktree.id) === comparisonKey)
-          : candidates
+        const comparisonKey = worktreeIdentityKey(worktreeId)
+        candidates = worktrees.filter(
+          (worktree) => worktreeIdentityKey(worktree.id) === comparisonKey
+        )
       }
       if (candidates.length === 0) {
         const parsed = splitWorktreeIdForFilesystem(worktreeId)

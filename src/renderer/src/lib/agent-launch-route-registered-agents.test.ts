@@ -75,6 +75,7 @@ function store(
 ): AgentLaunchRouteStore {
   const state = {
     settings: { ...SETTINGS, ...overrides.settings },
+    localDetectedAgentIdsByContext: { host: [] },
     runtimeStatusByEnvironmentId: new Map([['env-1', pairedStatus(overrides.runtimeId ?? 'rt-1')]]),
     worktreesByRepo: {},
     folderWorkspaces: []
@@ -93,7 +94,7 @@ beforeEach(() => {
 })
 
 describe('structured launch of a host-registered agent', () => {
-  it('opens a chat for an agent the local host listed', async () => {
+  it('opens an unchosen chat with empty native installation inventory', async () => {
     await loadHostStructuredAgents('local', REGISTERED, null)
 
     expect(routeFor(store(), 'grok')).toBe('structured-native-chat')

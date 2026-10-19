@@ -270,6 +270,8 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     if (restore.lastTitle) {
       // Why: mirror renderer hydration — a title main already tracked live outranks the payload's persisted one.
       this.applySeededAgentStatus(ptyId, this.getTrackedRawTitleForPty(ptyId) ?? restore.lastTitle)
+      // Why: an adopting runtime may already have published this tab under its default title.
+      this.touchMobileSessionSnapshotsForPty(ptyId)
     }
   }
 }

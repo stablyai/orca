@@ -78,7 +78,12 @@ function turnInputFor(body: AgentJournalMessageItem): Record<string, unknown>[] 
 async function steerCodexTurn(
   host: CodexTurnHost,
   expectedTurnId: string,
-  input: { clientMessageId: string; body: AgentJournalMessageItem; timeoutMs?: number }
+  input: {
+    clientMessageId: string
+    body: AgentJournalMessageItem
+    timeoutMs?: number
+    onReply?: () => void
+  }
 ): Promise<{ turnId: string; via: 'steer' } | null> {
   try {
     const answer = await host.connection.request(
@@ -89,7 +94,7 @@ async function steerCodexTurn(
         clientUserMessageId: input.clientMessageId,
         input: turnInputFor(input.body)
       },
-      { timeoutMs: input.timeoutMs }
+      { timeoutMs: input.timeoutMs, onReply: input.onReply }
     )
     return { turnId: readCodexTurnId(answer) ?? expectedTurnId, via: 'steer' }
   } catch (error) {
@@ -112,6 +117,8 @@ export async function startCodexTurn(
     body: AgentJournalMessageItem
     requestedAt?: number
     timeoutMs?: number
+    /** Stamped as each reply is read (`CodexDispatchEchoes.tick`); the last is this send's. */
+    onReply?: () => void
   }
 ): Promise<{ turnId: string | null; via: AgentJournalTurnJoin } | false> {
   // Armed before the write: the echo and `turn/started` can both land while the
@@ -142,7 +149,7 @@ export async function startCodexTurn(
       // Codex omits a tier the model does not list.
       ...Object.fromEntries(host.options)
     },
-    { timeoutMs: input.timeoutMs }
+    { timeoutMs: input.timeoutMs, onReply: input.onReply }
   )
   return { turnId: readCodexTurnId(answer), via: 'start' }
 }
@@ -164,8 +171,13 @@ export async function dispatchCodexTurn(
   timeoutMs: number | undefined
 ): Promise<AgentSessionDispatchOutcome> {
   let answer: { turnId: string | null; via: AgentJournalTurnJoin } | false
+  // Where the answer was read among Codex's notifications, not when this continuation runs.
+  let answeredAt: number | undefined
+  const onReply = (): void => {
+    answeredAt = session.dispatchEchoes.tick()
+  }
   try {
-    answer = await startCodexTurn(session, { ...input, timeoutMs })
+    answer = await startCodexTurn(session, { ...input, timeoutMs, onReply })
   } catch (error) {
     if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
       // Codex answered and declined, so no echo for this write can arrive.
@@ -184,18 +196,29 @@ export async function dispatchCodexTurn(
     }
     // A timeout or transport failure can happen after the frame was written.
     // Keep the correlation armed so a later echo can prove delivery.
+    session.dispatchEchoes.answered(
+      input.clientMessageId,
+      answeredAt ?? session.dispatchEchoes.tick()
+    )
     throw error
   }
   if (!answer) {
     return { state: 'rejected', ...codexDispatchRejection(agentSessionFailureFact('queueFull')) }
   }
   // An answer read after the turn it names already ended is settled by that end.
+  if (!answer.turnId) {
+    session.dispatchEchoes.answered(
+      input.clientMessageId,
+      answeredAt ?? session.dispatchEchoes.tick()
+    )
+  }
   const endedFirst = answer.turnId
     ? session.dispatchEchoes.bindTurn(
         input.clientMessageId,
         session.threadId,
         answer.turnId,
-        answer.via
+        answer.via,
+        answeredAt
       )
     : null
   const rejection = endedFirst ? codexTurnEndRejection(endedFirst, session.account) : null

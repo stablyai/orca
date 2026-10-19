@@ -28,7 +28,7 @@ import {
   removeRuntimeOwnedSshTarget
 } from '../ephemeral-vm-runtime-ssh'
 import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
-import { invalidateRuntimeEnvironmentTransport } from './runtime-environments'
+import { invalidateRuntimeEnvironmentTransport } from './runtime-environments/runtime-environments'
 import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm-runtime-attachment'
 
 export type EphemeralVmCleanupCommandResult = {

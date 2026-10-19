@@ -33,7 +33,7 @@ export function cancelledShellNavigationTarget(url: unknown): string | null {
  * It exists as a grant because it is the only thing that can tell a page whether a tap inside the
  * sealed HTML-preview frame escapes at all. A shell built before C7.10 A cancels the navigation and
  * drops it in silence, so a page that rendered the artifact's links as links would be offering a
- * tap that does nothing -- which is what `MobileHtmlPreview.web.tsx` reads this to avoid.
+ * tap that does nothing -- which is what `MobileHtmlPreview.tsx` reads this to avoid.
  *
  * A constant and not a platform read: both engines dispatch the event
  * (`ios/MobileWebShellView.swift`, `android/.../MobileWebShellView.kt`), so an app build either

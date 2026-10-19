@@ -9,7 +9,9 @@ import { performance } from 'node:perf_hooks'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import { listWorktreesStrict, removeWorktree } from './worktree'
+import { classifyWorktreeForceDeleteReason } from '../../shared/worktree/removal'
+import { formatWorktreeRemovalError } from '../ipc/worktree-logic'
+import { assertWorktreeCleanForRemoval, listWorktreesStrict, removeWorktree } from './worktree'
 import { areWorktreePathsEqual } from './worktree-path-comparison'
 import { isPrunableGitFileWorktree } from '../worktree-prunable-git-file'
 import { removeStaleLocalWorktreeRegistration } from '../local-worktree-removal-recovery'
@@ -93,6 +95,67 @@ describe('worktree removal against the real Git binary', () => {
     await expect(removeWorktree(repoPath, worktreePath, false)).rejects.toThrow()
     expect(existsSync(join(worktreePath, 'seed.txt'))).toBe(true)
     expect(await isRegistered(worktreePath)).toBe(true)
+  })
+
+  // A checkout whose initialized submodule holds a commit only it has; the parent does not record it.
+  async function addSubmoduleCheckoutWithLocalCommit(): Promise<{
+    subWorktreePath: string
+    vendorPath: string
+    localCommit: string
+  }> {
+    const emptyCommit = ['-c', 'user.name=o', '-c', 'user.email=o@example.invalid', 'commit']
+    const originPath = join(scratchDir, 'origin')
+    await mkdir(originPath)
+    await git(['init', '-q'], originPath)
+    await git([...emptyCommit, '-q', '--allow-empty', '-m', 'origin'], originPath)
+    await git(
+      ['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', originPath, 'vendor'],
+      repoPath
+    )
+    await git(['commit', '-qm', 'add vendor'], repoPath)
+    const subWorktreePath = join(workspaceRoot, 'repo', 'with-sub')
+    await git(['worktree', 'add', '-q', subWorktreePath, '-b', 'with-sub'], repoPath)
+    await git(
+      ['-c', 'protocol.file.allow=always', 'submodule', 'update', '-q', '--init'],
+      subWorktreePath
+    )
+    const vendorPath = join(subWorktreePath, 'vendor')
+    await git([...emptyCommit, '-q', '--allow-empty', '-m', 'local only'], vendorPath)
+    const localCommit = (await git(['rev-parse', 'HEAD'], vendorPath)).trim()
+    return { subWorktreePath, vendorPath, localCommit }
+  }
+
+  it('refuses a clean checkout with a submodule and offers Force Delete for it', async () => {
+    // Why: --force would delete submodule commits that exist only in this checkout, so Git's
+    // refusal must reach the user as a Force Delete choice rather than be retried away.
+    const { subWorktreePath, vendorPath, localCommit } = await addSubmoduleCheckoutWithLocalCommit()
+    // Recorded by the parent so its status stays clean.
+    await git(['commit', '-qam', 'bump vendor'], subWorktreePath)
+
+    const refusal = await removeWorktree(repoPath, subWorktreePath, false).catch((error) => error)
+    expect(refusal).toBeInstanceOf(Error)
+    expect(
+      classifyWorktreeForceDeleteReason(formatWorktreeRemovalError(refusal, subWorktreePath, false))
+    ).toBe('submodules')
+    expect(await isRegistered(subWorktreePath)).toBe(true)
+    expect((await git(['cat-file', '-t', localCommit], vendorPath)).trim()).toBe('commit')
+
+    await removeWorktree(repoPath, subWorktreePath, true)
+    expect(await isRegistered(subWorktreePath)).toBe(false)
+  })
+
+  it('names submodules when the dirty check refuses a checkout that has them', async () => {
+    // Why: the parent's status shows only its own file, yet Force Delete destroys the submodule commit.
+    const { subWorktreePath } = await addSubmoduleCheckoutWithLocalCommit()
+    await git(['commit', '-qam', 'bump vendor'], subWorktreePath)
+    await writeFile(join(subWorktreePath, 'notes.txt'), 'draft\n')
+
+    const refusal = await assertWorktreeCleanForRemoval(subWorktreePath).catch((error) => error)
+    const message = formatWorktreeRemovalError(refusal, subWorktreePath, false)
+    expect(classifyWorktreeForceDeleteReason(message)).toBe('submodules')
+    expect(message).toContain('?? notes.txt')
+    // Older apps offer Force Delete only for this sentence.
+    expect(message).toContain('Worktree has uncommitted or untracked changes')
   })
 
   it('does not delete a checkout through a malformed registration that names its git file', async () => {

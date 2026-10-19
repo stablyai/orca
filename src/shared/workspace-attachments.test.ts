@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { WorkspaceAttachment } from './worktree/types'
 import {
   getWorkspaceAttachments,
-  normalizeWorkspaceAttachmentUpdate
+  normalizeWorkspaceAttachmentUpdate,
+  workspaceAttachmentReferenceLabel
 } from './workspace-attachments'
 import {
   getWorkspaceAttachmentKey,
@@ -361,5 +362,36 @@ describe('workspace attachments', () => {
     expect(result.linkedItems).toEqual([mr])
     expect(result.linkedPR).toBeNull()
     expect(result.linkedGitLabMR).toBeNull()
+  })
+})
+
+describe('workspaceAttachmentReferenceLabel', () => {
+  it('reads a reference as the desktop card and the phone details both show it', () => {
+    expect(workspaceAttachmentReferenceLabel({ provider: 'github', type: 'pr', number: 12 })).toBe(
+      'PR #12'
+    )
+    expect(workspaceAttachmentReferenceLabel({ provider: 'gitlab', type: 'mr', number: 3 })).toBe(
+      'MR !3'
+    )
+    expect(
+      workspaceAttachmentReferenceLabel({ provider: 'github', type: 'issue', number: 4 })
+    ).toBe('Issue #4')
+    expect(
+      workspaceAttachmentReferenceLabel({
+        provider: 'jira',
+        type: 'issue',
+        number: 0,
+        jiraIdentifier: 'ORCA-4'
+      })
+    ).toBe('ORCA-4')
+    expect(
+      workspaceAttachmentReferenceLabel({ provider: 'linear', type: 'issue', number: 9 })
+    ).toBe('#9')
+    expect(
+      workspaceAttachmentReferenceLabel(
+        { provider: 'github', type: 'pr', number: 12 },
+        { pr: (n) => `Demande #${n}`, mr: String, issue: String }
+      )
+    ).toBe('Demande #12')
   })
 })

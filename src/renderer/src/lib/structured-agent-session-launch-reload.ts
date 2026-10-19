@@ -51,7 +51,10 @@ export function restorePersistedStructuredLaunchState(
   const callers: StructuredLaunchCallerGroup = createStructuredLaunchCallerGroup({ kind: 'retry' })
   const state: StructuredLaunchState = {
     identity: structuredLaunchIdentity(worktreeId, record.agent, record.resumeFrom),
-    intent,
+    intent: {
+      ...intent,
+      ...(record.surfaceAddress ? { surfaceAddress: record.surfaceAddress } : {})
+    },
     promptDelivery: 'draft',
     promise: Promise.resolve({ sessionId: record.sessionId, fence: 0 }),
     visibilityUnknown: record.lifecycle === 'visibility-unknown',

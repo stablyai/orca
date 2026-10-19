@@ -5,7 +5,7 @@ export function getAgentStatusSessionStartHandlerSourceLines(kind: PiAgentKind):
     ? [
         "  onStatus('session_start', (event, ctx) => {",
         '    updateSessionMetadata(ctx)',
-        '    if (isOmpRuntime()) { invalidateOmpUiDialogs(); post("session_start", readOmpActivity(ctx)); return }',
+        '    if (isOmpRuntime()) { updateRuntimeOmpSessionMetadata(ctx); invalidateOmpUiDialogs(); post("session_start", readOmpActivity(ctx)); return }',
         ...(kind === 'pi' ? ['    piUiPromptDepth = 0'] : []),
         '    // Why: /reload re-registers the active session, but it is not a',
         '    // turn boundary and must not clear the visible status or unread state.',

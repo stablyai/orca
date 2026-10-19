@@ -147,6 +147,23 @@ describe('SSH retained payload admission', () => {
     ).toEqual(relay)
   })
 
+  it('admits only a literal "Move anyway" offer', () => {
+    const state = { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }
+    const refused = { kind: 'relay', reason: 'refused', detail: 'saved tabs and panes' }
+    expect(
+      admitSshConnectionState(
+        { ...state, managedServer: { ...refused, canLeaveBehind: true } },
+        'ssh-a'
+      )?.managedServer
+    ).toEqual({ ...refused, canLeaveBehind: true })
+    expect(
+      admitSshConnectionState(
+        { ...state, managedServer: { ...refused, canLeaveBehind: 1 } },
+        'ssh-a'
+      )?.managedServer
+    ).toEqual(refused)
+  })
+
   it('rejects partial and malformed provider authority', () => {
     const state = {
       targetId: 'ssh-a',

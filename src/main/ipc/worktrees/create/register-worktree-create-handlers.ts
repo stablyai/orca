@@ -67,6 +67,10 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           fromExistingBranch: typeof args.baseBranch === 'string' && args.baseBranch.length > 0,
           isFolder: isFolderRepo(repo)
         })
+        const creation = runtime.workspaceCreations?.open({
+          creationId: args.creationId,
+          repoId: repo.id
+        })
         try {
           // Why: wrap only the helpers; the pre-validation throws above are IPC-shape bugs, not the git/filesystem failures the funnel tracks.
           if (isFolderRepo(repo)) {
@@ -88,13 +92,16 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
               store,
               mainWindow,
               runtime,
-              telemetry.timing
+              telemetry.timing,
+              creation?.named
             )
           }
         } catch (error) {
           releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
           telemetry.failed(error)
           throw error
+        } finally {
+          creation?.close()
         }
         finishAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
         if (result.timing) {

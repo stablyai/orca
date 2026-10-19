@@ -8,11 +8,9 @@ import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
 import { formatWorktreeIncludeCopyWarning } from '../ipc/worktree-include-copy-budget'
-import {
-  getWorktreeCreationLayout,
-  mergeWorktree,
-  resolveWorktreeCreateDisplayNameMeta
-} from '../ipc/worktree-logic'
+import { getWorktreeCreationLayout } from '../ipc/worktree-logic'
+import { mergeWorktree } from '../ipc/worktree-metadata-merge'
+import { resolveWorktreeCreateDisplayNameMeta } from '../ipc/worktree-display-name'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,

@@ -56,6 +56,9 @@ export abstract class RuntimeConstructionServices {
   abstract stopTerminalsForWorktree(
     ...args: Calls.StopTerminalsForWorktreeArgs
   ): Calls.StopTerminalsForWorktreeResult
+  abstract stopTerminalsForProject(
+    ...args: Calls.StopTerminalsForProjectArgs
+  ): Calls.StopTerminalsForProjectResult
   abstract resolveOrchestrationWorkerServer(
     ...args: Calls.ResolveOrchestrationWorkerServerArgs
   ): Calls.ResolveOrchestrationWorkerServerResult
@@ -150,6 +153,7 @@ export abstract class RuntimeConstructionServices {
   protected abstract getValidatedExplicitWorktreeIdSelector(
     selector: string | undefined
   ): string | null
+  abstract getExplicitSessionWorktreeIdSelector(selector: string | undefined): string | null
   protected abstract buildResolvedWorktreeFromId(worktreeId: string): ResolvedWorktree | null
   protected abstract listKnownResolvedWorktreesForExplicitTarget(
     targetWorktreeId: string,

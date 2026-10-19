@@ -16,7 +16,9 @@ function revealState(isNavigatingHistory = false) {
     markWorktreeVisited: vi.fn(),
     recordWorktreeVisit: vi.fn(),
     isNavigatingHistory,
-    revealWorktreeInSidebar: vi.fn()
+    revealWorktreeInSidebar: vi.fn(),
+    activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null
   }
 }
 

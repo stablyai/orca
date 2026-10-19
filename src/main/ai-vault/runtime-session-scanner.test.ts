@@ -10,7 +10,7 @@ vi.mock('../../shared/runtime-environment-store', () => ({
   listEnvironments: mocks.listEnvironments
 }))
 
-vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
 

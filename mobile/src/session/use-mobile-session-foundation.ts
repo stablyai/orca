@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { HOST_DOCK_MIN_WIDTH } from '../storage/preferences'
-import { useForceReconnect } from '../transport/client-context'
+import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import {
   useLastConnectedAt,

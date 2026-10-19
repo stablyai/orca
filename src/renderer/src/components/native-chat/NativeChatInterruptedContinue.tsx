@@ -39,6 +39,7 @@ export function useNativeChatInterruptedContinuation(input: {
   sessionId: string
   journalItems: readonly AgentJournalRenderItem[]
   submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+  /** Also true while the host may take no turn: Continue starts one. */
   isWorking: boolean
   /** Stable; a Continue click is the user's newer action, so it clears the composer's error. */
   reportComposerError: (text: null) => void

@@ -25,7 +25,6 @@ vi.mock('./mobile-image-source-picker', () => ({
   pickMobileImages: vi.fn()
 }))
 vi.mock('expo-file-system', () => ({ File: class {}, Paths: { cache: '/tmp' } }))
-vi.mock('expo-image-manipulator', () => ({ ImageManipulator: {}, SaveFormat: {} }))
 
 const REPORT = 'orchestration.workerTerminalUserInput'
 const ref = <T>(current: T) => ({ current })

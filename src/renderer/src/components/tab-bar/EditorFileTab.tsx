@@ -47,6 +47,7 @@ export default function EditorFileTab({
   onCloseOthers,
   onCloseToRight,
   onCloseToLeft,
+  onCloseSplitPane,
   onCloseAll,
   onMakePermanent,
   onTogglePin,
@@ -66,6 +67,7 @@ export default function EditorFileTab({
   onCloseOthers: () => void
   onCloseToRight: () => void
   onCloseToLeft: () => void
+  onCloseSplitPane?: () => void
   onCloseAll: () => void
   onMakePermanent?: () => void
   onTogglePin: () => void
@@ -432,6 +434,7 @@ export default function EditorFileTab({
         onCloseAll={onCloseAll}
         onCloseToRight={onCloseToRight}
         onCloseToLeft={onCloseToLeft}
+        onCloseSplitPane={onCloseSplitPane}
         onOpenMarkdownPreview={openMarkdownPreview}
       />
     </>

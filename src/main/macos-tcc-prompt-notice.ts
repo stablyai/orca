@@ -4,6 +4,7 @@ import type { BrowserWindow } from 'electron'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { getCanonicalUserDataPath } from './persistence'
 import { MacosTccPromptWatch } from './macos-tcc-prompt-watch'
+import { reclaimOrphanedTccLogStreams } from './macos-tcc-log-stream-orphans'
 
 /**
  * Surfaces Full Disk Access guidance only to users macOS is actually prompting
@@ -53,6 +54,7 @@ let nextClaimId = 0
 let pendingClaim: { claimId: number; ownerToken: number } | null = null
 let deferredWatchStartTimer: ReturnType<typeof setTimeout> | null = null
 let deferredWatchStartGeneration = 0
+let orphanReclaimScheduled = false
 
 function tallyPath(): string {
   return join(getCanonicalUserDataPath(), 'macos-tcc-prompt-tally.json')
@@ -222,6 +224,14 @@ export function initTccPromptNotice(
 ): void {
   if (process.platform !== 'darwin') {
     return
+  }
+  if (!orphanReclaimScheduled) {
+    orphanReclaimScheduled = true
+    // Why: runs even after the notice is dismissed, since older builds' orphans are still alive.
+    setTimeout(
+      () => void reclaimOrphanedTccLogStreams(),
+      TCC_PROMPT_WATCH_START_FALLBACK_MS
+    ).unref()
   }
   if (watch) {
     trackMainWindow(mainWindow)

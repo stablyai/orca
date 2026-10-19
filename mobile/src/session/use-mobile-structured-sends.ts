@@ -4,10 +4,16 @@
 // nowhere: it says so only if its deadline passes before the host shows it.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalSubmission
+} from '../../../src/shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../src/shared/structured-agent-session-message-projection'
-import { structuredAgentSessionSettledSends } from '../../../src/shared/structured-agent-session-send-settlement'
+import {
+  structuredAgentSessionReadCoversSend,
+  structuredAgentSessionSettledSends
+} from '../../../src/shared/structured-agent-session-send-settlement'
 import { mergeSentImagePreviews } from './mobile-native-chat-draft-reconcile'
 import type { MobileQueuedMessageFeed } from './mobile-structured-queued-message-feed'
 import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
@@ -31,11 +37,12 @@ export type MobileStructuredSends = {
 
 export function useMobileStructuredSends(args: {
   sessionKey: string
+  cursor?: AgentJournalCursor | null
   submissions: readonly AgentJournalSubmission[]
   queuedMessages: MobileQueuedMessageFeed
   onSendError: MobileNativeChatSendErrorReporter
 }): MobileStructuredSends {
-  const { onSendError, queuedMessages, sessionKey, submissions } = args
+  const { cursor, onSendError, queuedMessages, sessionKey, submissions } = args
   const [sendsBySession, setSendsBySession] = useState<
     Record<string, readonly MobileStructuredSend[]>
   >({})
@@ -109,7 +116,14 @@ export function useMobileStructuredSends(args: {
       (queuedMessages ?? []).map((message) => message.messageId)
     )
     const settled = new Set(
-      sends.map((send) => send.clientMessageId).filter((id) => cards.has(id) || recorded.has(id))
+      sends
+        .filter(
+          (send) =>
+            cards.has(send.clientMessageId) ||
+            recorded.has(send.clientMessageId) ||
+            structuredAgentSessionReadCoversSend(cursor, send.recordedCursor)
+        )
+        .map((send) => send.clientMessageId)
     )
     if (settled.size === 0) {
       return
@@ -119,7 +133,7 @@ export function useMobileStructuredSends(args: {
       deadlinesRef.current.delete(id)
     }
     forget(settled)
-  }, [forget, queuedMessages, sends, submissions])
+  }, [cursor, forget, queuedMessages, sends, submissions])
 
   useEffect(() => {
     mountedRef.current = true

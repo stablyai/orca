@@ -22,6 +22,13 @@ export function isPresenceConfirmed(): boolean {
   return !presenceGated || Date.now() - presentAt < DESKTOP_AWAY_SECONDS * 1000
 }
 
+/** How long presence holds without new input; null where it is not gated (browsers). */
+export function presenceRemainingMs(): number | null {
+  return presenceGated
+    ? Math.max(0, Math.round(DESKTOP_AWAY_SECONDS * 1000 - (Date.now() - presentAt)))
+    : null
+}
+
 export function createAutoAckPresenceCheck(
   readAway: () => Promise<boolean | undefined>,
   onPresent: () => void

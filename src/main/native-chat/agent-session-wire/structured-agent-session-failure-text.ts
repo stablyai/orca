@@ -36,7 +36,8 @@ const TYPED_START_REFUSALS = [
   'historyInOtherAccount',
   'claudeAccountFolderMissing',
   'claudeAccountSetupFailed',
-  'agentCommandNotRunnable'
+  'agentCommandNotRunnable',
+  'runtimeNotInstalled'
 ] as const satisfies readonly (AgentSessionFailureKind &
   AgentSessionRefusalReason<'agent_session_operation_invalid'>)[]
 

@@ -50,8 +50,7 @@ vi.mock('./migrate-restored-editor-file-owner', () => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: vi.fn(() => 'local'),
-  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn(() => null)
+  getExecutionHostIdForWorktree: vi.fn(() => 'local')
 }))
 
 // These fixtures' workspaces live on runtime-1, so an unstamped tab resolves there.

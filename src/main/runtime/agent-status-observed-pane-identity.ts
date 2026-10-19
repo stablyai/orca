@@ -4,6 +4,11 @@ import {
   type ObservedAgentStatusPaneIdentity
 } from '../ipc/agent-status-ipc-boundary'
 import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server/server-types'
+import type { OrcaRuntimeService } from './orca-runtime'
+
+/** The runtime also links each conversation to the PTY execution that reported it. */
+type ObservedStatusRuntime = AgentStatusRuntimeEnrichment &
+  Partial<Pick<OrcaRuntimeService, 'recordCliWriterConversation'>>
 
 /** Bounded like the hook server's own per-pane maps; eviction only degrades a row to `unobserved`. */
 const MAX_OBSERVED_PANES = 1024
@@ -48,22 +53,22 @@ export class AgentStatusObservedPaneIdentities {
 /** Buffers startup replay until PTY recovery has restored the runtime identities it fences. */
 export class AgentStatusObservedPaneIdentityCapture {
   private readonly pending = new Map<string, EnrichedAgentHookEventPayload>()
-  private runtime: AgentStatusRuntimeEnrichment | null = null
+  private runtime: ObservedStatusRuntime | null = null
 
   constructor(private readonly identities: AgentStatusObservedPaneIdentities) {}
 
   observe(enriched: EnrichedAgentHookEventPayload): void {
     if (this.runtime) {
-      recordObservedAgentStatusPaneIdentity(this.identities, enriched.paneKey, this.runtime)
+      recordObservedAgentStatusPaneIdentity(this.identities, enriched, this.runtime)
       return
     }
     this.pending.set(enriched.paneKey, enriched)
   }
 
-  attach(runtime: AgentStatusRuntimeEnrichment): void {
+  attach(runtime: ObservedStatusRuntime): void {
     this.runtime = runtime
     for (const enriched of this.pending.values()) {
-      recordObservedAgentStatusPaneIdentity(this.identities, enriched.paneKey, runtime)
+      recordObservedAgentStatusPaneIdentity(this.identities, enriched, runtime)
     }
     this.pending.clear()
   }
@@ -72,12 +77,13 @@ export class AgentStatusObservedPaneIdentityCapture {
 /** Ingest-time capture: resolve the pane once, as the status arrives, and keep that answer. */
 export function recordObservedAgentStatusPaneIdentity(
   identities: AgentStatusObservedPaneIdentities,
-  paneKey: string,
-  runtime: AgentStatusRuntimeEnrichment | undefined
+  event: EnrichedAgentHookEventPayload,
+  runtime: ObservedStatusRuntime | undefined
 ): void {
-  const binding = resolveAgentStatusBinding(paneKey, runtime)
+  runtime?.recordCliWriterConversation?.(event)
+  const binding = resolveAgentStatusBinding(event.paneKey, runtime)
   identities.record(
-    paneKey,
+    event.paneKey,
     binding.kind === 'unresolved'
       ? UNOBSERVED
       : {

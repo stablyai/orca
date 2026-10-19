@@ -26,7 +26,7 @@ import type {
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
 import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/structured-agent-runtime-metadata'
 import {
-  isNativeChatEnabled,
+  isNativeChatDefaultFor,
   resolveStructuredNativeChatSupport,
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
@@ -136,7 +136,9 @@ export function decideAgentLaunchMode(args: {
 }): AgentLaunchModeReceipt {
   const { placement, settings } = args
   const vocabulary = args.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  if (args.terminalOnly || !isNativeChatEnabled(settings)) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unrecognized agent name is handled rather than trusted; the registered-agent check rejects it and the launch downgrades to a terminal.
+  const agent = placement.agent as TuiAgent
+  if (args.terminalOnly || !isNativeChatDefaultFor(settings, agent)) {
     return {
       mode: 'terminal',
       preferred: 'terminal',
@@ -149,8 +151,6 @@ export function decideAgentLaunchMode(args: {
   if (placement.on) {
     return downgraded('remote_execution_host', vocabulary)
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unrecognized agent name is handled rather than trusted; the registered-agent check rejects it and the launch downgrades to a terminal.
-  const agent = placement.agent as TuiAgent
   const support = resolveStructuredNativeChatSupport({
     agent,
     executionHostId: 'local',
@@ -277,18 +277,18 @@ export function warnStructuredLaunchDowngrade(
   }
 }
 
-/** The store can be missing on a runtime that never opened one; that reads as no preference.
- *  A relaying desktop's stamped `nativeChatDefault` stands in for this host's own chat setting. */
+/** Read private saved choices; a desktop stamp already resolved the preference for this agent. */
 export function readAgentLaunchModeSettings(
-  runtime: Pick<OrcaRuntimeService, 'getClientSettings'>,
+  runtime: { requireStore(): { getSettings(): AgentLaunchModeSettings | null } },
   nativeChatDefault?: boolean
 ): AgentLaunchModeSettings | null {
   if (nativeChatDefault !== undefined) {
     return { experimentalNativeChat: nativeChatDefault }
   }
   try {
-    return runtime.getClientSettings()
-  } catch {
+    return runtime.requireStore().getSettings()
+  } catch (error) {
+    console.warn('[agent-launch] could not resolve chat preference', error)
     return null
   }
 }

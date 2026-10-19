@@ -11,6 +11,7 @@
 import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
 import { parseExecutionHostId } from './execution-host'
 import type { GlobalSettings } from './global-settings-types'
+import type { NativeChatProviderSettings } from './native-chat-providers'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
@@ -20,7 +21,8 @@ import {
 import type { TuiAgent } from './tui-agent'
 import type { WorkspaceLaunchKind } from './workspace-launch-kind'
 
-export type NativeChatDefaultSettings = Pick<GlobalSettings, 'experimentalNativeChat'>
+export type NativeChatDefaultSettings = Pick<GlobalSettings, 'experimentalNativeChat'> &
+  Partial<NativeChatProviderSettings>
 
 /** Why a launch that the user's default asked to be structured cannot be. */
 export type StructuredNativeChatBlocker =
@@ -66,6 +68,14 @@ export function isNativeChatEnabled(
   settings: Partial<NativeChatDefaultSettings> | null | undefined
 ): boolean {
   return settings?.experimentalNativeChat === true
+}
+
+/** Unchosen agents retain the chat default, independently of installation inventory. */
+export function isNativeChatDefaultFor(
+  settings: Partial<NativeChatDefaultSettings> | null | undefined,
+  agent: TuiAgent
+): boolean {
+  return isNativeChatEnabled(settings) && (settings?.nativeChatProviders?.[agent] ?? true)
 }
 
 function clientChoosesStructuredLaunches(capabilities: readonly string[] | undefined): boolean {

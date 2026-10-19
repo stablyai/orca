@@ -153,7 +153,7 @@ async function openEditorFileDropPaths(
         fileContext,
         [...paths],
         destinationDir,
-        { ensureDestinationDir: true }
+        { ensureDestinationDir: true, nameExtensionlessImages: true }
       )
       if (!editorGroupStillExists(destination)) {
         return

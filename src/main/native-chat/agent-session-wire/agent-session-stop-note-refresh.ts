@@ -40,14 +40,18 @@ export function refreshDerivedStopNotes(
   let pending: AgentJournalRenderItem[] = []
   let bytes = 0
   const emit = (): void => {
-    port.emit(subscriber, {
-      type: 'batch',
-      sessionId: subscriber.sessionId,
-      batch: { ...emptyAgentSessionBatch(subscriber.cursor), items: pending },
-      fence: subscriber.fence,
-      ...(work ? agentSessionPublishedWorkFields(journal, work) : {}),
-      hostNow
-    })
+    port.emit(
+      subscriber,
+      {
+        type: 'batch',
+        sessionId: subscriber.sessionId,
+        batch: { ...emptyAgentSessionBatch(subscriber.cursor), items: pending },
+        fence: subscriber.fence,
+        ...(work ? agentSessionPublishedWorkFields(journal, work) : {}),
+        hostNow
+      },
+      { currentWork: work }
+    )
     pending = []
     bytes = 0
   }

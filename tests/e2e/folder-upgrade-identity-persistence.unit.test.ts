@@ -37,7 +37,7 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
     activeTabId: 'omp-tab',
     tabsByWorktree: { [id]: [makeTerminalTab({ id: 'omp-tab', worktreeId: id })] }
   })
-  store.updateRepo(owner.id, { kind: 'git', folderUpgradeGitRootPath: 'C:/projects/draft' })
+  store.updateRepo(owner, { kind: 'git', folderUpgradeGitRootPath: 'C:/projects/draft' })
   store.flush()
   const reloaded = createStore()
   const repo = reloaded.getRepo(owner.id)
@@ -95,7 +95,7 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
 it('drops upgrade path evidence when execution ownership changes', () => {
   const store = createStore()
   store.addRepo(makeRepo({ id: 'folder', path: 'C:\\projects\\draft', kind: 'git' }))
-  store.updateRepo('folder', { folderUpgradeGitRootPath: 'C:/projects/draft' })
-  store.updateRepo('folder', { executionHostId: 'ssh:builder' })
+  store.updateRepo({ id: 'folder' }, { folderUpgradeGitRootPath: 'C:/projects/draft' })
+  store.updateRepo({ id: 'folder' }, { executionHostId: 'ssh:builder' })
   expect(store.getRepo('folder')?.folderUpgradeGitRootPath).toBeUndefined()
 })

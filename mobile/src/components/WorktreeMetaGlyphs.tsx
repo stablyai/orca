@@ -1,6 +1,8 @@
-import { CircleDot, GitMerge, StickyNote } from 'lucide-react-native'
+import { CalendarClock, CircleDot, GitMerge, SquareTerminal, StickyNote } from 'lucide-react-native'
 import { StyleSheet, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { TaskProviderLogo } from './TaskProviderLogo'
+import type { WorktreeMetaGlyphPresence } from '../worktree/worktree-meta-glyph-presence'
 import { prStateToken } from './pr-state-token'
 import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
 
@@ -11,37 +13,21 @@ export function prStateColor(state: string): string {
   return statusColor(prStateToken(state))
 }
 
-type Props = {
-  comment?: string | null
-  linkedLinearIssue?: string | null
-  linkedGitLabMR?: number | null
-  linkedIssue?: number | null
-  linkedGitLabIssue?: number | null
-}
-
-// Presence glyphs for linked notes / Linear / GitLab MR / issue, matching the
-// desktop WorktreeCardMetaBadges row. Mobile shows presence only; the full
-// detail (title/state/labels) is a follow-up detail sheet.
-export function WorktreeMetaGlyphs({
-  comment,
-  linkedLinearIssue,
-  linkedGitLabMR,
-  linkedIssue,
-  linkedGitLabIssue
-}: Props) {
-  const hasNotes = (comment ?? '').trim().length > 0
-  const hasLinear = Boolean(linkedLinearIssue)
-  const hasGitLabMR = linkedGitLabMR != null
-  const hasIssue = linkedIssue != null || linkedGitLabIssue != null
-  if (!hasNotes && !hasLinear && !hasGitLabMR && !hasIssue) {
+// Presence glyphs in the desktop WorktreeCardMetaBadges order. Mobile shows presence only; the
+// full detail (title/state/labels) is a follow-up detail sheet.
+export function WorktreeMetaGlyphs({ presence }: { presence: WorktreeMetaGlyphPresence }) {
+  if (!Object.values(presence).some(Boolean)) {
     return null
   }
   return (
     <View style={styles.metaGlyphs}>
-      {hasNotes && <StickyNote size={11} color={colors.textMuted} />}
-      {hasIssue && <CircleDot size={11} color={colors.textMuted} />}
-      {hasLinear && <Text style={styles.linearGlyph}>L</Text>}
-      {hasGitLabMR && <GitMerge size={11} color={colors.textMuted} />}
+      {presence.notes && <StickyNote size={11} color={colors.textMuted} />}
+      {presence.automation && <CalendarClock size={11} color={colors.textMuted} />}
+      {presence.cli && <SquareTerminal size={11} color={colors.textMuted} />}
+      {presence.issue && <CircleDot size={11} color={colors.textMuted} />}
+      {presence.jira && <TaskProviderLogo provider="jira" size={10} color={colors.textMuted} />}
+      {presence.linear && <Text style={styles.linearGlyph}>L</Text>}
+      {presence.gitLabMR && <GitMerge size={11} color={colors.textMuted} />}
     </View>
   )
 }

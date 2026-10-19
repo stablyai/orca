@@ -152,10 +152,14 @@ export async function loadIpcEventsHarness(
 
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
-    api: new Proxy(
+    api: new Proxy<Record<string, unknown>>(
       {
         runtimeEnvironments: createApiNamespaceStub({
-          getStatusSnapshots: () => Promise.resolve([])
+          getStatusSnapshots: () => Promise.resolve([]),
+          subscribe: async () => ({ unsubscribe: () => {} })
+        }),
+        legacyRelayBridge: createApiNamespaceStub({
+          listPanes: () => Promise.resolve([])
         }),
         ui: createApiNamespaceStub({
           getZoomLevel: () => 0,
@@ -248,7 +252,7 @@ export async function loadIpcEventsHarness(
         mobile: createApiNamespaceStub({
           consumePendingUnpairedDeviceAuthFailure: () => Promise.resolve(false)
         })
-      } as Record<string, unknown>,
+      },
       { get: (target, prop: string) => target[prop] ?? createApiNamespaceStub() }
     )
   })

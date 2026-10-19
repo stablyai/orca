@@ -1,16 +1,31 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import type * as TimersPromises from 'node:timers/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { escapeRegex } from '../../shared/string-utils'
 
 const resolveHelperAppPathMock = vi.hoisted(() => vi.fn())
 const resolveHelperExecutablePathMock = vi.hoisted(() => vi.fn())
 const runProcessMock = vi.hoisted(() => vi.fn())
+const permissionStatusDelayMock = vi.hoisted(() =>
+  vi.fn(
+    (milliseconds: number) =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, milliseconds)
+      })
+  )
+)
 const permissionStatusTempDir = '/tmp/orca-computer-use-permissions-test'
 const permissionStatusPath = join(permissionStatusTempDir, 'status.json')
 
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
+
+// The status poll's promise delay must use the fake clock this suite controls.
+vi.mock('node:timers/promises', async (importOriginal) => ({
+  ...(await importOriginal<typeof TimersPromises>()),
+  setTimeout: permissionStatusDelayMock
+}))
 
 vi.mock('child_process', () => ({
   execFileSync: vi.fn(),
@@ -56,6 +71,7 @@ describe('getComputerUsePermissionStatus', () => {
     vi.mocked(rm).mockReset()
     vi.mocked(stat).mockReset()
     runProcessMock.mockReset()
+    permissionStatusDelayMock.mockClear()
     runProcessMock.mockResolvedValue({
       code: 1,
       signal: null,
@@ -239,15 +255,46 @@ describe('getComputerUsePermissionStatus', () => {
     vi.useFakeTimers()
     const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
     vi.mocked(stat).mockRejectedValue(new Error('ENOENT'))
-    const rejection = expect(getComputerUsePermissionStatus()).rejects.toMatchObject({
+    let settled = false
+    const statusPromise = getComputerUsePermissionStatus().then(
+      (status) => {
+        settled = true
+        return status
+      },
+      (error: unknown) => {
+        settled = true
+        throw error
+      }
+    )
+    const rejection = expect(statusPromise).rejects.toMatchObject({
       code: 'accessibility_error',
       message: 'Timed out checking permissions'
     })
 
-    await vi.advanceTimersByTimeAsync(5000)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(stat).toHaveBeenCalledTimes(1)
+    expect(permissionStatusDelayMock).toHaveBeenCalledTimes(1)
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(4_999)
+    expect(settled).toBe(false)
+    expect(stat).toHaveBeenCalledTimes(50)
+    expect(permissionStatusDelayMock).toHaveBeenCalledTimes(50)
+    expect(permissionStatusDelayMock.mock.calls).toEqual(Array.from({ length: 50 }, () => [100]))
+    expect(runProcessMock).not.toHaveBeenCalled()
+    expect(rm).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
     await rejection
 
+    expect(settled).toBe(true)
+    expect(stat).toHaveBeenCalledTimes(50)
+    expect(permissionStatusDelayMock).toHaveBeenCalledTimes(50)
     expectOnlyOwnStatusHelperStopped()
+    expect(rm).toHaveBeenCalledWith(permissionStatusTempDir, {
+      recursive: true,
+      force: true
+    })
   })
 
   it('returns the status while helper cleanup is still pending', async () => {

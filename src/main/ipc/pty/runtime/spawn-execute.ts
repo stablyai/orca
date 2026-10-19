@@ -21,7 +21,8 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
   const acquireWorktreeSpawn = runtime?.acquireWorktreeTerminalSpawn
   ctx.releaseWorktreeSpawn = acquireWorktreeSpawn
     ? await acquireWorktreeSpawn.call(runtime, args.worktreeId, {
-        refuseSleptWorktree: args.refuseSleptWorktree
+        refuseSleptWorktree: args.refuseSleptWorktree,
+        connectionId: args.connectionId
       })
     : undefined
   let awaitingAnotherStart = false

@@ -3,6 +3,7 @@ import type { PropsWithChildren } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
@@ -40,6 +41,11 @@ vi.mock('../../store', () => {
 })
 vi.mock('./runtime-environment-explicit-connect', () => ({
   connectRuntimeHostAndReloadProjects: mocks.connectRuntime
+}))
+vi.mock('../settings/RuntimeRepairDialog', () => ({
+  RuntimeRepairDialog: ({ environmentId, name }: { environmentId: string; name: string }) => (
+    <div role="dialog">{`Re-pair ${name} (${environmentId})`}</div>
+  )
 }))
 vi.mock('@/components/ui/dropdown-menu', () => {
   const content = ({ children }: PropsWithChildren) => <div>{children}</div>
@@ -82,6 +88,8 @@ function readyStatus(): RuntimeEnvironmentStatus {
   return {
     status: {
       runtimeId: 'fixture',
+      // Why: a status without a protocol version reads as a too-old server (update required).
+      runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
       rendererGraphEpoch: 1,
       graphStatus: 'ready',
       authoritativeWindowId: 1,
@@ -228,4 +236,38 @@ describe('the status menu for a managed SSH host', () => {
     render(<SshStatusSegment compact={false} iconOnly={false} />)
     expect(screen.getAllByText('Claw box')).toHaveLength(1)
   })
+
+  it('names a revoked server and offers Re-pair instead of a futile Connect', () => {
+    state.runtimeStatusByEnvironmentId.set('server-windows', blockedStatus('access-revoked'))
+    render(<SshStatusSegment compact={false} iconOnly={false} />)
+    expect(screen.getByText('Access revoked')).toBeTruthy()
+    expect(screen.queryByText('Disconnected')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull()
+    fireEvent.click(screen.getAllByText('Re-pair…')[0])
+    expect(screen.getByRole('dialog').textContent).toBe('Re-pair win-lowspec (server-windows)')
+  })
+
+  it('names an incompatible server as needing an update', () => {
+    state.runtimeStatusByEnvironmentId.set('server-windows', blockedStatus('incompatible'))
+    render(<SshStatusSegment compact={false} iconOnly={false} />)
+    expect(screen.getByText('Update required')).toBeTruthy()
+    expect(screen.queryByText('Re-pair…')).toBeNull()
+  })
 })
+
+function blockedStatus(blockedReason: 'access-revoked' | 'incompatible'): RuntimeEnvironmentStatus {
+  return {
+    status: null,
+    checkedAt: 1,
+    snapshot: {
+      environmentId: 'server-windows',
+      pairingRevision: 1,
+      sequence: 1,
+      checkedAt: 1,
+      status: null,
+      verification: 'blocked',
+      blockedReason,
+      transport: 'unknown'
+    }
+  }
+}

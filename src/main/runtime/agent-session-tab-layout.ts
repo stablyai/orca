@@ -28,10 +28,14 @@ export function withChatTabChanges(
   changes: readonly ChatTabChange[]
 ): WorkspaceSessionState | null {
   const loaded = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
-  const groupId = loaded.desktopView.activeGroupIdByWorktree?.[worktreeId]
+  const activeGroupId = loaded.desktopView.activeGroupIdByWorktree?.[worktreeId]
   let layout = loaded.layout
   for (const change of changes) {
     const workspace = layout.workspaces[worktreeId]
+    // A remembered group the workspace no longer holds names nothing: the open mints its own.
+    const groupId = workspace?.groups.some((group) => group.id === activeGroupId)
+      ? activeGroupId
+      : undefined
     const sessionId = 'close' in change ? change.close : change.open.sessionId
     const tabId =
       workspace?.tabs.find((tab) => tab.kind === 'agent-session' && tab.entityId === sessionId)

@@ -43,6 +43,7 @@ export const UNIT_EXCLUDE = [
   'src/main/browser/browser-route-dns-prefetch.electron.test.ts',
   'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts',
   'src/main/browser/browser-popup-compatibility.electron.test.ts',
+  'src/main/browser/browser-popup-adapter-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-native-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-background-compatibility.electron.test.ts',
   `${CROSS_VERSION_WIRE_DIR}**`

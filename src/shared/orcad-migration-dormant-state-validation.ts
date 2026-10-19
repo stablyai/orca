@@ -1,29 +1,33 @@
-import type { OrcadMigrationDormantStatePayload } from './orcad-migration-manifest'
+import type { OrcadMigrationDormantStatePayload } from './orcad-migration/orcad-migration-manifest'
 import { getRepoIdFromWorktreeId } from './worktree/id'
 import { parseWorkspaceKey } from './workspace-scope'
 import {
   assertOrcadMigrationDormantWorkspaceSessionReferences,
   parseOrcadMigrationDormantWorkspaceSession
-} from './orcad-migration-dormant-session-validation'
+} from './orcad-migration/orcad-migration-dormant-session-validation'
 import {
   assertOrcadMigrationDormantAutomationReferences,
   parseOrcadMigrationDormantAutomationRuns,
   parseOrcadMigrationDormantAutomations
-} from './orcad-migration-dormant-automation-validation'
+} from './orcad-migration/orcad-migration-dormant-automation-validation'
 import {
   assertOrcadMigrationScrollbackReferences,
   parseOrcadMigrationTerminalScrollbackSnapshots
-} from './orcad-migration-scrollback'
+} from './orcad-migration/orcad-migration-scrollback'
 import {
   assertOrcadMigrationClientStateReferences,
   parseOrcadMigrationClientState
-} from './orcad-migration-client-state'
+} from './orcad-migration/orcad-migration-client-state'
+import {
+  assertOrcadMigrationEditorDraftsDeclarationReferences,
+  parseOrcadMigrationEditorDraftsDeclaration
+} from './orcad-migration/orcad-migration-editor-drafts'
 import {
   assertUnique,
   boundedArray,
   MAX_ORCAD_MIGRATION_DORMANT_NAMESPACES,
   requiredRecord
-} from './orcad-migration-dormant-value-validation'
+} from './orcad-migration/orcad-migration-dormant-value-validation'
 import {
   parseRetiredNames,
   parseRetirementNamespace,
@@ -31,12 +35,12 @@ import {
   parseWorkspaceLineageEntry,
   parseWorktreeLineageEntry,
   parseWorktreeMetaEntry
-} from './orcad-migration-dormant-state-entry-validation'
+} from './orcad-migration/orcad-migration-dormant-state-entry-validation'
 
 export {
   MAX_ORCAD_MIGRATION_DORMANT_NAMESPACES,
   MAX_ORCAD_MIGRATION_DORMANT_ROWS
-} from './orcad-migration-dormant-value-validation'
+} from './orcad-migration/orcad-migration-dormant-value-validation'
 
 export const ORCAD_MIGRATION_DORMANT_STATE_VERSION = 1 as const
 export function parseOrcadMigrationDormantState(value: unknown): OrcadMigrationDormantStatePayload {
@@ -87,7 +91,12 @@ export function parseOrcadMigrationDormantState(value: unknown): OrcadMigrationD
       : { automationRuns: parseOrcadMigrationDormantAutomationRuns(record.automationRuns) }),
     ...(record.clientState === undefined
       ? {}
-      : { clientState: parseOrcadMigrationClientState(record.clientState) })
+      : { clientState: parseOrcadMigrationClientState(record.clientState) }),
+    ...(record.editorDraftsBlob === undefined
+      ? {}
+      : {
+          editorDraftsBlob: parseOrcadMigrationEditorDraftsDeclaration(record.editorDraftsBlob)
+        })
   }
   assertUnique(payload.worktreeMeta, (entry) => entry.worktreeId, 'worktree_meta')
   assertUnique(payload.worktreeMeta, (entry) => entry.sourceKey, 'worktree_meta_source')
@@ -165,6 +174,12 @@ export function assertOrcadMigrationDormantStateReferences(args: {
       owns,
       repositoryIds: args.repositoryIds
     })
+  }
+  if (args.dormantState.editorDraftsBlob) {
+    assertOrcadMigrationEditorDraftsDeclarationReferences(
+      args.dormantState.workspaceSession,
+      args.dormantState.editorDraftsBlob
+    )
   }
   assertOrcadMigrationScrollbackReferences(
     args.dormantState.workspaceSession,

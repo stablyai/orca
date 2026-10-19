@@ -5,10 +5,8 @@ import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-p
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
 import { resolvePasteReadySignal } from '../../../shared/draft-paste-ready-scanner'
 import { useAppStore } from '@/store'
-import {
-  inspectRuntimeTerminalProcess,
-  sendRuntimePtyInputVerified
-} from '@/runtime/runtime-terminal-inspection'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START

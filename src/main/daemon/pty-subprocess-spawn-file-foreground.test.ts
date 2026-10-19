@@ -67,7 +67,7 @@ function table(command: string | null, loginWrapper = false): ProcessTableRow[] 
   ]
 }
 
-function createHandle(loginWrapper = false) {
+function createHandle(loginWrapper = false, shellPath = '/bin/zsh') {
   const proc: IPty & { processNameIsSpawnFile: true } = {
     pid: 100,
     cols: 80,
@@ -86,7 +86,7 @@ function createHandle(loginWrapper = false) {
   }
   return createDaemonPtySubprocessHandle({
     process: proc,
-    shellPath: '/bin/zsh',
+    shellPath,
     spawnCwd: '/tmp',
     env: {},
     startupCommandDeliveredInShellArgs: false,
@@ -234,20 +234,19 @@ it('uses Windows job membership and the native process table for ordinary childr
     { pid: 100, ppid: 1, name: 'pwsh.exe' },
     { pid: 102, ppid: 100, name: 'vim.exe' }
   ])
-  readStrict.mockRejectedValue(new Error('POSIX evidence unavailable'))
   const handle = createHandle()
   expect(await handle.confirmForegroundProcess?.()).toBe('vim.exe')
   expect(await inspect(handle)).toMatchObject({
     foregroundProcess: 'vim.exe',
     hasChildProcesses: true
   })
+  expect(readStrict).not.toHaveBeenCalled()
 })
 
 it('keeps missing Windows job membership unverifiable', async () => {
   vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
   resolveWindows.mockResolvedValue({ available: true, processName: null })
   members.mockReturnValue(null)
-  readStrict.mockRejectedValue(new Error('POSIX evidence unavailable'))
   expect(await inspect(createHandle())).toMatchObject({
     foregroundProcess: null,
     hasChildProcesses: true,
@@ -259,9 +258,26 @@ it('reports an idle Windows shell only when the owned job contains the shell alo
   vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
   resolveWindows.mockResolvedValue({ available: true, processName: null })
   members.mockReturnValue(new Set([100]))
-  readStrict.mockRejectedValue(new Error('POSIX evidence unavailable'))
   expect(await inspect(createHandle())).toMatchObject({ hasChildProcesses: false })
   expect(readWindows).not.toHaveBeenCalled()
+})
+
+it('accepts only a complete actual-shell Git Bash launch chain', async () => {
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+  const shellPath = 'C:\\Program Files\\Git\\bin\\bash.exe'
+  const handle = createHandle(false, shellPath)
+  members.mockReturnValue(new Set([100, 102]))
+  readWindows.mockResolvedValue([{ pid: 100, ppid: 1, name: 'bash.exe', creationTimeMs: 1 },
+    { pid: 102, ppid: 100, name: 'bash.exe', creationTimeMs: 2 }])
+  expect(await handle.inspectChildProcesses?.()).toBe('no-children')
+  readWindows.mockResolvedValue([{ pid: 100, ppid: 1, name: 'bash.exe' }])
+  expect(await handle.inspectChildProcesses?.()).toBe('unverifiable')
+  readWindows.mockResolvedValue([{ pid: 100, ppid: 1, name: 'bash.exe' },
+    { pid: 102, ppid: 100, name: 'agent.exe' }])
+  expect(await handle.inspectChildProcesses?.()).toBe('children')
+  members.mockReturnValue(new Set([102]))
+  expect(await handle.inspectChildProcesses?.()).toBe('unverifiable')
+  handle.dispose()
 })
 
 it('keeps the Windows close guard live when a shell descendant is selected above another job', async () => {
@@ -274,7 +290,6 @@ it('keeps the Windows close guard live when a shell descendant is selected above
     { pid: 103, ppid: 100, name: 'cmd.exe' },
     { pid: 104, ppid: 103, name: 'pwsh.exe' }
   ])
-  readStrict.mockRejectedValue(new Error('POSIX evidence unavailable'))
   const inspection = await inspect(createHandle())
   expect(inspection).toMatchObject({ hasChildProcesses: true, childProcessEvidence: 'children' })
 })

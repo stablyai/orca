@@ -105,7 +105,20 @@ beforeEach(async () => {
       location.executionHostId === 'local' && location.wslDistro === null,
     acquire: vi.fn(async (input) => {
       acquisitions++
+      const acquisitionGeneration = `acquisition-${acquisitions}`
+      const starter = host
+      // The handshake answers at once, reporting what the child runs with.
+      void starter.handleAdapterEvent({
+        type: 'started',
+        sessionId: input.identity.sessionId,
+        fence: input.fence,
+        acquisitionGeneration,
+        reportedOptions: { model: '' }
+        // Never admitted, so the empty report persists nothing.
+      })
       return {
+        providerChildPhase: 'starting' as const,
+        acquisitionGeneration,
         process: {
           hostId: 'local',
           pid: 4000 + acquisitions,

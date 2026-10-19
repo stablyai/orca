@@ -16,12 +16,19 @@ import {
   writeWslMoveCutover,
   wslMoveJournalDirectory
 } from './wsl-move-cutover-journal'
+import {
+  resetWslMoveDesktopRewriteStoresForTests,
+  setWslMoveDesktopRewriteRegistryCompleteForTests
+} from './wsl-move-desktop-rewrite-stores'
 
 let userDataPath: string
 beforeEach(() => {
   userDataPath = mkdtempSync(join(tmpdir(), 'wsl-move-journal-'))
 })
-afterEach(() => rmSync(userDataPath, { recursive: true, force: true }))
+afterEach(() => {
+  resetWslMoveDesktopRewriteStoresForTests()
+  rmSync(userDataPath, { recursive: true, force: true })
+})
 
 const journalPath = (id: string) => join(wslMoveJournalDirectory(userDataPath), `${id}.json`)
 
@@ -81,6 +88,7 @@ describe('WSL move journal', () => {
   })
 
   it('never moves a record backwards, rebinds it, or advances a superseded one', () => {
+    setWslMoveDesktopRewriteRegistryCompleteForTests(true)
     seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
     expect(() => writeWslMoveCutover(userDataPath, cutover('move-1', 'prepared'))).toThrow(
       'wsl_move_phase_regressed'

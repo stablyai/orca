@@ -866,6 +866,7 @@ describe('subscribe', () => {
     if (!replacement.ok) {
       throw new Error(`expected replacement owner, got ${replacement.refusal.code}`)
     }
-    expect(events.at(-1)).toMatchObject({ type: 'snapshot', fence: replacement.fence })
+    expect(events.findLast((event) => event.type === 'snapshot')?.fence).toBe(replacement.fence)
+    expect(events.at(-1)).toMatchObject({ fence: replacement.fence })
   })
 })

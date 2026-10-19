@@ -612,4 +612,67 @@ describe('buildProjectHostSetupOptions', () => {
       expect.objectContaining({ kind: 'needs-setup', hostId: 'runtime:omarchy-server' })
     ])
   })
+
+  function managedOpenclawHosts(): ExecutionHostRegistryEntry[] {
+    return buildExecutionHostRegistry({
+      repos: [],
+      settings: null,
+      hostSource: 'configured-only',
+      sshTargetLabels: new Map([['openclaw-target', 'openclaw']]),
+      runtimeEnvironments: [
+        {
+          id: 'openclaw-server',
+          name: 'openclaw',
+          orcadDeployment: { sshTargetId: 'openclaw-target' }
+        }
+      ]
+    })
+  }
+
+  it('shows one row when an SSH host and its managed server report the same checkout', () => {
+    const checkout = { path: '/home/neil/projects/orca' }
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo'), repo('ssh-repo'), repo('server-repo')],
+      hosts: [host('local'), ...managedOpenclawHosts()],
+      projectHostSetups: [
+        setup('local', 'project-1', 'local', 'local-repo'),
+        // The SSH repo predates the managed server, so it comes first in store order.
+        setup('ssh', 'project-1', 'ssh:openclaw-target', 'ssh-repo', checkout),
+        setup('server', 'project-1', 'runtime:openclaw-server', 'server-repo', checkout)
+      ]
+    })
+
+    expect(options.filter((option) => option.label === 'openclaw')).toEqual([
+      expect.objectContaining({
+        kind: 'ready',
+        id: 'server',
+        hostId: 'runtime:openclaw-server',
+        aliasSetups: [{ id: 'ssh', hostId: 'ssh:openclaw-target' }]
+      })
+    ])
+  })
+
+  it('keeps distinct checkouts on an SSH host and its managed server as separate rows', () => {
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('ssh-repo'), repo('server-repo')],
+      hosts: managedOpenclawHosts(),
+      projectHostSetups: [
+        setup('ssh', 'project-1', 'ssh:openclaw-target', 'ssh-repo', { path: '/home/neil/a' }),
+        setup('server', 'project-1', 'runtime:openclaw-server', 'server-repo', {
+          path: '/home/neil/b'
+        })
+      ]
+    })
+
+    expect(
+      options
+        .filter((option) => option.kind === 'ready')
+        .map((option) => [option.id, option.hostId])
+    ).toEqual([
+      ['ssh', 'ssh:openclaw-target'],
+      ['server', 'runtime:openclaw-server']
+    ])
+  })
 })

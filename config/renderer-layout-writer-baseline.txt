@@ -15,6 +15,7 @@
 1 src/renderer/src/components/status-bar/workspace-space-decision-inputs.ts
 2 src/renderer/src/components/tab-bar/terminal-tab-activity-status.ts
 3 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model-worktree-write-probe.ts
+1 src/renderer/src/components/tab-group/tab-group-layout-owner-commands.ts
 1 src/renderer/src/components/tab-group/useTabGroupWorkspaceModel.ts
 1 src/renderer/src/components/terminal-pane/pty-connection-test-deps.ts
 4 src/renderer/src/components/terminal-pane/terminal-recovery-ledger-test-store.ts
@@ -30,7 +31,6 @@
 25 src/renderer/src/lib/workspace-session-patch.ts
 3 src/renderer/src/lib/workspace-session-staged-browser-tabs.ts
 17 src/renderer/src/lib/workspace-session.ts
-21 src/renderer/src/lib/worktree-activation-created-agent-test-state.ts
 3 src/renderer/src/runtime/local-structured-session-tabs-sync/snapshot-projection.ts
 3 src/renderer/src/runtime/structured-agent-session-tab-retirement.ts
 10 src/renderer/src/runtime/sync-runtime-graph/mobile-session-group-projection.ts
@@ -51,7 +51,8 @@
 2 src/renderer/src/runtime/web-session-terminal-orphan-topology.ts
 3 src/renderer/src/runtime/web-session-terminal-recovery-snapshot-validation.ts
 10 src/renderer/src/store/slices/browser/browser-close-actions.ts
-6 src/renderer/src/store/slices/browser/browser-hydration-actions.ts
+1 src/renderer/src/store/slices/browser/browser-hydration-actions.ts
+1 src/renderer/src/store/slices/browser/browser-hydration-state.ts
 5 src/renderer/src/store/slices/browser/browser-page-focus-actions.ts
 2 src/renderer/src/store/slices/browser/browser-page-state-actions.ts
 6 src/renderer/src/store/slices/browser/browser-tab-actions.ts
@@ -60,13 +61,13 @@
 9 src/renderer/src/store/slices/editor/actions/check-run-details-actions.ts
 7 src/renderer/src/store/slices/editor/actions/close-file-action.ts
 1 src/renderer/src/store/slices/editor/actions/git-status-actions.ts
-5 src/renderer/src/store/slices/editor/actions/hydrate-editor-session.ts
+4 src/renderer/src/store/slices/editor/actions/hydrated-editor-session-state.ts
 3 src/renderer/src/store/slices/editor/actions/markdown-preview-actions.ts
 27 src/renderer/src/store/slices/editor/actions/open-combined-diff.ts
 13 src/renderer/src/store/slices/editor/actions/open-conflict-file.ts
 14 src/renderer/src/store/slices/editor/actions/open-conflict-review.ts
 4 src/renderer/src/store/slices/editor/actions/open-file-apply.ts
-5 src/renderer/src/store/slices/editor/actions/open-file-mutations.ts
+4 src/renderer/src/store/slices/editor/actions/open-file-mutations.ts
 7 src/renderer/src/store/slices/editor/actions/open-file-state.ts
 26 src/renderer/src/store/slices/editor/actions/open-history-diff.ts
 1 src/renderer/src/store/slices/editor/actions/open-unstaged-diff.ts
@@ -116,3 +117,6 @@
 5 src/renderer/src/store/terminals/workspace-terminal-hydration-patch.ts
 2 src/renderer/src/store/terminals/workspace-terminal-hydration.ts
 2 src/renderer/src/store/terminals/workspace-terminal-reconnect.ts
+7 src/renderer/src/store/workspace-layout-frame-held-tabs.ts
+4 src/renderer/src/store/workspace-layout-frame-slices.ts
+12 src/renderer/src/store/workspace-layout-frame-store-patch.ts

@@ -1,3 +1,5 @@
+import { BrowserClientProfileMetadata } from '../../shared/browser-client-profile-switch-protocol'
+import { installBrowserRoutePartitionPolicies } from './browser-session-route-policies'
 import { session, webContents } from 'electron'
 import { setBrowserClientRouteWebContentsProbe } from './browser-client-download-routing'
 import type { BrowserRoutePartitionBindingStore } from './browser-route-partition-binding-store'
@@ -38,12 +40,23 @@ const bindingStore = {
 }
 
 export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
-  validateProfile: (browserProfileId) => {
-    browserSessionRegistry.requireRouteBrowserProfile(browserProfileId)
+  validateProfile: (browserProfileId, metadata) => {
+    if (metadata) {
+      if (BrowserClientProfileMetadata.parse(metadata).id !== browserProfileId) {
+        throw new Error('browser_route_partition_profile_unavailable')
+      }
+    } else {
+      browserSessionRegistry.requireRouteBrowserProfile(browserProfileId)
+    }
   },
   getSession: (partition) => session.fromPartition(partition),
-  setupPolicies: ({ partition, browserProfileId }) =>
-    browserSessionRegistry.setupRoutePartitionPolicies(partition, browserProfileId),
+  setupPolicies: ({ partition, browserProfileId, profileMetadata }) =>
+    profileMetadata
+      ? installBrowserRoutePartitionPolicies(
+          { ...BrowserClientProfileMetadata.parse(profileMetadata), partition, source: null },
+          partition
+        )
+      : browserSessionRegistry.setupRoutePartitionPolicies(partition, browserProfileId),
   clearPolicies: ({ partition }) => {
     browserSessionRegistry.clearRoutePartitionPolicies(partition)
   },

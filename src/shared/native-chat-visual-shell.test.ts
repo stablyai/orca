@@ -7,6 +7,7 @@ import {
   NATIVE_CHAT_VISUAL_OPEN_LINK_TYPE,
   NATIVE_CHAT_VISUAL_PING_TYPE,
   NATIVE_CHAT_VISUAL_PONG_TYPE,
+  NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE,
   NATIVE_CHAT_VISUAL_SIZE_TYPE,
   NATIVE_CHAT_VISUAL_THEME_TYPE,
   buildNativeChatVisualDocument,
@@ -155,6 +156,17 @@ describe('readNativeChatVisualFrameMessage', () => {
     ).toEqual({ kind: 'open-link', url: 'https://example.com/a%20b' })
   })
 
+  it('accepts a wheel with a finite nonzero delta and a touch drag', () => {
+    const scroll = { type: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE, channel: 'c' }
+    expect(
+      readNativeChatVisualFrameMessage({ ...scroll, input: 'wheel', deltaY: -30 }, 'c')
+    ).toEqual({ kind: 'reader-scroll', input: 'wheel', deltaY: -30 })
+    expect(readNativeChatVisualFrameMessage({ ...scroll, input: 'touch' }, 'c')).toEqual({
+      kind: 'reader-scroll',
+      input: 'touch'
+    })
+  })
+
   it.each([
     ['another channel', { type: NATIVE_CHAT_VISUAL_SIZE_TYPE, channel: 'x', height: 10 }],
     ['no channel', { type: NATIVE_CHAT_VISUAL_SIZE_TYPE, height: 10 }],
@@ -174,6 +186,27 @@ describe('readNativeChatVisualFrameMessage', () => {
         channel: 'c',
         url: `https://example.com/${'a'.repeat(3000)}`
       }
+    ],
+    [
+      'zero wheel delta',
+      { type: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE, channel: 'c', input: 'wheel', deltaY: 0 }
+    ],
+    [
+      'NaN wheel delta',
+      {
+        type: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE,
+        channel: 'c',
+        input: 'wheel',
+        deltaY: Number.NaN
+      }
+    ],
+    [
+      'string wheel delta',
+      { type: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE, channel: 'c', input: 'wheel', deltaY: '-3' }
+    ],
+    [
+      'unknown input',
+      { type: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE, channel: 'c', input: 'key', deltaY: -3 }
     ],
     ['unknown type', { type: 'orca-panel-action', channel: 'c' }],
     ['a string', 'orca-visual-size'],

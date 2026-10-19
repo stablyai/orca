@@ -394,7 +394,17 @@ describe('workspace activation and metadata reentry', () => {
     )
     expect(notify.mock.calls).toEqual([
       ['repo'],
-      ['repo', { invalidateGitScans: false, sortOrderOnly: true }]
+      [
+        'repo',
+        {
+          invalidateGitScans: false,
+          sortOrderOnly: true,
+          sortOrders: [
+            { worktreeId: runtime.selectedWorktree.id, sortOrder: expect.any(Number) },
+            { worktreeId: otherId, sortOrder: expect.any(Number) }
+          ]
+        }
+      ]
     ])
   })
 

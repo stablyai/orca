@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import {
+  resolveTerminalPasteRuntime,
+  resolveTerminalPasteRuntimeEnvironmentId
+} from './terminal-paste-runtime'
 
 describe('terminal paste runtime', () => {
   it('uses the platform-local runtime when the transport carries no session metadata', () => {
@@ -110,5 +114,29 @@ describe('terminal paste runtime', () => {
       runtimeKey: 'remote:remote:env-1@@terminal-1',
       kind: 'remote-runtime'
     })
+  })
+
+  it('uploads to the server a PTY id names, even when two hosts publish the workspace', () => {
+    const twin: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: null },
+      repos: [
+        { id: 'twin', connectionId: null, executionHostId: 'local' },
+        { id: 'twin', connectionId: null, executionHostId: 'runtime:env-b' }
+      ],
+      worktreesByRepo: {
+        twin: [
+          { id: 'twin::/w', repoId: 'twin', hostId: 'local' },
+          { id: 'twin::/w', repoId: 'twin', hostId: 'runtime:env-b' }
+        ]
+      }
+    }
+    expect(
+      resolveTerminalPasteRuntimeEnvironmentId(twin, 'twin::/w', {
+        getPtyId: () => 'remote:env-b@@pty-1'
+      })
+    ).toBe('env-b')
+    expect(
+      resolveTerminalPasteRuntimeEnvironmentId(twin, 'twin::/w', { getPtyId: () => 'pty-1' })
+    ).toBeNull()
   })
 })

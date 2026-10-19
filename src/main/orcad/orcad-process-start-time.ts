@@ -8,7 +8,7 @@
  * so there the kernel start ticks plus boot id are the identity and wall time is only a hint.
  * Null still means "cannot say": callers must never read it as proof of exit.
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { parseLinuxStartTicks } from '../agent-hooks/managed-hook-owner-identity'
 import {
   getProcessStartedAtMs,
@@ -24,6 +24,8 @@ export type OrcadRecordedIdentity = {
   startedAtMs: number | null
   linuxStartTicks?: string
   bootId?: string
+  /** The lock's identity: the holder's POSIX uid as a decimal string, or a Windows username. */
+  identity?: string
 }
 
 /**
@@ -35,6 +37,7 @@ export type OrcadProcessIdentityVerdict = 'matches' | 'differs' | 'unknown' | 'u
 export type OrcadProcessIdentityReaders = {
   startedAtMs?: (pid: number) => number | null
   incarnation?: (pid: number) => OrcadProcessIncarnation | null
+  ownerUid?: (pid: number) => number | null
   platform?: NodeJS.Platform
 }
 
@@ -58,6 +61,57 @@ export function readOrcadProcessIncarnation(pid: number): OrcadProcessIncarnatio
   } catch {
     return null
   }
+}
+
+/** Linux: the uid owning `/proc/<pid>`, which is the process's effective uid, or root if non-dumpable. */
+export function readOrcadProcessOwnerUid(pid: number): number | null {
+  try {
+    return statSync(`/proc/${pid}`).uid
+  } catch {
+    return null
+  }
+}
+
+/** Linux: the live process's short command name, for telling the user what holds a PID. */
+export function readOrcadProcessName(pid: number): string | null {
+  try {
+    const name = readFileSync(`/proc/${pid}/comm`, 'utf8')
+      .trim()
+      .replace(/[^\x20-\x7e]/g, '?')
+    return name || null
+  } catch {
+    return null
+  }
+}
+
+function readLinuxOverflowUid(): number {
+  try {
+    const uid = Number(readFileSync('/proc/sys/kernel/overflowuid', 'utf8').trim())
+    return Number.isSafeInteger(uid) ? uid : 65534
+  } catch {
+    return 65534
+  }
+}
+
+/**
+ * orcad never changes uid, so a PID owned by another uid is proof of reuse. Root and the overflow
+ * uid prove nothing: /proc shows a non-dumpable process as root, and an unmapped root as overflow.
+ */
+function ownerProvesAnotherProcess(
+  pid: number,
+  recorded: OrcadRecordedIdentity,
+  readers: OrcadProcessIdentityReaders
+): boolean {
+  if (!recorded.identity || !/^\d+$/.test(recorded.identity)) {
+    return false
+  }
+  const owner = (readers.ownerUid ?? readOrcadProcessOwnerUid)(pid)
+  return (
+    owner !== null &&
+    owner !== 0 &&
+    owner !== Number(recorded.identity) &&
+    owner !== readLinuxOverflowUid()
+  )
 }
 
 export function recordedOrcadProcessIncarnation(
@@ -92,5 +146,8 @@ export function compareOrcadProcessIdentity(
     return 'matches'
   }
   // Windows and macOS report a stored creation time; Linux recomputes it from a drifting btime.
-  return (readers.platform ?? process.platform) === 'linux' ? 'unproven' : 'differs'
+  if ((readers.platform ?? process.platform) !== 'linux') {
+    return 'differs'
+  }
+  return ownerProvesAnotherProcess(pid, recorded, readers) ? 'differs' : 'unproven'
 }

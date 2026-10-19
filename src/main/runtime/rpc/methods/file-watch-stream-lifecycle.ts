@@ -1,10 +1,12 @@
 import { isWatcherProcessFailure } from '../../../ipc/parcel-watcher-process-failure'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { createFileWatchEventBatcher } from './file-watch-event-batcher'
+import type { FileWatchBatchCadence } from '../../../../shared/rpc-contract/files-target-params'
 
 export async function runFileWatchStream(args: {
   runtime: OrcaRuntimeService
   worktree: string
+  batchCadence?: FileWatchBatchCadence
   connectionId?: string
   signal?: AbortSignal
   subscriptionId: string
@@ -24,7 +26,7 @@ export async function runFileWatchStream(args: {
     let logicalCleanupStarted = false
     let endEmitted = false
     const setupAbortController = new AbortController()
-    const eventBatcher = createFileWatchEventBatcher(args.worktree, args.emit)
+    const eventBatcher = createFileWatchEventBatcher(args.worktree, args.emit, args.batchCadence)
     const settle = (callback: () => void): void => {
       if (settled) {
         return

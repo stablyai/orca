@@ -51,6 +51,9 @@ export type StructuredAgentSessionPublishOptions = Pick<
 /** An item write states which turn its row belongs to; the write that creates the row decides. */
 export type StructuredAgentSessionItemAppendOptions = StructuredAgentSessionAppendOptions & {
   turnScope: AgentJournalTurnScope
+  /** A reusable child's row a later run can resume: this child now executes it
+   *  (`JournalItemRow.executionOwner`). */
+  executes?: true
 }
 
 export type StructuredAgentSessionLifecycleJournal = Pick<
@@ -71,7 +74,7 @@ export type StructuredAgentSessionRevisionJournal = Pick<
 /** Rows already journaled and who produced each, read by a producer that has to agree with them. */
 export type StructuredAgentSessionLinkageJournal = Pick<
   AgentSessionJournal,
-  'epoch' | 'visitItemsWithLinkage'
+  'epoch' | 'visitItemsWithLinkage' | 'threadGoal' | 'threadGoalSource'
 >
 
 /** The row a revision rewrites and its whole new body, read from the journal at execution. */
@@ -80,9 +83,6 @@ export type StructuredAgentSessionRevisionResolver = (
 ) => { identity: AgentJournalItemIdentity; body: AgentJournalItemBody } | null
 
 export type StructuredAgentSessionRevisionOptions = StructuredAgentSessionItemAppendOptions
-
-/** Compatibility alias for lifecycle callers that already use this resolver. */
-export type StructuredAgentSessionLifecycleIdentityResolver = StructuredAgentSessionIdentityResolver
 
 export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSink & {
   appendItem(

@@ -56,13 +56,22 @@ export function synthesizeDisconnectedSshCleanupCandidates(
     if (!Object.hasOwn(allMeta, worktreeId) || !worktreeId.startsWith(repoWorktreePrefix)) {
       continue
     }
-    const meta = getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount)
+    const owned = getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount)
+    const meta = owned && withTerminalUse(owned)
     if (!meta || (!includeAllWorkspaces && !isWorkspaceInactiveForCleanup(meta, scannedAt))) {
       continue
     }
     candidates.push(createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta))
   }
   return candidates
+}
+
+// A terminal used on any device counts, even while its host is unreachable. Unlike the live scan, createdAt is not counted here.
+function withTerminalUse(meta: WorktreeMeta): WorktreeMeta {
+  const usedAt = meta.lastTerminalUseAt
+  return usedAt !== undefined && Number.isFinite(usedAt) && usedAt > meta.lastActivityAt
+    ? { ...meta, lastActivityAt: usedAt }
+    : meta
 }
 
 function createDisconnectedSshCandidate(

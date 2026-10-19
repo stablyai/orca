@@ -154,7 +154,33 @@ describe('WorkspaceLayoutStream', () => {
     delete withoutFolder.tabGroupLayouts![FOLDER_KEY]
     write(LOCAL_EXECUTION_HOST_ID, withoutFolder)
     await flush()
-    expect(events.at(-1)).toEqual({ type: 'removed', key: FOLDER_KEY })
+    expect(events.at(-1)).toEqual({ type: 'removed', key: FOLDER_KEY, seq: events[0]!.seq! + 1 })
+  })
+
+  it('numbers each change frame, so a reply can name the frame holding its write', async () => {
+    const { stream, write } = setup()
+    const events: WorkspaceLayoutEvent[] = []
+    const first = stream.subscribe((event) => events.push(event))
+    const session = localDesktopSession()
+    write(LOCAL_EXECUTION_HOST_ID, session)
+    await flush()
+    expect(events).toEqual([])
+    expect(stream.settledSeq()).toBe(first.seq)
+
+    session.tabGroups![GIT_KEY]![0]!.tabOrder.reverse()
+    write(LOCAL_EXECUTION_HOST_ID, session)
+    // Read before the queued flush runs: the write's frame goes out first.
+    const replySeq = stream.settledSeq()
+    expect(events).toEqual([expect.objectContaining({ key: GIT_KEY, seq: first.seq + 1 })])
+    expect(replySeq).toBe(first.seq + 1)
+    await flush()
+    expect(events).toHaveLength(1)
+
+    // A later subscriber starts where the stream is; positions never restart.
+    first.unsubscribe()
+    const second = stream.subscribe(() => {})
+    expect(second.seq).toBeGreaterThanOrEqual(replySeq)
+    second.unsubscribe()
   })
 
   it('logs a failing listener once and never throws into the write', async () => {
@@ -226,7 +252,7 @@ describe('WorkspaceLayoutStream', () => {
     )
     fake.write(LOCAL_EXECUTION_HOST_ID, rowsOnly(keys.slice(1), ['t1', 't2']))
     await flush()
-    expect(events).toEqual([{ type: 'removed', key: 'repo-1::/a' }])
+    expect(events).toEqual([{ type: 'removed', key: 'repo-1::/a', seq: expect.any(Number) }])
 
     const withoutFirstTab = rowsOnly(keys.slice(1), ['t2'])
     fake.write(LOCAL_EXECUTION_HOST_ID, withoutFirstTab)

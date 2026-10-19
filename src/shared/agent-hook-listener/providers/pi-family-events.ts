@@ -199,6 +199,8 @@ export function normalizePiCompatibleEvent(
 
 const OMP_APPROVAL_RELEASE_EVENTS: ReadonlySet<unknown> = new Set([
   'tool_approval_resolved',
+  'session_start',
+  'session_switch',
   'before_agent_start',
   'agent_start'
 ])

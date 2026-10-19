@@ -1,11 +1,11 @@
-import type * as ExecCommandModule from './ssh-relay-exec-command'
+import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnection } from './ssh-connection'
-import { SSH_EXEC_TIMEOUT_CODE } from './ssh-relay-exec-command'
+import type { SshConnection } from './connection/ssh-connection'
+import { SSH_EXEC_TIMEOUT_CODE } from './remote-exec/remote-exec-command'
 
 const execCommandMock = vi.hoisted(() => vi.fn())
 
-vi.mock('./ssh-relay-exec-command', async (importOriginal) => ({
+vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: execCommandMock
 }))

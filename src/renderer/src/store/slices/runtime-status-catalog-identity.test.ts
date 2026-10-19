@@ -8,7 +8,7 @@ import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   getRuntimeEnvironmentConnectionGeneration
 } from './runtime-status'
-import { createTestStore } from './store-test-helpers'
+import { createRuntimeStatusTestStore as createTestStore } from './runtime-status.test-fixture'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), dismiss: vi.fn() }

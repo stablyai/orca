@@ -5,6 +5,42 @@ import {
   getRepoIdFromWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../../../shared/worktree/id'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../shared/execution-host'
+
+type PlaceholderOwner = Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'>
+
+/**
+ * The owner a listing stamps on this repo row's worktrees. A server's repo that nests an SSH
+ * target lists them as `ssh:<target>` through that server, so a bare `runtime:` stamp would hide
+ * the target from an `ssh:` host selection.
+ */
+export function repoRowOwnerStamp(row: Repo): PlaceholderOwner {
+  const host = parseExecutionHostId(getRepoExecutionHostId(row))
+  const connectionId = row.connectionId?.trim()
+  if (host?.kind === 'runtime') {
+    return connectionId
+      ? {
+          hostId: toSshExecutionHostId(connectionId),
+          runtimeOwnerEnvironmentId: host.environmentId
+        }
+      : { hostId: host.id }
+  }
+  // Why: a row whose explicit host disagrees with its connection is not evidence of either.
+  return connectionId && host?.id === toSshExecutionHostId(connectionId) ? { hostId: host.id } : {}
+}
+
+/**
+ * The SSH host, and the server proxying it, that a listing would stamp. A repo id with rows on
+ * several hosts names neither, so its placeholder stays unstamped rather than guessing a twin.
+ */
+function placeholderOwner(repos: readonly Repo[], repoId: string): PlaceholderOwner {
+  const rows = repos.filter((repo) => repo.id === repoId)
+  return rows.length === 1 && rows[0].connectionId?.trim() ? repoRowOwnerStamp(rows[0]) : {}
+}
 
 export function addHydratedSshWorktreePlaceholders(
   repos: readonly Repo[],
@@ -29,6 +65,7 @@ export function addHydratedSshWorktreePlaceholders(
     const placeholder: Worktree = {
       id: worktreeId,
       repoId,
+      ...placeholderOwner(repos, repoId),
       displayName,
       comment: '',
       linkedIssue: null,

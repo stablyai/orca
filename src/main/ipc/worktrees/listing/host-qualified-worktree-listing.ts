@@ -21,6 +21,8 @@ import {
   isCapturedRepoCurrent,
   resolveRepoOwnershipEvidence
 } from './worktree-host-ownership'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { dropWorkspacesTheListingInvalidates } from '../../../persistence/restoring-sessions/invalid-workspace-layout-purge'
 
 export async function listHostQualifiedDetectedWorktrees(
   store: Store,
@@ -90,6 +92,9 @@ export async function listHostQualifiedDetectedWorktrees(
     return capturedAuthority !== null && isCurrentSshProviderAuthority(capturedAuthority)
   }
   const result = await listDetectedWorktreesForCapturedRepo(store, repo, isCurrent, providerAbort)
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    dropWorkspacesTheListingInvalidates(store, result)
+  }
   if (!result) {
     return rejected('stale')
   }

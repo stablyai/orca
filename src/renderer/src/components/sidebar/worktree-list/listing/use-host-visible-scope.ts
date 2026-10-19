@@ -12,7 +12,7 @@ import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
-} from './host-filtering'
+} from '../../../../../../shared/sidebar-list/host-filtering'
 
 // Narrows repos, project groups, and folder workspaces to the hosts (and devices) the
 // current host filter admits.

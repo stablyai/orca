@@ -2,6 +2,8 @@
 // the events it writes back as the provider would.
 
 import { vi, type Mock } from 'vitest'
+import type { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { activeProviderContext } from '../../../shared/agent-session-provider-context'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
@@ -29,7 +31,8 @@ export type QueuedRigProviderOptions = {
 
 export function createQueuedRigProvider(
   store: Pick<AgentSessionRecordStore, 'getRecord'>,
-  options: QueuedRigProviderOptions
+  options: QueuedRigProviderOptions,
+  host: () => StructuredAgentSessionHost
 ) {
   // Admitted: the message is written and unanswered, so the session owes work
   // until the test settles it.
@@ -53,7 +56,7 @@ export function createQueuedRigProvider(
   )
   let events: StructuredAgentSessionEventSink | undefined
 
-  const adapter: StructuredAgentSessionAdapter = {
+  const scripted: StructuredAgentSessionAdapter = {
     acquire: async ({ identity, fence, spawnToken, events: sink }) => {
       starts()
       const hold = startHold
@@ -72,6 +75,7 @@ export function createQueuedRigProvider(
         ? `${THREAD}-context-${record!.providerContextBoundary!.operationId}`
         : (context?.head?.handle.nativeId ?? THREAD)
       return {
+        providerChildPhase: 'starting' as const,
         process: {
           hostId: 'local',
           pid: 4242,
@@ -96,13 +100,15 @@ export function createQueuedRigProvider(
     cancelTurn,
     ...(options.stopEndsSession ? { stopEndsSession: () => true } : {}),
     ...(options.startUnanswered ? { startAnswered: () => false } : {}),
-    answerPrompt: vi.fn(async () => undefined),
+    answerPrompt: vi.fn(async ({ commit }) => commit()),
     setOption: vi.fn(async () => undefined),
     ...(options.rewind
       ? { rewind: options.rewind, rewindSupport: () => ({ supported: true as const }) }
       : {}),
     ...(options.recoverRewind ? { recoverRewind: options.recoverRewind } : {})
   }
+
+  const adapter = options.starting ? scripted : startsWhenPublished(scripted, host)
 
   /** What the provider's translator writes when a /compact's turn ends, as a success. */
   function finishCompact(): void {

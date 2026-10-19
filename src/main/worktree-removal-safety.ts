@@ -2,7 +2,7 @@ import { lstat, readFile } from 'node:fs/promises'
 import type { WorktreeMeta } from '../shared/worktree/meta-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { NESTED_WORKTREE_REMOVAL_PREFIX } from '../shared/worktree/nested-removal'
-import { areWorktreePathsEqual } from './ipc/worktree-logic'
+import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 import {
   containsPath,
   getPathOps,

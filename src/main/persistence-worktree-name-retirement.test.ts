@@ -14,7 +14,7 @@ import { MARINE_CREATURES } from '../shared/marine-creatures'
 import { createRetiredNameLookup } from '../shared/worktree/retired-name-registry'
 import type { SshTarget } from '../shared/ssh-types'
 import { MAX_RETIREMENT_NAMESPACES } from './worktree-retirement-namespace'
-import { getRuntimeOwnedSshTargetId } from './ssh/ssh-connection-store'
+import { getRuntimeOwnedSshTargetId } from './ssh/connection/ssh-connection-store'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'
 

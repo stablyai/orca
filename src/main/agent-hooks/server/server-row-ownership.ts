@@ -1,9 +1,4 @@
-import {
-  isWslHookRelayConnectionId,
-  wslHookRelayConnectionId
-} from '../../../shared/wsl-hook-relay-contract'
-import { splitWorktreeIdForFilesystem, worktreeIdsEqual } from '../../../shared/worktree/id'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status-terminal-owner'
 import { structuralValuesEqualIgnoringUndefined } from '../../../shared/structural-value-equality'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
@@ -55,13 +50,6 @@ function semanticRowsEqual(
   return structuralValuesEqualIgnoringUndefined(semanticRow(before), semanticRow(after))
 }
 
-function wslDistroForWorktree(worktreeId: string | undefined): string | null {
-  const worktreePath = worktreeId
-    ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
-    : undefined
-  return worktreePath ? (parseWslUncPath(worktreePath)?.distro ?? null) : null
-}
-
 export abstract class AgentHookServerRowOwnership extends AgentHookServerListeners {
   _resetRowOwnershipForTests(): void {
     this.paneKeyByTerminalHandle.clear()
@@ -82,34 +70,7 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     previous: Pick<AgentHookEventPayload, 'connectionId' | 'worktreeId'>,
     incoming: Pick<AgentHookEventPayload, 'connectionId' | 'worktreeId'>
   ): boolean {
-    if (
-      previous.worktreeId &&
-      incoming.worktreeId &&
-      !worktreeIdsEqual(previous.worktreeId, incoming.worktreeId)
-    ) {
-      return false
-    }
-    if (previous.connectionId === incoming.connectionId) {
-      return true
-    }
-    const relayConnection = isWslHookRelayConnectionId(previous.connectionId)
-      ? previous.connectionId
-      : isWslHookRelayConnectionId(incoming.connectionId)
-        ? incoming.connectionId
-        : null
-    const localConnection = previous.connectionId === null || incoming.connectionId === null
-    if (!relayConnection || !localConnection || !previous.worktreeId || !incoming.worktreeId) {
-      return false
-    }
-    const previousDistro = wslDistroForWorktree(previous.worktreeId)
-    const incomingDistro = wslDistroForWorktree(incoming.worktreeId)
-    return (
-      previousDistro !== null &&
-      incomingDistro !== null &&
-      previousDistro === incomingDistro &&
-      relayConnection === wslHookRelayConnectionId(previousDistro) &&
-      worktreeIdsEqual(previous.worktreeId, incoming.worktreeId)
-    )
+    return sameAgentStatusTerminalOwner(previous, incoming)
   }
 
   protected retainedOwnerLaunchTokenHash(
@@ -143,10 +104,29 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     if (!emit || semanticRowsEqual(before, after)) {
       return false
     }
-    const mutation: AgentHookStatusRowMutation = {
+    this.notifyStatusRowMutationListeners({
       before: toMutationIdentity(before),
       after: toMutationIdentity(after)
+    })
+    return true
+  }
+
+  /** Republish a row whose OSC 7501 facet alone changed, to the window and row-mutation readers only:
+   *  enriched listeners (plugins, recorder, titles) must not see progress ticks as transitions. */
+  protected republishProgramStatusFacet(paneKey: string): void {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+    const row = this.state.lastStatusByPaneKey.get(paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (!row || row.providerSessionOnly === true) {
+      return
     }
+    this.onAgentStatus?.({ ...this.programStatusFacets.stitch(row), programStatusOnly: true })
+    const identity = toMutationIdentity(row)
+    this.notifyStatusRowMutationListeners({ before: identity, after: identity })
+  }
+
+  private notifyStatusRowMutationListeners(mutation: AgentHookStatusRowMutation): void {
     for (const listener of this.statusRowMutationListeners) {
       try {
         listener(mutation)
@@ -154,6 +134,5 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
         console.error('[agent-hooks] status-row mutation listener threw', error)
       }
     }
-    return true
   }
 }

@@ -17,7 +17,9 @@ import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-rel
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
+import { revealTerminalPaneInWindow } from './terminal-pane-reveal-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
@@ -129,6 +131,9 @@ export function registerRuntimeWindowLifecycle(
           ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
           ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+          ...(opts.targetGroupId ? { targetGroupId: opts.targetGroupId } : {}),
+          ...(opts.afterTabId ? { afterTabId: opts.afterTabId } : {}),
+          ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
           activate: opts.activate !== false,
           ...(opts.presentation ? { presentation: opts.presentation } : {}),
           ...(opts.surfaceOwner === false ? { surfaceOwner: false } : {}),
@@ -172,8 +177,10 @@ export function registerRuntimeWindowLifecycle(
     },
     renameTerminal: (tabId, title, options) =>
       send('ui:renameTerminal', { tabId, title, ...options }),
+    setPaneTitle: (tabId, leafId, title) => send('ui:setPaneTitle', { tabId, leafId, title }),
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
+    revealTerminalPane: (target) => revealTerminalPaneInWindow(mainWindow, target),
     focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
     closeSessionTab: (tabId, worktreeId) =>
       requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
@@ -229,6 +236,17 @@ export function registerRuntimeWindowLifecycle(
       send('runtime:browserRemoteViewersChanged', { browserPageId, hasRemoteViewers }),
     clientHostedBrowserRowsChanged: (event) => send('runtime:clientHostedBrowserRowsChanged', event)
   })
+  // Switch point: the window reads its sidebar from main's feed and re-reads on each notice.
+  const detachSidebarInputsNotices = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? runtime.onClientEvent(
+        (event) => {
+          if (event.type === 'sidebarInputsChanged') {
+            send('runtime:sidebarInputsChanged', event)
+          }
+        },
+        { consumesTerminalSideEffects: false }
+      )
+    : null
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
     const fence = runtime.markRendererReloading(mainWindow.id)
@@ -245,6 +263,7 @@ export function registerRuntimeWindowLifecycle(
     rendererNotifications.onRendererProcessGone()
   })
   mainWindow.on('closed', () => {
+    detachSidebarInputsNotices?.()
     rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {

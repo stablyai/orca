@@ -1,12 +1,13 @@
 import { access, mkdir, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type * as TimerPromises from 'node:timers/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 
-const { state, runProcessMock, materializeMock, ensureWithinMock, disconnectMock } = vi.hoisted(
-  () => {
+const { state, runProcessMock, materializeMock, ensureWithinMock, disconnectMock, recoverMock } =
+  vi.hoisted(() => {
     const state: { root: string; packaged: boolean; identity: DaemonEndpointIdentity | null } = {
       root: '',
       packaged: true,
@@ -17,10 +18,30 @@ const { state, runProcessMock, materializeMock, ensureWithinMock, disconnectMock
       runProcessMock: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>(),
       materializeMock: vi.fn(),
       ensureWithinMock: vi.fn(),
-      disconnectMock: vi.fn()
+      disconnectMock: vi.fn(),
+      recoverMock: vi.fn<() => Promise<boolean>>()
+    }
+  })
+const retirementClock = vi.hoisted<{ now: number; enabled: boolean; waits: number[] }>(() => ({
+  now: 0,
+  enabled: false,
+  waits: []
+}))
+vi.mock('node:timers/promises', async (importOriginal) => {
+  const timers = await importOriginal<typeof TimerPromises>()
+  return {
+    ...timers,
+    setTimeout: (...args: Parameters<typeof timers.setTimeout>) => {
+      if (!retirementClock.enabled) {
+        return timers.setTimeout(...args)
+      }
+      const [ms = 1, value] = args
+      retirementClock.now += ms
+      retirementClock.waits.push(ms)
+      return Promise.resolve(value)
     }
   }
-)
+})
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 vi.mock('../../shared/app-environment', () => ({
   hasAppEnvironment: () => true,
@@ -35,6 +56,7 @@ vi.mock('./macos-daemon-bundle', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   materializeMacDaemonBundle: materializeMock
 }))
+vi.mock('./macos-retired-daemon-recovery', () => ({ recoverRetiredMacDaemonJob: recoverMock }))
 vi.mock('./client', () => ({
   DaemonClient: class {
     ensureConnectedWithin = ensureWithinMock
@@ -48,6 +70,7 @@ vi.mock('./client', () => ({
 
 import { launchMacDaemonFromStableBundle, macDaemonJobLabel } from './macos-daemon-launchd'
 import type { DaemonChildSpawnOptions } from './daemon-launched-child-spawn'
+import { PROTOCOL_VERSION } from './daemon-protocol-version'
 
 const ok: ProcessResult = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
 const stopped = { ...ok, stdout: 'gui/501/x = {\n\tstate = not running\n}\n' }
@@ -64,7 +87,7 @@ type Launchctl = { bootstrap: ProcessResult; bootout: ProcessResult; print: Proc
 let launchctl: Launchctl
 let job: unknown
 let jobMode = 0
-let options: DaemonChildSpawnOptions
+let options: DaemonChildSpawnOptions & { runtimeDir: string }
 let copyDir: string
 const nativePlatform = process.platform
 const originalGetuid = Object.getOwnPropertyDescriptor(process, 'getuid')
@@ -87,16 +110,22 @@ function stubSystemVersion(version: string): void {
   Object.defineProperty(process, 'getSystemVersion', { configurable: true, value: () => version })
 }
 
-/** Lets a readiness timeout elapse without waiting for it in real time. */
+function beginRetirementClock(): number {
+  const startedAt = Date.now()
+  retirementClock.now = startedAt
+  retirementClock.enabled = true
+  vi.spyOn(Date, 'now').mockImplementation(() => retirementClock.now)
+  return startedAt
+}
+
+/** Lets connection attempts and poll waits share the readiness deadline. */
 function elapseOnEachConnectAttempt(stepMs: number): () => number {
-  const realNow = Date.now()
-  let elapsedMs = 0
-  vi.spyOn(Date, 'now').mockImplementation(() => realNow + elapsedMs)
+  const startedAt = beginRetirementClock()
   ensureWithinMock.mockImplementation(async () => {
-    elapsedMs += stepMs
+    retirementClock.now += stepMs
     throw new Error('ECONNREFUSED')
   })
-  return () => elapsedMs
+  return () => retirementClock.now - startedAt
 }
 
 async function launchFailure(deadlineMs = roomyDeadline()): Promise<unknown> {
@@ -120,6 +149,7 @@ beforeEach(async () => {
     entryPath: '/Applications/Orca.app/Contents/Resources/daemon-entry.js',
     forkEntryPath: '/Applications/Orca.app/Contents/Resources/daemon-entry.js',
     userDataPath: state.root,
+    runtimeDir: join(state.root, 'daemon'),
     socketPath: join(state.root, 'daemon.sock'),
     tokenPath: join(state.root, 'daemon.token'),
     pidPath: join(state.root, 'daemon.pid'),
@@ -131,6 +161,7 @@ beforeEach(async () => {
     .mockResolvedValue({ directory: copyDir, execPath: helperExec(), entryPath: helperEntry() })
   ensureWithinMock.mockReset().mockResolvedValue(undefined)
   disconnectMock.mockReset()
+  recoverMock.mockReset().mockResolvedValue(false)
   launchctl = { bootstrap: ok, bootout: ok, print: [missing] }
   job = undefined
   runProcessMock.mockReset().mockImplementation(async (spec) => {
@@ -162,6 +193,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  retirementClock.enabled = false
+  retirementClock.waits = []
   vi.restoreAllMocks()
   for (const [key, descriptor] of [
     ['getuid', originalGetuid],
@@ -220,7 +253,7 @@ it('uses one launchd label per profile and protocol', () => {
   expect(macDaemonJobLabel('/Users/a/Library/Application Support/orca')).not.toBe(
     macDaemonJobLabel('/Users/a/Library/Application Support/orca-dev')
   )
-  expect(macDaemonJobLabel('/p')).toMatch(/^com\.stablyai\.orca\.terminal\.[0-9a-f]{16}\.v46$/)
+  expect(macDaemonJobLabel('/p')).toMatch(/^com\.stablyai\.orca\.terminal\.[0-9a-f]{16}\.v49$/)
 })
 
 it.each(['13.4.1', '12.7.6'])(
@@ -264,6 +297,7 @@ it("boots out an earlier daemon's stopped job before starting the new one", asyn
 })
 
 it('lets a restarting daemon exit before removing its registration and bootstrapping', async () => {
+  beginRetirementClock()
   launchctl.print = [running, stopped]
   await expect(launchMacDaemonFromStableBundle(options, roomyDeadline())).resolves.not.toBeNull()
   expect(launchctlCalls('bootout')).toHaveLength(1)
@@ -278,6 +312,46 @@ it.each([
   // No retirement wait may consume the time reserved for bootstrap and readiness.
   const error = await launchFailure(Date.now() + 20_000)
   expect(error).toBeInstanceOf(Error)
+  expect(launchctlCalls('bootstrap')).toHaveLength(0)
+  expect(launchctlCalls('bootout')).toHaveLength(0)
+  expect(recoverMock).toHaveBeenCalledExactlyOnceWith(
+    state.root,
+    options.runtimeDir,
+    PROTOCOL_VERSION
+  )
+})
+
+it('replaces a running job that verifiably retired its endpoint without exiting (#29361)', async () => {
+  const startedAt = beginRetirementClock()
+  launchctl.print = [running]
+  recoverMock.mockImplementation(async () => {
+    expect(retirementClock.now - startedAt).toBe(7_000)
+    launchctl.print = [missing]
+    return true
+  })
+  await expect(launchMacDaemonFromStableBundle(options, roomyDeadline())).resolves.not.toBeNull()
+  expect(recoverMock).toHaveBeenCalledOnce()
+  expect(launchctlCalls('bootstrap')).toHaveLength(1)
+  expect(retirementClock.waits).toEqual(Array(28).fill(250))
+  expect(launchctlCalls('print')).toHaveLength(29)
+})
+
+it.each([
+  ['declined', async () => false],
+  [
+    'failed',
+    async () => {
+      throw new Error('descendants are unverifiable')
+    }
+  ]
+])('keeps a running job whose recovery %s and never bootstraps beside it', async (_, impl) => {
+  launchctl.print = [running]
+  recoverMock.mockImplementation(impl)
+  const error = await launchFailure(Date.now() + 20_000)
+  expect(error).toHaveProperty(
+    'message',
+    expect.stringContaining('from an earlier launch is still registered')
+  )
   expect(launchctlCalls('bootstrap')).toHaveLength(0)
   expect(launchctlCalls('bootout')).toHaveLength(0)
 })
@@ -350,6 +424,7 @@ it('waits out a silent job that is still running and never forks beside it', asy
 })
 
 it('retries a connection refusal within the same job', async () => {
+  beginRetirementClock()
   ensureWithinMock.mockRejectedValueOnce(new Error('ECONNREFUSED'))
   launchctl.print = [missing, running]
   await expect(launchMacDaemonFromStableBundle(options, roomyDeadline())).resolves.not.toBeNull()

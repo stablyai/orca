@@ -37,6 +37,29 @@ describe('readWorkspaceLayoutStreamFrame', () => {
     ).toEqual({ type: 'snapshot', workspaces: [{ key: GIT_KEY, layout }] })
   })
 
+  it('keeps a frame’s stream position, and drops one that is not a position', () => {
+    const layout = publishedLayout()
+    expect(
+      readWorkspaceLayoutStreamFrame({ type: 'workspace', key: GIT_KEY, layout, seq: 7 })
+    ).toEqual({ type: 'workspace', key: GIT_KEY, layout, seq: 7 })
+    expect(readWorkspaceLayoutStreamFrame({ type: 'removed', key: GIT_KEY, seq: 0 })).toEqual({
+      type: 'removed',
+      key: GIT_KEY,
+      seq: 0
+    })
+    expect(readWorkspaceLayoutStreamFrame({ type: 'snapshot', workspaces: [], seq: 3 })).toEqual({
+      type: 'snapshot',
+      workspaces: [],
+      seq: 3
+    })
+    for (const seq of [-1, 1.5, '4', null, Number.MAX_VALUE]) {
+      expect(readWorkspaceLayoutStreamFrame({ type: 'removed', key: GIT_KEY, seq })).toEqual({
+        type: 'removed',
+        key: GIT_KEY
+      })
+    }
+  })
+
   it('returns null for a newer host’s frame type and for malformed frames', () => {
     const layout = publishedLayout()
     for (const unreadable of [

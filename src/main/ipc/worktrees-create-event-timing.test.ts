@@ -5,8 +5,9 @@ import {
   listWorktreesMock,
   setPlatform
 } from './worktrees-test-module-mocks'
-import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { beginPreparationWork } from '../worktree-create-concurrency'
+import { addWorktree } from '../git/worktree'
 
 const { trackMock, probeHookMock, telemetryEnabledMock } = vi.hoisted(() => ({
   trackMock: vi.fn<(name: string, props: Record<string, unknown>) => void>(),
@@ -296,5 +297,34 @@ describe('worktrees:create event timing fields', () => {
     expect(trackedEvents('workspace_created')).toHaveLength(0)
     expect(typeof props?.total_ms).toBe('number')
     expect(JSON.stringify(props)).not.toMatch(/fatal|work tree/)
+  })
+})
+
+describe('worktrees:create checkout progress event', () => {
+  beforeEach(() => {
+    setupWorktreeHandlers()
+  })
+
+  it("forwards git's checkout meter to the pending create it belongs to", async () => {
+    useRepo(makeRepo({}))
+    useLocalListing()
+    await handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'wt', creationId: 'c-7' })
+    const onCheckoutProgress = vi.mocked(addWorktree).mock.calls.at(-1)?.[6]?.onCheckoutProgress
+    vi.mocked(mainWindow.webContents.send).mockClear()
+
+    onCheckoutProgress?.({ percent: 42, completed: 420, total: 1000 })
+    onCheckoutProgress?.(null)
+
+    expect(vi.mocked(mainWindow.webContents.send).mock.calls).toEqual([
+      [
+        'createWorktree:progress',
+        {
+          creationId: 'c-7',
+          phase: 'creating',
+          checkout: { percent: 42, completed: 420, total: 1000 }
+        }
+      ],
+      ['createWorktree:progress', { creationId: 'c-7', phase: 'creating', checkout: null }]
+    ])
   })
 })

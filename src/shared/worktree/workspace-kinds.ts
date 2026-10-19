@@ -112,11 +112,16 @@ export function getWorkspaceRowKindFacts(
   repo: Pick<Repo, 'kind'> | undefined
 ): Pick<
   RuntimeWorktreePsSummary,
-  'defaultBranch' | 'automationCreated' | 'cliCreated' | 'detachedHead'
+  'defaultBranch' | 'automationCreated' | 'automationName' | 'cliCreated' | 'detachedHead'
 > {
+  // Persisted provenance is not validated, so an older record may lack the snapshot.
+  const snapshot: unknown = worktree.automationProvenance?.automationNameSnapshot
+  const automationName = typeof snapshot === 'string' ? snapshot.trim() : ''
   return {
     defaultBranch: isDefaultBranchWorkspace(worktree, repo),
-    ...(isAutomationGeneratedWorkspace(worktree) ? { automationCreated: true } : {}),
+    ...(isAutomationGeneratedWorkspace(worktree)
+      ? { automationCreated: true, ...(automationName ? { automationName } : {}) }
+      : {}),
     ...(isCliCreatedWorkspace(worktree) ? { cliCreated: true } : {}),
     ...(isDetachedHeadWorkspace(worktree) ? { detachedHead: true } : {})
   }

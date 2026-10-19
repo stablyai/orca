@@ -120,7 +120,7 @@ export const WORKTREE_METHODS = [
                 }),
                 creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
               },
-              context.clientKind ? { clientKind: context.clientKind } : {}
+              context
             )
           )
           finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)

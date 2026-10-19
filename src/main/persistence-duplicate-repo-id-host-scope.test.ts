@@ -164,6 +164,52 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
     )
   })
 
+  it.each(['local', 'ssh:ssh-1'] as const)(
+    'deleteProjectHostSetup with hostId %s removes that host twin only',
+    async (hostId) => {
+      const store = await createStoreWithDuplicateRepoId()
+
+      const result = store.deleteProjectHostSetup({ setupId: 'dup', hostId })
+
+      expect(result?.setup.hostId).toBe(hostId)
+      expect(store.getRepos().map((repo) => repo.path)).toEqual(
+        hostId === 'local' ? ['/remote/dup'] : ['/laptop/dup']
+      )
+    }
+  )
+
+  it.each(['local', 'ssh:ssh-1'] as const)(
+    'updateProjectHostSetup with hostId %s renames that host twin only',
+    async (hostId) => {
+      const store = await createStoreWithDuplicateRepoId()
+
+      const result = store.updateProjectHostSetup({
+        setupId: 'dup',
+        hostId,
+        updates: { displayName: 'Renamed' }
+      })
+
+      expect(result?.setup.hostId).toBe(hostId)
+      expect(store.getRepos().map((repo) => repo.displayName)).toEqual(
+        hostId === 'local' ? ['Renamed', 'Dup Remote'] : ['Dup Local', 'Renamed']
+      )
+    }
+  )
+
+  it('a hostId naming no twin edits nothing', async () => {
+    const store = await createStoreWithDuplicateRepoId()
+
+    expect(
+      store.updateProjectHostSetup({
+        setupId: 'dup',
+        hostId: 'ssh:other',
+        updates: { displayName: 'Renamed' }
+      })
+    ).toBeNull()
+    expect(store.deleteProjectHostSetup({ setupId: 'dup', hostId: 'ssh:other' })).toBeNull()
+    expect(store.getRepos().map((repo) => repo.displayName)).toEqual(['Dup Local', 'Dup Remote'])
+  })
+
   it('setResolvedRepoGitUsername writes only the probed host row', async () => {
     // Enrichment resolves per repo *location*, so the write must land on the row it probed; an
     // id-only lookup would stamp the sibling host's username and host-scoped hydration cache.

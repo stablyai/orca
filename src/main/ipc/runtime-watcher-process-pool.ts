@@ -20,8 +20,6 @@ import {
   type RuntimeWatcherProcessPoolOptions
 } from './runtime-watcher-pool-state'
 
-export type { RuntimeWatcherProcessPoolOptions } from './runtime-watcher-pool-state'
-
 // Why: extra ~50 MiB processes are justified only when quarantine isolates a fault.
 const DEFAULT_MAX_SHARED_SUPERVISORS = 1
 const DEFAULT_MAX_QUARANTINE_SUPERVISORS = 4

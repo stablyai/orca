@@ -1,10 +1,10 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RouteDependencies = {
   routes: { pathname: string; params?: Record<string, string> }[]
-  panels: { hostId: string; worktreeId: string; name?: string }[]
+  refusals: string[]
   /** `mount:<pathname>` / `unmount:<pathname>`, which is the only thing that tells a remount from
    *  a prop update — and a remount is what drops the old session's bridge and its grants. */
   lifecycle: string[]
@@ -13,7 +13,7 @@ type RouteDependencies = {
 
 const dependencies = vi.hoisted((): RouteDependencies => ({
   routes: [],
-  panels: [],
+  refusals: [],
   lifecycle: [],
   params: {}
 }))
@@ -28,7 +28,7 @@ vi.mock('react-native', () => ({
 }))
 
 // The workspace route reads the desktop's connection to decide whether a server is reachable.
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: null, state: 'disconnected' })
 }))
 vi.mock('../transport/workspace-server', () => ({
@@ -36,13 +36,9 @@ vi.mock('../transport/workspace-server', () => ({
 }))
 vi.mock('expo-router', () => ({ useLocalSearchParams: () => dependencies.params }))
 
-vi.mock('../agent-history/MobileAgentSessionHistoryPanel', () => ({
-  MobileAgentSessionHistoryPanel: (props: {
-    hostId: string
-    worktreeId: string
-    name?: string
-  }) => {
-    dependencies.panels.push(props)
+vi.mock('./PageRouteUnavailableScreen', () => ({
+  PageRouteUnavailableScreen: (props: { hostId: string }) => {
+    dependencies.refusals.push(props.hostId)
     return null
   }
 }))
@@ -79,17 +75,12 @@ async function renderRoute(): Promise<void> {
   })
 }
 
-describe('the native agent-history route that hands off to the shell', () => {
+describe('the agent-history route that hands off to the shell', () => {
   beforeEach(() => {
     dependencies.routes.length = 0
-    dependencies.panels.length = 0
+    dependencies.refusals.length = 0
     dependencies.lifecycle.length = 0
     dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1', name: 'my worktree' }
-    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', 'ota')
-  })
-
-  afterEach(() => {
-    vi.unstubAllEnvs()
   })
 
   it('opens the shell on this screen, with the name as the search half', async () => {
@@ -105,46 +96,26 @@ describe('the native agent-history route that hands off to the shell', () => {
     expect(dependencies.routes).toEqual([{ pathname: '/h/host-1/agent-history/wt-1' }])
   })
 
-  it('renders the native panel in a build without the shell, which is every store build', async () => {
-    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', undefined)
-    await renderRoute()
-    expect(dependencies.routes).toEqual([])
-    expect(dependencies.panels.at(-1)).toEqual({
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      name: 'my worktree'
-    })
-  })
-
   /**
-   * The ids encoding cannot save, which now keep the route native instead of failing it.
-   *
-   * `encodeURIComponent('..')` is `'..'`, so a dot-segment id reaches the bridge's own segment rule
-   * intact and `BridgeInitRouteSchema` refuses it. Before this the route handed it over anyway,
-   * `bridge-host.ts` dropped the route to null, and the page answered with "Update Orca to open
-   * this workspace" — a failure screen in place of the native panel sitting right behind the
-   * switch. The route decides first now, the way C3.1's files routes do.
+   * The ids encoding cannot save: `encodeURIComponent('..')` is `'..'`, which the bridge's segment
+   * rule refuses, so the route refuses here rather than handing the page a route it would refuse.
    */
-  it('stays native for a dot-segment id the bridge would refuse', async () => {
+  it('refuses a dot-segment id the bridge would refuse', async () => {
     for (const hostId of ['.', '..']) {
       dependencies.params = { hostId, worktreeId: 'wt-1', name: 'n' }
       dependencies.routes.length = 0
-      dependencies.panels.length = 0
+      dependencies.refusals.length = 0
       await renderRoute()
       expect(dependencies.routes, hostId).toEqual([])
-      expect(dependencies.panels.at(-1), hostId).toEqual({
-        hostId,
-        worktreeId: 'wt-1',
-        name: 'n'
-      })
+      expect(dependencies.refusals.at(-1), hostId).toBe(hostId)
     }
   })
 
-  it('stays native for a dot-segment worktree id too, which is the other segment', async () => {
+  it('refuses a dot-segment worktree id too, which is the other segment', async () => {
     dependencies.params = { hostId: 'host-1', worktreeId: '..', name: 'n' }
     await renderRoute()
     expect(dependencies.routes).toEqual([])
-    expect(dependencies.panels.at(-1)).toEqual({ hostId: 'host-1', worktreeId: '..', name: 'n' })
+    expect(dependencies.refusals.at(-1)).toBe('host-1')
   })
 
   it('encodes both dynamic segments, so a deep-linked id stays one segment each', async () => {
@@ -164,11 +135,11 @@ describe('the native agent-history route that hands off to the shell', () => {
     }
   })
 
-  it('stays native when the route names no worktree, which the shell could not open', async () => {
+  it('refuses when the route names no worktree, which the shell could not open', async () => {
     dependencies.params = { hostId: 'host-1' }
     await renderRoute()
     expect(dependencies.routes).toEqual([])
-    expect(dependencies.panels.at(-1)).toEqual({ hostId: 'host-1', worktreeId: '', name: '' })
+    expect(dependencies.refusals.at(-1)).toBe('host-1')
   })
 
   /**

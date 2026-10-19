@@ -46,6 +46,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   codexSystemNotSignedIn: "Codex isn't signed in. Run `{{loginCommand}}`.",
   codexManagedNotSignedIn:
     "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
+  antigravityNotSignedIn:
+    "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity.",
   agentCommandNotSignedIn:
     'Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.',
   interactiveAgentNotSignedIn:
@@ -60,7 +62,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   historyTooLarge: "This conversation's history is too large to restore here.",
   managedAccountEnvOverride:
     'This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.',
-  accountSwitchInProgress: 'A Claude account switch is in progress. Try again after it finishes.',
+  accountSwitchInProgress:
+    "{{agent}}'s setup is changing on this host. Try again after it finishes.",
   managedAccountUnsupported:
     'While a Claude account is added in WSL, Claude chats need a Windows Claude account.',
   launchFolderMissing:
@@ -71,6 +74,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   claudeAccountSetupFailed: CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
   agentCommandNotRunnable:
     "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
+  runtimeNotInstalled:
+    "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
   chooseClaudeAccount: 'Choose or add one in Claude Accounts settings.',
   chooseClaudeAccountThenRunCommand:
     'Choose or add one in Claude Accounts settings, then run /{{command}} again.',
@@ -102,6 +107,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   attachmentUnreadable:
     "An attachment on this message couldn't be read, so the message was not sent.",
   emptyMessage: 'This message is empty, so it was not sent.',
+  commandUnavailable: "This command isn't available in {{agent}} chats, so it was not sent.",
   queueFull: 'Too many messages were waiting for the agent, so this one was not sent.',
   writeFailed: "Orca couldn't hand this message to the agent, so it was not sent.",
   cancelled: 'This message was withdrawn before the agent started it.',

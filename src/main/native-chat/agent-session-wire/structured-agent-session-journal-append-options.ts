@@ -18,6 +18,7 @@ export function structuredAgentSessionJournalAppendOptions(
   return {
     fence,
     ownerFence: fence,
+    ...(options.executes ? { executionOwner: fence } : {}),
     ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt }),
     turnScope: options.turnScope,
     ...agentJournalLinkageFields(options)

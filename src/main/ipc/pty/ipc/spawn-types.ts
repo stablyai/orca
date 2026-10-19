@@ -10,17 +10,15 @@ import type { TerminalStartupCwdMissingDirFallback } from '../../../../shared/te
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
-import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import type { CodexSessionResumePreparation } from '../../../codex/codex-session-resume-home'
 import type {
   CodexHomePtySpawnedLifecycleArgs,
   GetSelectedCodexHomePath,
   PrepareClaudeAuth,
   PrepareCodexSessionResume
 } from '../host-env/types'
-import type { CodexResumeLaunch, PreparedCodexResumeHome } from '../host-env/codex-resume'
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { ResolvedPtyHost } from '../provider/registry'
+import type { PtySpawnCodexResumeDeps } from '../spawn-host-env'
 
 export type PtySpawnIpcArgs = {
   cols: number
@@ -86,7 +84,7 @@ export type AdoptStablePaneResult = {
   materialized?: true
 }
 
-export type PtySpawnIpcDeps = {
+export type PtySpawnIpcDeps = PtySpawnCodexResumeDeps & {
   runtime?: OrcaRuntimeService
   store?: Store
   getSettings?: () => GlobalSettings
@@ -108,27 +106,6 @@ export type PtySpawnIpcDeps = {
     missingDirFallback?: TerminalStartupCwdMissingDirFallback
   ) => string | undefined
   localStartupCwdDirectoryExists: (path: string) => boolean
-  prepareCodexResumeHome: (args: {
-    connectionId?: string | null
-    launchAgent?: TuiAgent
-    providerSession?: AgentProviderSessionMetadata
-    target: CodexAccountSelectionTarget
-    launchEnv?: NodeJS.ProcessEnv
-    useSelectedAccount?: boolean
-  }) => PreparedCodexResumeHome | null
-  noCodexResumeLaunch: (command: string | undefined) => CodexResumeLaunch
-  resolveCodexResumeLaunch: (
-    command: string | undefined,
-    prepared: PreparedCodexResumeHome
-  ) => Promise<CodexResumeLaunch>
-  reconcileSharedRuntimeResumeHome: (
-    resumeHome: Extract<CodexSessionResumePreparation, { outcome: 'resume' }>,
-    resolveCurrent: () => string | null | Promise<string | null>
-  ) => Promise<string>
-  stripSequencedStartupResumeArgv: <T extends Record<string, string> | undefined>(
-    env: T,
-    launch: CodexResumeLaunch
-  ) => T
   transitionSpawnHiddenRendererPtyDeliveryState: (id: string, hidden: boolean) => void
   trustedTerminalHandleEnv: Set<string>
   sendPtySpawnedToRenderer: (id: string) => void

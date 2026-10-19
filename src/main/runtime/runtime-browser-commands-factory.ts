@@ -5,6 +5,7 @@ import {
 } from '../../shared/runtime-types'
 import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import type { RuntimeBrowserCommands } from './browser/browser-commands'
+import { closeBrowserPageWithoutEngine } from './browser/browser-client-page-close'
 
 /**
  * How `OrcaRuntimeService` obtains its browser-automation commands.
@@ -112,12 +113,21 @@ export function createRuntimeBrowserCommands(
         // Why: an awaited undefined must not look like a thenable.
         return undefined
       }
+      if (property === 'browserTabClose') {
+        // Why: a stale client-hosted tab must stay closeable when this host has no engine.
+        return (params: Parameters<RuntimeBrowserCommands['browserTabClose']>[0]) =>
+          closeBrowserPageWithoutEngine(host, params ?? {}, browserUnavailableError)
+      }
       return () => {
-        throw new BrowserError(
-          BROWSER_UNAVAILABLE_ERROR_CODE,
-          'Browser automation is unavailable on this host.'
-        )
+        throw browserUnavailableError()
       }
     }
   })
+}
+
+export function browserUnavailableError(): BrowserError {
+  return new BrowserError(
+    BROWSER_UNAVAILABLE_ERROR_CODE,
+    'Browser automation is unavailable on this host.'
+  )
 }

@@ -1,4 +1,4 @@
-import { createSshOperationAbortError } from './ssh-connection-utils'
+import { createSshOperationAbortError } from './connection/ssh-exec-options'
 
 export function createLinkedSshFileTransferSignal(signals: readonly AbortSignal[]): {
   signal: AbortSignal

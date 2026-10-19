@@ -15,8 +15,26 @@ export type AiVaultPrepareSessionResumeArgs = Pick<
     fork?: boolean
   }
 
+export const AI_VAULT_CHAT_FORK_SOURCE_CAPABILITY = 'ai-vault.chat-fork-source.v1' as const
+
+export type AiVaultChatForkSource = Pick<
+  AiVaultSession,
+  'agent' | 'sessionId' | 'filePath' | 'cwd' | 'codexHome'
+> & { executionHostPlatform: NodeJS.Platform; sourceAgent: AiVaultAgent }
+
+export type AiVaultPrepareChatForkArgs = {
+  sourceChat: { sessionId: string; workspaceId: string }
+  executionHostId?: string
+  fork: true
+}
+
+export type AiVaultPrepareSessionResumeRequest =
+  | AiVaultPrepareSessionResumeArgs
+  | AiVaultPrepareChatForkArgs
+
 export type AiVaultPrepareSessionResumeResult = {
   useRealCodexHome: boolean
+  cliForkSource?: AiVaultChatForkSource
   // Why: cross-account hardlinking lists one rollout under several per-account
   // homes, so the owning host repins resume to the selected account's home.
   // Absent (older hosts included) means resume keeps the session's own home.

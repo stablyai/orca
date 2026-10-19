@@ -8,10 +8,10 @@ import { pickStoredFields } from './stored-record-fields'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import type { DesktopLayoutView, LayoutContentFacts } from './workspace-layout-beside'
 import type {
-  LayoutEditorFile,
   LayoutLeaf,
   LayoutTab,
-  LayoutTerminalTab
+  LayoutTerminalTab,
+  WorkspaceLayout
 } from './workspace-layout-model'
 import { tabExecutionHostId } from './workspace-layout-tab-host'
 
@@ -27,7 +27,7 @@ export type WorkspaceSaveScope = {
   workspaceKey: string
   worktreeId: string
   hostId: ExecutionHostId
-  editorFiles: readonly LayoutEditorFile[] | undefined
+  workspace: Pick<WorkspaceLayout, 'worktreeId' | 'tabs' | 'editorFiles'>
   leaves: Readonly<Record<string, LayoutLeaf>>
   facts: LayoutContentFacts
   view: DesktopLayoutView
@@ -94,7 +94,7 @@ export function saveTabBarEntry(
     entityId: tab.entityId,
     groupId: placement.groupId,
     worktreeId: scope.worktreeId,
-    executionHostId: tabExecutionHostId(tab, scope.editorFiles, scope.hostId),
+    executionHostId: tabExecutionHostId(tab, scope.workspace, scope.hostId),
     contentType: tab.kind,
     label,
     ...(tab.generatedTitle !== undefined ? { generatedLabel: tab.generatedTitle } : {}),

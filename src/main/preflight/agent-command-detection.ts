@@ -1,6 +1,6 @@
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { detectWslCommandsOnPath } from '../ipc/preflight-wsl-agent-detection'
-import { detectCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
+import { detectCommandsInInstallDirs } from '../../shared/local-agent-install-dir-detection'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext

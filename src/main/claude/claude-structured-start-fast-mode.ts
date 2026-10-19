@@ -5,7 +5,7 @@ import { ClaudeControlRequestError } from './claude-agent-sdk-control-requests'
 import { readClaudeModels } from './claude-structured-init-proof'
 import { listedModels } from './claude-structured-model-catalog'
 import { claudeModelFastModeSupport } from './claude-structured-session-options'
-import type { ClaudeStartupFacts, ClaudeStartupReport } from './claude-structured-session-startup'
+import type { ClaudeStartupFacts } from './claude-structured-session-startup'
 import type { ClaudeSession } from './claude-structured-session-state'
 
 /** A saved Fast the launch left out (`fastModeAtStart`): on for a new conversation, whose settings
@@ -43,14 +43,13 @@ export function admitClaudeStartFastMode(
   return fastMode
 }
 
-/** Applies a saved Fast the launch left out after `started`, so nothing waits on it. A refusal
- *  drops it as main's refused restore did, from the record too; silence keeps it wanted and
+/** Applies a saved Fast the launch left out after open, so nothing waits on it. A refusal
+ *  drops the child's value; silence keeps it wanted and
  *  unconfirmed. A write the user made meanwhile owns the option. */
 export async function applyClaudeStartFastMode(
   session: ClaudeSession,
   facts: ClaudeStartupFacts,
-  fastMode: string,
-  report: (event: ClaudeStartupReport) => void
+  fastMode: string
 ): Promise<void> {
   const sequence = session.optionMutationSequence
   try {
@@ -66,7 +65,6 @@ export async function applyClaudeStartFastMode(
     if (error instanceof ClaudeControlRequestError) {
       session.options.delete('fastMode')
       session.restoreSkippedOptions.add('fastMode')
-      report({ type: 'options-skipped', options: { fastMode } })
     }
   }
 }

@@ -7,7 +7,7 @@
 import type { SFTPWrapper } from 'ssh2'
 import { assertSafeRemotePathSegment, isWindowsRemoteHost } from './ssh-remote-platform'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
-import { redactRelayInstallMarkerTokens } from './ssh-relay-install-marker'
+import { redactRelayInstallMarkerTokens } from '../managed-server/install/remote-install-marker'
 
 export type SftpNamespacePathMapping = {
   homeRelativeNamespaceRoot: string

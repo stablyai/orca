@@ -16,7 +16,7 @@ import {
 import { createFakeWindowsSecurity } from '../../../shared/windows-security-addon.test-fixture'
 import { DEVICE_REGISTRY_FILENAME } from '../mobile-pairing-files'
 import { DeviceRegistry, type DeviceEntry } from '../device-registry'
-import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './e2ee-crypto'
+import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from '../../../shared/e2ee-crypto'
 import { MobileSocketWiring, type MobileSocketTransport } from './mobile-socket-wiring'
 
 vi.mock('@orca/process-host', () => ({

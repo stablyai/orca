@@ -125,7 +125,10 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
           Object.values(
             this.store?.getWorkspaceSession?.(getRepoExecutionHostId(repo))
               .sleepingAgentSessionsByPaneKey ?? {}
-          ).some((record) => record.worktreeId === worktree.id)
+          ).some(
+            // Why: a tab-open record resumes when its tab opens, headless or not.
+            (record) => record.worktreeId === worktree.id && record.restoreOnTabOpenOnly !== true
+          )
         ) {
           // Why: headless is only degraded when this worktree actually has a
           // persisted resume record. Ordinary mobile activation must not show

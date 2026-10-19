@@ -7,12 +7,12 @@ import { makeTab, makeWorktree } from '@/components/activity/ActivityPrototypePa
 import type { AppState } from '../types'
 import { agentMeta, agentTitle } from '@/components/activity/activity-thread-presentation'
 import { activationTreatsNoteAsFinished } from '@/lib/sleeping-agent-pane-ownership'
-import { resolveAgentStatusLiveEntryStateHistory } from './agent-status-live-entry-state-history'
+import { resolveAgentStatusLiveEntryStateHistory } from '../../../../shared/agent-status-live-entry-state-history'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
 import {
   recoveryRecordMatches,
   sleepingRecordsEquivalentIgnoringCaptureTime
-} from './agent-status-recovery-equivalence'
+} from '../../../../shared/agent-resume-record-equivalence'
 import {
   isValidCompletedAgentHibernationEntry,
   manualSleepCaptureEntry,

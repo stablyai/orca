@@ -1,5 +1,6 @@
 import { subscribeToPtyData } from '../terminal-pane/pty-data-sidecar-subscriptions'
-import { isRemoteRuntimePtyId, sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
 import { NATIVE_CHAT_SUBMIT } from './native-chat-send'
 import { stripScrollbackAnsi } from './native-chat-scrape-fallback'

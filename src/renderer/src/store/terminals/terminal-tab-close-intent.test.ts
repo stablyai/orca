@@ -125,7 +125,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => ({
     'nativeChatLaunchPromptByTabId',
     'nativeChatLaunchDraftByTabId',
     'pendingInitialCwdByTabId',
-    'pendingSetupSplitByTabId',
     'pendingIssueCommandSplitByTabId',
     'expandedPaneByTabId',
     'canExpandPaneByTabId',

@@ -28,6 +28,10 @@ export const ptyStreamAndSerializationApi = {
     id: string,
     target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
   ): Promise<boolean> => ipcRenderer.invoke('pty:openedBeforeClaudeAccounts', { id, target }),
+  claudeDiffPanelMayAutoOpen: (
+    id: string,
+    target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
+  ): Promise<boolean> => ipcRenderer.invoke('pty:claudeDiffPanelMayAutoOpen', { id, target }),
   readNewerDaemonHeldScreen: (sessionId: string): Promise<NewerDaemonHeldScreen | null> =>
     ipcRenderer.invoke('pty:readNewerDaemonHeldScreen', { sessionId }),
   reopenNewerDaemonTerminals: (): Promise<NewerDaemonReopenResult> =>

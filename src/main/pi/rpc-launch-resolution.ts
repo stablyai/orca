@@ -41,7 +41,7 @@ const PI_RPC_RELEASE_LINES = [
   { major: 1, floor: '1.0.0' }
 ] as const
 
-function supportsPiRpcVersion(version: string): boolean {
+export function supportsPiRpcVersion(version: string): boolean {
   return PI_RPC_RELEASE_LINES.some((line) => isStableCliVersionOnLine(version, line))
 }
 

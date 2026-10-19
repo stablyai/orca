@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runtime-git'
+import { RuntimeGitCommands } from './orca-runtime-git'
+import type { ResolvedRuntimeGitWorktree } from './runtime-git-command-target'
 
 const getBranchDiffMock = vi.hoisted(() => vi.fn())
 

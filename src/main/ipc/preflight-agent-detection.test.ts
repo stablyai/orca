@@ -89,9 +89,9 @@ vi.mock('../gitea/client', () => ({
 
 import {
   detectInstalledAgents,
-  detectInstalledAgentsWithShellPathHydration,
-  registerPreflightHandlers
-} from './preflight'
+  detectInstalledAgentsWithShellPathHydration
+} from '../preflight/agent-detection'
+import { registerPreflightHandlers } from './preflight'
 import { resetPreflightMocks, type HandlerMap } from './preflight-test-harness'
 
 describe('preflight', () => {

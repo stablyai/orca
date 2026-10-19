@@ -108,8 +108,9 @@ function expectWireCompatible(record: JourneyRecord): void {
 
   // The subscribe handshake still negotiates the optional output-pause opcode,
   // which is what keeps opcode 16 legal to send on this pairing.
+  // Drop notices (opcode 19) ride on pause and appear only when both peers know them.
   for (const event of record.subscribedEvents) {
-    expect(event.capabilities).toEqual({ outputPause: 1 })
+    expect(event.capabilities).toMatchObject({ outputPause: 1 })
   }
 
   // Input reached the process, before and after the reconnect.
@@ -153,6 +154,9 @@ describe('cross-version remote terminal wire', () => {
   it('current client against current server completes the journey, and is the reference for a current host', () => {
     expectJourneyActuallyRan(currentReference)
     expectWireCompatible(currentReference)
+    for (const event of currentReference.subscribedEvents) {
+      expect(event.capabilities).toEqual({ outputPause: 1, outputPauseDropNotice: 1 })
+    }
     expect(currentReference.snapshotStarts).toEqual([
       expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' }),
       expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' }),

@@ -2,9 +2,10 @@
  * Parked terminal side-effect watcher.
  * Why: parking unmounts TerminalPane, so this replays its bell/title/agent-completion/PR-link side effects while parked.
  */
+import { isClaudeIdleEdge } from '@/lib/agent-idle-edge'
+import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
 import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
-import { isClaudeAgent } from '../../../../shared/agent-detection'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
@@ -28,7 +29,7 @@ import {
 } from './terminal-side-effect-facts-handler'
 import { dispatchTerminalNotification } from './use-notification-dispatch'
 import { acquireHiddenRendererPtyDeliveryClaim } from './pty-renderer-delivery-claims'
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 
 // Why: keep the live path's BEL-vs-completion race window so notification behavior is identical whether a tab is parked or mounted.
 const PARKED_NOTIFICATION_GRACE_MS = AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS
@@ -144,7 +145,7 @@ export function startParkedTerminalByteWatcher(
         scheduleTerminalBellNotification()
       }
     },
-    onAgentBecameIdle: (title: string, meta?: { staleWorkingTitleClear?: boolean }): void => {
+    onAgentBecameIdle: (title: string, meta?: AgentIdleEdgeMeta): void => {
       // Why: stale-derived idles (main's 3s timer, not observed bytes) clear session state but must not schedule a completion a paused agent didn't earn.
       if (meta?.staleWorkingTitleClear) {
         useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
@@ -153,7 +154,7 @@ export function startParkedTerminalByteWatcher(
       const state = useAppStore.getState()
       // Why: null settings means "not hydrated yet"; a spurious timestamp is harmless while a dropped one loses the timer.
       if (
-        isClaudeAgent(title) &&
+        isClaudeIdleEdge(title, state.agentStatusByPaneKey[paneKey]) &&
         (state.settings === null || state.settings.promptCacheTimerEnabled)
       ) {
         state.setCacheTimerStartedAt(paneKey, Date.now())

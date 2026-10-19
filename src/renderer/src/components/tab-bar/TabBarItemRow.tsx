@@ -33,6 +33,7 @@ type TabBarItemRowProps = {
   /** Unified tab whose view mode the terminal tab toggles; absent when it has none. */
   viewModeTabId: string | undefined
   canDuplicate: boolean
+  canCloseSplitPane: boolean
   /** This editor tab's own status, so a git status write re-renders only the tabs it changed. */
   gitStatus: GitFileStatus | null
 }
@@ -54,6 +55,7 @@ function TabBarItemRow({
   isChatView,
   viewModeTabId,
   canDuplicate,
+  canCloseSplitPane,
   gitStatus
 }: TabBarItemRowProps): React.JSX.Element {
   // Why: the tabs' labels come from `translate()`, which a skipped render would leave in the old language.
@@ -79,6 +81,7 @@ function TabBarItemRow({
     hasTabsToLeft,
     tabCount,
     onTogglePin: () => actions.togglePinned(item),
+    onCloseSplitPane: canCloseSplitPane ? actions.closeSplitPane : undefined,
     dragData,
     dropIndicator,
     includeTopTabBorder

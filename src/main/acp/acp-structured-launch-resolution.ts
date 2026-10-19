@@ -21,6 +21,11 @@ import {
   type StructuredAgentCommandSettings
 } from '../native-chat/structured-agent-command-resolution'
 import { probeAgentCliVersion } from '../agent-cli-version-probe'
+import {
+  copyBesidePinnedMembers,
+  resolveInstalledRuntimeRelease
+} from '../node-runtime/managed-runtime-release'
+import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
 import {
@@ -66,13 +71,13 @@ export type AcpStructuredLaunch = {
 export type AcpStructuredLaunchPartDeps = {
   /** The chat's journal as it stands, read without opening it; null when it has none. */
   readJournal: (sessionId: string) => JournalLoad | null
-  /** The Agent Permissions setting's bypass posture for this agent, re-read per acquisition. */
-  resolveFullAccess?: (agent: string) => boolean
   resolveCommand?: typeof resolveCliCommand
   homePath?: string
   /** The environment the child process inherits at spawn; this process's own by default. */
   inheritedEnv?: NodeJS.ProcessEnv
   probeVersion?: typeof probeAgentCliVersion
+  /** Orca's data folder on this host, which holds the spec's managed runtime. */
+  dataDirectory: string
 } & Pick<AcpLaunchVisualsDeps, 'logger'>
 
 /** What a launch's binary and environment are read from; a catalog probe reads the same. */
@@ -87,11 +92,16 @@ export type AcpLaunchInvocationDeps = {
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
   /** Where the program starts, for a PATH entry relative to it; Orca's own when absent. */
   resolveWorkingDirectory?: () => Promise<string> | string
-} & Pick<AcpStructuredLaunchPartDeps, 'resolveCommand' | 'homePath' | 'inheritedEnv'>
+} & Pick<
+  AcpStructuredLaunchPartDeps,
+  'resolveCommand' | 'homePath' | 'inheritedEnv' | 'dataDirectory'
+>
 
-/** The binary a launch with `env` spawns: the user's Command setting when set, else the stock
- *  binary from PATH, then the agent's own install directories. A create's version check resolves
- *  through here too, so it asks about the same file. */
+/** The binary a launch with `env` spawns: the applicable Command setting when set, else the stock
+ *  binary from PATH, then the agent's own install directories. A spec with a managed runtime runs
+ *  its installed release before those, and a copy from them only beside every pinned member; the
+ *  bare name when none qualifies. A create's version check resolves through here too, so it asks
+ *  about the same file. A null `dataDirectory` skips the installed release. */
 export function resolveAcpLaunchCommand(
   spec: AcpLaunchSpec,
   env: Readonly<Record<string, string>>,
@@ -99,26 +109,41 @@ export function resolveAcpLaunchCommand(
     commandSettings?: StructuredAgentCommandSettings
     resolveCommand?: typeof resolveCliCommand
     homePath?: string
-  } = {}
+    dataDirectory: string | null
+  }
 ): string {
   const homePath = env.HOME ?? env.USERPROFILE ?? options.homePath ?? homedir()
   const pathEnv = [env.PATH ?? env.Path, ...spec.installDirectories({ env, homePath })]
     .filter((entry): entry is string => Boolean(entry))
     .join(delimiter)
-  return resolveStructuredAgentCommand(
-    spec.agent,
-    options.commandSettings ?? {},
-    { pathEnv, homePath },
-    {
-      command: spec.command,
-      ...(options.resolveCommand ? { resolve: options.resolveCommand } : {})
-    }
-  )
+  const settings = spec.ignoreAgentCommandSetting ? {} : (options.commandSettings ?? {})
+  const resolve = (searchPath: string) =>
+    resolveStructuredAgentCommand(
+      spec.agent,
+      settings,
+      { pathEnv: searchPath, homePath },
+      {
+        command: spec.command,
+        ...(options.resolveCommand ? { resolve: options.resolveCommand } : {})
+      }
+    )
+  const { managedRuntime } = spec
+  if (!managedRuntime || hasExplicitTuiLaunchCommand(settings, spec.agent)) {
+    return resolve(pathEnv)
+  }
+  const pin = managedRuntime.pin()
+  const root = options.dataDirectory && managedRuntime.root(options.dataDirectory)
+  const release = root ? resolveInstalledRuntimeRelease(root, pin).release : null
+  if (release) {
+    return resolve(release.folder)
+  }
+  const found = resolve(pathEnv)
+  return (found !== spec.command && copyBesidePinnedMembers(found, pin)) || spec.command
 }
 
 /** Whether `command` is a release the spec runs a structured chat on (true when it names none),
  *  and the version it printed. Asked only when the spec names releases or `wantVersion`. */
-async function probeAcpLaunchVersion(
+export async function probeAcpLaunchVersion(
   spec: AcpLaunchSpec,
   launch: { command: string; cwd: string; env: Record<string, string> },
   wantVersion: boolean,
@@ -202,7 +227,8 @@ export function acpStructuredLaunchPart(
         resolveWorkingDirectory: basis.launchDirectory,
         ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
         ...(deps.homePath ? { homePath: deps.homePath } : {}),
-        ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {})
+        ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {}),
+        dataDirectory: deps.dataDirectory
       }
     )
     const cwd = await basis.launchDirectory()
@@ -229,7 +255,8 @@ export function acpStructuredLaunchPart(
           inherited: deps.inheritedEnv ?? process.env
         })
       : null
-    const fullAccess = deps.resolveFullAccess?.(spec.agent) ?? false
+    // The chat's own mode, as the host decided it for this start; a start naming none asks.
+    const fullAccess = basis.permissionMode === 'full-access'
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     return {
       launch: {

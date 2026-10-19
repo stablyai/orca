@@ -35,7 +35,7 @@ const callRuntimeEnvironment = vi.fn<(...args: CallArgs) => Promise<unknown>>()
 // base64 in mock.calls and masquerade as a leak. Big tests swap in a plain fn.
 let transportImpl: (...args: CallArgs) => Promise<unknown> = (...args) =>
   callRuntimeEnvironment(...args)
-vi.mock('./runtime-environment-transport-routing', () => ({
+vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: (...args: CallArgs) => transportImpl(...args)
 }))
 

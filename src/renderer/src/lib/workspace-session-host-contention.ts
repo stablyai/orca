@@ -1,13 +1,12 @@
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import {
-  LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session-host-field-ownership'
-import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
+import { pickPrimaryHostForClaims } from '../../../shared/workspace-session-contested-primary-host'
 import {
   isWorkspaceSessionRecord,
   type WorkspaceSessionRecord
@@ -88,33 +87,6 @@ export function indexWorktreeHostClaims(
     }
   }
   return claims
-}
-
-/** The partition a host's session rows live in: every non-'local' host owns its own. */
-export function sessionPartitionHostFor(hostId: ExecutionHostId): ExecutionHostId {
-  return workspaceSessionPartitionHostId(hostId)
-}
-
-/** Distinct partitions a set of claimants spans. Fewer than two means persistence cannot tell the
- *  claimants apart, so the id keeps its uncontested routing. */
-export function contestedPartitionHosts(claimed: Iterable<ExecutionHostId>): ExecutionHostId[] {
-  return [...new Set([...claimed].map(sessionPartitionHostFor))]
-}
-
-/** Stable owner of a contested id: 'local' when it is a claimant, then any non-runtime host, then
- *  the lowest host id.
- *  Deliberately not the active host — a primary that followed navigation would migrate the same
- *  rows between partitions on every workspace switch. And deliberately not plain sort order once
- *  'local' is out: a `runtime:` environment id rotates across relay restarts, so ranking it last
- *  keeps a re-created environment from taking a stable host's rows into its partition. */
-export function pickPrimaryHostForClaims(hostIds: Iterable<ExecutionHostId>): ExecutionHostId {
-  const sorted = [...hostIds].sort()
-  return (
-    sorted.find((hostId) => hostId === LOCAL_EXECUTION_HOST_ID) ??
-    sorted.find((hostId) => parseExecutionHostId(hostId)?.kind !== 'runtime') ??
-    sorted[0] ??
-    LOCAL_EXECUTION_HOST_ID
-  )
 }
 
 function definedHostIds(slices: HostSessionSlices): ExecutionHostId[] {

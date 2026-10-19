@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, afterEach, vi } from 'vitest'
 import {
   getEditorFileDropOperationContext,
   shouldUploadRemoteEditorFileDrop
@@ -85,4 +85,23 @@ describe('shouldUploadRemoteEditorFileDrop', () => {
       connectionId: 'ssh-1'
     })
   })
+})
+
+const { rejectAppStoreAccess } = vi.hoisted(() => ({
+  rejectAppStoreAccess: vi.fn(() => {
+    throw new Error('Pure helper tests must not access the app store')
+  })
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(rejectAppStoreAccess, {
+    getState: rejectAppStoreAccess,
+    getInitialState: rejectAppStoreAccess,
+    setState: rejectAppStoreAccess,
+    subscribe: rejectAppStoreAccess
+  })
+}))
+
+afterEach(() => {
+  expect(rejectAppStoreAccess).not.toHaveBeenCalled()
 })

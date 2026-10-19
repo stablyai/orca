@@ -12,6 +12,7 @@ import {
   resolveLaunchUserDataPath
 } from './launch-user-data-path'
 import { foregroundServeIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
+import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
 import { ELECTRON_NO_SANDBOX_REQUEST_ENV } from '../../shared/electron-no-sandbox-request'
 import { needsElectronNoSandbox } from './electron-sandbox-switch'
 import { getMacAppBundlePath } from './mac-app-update-bundle'
@@ -24,12 +25,9 @@ import {
 } from './serve-update-supervisor'
 import { RuntimeClientError } from './types'
 import { SERVE_RUNTIME_ELECTRON, SERVE_RUNTIME_ENV } from '../../shared/orcad-local-serve-selection'
-import {
-  resolveLocalServeRuntime,
-  serveOptionArgs,
-  serveWithOrcad,
-  type ServeOrcaAppArgs
-} from './serve-orcad-launch'
+import { findBundledWebClientRoot } from '../../shared/bundled-web-client-root'
+import { resolveLocalServeRuntime, serveWithOrcad } from './serve-orcad-launch'
+import { serveOptionArgs, type ServeOrcaAppArgs } from '../../shared/orcad-serve-argv'
 import { waitForRecipeJson } from './serve-recipe-json'
 import {
   preflightElectronServe,
@@ -38,6 +36,7 @@ import {
 } from './serve-electron-preflight'
 import { MacServeStartupAbortError } from './serve-signal-exit-diagnostic'
 import { superviseServeService } from './serve-supervised-service'
+import { reexecThisServeUnderInitReaper } from './serve-pid1-init-reaper'
 import { supervisedAppImageUpdate } from './serve-appimage-update'
 import {
   relocateThisServeSupervisor,
@@ -130,6 +129,8 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
 }
 
 export function serveOrcaApp(args: ServeOrcaAppArgs = {}): Promise<number> {
+  // Why first: as a container or PrivatePIDs init, nothing would reap orphaned descendants.
+  reexecThisServeUnderInitReaper()
   const executable = resolveForegroundOrcaExecutable()
   // Why one value: the selector, orcad and Electron must all serve the profile the caller chose.
   const userDataPath = resolveLaunchUserDataPath()
@@ -188,7 +189,13 @@ async function serveWithSelectedRuntime(
       return refusal
     }
     process.stderr.write(`[serve] running on orcad ${selection.version}\n`)
-    return serveWithOrcad(selection, args, userDataPath, stripElectronRunAsNode(process.env))
+    return serveWithOrcad(
+      selection,
+      args,
+      userDataPath,
+      stripElectronRunAsNode(process.env),
+      findBundledWebClientRoot(resolveAppRoot())
+    )
   }
   if (selection.reason) {
     process.stderr.write(`[serve] using Electron serve: ${selection.reason}\n`)
@@ -225,6 +232,7 @@ function spawnElectronServe(
   // Why: the isolated profile has no login keychain, and the probe that discovers this blocks the
   // foreground process on the Keychain authorization prompt before it advertises readiness (#25453).
   childArgs.push(...foregroundServeIsolatedProfileSwitches())
+  childArgs.push(...headlessServeOzonePlatformSwitches(process.platform))
   const handoffPath =
     args.recipeJson !== true && getMacAppBundlePath(executable)
       ? getServeUpdateHandoffPath(userDataPath)

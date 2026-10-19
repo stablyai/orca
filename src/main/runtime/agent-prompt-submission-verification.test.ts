@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
 import {
-  AGENT_PROMPT_EFFECT_TIMEOUT_MS,
   AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS,
   type AgentPromptActivity,
   isAgentPromptStalledError,

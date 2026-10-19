@@ -32,9 +32,9 @@ import {
 } from '../agent-session-question-answer'
 import {
   AGENT_SESSION_HISTORY_DIRECTIONS,
-  AGENT_SESSION_HISTORY_MAX_LIMIT,
-  AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH
+  AGENT_SESSION_HISTORY_MAX_LIMIT
 } from '../agent-session-wire'
+import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../agent-session-thread-goal-wire'
 
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
@@ -116,7 +116,14 @@ export const AttachParams = z
  *  the provider child launches against; both are derived host-side from this id instead. */
 export const ResumeSource = z
   .object({
-    providerSessionId: Identifier('Invalid provider session id')
+    providerSessionId: Identifier('Invalid provider session id'),
+    cliSource: z
+      .object({
+        workspaceId: Identifier('Invalid workspace id'),
+        paneKey: Identifier('Invalid pane key')
+      })
+      .strict()
+      .optional()
   })
   .strict()
 
@@ -270,10 +277,14 @@ export const SetOptionParams = z
   .strict()
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const SleepWorkspaceParams = z.object({ workspaceId: z.string().min(1) }).strict()
 export const AcknowledgeAttentionParams = OptionsParams.extend({ observedCursor: JournalCursor })
 
 /** `agentSession.agents` takes nothing: the list is the host's, whichever client asks. */
 export const AgentsParams = z.object({}).strict()
+
+/** `agentSession.subscribeAvailability` takes nothing: the snapshot is the host's. */
+export const AvailabilityParams = z.strictObject({})
 
 /** `sessionId` scopes the catalog to that session's pinned account; without a
  *  session record the host keys it by the account a new launch would pin.

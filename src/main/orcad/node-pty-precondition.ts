@@ -197,7 +197,7 @@ export function buildNodePtyLoadProbeScript(nodePtyDir: string): string {
     `const fs=require('fs'),p=require('path');`,
     `const n=process.platform==='win32'&&Number(require('os').release().split('.')[2])>=18309?'conpty':'pty';`,
     `let f=null;`,
-    `for(const d of ['build/Release','build/Debug','prebuilds/'+process.platform+'-'+process.arch]){`,
+    `for(const d of ['build/orca-napi-'+process.platform+'-'+process.arch,'build/Release','build/Debug','prebuilds/'+process.platform+'-'+process.arch]){`,
     `for(const r of [${root},p.join(${root},'lib')]){`,
     `const c=p.join(r,d,n+'.node');if(fs.existsSync(c)){f=c;break}}if(f)break}`,
     `if(!f){console.log(${JSON.stringify(NO_BINARY_TOKEN)});process.exit(3)}`,

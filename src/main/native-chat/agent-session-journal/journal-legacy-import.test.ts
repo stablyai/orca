@@ -13,7 +13,10 @@ import type { AgentSessionProviderHandle } from '../../../shared/agent-session-p
 import type { NativeChatMessage } from '../../../shared/native-chat-types'
 import type * as TranscriptLineDecoders from '../transcript-line-decoders'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
-import { importLegacyTranscriptIntoJournal } from './journal-legacy-import'
+import {
+  importLegacyTranscriptIntoJournal,
+  prepareLegacyTranscriptImport
+} from './journal-legacy-import'
 import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import { openAgentSessionJournal } from './journal-store-factory'
 import type { AgentSessionJournal } from './journal-store'
@@ -486,29 +489,72 @@ describe('payload bounds on import', () => {
 })
 
 describe('import failures', () => {
-  it('rejects a legacy source above the fixed 16 MiB import cap before decoding', async () => {
-    const journalDir = join(root, 'oversized-source-journal')
-    const journal = await open('claude', CLAUDE_SESSION, {
-      database: openTestJournalHostDatabase(journalDir)
-    })
-    const filePath = join(root, 'oversized-source.jsonl')
-    await writeFile(filePath, 'x'.repeat(16 * 1024 * 1024 + 1), 'utf8')
-    const epoch = journal.epoch
-
-    await expect(
-      importLegacyTranscriptIntoJournal({
-        journal,
-        agent: 'claude',
+  it('charges retained identity metadata against the history budget', async () => {
+    const filePath = join(root, 'large-identities.jsonl')
+    const longId = 'i'.repeat(80 * 1024)
+    const lines = Array.from({ length: 250 }, (_, index) =>
+      JSON.stringify({
+        type: 'user',
+        uuid: `${index}-${longId}`,
         sessionId: CLAUDE_SESSION,
-        fence: 1,
-        options: { filePath }
+        message: { role: 'user', content: 'small' }
       })
-    ).resolves.toMatchObject({
-      ok: false,
-      error: `Legacy transcript exceeds the ${16 * 1024 * 1024}-byte import bound`
+    )
+    await writeFile(filePath, `${lines.join('\n')}\n`, 'utf8')
+
+    const result = await prepareLegacyTranscriptImport({
+      agent: 'claude',
+      sessionId: CLAUDE_SESSION,
+      options: { filePath }
     })
-    expect(journal.epoch).toBe(epoch)
-    expect(journal.snapshot().items).toEqual([])
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.items.length).toBeLessThan(lines.length)
+    expect(
+      result.items.reduce((total, item) => total + Buffer.byteLength(JSON.stringify(item)), 0)
+    ).toBeLessThanOrEqual(16 * 1024 * 1024)
+    expect(result.items.at(-1)?.identity).toMatchObject({
+      provider: 'claude',
+      uuid: `249-${longId}`
+    })
+  })
+
+  it('imports a source past 16 MiB, keeping its newest messages', async () => {
+    const journal = await open('claude', CLAUDE_SESSION, {
+      database: openTestJournalHostDatabase(join(root, 'large-source-journal'))
+    })
+    const filePath = join(root, 'large-source.jsonl')
+    const filler = 'x'.repeat(17 * 1024)
+    const lines = Array.from({ length: 1_100 }, (_, index) =>
+      JSON.stringify({
+        type: 'assistant',
+        uuid: `message-${index}`,
+        message: { role: 'assistant', content: [{ type: 'text', text: `${index} ${filler}` }] }
+      })
+    )
+    await writeFile(filePath, `${lines.join('\n')}\n`, 'utf8')
+
+    const result = await importLegacyTranscriptIntoJournal({
+      journal,
+      agent: 'claude',
+      sessionId: CLAUDE_SESSION,
+      fence: 1,
+      options: { filePath }
+    })
+
+    expect(result).toMatchObject({ ok: true, replaced: true })
+    const texts = journal
+      .snapshot()
+      .items.map((item) =>
+        item.body.kind === 'message' && item.body.blocks[0]?.type === 'text'
+          ? item.body.blocks[0].text.split(' ')[0]
+          : null
+      )
+    expect(texts.at(-1)).toBe('1099')
+    expect(texts.length).toBeGreaterThan(900)
+    expect(texts.length).toBeLessThan(lines.length)
   })
 
   it('bounds oversized legacy tool-call input before journal publication', async () => {

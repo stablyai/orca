@@ -1,5 +1,5 @@
-import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { StyleSheet, type TextStyle } from 'react-native'
+import { colors, onBrightColors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export const styles = StyleSheet.create({
   root: {
@@ -149,3 +149,31 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.borderSubtle
   }
 })
+
+/** A style's size and line height under the reader's zoom; null at 1x, where the sheet holds. */
+export function scaledMarkdownText(
+  style: { fontSize: number; lineHeight: number },
+  textScale: number
+): { fontSize: number; lineHeight: number } | null {
+  return textScale !== 1
+    ? { fontSize: style.fontSize * textScale, lineHeight: style.lineHeight * textScale }
+    : null
+}
+
+export type MarkdownTone = {
+  text: TextStyle | null
+  secondary: TextStyle | null
+  link: TextStyle | null
+  inlineCode: TextStyle | null
+}
+
+/** Colours over the styles above, for one surface. The default tone overrides nothing. */
+export const MARKDOWN_TONES: Record<'default' | 'onBright', MarkdownTone> = {
+  default: { text: null, secondary: null, link: null, inlineCode: null },
+  onBright: StyleSheet.create({
+    text: { color: colors.bgBase },
+    secondary: { color: onBrightColors.secondary },
+    link: { color: onBrightColors.link },
+    inlineCode: { color: colors.bgBase, backgroundColor: onBrightColors.codeBackground }
+  })
+}

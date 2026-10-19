@@ -143,6 +143,7 @@ export function createRelayApp(
     cellReserverPoll?: () => void
     cellAdmitModeEffective?: () => 'db' | 'reserve'
     cellAdmitModeRaw?: () => 'db' | 'reserve'
+    cellPhonePathEffective?: () => 'db' | 'memory'
     cellReserveCounts?: () => {
       bookings: number
       intake: { perSec: number; burst: number; tokens: number }
@@ -890,6 +891,9 @@ export function createRelayApp(
         : {}),
       ...(operations.cellAdmitModeEffective
         ? { admitModeEffective: operations.cellAdmitModeEffective() }
+        : {}),
+      ...(operations.cellPhonePathEffective
+        ? { phonePathEffective: operations.cellPhonePathEffective() }
         : {}),
       // Placement as built, not as configured: `on` only when this director books reserve cells.
       ...(config.role === 'director'

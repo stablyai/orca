@@ -8,7 +8,7 @@ import { isStructuredTab } from '../../../shared/structured-agent-session-tab'
 import { resolvePaneAgentActivity } from '@/lib/pane-agent-evidence'
 import type { AgentMessageTarget } from './agent-message-target'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
-import { resolveRuntimePaneTitleLeafResolution } from './runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafResolution } from '../../../shared/runtime-pane-title-leaf-id'
 
 export type RunningAgentTargetState = Pick<
   AppState,

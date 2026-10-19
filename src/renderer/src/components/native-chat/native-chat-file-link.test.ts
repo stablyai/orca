@@ -65,7 +65,8 @@ describe('resolveNativeChatFileLinkContext', () => {
     ).toEqual({
       worktreeId: 'wt-1',
       worktreePath: '/repo/worktree',
-      runtimeEnvironmentId: 'env-1'
+      runtimeEnvironmentId: 'env-1',
+      sourceTabId: 'tab-1'
     })
   })
 
@@ -97,7 +98,7 @@ describe('resolveNativeChatFileLinkContext', () => {
         }),
         structuredTab.id
       )
-    ).toEqual(context)
+    ).toEqual({ ...context, sourceTabId: structuredTab.id })
   })
 
   it('resolves a detected-only workspace from the supplied snapshot catalog', () => {
@@ -114,7 +115,8 @@ describe('resolveNativeChatFileLinkContext', () => {
     ).toEqual({
       worktreeId: 'wt-1',
       worktreePath: '/repo/detected',
-      runtimeEnvironmentId: null
+      runtimeEnvironmentId: null,
+      sourceTabId: 'tab-1'
     })
   })
 
@@ -134,7 +136,8 @@ describe('resolveNativeChatFileLinkContext', () => {
     ).toEqual({
       worktreeId: folderKey,
       worktreePath: '/workspace/platform',
-      runtimeEnvironmentId: null
+      runtimeEnvironmentId: null,
+      sourceTabId: folderTab.id
     })
   })
 })
@@ -184,7 +187,8 @@ describe('floating workspace native chat', () => {
     expect(resolveNativeChatFileLinkContext(pinned, floatingTab.id)).toEqual({
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       worktreePath: '/home/me/pinned',
-      runtimeEnvironmentId: null
+      runtimeEnvironmentId: null,
+      sourceTabId: floatingTab.id
     })
   })
 

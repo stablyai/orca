@@ -10,7 +10,6 @@ import type {
   PtySpawnResult
 } from '../providers/pty-provider-contract'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
-import { isDaemonEndpointGoneError } from './daemon-errors'
 import { LegacyDaemonExitProof } from './daemon-legacy-exit-proof'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
@@ -18,6 +17,8 @@ import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
 import { DaemonRouterRetirement } from './daemon-router-retirement'
 import { routeSpawnOrHold } from './daemon-router-newer-daemon-hold'
+import { findLegacySessionOwner } from './daemon-router-legacy-owner'
+import { retireExitedLegacyAdapter, type ExitedLegacyVerdict } from './daemon-router-exited-legacy'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 
@@ -28,16 +29,21 @@ export class DaemonPtyRouter implements IPtyProvider {
   private readonly ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
   private readonly subscriptions: DaemonPtyAdapterSubscriptionFanout
   private readonly legacyExitProof = new LegacyDaemonExitProof()
-  private readonly retirement = new DaemonRouterRetirement(() => this.allAdapters())
+  readonly retirement = new DaemonRouterRetirement(() => this.allAdapters())
 
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
     this.current = opts.current
     this.legacy = opts.legacy
-    this.ownerResolver = new DaemonSessionOwnerResolver(this.allAdapters(), this.sessionAdapters)
+    this.ownerResolver = new DaemonSessionOwnerResolver(
+      this.allAdapters(),
+      this.sessionAdapters,
+      (adapter, error) => this.retireExitedLegacy(adapter, error) !== 'not-exited'
+    )
     this.subscriptions = new DaemonPtyAdapterSubscriptionFanout(
       this.allAdapters(),
-      (id) => {
-        this.ownerResolver.forgetRoute(id)
+      // Why owner-only: another generation's exit for a reused id must not unroute a live legacy session.
+      (id, adapter) => {
+        this.ownerResolver.forgetRoute(id, adapter)
       },
       (adapter) => this.ownerResolver.invalidateProvider(adapter)
     )
@@ -59,7 +65,9 @@ export class DaemonPtyRouter implements IPtyProvider {
       if (opts.attachOnly && opts.sessionId) {
         return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
       }
-      const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined
+      const adapter =
+        (opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined) ??
+        (await findLegacySessionOwner(opts, this.current, this.legacy, this.legacyExitProof))
       const target = await routeSpawnOrHold(opts, adapter, this.current, this.ownerResolver)
       const result = await target.spawn(opts)
       // Why: the adapter filters intentional recovery exits and canonical-ID races before publishing proof.
@@ -218,7 +226,7 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async inspectProcess(
     id: string,
-    options?: { expectedIncarnationId?: string; steadyState?: boolean }
+    options?: Parameters<DaemonPtyAdapter['inspectProcess']>[1]
   ): Promise<PtyProcessInspection> {
     return this.adapterForInspection(id).inspectProcess(id, options)
   }
@@ -249,30 +257,23 @@ export class DaemonPtyRouter implements IPtyProvider {
           this.legacyExitProof.record(this.legacy)
           return processes
         } catch (error) {
-          if (
-            adapter === this.current ||
-            !isDaemonEndpointGoneError(error) ||
-            !this.legacyExitProof.hasExited(adapter)
-          ) {
+          const verdict = this.retireExitedLegacy(adapter, error)
+          if (verdict === 'not-exited') {
             throw error
           }
-          const index = this.legacy.indexOf(adapter)
-          if (index !== -1) {
-            this.legacy.splice(index, 1)
-            // Why: the resolver and fanout were built from a copy of allAdapters().
-            // Splicing this.legacy alone leaves them querying the dead socket.
+          if (verdict === 'retired') {
             this.ownerResolver.dropProvider(adapter)
-            this.subscriptions.dropAdapter(adapter)
           }
-          // Why: the socket is already gone; a failed disconnect must not fail the list.
-          void Promise.resolve()
-            .then(() => adapter.disconnectOnly())
-            .catch(() => undefined)
           return []
         }
       })
     )
     return results.flat()
+  }
+
+  private retireExitedLegacy(adapter: DaemonPtyAdapter, error: unknown): ExitedLegacyVerdict {
+    const { current, legacy, legacyExitProof: exitProof, subscriptions } = this
+    return retireExitedLegacyAdapter({ adapter, error, current, legacy, exitProof, subscriptions })
   }
 
   async getDefaultShell(): Promise<string> {

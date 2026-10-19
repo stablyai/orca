@@ -35,7 +35,12 @@ export function fakeClaude(providerSession: string) {
       initializationResult: async () => {
         connection.calls.push({ subtype: 'initialize' })
         if (selfExit) {
-          handlers.onExit?.(new Error(selfExit.message))
+          const error = new Error(selfExit.message)
+          if (selfExit.exitVerdict.root === 'exited') {
+            handlers.onExit?.(error)
+          } else {
+            handlers.onFault?.(error)
+          }
           return { models: [] }
         }
         handlers.onMessage?.({

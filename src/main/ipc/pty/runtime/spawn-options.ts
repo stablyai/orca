@@ -1,67 +1,37 @@
-import { getAppEnvironment } from '../../../../shared/app-environment'
-import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/legacy-shared-config-dir'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { makePaneKey, isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { ptySizes } from '../delivery/visibility-state'
-import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
-import { CODEX_HOME_ENV_KEYS } from '../host-env/codex-home'
-import {
-  mergePtyEnvDeletions,
-  removeCodexHomeDeletionRequests,
-  getInheritedAgentHookEnvKeysToDelete,
-  getInheritedAgentSessionStampEnvKeysToDelete
-} from '../host-env/pi-agent'
-import { promoteAgentTeamsShimPath, deleteRequestedEnvKeys } from '../host-env/path'
 import {
   routesFreshSpawnsToLocalProvider,
   beginPtySpawnForWorktree
 } from '../host-env/fresh-spawn-routing'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
-import { PI_PROCESS_OWNER_ENV_KEYS } from '../../../pty/pi-process-owner-env'
-import { resolveConfiguredTerminalShellArgs } from '../configured-terminal-shell-args'
-import { withCodexTerminalServerIsolationEnv } from '../../../../shared/codex-terminal-server-isolation'
-import { planCodexNoDaemonLaunch } from '../../../pty/codex-no-daemon-launch-command'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
-import { getStartupTerminalIngressIntent } from '../../terminal-startup-color-query-replies'
 import {
   joinPaneSpawn,
   makePaneSpawnReservationKey,
   reservePaneSpawn,
   paneSpawnReservationsByOwnerKey
 } from '../pane/spawn-reservation'
+import {
+  assemblePtySpawnEnvDeletions,
+  assemblePtySpawnLaunchOptions,
+  restoreProvisionalPtySize,
+  seedPtySpawnSize
+} from '../spawn-options-assembly'
 import type { RuntimePtySpawnState } from './spawn-state'
-import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-workspace-trust-spawn'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
-import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 
-/** Headless spawns need the same host-side environment isolation as desktop spawns. */
+/** Host lane: the shared spawn options plus this lane's agent-session claims and pane join. */
 export async function buildRuntimePtySpawnOptions(
   ctx: RuntimePtySpawnState
 ): Promise<
   (PtySpawnResult & { stablePaneOwner?: { handle: string; tabId: string; leafId: string } }) | null
 > {
   const args = ctx.args
-
-  // Why here: every provider (local, daemon, SSH relay, WSL) spawns from this env.
-  ctx.env = withCodexTerminalServerIsolationEnv(ctx.env, ctx.deps.getSettings?.())
-  ctx.spawnOptions = {
-    cols: args.cols,
-    rows: args.rows,
-    cwd: ctx.cwd,
-    env: ctx.env,
-    historyIsolationEnabled: ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
-    ...(ctx.isNewDaemonSession ? { isNewSession: true } : {})
-  }
-  if (!args.connectionId && !ctx.isDaemonHostSpawn) {
-    ctx.spawnOptions.codexHomePathOverride = { value: ctx.selectedCodexHomePath }
-  }
-  const startupIngress = getStartupTerminalIngressIntent(args)
-  if (startupIngress) {
-    ctx.spawnOptions.startupIngress = startupIngress
-  }
+  const settings = ctx.deps.getSettings?.()
+  // Host history is sampled before preparation; the window samples it afterwards.
+  const historyIsolationEnabled = ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true
   let ptySpawnCommitReported = false
   ctx.reportPtySpawnCommitted = (): void => {
     if (ptySpawnCommitReported) {
@@ -70,110 +40,26 @@ export async function buildRuntimePtySpawnOptions(
     ptySpawnCommitReported = true
     args.onPtySpawnCommitted?.()
   }
-  ctx.spawnOptions.envToDelete = mergePtyEnvDeletions(
-    args.envToDelete ?? [],
-    // Persistent daemons and older SSH hosts must not resurrect a parent Pi's ownership.
-    PI_PROCESS_OWNER_ENV_KEYS,
-    // Why: disable old hosts without removing ORCA_REAL_* while their Windows shim remains on PATH.
-    ctx.isDaemonHostSpawn || args.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
-    ctx.isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(ctx.env) : [],
-    // The daemon must judge its own inherited value; main may have a different config.
-    !args.connectionId && !ctx.isDaemonHostSpawn
-      ? getLegacyOpenCodeEnvKeysToDelete(ctx.env, getAppEnvironment().getPath('userData'))
-      : [],
-    // Why: ungated, unlike the agent-hook keys — the local provider and the relay host also spread their own process.env into every spawn.
-    getInheritedAgentSessionStampEnvKeysToDelete(ctx.env),
-    ctx.skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
-    // Why: the daemon owns a persistent inherited environment that may
-    // differ from main. ORCA_CODEX_HOME asks it to compare/delete the pair.
-    ctx.stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
-  )
-  if (ctx.codexResumeHomeSelected) {
-    ctx.spawnOptions.envToDelete = removeCodexHomeDeletionRequests(ctx.spawnOptions.envToDelete)
-  }
-  deleteRequestedEnvKeys(ctx.env, ctx.spawnOptions.envToDelete)
+  const deletions = assemblePtySpawnEnvDeletions({
+    env: ctx.env,
+    callerEnvToDelete: args.envToDelete,
+    agentTeamsEnvToDelete: [],
+    isDaemonHostSpawn: ctx.isDaemonHostSpawn,
+    connectionId: args.connectionId,
+    skipCodexHomeEnv: ctx.skipCodexHomeEnv,
+    stripInheritedOrcaCodexHome: ctx.stripInheritedOrcaCodexHome,
+    codexResumeHomeSelected: ctx.codexResumeHomeSelected,
+    settings
+  })
+  ctx.env = deletions.env
   await prepareAntigravityAccountForLaunch({
     launchAgent: args.launchAgent,
     command: ctx.launchCommand,
     connectionId: args.connectionId,
     isWsl: ctx.codexSelectionTarget.runtime === 'wsl',
     env: ctx.env,
-    envToDelete: ctx.spawnOptions.envToDelete
+    envToDelete: deletions.envToDelete
   })
-  const openCodeLaunch = await prepareOpenCodePtyLaunch({
-    command: ctx.launchCommand,
-    agent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
-    env: ctx.env,
-    envToDelete: (ctx.spawnOptions.envToDelete ??= []),
-    cwd: ctx.cwd,
-    connectionId: args.connectionId,
-    isFreshLaunch: !ctx.preAdoptedStablePane && ctx.launchCommand !== undefined,
-    ...(ctx.codexSelectionTarget.runtime === 'wsl'
-      ? { wsl: { distro: ctx.expectedWslDistro ?? undefined } }
-      : {})
-  })
-  ctx.env = openCodeLaunch.env
-  ctx.launchCommand = openCodeLaunch.command
-  ctx.spawnOptions.env = ctx.env
-  promoteAgentTeamsShimPath(ctx.env, ctx.requestedAgentTeamsPath)
-  const noDaemonLaunch = planCodexNoDaemonLaunch({
-    command: ctx.launchCommand,
-    executesOnThisHost: !args.connectionId && ctx.codexSelectionTarget.runtime !== 'wsl',
-    shellOverride: ctx.daemonShellOverride,
-    env: ctx.env,
-    envToDelete: ctx.spawnOptions.envToDelete,
-    cwd: ctx.cwd
-  })
-  const launchCommand = noDaemonLaunch ? await noDaemonLaunch : ctx.launchCommand
-  if (launchCommand !== undefined) {
-    ctx.spawnOptions.command = launchCommand
-  }
-  if (args.commandDelivery !== undefined) {
-    ctx.spawnOptions.commandDelivery = args.commandDelivery
-  }
-  if (args.startupCommandDelivery !== undefined) {
-    ctx.spawnOptions.startupCommandDelivery = args.startupCommandDelivery
-  }
-  if (isTuiAgent(args.launchAgent)) {
-    ctx.spawnOptions.launchAgent = args.launchAgent
-  }
-  if (args.worktreeId !== undefined) {
-    ctx.spawnOptions.worktreeId = args.worktreeId
-  }
-  const trustWrite = applyAgentWorkspaceTrustToSpawn({
-    launchAgent: args.launchAgent,
-    worktreeId: args.worktreeId,
-    cwd: ctx.cwd,
-    store: ctx.deps.store,
-    isFreshLaunch: !ctx.preAdoptedStablePane && ctx.launchCommand !== undefined,
-    settings: ctx.deps.getSettings?.(),
-    env: ctx.env,
-    claudeAuth: ctx.claudeAuth,
-    wslDistro: ctx.expectedWslDistro,
-    connectionId: args.connectionId ?? null,
-    spawnOptions: ctx.spawnOptions
-  })
-  if (trustWrite) {
-    await trustWrite
-  }
-  ctx.hadSessionSizeBeforeAttach =
-    ctx.effectiveSessionAppId !== undefined ? ptySizes.has(ctx.effectiveSessionAppId) : false
-  ctx.sessionSizeBeforeAttach =
-    ctx.effectiveSessionAppId !== undefined ? ptySizes.get(ctx.effectiveSessionAppId) : undefined
-  if (ctx.sessionId !== undefined) {
-    ctx.spawnOptions.sessionId = ctx.sessionId
-    if (
-      shouldSeedPreAttachPtySize({
-        isFreshSessionId: ctx.isNewDaemonSession,
-        hasCachedSize: ctx.hadSessionSizeBeforeAttach,
-        // Why false: runtime callers (CLI, headless serve) have no hidden pane to report, so a
-        // cached size is the only source that can outrank their requested grid here.
-        requestIsUnmeasured: false
-      })
-    ) {
-      ptySizes.set(ctx.effectiveSessionAppId ?? ctx.sessionId, { cols: args.cols, rows: args.rows })
-    }
-  }
   ctx.materializedPaneKey = ctx.hostSessionBinding
     ? makePaneKey(ctx.hostSessionBinding.tabId, ctx.hostSessionBinding.leafId)
     : null
@@ -187,25 +73,43 @@ export async function buildRuntimePtySpawnOptions(
       ? makePaneKey(args.tabId, ctx.metadataLeafId)
       : null
   ctx.spawnIdentityPaneKey = ctx.materializedPaneKey ?? ctx.metadataPaneKey
-  if (ctx.spawnIdentityPaneKey) {
-    ctx.spawnOptions.paneKey = ctx.spawnIdentityPaneKey
-  }
-  if (typeof args.tabId === 'string' && args.tabId.length > 0 && args.tabId.length <= 512) {
-    ctx.spawnOptions.tabId = args.tabId
-  }
-  if (!args.connectionId) {
-    ctx.spawnOptions.shellOverride = ctx.terminalRuntimeOptions.shellOverride
-    ctx.spawnOptions.terminalShellArgs = resolveConfiguredTerminalShellArgs({
-      connectionId: args.connectionId,
-      requestedShellOverride: args.shellOverride,
-      launchCommand: ctx.launchCommand,
-      settings: ctx.deps.getSettings?.()
-    })
-    ctx.spawnOptions.terminalWindowsWslDistro = ctx.expectedWslDistro
-    ctx.spawnOptions.terminalWindowsPowerShellImplementation = ctx.deps.getSettings
-      ? (ctx.deps.getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
-      : undefined
-  }
+  const launch = await assemblePtySpawnLaunchOptions({
+    args,
+    env: ctx.env,
+    envToDelete: deletions.envToDelete,
+    launchCommand: ctx.launchCommand,
+    cwd: ctx.cwd,
+    isDaemonHostSpawn: ctx.isDaemonHostSpawn,
+    preAdoptedStablePane: ctx.preAdoptedStablePane !== null,
+    isNewSession: ctx.isNewDaemonSession,
+    codexRuntime: ctx.codexSelectionTarget.runtime,
+    expectedWslDistro: ctx.expectedWslDistro,
+    requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
+    selectedCodexHomePath: ctx.selectedCodexHomePath,
+    shellOverride: ctx.daemonShellOverride,
+    paneKey: ctx.spawnIdentityPaneKey,
+    sessionId: ctx.sessionId,
+    spawnIntent: ctx.preAdoptedStablePane ? undefined : args.spawnIntent,
+    historyIsolationEnabled,
+    getSettings: ctx.deps.getSettings,
+    store: ctx.deps.store,
+    claudeAuth: ctx.claudeAuth
+  })
+  ctx.spawnOptions = launch.spawnOptions
+  ctx.env = launch.env
+  ctx.launchCommand = launch.launchCommand
+  const seeded = seedPtySpawnSize({
+    sessionId: ctx.sessionId,
+    sessionAppId: ctx.effectiveSessionAppId,
+    isFreshSessionId: ctx.isNewDaemonSession,
+    // Why false: runtime callers (CLI, headless serve) have no hidden pane to report, so a
+    // cached size is the only source that can outrank their requested grid here.
+    requestIsUnmeasured: false,
+    cols: args.cols,
+    rows: args.rows
+  })
+  ctx.hadSessionSizeBeforeAttach = seeded.hadSessionSizeBeforeAttach
+  ctx.sessionSizeBeforeAttach = seeded.sessionSizeBeforeAttach
   if (
     !ctx.preAdoptedStablePane &&
     args.agentSessionEnsure &&
@@ -226,9 +130,6 @@ export async function buildRuntimePtySpawnOptions(
   }
   if (!ctx.preAdoptedStablePane && args.agentSessionCreateOperationId) {
     ctx.spawnOptions.agentSessionCreateOperationId = args.agentSessionCreateOperationId
-  }
-  if (!ctx.preAdoptedStablePane && args.spawnIntent) {
-    ctx.spawnOptions.spawnIntent = args.spawnIntent
   }
   if (args.signal) {
     ctx.spawnOptions.signal = args.signal
@@ -284,17 +185,13 @@ export async function buildRuntimePtySpawnOptions(
           leafId: concurrentOwner.leafId
         }
       }
-      // Why: the winner owns its id's size; only a distinct losing session id remains provisional.
-      if (ctx.sessionId !== undefined) {
-        const provisionalSizeKey = ctx.effectiveSessionAppId ?? ctx.sessionId
-        if (provisionalSizeKey !== reattach.id) {
-          if (ctx.hadSessionSizeBeforeAttach && ctx.sessionSizeBeforeAttach) {
-            ptySizes.set(provisionalSizeKey, ctx.sessionSizeBeforeAttach)
-          } else {
-            ptySizes.delete(provisionalSizeKey)
-          }
-        }
-      }
+      restoreProvisionalPtySize({
+        sessionId: ctx.sessionId,
+        sessionAppId: ctx.effectiveSessionAppId,
+        reattachId: reattach.id,
+        hadSessionSizeBeforeAttach: ctx.hadSessionSizeBeforeAttach,
+        sessionSizeBeforeAttach: ctx.sessionSizeBeforeAttach
+      })
       return reattach
     }
   }

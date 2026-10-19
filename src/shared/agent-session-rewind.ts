@@ -45,6 +45,7 @@ export const AgentSessionRewindRecordSchema = z.object({
   phase: z.enum(['prepared', 'provider-succeeded', 'completed', 'refused']),
   epoch: Key.optional(),
   sequence: z.number().int().nonnegative().optional(),
+  /** Written by older builds only, as is `retained`: rewind now derives both from the journal. */
   hydrationVerified: z.boolean().optional(),
   reason: z.string().min(1).max(512).optional(),
   retained: z
@@ -58,10 +59,14 @@ export const AgentSessionRewindRecordSchema = z.object({
         // The row's execution provenance, carried into the rebuilt epoch. Absent on records written
         // before rows carried it.
         ownerFence: z.number().int().nonnegative().optional(),
+        // The run executing a reusable child's row, kept apart from `ownerFence`. Absent on records
+        // written before rows carried it.
+        executionOwner: z.number().int().nonnegative().optional(),
         ...AgentJournalProducerLinkageFields
       })
     )
     .max(10_000)
+    .optional()
 })
 export type AgentSessionRewindRecord = z.infer<typeof AgentSessionRewindRecordSchema>
 export const isAgentSessionRewindRecord = (value: unknown): value is AgentSessionRewindRecord =>

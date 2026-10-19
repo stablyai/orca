@@ -6,6 +6,7 @@ import {
   selectorCellState,
   transitionAdmissionSelector
 } from './relay-admission-selector.mjs'
+import { isReserveCellRefusal, reserveCellRollRefusal } from './relay-reserve-cell-refusal.mjs'
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000
 const DEFAULT_TIMEOUT_MS = 14 * 60 * 1_000
@@ -304,8 +305,9 @@ export function defaultIdentityToken(audience) {
   return result.stdout.trim()
 }
 
-async function responseJson(response, label) {
+async function responseJson(response, label, cellId) {
   const body = await response.json().catch(() => ({ error: `http_${response.status}` }))
+  if (isReserveCellRefusal(response.status, body)) throw reserveCellRollRefusal(cellId)
   if (!response.ok) throw new Error(`${label} failed: ${body.error ?? response.status}`)
   return body
 }
@@ -349,7 +351,10 @@ export function createAdminPost(config, deps, token) {
         await deps.wait(deps.random() * ADMIN_RETRY_BASE_MS * 2 ** (attempt - 1))
         continue
       }
-      return await responseJson(response, path)
+      // The director names no cell, so a two-cell request names both.
+      const cells =
+        body?.cellId ?? [body?.sourceCellId, body?.targetCellId].filter(Boolean).join(' or ')
+      return await responseJson(response, path, cells || null)
     }
     throw new Error(`${path} retry attempts exhausted`)
   }

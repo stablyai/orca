@@ -80,6 +80,7 @@ export function useStructuredAgentSessionTransportState(
   )
   return {
     journalItems,
+    currentRequests: enabled ? state.currentRequests : undefined,
     latestTurn,
     actionablePromptIds,
     hostWork,

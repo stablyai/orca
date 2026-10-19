@@ -33,7 +33,7 @@ function groupRow(key: string, hostId?: ExecutionHostId): RenderRow {
     key,
     label: key,
     count: 1,
-    tone: 'text-foreground',
+    icon: { kind: 'project' },
     ...(hostId ? { hostId } : {})
   }
 }
@@ -300,7 +300,6 @@ describe('buildLineageRowRekeyMap', () => {
       worktree: { id: worktreeId },
       depth: 0,
       groupDepth: 0,
-      lineageTrail: [],
       isLastLineageChild: true,
       lineageChildCount: 0
     } as unknown as RenderRow

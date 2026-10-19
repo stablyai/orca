@@ -59,8 +59,12 @@ async function requestWorktreeRemoval(
   if (forgetLocalOnly) {
     return window.api.worktrees.forgetLocal({ worktreeId, hostId, ...snapshotPruneBatch })
   }
-  args.assertCurrent()
+  const beforeSend = () => {
+    args.assertCurrent()
+    options?.assertBeforeDispatch?.()
+  }
   if (target.kind === 'local') {
+    beforeSend()
     return window.api.worktrees.remove({
       worktreeId,
       hostId,
@@ -97,7 +101,8 @@ async function requestWorktreeRemoval(
     {
       // Why (#19334): the host may run an archive hook before it decides anything, then waits for
       // Git's delete before it replies; outlast both when a hook can run.
-      timeoutMs: worktreeRemovalReplyTimeoutMs(!skipArchive)
+      timeoutMs: worktreeRemovalReplyTimeoutMs(!skipArchive),
+      beforeSend
     }
   )
 }

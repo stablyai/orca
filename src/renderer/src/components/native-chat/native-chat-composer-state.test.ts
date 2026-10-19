@@ -338,7 +338,7 @@ describe('native skill and command picker', () => {
       ],
       '',
       '/',
-      ['dataviz', 'ref-oss']
+      [{ name: 'dataviz' }, { name: 'ref-oss' }]
     )
     // The scanned-but-unreported skill is gone; the reported-but-unscanned one is
     // offered without a scope, and sorts after the one the scan located.
@@ -360,7 +360,11 @@ describe('native skill and command picker', () => {
   })
 
   it('rejects a session-reported name that is not a safe insertion token', () => {
-    const items = buildNativeChatPickerItems([], [], '', '/', ['ok', 'two words', 'cle\u200bar'])
+    const items = buildNativeChatPickerItems([], [], '', '/', [
+      { name: 'ok' },
+      { name: 'two words' },
+      { name: 'cle\u200bar' }
+    ])
     expect(items.map((item) => item.name)).toEqual(['ok'])
   })
 

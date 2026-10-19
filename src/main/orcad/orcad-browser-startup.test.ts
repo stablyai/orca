@@ -10,6 +10,8 @@ import {
 } from '../runtime/runtime-browser-commands-factory'
 import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
 import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
+import { RuntimeBrowserPageRegistry } from '../runtime/runtime-browser-page-registry'
+import { RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT } from '../runtime/client-hosted-browser-page-persistence'
 
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: vi.fn() }))
 afterEach(() => {
@@ -88,6 +90,54 @@ it('propagates ready-provider cleanup failures', async () => {
   pending.resolve(provider)
   await startup.ready
   await expect(startup.stop()).rejects.toThrow('stop failed')
+})
+
+function closeHost(pages: RuntimeBrowserPageRegistry): RuntimeBrowserCommandHost {
+  pages.publishClientPage({
+    browserPageId: 'page-restored',
+    workspaceId: 'wt-1',
+    browserProfileId: 'profile-a',
+    executionHostKey: 'restored-client-host-execution',
+    placement: RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT,
+    pairedDeviceId: 'device-a',
+    url: 'https://restored.internal/',
+    loading: false,
+    active: false
+  })
+  return Object.assign(Object.create(null), {
+    getRuntimeBrowserPageRegistry: () => pages,
+    getBrowserHostLeaseRegistry: () => ({ getPlacement: () => undefined }),
+    resolveBrowserWorkspace: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
+    resolveWorktreeSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
+    retireRuntimeOwnedBrowserSessionTab: vi.fn(() => true)
+  })
+}
+
+it('closes a held client-hosted page when discovery found no browser provider', async () => {
+  const { pending, startup } = delayedProvider()
+  const pages = new RuntimeBrowserPageRegistry()
+  const commands = createRuntimeBrowserCommands(closeHost(pages))
+  pending.resolve(null)
+  await startup.ready
+  await expect(
+    commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-restored' })
+  ).resolves.toEqual({ closed: true })
+  expect(pages.getPage('page-restored')).toBeUndefined()
+  await startup.stop()
+})
+
+it('closes a client-hosted page itself rather than asking a provider that never held it', async () => {
+  const { pending, provider, startup } = delayedProvider()
+  const pages = new RuntimeBrowserPageRegistry()
+  const commands = createRuntimeBrowserCommands(closeHost(pages))
+  pending.resolve(provider)
+  await startup.ready
+  await expect(
+    commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-restored' })
+  ).resolves.toEqual({ closed: true })
+  expect(pages.getPage('page-restored')).toBeUndefined()
+  expect(provider.factory).not.toHaveBeenCalled()
+  await startup.stop()
 })
 
 it('refuses a member the provider does not implement instead of invoking it', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'

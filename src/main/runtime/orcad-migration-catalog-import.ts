@@ -2,8 +2,8 @@ import type {
   OrcadMigrationCatalogAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
-import type { OrcadMigrationBlobDescriptor } from '../../shared/orcad-migration-blob-transfer'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationBlobDescriptor } from '../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type { Store } from '../persistence'
 
 /** A moved history waits while a shell runs in its worktree: that shell would overwrite it. */

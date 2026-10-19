@@ -6264,7 +6264,7 @@
     "ko": "이 호스트의 orca CLI가 Orca를 제어하도록 허용"
   },
   "auto.components.settings.SshTargetForm.allowRemoteCliControlHelp": {
-    "ko": "꺼져 있으면 이 호스트에서 실행한 orca 명령은 이 호스트의 터미널에만 적용됩니다. 켜면 다른 호스트와 이 컴퓨터의 오케스트레이션, 파일 및 연동 기능에도 접근할 수 있습니다."
+    "ko": "새 호스트에서는 기본적으로 켜져 있습니다. 이 호스트에서 실행한 orca 명령이 이 호스트의 작업 공간에서만, 연결되어 있는 동안에만 이 데스크톱의 Orca 브라우저 탭을 열고 조작할 수 있게 하고, 이 호스트에서 이전 버전의 Orca가 시작한 터미널이 자신이 감독받는 작업에 대해 오케스트레이션 명령(check, inbox, send, ask, reply)을 실행할 수 있게 합니다. 파일, 클립보드, 쿠키는 읽을 수 없습니다. 끄면 이 호스트 자체의 Orca 서버에만 접근합니다."
   },
   "auto.components.settings.AdvancedNetworkSettingsSection.3e431564b5": {
     "ko": "localhost, 127.0.0.1, *.internal"

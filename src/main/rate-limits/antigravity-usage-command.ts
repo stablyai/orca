@@ -36,6 +36,15 @@ export const ANTIGRAVITY_USAGE_ARGS: readonly string[] = [
  */
 export const ANTIGRAVITY_USAGE_TIMEOUT_MS = 30_000
 
+/**
+ * Added to every probe's environment.
+ *
+ * Why: a due update check makes agy start `--bg-updater`, whose own console child opens a visible
+ * window on Windows and takes focus (#27390); a background quota read must not update the CLI
+ * either. Verified on agy 1.4.2: only `true` disables it (`1` still spawns the updater).
+ */
+export const ANTIGRAVITY_PROBE_ENV = { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' } as const
+
 // Before agy 1.1.11, `/usage` in print mode spends a model turn (agy's bundled changelog).
 export const ANTIGRAVITY_MIN_USAGE_VERSION = '1.1.11'
 

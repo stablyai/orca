@@ -230,6 +230,14 @@ describe('inline queued editor', () => {
     expect(toast.error).toHaveBeenCalledTimes(1)
   })
 
+  it('moves typing into the chat box without image markers, since the card keeps its images', async () => {
+    const hook = harness()
+    await begin(hook)
+    act(() => hook.result.current.editor?.change('see [Image #1] again'))
+    hook.rerender({ messages: [] })
+    expect(readNativeChatDraftCache(SCOPE)).toBe('see  again')
+  })
+
   it('a clean edit whose card leaves just closes; an unloaded list proves nothing', async () => {
     const hook = harness()
     await begin(hook)

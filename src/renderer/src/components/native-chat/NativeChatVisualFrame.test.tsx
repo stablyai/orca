@@ -11,6 +11,7 @@ import {
   NATIVE_CHAT_VISUAL_PING_TYPE,
   NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS,
   NATIVE_CHAT_VISUAL_PONG_TYPE,
+  NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE,
   NATIVE_CHAT_VISUAL_SIZE_TYPE,
   NATIVE_CHAT_VISUAL_THEME_TYPE
 } from '../../../../shared/native-chat-visual-shell'
@@ -21,11 +22,15 @@ vi.mock('@/lib/http-link-routing', () => ({
 }))
 
 import { NativeChatVisualFrame } from './NativeChatVisualFrame'
+import type { ReaderGesture } from './native-chat-autoscroll'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-drag-passthrough'
 
 const visual = { revision: 'r1', html: '<p>chart</p>', path: '/v' }
 
-function Harness(props: { onRetired?: () => void }) {
+function Harness(props: {
+  onRetired?: () => void
+  onReaderGesture?: (gesture: ReaderGesture) => void
+}) {
   const scope = useRef<HTMLDivElement | null>(null)
   return (
     <div ref={scope}>
@@ -34,6 +39,7 @@ function Harness(props: { onRetired?: () => void }) {
         title="Chart"
         themeScope={scope}
         onRetired={props.onRetired ?? (() => {})}
+        onReaderGesture={props.onReaderGesture}
       />
     </div>
   )
@@ -152,6 +158,21 @@ describe('NativeChatVisualFrame', () => {
     post({ type: NATIVE_CHAT_VISUAL_SIZE_TYPE, channel, height: 900 }, window)
     post({ type: NATIVE_CHAT_VISUAL_SIZE_TYPE, channel: 'other', height: 900 }, frame.contentWindow)
     expect(box).toHaveStyle({ height: '420px' })
+  })
+
+  it('hands a wheel or touch its page could not take to the transcript as a reader gesture', () => {
+    const onReaderGesture = vi.fn()
+    const { container } = render(<Harness onReaderGesture={onReaderGesture} />)
+    const frame = frameOf(container)
+    const channel = channelOf(frame)
+    const scroll = { type: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE, channel }
+    post({ ...scroll, input: 'wheel', deltaY: -30 }, frame.contentWindow)
+    expect(onReaderGesture).toHaveBeenLastCalledWith({ kind: 'wheel', deltaY: -30, zoom: false })
+    post({ ...scroll, input: 'touch' }, frame.contentWindow)
+    expect(onReaderGesture).toHaveBeenLastCalledWith({ kind: 'touch-drag' })
+    post({ ...scroll, input: 'wheel', deltaY: -30 }, window)
+    post({ ...scroll, channel: 'other', input: 'wheel', deltaY: -30 }, frame.contentWindow)
+    expect(onReaderGesture).toHaveBeenCalledTimes(2)
   })
 
   it('restyles in place on a theme change instead of reloading the visual', () => {

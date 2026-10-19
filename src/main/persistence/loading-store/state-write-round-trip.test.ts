@@ -79,6 +79,25 @@ function session(activeTabId: string): WorkspaceSessionState {
 }
 
 describe('persisted state survives a save/load round trip', () => {
+  it.each(['split-vertical', 'split-horizontal', 'new-tab'])(
+    'drops retired setup location %s on update and disk serialization',
+    (setupScriptLaunchMode) => {
+      const dataFile = join(
+        realpathSync(mkdtempSync(join(tmpdir(), 'orca-retired-setup-location-'))),
+        'state.json'
+      )
+      const written = openStore(dataFile)
+      const updates = { setupScriptLaunchMode, terminalFocusFollowsMouse: true }
+      expect(written.updateSettings(updates)).not.toHaveProperty('setupScriptLaunchMode')
+      written.flush()
+      const saved = JSON.parse(readPersistedStateJson(dataFile))
+      expect(saved.settings).not.toHaveProperty('setupScriptLaunchMode')
+      const loaded = openStore(dataFile).getSettings()
+      expect(loaded).not.toHaveProperty('setupScriptLaunchMode')
+      expect(loaded.terminalFocusFollowsMouse).toBe(true)
+    }
+  )
+
   it('keeps a #22551 settings-slot OpenCode Go key on disk until its new owner has it', () => {
     const dataFile = join(
       realpathSync(mkdtempSync(join(tmpdir(), 'orca-legacy-opencode-go-key-'))),

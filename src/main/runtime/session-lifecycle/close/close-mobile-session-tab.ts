@@ -39,7 +39,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
     } = {}
   ): Promise<MobileSessionTabCloseOutcome> {
     const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
-    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
+    const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)

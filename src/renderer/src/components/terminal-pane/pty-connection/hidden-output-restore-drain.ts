@@ -2,7 +2,7 @@ import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-i
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
-import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
+import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 
 import {
   HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS,

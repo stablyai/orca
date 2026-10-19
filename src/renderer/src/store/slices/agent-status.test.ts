@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
@@ -12,10 +12,21 @@ import {
   structuredAgentSessionTabId
 } from '../../../../shared/structured-agent-session-projection'
 import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
+import { createStoreSessionMockApi } from './store-session-test-harness'
 
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: vi.fn()
 }))
+
+beforeEach(() => {
+  // Track the original global before the shared fixture installs the renderer API.
+  vi.stubGlobal('window', undefined)
+  createStoreSessionMockApi()
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 {
   describe('agent status freshness expiry', () => {

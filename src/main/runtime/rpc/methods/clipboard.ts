@@ -10,7 +10,6 @@ import {
   StartImageUpload
 } from '../../../../shared/rpc-contract/clipboard-params'
 import { decodeClipboardImageUpload } from './clipboard-image-upload-decoding'
-export { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../../shared/rpc-contract/clipboard-params'
 export const CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT = 8
 const CLIPBOARD_IMAGE_UPLOAD_TTL_MS = 5 * 60 * 1000
 

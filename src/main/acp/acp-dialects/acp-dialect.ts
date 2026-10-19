@@ -106,6 +106,9 @@ export type AcpDialect = {
   failedTurnText?(stopReason: string): string
   /** An agent that ends a `/compact` it did not do as a normal turn says so in its reply. */
   compactionReply?(text: string): AcpCompactionReply | undefined
+  /** The agent's own `/` commands a chat does not offer: hidden from its list, and a message
+   *  that is only one of them is refused before it reaches the agent. */
+  withheldCommands?: readonly string[]
 }
 
 /** Which of the dialect's stop routes this agent process proved it answers. */

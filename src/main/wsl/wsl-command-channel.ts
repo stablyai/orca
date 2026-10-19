@@ -1,6 +1,6 @@
 import { Duplex } from 'node:stream'
 import type { PipedChildProcess } from '@orca/process-host/process-spec'
-import type { RemoteCommandChannel } from '../ssh/remote-install-transport'
+import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
 
 /**
  * A `wsl.exe` child shaped like an SSH exec channel: reads are its stdout, writes its stdin.

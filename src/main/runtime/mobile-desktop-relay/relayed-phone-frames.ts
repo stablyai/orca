@@ -56,7 +56,7 @@ const LAUNCH_METHODS_READING_CHAT_DEFAULT = new Set(['agent.launch', 'agent.laun
 export function withRelayedLaunchChatDefault(
   frame: string,
   method: string,
-  nativeChatDefault: boolean
+  nativeChatDefaultFor: (agent: string) => boolean
 ): string {
   if (!LAUNCH_METHODS_READING_CHAT_DEFAULT.has(method)) {
     return frame
@@ -65,7 +65,11 @@ export function withRelayedLaunchChatDefault(
   if (!isRecord(parsed) || !isRecord(parsed.params)) {
     return frame
   }
-  return JSON.stringify({ ...parsed, params: { ...parsed.params, nativeChatDefault } })
+  const agent = typeof parsed.params.agent === 'string' ? parsed.params.agent : ''
+  return JSON.stringify({
+    ...parsed,
+    params: { ...parsed.params, nativeChatDefault: nativeChatDefaultFor(agent) }
+  })
 }
 
 /**

@@ -6,17 +6,17 @@ name: SSH Windows hosts
 # sessions behind logging shims, and deploys orcad on the pinned node.exe in both DefaultShell cases.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
-      - 'src/main/ssh/ssh-relay-*'
+      - 'src/main/ssh/remote-*'
       - 'src/main/ssh/*runtime*'
       - 'src/main/ssh/orcad-*'
+      - 'src/main/managed-server/**'
       - 'src/main/orcad/orcad-artifact-materializer.ts'
       - 'src/main/orcad/orcad-host-unavailable.ts'
       - 'src/main/node-runtime/**'
-      - 'src/main/ssh/remote-install-*'
       - 'src/main/ssh/ssh-remote-*'
-      - 'src/main/ssh/ssh-hostile-host-*'
+      - 'src/main/ssh/hostile-host-test-support/**'
       - 'src/main/ssh/ssh-windows-host-*'
       - 'src/wsl-guest/**'
       - 'src/packages/process-host/**'
@@ -41,9 +41,14 @@ on:
       - 'config/scripts/windows-process-tree-prepared-addon*.mjs'
       - 'config/scripts/windows-process-tree-gyp-rebuild.mjs'
       - 'src/shared/windows-breakaway-launch*.ts'
-      - 'src/main/ipc/ssh-host-server-*.ts'
+      - 'src/main/ipc/ssh/ssh-host-server-*.ts'
+      # The deploy runs over this SSH transport.
+      - 'src/main/ssh/connection/**'
+      - 'src/main/ssh/ssh-reconnect-error-classification.ts'
+      - 'src/main/ssh/ssh-posix-command-wrapper.ts'
+      - 'src/shared/shell-argument-quoting.ts'
       - '!src/**/*.test.ts'
-      - 'src/main/ssh/orcad-windows-host-lane.test.ts'
+      - 'src/main/managed-server/host-state/orcad-windows-host-lane.test.ts'
       - 'tests/e2e/ssh-orcad-auto-convert.spec.ts'
       - 'tests/e2e/helpers/orcad-convert-host.ts'
       - 'tests/e2e/helpers/orcad-convert-flow.ts'
@@ -106,9 +111,11 @@ jobs:
           persist-credentials: false
           # Keep complete server/test trees; missing future imports fail the unchanged builds.
           # All of src: the orcad-convert cell builds the full e2e app and the bundled CLI.
+          # mobile: the template ships the mobile web page, which builds from mobile/.
           sparse-checkout: |
             .github
             config
+            mobile
             native
             resources
             tests
@@ -159,8 +166,11 @@ jobs:
       - uses: ./.github/actions/prepare-windows-cli-launcher
         with:
           arches: ${{ matrix.arch }}
+      - uses: ./.github/actions/build-mobile-web-bundle
       - name: Build the win32 template
         shell: bash
+        env:
+          ORCA_REUSE_PREPARED_WINDOWS_SECURITY: ${{ github.event_name == 'pull_request' && steps.dependencies.outcome == 'success' }}
         run: |
           pnpm build:orcad-prebuilds --require-slots "win32-${{ matrix.arch }}"
           node config/scripts/build-orcad-template.mjs --targets "win32-${{ matrix.arch }}"

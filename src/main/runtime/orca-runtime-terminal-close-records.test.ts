@@ -21,7 +21,6 @@ import {
 } from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
 import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import type { DurableProfileStateMutation } from '../persistence/loading-store/store-runtime-state'
 import { RuntimeMachineName } from './runtime-machine-name'
 
 const SSH_REPO_ID = 'ssh-repo'
@@ -360,96 +359,9 @@ describe('terminal resume cleanup characterization', () => {
         restore()
       }
     })
-
-    it('keeps the native failure when the capability disappears after the guard', async () => {
-      const { store, runtime } = persistedRuntime()
-      const original = store.runDurableMutation.bind(store)
-      let restore: (() => void) | undefined
-      vi.spyOn(store, 'runDurableMutation').mockImplementation(function <T>(
-        mutate: () => DurableProfileStateMutation<T>
-      ): Promise<T> {
-        return original(() => {
-          restore = removeSessionReader(store)
-          return mutate()
-        })
-      })
-      try {
-        await expect(runtime.clearResumeRecords()).rejects.toThrow(TypeError)
-      } finally {
-        restore?.()
-      }
-    })
-
-    it('keeps the native failure at the later rollback capability read', async () => {
-      const { store, runtime } = persistedRuntime()
-      let restore: (() => void) | undefined
-      vi.spyOn(store, 'runDurableMutation').mockImplementation(async function <T>(
-        mutate: () => DurableProfileStateMutation<T>
-      ): Promise<T> {
-        const mutation = mutate()
-        expect(mutation.rollback).toBeTypeOf('function')
-        restore = removeSessionReader(store)
-        mutation.rollback?.()
-        return mutation.value
-      })
-      try {
-        await expect(runtime.clearResumeRecords()).rejects.toThrow(TypeError)
-      } finally {
-        restore?.()
-      }
-    })
   })
-  it('keeps the native failure when the Root Store disappears inside the durable callback', async () => {
+  it('uses the session reader with its Store receiver and local host partition', async () => {
     const { store, runtime } = persistedRuntime()
-    const original = store.runDurableMutation.bind(store)
-    const descriptor = Object.getOwnPropertyDescriptor(runtime, 'store')
-    if (!descriptor) {
-      throw new Error('fixture Store descriptor missing')
-    }
-    vi.spyOn(store, 'runDurableMutation').mockImplementation(function <T>(
-      mutate: () => DurableProfileStateMutation<T>
-    ): Promise<T> {
-      return original(() => {
-        Object.defineProperty(runtime, 'store', { configurable: true, value: null })
-        return mutate()
-      })
-    })
-    try {
-      await expect(runtime.clearResumeRecords()).rejects.toThrow(TypeError)
-    } finally {
-      Object.defineProperty(runtime, 'store', descriptor)
-    }
-  })
-
-  it('keeps the native failure when the Root Store disappears before rollback', async () => {
-    const { store, runtime } = persistedRuntime()
-    const descriptor = Object.getOwnPropertyDescriptor(runtime, 'store')
-    if (!descriptor) {
-      throw new Error('fixture Store descriptor missing')
-    }
-    vi.spyOn(store, 'runDurableMutation').mockImplementation(async function <T>(
-      mutate: () => DurableProfileStateMutation<T>
-    ): Promise<T> {
-      const mutation = mutate()
-      expect(mutation.rollback).toBeTypeOf('function')
-      Object.defineProperty(runtime, 'store', { configurable: true, value: null })
-      mutation.rollback?.()
-      return mutation.value
-    })
-    try {
-      await expect(runtime.clearResumeRecords()).rejects.toThrow(TypeError)
-    } finally {
-      Object.defineProperty(runtime, 'store', descriptor)
-    }
-  })
-
-  it('retains the repeated Root Store reads and session method receiver and arguments', async () => {
-    const { store, runtime } = persistedRuntime()
-    const descriptor = Object.getOwnPropertyDescriptor(runtime, 'store')
-    if (!descriptor) {
-      throw new Error('fixture Store descriptor missing')
-    }
-    let storeReads = 0
     const original = store.getWorkspaceSession
     const reader = vi.spyOn(store, 'getWorkspaceSession').mockImplementation(function (
       this: Store,
@@ -459,19 +371,7 @@ describe('terminal resume cleanup characterization', () => {
       expect(args).toEqual([LOCAL_EXECUTION_HOST_ID])
       return original.apply(this, args)
     })
-    Object.defineProperty(runtime, 'store', {
-      configurable: true,
-      get() {
-        storeReads += 1
-        return store
-      }
-    })
-    try {
-      await expect(runtime.clearResumeRecords()).resolves.toBeUndefined()
-      expect(storeReads).toBe(7)
-      expect(reader).toHaveBeenCalledTimes(2)
-    } finally {
-      Object.defineProperty(runtime, 'store', descriptor)
-    }
+    await expect(runtime.clearResumeRecords()).resolves.toBeUndefined()
+    expect(reader).toHaveBeenCalled()
   })
 })

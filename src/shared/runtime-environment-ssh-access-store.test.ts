@@ -220,12 +220,12 @@ describe('independent paired runtime SSH access persistence', () => {
     expect(prepare(original)).toEqual(prepared)
     expect(prepare(prepared)).toEqual(prepared)
     expect(() => prepare(prepared, 'other-request')).toThrow('Another SSH access')
-    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Unlink')
+    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Retry or cancel it')
     expect(() =>
       updateEnvironmentFromPairingCode(userDataPath, prepared.id, {
         pairingCode: encodePairingOffer(pairing)
       })
-    ).toThrow('Unlink')
+    ).toThrow('Retry or cancel it')
     expect(() =>
       markEnvironmentUsed(userDataPath, prepared.id, { runtimeId: 'different-runtime' })
     ).toThrow('cannot change')
@@ -288,7 +288,7 @@ describe('independent paired runtime SSH access persistence', () => {
         requestId: 'stale-request'
       })
     ).toThrow('pending unlink intent')
-    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Unlink')
+    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Retry or cancel it')
     const finished = completeRuntimeEnvironmentSshAccessUnlink(userDataPath, {
       expectedEnvironment: prepared,
       requestId: 'release-request'

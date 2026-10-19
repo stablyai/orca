@@ -7,11 +7,11 @@
 // A record ends when the chat's agent is started again outside a resume action — the host retires
 // it at that start, with the offer — or by a successful retry, or a dismissal.
 
+import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import type {
-  AgentSessionRecoveryCapsule,
   AgentSessionResumeFailureInput,
   AgentSessionResumeFailureRecord
-} from '../../runtime/agent-session-recovery-capsule'
+} from '../../runtime/agent-session-recovery-capsule-entries'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
   AgentSessionResumeFailureOutcome,

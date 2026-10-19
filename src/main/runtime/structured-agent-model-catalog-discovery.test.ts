@@ -64,10 +64,10 @@ describe('the model catalog contract on every registration', () => {
       (registration) => registration.modelCatalog(context()).kind === 'probe'
     ).map((registration) => registration.definition.agent)
     expect(Object.keys(probes).sort()).toEqual([...listing].sort())
-    // Every agent registered today but OMP lists its models without a session.
+    // Every agent registered today but Antigravity lists its models before a chat.
     expect(listing.sort()).toEqual(
       STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map((registration) => registration.definition.agent)
-        .filter((agent) => agent !== 'omp')
+        .filter((agent) => agent !== 'antigravity')
         .sort()
     )
   })
@@ -80,6 +80,15 @@ describe('the model catalog contract on every registration', () => {
     // Codex's `model/list` names it. Grok's session-free `currentModelId` can differ from what a
     // session runs, so Grok, like the rest, learns it from a chat with no pick.
     expect([...listingNamesConfiguredModel].sort()).toEqual(['codex'])
+  })
+
+  // OpenCode 2.x and OMP list in a session opened in the chat's folder, which a prewarm does not have.
+  it('marks the agents whose listing runs in a chat folder', () => {
+    const { listsInChatFolder } = registeredModelCatalogDiscovery(
+      STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
+      context()
+    )
+    expect([...listsInChatFolder].sort()).toEqual(['omp', 'opencode', 'opencode2'])
   })
 
   it('maps an ACP agent with no session-free listing to an unavailable registration', () => {

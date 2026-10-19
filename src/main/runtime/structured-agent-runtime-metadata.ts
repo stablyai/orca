@@ -2,17 +2,14 @@ import { agentSessionAccountHome } from '../../shared/agent-session-account-home
 import { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS, type AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
-import {
-  acpLaunchVersionSupported,
-  resolveAcpLaunchCommand
-} from '../acp/acp-structured-launch-resolution'
+import { resolveAcpLaunchCommand } from '../acp/acp-structured-launch-resolution'
 import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
 import { CLAUDE_STRUCTURED_AGENT } from '../claude/claude-structured-agent-definition'
 import { CLAUDE_CLI_CONVERSATIONS } from '../claude/claude-cli-conversations'
 import { CODEX_CLI_CONVERSATIONS } from '../codex/codex-cli-conversations'
 import { supportsCodexStructuredLocation } from '../codex/codex-structured-location-support'
 import { supportsClaudeStructuredLocation } from '../claude/claude-structured-location-support'
-import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
+import { supportsAcpStructuredLocation } from '../acp/acp-structured-location-support'
 import { PI_RPC_RUNTIME_METADATA } from '../pi/rpc-runtime-metadata'
 import {
   resolveStructuredClaudeAccountHomePath,
@@ -34,21 +31,27 @@ export type StructuredAgentRuntimeCatalogEntry =
   | { kind: 'acp'; metadata: StructuredAgentRuntimeMetadata; spec: AcpLaunchSpec }
 
 function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
+  const { supportsVersion } = spec
   return {
     definition: acpStructuredAgentDefinition(spec),
-    supportsLocation: (location) => supportsSupervisedProviderChildLocation(location),
-    ...(spec.supportsVersion
+    supportsLocation: (location) => supportsAcpStructuredLocation(spec, location),
+    ...(supportsVersion
       ? {
           launchCheck: {
             resolveLaunch: (shellEnv, commandSettings) => {
               const env = { ...shellEnv, ...spec.env }
-              return { command: resolveAcpLaunchCommand(spec, env, { commandSettings }), env }
+              const command = resolveAcpLaunchCommand(spec, env, {
+                commandSettings,
+                dataDirectory: null
+              })
+              return { command, env }
             },
-            supportsVersion: (launch) => acpLaunchVersionSupported(spec, launch)
+            supportsVersion
           }
         }
       : {}),
-    resolveAccountHome: ({ launchEnv }) => spec.account.resolve({ launchEnv }),
+    resolveAccountHome: ({ launchEnv }, { stateDirectory }) =>
+      spec.account.resolve({ launchEnv, stateDirectory }),
     modelCatalog: (context) => acpModelCatalogDiscovery(spec, context),
     transcriptImport: spec.transcriptImport,
     sessionHistory: spec.sessionHistory

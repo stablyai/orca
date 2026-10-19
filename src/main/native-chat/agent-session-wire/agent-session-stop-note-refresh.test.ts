@@ -63,6 +63,8 @@ describe('the stop-note refresh frame', () => {
     // The generation live now is fence 2; both stale items came from fence 1.
     const work = new StructuredAgentSessionCurrentWork(
       {
+        cursor: () => ({ epoch: 'e', sequence: 3 }),
+        item: (id) => items.find((item) => item.itemId === id) ?? null,
         runningTurn: () => ({ item: staleTurn, turnId: 't-old' }),
         itemFence: () => 1,
         visitItems: (visit) => {

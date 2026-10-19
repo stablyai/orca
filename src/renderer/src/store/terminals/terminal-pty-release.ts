@@ -66,14 +66,14 @@ export function createTerminalPtyReleaseActions(
           // Why: repo purge can retire the owning tab before its async exit arrives; don't resurrect an orphan PTY index.
           delete nextPtyIdsByTabId[tabId]
         }
-        const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
+        const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
         const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
         if (ptyId) {
-          delete nextPendingCodexPaneRestartIds[ptyId]
+          delete nextPendingPaneAccountRestarts[ptyId]
           delete nextCodexRestartNoticeByPtyId[ptyId]
         } else {
           for (const currentPtyId of s.ptyIdsByTabId[tabId] ?? []) {
-            delete nextPendingCodexPaneRestartIds[currentPtyId]
+            delete nextPendingPaneAccountRestarts[currentPtyId]
             delete nextCodexRestartNoticeByPtyId[currentPtyId]
           }
         }
@@ -98,7 +98,7 @@ export function createTerminalPtyReleaseActions(
             : {}),
           ptyIdsByTabId: nextPtyIdsByTabId,
           lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
-          pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
+          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
         }
       })

@@ -13,6 +13,11 @@ export type ConfirmationDialogOptions = {
   icon?: LucideIcon
   cancelVariant?: 'outline' | 'ghost'
   initialFocus?: 'confirm'
+  /** The short close-prompt look: small title, text and buttons. */
+  compact?: boolean
+  /** Opened by a click or Enter: an outside press, a repeated Enter or a double-click's second
+   *  click can't settle it; Cancel and Esc still do. */
+  ignoresOpeningGesture?: boolean
   /** Renders a "Don't ask again" checkbox. `onConfirmed` runs only when the user confirms with it checked. */
   dontAskAgain?: { label?: string; onConfirmed: () => void }
 }

@@ -30,7 +30,7 @@ import {
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import {
   THREAD_ID,
   adapterFor,
@@ -76,7 +76,7 @@ beforeEach(async () => {
   log = recordingStructuredAgentSessionLogger()
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
-    agents: NO_STRUCTURED_AGENTS,
+    agents: claudeAndCodexDeclared(),
     logger: log.logger,
     store,
     adapter: {
@@ -222,7 +222,7 @@ describe('a Stop that names no turn', () => {
     )
     expect(await pickOption('model', 'gpt-next')).toMatchObject({
       ok: true,
-      value: { options: { model: 'gpt-next', serviceTier: 'priority' } }
+      value: { options: { model: 'gpt-next' } }
     })
     expect(codex.connections[0].calls.filter((call) => call.method === 'model/list')).toHaveLength(
       1
@@ -248,7 +248,7 @@ describe('a Stop that names no turn', () => {
     )
     expect(
       codex.connections[0].calls.filter((call) => call.method === 'turn/start')[1]?.params
-    ).toMatchObject({ model: 'gpt-next', serviceTier: 'priority' })
+    ).toMatchObject({ serviceTier: 'priority' })
     pending.resolve({ data: [], nextCursor: null })
   })
 
@@ -369,11 +369,11 @@ describe('a Stop that names no turn', () => {
     ])
   })
 
-  it('fails a turn Codex refuses for a model picked before the list, then sends again', async () => {
+  it('records a provider-refused turn, then sends again without changing saved picks', async () => {
     const pending = Promise.withResolvers<unknown>()
     const codex = fakeCodex({ 'model/list': () => pending.promise })
     codex.routes['turn/start'] = (params) => {
-      if (params?.model === 'gpt-missing') {
+      if (codex.connections[0].calls.filter((call) => call.method === 'turn/start').length === 1) {
         throw new CodexAppServerRequestError(
           'turn/start',
           -32602,
@@ -409,9 +409,7 @@ describe('a Stop that names no turn', () => {
         codex.connections[0].calls.filter((call) => call.method === 'turn/start')
       ).toHaveLength(2)
     )
-    expect(
-      codex.connections[0].calls.filter((call) => call.method === 'turn/start')[1]?.params
-    ).toMatchObject({ model: 'gpt-live' })
+    expect(store.getRecord(SESSION)?.options?.model).toBe('gpt-live')
     await eventually(async () =>
       expect((await submission(retried.id))?.dispatchState).not.toBe('rejected')
     )

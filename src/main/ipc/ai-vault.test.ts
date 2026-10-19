@@ -87,7 +87,12 @@ describe('listAiVaultSessions host routing', () => {
         includeAntigravityIdeSessions: true,
         executionHostId: 'local'
       }),
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      expect.objectContaining({
+        work: expect.any(Function),
+        finish: expect.any(Function),
+        fail: expect.any(Function)
+      })
     )
   })
 

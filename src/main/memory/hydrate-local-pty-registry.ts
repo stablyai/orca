@@ -4,7 +4,7 @@ import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
-import { splitWorktreeId, worktreeIdComparisonKey } from '../../shared/worktree/id'
+import { splitWorktreeId, worktreeIdentityKey } from '../../shared/worktree/id'
 import { getDaemonProvider } from '../daemon/daemon-provider-state'
 import { getAllDaemonAdapters, type DaemonProvider } from '../daemon/daemon-provider-routing'
 import type { SessionInfo } from '../daemon/types'
@@ -144,14 +144,12 @@ async function hydrateLocalPtyRegistry(
       const { repo, worktrees } = result.value
       for (const worktree of worktrees) {
         const worktreeId = `${repo.id}::${worktree.path}`
-        const key = worktreeIdComparisonKey(worktreeId)
-        if (key) {
-          const existing = liveGitWorktreeIdsByKey.get(key)
-          liveGitWorktreeIdsByKey.set(
-            key,
-            existing === undefined || existing === worktreeId ? worktreeId : null
-          )
-        }
+        const key = worktreeIdentityKey(worktreeId)
+        const existing = liveGitWorktreeIdsByKey.get(key)
+        liveGitWorktreeIdsByKey.set(
+          key,
+          existing === undefined || existing === worktreeId ? worktreeId : null
+        )
       }
     }
 
@@ -190,8 +188,7 @@ async function hydrateLocalPtyRegistry(
     if (verifiedLocalFolderKeys.has(worktreeId) || verifiedFolderWorktreeIds.has(worktreeId)) {
       return true
     }
-    const key = worktreeIdComparisonKey(worktreeId)
-    return key !== null && typeof liveGitWorktreeIdsByKey.get(key) === 'string'
+    return typeof liveGitWorktreeIdsByKey.get(worktreeIdentityKey(worktreeId)) === 'string'
   }
 }
 

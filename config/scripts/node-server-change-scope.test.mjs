@@ -158,6 +158,7 @@ it.each([
   'tsconfig.json',
   'config/tsconfig.node.json',
   'config/scripts/node-server-qualification.mjs',
+  'config/scripts/node-server-native-compat-scope.mjs',
   'config/patches/node-pty@1.1.0.patch',
   'native/windows-registry/src/addon.cc',
   '.github/actions/install-node-dependencies/action.yml',
@@ -297,29 +298,48 @@ it.each([
     fullQualification: false,
     expected: 'should_run=true'
   },
+  {
+    files: ['src/main/persistence/profile-state/profile-state-recovery-crash-boundaries.test.ts'],
+    deferred: true,
+    fullQualification: false,
+    pullRequest: true,
+    nativeGraph: true,
+    expected: 'should_run=true'
+  },
   { files: ['src/renderer/src/example.ts'], deferred: true, expected: 'graph_required=true' },
   { files: ['src/renderer/src/example.ts'], deferred: false, expected: 'should_run=true' }
 ])('fails closed or requests dependencies in an uninstalled checkout: %j', (scenario) => {
   const root = moduleTree(
     Object.fromEntries(
-      ['node-server-change-scope', 'node-server-test-paths', 'node-server-qualification'].map(
-        (name) => [
-          `config/scripts/${name}.mjs`,
-          readFileSync(new URL(`./${name}.mjs`, import.meta.url), 'utf8')
-        ]
-      )
+      [
+        'node-server-change-scope',
+        'node-server-test-paths',
+        'node-server-qualification',
+        'node-server-native-compat-scope'
+      ].map((name) => [
+        `config/scripts/${name}.mjs`,
+        readFileSync(new URL(`./${name}.mjs`, import.meta.url), 'utf8')
+      ])
     )
   )
   const changes = join(root, 'changes')
   const stepOutput = join(root, 'step-output')
+  const statuses = join(root, 'native-diff')
   writeFileSync(changes, scenario.files.map((file) => `${file}\0`).join(''))
+  writeFileSync(
+    statuses,
+    scenario.files
+      .map((file) => `:100644 100644 ${'1'.repeat(40)} ${'2'.repeat(40)} M\0${file}\0`)
+      .join('')
+  )
   const result = runProcessSync({
     program: process.execPath,
     args: [
       realpathSync(join(root, 'config/scripts/node-server-change-scope.mjs')),
       changes,
       ...(scenario.fullQualification === false ? [] : ['--full-qualification']),
-      ...(scenario.deferred ? ['--defer-graph'] : [])
+      ...(scenario.deferred ? ['--defer-graph'] : []),
+      ...(scenario.pullRequest ? ['--pull-request', '--diff-paths', statuses] : [])
     ],
     cwd: root,
     env: { ...process.env, GITHUB_OUTPUT: stepOutput },
@@ -328,6 +348,10 @@ it.each([
   expect(result.code).toBe(0)
   const output = readFileSync(stepOutput, 'utf8')
   expect(output).toContain(scenario.expected)
+  if (scenario.nativeGraph) {
+    expect(output).toContain('graph_required=true')
+    expect(output).not.toContain('native_compatibility=')
+  }
   if (scenario.expected === 'graph_required=true') {
     expect(output).not.toContain('should_run=')
     expect(output).not.toContain('runners=')
@@ -547,44 +571,15 @@ it('keeps every platform job and runs them when detection is skipped or fails', 
   expect(workflow.jobs.persistence.strategy.matrix.os).toContain('needs.changes.outputs.runners')
   for (const jobName of ['linux_glibc_floor', 'linux_musl']) {
     const job = workflow.jobs[jobName]
-    expect(job.needs).toEqual(['changes', 'persistence'])
+    expect(job.needs).toEqual(['changes', 'persistence', 'mobile_web_bundle'])
+    // The containers never install mobile/, and orcad refuses to build without the page.
+    expect(job.steps.some((step) => step.with?.name === 'orcad-mobile-web-bundle')).toBe(true)
+    expect(job.if).toContain("needs.mobile_web_bundle.result == 'success'")
     expect(job.if).toContain("needs.persistence.result == 'success'")
     expect(job.if).toContain("needs.changes.outputs.qualification != 'false'")
     expect(job.if).toContain("needs.changes.outputs.should_run != 'false'")
     expect(job.strategy.matrix.os).toEqual(['ubuntu-22.04', 'ubuntu-24.04-arm'])
   }
-})
-
-it('builds server glibc slots on glibc 2.28 and the compat slot on glibc 2.17 (design D6)', () => {
-  const workflow = parse(
-    readFileSync(new URL('../../.github/workflows/node-server-tests.yml', import.meta.url), 'utf8')
-  )
-  const floor = workflow.jobs.linux_glibc_floor
-  expect(floor.container).toBe('${{ matrix.image }}')
-  expect(floor.strategy.matrix.include).toEqual([
-    {
-      os: 'ubuntu-22.04',
-      image: expect.stringMatching(/^quay\.io\/pypa\/manylinux_2_28_x86_64@sha256:[0-9a-f]{64}$/)
-    },
-    {
-      os: 'ubuntu-24.04-arm',
-      image: expect.stringMatching(/^quay\.io\/pypa\/manylinux_2_28_aarch64@sha256:[0-9a-f]{64}$/)
-    }
-  ])
-  expect(floor.env).toMatchObject({ CC: 'gcc', CXX: 'g++' })
-
-  const compat = workflow.jobs.linux_glibc217_compat
-  expect(compat.needs).toEqual(['changes', 'persistence'])
-  expect(compat.if).toBe(floor.if)
-  expect(compat['runs-on']).toBe('ubuntu-22.04')
-  const run = compat.steps.map((step) => step.run ?? '').join('\n')
-  expect(run).toMatch(/quay\.io\/pypa\/manylinux2014_x86_64@sha256:[0-9a-f]{64} /)
-  expect(run).toContain('--slot=linux-x64-glibc217 --print-runtime')
-  expect(run).toContain('build-orcad-prebuilds.mjs --slot=linux-x64-glibc217\n')
-  expect(run).toContain('--require-slots linux-x64-glibc217')
-  expect(run).toContain(
-    'env -u LD_LIBRARY_PATH node config/scripts/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217 --smoke'
-  )
 })
 
 it('runs the Bun and Node cross-runtime tests on Linux against pinned inputs', () => {

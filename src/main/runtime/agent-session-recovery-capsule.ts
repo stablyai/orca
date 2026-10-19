@@ -23,11 +23,6 @@ import {
   type RecoveryEntry
 } from './agent-session-recovery-capsule-entries'
 
-export type {
-  AgentSessionResumeFailureInput,
-  AgentSessionResumeFailureRecord
-} from './agent-session-recovery-capsule-entries'
-
 export const AGENT_SESSION_RECOVERY_CAPSULE_FILE = 'agent-session-recovery.json'
 const MAX_CAPSULE_BYTES = 4 * 1024 * 1024
 

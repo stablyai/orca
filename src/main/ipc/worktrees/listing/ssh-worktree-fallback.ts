@@ -1,6 +1,7 @@
 import { preserveFolderUpgradeWorktreePath } from '../../../folder-upgrade-worktree-path'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { parseWorktreeId, areWorktreePathsEqual, mergeWorktree } from '../../worktree-logic'
+import { parseWorktreeId } from '../../worktree-logic'
+import { mergeWorktree } from '../../worktree-metadata-merge'
 import {
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId
@@ -19,13 +20,13 @@ import {
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
 } from '../../../../shared/worktree/ownership'
-import { dedupeWorktreesByPath } from '../../worktree-path-comparison'
+import { areWorktreePathsEqual, dedupeWorktreesByPath } from '../../../git/worktree-path-comparison'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources
 } from '../../../../shared/worktree/visibility-sources'
 import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
-import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
+import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
 import { loggedMalformedWorktreeMetaKeys, warnOnce } from './worktree-listing-diagnostics'
 import {
   getProjectHostSetupMetaUpdates,
@@ -199,7 +200,7 @@ export function buildDetectedGitWorktrees(
       worktreeVisibilitySourceMatcher
     })
   })
-  return projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
+  return projectWorktreeLineageWithHostPeers(store, repo, detected)
 }
 
 export function stampAndMergeVisibleDetectedWorktree(

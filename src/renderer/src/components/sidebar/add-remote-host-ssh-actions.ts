@@ -84,7 +84,9 @@ export async function saveNewSshHostFromForm<T extends SavedSshHost>({
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
-    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {})
+    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
+    // Why explicit both ways: absent means on here, and off on a server from before the default flip.
+    allowRemoteCliControl: form.allowRemoteCliControl
   }
 
   try {

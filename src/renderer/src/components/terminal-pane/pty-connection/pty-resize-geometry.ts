@@ -10,8 +10,6 @@ import { deferTerminalGeometryMutationDuringRebuild } from '@/lib/pane-manager/t
 import { waitForStableStartupGrid } from '../terminal-startup-grid-settle'
 import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/window-park-visibility'
 
-import { isSetupSplitGeometryReady } from './setup-split-geometry'
-
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
@@ -216,15 +214,6 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
     getWindowParkVisible() &&
     !session.unservedSshTargetId &&
     session.runtimeEnvironmentId === null
-  session.isStartupGridReadyForConnect = (): boolean => {
-    const setupSplitDirection = session.paneStartup?.waitForSetupSplitDirection
-    if (!setupSplitDirection) {
-      return true
-    }
-    // Why: the setup split reparents the main pane before its xterm grid
-    // necessarily reflects the new flex geometry; wait for both to agree.
-    return isSetupSplitGeometryReady(session.pane, session.manager, setupSplitDirection)
-  }
   session.settleStartupGridBeforeConnect = (connect: () => void): void => {
     session.startupGridSettleHandle?.cancel()
     let settled = false
@@ -239,9 +228,6 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
     // has settled; spawn from a briefly stable grid so the TUI paints cleanly.
     const handle = waitForStableStartupGrid({
       isAlive: () => !session.disposed,
-      isReadyToSettle: session.paneStartup?.waitForSetupSplitDirection
-        ? session.isStartupGridReadyForConnect
-        : undefined,
       measure: session.measureStartupGrid,
       onSettled: finish,
       requestFrame: (callback) => requestAnimationFrame(callback),

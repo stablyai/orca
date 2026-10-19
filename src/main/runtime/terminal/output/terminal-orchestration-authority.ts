@@ -30,7 +30,7 @@ import {
 } from '../../orchestration/cli-command'
 import { readOrchestrationFleetAgentStatusSnapshot } from '../../orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from '../../structured-worker-authority'
-import { isStructuredWorkerHandle } from '../../structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../../shared/structured-worker-handle'
 import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { matchesProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
 

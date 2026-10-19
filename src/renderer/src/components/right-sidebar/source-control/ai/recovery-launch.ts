@@ -90,7 +90,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
 }: {
   activeWorktreeId: string
   activeGroupId: string | null | undefined
-  activeSourceControlLaunchPlatform: NodeJS.Platform
+  activeSourceControlLaunchPlatform: NodeJS.Platform | undefined
   sourceRepoConnectionId?: string | null
   actionId: SourceControlLaunchActionId
   basePrompt: string | null

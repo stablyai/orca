@@ -21,6 +21,7 @@ import type {
   CodexAppServerConnectionHandlers,
   openCodexAppServerConnection
 } from '../codex/codex-app-server-connection'
+import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import {
@@ -179,6 +180,17 @@ describe('the chat strip and the session list read the same host child records',
     const stripRows = () => rows(strip.at(-1)?.children ?? undefined)
     const both = (expected: Row[]) => {
       expect(summaryRows()).toEqual(expected)
+      const sources = collectRuntimeWorktreeAgentSources({
+        hookSnapshots: server.getStatusSnapshot(),
+        readStructuredSummary: host.readStatusSummary,
+        mirroredWorktreeIdByTabId: new Map(),
+        connectedPtyEvidence: {
+          tabIds: new Set(),
+          paneKeys: new Set(),
+          ptyIdByTerminalHandle: new Map()
+        }
+      })
+      expect([...sources.values()].flatMap((source) => rows(source.children))).toEqual(expected)
       expect(stripRows()).toEqual(expected)
     }
 

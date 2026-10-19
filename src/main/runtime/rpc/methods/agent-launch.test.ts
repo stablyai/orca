@@ -332,6 +332,7 @@ describe('the worktree factory', () => {
 
     expect(createArgs(runtime)).toMatchObject({
       startupAgent: 'claude',
+      terminalImageViewerSupported: false,
       startupAgentArgs: '--model opus',
       startupCwd: '/repo/packages/api',
       startupLaunchSource: 'source_control_recovery'
@@ -566,6 +567,7 @@ describe('the terminal factory', () => {
 
     expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-new', {
       startupAgent: 'claude',
+      terminalImageViewerSupported: false,
       // A refused structured session opens its fallback tab as a terminal.
       viewMode: 'terminal',
       // A paired device's launch never moves the desktop window.
@@ -593,6 +595,7 @@ describe('the terminal factory', () => {
     // runtime as `id:id:wt-7`.
     expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-7', {
       startupAgent: 'gemini',
+      terminalImageViewerSupported: false,
       // No native chat renderer for this agent, so its tab opens as the terminal.
       viewMode: 'terminal',
       surfaceOwner: false,

@@ -7,11 +7,8 @@ import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/launch'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
-import {
-  buildWslExecArgs,
-  buildWslLoginShellCommand,
-  quotePosixShell
-} from '../../shared/wsl-login-shell-command'
+import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import {
   getVersionManagerBinPaths,
   resolveCliCommand,

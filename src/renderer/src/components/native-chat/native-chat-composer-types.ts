@@ -1,4 +1,3 @@
-import type { NativeChatQueueResume } from './native-chat-composer-primary-action'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
 import type { StructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
@@ -32,14 +31,6 @@ export type NativeChatOptionPickerRequest = {
   consume: () => void
 }
 
-/** A queue the host holds, with cards waiting. */
-export type NativeChatQueueHold = {
-  /** Every card shown, held or not. */
-  count: number
-  /** Delete every card; false when one could not be (already reported). */
-  clear: () => Promise<boolean>
-}
-
 export type NativeChatStructuredComposerTransport = {
   conversationCommands?: readonly AgentSessionConversationCommand[]
   send: (
@@ -48,6 +39,8 @@ export type NativeChatStructuredComposerTransport = {
   ) => boolean | 'queued'
   /** A send is out: Send stays disabled, and a send returns false, until it settles. */
   sendOut?: boolean
+  /** Send is held for this reason, which the disabled button says. */
+  sendBlockedReason?: string
   dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]
@@ -70,11 +63,6 @@ export type NativeChatStructuredComposerTransport = {
   sessionId: string
   /** Owning runtime for that report; null is the local runtime. */
   runtimeEnvironmentId: string | null
-  /** Present while the queue is held: a message sent now first asks whether to clear its cards. */
-  queueHold?: NativeChatQueueHold
-  /** Present while the host holds the queue and no turn runs: an empty composer's primary
-   *  action becomes Resume, which releases it. */
-  queueResume?: NativeChatQueueResume
 }
 
 export type NativeChatOptimisticSendOutcome = {
@@ -97,6 +85,9 @@ export type NativeChatComposerProps = {
   agent: AgentType
   /** Guard desktop sends while a mobile client owns the terminal input lease. */
   canSend?: boolean
+  /** The chat can't take input yet (a program it needs isn't installed): the composer is disabled
+   *  and this is its placeholder. */
+  unavailableHint?: string | undefined
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
   isWorking?: boolean
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */

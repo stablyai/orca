@@ -4,12 +4,12 @@ import type * as Fs from 'node:fs'
 import { mkdir, realpath, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  subscribeViaWatcherProcess,
-  type WatcherProcessCallback,
-  type WatcherProcessHooks,
-  type WatcherProcessSubscribeOptions
-} from '../ipc/parcel-watcher-process'
+import { subscribeViaWatcherProcess } from '../ipc/parcel-watcher-process'
+import type {
+  WatcherProcessCallback,
+  WatcherProcessHooks
+} from '../ipc/parcel-watcher-process-subscription'
+import type { WatcherProcessSubscribeOptions } from '../ipc/parcel-watcher-process-protocol'
 import {
   createAliasedWatcherRoot as createNativeAliasedWatcherRoot,
   removeAliasedWatcherRoot,

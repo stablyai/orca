@@ -4,28 +4,22 @@ import {
   workspaceRouteParams
 } from '../../../../src/navigation/workspace-execution-host'
 import { useLocalSearchParams } from 'expo-router'
-import { MobileDiffReviewRouteScreen } from '../../../../src/session/MobileDiffReviewRouteScreen'
 import { firstReviewParam } from '../../../../src/session/mobile-diff-review-screen-model'
 import {
   shellScreenRoute,
   shellScreenRouteKey
 } from '../../../../src/mobile-web-shell/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { shellSwitchDecision } from '../../../../src/mobile-web-shell/shell-switch-decision'
+import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/PageRouteUnavailableScreen'
 
 /**
- * Diff review, from the desktop's bundle or from this app.
- *
- * The files switch's shape. What is different here is that the native screen is a component rather
- * than the body of this file: `MobileDiffReviewRouteScreen` calls the review controller, and a
- * controller at this file's top level would subscribe behind the page as well as in front of it.
- * As an element it is built and not mounted, and only `fallback` ever mounts it.
+ * Diff review, from the desktop's bundle. The files route's shape.
  *
  * `matchesRoutePattern` is segment-count exact with literal equality on the static segments, so
  * these five segments collide with nothing: the explorer's five carry `files`.
  */
 export default withWorkspaceRoute(function MobileDiffReviewScreen() {
-  // Through `firstReviewParam`, which is this domain's spelling of the rule every switch follows:
+  // Through `firstReviewParam`, which is this domain's spelling of the rule every route file follows:
   // expo-router answers a repeated query key with an array, and a bare read would build a single
   // segment out of `String(['a','b'])` that the bridge's segment rule accepts.
   const params = useLocalSearchParams<{
@@ -39,7 +33,6 @@ export default withWorkspaceRoute(function MobileDiffReviewScreen() {
   const hostId = firstReviewParam(params.hostId)
   const worktreeId = firstReviewParam(params.worktreeId)
   const executionHost = useWorkspaceExecutionHost()
-  const native = <MobileDiffReviewRouteScreen />
 
   // The four query params are read by the screen itself, so they are carried across whole rather
   // than re-derived here; each is omitted when empty, because the screen's own normalizers treat an
@@ -60,20 +53,11 @@ export default withWorkspaceRoute(function MobileDiffReviewScreen() {
         })
       : null
 
-  const decision = shellSwitchDecision(route)
-
-  if (decision.kind === 'native') {
-    return native
+  if (route === null) {
+    return <PageRouteUnavailableScreen hostId={hostId} />
   }
   // Keyed on the route: a host captures the grants its session was opened with, so a screen reused
   // across a route change would keep authorising frames under the grants of the route the page has
   // left. A `file` change is the common case here and is a param change, not a path change.
-  return (
-    <MobileWebShellScreen
-      key={shellScreenRouteKey(decision.route)}
-      hostId={hostId}
-      route={decision.route}
-      fallback={native}
-    />
-  )
+  return <MobileWebShellScreen key={shellScreenRouteKey(route)} hostId={hostId} route={route} />
 })

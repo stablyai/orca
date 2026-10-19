@@ -147,13 +147,6 @@ export abstract class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeW
     this.refreshRendererGeometry(ptyId, cols, rows)
   }
 
-  // Why: test seam — exposes lastRendererSizes for assertions about
-  // pty:reportGeometry / onExternalPtyResize side effects without making
-  // the underlying Map writable from the outside.
-  getLastRendererSize(ptyId: string): { cols: number; rows: number } | null {
-    return this.lastRendererSizes.get(ptyId) ?? null
-  }
-
   protected refreshRendererGeometry(ptyId: string, cols: number, rows: number): void {
     this.lastRendererSizes.set(ptyId, { cols, rows })
     const inner = this.mobileSubscribers.get(ptyId)

@@ -32,7 +32,8 @@ export type AgentSessionQueuedMessagesResumeResult = {
 }
 
 /** One draft the host holds for this conversation, published whole-list on the
- *  subscribe stream and on history pages. Text-only v1. */
+ *  subscribe stream and on history pages. A card holding an image goes only to a reader that
+ *  advertises `agent-session.queued-image-cards.v1`. */
 export type AgentSessionQueuedMessage = {
   messageId: string
   position: number

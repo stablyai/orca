@@ -359,10 +359,10 @@ describe('SortableTabContextMenu', () => {
     act(() => getButton(container, 'Close Others').click())
     expect(onCloseOthers).toHaveBeenCalledWith('term-1')
 
-    act(() => getButton(container, 'Close Tabs To The Right').click())
+    act(() => getButton(container, 'Close All Tabs To The Right').click())
     expect(onCloseToRight).toHaveBeenCalledWith('term-1')
 
-    act(() => getButton(container, 'Close Tabs To The Left').click())
+    act(() => getButton(container, 'Close All Tabs To The Left').click())
     expect(onCloseToLeft).toHaveBeenCalledWith('term-1')
   })
 
@@ -372,8 +372,8 @@ describe('SortableTabContextMenu', () => {
       hasTabsToRight: false
     })
 
-    expect(getButton(container, 'Close Tabs To The Left').disabled).toBe(true)
-    expect(getButton(container, 'Close Tabs To The Right').disabled).toBe(true)
+    expect(getButton(container, 'Close All Tabs To The Left').disabled).toBe(true)
+    expect(getButton(container, 'Close All Tabs To The Right').disabled).toBe(true)
   })
 
   it('hides move-tab split actions for a single-tab group', () => {
@@ -394,5 +394,14 @@ describe('SortableTabContextMenu', () => {
 
     expect(container.textContent).not.toContain('Move Tab to Split')
     expect(container.textContent).toContain('Split terminal right')
+  })
+
+  it('offers Close split pane only when the group is one of several splits', () => {
+    const onCloseSplitPane = vi.fn()
+    const { container } = renderMenu({ onCloseSplitPane })
+    act(() => getButton(container, 'Close split pane').click())
+    expect(onCloseSplitPane).toHaveBeenCalledOnce()
+
+    expect(renderMenu().container.textContent).not.toContain('Close split pane')
   })
 })

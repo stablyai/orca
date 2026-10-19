@@ -93,7 +93,7 @@ describe('ACP compaction capability', () => {
           acpStructuredAgentDefinition(spec).capabilities.compact
         ])
       )
-    ).toEqual({ grok: true, opencode: true, omp: true })
+    ).toEqual({ grok: true, opencode: true, opencode2: true, omp: true, antigravity: false })
     expect(acpStructuredAgentDefinition(withoutCompaction(GROK)).capabilities.compact).toBe(false)
   })
 

@@ -3,7 +3,7 @@ import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/
 import { createStructuredMailboxPointerHost } from '../orchestration/structured-mailbox-pointer-host'
 import { localOrchestrationCliCommand } from '../orchestration/cli-command'
 import { RuntimeOrchestrationSenderNames } from '../runtime-orchestration-sender-names'
-import { isStructuredWorkerHandle } from '../structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address'
 import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
 import { OrcaRuntimeWithRuntimeId } from './runtime-identity-state'
@@ -124,7 +124,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   protected readonly terminalList = new RuntimeTerminalList({
     getGraphEpoch: () => (this.graphStatus === 'ready' ? this.rendererGraphEpoch : null),
     assertGraphEpoch: (epoch) => this.assertStableReadyGraph(epoch),
-    getExplicitWorktreeId: (selector) => this.getValidatedExplicitWorktreeIdSelector(selector),
+    getExplicitWorktreeId: (selector) => this.getExplicitSessionWorktreeIdSelector(selector),
     getResolvedCache: () => this.resolvedWorktrees.peek(),
     buildWorktreeFromId: (worktreeId) => this.buildResolvedWorktreeFromId(worktreeId),
     resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),

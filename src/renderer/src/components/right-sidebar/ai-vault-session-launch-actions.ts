@@ -1,6 +1,5 @@
 import {
   notifyAiVaultSessionPreparationFailure,
-  notifyAiVaultSessionQueued,
   resolveAiVaultSessionLaunchTargetOrNotify
 } from './ai-vault-session-launch-feedback'
 import { useCallback, useState } from 'react'
@@ -16,7 +15,7 @@ import {
   buildAiVaultCopiedSessionStartupForWorktree,
   buildAiVaultForkStartupForWorktree
 } from '@/lib/ai-vault-session-fork-startup'
-import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
+import { launchAiVaultSessionAndReveal } from '@/lib/launch-ai-vault-session-and-reveal'
 import { useAppStore } from '@/store'
 import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
@@ -27,7 +26,6 @@ import {
 } from '@/lib/ai-vault-session-resume-preparation'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
-import { agentLabel } from './ai-vault-session-filters'
 import { describeAiVaultCliForkFailure } from './ai-vault-session-cli-fork'
 import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
 import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuation'
@@ -36,10 +34,7 @@ import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-struct
 import { adoptsCliConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { describeAiVaultResumeFailure } from '@/lib/ai-vault-resume-refusal'
-import {
-  activateAiVaultResumeWorkspace,
-  resumeAiVaultSessionInNewChat
-} from './ai-vault-session-resume-in-chat-launch'
+import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
 import { resolveAiVaultTargetWorkspacePath } from './ai-vault-session-launch-target'
 
 export function useAiVaultSessionLaunchActions({
@@ -117,37 +112,12 @@ export function useAiVaultSessionLaunchActions({
         return
       }
       void prepareStartup(targetId.worktreeId)
-        .then((startup) => {
-          const launchResult = launchAiVaultSessionInNewTab({
-            agent: session.agent,
-            worktreeId: targetId.worktreeId,
-            ...startup
-          })
-          if (launchResult.tabId === null) {
-            void launchResult.runtimeLaunch.then((outcome) => {
-              if (outcome.status === 'failed') {
-                toast.error(
-                  describeFailure(outcome.message) ||
-                    translate(
-                      'auto.lib.launch.agent.in.new.tab.11cce5cc77',
-                      'Could not launch {{value0}} in a new terminal.',
-                      { value0: agentLabel(session.agent) }
-                    )
-                )
-                return
-              }
-              if (useAppStore.getState().activeWorktreeId !== targetId.worktreeId) {
-                activateAiVaultResumeWorkspace(targetId.worktreeId)
-              }
-              notifyAiVaultSessionQueued(session.agent)
-            })
-            return
-          }
-          if (useAppStore.getState().activeWorktreeId !== targetId.worktreeId) {
-            activateAiVaultResumeWorkspace(targetId.worktreeId)
-          }
-          notifyAiVaultSessionQueued(session.agent)
-        })
+        .then((startup) =>
+          launchAiVaultSessionAndReveal(
+            { agent: session.agent, worktreeId: targetId.worktreeId, ...startup },
+            describeFailure
+          )
+        )
         .catch((error: unknown) =>
           notifyAiVaultSessionPreparationFailure(error, session.agent, describeFailure)
         )
@@ -182,7 +152,7 @@ export function useAiVaultSessionLaunchActions({
           state: useAppStore.getState(),
           worktreeId,
           session,
-          commandOverride: agentCmdOverrides?.opencode
+          commandOverride: agentCmdOverrides?.[session.agent]
         })
         const prepared = await prepareAiVaultSessionForFork(session)
         const target = await dropDeletedSshResumeCwd(prepared.session)

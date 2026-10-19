@@ -159,7 +159,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
   it('recovers the source and destination mode after abrupt interruption', () => {
     const outcome = runApplyScript({ deleteSource: true, killAfterSourceRemoval: true })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetMode).toBe(0o600)
@@ -172,7 +172,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       killAfterDestinationInstall: true
     })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetMode).toBe(0o600)
@@ -185,7 +185,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       killBeforeDestinationRecoveryLink: true
     })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.destinationRecoveryAuth).toBeNull()
     expect(outcome.destinationRecoveryPathExists).toBe(false)
@@ -199,7 +199,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       rewriteQuarantineBeforeRecovery: true
     })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.sourceRecoveryAuth).toBeNull()
     expect(outcome.sourceQuarantineAuth).toBe(NEWER_AUTH)
@@ -213,7 +213,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       replaceTargetBeforeRecovery: true
     })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetAuth).toBe(NEWER_AUTH)
     expect(outcome.destinationRecoveryAuth).toBe(SOURCE_AUTH)
@@ -352,7 +352,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       sourceSession: RETIRED_SESSION
     })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetSession).toBeNull()
     expect(outcome.markerExists).toBe(false)
@@ -365,7 +365,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       sourceSession: RETIRED_SESSION
     })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetSession).toBe(RETIRED_SESSION)
     expect(outcome.sessionCommitMarkerExists).toBe(false)

@@ -3,8 +3,8 @@ import { hostStableKey, parseHostStableKey } from '../../../shared/automation-ow
 import type {
   OrcadMigrationClientStatePayload,
   OrcadMigrationUiRoutingState
-} from '../../../shared/orcad-migration-client-state'
-import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-client-state'
+import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration/orcad-migration-manifest'
 
 export type PreparedOrcadMigrationClientState = {
   incoming: OrcadMigrationClientStatePayload | undefined

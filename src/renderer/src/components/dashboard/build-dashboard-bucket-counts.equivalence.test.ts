@@ -17,7 +17,7 @@ import {
   createDashboardBucketCountsCache
 } from './build-dashboard-bucket-counts'
 import { selectDashboardOrchestration } from './dashboard-orchestration-selection'
-import { dashboardRowBucketProjection } from './dashboard-row-bucket'
+import { dashboardRowBucketProjection, readAgentRowTurnRecords } from './dashboard-row-bucket'
 import { collectActiveDashboardWorkspaces } from './dashboard-snapshot-workspaces'
 import { selectWorktreeAgentRowsCached } from './worktree-agent-rows-cache'
 
@@ -65,7 +65,7 @@ function oracleBucketCounts(
       if (row.rowSource === 'subagent') {
         continue
       }
-      counts[dashboardRowBucketProjection(row, state.acknowledgedAgentsByPaneKey).bucket] += 1
+      counts[dashboardRowBucketProjection(row, readAgentRowTurnRecords(state)).bucket] += 1
     }
   }
   return counts

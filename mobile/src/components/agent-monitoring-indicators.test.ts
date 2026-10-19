@@ -88,7 +88,7 @@ describe('mobile monitoring indicators', () => {
     expect(animationLoop).toHaveBeenCalledOnce()
   })
 
-  it('keeps the native driver for both working rings on native', async () => {
+  it('keeps both native working rings off the interaction queue', async () => {
     await act(async () => {
       renderer = create(
         createElement('View', null, [
@@ -100,7 +100,10 @@ describe('mobile monitoring indicators', () => {
 
     expect(animationTiming).toHaveBeenCalledTimes(2)
     for (const call of animationTiming.mock.calls) {
-      expect(call).toEqual([expect.anything(), expect.objectContaining({ useNativeDriver: true })])
+      expect(call).toEqual([
+        expect.anything(),
+        expect.objectContaining({ useNativeDriver: true, isInteraction: false })
+      ])
     }
   })
 

@@ -2,11 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import type { WebContents } from 'electron'
 import {
   dispatchPageKeyEvent,
-  planCdpKeyEvent,
-  planInsertText,
   routePageTextInsertion,
   type GuestCdpSender
 } from './guest-direct-key-input'
+import { planCdpKeyEvent, planInsertText } from './guest-key-event-plan'
 
 function fakePage(type: string) {
   const page = {

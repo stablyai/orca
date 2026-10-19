@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import {
   isLegacyAgentSessionAccountHome,
@@ -10,22 +11,30 @@ import { discoverSkills } from '../skills/discovery'
 import { scanClaudeCommandFolders } from './claude-command-folder-scan'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
 import { agentSessionPinnedLaunchDirectory } from '../runtime/agent-session-record-launch-directory'
+import type { ClaudeCommandCatalogProbe } from './claude-command-catalog-probe'
 
-/** How long one scan answers for a workspace and account before the next read scans again. */
-export const CLAUDE_AT_REST_COMMANDS_TTL_MS = 10_000
+/** How long one scan answers for a workspace and account before the next read scans again. The
+ *  list changes only when commands, skills or plugins do, and a running chat reports its own. */
+export const CLAUDE_AT_REST_COMMANDS_TTL_MS = 5 * 60_000
 /** A scan still unanswered this long no longer holds the next one off, so a hung folder can't
  *  freeze the menu. At most two run at once, so a folder that stays hung holds no more. */
 const SCAN_OVERDUE_MS = 30_000
 const MAX_SCANS_IN_FLIGHT = 2
+/** Each probe starts a Claude process, so many workspaces opening at once wait their turn. */
+const MAX_PROBES_RUNNING = 2
 
 export type ClaudeAtRestCommandsDeps = {
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
+  /** Asks Claude itself; absent, or when it fails, the folders are read instead. */
+  probe?: ClaudeCommandCatalogProbe
   now?: () => number
   discover?: typeof discoverSkills
 }
 
 type Entry = {
   commands?: AgentSessionSlashCommand[]
+  /** The kept answer is Claude's own list, which a failed refresh keeps rather than the folders'. */
+  fromClaude?: boolean
   /** When the kept answer, or the last failure, landed. */
   scannedAt: number
   lastStartedAt: number
@@ -36,14 +45,16 @@ type Entry = {
 }
 
 /**
- * The `/` surface of a Claude chat whose Claude is not running, read from the folders Claude reads
- * its own from on the host that runs it: the account's and the workspace's command folders and
- * skills, beside the commands the chat's menu always offers. Nothing until the first scan lands;
- * `onChange` fires when a scan finds something different.
+ * The `/` surface of a Claude chat whose Claude is not running, as Claude itself lists it on the
+ * host that runs it, in the folder the chat launches in. When Claude can't answer, the folders it
+ * reads its own from: the account's and the workspace's command folders and skills, beside the
+ * commands the chat's menu always offers. Nothing until the first scan lands; `onChange` fires
+ * when a scan finds something different.
  */
 export class ClaudeAtRestCommandCatalog {
   private readonly entries = new Map<string, Entry>()
   private readonly listeners = new Set<() => void>()
+  private readonly probes = new PrioritySemaphore(MAX_PROBES_RUNNING)
 
   constructor(private readonly deps: ClaudeAtRestCommandsDeps) {}
 
@@ -88,18 +99,26 @@ export class ClaudeAtRestCommandCatalog {
     const scan = ++entry.started
     entry.lastStartedAt = this.now()
     entry.inFlight += 1
-    const newest = () => {
+    const newest = (fromClaude: boolean) => {
       if (scan < entry.kept) {
         return false
       }
-      entry.kept = scan
       entry.scannedAt = this.now()
+      // A rejected fallback still settles the refresh, but cannot supersede Claude's list.
+      if (entry.fromClaude && !fromClaude) {
+        return false
+      }
+      entry.kept = scan
       return true
     }
     void this.scan(record)
       .then(
-        (commands) => {
-          if (!newest() || JSON.stringify(commands) === JSON.stringify(entry.commands)) {
+        ({ commands, fromClaude }) => {
+          if (!newest(fromClaude)) {
+            return
+          }
+          entry.fromClaude = fromClaude
+          if (JSON.stringify(commands) === JSON.stringify(entry.commands)) {
             return
           }
           entry.commands = commands
@@ -118,12 +137,27 @@ export class ClaudeAtRestCommandCatalog {
       })
   }
 
-  private async scan(record: AgentSessionRecord): Promise<AgentSessionSlashCommand[]> {
+  private async scan(
+    record: AgentSessionRecord
+  ): Promise<{ commands: AgentSessionSlashCommand[]; fromClaude: boolean }> {
     // The folder Claude will launch in: a floating chat's pin, not the floating setting's current one.
     const cwd =
       agentSessionPinnedLaunchDirectory(record) ??
       (await this.deps.resolveWorkspacePath(record.location.workspaceId))
     const account = requireLegacyAgentSessionAccountHome(record.accountHome).path
+    if (this.deps.probe) {
+      const release = await this.probes.acquire(0)
+      try {
+        return {
+          commands: await this.deps.probe({ cwd, accountHomePath: account }),
+          fromClaude: true
+        }
+      } catch (error) {
+        console.warn('[claude] listing the at-rest `/` commands failed; reading folders:', error)
+      } finally {
+        release()
+      }
+    }
     const [custom, discovered] = await Promise.all([
       scanClaudeCommandFolders([join(cwd, '.claude', 'commands'), join(account, 'commands')]),
       (this.deps.discover ?? discoverSkills)({
@@ -148,7 +182,10 @@ export class ClaudeAtRestCommandCatalog {
         kind: 'skill',
         ...(skill.description ? { description: skill.description } : {})
       }))
-    return [...builtIn, ...custom.filter((command) => !names.has(command.name)), ...skills]
+    return {
+      commands: [...builtIn, ...custom.filter((command) => !names.has(command.name)), ...skills],
+      fromClaude: false
+    }
   }
 
   private now(): number {

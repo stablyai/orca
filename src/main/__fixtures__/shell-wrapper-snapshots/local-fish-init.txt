@@ -24,7 +24,9 @@ if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
     # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
     set -l pointer (string replace -r '^~/' "$HOME/" -- "$ORCA_CLAUDE_PROFILE_POINTER")
     set -l profile (cat "$pointer" 2>/dev/null)
-    if test -n "$CLAUDE_CONFIG_DIR"; and test "$CLAUDE_CONFIG_DIR" != "$ORCA_CLAUDE_INJECTED_CONFIG_DIR"
+    set -l own (string trim -r -c / -- "$ORCA_CLAUDE_USER_CONFIG_DIR")
+    set -l current (string trim -r -c / -- "$CLAUDE_CONFIG_DIR")
+    if test -n "$CLAUDE_CONFIG_DIR"; and test "$CLAUDE_CONFIG_DIR" != "$ORCA_CLAUDE_INJECTED_CONFIG_DIR"; and begin; test -z "$own"; or test "$current" != "$own"; end
       command claude $argv
       return $status
     end

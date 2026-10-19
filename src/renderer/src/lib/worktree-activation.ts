@@ -7,7 +7,7 @@ import { registerWorktreeActivation } from '@/lib/worktree-activation-nav-regist
 import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   folderWorkspaceActivationBlocked,
@@ -20,7 +20,7 @@ import {
   findFolderWorkspaceOwner,
   getRuntimeEnvironmentIdForFolderWorkspace
 } from './folder-workspace-runtime-owner'
-import { getFolderWorkspaceHostId } from '@/store/folder-workspaces/folder-workspace-catalog'
+import { getFolderWorkspaceHostId } from '../../../shared/folder-workspace-execution-host'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import {
   ensureFolderWorkspaceInitialTerminal,
@@ -38,6 +38,7 @@ import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-r
 import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-filters'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from './floating-workspace-panel-reveal'
+import { markVisited, readPreviousActive } from './worktree-activation-visit'
 
 /**
  * Shared activation sequence used by the worktree palette and add-repo/worktree dialogs.
@@ -109,12 +110,13 @@ export function activateAndRevealFolderWorkspace(
     state.setActiveView('terminal')
   }
 
+  const previousActive = readPreviousActive(state)
   state.setActiveFolderWorkspace(folderWorkspaceId, opts?.executionHostId)
 
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   const providesInitialSurface = activationProvidesInitialSurface(opts)
   const seedUserDefaultSurface = activationSeedsUserDefaultSurface(opts)
-  state.markWorktreeVisited(workspaceKey)
+  markVisited(state, workspaceKey, previousActive, opts?.executionHostId)
   if (!state.isNavigatingHistory) {
     state.recordWorktreeVisit(workspaceKey)
   }
@@ -204,10 +206,14 @@ export function activateAndRevealWorktree(
     state.setActiveView('terminal')
   }
 
+  const previousActive = readPreviousActive(state)
   // 3. Core activation: setActiveWorktree also restores per-worktree state, clears unread, bumps dead PTY generations, refreshes GitHub
   state.setActiveWorktree(worktreeId, opts?.executionHostId)
   const postActivationState = useAppStore.getState()
-  const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
+  const ownerRuntimeEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+    postActivationState,
+    wt.id
+  )
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
     // Why: paired web clients own only local selection, so the desktop host publishes session surfaces without treating it as a nav command.
     void activateWebRuntimeSessionWorktree({
@@ -218,7 +224,7 @@ export function activateAndRevealWorktree(
 
   // Why: focus recency for Cmd+J ordering, distinct from recordWorktreeVisit/lastActivityAt; stamp before any later async step could throw. See docs/cmd-j-empty-query-ordering.md.
   if (!isPlainAlreadyActiveTerminal) {
-    state.markWorktreeVisited(worktreeId)
+    markVisited(state, worktreeId, previousActive, opts?.executionHostId ?? null)
   }
 
   // Why: skip re-recording for goBack/goForward history navigation — it moves the index instead of visiting anew (isNavigatingHistory).

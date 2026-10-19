@@ -4,7 +4,7 @@ import type { ServeReadiness } from '../server/serve-readiness'
 import {
   verifyOrcadPairingIdentity,
   type OrcadTunnelIdentity
-} from '../ssh/orcad-managed-tunnel-identity'
+} from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 /** Whether the server behind a WSL bridge is the orcad that published `readiness`. */
 export async function verifyWslOrcadIdentity(

@@ -56,8 +56,8 @@ export const CodexResetExpectedScope = z
 
 export const ConsumeCodexResetCreditParams = z
   .object({
-    // Why: the phone owns the logical attempt key so a lost response can be
-    // retried without spending a finite earned credit twice.
+    // Why: one key per client attempt; the host ledger answers a retry of the same offer or
+    // account with the attempt it already recorded, so a credit is never spent twice.
     idempotencyKey: z.uuid('Invalid idempotencyKey'),
     expectedScope: CodexResetExpectedScope
   })

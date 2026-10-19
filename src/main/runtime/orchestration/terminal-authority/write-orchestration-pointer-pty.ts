@@ -107,6 +107,12 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     return agentIdentity ? { agentIdentity } : {}
   }
 
+  /** A user's pane name from the saved layout: every client's pane rename lands there. */
+  protected getSavedPaneTitle(worktreeId: string, tabId: string, leafId: string): string | null {
+    const layout = this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[tabId]
+    return layout?.titlesByLeafId?.[leafId]?.trim() || null
+  }
+
   protected buildTerminalSummary(
     leaf: RuntimeLeafRecord,
     worktreesById: Map<string, ResolvedWorktree>,
@@ -117,6 +123,7 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
 
     const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
     const title = getLatestLeafTitle(this.getLeafDisplayRecord(leaf), tab?.title ?? null)
+    const paneTitle = this.getSavedPaneTitle(leaf.worktreeId, leaf.tabId, leaf.leafId)
     // Why: leaf.connected mirrors the renderer graph (`ptyId !== null`), so a
     // restored surface whose PTY died with a prior run still reads connected.
     // Demote only on a controller-proven absence, and only for locally-scoped
@@ -143,6 +150,7 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       tabId: leaf.tabId,
       leafId: leaf.leafId,
       title,
+      ...(paneTitle ? { paneTitle } : {}),
       connected: provenAbsent ? false : leaf.connected,
       writable: provenAbsent ? false : leaf.writable,
       lastOutputAt: leaf.lastOutputAt,

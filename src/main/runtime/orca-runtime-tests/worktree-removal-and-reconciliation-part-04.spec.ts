@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
@@ -319,7 +319,10 @@ describe('OrcaRuntimeService', () => {
         stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
       })
     )
-    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+    const gitSpy = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockResolvedValue({ stdout: '', stderr: '' })
+    onTestFinished(() => gitSpy.mockRestore())
 
     await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
     expect(removeWorktree).toHaveBeenCalledWith(
@@ -498,7 +501,10 @@ describe('OrcaRuntimeService', () => {
         stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
       })
     )
-    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+    const gitSpy = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockResolvedValue({ stdout: '', stderr: '' })
+    onTestFinished(() => gitSpy.mockRestore())
 
     // Prime the bounded raw scan cache with the worktree still present.
     await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)

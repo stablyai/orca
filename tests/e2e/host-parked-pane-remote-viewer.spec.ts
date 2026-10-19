@@ -46,7 +46,7 @@ import {
 } from './helpers/paired-electron-client'
 import { focusActiveTerminalInput } from './helpers/terminal'
 import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const PARK_DELAY_MS = 30_000
 const PAINT_BUDGET_MS = 20_000

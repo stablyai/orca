@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { chromium } from 'playwright'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
 import {
   BrowserSessionUaCdpCollector,
@@ -20,6 +20,19 @@ import {
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
+let processIdentityModulePath: string
+let exceptionModulePath: string
+
+beforeAll(async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-wire-identity-modules-'))
+  fixtureRoots.push(root)
+  processIdentityModulePath = join(root, 'browser-process-user-agent.cjs')
+  exceptionModulePath = join(root, 'browser-session-ua.cjs')
+  await Promise.all([
+    buildModule('src/main/browser/browser-process-user-agent.ts', processIdentityModulePath),
+    buildModule('src/main/browser/browser-session-ua.ts', exceptionModulePath)
+  ])
+})
 
 afterAll(() => {
   for (const root of fixtureRoots) {
@@ -180,12 +193,6 @@ describe('browser session wire identity under Electron', () => {
 async function runProbe(arm: ProbeArm): Promise<ProbeResult> {
   const root = mkdtempSync(join(tmpdir(), `orca-wire-identity-${arm}-`))
   fixtureRoots.push(root)
-  const processIdentityModulePath = join(root, 'browser-process-user-agent.cjs')
-  const exceptionModulePath = join(root, 'browser-session-ua.cjs')
-  await Promise.all([
-    buildModule('src/main/browser/browser-process-user-agent.ts', processIdentityModulePath),
-    buildModule('src/main/browser/browser-session-ua.ts', exceptionModulePath)
-  ])
   const server = await startBrowserSessionUaWireProbeServer()
   const resultPath = join(root, 'result.json')
   const barrierPath = join(root, 'continue')

@@ -3,7 +3,7 @@
  * shell alive, and that relay refuses this build's handshake. The bridge must reach the shell through
  * the old relay's own `--connect`, drive it, survive a dropped connection, never displace an
  * attached 1.4.224 client, and retire the pane once the shell exits.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay-bridge/.
+ * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
  */
 import type { ChildProcess } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -14,9 +14,9 @@ import { toAppSshPtyId } from '../../../src/shared/ssh-pty-id'
 import {
   LegacyRelayClient,
   LegacyRelayOwnerHeldError
-} from '../../../src/main/ssh/legacy-relay-bridge/legacy-relay-client'
-import { LegacyRelayTargetBridge } from '../../../src/main/ssh/legacy-relay-bridge/legacy-relay-target-bridge'
-import type { LegacyRelayEndpoint } from '../../../src/main/ssh/legacy-relay-bridge/legacy-relay-endpoints'
+} from '../../../src/main/ssh/legacy-relay/legacy-relay-client'
+import { LegacyRelayTargetBridge } from '../../../src/main/ssh/legacy-relay/legacy-relay-target-bridge'
+import type { LegacyRelayEndpoint } from '../../../src/main/ssh/legacy-relay/legacy-relay-endpoints'
 import { getRemoteHostPlatform } from '../../../src/main/ssh/ssh-remote-platform'
 import { materializeReleaseCheckout } from './release-checkout'
 import {

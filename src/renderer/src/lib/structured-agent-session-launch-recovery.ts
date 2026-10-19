@@ -1,5 +1,8 @@
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session-wire'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
 import {
   launchStructuredAgentSession,
   StructuredAgentSessionCreateRefusalError,
@@ -14,6 +17,7 @@ export type StructuredAgentLaunchReceipt = {
   sessionId: string
   fence: number
   firstMessage?: AgentJournalSubmission
+  cursor?: AgentJournalCursor
 }
 
 export type StructuredLaunchRecoveryState = {
@@ -79,7 +83,13 @@ export async function recoverPublishedSessionReceipt(
   if (state.intent.createMessageSupport === true) {
     publishStructuredAgentSessionCreateHydration(state.intent, history.page, fence)
   }
-  return { sessionId: state.intent.sessionId, fence, ...(firstMessage ? { firstMessage } : {}) }
+  return {
+    sessionId: state.intent.sessionId,
+    fence,
+    ...(firstMessage
+      ? { firstMessage, cursor: history.page.liveCursor ?? history.page.window.nextCursor }
+      : {})
+  }
 }
 
 async function retrySameIntent(

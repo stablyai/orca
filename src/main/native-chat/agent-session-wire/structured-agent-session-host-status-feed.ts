@@ -67,8 +67,8 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     // field initializer, before its constructor parameters are assigned.
     statusSink: () => args.deps().statusSink,
     ...(args.onAgentStarted ? { onAgentStarted: args.onAgentStarted } : {}),
-    onChildWorkChanged: (sessionId) => {
-      subagentRows.changed(sessionId)
+    onChildWorkChanged: (sessionId, producer) => {
+      subagentRows.changed(sessionId, producer)
       args.onChildWorkChanged?.(sessionId)
     }
   })

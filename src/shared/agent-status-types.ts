@@ -2,6 +2,7 @@
 // Why: status comes from hooks (Claude, Codex, etc.) — never inferred from terminal titles;
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
+import type { ProgramStatusFacet } from './program-status/facet'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { AgentStateHistoryEntry } from './agent-state-history'
@@ -34,7 +35,6 @@ export {
   AGENT_TYPE_MAX_LENGTH
 } from './agent-status-field-normalization'
 export {
-  AGENT_STATUS_MAX_SUBAGENTS,
   agentSubagentsEqual,
   type AgentSubagentSnapshot,
   type AgentSubagentState
@@ -159,6 +159,10 @@ export type AgentStatusEntry = {
   terminalResumeEligible?: false
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** The program's own OSC 7501 report (progress, message, blocks like sign-in), beside whichever
+   *  producer owns `state`. Never decides `state`; readers resolve it through
+   *  resolveProgramStatusPresentation. Live-only. */
+  programStatus?: ProgramStatusFacet
   /** True for a nonterminal state hydrated from last-status.json with no live hook since:
    *  the transition may have been missed while no receiver was up, so freshness gates
    *  treat the row as stale immediately. Cleared by any accepted live event. */
@@ -261,6 +265,7 @@ export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
 // Re-exported here because every consumer reaches for the entry type and its freshness gate
 // together; the clock rules themselves live in agent-status-freshness.ts.
 export {
+  AGENT_STATUS_HYDRATE_MAX_AGE_MS,
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusAuthorityObservedAt,
   agentStatusEvidenceObservedAt,

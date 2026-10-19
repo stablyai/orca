@@ -65,7 +65,7 @@ export async function cancelClaudeStructuredTurn(input: {
   const acquisitionGeneration = session.acquisitionGeneration
   // A CLI still starting answers no interrupt: Stop ends its child next (`stopEndsSession`), and
   // that end settles every message it was handed and never echoed as stopped.
-  if (request.prompt || session.startup.state === 'pending') {
+  if (request.prompt) {
     return { cancelled: false }
   }
   const requestedTurnId = request.turnId

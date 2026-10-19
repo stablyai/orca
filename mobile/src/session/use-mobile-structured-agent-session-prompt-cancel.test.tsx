@@ -126,7 +126,9 @@ function Harness({
       statusFeed: false,
       quietRepeatedStop: false,
       sendOptions: false,
-      conversationStop: false
+      conversationStop: false,
+      permissionModes: false,
+      phoneAttachments: false
     },
     onSendError: vi.fn()
   })

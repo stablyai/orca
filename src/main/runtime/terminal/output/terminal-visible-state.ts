@@ -1,5 +1,8 @@
 import { OrcaRuntimeWithCaptureProviderTerminalBuffer } from './provider-buffer-capture'
-import type { RuntimeTerminalProjection } from '../../orca-runtime-core'
+import {
+  TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
+  type RuntimeTerminalProjection
+} from '../../orca-runtime-core'
 import { buildPreview } from '../../terminal-tail-state'
 import type {
   RuntimeHeadlessTerminal,
@@ -142,6 +145,25 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       sequence: state.outputSequence,
       generation
     }
+  }
+
+  protected async readCurrentTerminalWaitScreen(
+    ptyId: string
+  ): Promise<RuntimeVisibleTerminalState | null | undefined> {
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const screen = await withTimeout(
+      this.readVisibleTerminalState(ptyId),
+      TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
+      null
+    )
+    if (generation !== this.getPtyLifecycleGeneration(ptyId)) {
+      return undefined
+    }
+    return screen &&
+      screen.generation === generation &&
+      screen.sequence >= this.getPtyOutputSequence(ptyId)
+      ? screen
+      : null
   }
 
   /** Synchronous visible grid of the live emulator, for tui-idle body evidence. Null when the

@@ -1,3 +1,4 @@
+import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { AppState } from '@/store/types'
@@ -10,13 +11,17 @@ import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RenderRow } from '../listing/render-row'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
-import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
+import type {
+  PinnedWorktreeDisplayPolicy,
+  WorktreeGroupBy
+} from '../../../../../../shared/sidebar-list/row-types'
 import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
 import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
 
 export const MAX_REVEAL_RETRIES = 8
 
 export type PendingSidebarRevealArgs = {
+  occurrencePlan?: WorktreeOccurrencePlan<Worktree>
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   pendingRevealSidebarRow: PendingSidebarRowReveal | null
   clearPendingRevealWorktreeId: () => void

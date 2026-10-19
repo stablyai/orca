@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { decodeAccountsSnapshot } from '../components/AccountUsage'
 import { subscribeToDesktopNotifications } from '../notifications/mobile-notifications'
-import { usePrimeHosts } from '../transport/client-context'
+import { usePrimeHosts } from '../transport/host-client-hooks'
 import { createHostConnectRefetchGate } from '../transport/host-connect-refetch-gate'
 import { selectHomeAutoConnectHostIds } from '../transport/home-host-auto-connect'
 import type { RpcClient } from '../transport/rpc-client'

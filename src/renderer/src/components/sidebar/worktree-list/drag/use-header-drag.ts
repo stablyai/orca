@@ -6,8 +6,11 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { HostHeaderRow, HostSectionRow } from '../../host-section-rows'
-import type { Row, WorktreeGroupBy } from '../grouping/row-types'
+import type {
+  HostHeaderRow,
+  HostSectionRow
+} from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { Row, WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 import {
   getProjectGroupHeaderSectionEndByGroupId,

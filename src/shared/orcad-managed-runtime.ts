@@ -1,7 +1,7 @@
 import type { PublicKnownRuntimeEnvironment } from './runtime-environments'
 import type { OrcadTerminalCensus } from './orcad-terminal-census'
-import type { OrcadMigrationBlocker } from './orcad-migration-preflight'
-import type { OrcadMigrationSourceCutoverPhase } from './orcad-migration-source-cutover'
+import type { OrcadMigrationBlocker } from './orcad-migration/orcad-migration-preflight'
+import type { OrcadMigrationSourceCutoverPhase } from './orcad-migration/orcad-migration-source-cutover'
 import type { OrcadDaemonRetirementVerdict } from './orcad-stop-request'
 import type { SshManagedServerLinkedProject } from './ssh-types'
 
@@ -13,6 +13,8 @@ export type OrcadManagedRefusal = {
   verdict: 'live' | 'unverifiable'
   code: string
   reason: string
+  /** Only saved state blocks, which a confirmed "Move anyway" leaves on this desktop. */
+  canLeaveBehind?: true
 }
 
 export type OrcadManagedDeferral = {
@@ -66,6 +68,15 @@ export type OrcadManagedStopResult =
       retirement: OrcadDaemonRetirementVerdict | null
     }
   | OrcadManagedRefusal
+
+/**
+ * Restarting the server from the current SSH session. Refused while any terminal runs or can't be
+ * counted (`liveSessions: null`): the terminal daemon outlives orcad and keeps what it inherited.
+ */
+export type OrcadManagedRestartResult =
+  | { outcome: 'restarted'; environmentId: string }
+  | { outcome: 'terminals-running'; liveSessions: number | null }
+  | { outcome: 'not-restarted'; reason: string }
 
 /**
  * Unlinks the server from this desktop without reaching its host, for a host that is gone or

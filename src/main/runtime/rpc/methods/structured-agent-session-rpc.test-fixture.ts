@@ -176,6 +176,7 @@ export function hostStub(): StructuredAgentSessionHost {
     waitForSendSettlement: vi.fn(),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
+    sleepWorkspace: vi.fn(async () => ({ stoppedSessionIds: [SESSION] })),
     revealSession: vi.fn(async () => ({
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -248,6 +249,8 @@ export function dispatcher(
   const runtime = {
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ experimentalNativeChat: true }),
+    // The host reads saved settings privately; follow the client settings each test chose.
+    requireStore: () => ({ getSettings: () => runtime.getClientSettings() }),
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),
@@ -268,7 +271,7 @@ export async function call(
   client?: {
     clientId?: string
     clientKind?: 'mobile' | 'runtime'
-    clientCapabilities?: string[]
+    clientCapabilities?: readonly string[]
     signal?: AbortSignal
   },
   runtimeOverrides: Record<string, unknown> = {},
@@ -322,6 +325,4 @@ export function installStructuredHostStub(): void {
   setStructuredAgentSessionHost(hostStub())
 }
 
-export function clearStructuredHostStub(): void {
-  setStructuredAgentSessionHost(null)
-}
+export const clearStructuredHostStub = (): void => setStructuredAgentSessionHost(null)

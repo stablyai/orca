@@ -1,4 +1,3 @@
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { classifyClaudeBackgroundTaskKind } from './claude-background-task-kind'
 import { isAgentChildWorkKind } from './agent-status-child-work-liveness'
 
@@ -91,12 +90,6 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       continue
     }
     if (typeof obj.id !== 'string' || obj.id.trim().length === 0) {
-      truncated = true
-      continue
-    }
-    if (tasks.length >= AGENT_STATUS_MAX_SUBAGENTS) {
-      // Why: a capped inventory cannot prove a tracked id is absent; callers
-      // must retain unlisted rows rather than deleting live overflow tasks.
       truncated = true
       continue
     }

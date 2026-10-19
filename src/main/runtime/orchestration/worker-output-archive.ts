@@ -7,10 +7,8 @@ import type {
   WorkerTerminalArchiveRow,
   WorkerTerminalArchiveStatus
 } from './worker-terminal-ownership'
-import {
-  MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT,
-  redactWorkerTerminalLines
-} from './worker-transcript-payload'
+import { MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT } from './worker-transcript-payload'
+import { redactWorkerTerminalLines } from './worker-terminal-redaction'
 import { readWorkerTranscript } from './worker-transcript-read'
 import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import { captureStructuredWorkerArchive } from '../rpc/methods/orchestration-structured-worker-lifecycle'

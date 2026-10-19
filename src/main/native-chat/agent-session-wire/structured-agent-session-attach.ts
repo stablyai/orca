@@ -81,6 +81,7 @@ export type AgentSessionAttachParams = {
     providerHandle: AgentSessionProviderHandle
     /** Omitted only when the exact committed operation replays an already-imported journal. */
     transcriptPath?: string
+    source?: { providerSessionId: string; workspaceCwd: string }
   }
 }
 

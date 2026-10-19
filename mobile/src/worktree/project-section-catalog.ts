@@ -1,5 +1,6 @@
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
 import { getLogicalRepoOrderRankById } from '../../../src/shared/project-section-order'
+import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
 import type { ServedProjectSections } from './project-sections-operations'
 import { NO_PROJECT_SECTION_CATALOG, type ProjectSectionCatalog } from './workspace-list-sections'
 import type { SectionRepo } from './workspace-list-types'
@@ -12,14 +13,20 @@ import type { SectionRepo } from './workspace-list-types'
 export function buildProjectSectionCatalog(
   served: ServedProjectSections | null,
   desktopRepos: readonly SectionRepo[],
-  visibleHostIds: readonly ExecutionHostId[] | null
+  visibleHostIds: readonly ExecutionHostId[] | null,
+  /** The shared UI value; null until read, when the served one stands in. */
+  projectOrderBy: ProjectOrderBy | null
 ): ProjectSectionCatalog {
   const shown = (repos: readonly SectionRepo[]) =>
     visibleHostIds
       ? repos.filter((repo) => visibleHostIds.includes(getRepoExecutionHostId(repo)))
       : repos
   if (!served) {
-    return { ...NO_PROJECT_SECTION_CATALOG, repos: shown(desktopRepos) }
+    return {
+      ...NO_PROJECT_SECTION_CATALOG,
+      repos: shown(desktopRepos),
+      projectOrderBy: projectOrderBy ?? NO_PROJECT_SECTION_CATALOG.projectOrderBy
+    }
   }
   // Why: the desktop withholds uploaded image icons from the snapshot; its repo.list still carries them.
   const iconKey = (repo: SectionRepo) => `${getRepoExecutionHostId(repo)}|${repo.id}`
@@ -33,6 +40,6 @@ export function buildProjectSectionCatalog(
     grouping: { projects: served.projects, projectHostSetups: served.setups },
     // Why: served repos come in the sidebar's header order, cross-host manual order included.
     repoOrder: getLogicalRepoOrderRankById(served.repos.map((repo) => repo.id)),
-    projectOrderBy: served.projectOrderBy
+    projectOrderBy: projectOrderBy ?? served.projectOrderBy
   }
 }

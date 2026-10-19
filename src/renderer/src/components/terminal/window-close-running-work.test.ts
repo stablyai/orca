@@ -81,22 +81,52 @@ describe('assessWindowCloseRunningWork', () => {
     })
   })
 
-  it('warns on quit about a live process on a paired runtime host', async () => {
+  // #29916: a paired runtime owns its terminals and keeps them after this client quits.
+  it('does not warn on quit, or probe, for a live process on a paired runtime host', async () => {
+    setState([RUNTIME_PTY, OWNERLESS_RUNTIME_PTY])
+    answerWith({ [RUNTIME_PTY]: BUSY, [OWNERLESS_RUNTIME_PTY]: BUSY })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
+      kind: 'none'
+    })
+    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('does not warn on quit when a paired runtime host is unreachable', async () => {
+    setState([RUNTIME_PTY])
+    answerWith({ [RUNTIME_PTY]: UNVERIFIABLE })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
+      kind: 'none'
+    })
+  })
+
+  it('still warns when closing the window over a live process on a paired runtime host', async () => {
     setState([RUNTIME_PTY])
     answerWith({ [RUNTIME_PTY]: BUSY })
 
-    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
       kind: 'running'
     })
   })
 
-  it('counts an owner-less remote pty as remote work', async () => {
+  it('still warns when closing the window over an owner-less runtime pty', async () => {
     setState([OWNERLESS_RUNTIME_PTY])
-    answerWith({ [OWNERLESS_RUNTIME_PTY]: BUSY })
+    answerWith({ [OWNERLESS_RUNTIME_PTY]: UNVERIFIABLE })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
+      kind: 'unverifiable'
+    })
+  })
+
+  it('warns on quit about an SSH relay pty alongside a busy paired runtime pty', async () => {
+    setState([SSH_PTY, RUNTIME_PTY])
+    answerWith({ [SSH_PTY]: BUSY, [RUNTIME_PTY]: BUSY })
 
     await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
       kind: 'running'
     })
+    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledTimes(1)
   })
 
   // The crux of docs/reference/ssh-execution-boundary.md: an unreachable host is `unverifiable`,
@@ -155,7 +185,7 @@ describe('assessWindowCloseRunningWork', () => {
     setState([SSH_PTY, RUNTIME_PTY])
     answerWith({ [SSH_PTY]: UNVERIFIABLE, [RUNTIME_PTY]: BUSY })
 
-    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
       kind: 'running'
     })
   })

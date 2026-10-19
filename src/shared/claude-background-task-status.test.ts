@@ -11,7 +11,6 @@ import {
   seedClaudeSubagentRosterFromSnapshots
 } from './agent-hook-listener/providers/claude-roster-state'
 import { normalizeHookPayload } from './agent-hook-listener'
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
 import { makePaneKey } from './stable-pane-id'
 
@@ -30,8 +29,8 @@ function claudeEvent(state: HookListenerState, paneKey: string, payload: Record<
 }
 
 describe('Claude background task status', () => {
-  it('finds pending monitor work after the visible child-row cap', () => {
-    const agentTasks = Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 1 }, (_, index) => ({
+  it('lists every agent row and still finds pending monitor work after them', () => {
+    const agentTasks = Array.from({ length: 40 }, (_, index) => ({
       id: `agent-${index}`,
       type: 'subagent',
       status: 'running'
@@ -40,8 +39,8 @@ describe('Claude background task status', () => {
       background_tasks: [...agentTasks, { id: 'monitor-1', type: 'monitor', status: 'pending' }]
     })
 
-    expect(result).toMatchObject({ truncated: true, hasRunningNonAgentTask: true })
-    expect(result.tasks).toHaveLength(AGENT_STATUS_MAX_SUBAGENTS)
+    expect(result).toMatchObject({ truncated: false, hasRunningNonAgentTask: true })
+    expect(result.tasks).toHaveLength(40)
 
     const state = createHookListenerState()
     expect(

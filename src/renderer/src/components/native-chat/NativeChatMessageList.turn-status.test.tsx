@@ -249,20 +249,27 @@ afterEach(cleanup)
   // says the turn is stopping, and the bar settles to "Interrupted after" once the turn ends.
   describe("the turn bar while a person's Stop ends the turn", () => {
     it('keeps the running clock above the Stopping tail line', () => {
-      render(
+      const transcript = (stopping: boolean) => (
         <NativeChatMessageList
           session={session}
           journalItems={[journalItem(1, turnItem)]}
+          turnActivity={{ kind: 'description', text: 'Running pnpm test' }}
           isWorking
-          stopping
+          stopping={stopping}
           expandSignal={false}
         />
       )
+      const { rerender } = render(transcript(false))
+      expect(screen.getByText('Running pnpm test')).toBeInTheDocument()
+      expect(screen.queryByText('Stopping…')).toBeNull()
+
+      rerender(transcript(true))
 
       const bar = screen.getByText('Working for 0s')
       const stopping = screen.getByText('Stopping…')
       expect(bar.compareDocumentPosition(stopping)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
       expect(screen.getAllByText(/Stopping/)).toHaveLength(1)
+      expect(screen.queryByText('Running pnpm test')).toBeNull()
     })
   })
 

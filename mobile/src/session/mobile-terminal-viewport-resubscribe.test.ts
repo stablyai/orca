@@ -93,6 +93,19 @@ describe('resolveTerminalViewportResubscribe', () => {
     ).toEqual({ kind: 'converged' })
   })
 
+  it('accepts desktop dims in desktop mode instead of treating them as a failed fit (#28487)', () => {
+    expect(
+      resolveTerminalViewportResubscribe({
+        hostCols: 150,
+        hostRows: 40,
+        viewportMeasured: true,
+        viewport: PHONE,
+        attempts: 0,
+        displayMode: 'desktop'
+      })
+    ).toEqual({ kind: 'converged' })
+  })
+
   it('backs off across mismatch attempts and then exhausts', () => {
     const delays = [0, 1, 2].map((attempts) => {
       const decision = resolveTerminalViewportResubscribe({
@@ -241,6 +254,7 @@ describe('runTerminalViewportFitPass', () => {
     measured?: { cols: number; rows: number } | null
     sentViewport?: { cols: number; rows: number } | null
     budget?: TerminalViewportResubscribeBudget
+    displayMode?: string
   }) {
     const budget = overrides.budget ?? new TerminalViewportResubscribeBudget()
     const diagnostics = {
@@ -267,6 +281,7 @@ describe('runTerminalViewportFitPass', () => {
       seq: 1,
       hostCols: overrides.hostCols ?? null,
       hostRows: overrides.hostRows ?? null,
+      displayMode: overrides.displayMode ?? null,
       sentViewport: overrides.sentViewport ?? null,
       budget,
       diagnostics,
@@ -301,6 +316,28 @@ describe('runTerminalViewportFitPass', () => {
     expect(h.unsubscribeTerminal).not.toHaveBeenCalled()
     expect(h.subscribeToTerminal).not.toHaveBeenCalled()
     expect(h.diagnostics.streamResubscribeHeld).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the stream up and shows no fit error when the host is in desktop mode (#28487)', async () => {
+    // Why: after a desktop take-back the phone reconnects at desktop dims on purpose.
+    const budget = new TerminalViewportResubscribeBudget()
+    budget.chargeAttempt(HANDLE)
+    const h = makeHarness({
+      hostCols: 150,
+      hostRows: 40,
+      viewportMeasured: true,
+      viewport: PHONE,
+      displayMode: 'desktop',
+      budget
+    })
+    for (let i = 0; i <= MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS; i++) {
+      runTerminalViewportFitPass(h.args)
+      await settle()
+    }
+    expect(h.unsubscribeTerminal).not.toHaveBeenCalled()
+    expect(h.subscribeToTerminal).not.toHaveBeenCalled()
+    expect(h.showToast).not.toHaveBeenCalled()
+    expect(h.budget.attempts(HANDLE)).toBe(0)
   })
 
   it('measures and resubscribes immediately on the first pass, charging one attempt', async () => {

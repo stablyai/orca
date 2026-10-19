@@ -95,7 +95,10 @@ export async function retireOutgrownStructuredAgentSessionChild(
   sessionId: string,
   session: OutgrownChildReading | undefined,
   deps: {
-    work: StructuredAgentSessionChildWorkReads
+    /** `childWork`: the records, read only for endings the lead has yet to answer. */
+    work: StructuredAgentSessionChildWorkReads & {
+      childWork: () => readonly AgentChildWorkView[] | undefined
+    }
     startUnavailable?: () => AgentSessionUnavailable | undefined
     /** The mode a start of the chat would launch with now. */
     launchPermission?: () => Promise<AgentChatPermissionMode | null>

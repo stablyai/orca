@@ -7,7 +7,7 @@ import {
 } from './orca-runtime-test-mocks.spec'
 import { store, TEST_WORKTREE_ID } from './orca-runtime-test-fixtures.spec'
 import { parseWorkspaceReferenceUrl } from '../../shared/workspace-reference-identity'
-import { RuntimeLinearCommands } from './runtime-linear-connection-commands'
+import type { RuntimeLinearCommands } from './runtime-linear-connection-commands'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
 vi.mock('./agent-session-record-store-slot', () => ({
@@ -97,15 +97,8 @@ class LinearOwnerRuntime extends OrcaRuntimeService {
 }
 
 describe('Linear installed owner', () => {
-  it('keeps the installed descriptor and forwards the command promise unchanged', async () => {
+  it('forwards the command promise unchanged', async () => {
     const runtime = new OrcaRuntimeService()
-    const descriptor = Object.getOwnPropertyDescriptor(
-      OrcaRuntimeService.prototype,
-      'linearIssueComments'
-    )
-    expect(descriptor).toMatchObject({ configurable: true, enumerable: false, writable: true })
-    expect(Object.hasOwn(runtime, 'linearIssueComments')).toBe(false)
-    expect(runtime.linearCommands).toBeInstanceOf(RuntimeLinearCommands)
     const result: ReturnType<RuntimeLinearCommands['linearIssueComments']> = Promise.resolve([])
     const comments = vi.spyOn(runtime.linearCommands, 'linearIssueComments').mockReturnValue(result)
     expect(runtime.linearIssueComments('issue-1', 'workspace-1')).toBe(result)

@@ -1,15 +1,18 @@
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import {
   ORCAD_MIGRATION_DEPENDENCY_KINDS,
   type OrcadMigrationDependencyKind
-} from '../../../shared/orcad-migration-preflight'
+} from '../../../shared/orcad-migration/orcad-migration-preflight'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { TerminalScrollbackSnapshotStorage } from '../../terminal-scrollback-snapshots'
 import {
   inspectOrcadMigrationSourceSessions,
   type OrcadMigrationSourceSessionInspection
 } from './orcad-source-session-dependencies'
-import { collectOrcadMigrationSourceDormantState } from './orcad-source-dormant-state'
+import {
+  collectOrcadMigrationSourceDormantState,
+  orcadMigrationLeavesBehind
+} from './orcad-source-dormant-state'
 import {
   createOrcadMigrationSourceScope,
   orcadMigrationOwnerMatchesScope,
@@ -56,7 +59,10 @@ export function collectOrcadMigrationUntransferredDependencyCensus(
     'terminal-lease': state.sshRemotePtyLeases.filter(
       (lease) => lease.targetId === scope.targetId && lease.state !== 'terminated'
     ).length,
-    'terminal-recovery': countTerminalRecoveryState(state, scope, sessions)
+    // Left behind, recovery records stay with this desktop; the terminal gate still proves exit.
+    'terminal-recovery': orcadMigrationLeavesBehind(state, scope.targetId)
+      ? 0
+      : countTerminalRecoveryState(state, scope, sessions)
   }
   return {
     counts,

@@ -16,10 +16,8 @@ vi.mock('electron', () => ({
   net: { fetch: (...args: unknown[]) => fetchMock(...args) }
 }))
 
-import {
-  MAX_FEEDBACK_IMAGE_RESPONSE_BYTES,
-  MAX_FEEDBACK_IMAGE_TOTAL_BYTES
-} from './feedback-image-attachments'
+import { MAX_FEEDBACK_IMAGE_RESPONSE_BYTES } from './feedback-image-attachments'
+import { MAX_FEEDBACK_IMAGE_TOTAL_BYTES } from '../../shared/feedback-image-limits'
 import { registerFeedbackHandlers, submitFeedback } from './feedback'
 
 function okResponse(): Response {

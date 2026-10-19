@@ -2,7 +2,7 @@ import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/ru
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { parseWorkerTerminalHostScope } from '../../../../orchestration/worker-terminal-process-liveness'
+import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
 import { observeChatAssignee } from '../../../../orchestration/chat-assignee'

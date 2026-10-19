@@ -213,9 +213,16 @@ describe('launchAgentInNewTab', () => {
 
   it('stamps the launched agent on the new tab for immediate provider icon bootstrap', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const cancelFocus = vi.fn()
 
-    launchAgentInNewTab({ requestId: 'request-1', agent: 'codex', worktreeId: 'wt-1' })
+    launchAgentInNewTab({
+      requestId: 'request-1',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      focusIntent: { request: vi.fn(), cancel: cancelFocus }
+    })
 
+    expect(cancelFocus).toHaveBeenCalledOnce()
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       launchAgent: 'codex',
       pendingStartup: expect.anything()
@@ -537,15 +544,13 @@ describe('launchAgentInNewTab', () => {
 
     launchAgentInNewTab({ requestId: 'request-12', agent: 'codex', worktreeId: 'wt-1' })
 
-    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: 'wt-1',
-        environmentId: 'web-runtime',
-        agentSessionKind: 'fresh',
-        agent: 'codex',
-        viewMode: 'terminal'
-      })
-    )
+    expect(mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0]).toMatchObject({
+      worktreeId: 'wt-1',
+      environmentId: 'web-runtime',
+      agentSessionKind: 'fresh',
+      agent: 'codex',
+      viewMode: 'terminal'
+    })
   })
 
   it('propagates the resolved terminal mode to paired web runtime launches', async () => {
@@ -561,15 +566,13 @@ describe('launchAgentInNewTab', () => {
 
     launchAgentInNewTab({ requestId: 'request-13', agent: 'codex', worktreeId: 'wt-1' })
 
-    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: 'wt-1',
-        environmentId: 'web-runtime',
-        agentSessionKind: 'fresh',
-        agent: 'codex',
-        viewMode: 'terminal'
-      })
-    )
+    expect(mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0]).toMatchObject({
+      worktreeId: 'wt-1',
+      environmentId: 'web-runtime',
+      agentSessionKind: 'fresh',
+      agent: 'codex',
+      viewMode: 'terminal'
+    })
   })
 
   it('surfaces a toast when host agent launch fails in paired web clients', async () => {

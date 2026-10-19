@@ -87,13 +87,13 @@ function scriptRequest(factory: ScriptedResponseFactory): {
         for (const cb of listeners.get('response') ?? []) {
           cb(response)
         }
-        setTimeout(() => {
+        scheduleResponse(() => {
           for (const chunk of spec.chunks ?? []) {
             response.push(chunk)
           }
           // Why: fail on a later tick so pushed chunks flush to the file
           // stream first, mirroring a transfer that dies mid-body.
-          setTimeout(() => {
+          scheduleResponse(() => {
             if (spec.failWith) {
               response.destroy(new Error(spec.failWith))
             } else {
@@ -110,6 +110,27 @@ function scriptRequest(factory: ScriptedResponseFactory): {
 }
 
 const PAYLOAD = Buffer.from('0123456789abcdefghij')
+// Keep stream-to-file flush delays real while retry timers advance.
+const scheduleResponse = globalThis.setTimeout
+
+async function advanceInterruptedRetry(
+  attempt: Promise<void>,
+  download: Promise<void>,
+  filePath: string,
+  message: string
+): Promise<void> {
+  await expect(attempt).rejects.toThrow(message)
+  await new Promise((resolve) => setImmediate(resolve))
+  const partial = readFileSync(filePath)
+  const requestsBeforeRetry = netRequestMock.mock.calls.length
+  await vi.advanceTimersByTimeAsync(999)
+  const requestsBeforeDeadline = netRequestMock.mock.calls.length
+  await vi.advanceTimersByTimeAsync(1)
+  await download
+  expect(partial).toEqual(PAYLOAD.subarray(0, 10))
+  expect(requestsBeforeRetry).toBe(1)
+  expect(requestsBeforeDeadline).toBe(1)
+}
 
 describe('ModelManager download resume', () => {
   beforeEach(() => {
@@ -122,6 +143,7 @@ describe('ModelManager download resume', () => {
   })
 
   it('resumes an interrupted download with a Range request and assembles the full file', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
     try {
       scriptRequest(() => ({
@@ -143,14 +165,26 @@ describe('ModelManager download resume', () => {
       })
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
       const filePath = join(dir, 'model.bin')
+      const attempt = vi.spyOn(manager, 'downloadFile')
 
-      await manager.downloadFileWithRetry(
+      const download = manager.downloadFileWithRetry(
         'https://example.com/model.bin',
         filePath,
         PAYLOAD.length,
         'm',
         () => false,
         new AbortController().signal
+      )
+
+      const firstAttempt = attempt.mock.results[0]
+      if (firstAttempt?.type !== 'return') {
+        throw new Error('First download attempt did not start')
+      }
+      await advanceInterruptedRetry(
+        firstAttempt.value,
+        download,
+        filePath,
+        'net::ERR_CONTENT_LENGTH_MISMATCH'
       )
 
       expect(netRequestMock).toHaveBeenCalledTimes(2)
@@ -446,6 +480,7 @@ describe('ModelManager download resume', () => {
   })
 
   it('restarts from scratch when the server ignores the Range request', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
     try {
       scriptRequest(() => ({
@@ -461,14 +496,26 @@ describe('ModelManager download resume', () => {
       }))
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
       const filePath = join(dir, 'model.bin')
+      const attempt = vi.spyOn(manager, 'downloadFile')
 
-      await manager.downloadFileWithRetry(
+      const download = manager.downloadFileWithRetry(
         'https://example.com/model.bin',
         filePath,
         PAYLOAD.length,
         'm',
         () => false,
         new AbortController().signal
+      )
+
+      const firstAttempt = attempt.mock.results[0]
+      if (firstAttempt?.type !== 'return') {
+        throw new Error('First download attempt did not start')
+      }
+      await advanceInterruptedRetry(
+        firstAttempt.value,
+        download,
+        filePath,
+        'net::ERR_CONNECTION_RESET'
       )
 
       expect(netRequestMock).toHaveBeenCalledTimes(2)

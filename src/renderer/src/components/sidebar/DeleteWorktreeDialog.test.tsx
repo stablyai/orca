@@ -284,6 +284,63 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     })
   })
 
+  it('keeps long child workspace paths constrained inside the lineage notice', async () => {
+    const child = makeWorktree(
+      'docs-file-upload-discovery-with-a-very-long-name',
+      '/Users/jinjingliang/Documents/projects/agent-slack/docs-file-upload-discovery-with-a-very-long-path-segment'
+    )
+    const { DeleteWorktreeLineageNotice } = await import('./DeleteWorktreeLineageNotice')
+
+    const markup = renderToStaticMarkup(
+      <DeleteWorktreeLineageNotice
+        descendants={[child]}
+        dirtyChangeCountsByWorktreeId={new Map()}
+        dirtyChangePreviewsByWorktreeId={new Map()}
+      />
+    )
+
+    expect(markup).toContain('min-w-0 max-w-full overflow-hidden rounded-md')
+    expect(markup).toContain('mt-2 min-w-0 max-w-full space-y-1 overflow-hidden')
+    expect(markup).toContain('min-w-0 overflow-hidden')
+    expect(markup).toContain('truncate text-muted-foreground')
+  })
+
+  it('names a different checkout of the same project in the delete disclosure', async () => {
+    const repo: Repo = {
+      id: 'repo-1',
+      path: '/parent',
+      displayName: 'Parent project',
+      badgeColor: 'gray',
+      addedAt: 1
+    }
+    const checkout: Repo = {
+      id: 'second-checkout',
+      displayName: 'Second checkout',
+      path: '/second',
+      badgeColor: 'gray',
+      addedAt: 2
+    }
+    const parent = { ...makeWorktree('parent', '/parent'), repoId: repo.id }
+    const child = { ...makeWorktree('child', '/child'), repoId: checkout.id }
+    const { DeleteWorktreeLineageNotice } = await import('./DeleteWorktreeLineageNotice')
+    const markup = renderToStaticMarkup(
+      <DeleteWorktreeLineageNotice
+        parent={parent}
+        descendants={[child]}
+        repoMap={
+          new Map([
+            [repo.id, repo],
+            [checkout.id, checkout]
+          ])
+        }
+        dirtyChangeCountsByWorktreeId={new Map()}
+        dirtyChangePreviewsByWorktreeId={new Map()}
+      />
+    )
+    expect(visibleMarkupText(markup)).toContain('(Second checkout)')
+    expect(visibleMarkupText(markup)).toContain('child · Second checkout')
+  })
+
   it('uses non-destructive disk copy for folder workspace deletes', async () => {
     const workspace = {
       ...makeWorktree('Folder workspace', '/projects/folder'),

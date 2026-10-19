@@ -49,7 +49,8 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
-    ...(form.allowRemoteCliControl ? { allowRemoteCliControl: true } : {})
+    // Why explicit both ways: a server from before the default flip reads an absent value as off.
+    allowRemoteCliControl: form.allowRemoteCliControl
   }
 
   return {
@@ -65,7 +66,6 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
         proxyCommand,
         jumpHost,
         systemSshConnectionReuse,
-        allowRemoteCliControl: form.allowRemoteCliControl || undefined,
         source: 'manual'
       }
     }

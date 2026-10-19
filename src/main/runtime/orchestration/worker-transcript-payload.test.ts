@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
 import {
   boundWorkerTranscriptMessages,
-  boundWorkerTranscriptTail,
-  redactWorkerTerminalLines
+  boundWorkerTranscriptTail
 } from './worker-transcript-payload'
+import { redactWorkerTerminalLines } from './worker-terminal-redaction'
 
 describe('worker transcript wire bounds', () => {
   it('clips oversized blocks and omits local image paths', () => {

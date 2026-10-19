@@ -23,6 +23,7 @@ export type WorkspaceBoardTaskStatusSyncMessage =
   | { kind: 'ambiguous-workflow-state'; statusLabel: string }
   | { kind: 'update-failed'; issueIdentifier: string; detail?: string }
   | { kind: 'provider-error'; issueIdentifier: string; detail?: string }
+  | { kind: 'owner-ambiguous'; issueIdentifier: string }
   | { kind: 'unexpected-error'; detail?: string }
 
 type WorkspaceBoardTaskStatusSyncDependencies = {
@@ -39,7 +40,8 @@ export type SyncWorkspaceBoardTaskStatusesArgs = {
     Pick<Worktree, 'linkedLinearIssue' | 'linkedLinearIssueWorkspaceId'>
   >
   settings?: RuntimeLinearSettings
-  getSettingsForWorktree?: (worktreeId: string) => RuntimeLinearSettings
+  /** `null` refuses the worktree: its owner is ambiguous, so no host's Linear settings apply. */
+  getSettingsForWorktree?: (worktreeId: string) => RuntimeLinearSettings | null
   getLatestWorkspaceStatus: (worktreeId: string) => WorkspaceStatus | null | undefined
   deps?: Partial<WorkspaceBoardTaskStatusSyncDependencies>
 }
@@ -178,9 +180,12 @@ async function syncLinearWorktreeStatus(
   }
 
   // Why: no source has always meant this computer.
-  const settings = (args.getSettingsForWorktree
+  const settings = args.getSettingsForWorktree
     ? args.getSettingsForWorktree(worktreeId)
-    : args.settings) ?? { kind: 'local' }
+    : (args.settings ?? { kind: 'local' })
+  if (!settings) {
+    return skipped(result, { kind: 'owner-ambiguous', issueIdentifier: worktree.linkedLinearIssue })
+  }
   const linkedWorkspaceId = worktree.linkedLinearIssueWorkspaceId ?? undefined
 
   try {

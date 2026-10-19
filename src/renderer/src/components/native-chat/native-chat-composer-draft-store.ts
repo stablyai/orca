@@ -9,6 +9,7 @@ import {
   sameNativeChatComposerDraftImages
 } from './native-chat-composer-draft-comparison'
 import {
+  placeNativeChatComposerDraftAddition,
   withNativeChatComposerDraftAddition,
   type NativeChatComposerDraftAddition
 } from './native-chat-composer-draft-addition'
@@ -184,11 +185,9 @@ export function updateNativeChatComposerDraft(
 
 function withAddition<T extends NativeChatComposerDraft>(
   draft: T,
-  addition: NativeChatComposerDraftAddition,
-  options: { once?: boolean } = {}
+  addition: NativeChatComposerDraftAddition
 ): T {
-  const next = withNativeChatComposerDraftAddition(draft, addition, options)
-  return { ...draft, ...next }
+  return { ...draft, ...withNativeChatComposerDraftAddition(draft, addition) }
 }
 
 /**
@@ -205,7 +204,8 @@ export function appendToNativeChatComposerDraft(
 ): boolean {
   const before = records.get(scopeKey)
   const current = readNativeChatComposerDraft(scopeKey)
-  const { text, images, document } = withAddition(current, addition)
+  const placed = placeNativeChatComposerDraftAddition(current, addition)
+  const { text, images, document } = withAddition(current, placed)
   updateNativeChatComposerDraft(
     scopeKey,
     {
@@ -215,7 +215,7 @@ export function appendToNativeChatComposerDraft(
       ...(owner ? { owner } : {})
     },
     'immediate',
-    (loaded) => withAddition(loaded, addition, { once: true })
+    (loaded) => withAddition(loaded, placed)
   )
   const after = records.get(scopeKey)
   if (!after) {
@@ -225,7 +225,7 @@ export function appendToNativeChatComposerDraft(
   if (after === before && !hasLocalChange(scopeKey) && !refusedScopes.has(scopeKey)) {
     return true
   }
-  return journalNativeChatComposerDraftAddition(scopeKey, addition, after.savedAt)
+  return journalNativeChatComposerDraftAddition(scopeKey, placed, after.savedAt)
 }
 
 /**

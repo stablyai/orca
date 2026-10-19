@@ -465,7 +465,7 @@ describe('terminal element file drops', () => {
       }),
       ['/client/file.txt'],
       '/owner/workspace/.orca/drops',
-      { assertCurrent: expect.any(Function) }
+      { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
     )
     expect(fixture.sends[0]).toHaveBeenCalledExactlyOnceWith(
       '/owner/workspace/.orca/drops/file.txt ',

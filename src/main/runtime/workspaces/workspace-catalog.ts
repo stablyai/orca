@@ -1,4 +1,4 @@
-import { RuntimeWorkspaceSelectors } from './workspace-selectors'
+import { OrcaRuntimeWithReadKittyFile } from '../orca-runtime-read-kitty-file'
 import type { RuntimeWorkspaceRepoScanRefresh } from './workspace-repo-scan-refresh'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
@@ -28,10 +28,12 @@ import {
   LOCAL_EXECUTION_HOST_ID
 } from '../../../shared/execution-host'
 import { withUnregisteredRemovalCheckouts } from '../../worktree-removal-listing'
+import { withoutInFlightWorktreeCreates } from '../../worktree-create-in-flight'
+import { preserveFolderUpgradeWorktreePath } from '../../folder-upgrade-worktree-path'
 import type { RuntimeWorktreeScanCache } from '../orca-runtime-core'
 import { resolveWorktreeScanCacheTtlMs } from '../runtime-worktree-scan-cache'
 
-export abstract class RuntimeWorkspaceCatalog extends RuntimeWorkspaceSelectors {
+export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFile {
   protected abstract refreshRepoWorktreeScan(
     ...args: Parameters<RuntimeWorkspaceRepoScanRefresh['refreshRepoWorktreeScan']>
   ): ReturnType<RuntimeWorkspaceRepoScanRefresh['refreshRepoWorktreeScan']>
@@ -115,9 +117,7 @@ export abstract class RuntimeWorkspaceCatalog extends RuntimeWorkspaceSelectors 
       )
     )
     const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}
-    const worktrees = perRepoWorktrees.flatMap((rows) =>
-      projectResolvedWorktreeLineage(rows, lineageById)
-    )
+    const worktrees = projectResolvedWorktreeLineage(perRepoWorktrees.flat(), lineageById)
     return { worktrees, platformByRepoId }
   }
 
@@ -148,9 +148,18 @@ export abstract class RuntimeWorkspaceCatalog extends RuntimeWorkspaceSelectors 
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
-    const scan = await this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
+    const cached = await this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
+    // Why here: paired clients list through this scan (`worktree.detectedList`), so a folder-upgraded
+    // checkout must carry the folder's locator here or its id loses metadata and terminals (#30150).
+    const scan = { ...cached, worktrees: preserveFolderUpgradeWorktreePath(repo, cached.worktrees) }
     return scan.ok && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
-      ? { ok: true, worktrees: await withUnregisteredRemovalCheckouts(repo.id, scan.worktrees) }
+      ? {
+          ok: true,
+          worktrees: await withUnregisteredRemovalCheckouts(
+            repo.id,
+            withoutInFlightWorktreeCreates(repo.id, scan.worktrees)
+          )
+        }
       : scan
   }
 

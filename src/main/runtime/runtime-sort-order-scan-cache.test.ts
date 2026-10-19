@@ -12,6 +12,7 @@ import {
   store
 } from './orca-runtime-test-fixtures.spec'
 import { registerRuntimeWindowLifecycle } from '../window/runtime-window-lifecycle'
+import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 
 vi.mock('electron', () => ({ ipcMain: { on: vi.fn(), removeListener: vi.fn() } }))
 
@@ -46,18 +47,29 @@ async function createScannedRuntime(): Promise<InstanceType<typeof OrcaRuntimeSe
 async function expectOrderSaveSkipsGitScan(
   runtime: InstanceType<typeof OrcaRuntimeService>
 ): Promise<void> {
-  const events: { type: string; repoId?: string }[] = []
+  const events: RuntimeClientEvent[] = []
   const unsubscribe = runtime.onClientEvent((event) => events.push(event))
 
   expect(runtime.persistManagedWorktreeSortOrder([secondId, firstId])).toEqual({ updated: 2 })
   unsubscribe()
   const listed = await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
 
-  expect(events).toEqual([{ type: 'worktreesChanged', repoId: TEST_REPO_ID, sortOrderOnly: true }])
   expect(listWorktrees).toHaveBeenCalledTimes(1)
   const sortOrderOf = (id: string) =>
     listed.worktrees.find((worktree) => worktree.id === id)?.sortOrder ?? Number.NaN
   expect(sortOrderOf(secondId)).toBeGreaterThan(sortOrderOf(firstId))
+  // The event carries the saved values so a client can patch rows without refetching them.
+  expect(events).toEqual([
+    {
+      type: 'worktreesChanged',
+      repoId: TEST_REPO_ID,
+      sortOrderOnly: true,
+      sortOrders: [
+        { worktreeId: secondId, sortOrder: sortOrderOf(secondId) },
+        { worktreeId: firstId, sortOrder: sortOrderOf(firstId) }
+      ]
+    }
+  ])
 
   runtime.publishWorktreeRemovalChange(TEST_REPO_ID)
   await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)

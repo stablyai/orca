@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
+import { RuntimeAiVaultCommands } from '../../runtime-ai-vault-commands'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultServiceScanOptions } from '../../../ai-vault/session-scanner-service-protocol'
 import {
@@ -77,12 +78,12 @@ function makeSession(): AiVaultSession {
 function makeDispatcher(): RpcDispatcher {
   // Why: the handler only needs getRuntimeId (envelope) + listAiVaultSessions,
   // which delegates to the shared cache module the IPC handler also uses.
+  const vault = new RuntimeAiVaultCommands(() => null)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test read only these three runtime members.
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     ensureStructuredAgentSessionHost: vi.fn(async () => undefined),
-    listAiVaultSessions: (args?: Parameters<typeof listAiVaultSessions>[0]) =>
-      listAiVaultSessions(args),
+    listAiVaultSessions: vault.list.bind(vault),
     resolveAiVaultSessionTitles: (requests: unknown[], signal?: AbortSignal) =>
       resolveAiVaultSessionTitlesInService(requests, signal)
   } as unknown as OrcaRuntimeService
@@ -325,8 +326,10 @@ describe('aiVault methods without a structured host', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       ensureStructuredAgentSessionHost: vi.fn().mockRejectedValue(installError),
-      listAiVaultSessions: (args?: Parameters<typeof listAiVaultSessions>[0]) =>
-        listAiVaultSessions(args),
+      listAiVaultSessions: (
+        args?: Parameters<typeof listAiVaultSessions>[0],
+        signal?: AbortSignal
+      ) => listAiVaultSessions(args, { signal }),
       prepareAiVaultSessionResume: vi.fn().mockResolvedValue({ useRealCodexHome: true })
     } as unknown as OrcaRuntimeService
     return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
@@ -369,6 +372,27 @@ describe('aiVault.listSessions handler + shared cache', () => {
 
   afterEach(() => {
     resetAiVaultSessionListCacheForTests()
+  })
+
+  it('aborts the host scan when its last RPC caller disconnects', async () => {
+    scanAiVaultSessionsInService.mockImplementation(
+      (_options, signal) =>
+        new Promise<AiVaultListResult>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('scan aborted')), { once: true })
+        })
+    )
+    const dispatcher = makeDispatcher()
+    const caller = new AbortController()
+    const response = dispatcher.dispatch(makeRequest('aiVault.listSessions', {}), {
+      signal: caller.signal
+    })
+    await vi.waitFor(() => expect(scanAiVaultSessionsInService).toHaveBeenCalledOnce())
+    const scanSignal = scanAiVaultSessionsInService.mock.calls[0]?.[1]
+
+    caller.abort()
+
+    expect(scanSignal?.aborted).toBe(true)
+    await expect(response).resolves.toMatchObject({ ok: false })
   })
 
   it('isolates IDE opt-in scans from legacy clients sharing the host cache', async () => {
@@ -574,7 +598,8 @@ describe('aiVault.listSessions handler + shared cache', () => {
     expect(response).toMatchObject({ ok: true })
     expect(scanAiVaultSessionsInService).toHaveBeenCalledWith(
       expect.objectContaining({ limit: undefined, unlimited: true }),
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      expect.objectContaining({ work: expect.any(Function) })
     )
   })
 

@@ -34,12 +34,8 @@ import {
 import {
   parseWorkerTerminalHostScope,
   type WorkerTerminalHostScope
-} from './orchestration/worker-terminal-process-liveness'
+} from '../../shared/worker-terminal-host-scope'
 
-export {
-  STRUCTURED_WORKER_HANDLE_PREFIX,
-  isStructuredWorkerHandle
-} from '../../shared/structured-worker-handle'
 export const STRUCTURED_WORKER_INCARNATION_PREFIX = 'structured:'
 
 export type StructuredWorkerIdentity = {

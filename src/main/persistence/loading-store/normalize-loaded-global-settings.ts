@@ -154,6 +154,7 @@ export function normalizeLoadedGlobalSettings(
     disabledTuiAgents: migratedDisabledTuiAgents,
     ...migratedAgentYoloDefaults,
     claudeAgentTeamsDefaultDisabledMigrated: true,
+    sshRemoteCliControlExistingHostsMigrated: true,
     openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
       seedDefaults: true
     }),

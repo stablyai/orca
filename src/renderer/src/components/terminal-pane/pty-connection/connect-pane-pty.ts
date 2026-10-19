@@ -1,3 +1,4 @@
+import { installPtyKittyFileReader } from './pty-kitty-file-reader'
 import { installSpawnDeferredSleep } from './spawn-deferred-sleep'
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
@@ -111,6 +112,7 @@ export function connectPanePty(
   session.syncHiddenRendererPtyDelivery = () => {}
   session.releaseHiddenRendererPtyDelivery = () => {}
   session.handleRemoteOutputPauseChanged = () => {}
+  session.handleRemotePausedOutputDropped = () => {}
   session.handleRendererOwnedAgentStatus = () => {}
   session.remoteOutputGatedPtyId = null
   session.remoteOutputFactConsumerPtyId = null
@@ -211,6 +213,7 @@ export function connectPanePty(
     }
     session.deps.clearExitedPanePtyLayoutBinding(session.pane.id, exitedPtyId)
   }
+  installPtyKittyFileReader(session)
   installPtyInputForward(session)
   installPtyResizeGeometry(session)
   installRunDeferredConnect(session)

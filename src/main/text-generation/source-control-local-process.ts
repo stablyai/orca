@@ -1,7 +1,7 @@
+import { WindowsCmdLineBreakError } from '@orca/process-host'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
 import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
-import { UnsafeWindowsBatchArgumentsError } from '../win32-utils'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
 import {
   finalizeFromAgentOutput,
@@ -125,7 +125,7 @@ export function runLocalSourceControlPlan(input: {
       })
     } catch (error) {
       markProcessClosed()
-      if (error instanceof UnsafeWindowsBatchArgumentsError) {
+      if (error instanceof WindowsCmdLineBreakError) {
         resolve({ success: false, error: userFacingUnsafeWindowsBatchArgs(plan.label) })
         return
       }

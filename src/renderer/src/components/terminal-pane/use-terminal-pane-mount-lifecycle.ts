@@ -8,6 +8,8 @@ import { prepareTerminalPaneMount } from './terminal-pane-mount-preparation'
 import { createTerminalPaneManagerOptions } from './terminal-pane-manager-options'
 import { restoreTerminalPaneLayout } from './terminal-pane-layout-restore'
 import { runTerminalPaneBootstrapSplits } from './terminal-pane-mount-bootstrap'
+import { recordingBootstrapSplits } from './terminal-pane-bootstrap-split-record'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { installTerminalPaneMountEvents } from './terminal-pane-mount-events'
 import { cleanupTerminalPaneMount } from './terminal-pane-mount-cleanup'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
@@ -44,9 +46,8 @@ export function useTerminalPaneMountLifecycle(
       ptyDeps,
       deferredSplitHandoffs,
       // Keep the raw startup object for identity checks against the store's queued command.
-      // `ptyDeps.startup` may be a setup-wait copy and is consumed/mutated during bootstrap.
+      // `ptyDeps.startup` is consumed/mutated during bootstrap.
       startup: deps.startup,
-      startupWithSetupSplitWait: preparation.startupWithSetupSplitWait,
       defaultTabCwd: preparation.defaultTabCwd,
       startupCwd: preparation.startupCwd,
       worktreePath: preparation.worktreePath,
@@ -85,9 +86,11 @@ export function useTerminalPaneMountLifecycle(
       initialLayoutHadBuffers: preparation.initialLayoutHadBuffers
     })
     runTerminalPaneBootstrapSplits({
-      manager,
+      // Switch point: startup splits are recorded in main under the window's pane ids.
+      manager: ORCA_LAYOUT_OWNER_IS_MAIN
+        ? recordingBootstrapSplits(manager, deps.worktreeId, deps.tabId)
+        : manager,
       ptyDeps,
-      setupSplit: deps.setupSplit,
       issueCommandSplit: deps.issueCommandSplit,
       isActive: deps.isActive
     })
@@ -105,6 +108,7 @@ export function useTerminalPaneMountLifecycle(
         worktreeId: deps.worktreeId,
         isActive: deps.isActive,
         managerRef: deps.managerRef,
+        showPaneTitle: deps.showPaneTitle,
         persistLayoutSnapshot: deps.persistLayoutSnapshot,
         syncCanExpandState: preparation.syncCanExpandState,
         queueResizeAll

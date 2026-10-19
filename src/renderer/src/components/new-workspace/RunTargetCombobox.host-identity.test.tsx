@@ -66,6 +66,27 @@ describe('run target host identity', () => {
     expect(onHostChange).toHaveBeenCalledWith(JSON.stringify(['same-id', 'ssh:builder']))
   })
 
+  it('shows a merged machine row when the selection names its other host id', () => {
+    const serverOption: ReadyProjectHostSetupOption = {
+      ...sshOption,
+      id: 'server-setup',
+      hostId: 'runtime:builder-server',
+      aliasSetups: [{ id: 'ssh-setup', hostId: 'ssh:builder' }]
+    }
+    render(
+      <RunTargetCombobox
+        hostOptions={[localOption, serverOption]}
+        hostValue="ssh-setup"
+        hostExecutionHostId="ssh:builder"
+        recipes={[]}
+        recipeValue={null}
+      />
+    )
+
+    const field = screen.getByRole('combobox', { name: 'Run on' })
+    expect(field.parentElement?.parentElement?.textContent).toContain('Builder')
+  })
+
   it('gives duplicate setup IDs distinct keyboard navigation keys', () => {
     const { rows } = buildRunTargetRows({
       hostOptions: options,

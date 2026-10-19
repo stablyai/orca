@@ -60,9 +60,11 @@ function dropUnusableTurnScope(record: Record<string, unknown>): void {
 
 /** Provenance this build cannot read, removed like linkage: the item's creating fence stands in. */
 function dropUnusableOwnerFence(record: Record<string, unknown>): void {
-  const value = record.ownerFence
-  if (value !== undefined && !(Number.isSafeInteger(value) && Number(value) >= 0)) {
-    delete record.ownerFence
+  for (const key of ['ownerFence', 'executionOwner'] as const) {
+    const value = record[key]
+    if (value !== undefined && !(Number.isSafeInteger(value) && Number(value) >= 0)) {
+      delete record[key]
+    }
   }
 }
 

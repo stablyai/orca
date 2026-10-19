@@ -255,7 +255,7 @@ describe('ComposerParentWorktreePicker', () => {
     expect(rows()).toHaveLength(0)
   })
 
-  it('excludes archived worktrees and worktrees from another repo', () => {
+  it('offers parents from another repo while excluding archived worktrees', () => {
     seed(
       [
         makeWorktree({ id: 'alpha', displayName: 'Alpha' }),
@@ -270,10 +270,10 @@ describe('ComposerParentWorktreePicker', () => {
 
     expect(candidateLabels().join(' ')).toContain('Alpha')
     expect(candidateLabels().join(' ')).not.toContain('Archived')
-    expect(candidateLabels().join(' ')).not.toContain('Other repo')
+    expect(candidateLabels().join(' ')).toContain('Other repo')
   })
 
-  it('excludes candidates on another execution host or project', () => {
+  it('offers another project on the same host and excludes another host', () => {
     seed([
       makeWorktree({ id: 'same', displayName: 'Same host', hostId: 'local', projectId: 'proj1' }),
       makeWorktree({
@@ -303,7 +303,7 @@ describe('ComposerParentWorktreePicker', () => {
 
     expect(candidateLabels().join(' ')).toContain('Same host')
     expect(candidateLabels().join(' ')).not.toContain('Other host')
-    expect(candidateLabels().join(' ')).not.toContain('Other project')
+    expect(candidateLabels().join(' ')).toContain('Other project')
   })
 
   // A worktree with no recorded hostId inherits its repo's host, which is the child's host too.

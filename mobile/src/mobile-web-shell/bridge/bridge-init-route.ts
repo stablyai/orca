@@ -18,7 +18,7 @@ import {
  * builds one, once, and writes it into its history before the first render.
  *
  * Its own module rather than the envelope's, because three other modules want the route without
- * the rest of the protocol: the native switches build one, the host holds one and republishes it
+ * the rest of the protocol: the native route files build one, the host holds one and republishes it
  * (ruling 33.1), and the page reads one back out of `init`.
  */
 export const BridgeInitRouteSchema = z.object({

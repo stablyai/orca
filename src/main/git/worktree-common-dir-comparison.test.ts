@@ -1,26 +1,39 @@
 // The common-dir check decides whether a create is confirmed, so a false accept adopts a foreign repo.
 import { describe, expect, it } from 'vitest'
-import { isSameCommonDirPath } from './worktree-listing'
+import { areWorktreePathsEqual } from './worktree-path-comparison'
 
-describe('isSameCommonDirPath', () => {
+describe('comparing git common dirs', () => {
   it('keeps WSL paths case-sensitive on a Windows host', () => {
-    expect(isSameCommonDirPath('/home/u/RepoA/.git', '/home/u/repoa/.git', 'win32')).toBe(false)
-    expect(isSameCommonDirPath('/home/u/repoa/.git', '/home/u/repoa/.git', 'win32')).toBe(true)
+    expect(areWorktreePathsEqual('/home/u/RepoA/.git', '/home/u/repoa/.git', 'win32')).toBe(false)
+    expect(areWorktreePathsEqual('/home/u/repoa/.git', '/home/u/repoa/.git', 'win32')).toBe(true)
+    expect(
+      areWorktreePathsEqual(
+        '\\\\wsl.localhost\\Ubuntu\\home\\u\\RepoA\\.git',
+        '\\\\wsl.localhost\\Ubuntu\\home\\u\\repoa\\.git',
+        'win32'
+      )
+    ).toBe(false)
   })
 
   it('refuses to compare a Linux path against a Windows one', () => {
-    expect(isSameCommonDirPath('/home/u/repo/.git', 'C:\\repo\\.git', 'win32')).toBe(false)
+    expect(areWorktreePathsEqual('/home/u/repo/.git', 'C:\\repo\\.git', 'win32')).toBe(false)
     expect(
-      isSameCommonDirPath('/home/u/repo/.git', '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo\\.git')
+      areWorktreePathsEqual('/home/u/repo/.git', '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo\\.git')
     ).toBe(false)
   })
 
   it('still folds drive-letter case and slash style for Windows paths', () => {
-    expect(isSameCommonDirPath('C:\\Repo\\.git', 'c:/repo/.git', 'win32')).toBe(true)
+    expect(areWorktreePathsEqual('C:\\Repo\\.git', 'c:/repo/.git', 'win32')).toBe(true)
   })
 
   it('normalizes without folding case on a POSIX host', () => {
-    expect(isSameCommonDirPath('/repo/./x/../.git', '/repo/.git', 'linux')).toBe(true)
-    expect(isSameCommonDirPath('/repo/.GIT', '/repo/.git', 'linux')).toBe(false)
+    expect(areWorktreePathsEqual('/repo/./x/../.git', '/repo/.git', 'linux')).toBe(true)
+    expect(areWorktreePathsEqual('/repo/.GIT', '/repo/.git', 'linux')).toBe(false)
+  })
+
+  // macOS git reports a repo under /tmp by its /private/tmp realpath; it is the same object store.
+  it('treats /tmp and /private/tmp as one directory on macOS only', () => {
+    expect(areWorktreePathsEqual('/private/tmp/r/.git', '/tmp/r/.git', 'darwin')).toBe(true)
+    expect(areWorktreePathsEqual('/private/tmp/r/.git', '/tmp/r/.git', 'linux')).toBe(false)
   })
 })

@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import { AcpAuthRequiredError, AcpRpcError } from './acp-errors'
+import { AcpAuthRequiredError, AcpRpcError, acpAuthRequiredError } from './acp-errors'
 import {
   NewSessionResponseSchema,
   LoadSessionResponseSchema,
@@ -67,7 +67,7 @@ export async function setupAcpSession(
     if (!(error instanceof AcpAuthRequiredError)) {
       throw error
     }
-    const required = new AcpAuthRequiredError(error.message, error.data, initialized.authMethods)
+    const required = acpAuthRequiredError(error, initialized.authMethods)
     const method = initialized.authMethods?.find((method) => method.id === options.authMethodId)
     if (!method) {
       throw required
@@ -77,7 +77,7 @@ export async function setupAcpSession(
       return await setup()
     } catch (failure) {
       if (failure instanceof AcpAuthRequiredError) {
-        throw new AcpAuthRequiredError(failure.message, failure.data, initialized.authMethods)
+        throw acpAuthRequiredError(failure, initialized.authMethods)
       }
       throw failure
     }

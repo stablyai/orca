@@ -83,7 +83,13 @@ export type AgentJournalEpochReason = (typeof AGENT_JOURNAL_EPOCH_REASONS)[numbe
 /** The generation whose execution produced an item: execution provenance, distinct from the
  *  row's `fence`, which is writer authority. Rides the row like linkage, with no `v` bump: an older
  *  host ignores it. Absent on rows from before it: the item's creating fence stands in. */
-type JournalItemProvenance = { ownerFence?: number }
+type JournalItemProvenance = {
+  ownerFence?: number
+  /** The fence of the child process whose write this is, on a reusable child's row (a subagent, a
+   *  Claude background task) that a later run can resume. Moves with each such write; absent, the
+   *  item's `ownerFence` stands in. */
+  executionOwner?: number
+}
 
 export type JournalItemRow = JournalRowBase &
   JournalItemProvenance & {

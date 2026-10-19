@@ -4,7 +4,8 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journa
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkKind } from '../../../shared/agent-status-child-work'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import {
   collectSubscriber,
   createRestTestRig,
@@ -46,23 +47,24 @@ function lastStatus(): AgentSessionStatusSummary | undefined {
 }
 
 /** A child record as the host's store serves it; a `done` one has settled. */
-function childView(
+/** What the provider reported about one child, as its producer hands it to the host. */
+function childEdge(
   id: string,
-  kind: AgentChildWorkView['kind'],
+  kind: AgentChildWorkKind,
   state: 'working' | 'idle' | 'done'
-): AgentChildWorkView {
-  return {
-    id,
-    kind,
-    state,
-    membership: state === 'done' ? 'settled' : 'live',
-    ...(state === 'done' ? { outcome: 'succeeded' as const, settledAt: rig.clock.now } : {}),
-    firstObservedAt: rig.clock.now,
-    observedAt: rig.clock.now,
-    stoppable: false,
-    invocation: { invocationId: `spawn-${id}`, generation: 1 }
-  }
+): AgentChildWorkEvidence {
+  const handle = { idKind: 'task_id' as const, id }
+  return state === 'done'
+    ? { type: 'ended', observedAt: rig.clock.now, handle, outcome: 'succeeded' }
+    : {
+        type: 'live',
+        observedAt: rig.clock.now,
+        child: { handle, kind, residency: 'background', state, stoppable: false }
+      }
 }
+
+const reportChildren = (...edges: AgentChildWorkEvidence[]) =>
+  rig.host.publishChildWorkEvidence(SESSION, edges)
 
 function fence(): number {
   return rig.store.getRecord(SESSION)?.lease.runtimeFence ?? 1
@@ -129,12 +131,12 @@ describe('the idle sweep', () => {
   it('never stops an agent whose background work still runs (P2-09)', async () => {
     await foundRestTestChat(rig)
     // A Codex subagent thread is one of these records; the host holds both kinds alike.
-    rig.sink.readChildWork.mockReturnValue([childView('subagent-1', 'agent', 'working')])
+    reportChildren(childEdge('subagent-1', 'agent', 'working'))
     rig.clock.now += IDLE_MS + 1
 
     await sweepTicks()
     expect(rig.adapter.closeSession).not.toHaveBeenCalled()
-    rig.sink.readChildWork.mockReturnValue([])
+    reportChildren(childEdge('subagent-1', 'agent', 'done'))
     rig.clock.now += IDLE_MS + 1
     await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
   })
@@ -143,10 +145,10 @@ describe('the idle sweep', () => {
   // agent in that gap would lose the wake-up. Owed work is activity, as main's release clock had it.
   it('gives an agent a full idle window after its background work ends', async () => {
     await foundRestTestChat(rig)
-    rig.sink.readChildWork.mockReturnValue([childView('subagent-1', 'agent', 'working')])
+    reportChildren(childEdge('subagent-1', 'agent', 'working'))
     rig.clock.now += IDLE_MS + 1
     await sweepTicks()
-    rig.sink.readChildWork.mockReturnValue([childView('subagent-1', 'agent', 'done')])
+    reportChildren(childEdge('subagent-1', 'agent', 'done'))
 
     await sweepTicks()
     expect(rig.adapter.closeSession).not.toHaveBeenCalled()
@@ -158,12 +160,12 @@ describe('the idle sweep', () => {
   // have closed still leaves the agent a full window after it.
   it('gives a full window after background work that ends late in a window', async () => {
     await foundRestTestChat(rig)
-    rig.sink.readChildWork.mockReturnValue([childView('subagent-1', 'agent', 'working')])
+    reportChildren(childEdge('subagent-1', 'agent', 'working'))
     rig.clock.now += IDLE_MS + 1
     await sweepTicks()
     rig.clock.now += IDLE_MS - 60_000
     await sweepTicks()
-    rig.sink.readChildWork.mockReturnValue([childView('subagent-1', 'agent', 'done')])
+    reportChildren(childEdge('subagent-1', 'agent', 'done'))
     rig.clock.now += 60_000 + 1
 
     await sweepTicks()
@@ -174,10 +176,12 @@ describe('the idle sweep', () => {
 
   it('stops an agent whose child records hold only children that went idle or finished', async () => {
     await foundRestTestChat(rig)
-    rig.sink.readChildWork.mockReturnValue([
-      childView('subagent-1', 'agent', 'idle'),
-      childView('subagent-2', 'agent', 'done')
-    ])
+    reportChildren(
+      childEdge('subagent-1', 'agent', 'working'),
+      childEdge('subagent-2', 'agent', 'working'),
+      childEdge('subagent-1', 'agent', 'idle'),
+      childEdge('subagent-2', 'agent', 'done')
+    )
     rig.clock.now += IDLE_MS + 1
 
     await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
@@ -321,7 +325,7 @@ describe('the idle sweep with no child running (P2-22 ii)', () => {
       isDisposed: () => false,
       deliveryActive: () => false,
       store: { getRecord: () => null, replacedRuntime: () => undefined },
-      childWork: () => undefined,
+      childWorkOpen: () => false,
       hasOpenDispatch: () => false,
       providerHoldsDispatch: () => false,
       stopAgent,

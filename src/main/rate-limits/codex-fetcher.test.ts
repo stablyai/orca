@@ -44,6 +44,9 @@ vi.mock('../codex-cli/command', () => ({
   resolveCodexCommand: resolveCodexCommandMock
 }))
 
+vi.mock('../wsl-interop-spawn-directory', () => ({
+  resolveWslInteropSpawnCwd: () => 'C:\\Windows'
+}))
 vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
 }))
@@ -678,7 +681,7 @@ describe('fetchCodexRateLimits', () => {
       expect(shellCommand).not.toContain('wsl-codex-path')
       expect(spawnOptions).toEqual(
         expect.objectContaining({
-          cwd: expect.stringContaining('rate-limit-pty-cwd'),
+          cwd: 'C:\\Windows',
           env: expect.not.objectContaining({ CODEX_HOME: expect.anything() })
         })
       )

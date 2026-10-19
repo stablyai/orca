@@ -146,7 +146,7 @@ describe('projects:update once the WSL host owns a repo', () => {
   it('lets project-wide settings change again', async () => {
     store.addRepo(repo('repo-1'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
-    registerRepoCatalogHandlers(new BrowserWindow(), store)
+    registerRepoCatalogHandlers(new BrowserWindow(), store, { removeProject: vi.fn() })
     const project = store.getProjects().find((entry) => entry.sourceRepoIds.includes('repo-1'))
     const updates = { localWindowsRuntimePreference: { kind: 'windows-host' } }
 

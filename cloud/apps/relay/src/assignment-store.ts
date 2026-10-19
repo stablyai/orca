@@ -1290,6 +1290,11 @@ export class RelayAssignmentStore {
     if (state !== 'existing-only') {
       return false
     }
+    // A reserve cell keeps no activity rows and its ledger stamps last_activity_at, so zero
+    // leases proves nothing; a dead one is left to the dead-reserve path and its fence.
+    if (await this.mayBeReserveCell(text(existing, 'cell_id'), transaction)) {
+      return false
+    }
     const liveLeases = (
       await transaction.query(
         `SELECT COUNT(*) AS live FROM relay_assignment_activity_leases

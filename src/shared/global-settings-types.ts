@@ -1,4 +1,4 @@
-import type { NativeChatGlobalSettings } from './native-chat-appearance-settings'
+import type { GlobalSettingsBase } from './global-settings-base'
 import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/project-types'
@@ -41,7 +41,6 @@ import type {
   SourceControlViewMode,
   TaskViewPresetId
 } from './ui-chrome-types'
-import type { SetupScriptLaunchMode } from './worktree/launch-types'
 import type { WorktreeVisibilityDefaults } from './repo-types'
 
 export type { WorktreeVisibilityDefaults } from './repo-types'
@@ -49,7 +48,7 @@ export type { WorktreeVisibilityDefaults } from './repo-types'
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
 
-export type GlobalSettings = NativeChatGlobalSettings & {
+export type GlobalSettings = GlobalSettingsBase & {
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
@@ -198,8 +197,6 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   terminalAllowOsc52ClipboardDefaultedOnForAllUsers?: boolean
   /** Experimental Claude Agent Teams; native panes use a tmux-compatible shim so teammate output stays on the normal PTY path. */
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
-  /** Where the repo setup script runs on workspace create; defaults to a background "Setup" tab to keep the main terminal usable. */
-  setupScriptLaunchMode: SetupScriptLaunchMode
   terminalScrollbackRows: number
   /** Optional app-level proxy for Electron networking and local PTYs; empty preserves system/inherited proxy env. */
   httpProxyUrl?: string
@@ -238,7 +235,7 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   nativeChatShellEnvironmentVariables?: string[]
   /** Last explicit native-chat model + option selections; live panes need an applied/dispatched record before showing a value. */
   nativeChatSessionOptions?: PersistedNativeChatSessionOptions
-  /** New Claude and Codex chats' permission mode; seeded once from Agent Permissions. */
+  /** New chats' permission mode, for agents whose chats offer modes; seeded once from Agent Permissions. */
   nativeChatPermissionMode?: AgentChatPermissionMode
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
@@ -366,10 +363,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   devPluginPaths: string[]
   /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
-  /** Why: worktree deletion is destructive (rm -rf of the working dir), so confirm by default. */
-  skipDeleteWorktreeConfirm: boolean
-  /** Opt-in: workspace deletion discards changes and may waive terminal-stop verification. */
-  alwaysForceDeleteWorktrees?: boolean
+  /** One-shot guard: hosts saved before the remote CLI control default flip were pinned off. */
+  sshRemoteCliControlExistingHostsMigrated?: boolean
   /** Why: closing a terminal with child processes kills foreground work; keep this skip separate from other confirmations. */
   skipCloseTerminalWithRunningProcessConfirm: boolean
   /** Why: deleting an automation also deletes its run history; keep this skip separate from worktree deletion. */

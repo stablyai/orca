@@ -30,6 +30,7 @@ import { registerRepoHandlers } from './repos'
 import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
+import { isGitRepoAsync } from '../git/repo'
 import { listSubmodulePaths } from '../git/status'
 import {
   createMockCloneProcess,
@@ -37,6 +38,7 @@ import {
   resetLocalRepoMocks,
   waitForAssertion
 } from './repos-remote-test-harness'
+import { repoTarget } from '../persistence/repo-host-target-matcher.test-fixture'
 
 const {
   handleMock,
@@ -155,7 +157,11 @@ describe('repos:add + repos:clone', () => {
     expect(configReads).toHaveLength(2)
   })
 
-  it('preserves existing badgeColor when repos:clone upgrades folder->git after dedupe', async () => {
+  it.each([
+    { replacement: false, extraWorkspace: false },
+    { replacement: true, extraWorkspace: false },
+    { replacement: true, extraWorkspace: true }
+  ])('uses the current folder after clone proof: %j', async ({ replacement, extraWorkspace }) => {
     const destination = await createTempRoot()
     const clonePath = join(destination, 'orca')
     const existing = {
@@ -166,8 +172,21 @@ describe('repos:add + repos:clone', () => {
       addedAt: 1,
       kind: 'folder'
     }
-    const upgraded = { ...existing, kind: 'git' as const }
+    const current = replacement
+      ? { ...existing, id: 'replacement-folder', badgeColor: '#2563eb' }
+      : existing
+    const upgraded = { ...current, kind: 'git' as const }
     mockStore.getRepos.mockReturnValue([existing])
+    mockStore.getAllWorktreeMeta.mockReturnValue({})
+    vi.mocked(isGitRepoAsync).mockImplementationOnce(async () => {
+      mockStore.getRepos.mockReturnValue([current])
+      if (extraWorkspace) {
+        mockStore.getAllWorktreeMeta.mockReturnValue({
+          [`${current.id}::${clonePath}::workspace:extra`]: {}
+        })
+      }
+      return true
+    })
     mockStore.updateRepo.mockReturnValue(upgraded)
 
     const result = await handlers.get('repos:clone')!(null, {
@@ -175,15 +194,49 @@ describe('repos:add + repos:clone', () => {
       destination
     })
 
-    expect(mockStore.updateRepo).toHaveBeenCalledWith(existing.id, {
-      kind: 'git',
-      projectHostSetupMethod: 'cloned'
-    })
-    expect(result).toEqual(upgraded)
-    expect(result).toHaveProperty('badgeColor', '#8b5cf6')
-    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, upgraded)
+    if (extraWorkspace) {
+      expect(mockStore.updateRepo).not.toHaveBeenCalled()
+      expect(result).toEqual(current)
+    } else {
+      expect(mockStore.updateRepo).toHaveBeenCalledWith(repoTarget(current.id), {
+        kind: 'git',
+        folderUpgradeGitRootPath: clonePath,
+        projectHostSetupMethod: 'cloned'
+      })
+      expect(result).toEqual(upgraded)
+    }
+    expect(result).toHaveProperty('badgeColor', current.badgeColor)
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, result)
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
     expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('registers the completed clone with a fresh id when its saved folder is removed during proof', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    const existing = {
+      id: 'removed-folder',
+      path: clonePath,
+      displayName: 'orca',
+      badgeColor: '#8b5cf6',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+    vi.mocked(isGitRepoAsync).mockImplementationOnce(async () => {
+      mockStore.getRepos.mockReturnValue([])
+      return true
+    })
+
+    const result = await handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+
+    expect(result).not.toHaveProperty('id', existing.id)
+    expect(result).toMatchObject({ path: clonePath, kind: 'git' })
+    expect(mockStore.addRepo).toHaveBeenCalledWith(result)
+    expect(mockStore.updateRepo).not.toHaveBeenCalled()
   })
 
   it('rejects a dot-segment URL before creating the destination or spawning git', async () => {

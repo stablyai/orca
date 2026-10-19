@@ -17,6 +17,11 @@ const STATIC_WEB_CONTENT_TYPES = new Map([
   ['.woff2', 'font/woff2']
 ])
 
+/** A server without a web client still answers plain HTTP, so callers fail fast instead of hanging. */
+export const answerWithoutWebClient: RequestListener = (_request, response) => {
+  writeHttpStatus(response, 404)
+}
+
 export function createStaticWebClientHandler(staticRoot: string): RequestListener {
   const resolvedRoot = resolve(staticRoot)
   return (request, response) => {

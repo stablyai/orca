@@ -255,7 +255,15 @@ describe('OrcaRuntimeService', () => {
 
     expect(setWorktreeMeta).toHaveBeenCalledTimes(2)
     expect(events).toEqual([
-      { type: 'worktreesChanged', repoId: TEST_REPO_ID, sortOrderOnly: true }
+      {
+        type: 'worktreesChanged',
+        repoId: TEST_REPO_ID,
+        sortOrderOnly: true,
+        sortOrders: [
+          { worktreeId: secondId, sortOrder: metaById[secondId].sortOrder },
+          { worktreeId: firstId, sortOrder: metaById[firstId].sortOrder }
+        ]
+      }
     ])
   })
 

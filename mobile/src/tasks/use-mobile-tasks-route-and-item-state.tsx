@@ -140,7 +140,7 @@ export function useMobileTasksRouteAndItemState() {
     Array<Extract<TaskItem, { provider: 'github' }>[]>
   >([])
   const [githubCurrentPage, setGithubCurrentPage] = useState(0)
-  const [githubTotalCount, setGithubTotalCount] = useState<number | null>(null)
+  const [githubCountedTotalPages, setGithubCountedTotalPages] = useState<number | null>(null)
   const [githubPaginationLoading, setGithubPaginationLoading] = useState(false)
   const [githubLoadingTargetPage, setGithubLoadingTargetPage] = useState<number | null>(null)
   const [githubRepoSources, setGithubRepoSources] = useState<Record<string, GitHubRepoSources>>({})
@@ -288,8 +288,8 @@ export function useMobileTasksRouteAndItemState() {
     setGithubPages,
     githubCurrentPage,
     setGithubCurrentPage,
-    githubTotalCount,
-    setGithubTotalCount,
+    githubCountedTotalPages,
+    setGithubCountedTotalPages,
     githubPaginationLoading,
     setGithubPaginationLoading,
     githubLoadingTargetPage,

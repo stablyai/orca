@@ -37,11 +37,6 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 
-/** Text-only v1: any image block routes to the immediate path. */
-export function queuedMessageBodyIsTextOnly(body: AgentJournalMessageItem): boolean {
-  return body.blocks.every((block) => block.type === 'text')
-}
-
 /** Waiting, not held on its own, and not positioned behind a returned card or a
  *  card the queue's pause holds: the queue never reorders. The admission rule
  *  (§accept) and the drain's selection both read it; only the drain's (`automatic`) stops at a
@@ -142,8 +137,8 @@ export function shouldQueueStructuredAgentSessionSend(
 /**
  * The accept branch: a capable send while the session is working (or behind an
  * actionable backlog) becomes a draft instead of a submission. Returns null for
- * the immediate path — an incapable client, an image body (text-only v1), a
- * replayed id the journal already answers, or an idle session.
+ * the immediate path — an incapable client, a replayed id the journal already
+ * answers, or an idle session.
  */
 export async function maybeQueueStructuredAgentSessionSend(
   context: {
@@ -157,6 +152,7 @@ export async function maybeQueueStructuredAgentSessionSend(
     envelope: { clientOperationId: string }
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
+    queuedImageCards?: boolean
     options?: Readonly<Record<string, string>>
     /** A person's send at a chat surface: every attachment it names must still be stored. */
     userSend?: true
@@ -169,7 +165,11 @@ export async function maybeQueueStructuredAgentSessionSend(
   | null
 > {
   const clientMessageId = params.envelope.clientOperationId
-  if (params.delivery !== 'queue-if-active' || !queuedMessageBodyIsTextOnly(params.body)) {
+  if (
+    params.delivery !== 'queue-if-active' ||
+    (params.queuedImageCards === false &&
+      params.body.blocks.some((block) => block.type === 'image-ref'))
+  ) {
     return null
   }
   // Asked again with no ledger answer: a send this host queued answers as its replay would —

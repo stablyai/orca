@@ -7,14 +7,13 @@ import type { CodexUsageStore } from '../codex-usage/store'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { AutomationService } from './service'
-import type { AutomationRun } from '../../shared/automations-types'
 import { createHeadlessRunTerminalRetention } from './headless-run-terminal-retention'
 import {
   getTuiAgentDetectCommands,
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../shared/tui-agent-config'
-import { launchHeadlessAutomationAgent } from './headless-automation-agent-launch'
+import { launchHeadlessAutomationAgent, runOwnHandle } from './headless-automation-agent-launch'
 import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
 
 const MAX_REMEMBERED_LAUNCHES = 256
@@ -51,10 +50,10 @@ export function createRuntimeAutomationService(input: {
     allowRemoteHostScheduling: input.headless,
     headlessDispatcher: input.headless
       ? async (request) => {
-          const { terminalHandle, ...launch } = await launchHeadlessAutomationAgent(
-            runtime,
-            request
-          )
+          const { terminalHandle, ...launch } = await launchHeadlessAutomationAgent(runtime, {
+            ...request,
+            runs: store.listAutomationRuns(request.automation.id)
+          })
           if (launch.terminalPaneKey) {
             launchedHandles.set(launch.terminalPaneKey, terminalHandle)
             if (launchedHandles.size > MAX_REMEMBERED_LAUNCHES) {
@@ -98,6 +97,8 @@ function bindHeadlessRunTerminalRetention(
       await runtime.closeTerminal(handle)
       return true
     },
+    inAutomationLane: (automationId, operation) =>
+      service.runInAutomationLane(automationId, operation),
     forgetRunTerminal: async (run) => {
       // A run still dispatched had its agent exit without a result, proven by its idle shell.
       const unfinished = run.status === 'dispatched'
@@ -132,16 +133,4 @@ function automationAgentCommands(agentId: string | undefined): string[] {
   }
   const config = TUI_AGENT_CONFIG[agentId]
   return [...getTuiAgentDetectCommands(config), config.launchCmd]
-}
-
-/** The run's pane handle while that pane still holds the run's own PTY; null otherwise. */
-function runOwnHandle(runtime: OrcaRuntimeService, run: AutomationRun): string | null {
-  const handle = run.terminalPaneKey
-    ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey)
-    : null
-  return handle &&
-    run.terminalPtyId &&
-    runtime.getTerminalPtyIdForHandle(handle) === run.terminalPtyId
-    ? handle
-    : null
 }

@@ -10,7 +10,14 @@ import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
 import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
 import { pickStoredFields } from './stored-record-fields'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
-import { tabsInOrder, type LayoutTab, type WorkspaceLayout } from './workspace-layout-model'
+import {
+  tabsInOrder,
+  type LayoutBrowserTab,
+  type LayoutEditorFile,
+  type LayoutTab,
+  type LayoutTerminalCreation,
+  type WorkspaceLayout
+} from './workspace-layout-model'
 import { tabExecutionHostId } from './workspace-layout-tab-host'
 
 export type PublishedPane = {
@@ -30,7 +37,10 @@ export type PublishedTerminal = {
   chatLeafId?: string
   /** "Terminal N", the title shown when no other title is set. */
   defaultTitle?: string
-}
+} & Pick<
+  LayoutTerminalCreation,
+  'shellOverride' | 'forceHostRuntime' | 'startupCwd' | 'launchAgent'
+>
 
 export type PublishedTab = {
   id: string
@@ -51,19 +61,19 @@ export type PublishedTab = {
   terminal?: PublishedTerminal
 }
 
-export type PublishedEditorFile = {
-  filePath: string
-  relativePath: string
-  language: string
-  readOnly?: boolean
-  liveTail?: boolean
-}
+export type PublishedEditorFile = Pick<
+  LayoutEditorFile,
+  | 'filePath'
+  | 'relativePath'
+  | 'language'
+  | 'readOnly'
+  | 'liveTail'
+  | 'runtimeEnvironmentId'
+  | 'externalSshTargetId'
+>
 
-export type PublishedBrowserTab = {
-  id: string
-  sessionProfileId?: string | null
-  pageIds?: string[]
-}
+/** `createdAt` is optional on the wire: a host from before it was published omits it. */
+export type PublishedBrowserTab = Omit<LayoutBrowserTab, 'createdAt'> & { createdAt?: number }
 
 /** Addressed by its workspace key alone; which partition owns it stays the host's routing. */
 export type PublishedWorkspaceLayout = {
@@ -86,7 +96,7 @@ function publishTab(
     id: tab.id,
     kind: tab.kind,
     entityId: tab.entityId,
-    executionHostId: tabExecutionHostId(tab, workspace.editorFiles, partition),
+    executionHostId: tabExecutionHostId(tab, workspace, partition),
     createdAt: tab.createdAt,
     customTitle: tab.customTitle,
     color: tab.color,
@@ -109,7 +119,13 @@ function publishTab(
       root: tab.panes.root,
       panes,
       ...pickStoredFields(tab.panes, ['chatLeafId']),
-      ...pickStoredFields(tab.terminal, ['defaultTitle'])
+      ...pickStoredFields(tab.terminal, [
+        'defaultTitle',
+        'shellOverride',
+        'forceHostRuntime',
+        'startupCwd',
+        'launchAgent'
+      ])
     }
   }
   return published
@@ -128,11 +144,22 @@ export function publishWorkspaceLayout(
       filePath: file.filePath,
       relativePath: file.relativePath,
       language: file.language,
-      ...pickStoredFields(file, ['readOnly', 'liveTail'])
+      ...pickStoredFields(file, [
+        'readOnly',
+        'liveTail',
+        'runtimeEnvironmentId',
+        'externalSshTargetId'
+      ])
     })),
     browserTabs: (workspace.browserTabs ?? []).map((tab) => ({
       id: tab.id,
-      ...pickStoredFields(tab, ['sessionProfileId', 'pageIds'])
+      ...pickStoredFields(tab, [
+        'createdAt',
+        'label',
+        'sessionProfileId',
+        'sessionPartition',
+        'pageIds'
+      ])
     }))
   }
 }

@@ -122,8 +122,10 @@ describe('a permission pick on this device', () => {
   })
 
   it('shows at once and stays pickable while the write waits behind a start', async () => {
-    optionsAnswering('ask')
-    vi.mocked(mutate).mockImplementation(() => new Promise(() => {}))
+    optionsAnswering('ask', 'auto')
+    const first = Promise.withResolvers<{ options: Record<string, string> }>()
+    const second = Promise.withResolvers<{ options: Record<string, string> }>()
+    vi.mocked(mutate).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
     const { result, unmount } = renderReopened(1)
     await waitFor(() => expect(permission(result.current.optionSnapshot)).toBe('ask'))
 
@@ -136,6 +138,9 @@ describe('a permission pick on this device', () => {
     })
     expect(permission(result.current.optionSnapshot)).toBe('auto')
     expect(vi.mocked(mutate)).toHaveBeenCalledTimes(2)
+    await act(async () => second.resolve({ options: { permissionMode: 'auto' } }))
+    await act(async () => first.resolve({ options: { permissionMode: 'full-access' } }))
+    expect(permission(result.current.optionSnapshot)).toBe('auto')
     unmount()
   })
 

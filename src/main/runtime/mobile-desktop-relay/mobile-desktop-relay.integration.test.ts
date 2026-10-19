@@ -189,7 +189,9 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
       onEnvironmentRetired: (listener) => {
         retirementListeners.add(listener)
         return () => retirementListeners.delete(listener)
-      }
+      },
+      onStatusChanged: () => () => {},
+      watchChanges: () => ({ close: () => {}, current: () => true })
     }
     desktop.server.setMobileDesktopRelayHosts(hosts)
     const metadata = readRuntimeMetadata(host.userDataPath)!

@@ -124,6 +124,7 @@ async function runSchedule(seed: number, stats: Stats): Promise<void> {
   const ptyWrites: string[] = []
   const reachedHost = new Set<number>()
   const sentByClient = new Set<number>()
+  let inputFramesSent = 0
   const faultWeights: [WriteFault, number][] = [
     ['accept', 1],
     ['refuse', random() * 0.3],
@@ -203,7 +204,10 @@ async function runSchedule(seed: number, stats: Stats): Promise<void> {
         }
   })
   link.random = random
-  link.onClientInput = (text) => markersIn(text).forEach((id) => sentByClient.add(id))
+  link.onClientInput = (text) => {
+    inputFramesSent += 1
+    markersIn(text).forEach((id) => sentByClient.add(id))
+  }
   link.onHostInput = (text) => markersIn(text).forEach((id) => reachedHost.add(id))
 
   let disconnected = false
@@ -364,10 +368,10 @@ async function runSchedule(seed: number, stats: Stats): Promise<void> {
   // No permanent stall: every accepted write settled, and nothing is still being resent.
   const unsettled = ops.filter((op) => op.accepted && op.result === 'pending').map((op) => op.id)
   expect(unsettled, `seed ${seed} accepted writes never settled`).toEqual([])
-  const sentBefore = sentByClient.size
+  const sentBefore = inputFramesSent
   const writesBefore = ptyWrites.length
   await vi.advanceTimersByTimeAsync(60_000)
-  expect(sentByClient.size).toBe(sentBefore)
+  expect(inputFramesSent, `seed ${seed} kept resending after recovery`).toBe(sentBefore)
   expect(ptyWrites.length).toBe(writesBefore)
 
   const arrived = checkPty(ptyWrites.join(''), ops, seed)

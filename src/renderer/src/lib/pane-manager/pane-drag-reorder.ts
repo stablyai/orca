@@ -4,10 +4,10 @@ import type {
   ManagedPaneInternal,
   PaneExternalDropHandler,
   PaneExternalDropResolver,
+  PaneDropTaker,
   PaneExternalDropTarget,
   PaneStyleOptions
 } from './pane-manager-types'
-import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { detachPaneFromTree, findPaneChildren, insertPaneNextTo } from './pane-tree-ops'
 
 // ---------------------------------------------------------------------------
@@ -32,10 +32,12 @@ export type DragReorderCallbacks = {
   applyDividerStyles: () => void
   refitPanesUnder: (el: HTMLElement) => void
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
-  onLayoutChanged?: (intent?: PaneLayoutEditIntent) => void
+  onLayoutChanged?: () => void
   onDragActiveChange?: (active: boolean) => void
   resolveExternalDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
+  onDividerRatiosCommitted?: () => void
+  takePaneDrop?: PaneDropTaker
 }
 
 export function createDragReorderState(): DragReorderState {
@@ -115,9 +117,26 @@ export function handlePaneDrop(
   if (isPaneDropNoOp(sourcePaneId, targetPaneId, zone, panes)) {
     return
   }
+  if (!panes.has(sourcePaneId) || !panes.has(targetPaneId)) {
+    return
+  }
+  const move = (): void => movePaneNextTo(sourcePaneId, targetPaneId, zone, callbacks)
+  if (!callbacks.takePaneDrop?.({ sourcePaneId, targetPaneId, zone }, move)) {
+    move()
+  }
+}
+
+function movePaneNextTo(
+  sourcePaneId: number,
+  targetPaneId: number,
+  zone: DropZone,
+  callbacks: DragReorderCallbacks
+): void {
+  const panes = callbacks.getPanes()
   const source = panes.get(sourcePaneId)
   const target = panes.get(targetPaneId)
-  if (!source || !target) {
+  // Why re-read: a taken drop moves later, when either pane may have closed.
+  if (!source || !target || callbacks.isDestroyed()) {
     return
   }
 
@@ -134,7 +153,7 @@ export function handlePaneDrop(
   callbacks.applyPaneOpacity()
   callbacks.applyDividerStyles()
   updateMultiPaneState(callbacks)
-  callbacks.onLayoutChanged?.('gesture')
+  callbacks.onLayoutChanged?.()
 }
 
 export function showDropOverlay(state: DragReorderState): void {

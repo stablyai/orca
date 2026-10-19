@@ -177,29 +177,61 @@ describe.each(targets)('runtime layout client over the %s transport', (_name, ta
     expect(stream.unsubscribed).toBe(false)
   })
 
-  it('after a lost stream, keeps the last state and never reopens it', async () => {
-    subscribe()
-    const first = await opened(1)
-    first.send(
-      snapshot([
-        { key: 'a', layout: layout('a', ['t1', 't2']) },
-        { key: 'b', layout: layout('b') }
-      ])
+  it('reports every frame’s position, an unreadable frame’s and a throwing reader’s too', async () => {
+    const positions: number[] = []
+    let throwOnFrame = false
+    subscribeRuntimeLayout(
+      target,
+      {},
+      () => {
+        if (throwOnFrame) {
+          throw new Error('reader failed')
+        }
+      },
+      () => {},
+      (seq) => positions.push(seq)
     )
-    first.drop()
-    expect(first.unsubscribed).toBe(true)
-    expect(status).toEqual({ state: 'lost' })
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(host.streams).toHaveLength(1)
-    // The last state stays; a late frame from the dropped stream changes nothing.
-    first.send({ type: 'removed', key: 'a' })
-    expect(cache).toEqual({ a: layout('a', ['t1', 't2']), b: layout('b') })
+    const stream = await opened(1)
+    stream.send({ ...snapshot(), seq: 3 })
+    stream.send({ type: 'navigate', request: {}, seq: 4 })
+    stream.send({ type: 'workspace', key: 'a', layout: { worktreeId: 'a' }, seq: 5 })
+    throwOnFrame = true
+    expect(() => stream.send({ type: 'removed', key: 'a', seq: 6 })).toThrow('reader failed')
+    // A frame with no position, as an older host sends, reports none.
+    throwOnFrame = false
+    stream.send({ type: 'removed', key: 'a' })
+    expect(positions).toEqual([3, 4, 5, 6])
   })
+
+  it.skipIf(target.kind === 'local')(
+    'after a lost stream, keeps the last state and never reopens it',
+    async () => {
+      subscribe()
+      const first = await opened(1)
+      first.send(
+        snapshot([
+          { key: 'a', layout: layout('a', ['t1', 't2']) },
+          { key: 'b', layout: layout('b') }
+        ])
+      )
+      first.drop()
+      expect(first.unsubscribed).toBe(true)
+      expect(status).toEqual({ state: 'lost' })
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(host.streams).toHaveLength(1)
+      // The last state stays; a late frame from the dropped stream changes nothing.
+      first.send({ type: 'removed', key: 'a' })
+      expect(cache).toEqual({ a: layout('a', ['t1', 't2']), b: layout('b') })
+    }
+  )
 
   it.each([
     ['a failed subscribe', () => host.rejectNextSubscribe(), async () => {}],
     ['an error frame', () => {}, async () => (await opened(1)).fail('stream failed')]
   ])('stops after %s without retrying', async (_case, before, fail) => {
+    if (target.kind === 'local') {
+      return
+    }
     before()
     const subscription = subscribe()
     await fail()
@@ -261,5 +293,96 @@ describe.each(targets)('runtime layout client over the %s transport', (_name, ta
     subscription.close()
     const stream = await opened(1)
     await vi.waitFor(() => expect(stream.unsubscribed).toBe(true))
+  })
+})
+
+describe('the local layout stream after a loss', () => {
+  let host: FakeHost
+  let cache: WorkspaceLayoutCache
+  let statuses: RuntimeLayoutStreamStatus[]
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    host = installFakeHost({ kind: 'local' })
+    cache = EMPTY_WORKSPACE_LAYOUT_CACHE
+    statuses = []
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  const subscribe = () =>
+    subscribeRuntimeLayout(
+      { kind: 'local' },
+      {},
+      (frame) => {
+        cache = applyLayoutFrame(cache, frame)
+      },
+      (next) => {
+        statuses.push(next)
+      }
+    )
+
+  async function opened(count: number): Promise<FakeStream> {
+    await vi.waitFor(() => expect(host.streams).toHaveLength(count))
+    await vi.advanceTimersByTimeAsync(0)
+    return host.streams[count - 1]!
+  }
+
+  const snapshot = (workspaces: { key: string; layout: PublishedWorkspaceLayout }[]) => ({
+    type: 'snapshot',
+    subscriptionId: 'layout-1',
+    workspaces
+  })
+
+  it('reopens it, and the new snapshot replaces the cache', async () => {
+    subscribe()
+    const first = await opened(1)
+    first.send(
+      snapshot([
+        { key: 'a', layout: layout('a') },
+        { key: 'b', layout: layout('b') }
+      ])
+    )
+    first.drop()
+    expect(statuses.at(-1)).toEqual({ state: 'lost' })
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    const second = await opened(2)
+    expect(statuses.at(-1)).toEqual({ state: 'connecting' })
+    second.send(snapshot([{ key: 'a', layout: layout('a', ['t1']) }]))
+    expect(statuses.at(-1)).toEqual({ state: 'live' })
+    expect(cache).toEqual({ a: layout('a', ['t1']) })
+    // A late frame from the dropped stream changes nothing.
+    first.send({ type: 'removed', key: 'a' })
+    expect(cache).toEqual({ a: layout('a', ['t1']) })
+  })
+
+  it('waits longer after each failed reopen, and close stops a pending one', async () => {
+    const subscription = subscribe()
+    ;(await opened(1)).drop()
+    host.rejectNextSubscribe()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(statuses.at(-1)).toEqual({ state: 'lost' })
+    await vi.advanceTimersByTimeAsync(1_999)
+    expect(host.streams).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(1)
+    await opened(2)
+    host.streams[1]!.drop()
+    subscription.close()
+    expect(statuses.at(-1)).toEqual({ state: 'closed' })
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(host.streams).toHaveLength(2)
+  })
+
+  it('never reopens after a refusal', async () => {
+    subscribe()
+    ;(await opened(1)).fail('no layout stream', 'method_not_found')
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(host.streams).toHaveLength(1)
   })
 })

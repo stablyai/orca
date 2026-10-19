@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-import { lstat, readFile, readdir, realpath, rm } from 'node:fs/promises'
+import { lstat, readFile, readdir, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { runProcess } from '@orca/process-host'
 import { lock } from 'proper-lockfile'
-import { decodeGitCQuotedPath } from '../../src/shared/git-cquoted-path.ts'
+import { localRepositoryWorktrees } from './local-repository-worktrees.mjs'
 import { CHECKOUT_FORMAT } from '../../tests/e2e/cross-version-wire/release-checkout-publication.ts'
 import { withReleaseSourceFormatLease } from '../../tests/e2e/cross-version-wire/release-source-retention.ts'
 
@@ -70,58 +69,6 @@ async function logicalBytes(root) {
   return bytes
 }
 
-async function git(repoRoot, args) {
-  const result = await runProcess({
-    program: 'git',
-    args,
-    cwd: repoRoot,
-    timeoutMs: 30_000,
-    maxOutputBytes: 4 * 1024 * 1024,
-    terminationBarrier: true
-  })
-  if (result.code !== 0 || result.timedOut) {
-    throw new Error('Could not read the local Git repository')
-  }
-  return result.stdout
-}
-
-async function repositoryTargets(repoRoot) {
-  const common = (await git(repoRoot, ['rev-parse', '--git-common-dir'])).replace(
-    process.platform === 'win32' ? /\r?\n$/ : /\n$/,
-    ''
-  )
-  if (!common || common.includes('\n')) {
-    throw new Error('Unrecognised Git common directory')
-  }
-  const output = await git(repoRoot, [
-    '-c',
-    'core.quotePath=false',
-    'worktree',
-    'list',
-    '--porcelain'
-  ])
-  const worktrees = []
-  for (const block of output.split(/\r?\n\r?\n/)) {
-    const lines = block.split(/\r?\n/).filter(Boolean)
-    if (lines.length === 0) {
-      continue
-    }
-    if (
-      lines.some(
-        (line) =>
-          !/^(worktree |HEAD |branch |bare$|detached$|locked(?: |$)|prunable(?: |$))/.test(line)
-      )
-    ) {
-      throw new Error('Ambiguous worktree listing; refusing cleanup')
-    }
-    const field = lines.find((line) => line.startsWith('worktree '))
-    if (field && !lines.includes('bare')) {
-      worktrees.push(decodeGitCQuotedPath(field.slice(9)))
-    }
-  }
-  return { commonDirectory: await realpath(resolve(repoRoot, common)), worktrees }
-}
-
 export async function reclaimReleaseTestCaches({
   repoRoot = process.cwd(),
   apply = false,
@@ -139,7 +86,7 @@ export async function reclaimReleaseTestCaches({
       'Stop cross-version tests in this repository, then pass --tests-stopped with --apply'
     )
   }
-  const { commonDirectory, worktrees } = targets ?? (await repositoryTargets(repoRoot))
+  const { commonDirectory, worktrees } = targets ?? (await localRepositoryWorktrees(repoRoot))
   const cutoff = nowMs - minAgeDays * DAY_MS
   const result = { entries: 0, logicalBytes: 0, protected: 0 }
 

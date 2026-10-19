@@ -17,12 +17,40 @@ import type { ProjectGroup } from './project-group-types'
 import type { Repo } from './repo-types'
 import { isPathInsideOrEqual } from './cross-platform-path'
 import { getProjectGroupSubtreeIds } from './project-groups'
-import { getRepoExecutionHostId, normalizeHostPart, parseExecutionHostId } from './execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeHostPart,
+  parseExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from './execution-host'
 
 export type FolderWorkspaceHostState = {
   folderWorkspaces: readonly FolderWorkspace[]
   projectGroups: readonly ProjectGroup[]
   repos: readonly Repo[]
+}
+
+/** The fields host resolution reads, so a catalog read over the wire resolves the same way. */
+export type FolderHostRepo = {
+  path: string
+  projectGroupId?: string | null
+  connectionId?: string | null
+  executionHostId?: string | null
+}
+
+export type FolderHostCatalog<R extends FolderHostRepo = Repo> = {
+  folderWorkspaces: readonly (Pick<FolderWorkspace, 'id' | 'folderPath' | 'projectGroupId'> & {
+    connectionId?: string | null
+    executionHostId?: string | null
+  })[]
+  projectGroups: readonly (Pick<ProjectGroup, 'id'> & {
+    parentGroupId: string | null
+    connectionId?: string | null
+    executionHostId?: string | null
+  })[]
+  repos: readonly R[]
 }
 
 export type FolderWorkspaceHost =
@@ -45,23 +73,23 @@ export type FolderWorkspaceHost =
  * A non-SSH host falls back to the raw field so a `runtime:` row keeps contributing its nested
  * target, which is not this client's to dial.
  */
-function getRepoScopeConnectionId(repo: Repo): string | null {
+function getRepoScopeConnectionId(repo: FolderHostRepo): string | null {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
   return host?.kind === 'ssh' ? host.targetId : normalizeHostPart(repo.connectionId)
 }
 
-function getFolderScopeCandidateRepos(args: {
+function getFolderScopeCandidateRepos<R extends FolderHostRepo>(args: {
   folderPath: string
   projectGroupId: string
   connectionId: string | null
-  projectGroups: readonly ProjectGroup[]
-  repos: readonly Repo[]
-}): Repo[] {
+  projectGroups: FolderHostCatalog<R>['projectGroups']
+  repos: readonly R[]
+}): R[] {
   const groupIds = getProjectGroupSubtreeIds(args.projectGroups, args.projectGroupId)
   // Classify each repo once. The previous pair of filters read every
   // projectGroupId twice before applying the same path predicate.
-  const groupRepos: Repo[] = []
-  const pathRepos: Repo[] = []
+  const groupRepos: R[] = []
+  const pathRepos: R[] = []
   for (const repo of args.repos) {
     const projectGroupId = repo.projectGroupId
     if (typeof projectGroupId === 'string' && groupIds.has(projectGroupId)) {
@@ -88,10 +116,10 @@ function getFolderScopeCandidateRepos(args: {
   ]
 }
 
-export function findFolderWorkspaceCandidateRepos(
-  state: FolderWorkspaceHostState,
+export function findFolderWorkspaceCandidateRepos<R extends FolderHostRepo>(
+  state: FolderHostCatalog<R>,
   folderWorkspaceId: string
-): Repo[] {
+): R[] {
   const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
   if (!workspace) {
     return []
@@ -106,8 +134,8 @@ export function findFolderWorkspaceCandidateRepos(
   })
 }
 
-export function resolveFolderWorkspaceHost(
-  state: FolderWorkspaceHostState,
+export function resolveFolderWorkspaceHost<R extends FolderHostRepo>(
+  state: FolderHostCatalog<R>,
   folderWorkspaceId: string
 ): FolderWorkspaceHost {
   const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
@@ -167,4 +195,30 @@ export function resolveFolderWorkspaceHost(
     return { kind: 'ambiguous' }
   }
   return { kind: 'ssh', targetId: [...connectionIds][0] }
+}
+
+export function getFolderWorkspaceHostId(
+  workspace: FolderWorkspace,
+  projectGroups: readonly ProjectGroup[]
+): ExecutionHostId {
+  const explicitHostId = parseExecutionHostId(workspace.executionHostId)?.id
+  if (explicitHostId) {
+    return explicitHostId
+  }
+  if (workspace.connectionId) {
+    return toSshExecutionHostId(workspace.connectionId)
+  }
+  let matchingHostId: ExecutionHostId | undefined
+  for (const group of projectGroups) {
+    if (group.id !== workspace.projectGroupId) {
+      continue
+    }
+    const hostId = getRepoExecutionHostId(group)
+    if (matchingHostId === undefined) {
+      matchingHostId = hostId
+    } else if (matchingHostId !== hostId) {
+      return LOCAL_EXECUTION_HOST_ID
+    }
+  }
+  return matchingHostId ?? LOCAL_EXECUTION_HOST_ID
 }

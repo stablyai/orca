@@ -2,7 +2,7 @@ name: Headless Node server
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - 'src/**'
       - 'config/**'
@@ -14,7 +14,7 @@ on:
       - 'pnpm-workspace.yaml'
       - 'tsconfig.json'
       - '.npmrc'
-      - '.pnpmfile.cjs'
+      - 'config/pnpmfile.cjs'
       - '.github/actions/install-node-dependencies/**'
       - '.github/actions/restore-pnpm-verification/**'
       - '.github/actions/prepare-headless-compiler/**'
@@ -60,6 +60,7 @@ jobs:
     outputs:
       should_run: ${{ steps.scope.outputs.should_run || steps.graph.outputs.should_run }}
       qualification: ${{ steps.scope.outputs.qualification || steps.graph.outputs.qualification }}
+      native_compatibility: ${{ steps.scope.outputs.native_compatibility || steps.graph.outputs.native_compatibility }}
       runners: ${{ steps.scope.outputs.runners || steps.graph.outputs.runners }}
     steps:
       - uses: actions/checkout@v6
@@ -76,6 +77,7 @@ jobs:
         env:
           PUSH_BASE: ${{ github.event.before }}
           EVENT_NAME: ${{ github.event_name }}
+          ALLOW_TEST_ONLY_NATIVE_SKIP: ${{ github.event_name == 'pull_request' && !inputs.build_template && inputs.ref == '' }}
         run: |
           if [ "$EVENT_NAME" = push ]; then
             # Compare the entire push, including multi-commit pushes and removed files.
@@ -88,10 +90,15 @@ jobs:
             fi
             exit 0
           fi
+          NATIVE_SCOPE_ARGS=()
+          if [ "$ALLOW_TEST_ONLY_NATIVE_SKIP" = true ]; then
+            NATIVE_SCOPE_ARGS=(--pull-request --diff-paths "$RUNNER_TEMP/node-server-native-diff")
+          fi
           # Compare the tested merge with its base, retaining both sides of renames.
           if git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/node-server-changes" &&
-             git diff --name-only --no-renames --diff-filter=M -z HEAD^1 HEAD > "$RUNNER_TEMP/node-server-modified"; then
-            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph --modified-paths "$RUNNER_TEMP/node-server-modified"
+             git diff --name-only --no-renames --diff-filter=M -z HEAD^1 HEAD > "$RUNNER_TEMP/node-server-modified" &&
+             git diff --raw --no-renames --no-abbrev -z HEAD^1 HEAD > "$RUNNER_TEMP/node-server-native-diff"; then
+            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph --modified-paths "$RUNNER_TEMP/node-server-modified" "${NATIVE_SCOPE_ARGS[@]}"
           else
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
@@ -108,11 +115,16 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+          ALLOW_TEST_ONLY_NATIVE_SKIP: ${{ github.event_name == 'pull_request' && !inputs.build_template && inputs.ref == '' }}
         run: |
           if [ "$EVENT_NAME" = push ]; then
             node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --full-qualification --modified-paths "$RUNNER_TEMP/node-server-modified"
           else
-            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --modified-paths "$RUNNER_TEMP/node-server-modified"
+            NATIVE_SCOPE_ARGS=()
+            if [ "$ALLOW_TEST_ONLY_NATIVE_SKIP" = true ]; then
+              NATIVE_SCOPE_ARGS=(--pull-request --diff-paths "$RUNNER_TEMP/node-server-native-diff")
+            fi
+            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --modified-paths "$RUNNER_TEMP/node-server-modified" "${NATIVE_SCOPE_ARGS[@]}"
           fi
 
   persistence:
@@ -139,6 +151,7 @@ jobs:
           ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies
+        id: dependencies
         with:
           native-runtime: ${{ runner.os == 'Windows' && 'node' || 'none' }}
           cache-pnpm-store: ${{ runner.os != 'Windows' }}
@@ -178,7 +191,10 @@ jobs:
         if: runner.os == 'Windows'
         with:
           arches: ${{ (inputs.build_template && matrix.os == 'windows-2022') && 'x64 arm64' || (runner.arch == 'ARM64' && 'arm64' || 'x64') }}
+      - uses: ./.github/actions/build-mobile-web-bundle
       - run: pnpm build:orcad
+        env:
+          ORCA_REUSE_PREPARED_WINDOWS_SECURITY: ${{ github.event_name == 'pull_request' && runner.os == 'Windows' && steps.dependencies.outcome == 'success' }}
       - wait: bun-orcad
       - run: pnpm test:node-server --artifact ${{ runner.os == 'Linux' && '--cross-runtime' || '' }}
         env:
@@ -282,14 +298,40 @@ jobs:
           # A rerun attempt re-uploads under the same name, which v4 otherwise refuses.
           overwrite: true
 
+  # The container lanes take the page from here: it is platform-independent, and building it needs
+  # mobile/node_modules, which those images never install.
+  mobile_web_bundle:
+    needs: changes
+    if: >-
+      ${{ !cancelled() && needs.changes.outputs.should_run != 'false' &&
+      needs.changes.outputs.qualification != 'false' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - uses: ./.github/actions/build-mobile-web-bundle
+      - uses: actions/upload-artifact@v7
+        with:
+          name: orcad-mobile-web-bundle
+          path: out/mobile-web/
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: true
+
   linux_glibc_floor:
-    needs: [changes, persistence]
+    needs: [changes, persistence, mobile_web_bundle]
     concurrency:
       group: node-server-linux_glibc_floor-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
     # A failed smoke already blocks qualification; missing scope still selects every platform.
     if: >-
       ${{ !cancelled() && needs.persistence.result == 'success' &&
+      needs.mobile_web_bundle.result == 'success' &&
       needs.changes.outputs.should_run != 'false' &&
       needs.changes.outputs.qualification != 'false' }}
     strategy:
@@ -338,6 +380,10 @@ jobs:
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
           pnpm build:orcad-prebuilds --smoke
+      - uses: actions/download-artifact@v8
+        with:
+          name: orcad-mobile-web-bundle
+          path: out/mobile-web
       - run: pnpm build:orcad
       - run: pnpm test:node-server --artifact
       - name: Keep this runner's glibc 2.28 slot for the desktop template
@@ -359,7 +405,9 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.persistence.result == 'success' &&
       needs.changes.outputs.should_run != 'false' &&
-      needs.changes.outputs.qualification != 'false' }}
+      needs.changes.outputs.qualification != 'false' &&
+      (github.event_name != 'pull_request' || inputs.build_template || inputs.ref != '' ||
+      needs.changes.outputs.native_compatibility != 'false') }}
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
@@ -406,13 +454,14 @@ jobs:
           overwrite: true
 
   linux_musl:
-    needs: [changes, persistence]
+    needs: [changes, persistence, mobile_web_bundle]
     concurrency:
       group: node-server-linux_musl-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
     # A failed smoke already blocks qualification; missing scope still selects every platform.
     if: >-
       ${{ !cancelled() && needs.persistence.result == 'success' &&
+      needs.mobile_web_bundle.result == 'success' &&
       needs.changes.outputs.should_run != 'false' &&
       needs.changes.outputs.qualification != 'false' }}
     strategy:
@@ -432,6 +481,10 @@ jobs:
         id: pnpm-verification
         with:
           container-toolchain: 'true'
+      - uses: actions/download-artifact@v8
+        with:
+          name: orcad-mobile-web-bundle
+          path: out/mobile-web
       - name: Verify native Alpine artifact and persistence
         env:
           VERIFICATION_CACHE_PATH: ${{ steps.pnpm-verification.outputs.path }}
@@ -466,10 +519,11 @@ jobs:
 
   # Design D2: the desktop ships every target's addons, merged from the lanes that qualified them.
   desktop_template:
-    needs: [persistence, linux_glibc_floor, linux_glibc217_compat, linux_musl]
+    needs: [persistence, mobile_web_bundle, linux_glibc_floor, linux_glibc217_compat, linux_musl]
     if: >-
       ${{ !cancelled() && inputs.build_template &&
-      needs.persistence.result == 'success' && needs.linux_glibc_floor.result == 'success' &&
+      needs.persistence.result == 'success' && needs.mobile_web_bundle.result == 'success' &&
+      needs.linux_glibc_floor.result == 'success' &&
       needs.linux_glibc217_compat.result == 'success' && needs.linux_musl.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -506,6 +560,11 @@ jobs:
           node config/scripts/merge-orcad-prebuilds.mjs "$RUNNER_TEMP"/orcad-prebuild-lanes/*
           pnpm build:orcad-prebuilds --require-slots
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc217
+      # The page the qualification lanes tested, not a rebuild.
+      - uses: actions/download-artifact@v8
+        with:
+          name: orcad-mobile-web-bundle
+          path: out/mobile-web
       - run: pnpm build:orcad-template
       - name: Report the template size
         shell: bash

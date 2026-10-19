@@ -50,6 +50,11 @@ describe('renameWorktreeFolderOnFirstWork', () => {
       OLD_ID,
       'repo1::/ws/worktree-creation-spinner'
     )
+    // Main re-keys its stored layout before the window hears of the rename, so the window's
+    // re-key and save only mirror it (worktree-identity-rename-main-agreement.test.ts).
+    expect(vi.mocked(deps.migrateWorktreeIdentity).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(deps.notifyWorktreeRenamed).mock.invocationCallOrder[0]!
+    )
   })
 
   it('preserves the folder-workspace instance suffix in the migrated identity', async () => {

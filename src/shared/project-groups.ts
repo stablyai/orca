@@ -185,3 +185,14 @@ export function getNextProjectGroupOrder(repos: readonly Repo[], groupId: string
   }
   return max + 1
 }
+
+/**
+ * One row per group id, in first-seen order. Hosts can publish one group under the same id (a
+ * project moved to a managed server keeps the desktop's copy, #30045); the last copy wins, as in
+ * every id-keyed group lookup, so the sidebar and search agree on its name.
+ */
+export function getDistinctProjectGroups<T extends Pick<ProjectGroup, 'id'>>(
+  projectGroups: readonly T[]
+): T[] {
+  return [...new Map(projectGroups.map((group) => [group.id, group])).values()]
+}

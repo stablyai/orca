@@ -7,6 +7,7 @@ import {
   type DirectSshConnectedStateOrigin
 } from '../direct-ssh-state-routing'
 import { hydrateDirectSshInitialState } from './direct-ssh-initial-state-hydration'
+import { syncSshConfigTargetsPassively } from '../../lib/ssh-config-passive-sync'
 import { applySshManagedServerTransition } from './ssh-managed-server-state-effects'
 
 type AuthorityDeadline = { timer: ReturnType<typeof setTimeout>; settle: () => void }
@@ -56,7 +57,12 @@ export function registerDirectSshStateIpcBridge(unsubs: (() => void)[]): () => v
   ) => void
   void hydrateDirectSshInitialState(isStopped, sshStateWatermarkByTargetId, (targetId, state) =>
     applySshConnectionStateChange(targetId, state, 'initial-hydration')
-  )
+  ).then(() => {
+    // Why: after the saved list paints, so a slow config parse never delays the first host list.
+    if (!isStopped()) {
+      void syncSshConfigTargetsPassively()
+    }
+  })
   unsubs.push(
     window.api.ssh.onCredentialRequest((data) => {
       useAppStore.getState().enqueueSshCredentialRequest(data)

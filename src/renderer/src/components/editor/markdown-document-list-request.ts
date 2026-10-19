@@ -17,7 +17,7 @@ type InFlightMarkdownDocumentList = {
   startedAt: number
 }
 
-const MARKDOWN_DOCUMENT_LIST_JOIN_WINDOW_MS = 30_000
+export const MARKDOWN_DOCUMENT_LIST_JOIN_WINDOW_MS = 30_000
 const inFlightMarkdownDocumentLists = new Map<string, InFlightMarkdownDocumentList>()
 
 export function getMarkdownDocumentListRequestKey(

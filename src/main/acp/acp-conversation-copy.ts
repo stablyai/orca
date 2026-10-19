@@ -1,8 +1,5 @@
 import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
-import {
-  assertOpenCodeCopyUsesLocalStore,
-  OpenCodeCopyServerRouteError
-} from '../../shared/opencode-launch-command'
+import { OpenCodeCopyServerRouteError } from '../../shared/opencode-launch-command'
 // The chat protocol saves an independent conversation; its ordinary CLI opens that copy.
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import {
@@ -29,7 +26,7 @@ export const ACP_CONVERSATION_COPY_TIMEOUT_MS = 60_000
 export async function copyAcpConversation(
   deps: Pick<
     AcpStructuredSessionAdapterDeps,
-    'spec' | 'readLaunch' | 'resolveLaunchArgs' | 'connect' | 'logger'
+    'spec' | 'readLaunch' | 'resolveLaunchArgs' | 'connect' | 'logger' | 'dataDirectory'
   >,
   input: {
     identity: AgentSessionJournalIdentity
@@ -48,17 +45,16 @@ export async function copyAcpConversation(
   let connection: AcpStructuredConnection | null = null
   try {
     signal.throwIfAborted()
-    if (deps.spec.agent === 'opencode') {
-      const args = await waitForPromiseWithSignal(
-        Promise.resolve(deps.resolveLaunchArgs?.() ?? []),
-        signal
+    const assertCopyLaunchArgs = deps.spec.assertCopyLaunchArgs
+    if (assertCopyLaunchArgs) {
+      assertCopyLaunchArgs(
+        await waitForPromiseWithSignal(Promise.resolve(deps.resolveLaunchArgs?.() ?? []), signal)
       )
-      assertOpenCodeCopyUsesLocalStore(args)
     }
     signal.throwIfAborted()
     const launch = await waitForPromiseWithSignal(deps.readLaunch(input.identity), signal)
     signal.throwIfAborted()
-    await assertCopyAccountSelected(deps.spec, input.accountHome, launch.env, signal)
+    await assertCopyAccountSelected(deps, input.accountHome, launch.env, signal)
     signal.throwIfAborted()
     connection = deps.connect(
       {
@@ -75,7 +71,7 @@ export async function copyAcpConversation(
       forkAdvertised(connection, input.providerSessionId, launch.cwd),
       signal
     )
-    await assertCopyAccountSelected(deps.spec, input.accountHome, launch.env, signal)
+    await assertCopyAccountSelected(deps, input.accountHome, launch.env, signal)
     const providerSession = normalizeAgentProviderSession({ key: 'session_id', id: sessionId })
     if (!providerSession || providerSession.id !== sessionId) {
       throw new Error('The agent returned an invalid copied conversation identity.')
@@ -138,13 +134,14 @@ async function forkAdvertised(
 
 /** Rederive selection at the fork boundaries; ordinary terminals still own their normal routing. */
 async function assertCopyAccountSelected(
-  spec: AcpStructuredSessionAdapterDeps['spec'],
+  { spec, dataDirectory }: Pick<AcpStructuredSessionAdapterDeps, 'spec' | 'dataDirectory'>,
   home: AgentSessionAccountHome,
   launchEnv: Record<string, string>,
   signal: AbortSignal
 ): Promise<void> {
   if ('kind' in home && home.kind === 'opencode') {
-    const selected = await waitForPromiseWithSignal(spec.account.resolve({ launchEnv }), signal)
+    const resolving = spec.account.resolve({ launchEnv, stateDirectory: dataDirectory })
+    const selected = await waitForPromiseWithSignal(resolving, signal)
     if (!agentSessionAccountHomesEqual(home, selected)) {
       throw new AcpCopyAccountMismatchError()
     }

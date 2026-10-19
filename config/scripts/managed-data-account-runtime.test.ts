@@ -30,8 +30,8 @@ beforeAll(async () => {
       ...main.build,
       outDir: join(outputDir, 'bundle'),
       sourcemap: false,
-      rollupOptions: {
-        ...main.build.rollupOptions,
+      rolldownOptions: {
+        ...main.build.rolldownOptions,
         input: join(projectDir, 'src/main/managed-data-accounts/credential-capture.ts'),
         output: { format: 'cjs', entryFileNames: 'credential-capture.cjs' }
       }

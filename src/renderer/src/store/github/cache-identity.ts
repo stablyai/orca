@@ -10,7 +10,10 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId
 } from '../../../../shared/execution-host'
-import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '../slices/github-cache-key'
+import {
+  getGitHubPRCacheKey,
+  getGitHubRepoCacheKey
+} from '../../../../shared/github/github-cache-key'
 import type { AppState } from '../types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { CacheEntry } from './cache-model'

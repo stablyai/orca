@@ -45,6 +45,19 @@ function isCodexNoRolloutError(error: unknown, threadId: string): boolean {
   )
 }
 
+/**
+ * Codex rebuilds each command's env from `shell_environment_policy`, so `inherit = "core"` drops
+ * every Orca key the app-server holds. Codex adds `set` keys after that filter and merges these
+ * per key, so the user's own policy stays as written.
+ */
+function shellEnvironmentSetConfig(
+  env: Record<string, string> | undefined
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env ?? {}).map(([key, value]) => [`shell_environment_policy.set.${key}`, value])
+  )
+}
+
 export async function openCodexThread(
   connection: Pick<CodexAppServerConnection, 'request'>,
   launch: {
@@ -58,14 +71,17 @@ export async function openCodexThread(
     model?: string
     /** Config overrides for this thread, on start and resume alike. */
     threadConfig?: Record<string, unknown>
+    /** Env every command the agent runs must see, whatever the user's shell environment policy. */
+    commandEnv?: Record<string, string>
   },
   timeoutMs: number | undefined
 ): Promise<CodexOpenedThread> {
   const resumeThreadId = launch.resumeThreadId
+  const config = { ...launch.threadConfig, ...shellEnvironmentSetConfig(launch.commandEnv) }
   const threadSettings = {
     cwd: launch.cwd,
     ...launch.permissionPolicy,
-    ...(launch.threadConfig ? { config: launch.threadConfig } : {})
+    ...(Object.keys(config).length > 0 ? { config } : {})
   }
   const startThread = (): Promise<unknown> =>
     connection.request(

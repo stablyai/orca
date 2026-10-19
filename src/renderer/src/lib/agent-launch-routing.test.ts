@@ -100,6 +100,33 @@ describe('new agent launch routing', () => {
     ).toBe('structured-native-chat')
   })
 
+  it("follows each agent's chat provider switch", () => {
+    const grokHost = {
+      agent: 'grok' as const,
+      hostCapabilities: [
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+      ],
+      hostStructuredAgents: ['grok']
+    }
+    // Routing does not depend on native installation inventory.
+    expect(route({ agent: 'claude' })).toBe('structured-native-chat')
+    expect(route(grokHost)).toBe('structured-native-chat')
+    expect(
+      route({ ...grokHost, settings: { ...settings, nativeChatProviders: { grok: false } } })
+    ).toBe('terminal-tui')
+    // A saved choice wins either way.
+    expect(route({ settings: { ...settings, nativeChatProviders: { codex: false } } })).toBe(
+      'terminal-tui'
+    )
+    expect(
+      route({
+        ...grokHost,
+        settings: { ...settings, nativeChatProviders: { grok: true } }
+      })
+    ).toBe('structured-native-chat')
+  })
+
   it.each(['git-worktree', 'folder', 'floating'] as const)(
     'allows a supported local %s workspace',
     (workspaceKind) => expect(route({ workspaceKind })).toBe('structured-native-chat')

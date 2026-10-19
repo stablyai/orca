@@ -22,7 +22,6 @@ import type {
 import type {
   AgentJournalAnsweredTurnIdentity,
   AgentJournalItemIdentity,
-  AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentJournalDispatchState,
   AgentJournalTurnItem,
@@ -37,9 +36,9 @@ import type {
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type {
   AgentSessionOptionsResult,
-  AgentSessionSlashCommand,
-  AgentSessionThreadGoalChange
+  AgentSessionSlashCommand
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-thread-goal-wire'
 import type { AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type {
@@ -54,9 +53,13 @@ export type {
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
-import type { StructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt-contract'
+import type {
+  StructuredAgentSessionStartupAttempt,
+  StructuredAgentSessionAcquisitionReceipt
+} from './structured-agent-session-startup-attempt-contract'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
+import type { StructuredAgentSessionProviderOpen } from './structured-agent-session-provider-open-contract'
 
 /** A live options read, plus what the child listed for its account's saved catalog. The host
  *  saves that listing and strips it before answering; an adapter whose listing reaches the
@@ -110,7 +113,7 @@ export {
  *  the process the host can probe, and the provider handle it was minted with. */
 export type AgentSessionAcquisition = {
   process: AgentSessionProcessIdentity
-  link: AgentSessionProviderHandleLink
+  link?: AgentSessionProviderHandleLink
   /** Host-local identity for this exact provider child, distinct even when the durable fence is
    *  reused by a superseding acquisition. */
   acquisitionGeneration?: string
@@ -135,6 +138,7 @@ export type AgentSessionPreSpawnReason = Extract<
   | 'claudeAccountFolderMissing'
   | 'claudeAccountSetupFailed'
   | 'agentCommandNotRunnable'
+  | 'runtimeNotInstalled'
 >
 
 /** Acquisition failed with first-hand proof that no provider process existed. */
@@ -214,6 +218,8 @@ export type StructuredAgentSessionEndedEvent = {
 /** The child a publish-first acquire handed over has now proven its start: startup facts applied.
  *  What it reports from here on is fact, not a catalog guess. */
 export type StructuredAgentSessionStartedEvent = {
+  /** The handle supplied when the provider finishes starting. */
+  link?: AgentSessionProviderHandleLink
   type: 'started'
   sessionId: string
   fence: number
@@ -221,40 +227,21 @@ export type StructuredAgentSessionStartedEvent = {
   /** What the child proved, snapshotted by the adapter from what startup already read. The host
    *  handles this inside the session's serialized step, so it must not ask the CLI. */
   reportedOptions: AgentSessionOptionsResult['current']
-  /** Saved options the child could not take; the host drops them rather than persist them. */
-  restoreSkippedOptions: readonly string[]
-  /** Values the child showed it cannot run: a report naming the same value is not persisted. */
-  retiredOptions?: Readonly<Record<string, string>>
   /** What the child listed at startup, saved as its account's catalog even if no view reads it. */
   catalogListing?: AgentModelCatalogLiveListing
-  /** The attempt's `optionRevision()` as the read behind this report began: a pick the host took
-   *  since makes it out of date. An earlier report never does, whenever the host took it. */
-  optionRevision: number
-}
-
-/** A running child showed saved options it cannot run, as a model the provider reports missing.
- *  The record drops them, so the next start uses the provider's own. */
-export type StructuredAgentSessionOptionsSkippedEvent = {
-  type: 'options-skipped'
-  sessionId: string
-  fence: number
-  acquisitionGeneration: string
-  /** Each saved value the child showed it cannot run; a record holding another value keeps it. */
-  options: Readonly<Record<string, string>>
 }
 
 /** What a child that already proved its start reports later, such as an optional read that came
  *  after `started`: persisted as the start's report is. Never delays a start. */
 export type StructuredAgentSessionOptionsReportedEvent = Omit<
   StructuredAgentSessionStartedEvent,
-  'type'
+  'type' | 'link'
 > & { type: 'options-reported' }
 
 export type StructuredAgentSessionLifecycleEvent =
   | StructuredAgentSessionEndedEvent
   | StructuredAgentSessionStartedEvent
   | StructuredAgentSessionOptionsReportedEvent
-  | StructuredAgentSessionOptionsSkippedEvent
 
 /** Whether the provider child behind an acquisition has proven its start. A publish-first
  *  acquire hands over a `starting` child, which the host gives no input until the `started`
@@ -285,6 +272,8 @@ export type StructuredAgentSessionSetOptionInput = {
 }
 
 export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
+  /** Opens the published process under the host's startup signal. */
+  open?: StructuredAgentSessionProviderOpen
   /** Provider-aware capability check for hosts that route more than one adapter. */
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Provider/runtime support, kept here so remote enablement changes adapter data, not UI logic. */
@@ -298,6 +287,9 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
    *  `AgentSessionAcquisitionRootExitObservedError` when the provider root's own
    *  exit was observed first-hand but its descendants were not proven gone. */
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
+  /** Whether this adapter owns a child, failed acquisition, or unacknowledged acquisition receipt. */
+  hasOwnedAcquisition?(sessionId: string): boolean
+  stoppedAcquisition?(sessionId: string): StructuredAgentSessionAcquisitionReceipt | undefined
   dispatch(input: {
     sessionId: string
     clientMessageId: string
@@ -312,25 +304,20 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** How this session narrows its agent's declared rewind; `agent` answers for one with no child
    *  running. The router applies the declaration first, so an adapter's answer never widens it. */
   rewindSupport?(sessionId: string, agent?: string): AgentSessionRewindSupport
+  /** Whether a rewind whose reply was lost took effect, observed without repeating it.
+   *  `keptTurnId` is the last provider turn the rewind keeps, null when it keeps none. */
   recoverRewind?(input: {
     sessionId: string
     fence: number
+    signal?: AbortSignal
     beforeTurnId: string
-  }): Promise<
-    | { ok: true; items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] }
-    | { ok: false; reason: AgentSessionRewindReason }
-  >
+    keptTurnId: string | null
+  }): Promise<{ ok: true } | { ok: false; reason: AgentSessionRewindReason }>
   rewind?(input: {
     sessionId: string
     fence: number
     beforeTurnId: string
-    onPrepared?: (
-      items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[]
-    ) => Promise<void>
-  }): Promise<
-    | { ok: true; items?: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] }
-    | { ok: false; reason: AgentSessionRewindReason }
-  >
+  }): Promise<{ ok: true } | { ok: false; reason: AgentSessionRewindReason }>
   /** Sends a conversation compaction and answers with the provider's receipt of it, as a dispatch
    *  does. The command's turn is the child's journal translator's to end, from the provider's own
    *  frames; a child that ends first leaves it to the host's settlement of that child. */
@@ -381,6 +368,9 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** The provider reported taking a send it has neither answered nor ended, as a queued follow-up
    *  or a silent retry does. Derived from the live child; false with none. */
   holdsDispatch?(sessionId: string): boolean
+  /** The sends the live child still holds as its own work, by client message id; undefined when
+   *  this adapter cannot say, and the host reads an unanswered send as held. */
+  heldSends?(sessionId: string): ReadonlySet<string> | undefined
   /** The adapter's own child for this exact acquisition has a pid and its root exit has not been
    *  seen: first-hand proof of life for lease renewal. Absent or false falls back to a PID probe. */
   holdsLiveProviderProcess?(sessionId: string, acquisitionGeneration: string): boolean
@@ -406,8 +396,6 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<void | Readonly<Record<string, string>>>
-  /** Resolves once a live session can take an option write, or after a bound; never rejects. */
-  awaitOptionWritable?(sessionId: string): Promise<void>
   /** False while the live child has not answered its start, so it has run nothing it was handed.
    *  Absent or undefined reads as answered. */
   startAnswered?(sessionId: string): boolean | undefined
@@ -457,5 +445,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** Stops a provider child for teardown without requiring a future-resume cursor. */
   disposeSession?(sessionId: string): Promise<boolean>
   /** Host acknowledgement that the proven-dead child, lease and journal owner are released. */
-  acknowledgeSessionRelease?(sessionId: string): void
+  acknowledgeSessionRelease?(
+    sessionId: string,
+    acquisition?: StructuredAgentSessionAcquisitionReceipt
+  ): void
 }

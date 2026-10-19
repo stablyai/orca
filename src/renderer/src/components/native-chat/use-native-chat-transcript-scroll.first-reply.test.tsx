@@ -24,7 +24,8 @@ function FirstReply({ phase, pin }: { phase: number; pin: () => void }) {
   })
   const input = useNativeChatReaderScrollInput(scrollRef, {
     onReaderScroll: vi.fn(),
-    onLeaveEnd: transcript.readerLeavesEnd
+    onLeaveEnd: transcript.readerLeavesEnd,
+    onScrollGesture: transcript.forwardedGesture
   })
   return (
     <div

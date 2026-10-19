@@ -9,6 +9,7 @@ import type {
 } from '../../shared/claude-usage-types'
 import type { ClaudeUsagePersistedState } from './types'
 import { estimateCostUsd } from './claude-model-pricing'
+import { addBillableTokens, NO_TOKENS, type ClaudeBillableTokens } from './claude-billable-tokens'
 import { getFilteredDaily, getFilteredSessions } from './claude-usage-scope-filters'
 
 export function buildSummary(
@@ -29,6 +30,7 @@ export function buildSummary(
   const byProject = new Map<string, number>()
   let estimatedCostUsd = 0
   let hasAnyBillableCost = false
+  let hasUnpricedModels = false
 
   for (const row of filteredDaily) {
     inputTokens += row.inputTokens
@@ -43,17 +45,12 @@ export function buildSummary(
       row.projectLabel,
       (byProject.get(row.projectLabel) ?? 0) + row.inputTokens + row.outputTokens
     )
-    const cost = estimateCostUsd(
-      row.model,
-      row.inputTokens,
-      row.outputTokens,
-      row.cacheReadTokens,
-      row.cacheWriteTokens,
-      row.cacheWrite1hTokens
-    )
+    const cost = estimateCostUsd(row.model, row)
     if (cost !== null) {
       hasAnyBillableCost = true
       estimatedCostUsd += cost
+    } else if (row.model !== null) {
+      hasUnpricedModels = true
     }
   }
 
@@ -73,6 +70,7 @@ export function buildSummary(
     cacheReuseRate:
       inputTokens + cacheReadTokens > 0 ? cacheReadTokens / (inputTokens + cacheReadTokens) : null,
     estimatedCostUsd: hasAnyBillableCost ? estimatedCostUsd : null,
+    hasUnpricedModels,
     topModel,
     topProject,
     // Why: the empty-state UX is scope/range specific. Using global persisted
@@ -112,8 +110,9 @@ export function buildBreakdown(
   kind: ClaudeUsageBreakdownKind
 ): ClaudeUsageBreakdownRow[] {
   const rows = new Map<string, ClaudeUsageBreakdownRow>()
-  // Why: the 1h cache-write split only feeds pricing, so it stays off the renderer row type.
-  const cacheWrite1hTokensByKey = new Map<string, number>()
+  // Why: the 1h cache-write split and long-context subset only feed pricing, so they stay off the
+  // renderer row type.
+  const billableByKey = new Map<string, ClaudeBillableTokens>()
   const filteredDaily = getFilteredDaily(state, scope, range)
   const filteredSessions = getFilteredSessions(state, scope, range)
 
@@ -136,10 +135,7 @@ export function buildBreakdown(
     existing.outputTokens += daily.outputTokens
     existing.cacheReadTokens += daily.cacheReadTokens
     existing.cacheWriteTokens += daily.cacheWriteTokens
-    cacheWrite1hTokensByKey.set(
-      key,
-      (cacheWrite1hTokensByKey.get(key) ?? 0) + daily.cacheWrite1hTokens
-    )
+    billableByKey.set(key, addBillableTokens(billableByKey.get(key) ?? NO_TOKENS, daily))
     rows.set(key, existing)
   }
 
@@ -170,14 +166,7 @@ export function buildBreakdown(
 
   for (const row of rows.values()) {
     if (kind === 'model') {
-      row.estimatedCostUsd = estimateCostUsd(
-        row.key,
-        row.inputTokens,
-        row.outputTokens,
-        row.cacheReadTokens,
-        row.cacheWriteTokens,
-        cacheWrite1hTokensByKey.get(row.key) ?? 0
-      )
+      row.estimatedCostUsd = estimateCostUsd(row.key, billableByKey.get(row.key) ?? NO_TOKENS)
     }
   }
 

@@ -68,6 +68,7 @@ export type FirstPartyAgentStatus = {
   state: AgentStatusState
   updatedAt: number
   sessionBoundary?: boolean
+  programAtRest?: boolean
 } | null
 
 /** Tier 1: an idle marker the agent put in a title itself. */
@@ -83,13 +84,17 @@ export function hasExplicitIdleTitle(
 /**
  * Tier 1, first-party: a `sessionBoundary` row, which claims a NEW SESSION owns the pane and waits
  * for its first input. Producers set it only for a startup/resume/reset boundary, so it cannot
- * arrive mid-turn (#6011). An ordinary hook `done` decides only through the hook lane (tier 0).
+ * arrive mid-turn (#6011). An OSC 7501 `done` is the program's own at-rest claim and counts too.
+ * An ordinary hook `done` decides only through the hook lane (tier 0).
  */
 export function hasFreshDoneFirstPartyStatus(
   status: FirstPartyAgentStatus,
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
 ): boolean {
-  if (status?.state !== 'done' || status.sessionBoundary !== true) {
+  if (
+    status?.state !== 'done' ||
+    (status.sessionBoundary !== true && status.programAtRest !== true)
+  ) {
     return false
   }
   return Date.now() - status.updatedAt <= staleAfterMs
@@ -277,7 +282,9 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       ? READY_STRONG
       : { kind: 'pending', quietForeground: 'closed' }
   }
-  if (hasExplicitIdleTitle(input.record, input.rendererTitle)) {
+  // Why the title before the body: both are tier 1, so either settles, but the title is a
+  // memoized lookup and the body is a fresh multi-KB scan. Same verdict, cheaper order.
+  if (hasExplicitIdleTitle(input.record, input.rendererTitle) || input.readPositiveBodyEvidence()) {
     return READY_STRONG
   }
   // Why beside the title lane, not after the veto: both are tier 1, and a first-party `done`
@@ -302,9 +309,6 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       input.readScreenInputVeto() === false
       ? READY_STRONG
       : { kind: 'pending', quietForeground: 'closed' }
-  }
-  if (input.readPositiveBodyEvidence()) {
-    return READY_STRONG
   }
   // Why after the veto: a first-party working account outranks inferred body evidence.
   // Why before the working title: Codex can leave a stale spinner title after a turn, and a

@@ -1,8 +1,9 @@
 import { useCallback } from 'react'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
 import { savePinnedIds } from '../storage/preferences'
-import type { useForgetHostClient } from '../transport/client-context'
+import type { useForgetHostClient } from '../transport/host-client-hooks'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
 import { isPageHostRemovalUnavailable } from '../transport/page-host-removal-refusal'
 import type { RpcClient } from '../transport/rpc-client'
@@ -95,6 +96,10 @@ export function useHostWorktreeActions(args: {
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
+      // Switch point: a feed-built list keeps no pin cache of its own.
+      if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+        return
+      }
       setPinnedIds((prev) => {
         const next = new Set(prev)
         if (pinned) {
@@ -224,12 +229,12 @@ export function useHostWorktreeActions(args: {
   }, [hostId, leaveHost, forgetHostClient, setActionError, setConfirmRemoveHost])
 
   const navigateFromHostList = useCallback(
-    (target: string) => {
+    (target: string, selectPane = false) => {
       if (!embedded) {
         router.push(target)
         return
       }
-      if (pathname === (target.split('?')[0] ?? target)) {
+      if (!selectPane && pathname === (target.split('?')[0] ?? target)) {
         return
       }
       if (pathname === `/h/${hostId}`) {
@@ -242,7 +247,7 @@ export function useHostWorktreeActions(args: {
   )
 
   const openWorktreeSession = useCallback(
-    (item: Worktree) => {
+    (item: Worktree, paneKey?: string) => {
       const server = serverWorkspaces.hosts.find((host) => host.hostId === item.hostId)
       if (server?.relay === 'update-needed') {
         setServerNotice(serverUpdateNeededNotice(server.label))
@@ -252,7 +257,10 @@ export function useHostWorktreeActions(args: {
       if (routeHost === null) {
         return
       }
-      setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
+      // Switch point: a feed-built list highlights only what the desktop has open.
+      if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+        setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
+      }
       const rowClient = clientForRow(item)
       if (rowClient && connState === 'connected') {
         void worktreeActivate
@@ -267,8 +275,9 @@ export function useHostWorktreeActions(args: {
       // so an absent one builds `/h//session/...` — a pathname the shell's segment rule refuses —
       // rather than the string "undefined", which it would accept as a host named undefined.
       const executionHost = routeHost ? `&executionHost=${encodeURIComponent(routeHost)}` : ''
-      const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}${executionHost}`
-      navigateFromHostList(target)
+      const pane = paneKey ? `&paneKey=${encodeURIComponent(paneKey)}` : ''
+      const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}${executionHost}${pane}`
+      navigateFromHostList(target, Boolean(paneKey))
     },
     [
       client,

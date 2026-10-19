@@ -62,7 +62,8 @@ export function useCombinedDiffViewRestore({
     loadedIndicesRef,
     loadingIndicesRef,
     reloadTimersRef,
-    sectionLoadTokensRef
+    sectionLoadTokensRef,
+    supersededLoadIndicesRef
   } = registry
 
   // Why useState and not `useRef(expr)`: the latter re-reads all three caches on every render and
@@ -180,6 +181,7 @@ export function useCombinedDiffViewRestore({
     loadedIndicesRef.current.clear()
     loadingIndicesRef.current.clear()
     sectionLoadTokensRef.current.clear()
+    supersededLoadIndicesRef.current.clear()
     clearPendingSectionReloadTimers(reloadTimersRef.current)
     loadSchedulerRef.current.reset()
     generationRef.current += 1
@@ -196,6 +198,7 @@ export function useCombinedDiffViewRestore({
     loadingIndicesRef,
     reloadTimersRef,
     sectionLoadTokensRef,
+    supersededLoadIndicesRef,
     setGeneration,
     setSectionHeights,
     setSections,

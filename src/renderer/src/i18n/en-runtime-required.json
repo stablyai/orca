@@ -1,4 +1,9 @@
 {
+  "accounts": {
+    "claude": {
+      "profileSwitching": "Switching applies to the next Claude you start in any tab."
+    }
+  },
   "agentsSidebarIntro": {
     "migrated": {
       "action": "Open Agents"
@@ -381,6 +386,10 @@
           "d07e4b8553": "branch",
           "d16e037f40": "rich"
         },
+        "EditorPanelMarkdownActionsMenu": {
+          "10c39d58c1": "Hide front matter",
+          "8c8b7f5ff5": "Show front matter"
+        },
         "ReviewNotesSendMenuContent": {
           "50f7e753ea": "Sending notes to active agent...",
           "bb9c69a0c9": "Notes sent to active agent.",
@@ -707,6 +716,12 @@
             "scope": "Scope",
             "thisScope": "This",
             "worktreeScope": "Worktree"
+          },
+          "AiVaultScanProgressStrip": {
+            "databaseCount_one": "{{value0}} database",
+            "databaseCount_other": "{{value0}} databases",
+            "fileCount_one": "{{value0}} file",
+            "fileCount_other": "{{value0}} files"
           },
           "AiVaultSessionDetails": {
             "assistant": "Assistant",
@@ -1538,19 +1553,29 @@
           "typographyAdvanced": "Typography"
         },
         "TerminalPane": {
+          "003df129fe": "Split Horizontally",
           "05efc0bada": "true",
+          "1158f8fd55": "New Tab",
           "219aaa59f4": "WSL Distribution",
+          "21f8da2078": "Workspace Setup Script",
           "2503f1e86b": "Used for new WSL terminal panes and local agent detection when the active workspace is not already inside WSL.",
           "29154326bb": "on",
+          "332e8a2872": "Split Vertically",
           "348246b06f": "false",
+          "34a0dfa06e": "Where the repository setup script runs when a new workspace is created.",
           "5936387ddd": "auto",
           "5fe79a5e56": "Choose which WSL distribution new WSL terminals and local agent scans use.",
+          "623e62df99": "Split horizontally",
+          "691ce810e0": "Split vertically",
+          "6c6a054a1c": "Run in a new tab",
+          "a9d47451d1": "\"New Tab\" opens the setup command in a background tab titled \"Setup\" without stealing focus.",
           "ab20575a8a": "off",
           "ab3a1f9068": "wsl.exe",
           "adbafefe56": "custom",
           "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
           "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
           "cc8c5ca224": "Windows default",
+          "d23b43c5be": "Setup Script Location",
           "d78fc4fdef": "Loading distributions"
         },
         "TerminalSettingsPreview": {
@@ -1823,6 +1848,18 @@
           }
         },
         "terminal": {
+          "search": {
+            "2610ee3b56": "Where the repository setup script runs when a new workspace is created: a vertical split (default), a horizontal split, or a background tab titled 'Setup'.",
+            "4529806908": "setup",
+            "5be2d67678": "Setup Script Location",
+            "6b659fff2a": "script",
+            "7a48c7715b": "workspace",
+            "b872de3926": "location",
+            "c047f398cc": "launch",
+            "de7bc1d5f5": "split",
+            "f44643328e": "tab",
+            "fd6c24313d": "new"
+          },
           "windows": {
             "search": {
               "02c772582a": "linux",
@@ -2377,13 +2414,16 @@
           },
           "WorkspaceSpaceCompactPanel": {
             "2837dc7c72": "cancelling",
+            "9be86c46a0": "Freeable",
             "bef4dc0457": "{{value0}} reclaimable · {{value1}} unavailable"
           },
           "WorkspaceSpaceManagerPanel": {
             "02b27c2230": "workspace",
             "1cc6cd4c0f": "workspaces",
             "433bb7f595": "ok",
-            "d254f04097": "cancelling"
+            "83f1a0a932": "Reclaimable",
+            "d254f04097": "cancelling",
+            "d595295d7d": "{{value0}} can be reclaimed from linked worktrees."
           },
           "resource": {
             "manager": {
@@ -2409,17 +2449,26 @@
             "96354ed249": "Split Up",
             "966feb9ad5": "Split Right"
           },
+          "EditorFileTabCloseButton": {
+            "a768f428f1": "Close tab"
+          },
           "EditorFileTabContextMenu": {
             "1d04b1630b": "Split Down",
             "6b3efb106e": "Split Up",
             "e3ff145b98": "Split Left",
             "f7c3d7d5af": "Split Right"
           },
+          "QuickLaunchButton": {
+            "chatLoading": "Checking chat support…"
+          },
           "SortableTabContextMenu": {
             "0ce4bae39d": "Split Left",
             "21132389e9": "Split Right",
             "591f9b12c1": "Split Up",
             "af80ed83c1": "Split Down"
+          },
+          "TabBar": {
+            "ab589350e5": "Could not build launch command for {{value0}}."
           },
           "TabBarQuickCommandsButton": {
             "c781f992e4": "destructive"
@@ -2672,6 +2721,13 @@
           "candidateRow": {
             "contextCount": "Context: {{value0}}"
           }
+        },
+        "space": {
+          "WorkspaceSpacePage": {
+            "45f6302dbc": "Space",
+            "8d0048e1cb": "Workspace disk usage and reclaimable worktree storage.",
+            "e8d6ba11ab": "Beta"
+          }
         }
       }
     },
@@ -2847,11 +2903,12 @@
         "imageUnsupported": "Image paste is not supported for this agent."
       },
       "failureWords": {
-        "accountSwitchInProgress": "A Claude account switch is in progress. Try again after it finishes.",
+        "accountSwitchInProgress": "{{agent}}'s setup is changing on this host. Try again after it finishes.",
         "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
         "agentCommandNotSignedIn": "Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.",
         "agentNotSignedIn": "Sign in to {{agent}}.",
         "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
+        "antigravityNotSignedIn": "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity.",
         "argumentsMissingValue": "Saved Arguments need a value for {{option}}.",
         "argumentsMultipleValues": "Saved Arguments give {{option}} more than one value.",
         "argumentsPositionalPrompt": "Saved Arguments include a prompt.",
@@ -2896,6 +2953,7 @@
         "couldNotStopTheAgent": "Couldn't stop the agent.",
         "editSavedArguments": "Edit them in Settings > Agents > Arguments.",
         "emptyMessage": "This message is empty, so it was not sent.",
+        "commandUnavailable": "This command isn't available in {{agent}} chats, so it was not sent.",
         "historyInOtherAccount": "This chat's history is in another Claude account. Switch back to that account to continue it.",
         "historyTooLarge": "This conversation's history is too large to restore here.",
         "hostFault": "Orca ran into a problem, so this didn't go through.",
@@ -2911,8 +2969,8 @@
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
         "notSignedIn": "{{agent}} is not signed in.",
         "previousExitUnverifiable": "Couldn't stop {{agent}} from before.",
-        "providerExitedRejection": "{{agent}} stopped before this message was sent.",
         "providerExitedAnswer": "{{agent}} has stopped, so your answer was not sent. Send a message to continue.",
+        "providerExitedRejection": "{{agent}} stopped before this message was sent.",
         "providerExitedRow": "{{agent}} stopped while this response was in progress. You can continue in this conversation.",
         "providerRateLimited": "{{agent}} is rate-limited and retrying.",
         "providerRejected": "{{agent}} didn't accept this message.",
@@ -2926,6 +2984,7 @@
         "queueFull": "Too many messages were waiting for the agent, so this one was not sent.",
         "runCommandAgain": "Run /{{command}} again.",
         "runCommandWhenDone": "Run /{{command}} when it's done.",
+        "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "sendToTryAgain": "Send your message to try again.",
         "sessionNotRestored": "{{agent}} couldn't reopen its earlier session, so this chat continues in a new one. {{agent}} doesn't remember the earlier messages.",
@@ -2949,8 +3008,21 @@
         "other": "Other…"
       },
       "queuedMessages": {
-        "sendConfirmBody_one": "You are about to send a message. Do you want to clear the {{count}} message previously queued?",
-        "sendConfirmBody_other": "You are about to send a message. Do you want to clear the {{count}} messages previously queued?"
+        "imageCount_one": "{{count}} image",
+        "imageCount_other": "{{count}} images"
+      },
+      "receipt": {
+        "cancelled": "Cancelled",
+        "cancelledBy": "Cancelled on {{device}}",
+        "emptyAnswer": "Empty answer",
+        "resolved": "Resolved",
+        "resolver": "Answered on {{device}}",
+        "unavailable": "Selected answer unavailable"
+      },
+      "resumeInNewChat": {
+        "exitUnconfirmedFromTerminal": "Orca can't confirm {{agent}} has exited in its terminal. Stop what's running there or close the terminal, then open this conversation from Session History.",
+        "exitUnconfirmed": "Orca can't confirm {{agent}} has exited in its terminal. Stop what's running there or close the terminal, then try again.",
+        "cannotResume": "This {{agent}} conversation can't be resumed in a native chat."
       },
       "state": {
         "empty": {
@@ -3205,6 +3277,11 @@
       "reopened_other": "Reopened {{count}} terminals",
       "resumed_one": "{{count}} agent session resumed.",
       "resumed_other": "{{count}} agent sessions resumed."
+    }
+  },
+  "workspaceSpace": {
+    "chart": {
+      "workspaceSizes": "Workspace sizes"
     }
   },
   "worktreeJumpPalette": {

@@ -1,16 +1,22 @@
 // `agentSession.threadGoal`: change the provider thread's goal through the same
 // admission, ledger and journal path every other session mutation takes.
 
-import { refuse, type AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
+import {
+  refuse,
+  type AgentSessionRefusalReason,
+  type AgentSessionWireRefusal
+} from '../../../shared/agent-session-wire-refusals'
 import type {
   AgentJournalItemIdentity,
   AgentJournalThreadGoal
 } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import type {
-  AgentSessionMutationEnvelope,
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session-thread-goal-wire'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
@@ -18,8 +24,22 @@ import { contextStructuredAgentSessionCurrentWork } from './structured-agent-ses
 function refused(
   reason: AgentSessionRefusalReason<'agent_session_operation_invalid'>,
   message: string
-): TurnOutcome<AgentSessionThreadGoalResult> {
+): { ok: false; refusal: AgentSessionWireRefusal } {
   return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
+}
+
+const goalsUnsupported = () =>
+  refused('goalsUnsupported', 'Goals are unavailable for this chat session.')
+
+/** The refusal for an agent with no goals; null when it has them. Needs no running agent. */
+export function refuseThreadGoalUnsupported(
+  adapter: Pick<StructuredAgentSessionAdapter, 'changeThreadGoal'>,
+  agents: Pick<StructuredAgentRegistry, 'capabilities'>,
+  agent: string | undefined
+): { ok: false; refusal: AgentSessionWireRefusal } | null {
+  return adapter.changeThreadGoal && agent && agents.capabilities(agent)?.threadGoal
+    ? null
+    : goalsUnsupported()
 }
 
 /** Keyed by the operation, so a replayed set upserts its one objective row. */
@@ -48,8 +68,11 @@ export async function performThreadGoalChange(
   ctx: AgentSessionTurnContext,
   input: { clientOperationId: string; change: AgentSessionThreadGoalChange }
 ): Promise<TurnOutcome<AgentSessionThreadGoalResult>> {
-  if (!ctx.adapter.changeThreadGoal || !ctx.agents.capabilities(ctx.agent)?.threadGoal) {
-    return refused('goalsUnsupported', 'Goals are unavailable for this chat session.')
+  if (
+    !ctx.adapter.changeThreadGoal ||
+    refuseThreadGoalUnsupported(ctx.adapter, ctx.agents, ctx.agent)
+  ) {
+    return goalsUnsupported()
   }
   const { change } = input
   const identity = objectiveIdentity(input.clientOperationId)

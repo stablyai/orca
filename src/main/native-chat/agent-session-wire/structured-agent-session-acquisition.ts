@@ -76,8 +76,7 @@ export async function acquireOwner(
       spawnToken,
       ...(permissionMode ? { permissionMode } : {}),
       ...(input.eventSink ? { events: input.eventSink } : {}),
-      ...(input.acquireSignal ? { signal: input.acquireSignal } : {}),
-      optionRevision: input.optionRevision
+      ...(input.acquireSignal ? { signal: input.acquireSignal } : {})
     })
     const progress = input.onStartupAttempt?.(attempt)
     const acquired = await input.adapter.acquire({
@@ -129,7 +128,7 @@ export async function acquireOwner(
     const proved = await input.store.proveOwner({
       sessionId: record.sessionId,
       fence,
-      link: acquired.link,
+      ...(acquired.link ? { link: acquired.link } : {}),
       now: input.now(),
       ...(options ? { options } : {})
     })

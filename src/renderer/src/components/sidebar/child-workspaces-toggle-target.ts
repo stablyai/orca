@@ -13,11 +13,11 @@ import {
   getPublishedVisibleWorktreeShortcutTargets
 } from './visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
-import { getWorktreeLineageGroupKey } from './worktree-list/grouping/group-keys'
+import { getWorktreeLineageGroupKey } from '../../../../shared/sidebar-list/group-keys'
 import {
   getHostScopedWorktreeLineageInputs,
   getWorktreeLineageAncestors
-} from './worktree-lineage-projection'
+} from '../../../../shared/sidebar-list/worktree-lineage-projection'
 
 type ChildWorkspacesToggleState = Pick<
   AppState,

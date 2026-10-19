@@ -1,7 +1,14 @@
 import { BrowserError } from '../browser/browser-error'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
 import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
-import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
+import {
+  browserUnavailableError,
+  setRuntimeBrowserCommandsFactory
+} from '../runtime/runtime-browser-commands-factory'
+import {
+  closeBrowserPageWithoutEngine,
+  closeRegisteredBrowserClientPage
+} from '../runtime/browser/browser-client-page-close'
 import {
   resolveOrcadBrowserProvider,
   type OrcadBrowserProvider,
@@ -27,16 +34,24 @@ export function startOrcadBrowserProvider(options: OrcadBrowserProviderOptions):
           if (property === 'then' || typeof property !== 'string') {
             return undefined
           }
-          return (...args: unknown[]) => {
+          const forward = (args: unknown[]): unknown => {
             if (controller.signal.aborted || !provider?.isAvailable()) {
-              throw new BrowserError(
-                BROWSER_UNAVAILABLE_ERROR_CODE,
-                'Browser automation is unavailable on this host.'
-              )
+              throw browserUnavailableError()
             }
             commands ??= provider.factory(host)
             return callBrowserCommand(commands, property, args)
           }
+          if (property === 'browserTabClose') {
+            // Why: client-hosted pages live in this runtime's registry, never in the provider.
+            return async (...args: Parameters<RuntimeBrowserCommands['browserTabClose']>) => {
+              const params = args[0] ?? {}
+              if (controller.signal.aborted || !provider?.isAvailable()) {
+                return closeBrowserPageWithoutEngine(host, params, browserUnavailableError)
+              }
+              return (await closeRegisteredBrowserClientPage(host, params)) ?? forward(args)
+            }
+          }
+          return (...args: unknown[]) => forward(args)
         }
       })
     },

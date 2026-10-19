@@ -47,15 +47,6 @@ export function setClaudeStructuredSessionOption(
   input: { key: string; value: string },
   timeoutMs: number | undefined
 ): Promise<Readonly<Record<string, string>>> {
-  // Each write is a control request the CLI answers only after initialize.
-  if (session.startup.state !== 'proven') {
-    return Promise.reject(
-      new AgentSessionOptionRejectedError(
-        'Claude is still starting; options can be changed once it is ready.',
-        'providerStarting'
-      )
-    )
-  }
   return setClaudeStructuredOption(session, input, timeoutMs)
 }
 

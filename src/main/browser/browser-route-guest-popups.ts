@@ -16,6 +16,7 @@ import {
 } from './browser-route-guest-popup-window-options'
 import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
 import { allowNativeBrowserPopup, isNativeBrowserPopupRequest } from './browser-popup-native-window'
+import { allowPageUnload } from './browser-guest-unload-policy'
 
 /** Bounded so a page holding a real gesture stream cannot paper the desktop in windows. */
 export const MAX_BROWSER_ROUTE_GUEST_POPUPS = 4
@@ -103,6 +104,8 @@ export function createBrowserRouteGuestPopupController(input: {
       contents.setWindowOpenHandler(buildWindowOpenHandler(contents, gesture))
       contents.on('will-navigate', onPopupNavigate)
       contents.on('will-redirect', onPopupNavigate)
+      // Why here: route popups skip attachGuestPolicies, so the browsing guests' unload rule never reaches them.
+      contents.on('will-prevent-unload', allowPageUnload)
       // Ownership before first load: a download can start on the popup's very first navigation, and
       // an unowned route popup fails closed instead of routing to the opener's remote workspace.
       // Descendants register against the root opener, so a chain never needs walking.

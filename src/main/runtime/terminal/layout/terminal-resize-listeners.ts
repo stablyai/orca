@@ -17,10 +17,8 @@ import type {
   RuntimeTerminalOrphanAdoptionRequest,
   RuntimeTerminalOrphanAdoptionResult
 } from '../../../../shared/runtime-terminal-contracts'
-import {
-  classifyWorkerTerminalProcessIncarnation,
-  parseWorkerTerminalHostScope
-} from '../../orchestration/worker-terminal-process-liveness'
+import { classifyWorkerTerminalProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
+import { parseWorkerTerminalHostScope } from '../../../../shared/worker-terminal-host-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../shared/orchestration-task-display'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'

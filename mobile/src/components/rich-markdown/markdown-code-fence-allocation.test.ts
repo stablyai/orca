@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
 import { MOBILE_MARKDOWN_EDIT_MAX_BYTES } from '../../../../src/shared/mobile-markdown-document'
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
@@ -49,10 +50,12 @@ describe('code-block fence sizing', () => {
   it('serializes an admitted editable document without collecting every backtick run', () => {
     document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
     const posted: MobileRichMarkdownEditorMessage[] = []
-    const editorDocument = createRichMarkdownEditorDocument({
-      postToHost: (message) => posted.push(message),
-      keyboardInsetSource: () => null
-    })
+    const editorDocument = createRichMarkdownEditorDocument(
+      quietRichMarkdownEditorHost({
+        postToHost: (message) => posted.push(message),
+        keyboardInsetSource: () => null
+      })
+    )
     try {
       const code = '`a'.repeat((MOBILE_MARKDOWN_EDIT_MAX_BYTES - 40) / 2)
       const markdown = `\`\`\`ts\n${code}\n\`\`\``

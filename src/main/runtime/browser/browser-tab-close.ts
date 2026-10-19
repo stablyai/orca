@@ -1,5 +1,5 @@
 import type { RuntimeBrowserTabQueries } from './browser-tab-queries'
-import { closeRuntimeBrowserClientPage } from '../runtime-browser-client-page-creation'
+import { retireRuntimeBrowserClientPage } from './browser-client-page-close'
 import { BrowserError } from '../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
@@ -55,27 +55,7 @@ export class RuntimeBrowserTabClose {
       }
     }
     if (clientPage) {
-      const authority = this.host.getBrowserHostLeaseRegistry()
-      // Why: a retained page whose host quit has no placement left to command, and asking the
-      // absent host first would refuse the close and strand the tab with no way to dismiss it.
-      if (authority.getPlacement(clientPage.browserPageId)) {
-        await closeRuntimeBrowserClientPage(authority, {
-          browserPageId: clientPage.browserPageId,
-          placement: clientPage.placement
-        })
-      }
-      if (!pages.retirePage(clientPage.browserPageId, clientPage.placement)) {
-        throw new Error('browser_page_placement_stale')
-      }
-      if (this.host.retireRuntimeOwnedBrowserSessionTab) {
-        this.host.retireRuntimeOwnedBrowserSessionTab(
-          clientPage.workspaceId,
-          clientPage.browserPageId
-        )
-      } else {
-        this.host.notifyHeadlessBrowserSessionTabsChanged?.(clientPage.workspaceId)
-      }
-      return { closed: true }
+      return retireRuntimeBrowserClientPage(this.host, clientPage)
     }
     const namedPageId =
       typeof params.page === 'string' && params.page.length > 0 ? params.page : null

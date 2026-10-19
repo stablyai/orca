@@ -70,7 +70,9 @@ export async function executeAgentLaunch(
           : {}),
         ...(execution.callerRendersStructured === false ? { callerRendersStructured: false } : {})
       },
-      settings: readAgentLaunchModeSettings(runtime, intent.nativeChatDefault),
+      settings: execution.terminalOnly
+        ? undefined
+        : readAgentLaunchModeSettings(runtime, intent.nativeChatDefault),
       ...(execution.terminalOnly ? { terminalOnly: true } : {}),
       vocabulary
     })

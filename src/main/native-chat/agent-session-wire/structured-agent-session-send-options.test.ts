@@ -97,10 +97,7 @@ describe('an opening message created with a model and effort', () => {
     options: Record<string, string> = OPENED
   ) {
     const start = rest.adapter.acquire.getMockImplementation()!
-    rest.adapter.acquire.mockImplementationOnce(async (input) => ({
-      ...(await start(input)),
-      providerChildPhase: 'starting'
-    }))
+    rest.adapter.acquire.mockImplementationOnce(rest.heldStart(start))
     const first = { clientMessageId: hostTestOperationId(), body: hostTestMessage('opening') }
     const params = createTestParams(first, { options })
     expect(
@@ -116,11 +113,7 @@ describe('an opening message created with a model and effort', () => {
         fence: rest.store.getRecord(SESSION)!.lease.runtimeFence,
         acquisitionGeneration: (await rest.adapter.acquire.mock.results[0]!.value)
           .acquisitionGeneration,
-        reportedOptions: options,
-        restoreSkippedOptions: [],
-        optionRevision: rest.host
-          .collaboratorsForTests()
-          .runtimeState.optionRevisions.current(SESSION)
+        reportedOptions: options
       })
     return { first, proveStart }
   }
@@ -140,10 +133,7 @@ describe('an opening message created with a model and effort', () => {
           fields
         })
       }
-      expect(await rest.host.setOption(REST_TEST_CALLER, { envelope, ...fields })).toMatchObject({
-        ok: true
-      })
-      expect(rest.store.getRecord(SESSION)?.options?.model).toBe('sonnet')
+      const picked = rest.host.setOption(REST_TEST_CALLER, { envelope, ...fields })
       const ranOn: (string | undefined)[] = []
       rest.adapter.dispatch.mockImplementationOnce(async () => {
         ranOn.push(rest.store.getRecord(SESSION)?.options?.model)
@@ -152,6 +142,8 @@ describe('an opening message created with a model and effort', () => {
       await proveStart()
       await vi.waitFor(() => expect(rest.adapter.dispatch).toHaveBeenCalledOnce())
       expect(ranOn).toEqual(['opus'])
+      expect(await picked).toMatchObject({ ok: true })
+      expect(rest.store.getRecord(SESSION)?.options?.model).toBe('sonnet')
     } finally {
       await rest.dispose()
     }
@@ -203,20 +195,24 @@ describe('a send carrying its model and effort', () => {
       await eventually(() => expect(starting.starts).toHaveBeenCalled())
       // Picked while the message waits for its agent to start.
       const fields = { key: 'model', value: 'gpt-b' }
-      await starting.host.setOption(CALLER, {
+      const picked = starting.host.setOption(CALLER, {
         envelope: starting.envelope(fields, 'agentSession.setOption', hostTestOperationId()),
         ...fields
       })
-      expect(starting.store.getRecord(SESSION)?.options?.model).toBe('gpt-b')
+      const setOption = vi.mocked(starting.setOption)
+      starting.dispatch.mockImplementationOnce(async () => {
+        expect(setOption.mock.calls.at(-1)?.[0]).toMatchObject({ key: 'model', value: 'gpt-a' })
+        expect(setOption.mock.invocationCallOrder.at(-1)).toBeLessThan(
+          starting.dispatch.mock.invocationCallOrder.at(-1) ?? 0
+        )
+        return acceptedDispatch()
+      })
       await starting.proveStart()
       await eventually(async () =>
         expect((await starting.submission(sent.id))?.handedOverAt).toBeDefined()
       )
-      const setOption = vi.mocked(starting.setOption)
-      expect(setOption.mock.calls.at(-1)?.[0]).toMatchObject({ key: 'model', value: 'gpt-a' })
-      expect(setOption.mock.invocationCallOrder.at(-1)).toBeLessThan(
-        starting.dispatch.mock.invocationCallOrder.at(-1) ?? 0
-      )
+      expect(await picked).toMatchObject({ ok: true })
+      expect(starting.store.getRecord(SESSION)?.options?.model).toBe('gpt-b')
     } finally {
       await starting.dispose()
     }

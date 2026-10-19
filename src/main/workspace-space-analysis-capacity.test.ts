@@ -37,6 +37,11 @@ vi.mock('./repo-worktrees', () => ({
   listRepoWorktrees: listRepoWorktreesMock
 }))
 
+vi.mock('./workspace-space-scan-worker-client', async () => {
+  const { scanLocalWorkspaceSpaceWorktree } = await import('./workspace-space-local-scan')
+  return { scanLocalWorkspaceSpaceWorktreeViaWorker: scanLocalWorkspaceSpaceWorktree }
+})
+
 import { analyzeWorkspaceSpace } from './workspace-space-analysis'
 
 function createStore(repo: Repo): Store {

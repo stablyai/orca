@@ -1,6 +1,5 @@
-import { createHash } from 'node:crypto'
 import { writeFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/local-build-compatibility-contract'
@@ -11,7 +10,7 @@ import { compareDottedVersions } from '../orcad/native-host-abi'
 import { DaemonClient } from './client'
 import { DaemonEndpointOwnershipError, holdDaemonAdoptionLease } from './daemon-endpoint-adoption'
 import { buildDaemonScriptArgs, type DaemonChildSpawnOptions } from './daemon-launched-child-spawn'
-import { PROTOCOL_VERSION } from './daemon-protocol-version'
+import { macDaemonJobLabel } from './macos-daemon-job-label'
 import type { DaemonProcessHandle } from './daemon-spawner'
 import { DAEMON_SHUTDOWN_TIMEOUT_MS } from './daemon-shutdown-deadline'
 import {
@@ -28,8 +27,15 @@ import {
   readMacDaemonJobState,
   stopMacDaemonJob
 } from './macos-daemon-job-state'
+import { recoverRetiredMacDaemonJob } from './macos-retired-daemon-recovery'
+import { PROTOCOL_VERSION } from './daemon-protocol-version'
 
-type MacDaemonLaunchOptions = Omit<DaemonChildSpawnOptions, 'forkEntryPath' | 'relocatedExecPath'>
+type MacDaemonLaunchOptions = Omit<
+  DaemonChildSpawnOptions,
+  'forkEntryPath' | 'relocatedExecPath'
+> & {
+  runtimeDir: string
+}
 
 /** Why a launch fell back to forking the daemon from the app. */
 export type MacStableLaunchFallbackReason =
@@ -43,11 +49,7 @@ const BOOTSTRAP_TIMEOUT_MS = 10_000
 const STARTUP_TIMEOUT_MS = 10_000
 const JOB_CHECK_INTERVAL_MS = 250
 
-/** One job per profile and protocol, matching the one daemon each of them may run. */
-export function macDaemonJobLabel(userDataPath: string): string {
-  const profileKey = createHash('sha256').update(resolve(userDataPath)).digest('hex').slice(0, 16)
-  return `com.stablyai.orca.terminal.${profileKey}.v${PROTOCOL_VERSION}`
-}
+export { macDaemonJobLabel } from './macos-daemon-job-label'
 
 function buildMacDaemonLaunchJob(
   options: MacDaemonLaunchOptions,
@@ -94,6 +96,23 @@ function fallBackToFork(
     error
   )
   return null
+}
+
+/**
+ * A label held by a service that retired its endpoint but never exited would refuse every launch;
+ * the recovery verifies that retirement first, so a live or unreadable service is never touched.
+ */
+async function recoverBlockingMacDaemonJob(options: MacDaemonLaunchOptions): Promise<boolean> {
+  try {
+    return await recoverRetiredMacDaemonJob(
+      options.userDataPath,
+      options.runtimeDir,
+      PROTOCOL_VERSION
+    )
+  } catch (error) {
+    console.warn('[daemon] Could not recover the earlier macOS terminal service', error)
+    return false
+  }
 }
 
 /**
@@ -145,8 +164,13 @@ export async function launchMacDaemonFromStableBundle(
     Date.now() + DAEMON_SHUTDOWN_TIMEOUT_MS + 2_000,
     deadlineMs - BOOTSTRAP_TIMEOUT_MS - STARTUP_TIMEOUT_MS
   )
-  if (!(await releaseMacDaemonJob(service, releaseByMs))) {
-    throw new Error('A macOS terminal service from an earlier launch is still registered')
+  if (
+    !(await releaseMacDaemonJob(service, releaseByMs)) &&
+    !(await recoverBlockingMacDaemonJob(options))
+  ) {
+    throw new Error(
+      'A macOS terminal service from an earlier launch is still registered. Restart terminals from Settings → Manage Sessions.'
+    )
   }
   // The inherited environment can contain credentials; never leave it on disk after bootstrap.
   const jobPath = join(bundle.directory, `launch-${options.launchNonce}.plist`)

@@ -452,6 +452,42 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     expect(request).not.toHaveProperty('orchestrationRequestId')
   })
 
+  it('does not crash while resolving terminal.wait defaults without params', async () => {
+    const userDataPath = makeRuntimeClientFixture()
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request: unknown = JSON.parse(String(data).trim())
+        if (
+          typeof request !== 'object' ||
+          request === null ||
+          !('id' in request) ||
+          typeof request.id !== 'string'
+        ) {
+          throw new Error('Expected a runtime request with an id')
+        }
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: { satisfied: true },
+            _meta: { runtimeId: 'runtime-1' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint, 'token', process.pid)
+
+    const client = new RuntimeClient(userDataPath, 100)
+    const response = await client.call<{ satisfied: boolean }>('terminal.wait')
+
+    expect(response.result).toEqual({ satisfied: true })
+  })
+
   it('allows a per-call timeout override for long runtime requests', async () => {
     const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')

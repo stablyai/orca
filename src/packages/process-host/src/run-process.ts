@@ -10,6 +10,8 @@ import { hasSpawnObserver, notifySpawnObserver } from './spawn-observer'
 import { createOutputSink } from './bounded-output-sink'
 import { createChildTerminationReporter } from './child-termination-reporter'
 
+export { WindowsCmdLineBreakError } from './windows-command-line'
+
 import type {
   PipedChildProcess,
   PipedProcessSpec,
@@ -119,6 +121,7 @@ export function runProcess(
     })
     child.stderr?.on('data', (chunk: Buffer | string) => {
       stderr.write(chunk)
+      spec.onStderr?.(chunk)
       if (spec.killOnOutputLimit && stderr.truncated()) {
         stopAndSettle()
       }

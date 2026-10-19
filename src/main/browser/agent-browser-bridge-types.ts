@@ -43,6 +43,8 @@ export type ResolvedBrowserCommandTarget = {
 
 export type AgentBrowserCleanupOptions = {
   closeTimeoutMs?: number
+  /** Retire only the helper and proxy; commands waiting on the page still run, on a fresh session. */
+  keepQueuedCommands?: boolean
 }
 
 export type BrowserMouseModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'

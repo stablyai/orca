@@ -15,21 +15,7 @@ import { waitForRecipeJson } from './serve-recipe-json'
 import { superviseForegroundServe } from './serve-update-supervisor'
 import { isSupervisedSpawnHeld } from './serve-supervised-stop'
 import { redactingSpawn, shouldRedactSupervisedStdout } from './serve-pairing-redaction'
-
-export type ServeOrcaAppArgs = {
-  json?: boolean
-  port?: string | null
-  pairingAddress?: string | null
-  noPairing?: boolean
-  mobilePairing?: boolean
-  grantDesktopControl?: boolean
-  recipeJson?: boolean
-  projectRoot?: string | null
-  /** Starts Electron serve despite a remembered macOS startup abort in this environment. */
-  force?: boolean
-  /** Restart the server under a service manager instead of exiting with it; never inferred. */
-  supervise?: boolean
-}
+import { orcadServeArgs, type ServeOrcaAppArgs } from '../../shared/orcad-serve-argv'
 
 /** A first run may download and verify the pinned Node; bound it well past that. */
 const SELECTION_TIMEOUT_MS = 10 * 60_000
@@ -84,11 +70,13 @@ export function serveWithOrcad(
   args: ServeOrcaAppArgs,
   userDataPath: string,
   /** The caller's environment without `ELECTRON_RUN_AS_NODE`. */
-  baseEnv: NodeJS.ProcessEnv
+  baseEnv: NodeJS.ProcessEnv,
+  /** The app's browser client; the slot does not carry one, so orcad serves it from here. */
+  webClientRoot?: string
 ): Promise<number> {
   const spec: ProcessSpec = {
     program: selection.runtime,
-    args: [selection.entry, ...orcadServeArgs(args)],
+    args: [selection.entry, ...orcadServeArgs(args, webClientRoot)],
     detached: args.recipeJson === true,
     cwd: dirname(selection.entry),
     stdio: args.recipeJson === true ? ['ignore', 'pipe', 'inherit'] : 'inherit',
@@ -116,22 +104,4 @@ export function serveWithOrcad(
     handoffPath: null,
     expectedHandoff: null
   })
-}
-
-export function serveOptionArgs(args: ServeOrcaAppArgs, prefix: '--' | '--serve-'): string[] {
-  return [
-    ...(args.json ? [`${prefix}json`] : []),
-    ...(args.port ? [`${prefix}port`, args.port] : []),
-    ...(args.pairingAddress ? [`${prefix}pairing-address`, args.pairingAddress] : []),
-    ...(args.noPairing ? [`${prefix}no-pairing`] : []),
-    ...(args.mobilePairing ? [`${prefix}mobile-pairing`] : []),
-    ...(args.grantDesktopControl ? [`${prefix}grant-desktop-control`] : []),
-    ...(args.recipeJson && args.projectRoot
-      ? [`${prefix}recipe-json`, `${prefix}project-root`, args.projectRoot]
-      : [])
-  ]
-}
-
-export function orcadServeArgs(args: ServeOrcaAppArgs): string[] {
-  return ['--bind', '0.0.0.0', ...serveOptionArgs(args, '--')]
 }

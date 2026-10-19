@@ -16,7 +16,7 @@ import {
   runtimeTargetForOwnerEnvironment
 } from '../../runtime/runtime-client-target'
 import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
-import { getFolderWorkspaceHostId } from './folder-workspace-catalog'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
 
 type FolderPathStatusSnapshotState = Pick<
   AppState,

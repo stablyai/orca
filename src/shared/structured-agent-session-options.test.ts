@@ -19,7 +19,7 @@ function viewModel(
   held: Readonly<Record<string, string>>
 ) {
   const model = structuredAgentSessionOptionSnapshot(
-    structuredAgentSessionOptionView(state, seed, held, true)
+    structuredAgentSessionOptionView(state, seed, held)
   ).find((descriptor) => descriptor.id === 'model')
   return model?.kind.type === 'select' ? model.kind.currentValue : undefined
 }
@@ -284,7 +284,7 @@ describe('structured agent session options', () => {
     // A saved pick the host's list does not name shows the quiet placeholder, never its raw id.
     expect(
       structuredAgentSessionOptionSnapshot(
-        structuredAgentSessionOptionView(seeded, { model: 'gpt-next' }, {}, true)
+        structuredAgentSessionOptionView(seeded, { model: 'gpt-next' }, {})
       )
     ).toEqual([expect.objectContaining({ id: 'model', settable: false, valueSource: 'unknown' })])
     // Before the host answers, and on the built-in list, no saved pick is named.

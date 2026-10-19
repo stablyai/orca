@@ -35,9 +35,12 @@ export type TerminalHostInspectionTier = 'full' | 'cheap'
 export async function inspectTerminalHostProcess(args: {
   sessionId: string
   session: Session | null
+  currentSession?: () => Session | undefined
   expectedIncarnationId?: string
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
+  /** See `PtyProcessInspectionOptions`. */
+  ignoreDetached?: boolean
   retiredIncarnation?: RetiredIncarnation
   authorityGeneration: string
   nextObservationEpoch: () => number
@@ -84,17 +87,24 @@ export async function inspectTerminalHostProcess(args: {
   let childProcessEvidence: PtyChildProcessVerdict | undefined = session.processNameIsSpawnFile
     ? 'unverifiable'
     : undefined
-  if (session.processNameIsSpawnFile && process.platform === 'win32' && incarnationMatches) {
-    foregroundProcess = await session.confirmForegroundProcess()
-    childProcessEvidence = session.inspectChildProcesses()
-  }
   let evidence: RemoteForegroundEvidence
   if (!incarnationMatches) {
     evidence = unverifiableEvidence(args, session, 'incarnation_mismatch')
+  } else if (process.platform === 'win32') {
+    if (session.processNameIsSpawnFile) {
+      foregroundProcess = await session.confirmForegroundProcess()
+    }
+    // A steady-state poll never decides adoption or close, so it may read the cached process table.
+    childProcessEvidence = await session.inspectChildProcesses(
+      args.steadyState !== true,
+      args.ignoreDetached === true
+    )
+    // Unverifiable whatever `ps` says, and an MSYS `ps.exe` on PATH would flash a console.
+    evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
       const snapshot = await getStrictProcessTableSnapshotWithAge()
-      if (session.processNameIsSpawnFile && process.platform !== 'win32') {
+      if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess
         childProcessEvidence = inspectSpawnFileChildProcessesFromRows(
@@ -123,6 +133,10 @@ export async function inspectTerminalHostProcess(args: {
       evidence = unverifiableEvidence(args, session, 'process_table_unreadable')
       clearSteadyStateAnchor(session)
     }
+  }
+  if (!session.isAlive || (args.currentSession && args.currentSession() !== session)) {
+    childProcessEvidence = 'unverifiable'
+    evidence = unverifiableEvidence(args, session, 'session_changed')
   }
   const nonShellForeground = foregroundProcess !== null && !isShellProcess(foregroundProcess)
   // Evidence names recognized agents only, so its null must not erase an ordinary command (#18078).

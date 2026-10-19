@@ -101,7 +101,8 @@ vi.mock('../gitea/client', () => ({
   getGiteaAuthStatus: getGiteaAuthStatusMock
 }))
 
-import { _resetPreflightCache, registerPreflightHandlers, runPreflightCheck } from './preflight'
+import { _resetPreflightCache, runPreflightCheck } from '../preflight/agent-detection'
+import { registerPreflightHandlers } from './preflight'
 import {
   defaultAzureDevOpsStatus,
   defaultBitbucketStatus,

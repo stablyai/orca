@@ -1,10 +1,41 @@
+import { failedProviderChildStart } from './structured-agent-session-provider-child'
+import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../shared/structured-agent-session-start-failure-row-key'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import type { StructuredAgentSessionStartFailureWords } from './structured-agent-session-failure-text'
+import type {
+  StructuredAgentSessionStartFailureWords,
+  StructuredAgentSessionStartFailureCause
+} from './structured-agent-session-failure-text'
+import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+
+export function refusedStructuredAgentSessionStart(
+  record: AgentSessionRecord | null,
+  {
+    refusal,
+    diagnostic,
+    argumentProblem,
+    expired
+  }: Extract<StructuredAgentSessionResumeOutcome, { ok: false }>
+): { startKey: null; cause: StructuredAgentSessionStartFailureCause } {
+  if (expired) {
+    return { startKey: null, cause: { failure: agentSessionFailureFact('hostStopped') } }
+  }
+  return {
+    startKey: null,
+    cause: {
+      refusal,
+      ...(diagnostic ? { diagnostic } : {}),
+      ...(argumentProblem ? { argumentProblem } : {}),
+      ...(record?.providerHandleChain.length === 0 ? { newSession: true as const } : {})
+    }
+  }
+}
 
 /** A start that failed, keyed like its row, in the words `structuredAgentSessionStartFailure` gave. */
 export type StructuredAgentSessionStartFailure = StructuredAgentSessionStartFailureWords & {
@@ -43,24 +74,23 @@ export function hasStructuredAgentSessionStartFailureRow(
 
 /**
  * A start the delivery loop needed and did not get: every queued message rejected with the same
- * words, then the start's row. Writes nothing when nothing is still queued: a start whose messages
- * Stop withdrew did not fail anyone.
+ * words, then the start's row. A failed owned open also records its cause before any message.
  */
 export async function recordStructuredAgentSessionStartFailure(
   session: Pick<StructuredAgentSessionHostSession, 'journal'> & { fence: number },
   failure: StructuredAgentSessionStartFailure
 ): Promise<void> {
   const oldest = oldestQueuedSubmission(session)
-  if (!oldest) {
+  const startKey = failure.startKey ?? oldest?.clientMessageId
+  if (startKey === undefined) {
     return
   }
-  const startKey = failure.startKey ?? oldest.clientMessageId
   await session.journal.appendLifecycleBatch({
     settlementId: `start-failure:${startKey}`,
     fence: session.fence,
     recovered: true,
     mutations: [structuredAgentSessionStartFailureRow(startKey, failure)],
-    rejectsQueued: { reason: failure.reason, rejection: failure.rejection }
+    ...(oldest ? { rejectsQueued: { reason: failure.reason, rejection: failure.rejection } } : {})
   })
 }
 
@@ -77,4 +107,23 @@ export function oldestQueuedSubmission(
     }
   }
   return oldest
+}
+
+/** A start that died while this message waited on it — a view's, say — is the message's failed
+ *  start: settled with it, under its key, rather than started again into the same failure. */
+export function startThatFailedWhileQueued(
+  session: StructuredAgentSessionHostSession,
+  oldest: NonNullable<ReturnType<typeof oldestQueuedSubmission>>
+): { startKey: string | null; cause: StructuredAgentSessionStartFailureCause } | null {
+  const ended = failedProviderChildStart(session)
+  if (
+    !ended ||
+    oldest.acceptedSequence === undefined ||
+    ended.endedAt.epoch !== session.journal.cursor().epoch ||
+    ended.endedAt.sequence < oldest.acceptedSequence
+  ) {
+    return null
+  }
+  const cause = structuredAgentSessionEndedChildFailure(ended)
+  return cause ? { startKey: ended.generation, cause } : null
 }

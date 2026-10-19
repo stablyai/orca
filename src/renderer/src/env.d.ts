@@ -6,6 +6,7 @@ import type { languages } from 'monaco-editor'
 import type { MonacoE2EProbe } from './components/editor/monaco-e2e-probe'
 import type { TerminalWorktreeParkingDebugVerdict } from './components/terminal-pane/terminal-parking-e2e-overrides'
 import type { TerminalPtyPreSpawnE2EBarrier } from './components/terminal-pane/terminal-pty-pre-spawn-e2e-barrier'
+import type { LocalLayoutStreamE2EEnd } from './runtime/local-layout-stream-e2e-end'
 
 declare module 'monaco-editor/esm/vs/basic-languages/python/python.js' {
   export const conf: languages.LanguageConfiguration
@@ -137,6 +138,7 @@ declare global {
     __monacoEditorE2E?: MonacoE2EProbe
     __e2ePtyAppliedSizeReadDelayMs?: number
     __terminalPtyPreSpawnE2EBarrier?: TerminalPtyPreSpawnE2EBarrier
+    __endLocalLayoutStreamE2E?: LocalLayoutStreamE2EEnd
   }
 }
 

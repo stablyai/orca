@@ -14,8 +14,8 @@ import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { buildRuntimeTerminalOrphanSession } from './runtime-terminal-orphan-session-adoption'
 import { validateRuntimeTerminalOrphanTopology } from './runtime-terminal-orphan-topology-validation'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../persistence/restoring-sessions/workspace-session-write-rollback'
+import { worktreeIdsEqual } from '../../shared/worktree/id'
 
 type RuntimeTerminalOrphanAdoptionPorts = {
   getPty: (handle: string) => RuntimePtyWorktreeRecord | null
@@ -74,7 +74,7 @@ export async function adoptRuntimeTerminalOrphansFromInventory(args: {
       throw new Error('terminal_orphan_stale')
     }
     if (
-      !runtimeWorktreeIdsEqual(pty.worktreeId, workspace.id) ||
+      !worktreeIdsEqual(pty.worktreeId, workspace.id) ||
       !terminalOrphanExecutionOwnersEqual(
         { connectionId: workspace.connectionId, wslDistro: args.worktreeWslDistro },
         {
@@ -94,7 +94,7 @@ export async function adoptRuntimeTerminalOrphansFromInventory(args: {
         .getLeaves(claim.ptyId)
         .some(
           (owner) =>
-            !runtimeWorktreeIdsEqual(owner.worktreeId, workspace.id) ||
+            !worktreeIdsEqual(owner.worktreeId, workspace.id) ||
             owner.tabId !== claim.tabId ||
             owner.leafId !== claim.leafId
         )
@@ -137,7 +137,7 @@ export async function adoptRuntimeTerminalOrphansFromInventory(args: {
     const binding = persistedBinding(claim.ptyId)
     return (
       binding !== null &&
-      runtimeWorktreeIdsEqual(binding.worktreeId, workspace.id) &&
+      worktreeIdsEqual(binding.worktreeId, workspace.id) &&
       binding.paneKey === paneKey &&
       session.terminalPtyIncarnationsByPaneKey?.[paneKey] === claim.incarnationId
     )
@@ -164,7 +164,7 @@ export async function adoptRuntimeTerminalOrphansFromInventory(args: {
     const existingBinding = persistedBinding(claim.ptyId)
     if (
       existingBinding &&
-      (!runtimeWorktreeIdsEqual(existingBinding.worktreeId, workspace.id) ||
+      (!worktreeIdsEqual(existingBinding.worktreeId, workspace.id) ||
         existingBinding.paneKey !== paneKey)
     ) {
       throw new Error('terminal_orphan_competing_owner')
@@ -177,15 +177,14 @@ export async function adoptRuntimeTerminalOrphansFromInventory(args: {
     const graphOwner = ports.getLeaf(claim.tabId, claim.leafId)
     if (
       graphOwner &&
-      (graphOwner.ptyId !== claim.ptyId ||
-        !runtimeWorktreeIdsEqual(graphOwner.worktreeId, workspace.id))
+      (graphOwner.ptyId !== claim.ptyId || !worktreeIdsEqual(graphOwner.worktreeId, workspace.id))
     ) {
       throw new Error('terminal_orphan_surface_occupied')
     }
     if (
       Object.entries(session.tabsByWorktree).some(
         ([ownerWorktreeId, tabs]) =>
-          !runtimeWorktreeIdsEqual(ownerWorktreeId, workspace.id) &&
+          !worktreeIdsEqual(ownerWorktreeId, workspace.id) &&
           tabs.some((tab) => tab.id === claim.tabId)
       )
     ) {

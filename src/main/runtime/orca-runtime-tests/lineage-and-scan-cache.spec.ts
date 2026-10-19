@@ -288,23 +288,26 @@ describe('OrcaRuntimeService', () => {
       childRepoId: 'repo-child',
       parentRepoId: 'repo-parent',
       childMeta: {},
-      parentMeta: {}
+      parentMeta: {},
+      accepted: true
     },
     {
       boundary: 'known host',
       childRepoId: TEST_REPO_ID,
       parentRepoId: TEST_REPO_ID,
       childMeta: { hostId: 'runtime:child-host' as const },
-      parentMeta: { hostId: 'runtime:parent-host' as const }
+      parentMeta: { hostId: 'runtime:parent-host' as const },
+      accepted: false
     },
     {
       boundary: 'known project',
       childRepoId: TEST_REPO_ID,
       parentRepoId: TEST_REPO_ID,
       childMeta: { projectId: 'project-child' },
-      parentMeta: { projectId: 'project-parent' }
+      parentMeta: { projectId: 'project-parent' },
+      accepted: true
     }
-  ])('rejects manual lineage writes across a $boundary boundary', async (scenario) => {
+  ])('checks manual lineage writes across a $boundary boundary', async (scenario) => {
     const repos = [...new Set([scenario.childRepoId, scenario.parentRepoId])].map((id) => ({
       id,
       path: join(tmpdir(), id),
@@ -344,16 +347,21 @@ describe('OrcaRuntimeService', () => {
     ])
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
-    await expect(
-      runtime.updateManagedWorktreeMeta(`id:${childId}`, {
-        lineage: { parentWorktree: `id:${parentId}` }
-      })
-    ).rejects.toThrow(
-      'Parent worktree must belong to the same repository, execution host, and project.'
-    )
-
-    expect(setWorktreeLineage).not.toHaveBeenCalled()
-    expect(setWorkspaceLineage).not.toHaveBeenCalled()
+    const update = runtime.updateManagedWorktreeMeta(`id:${childId}`, {
+      lineage: { parentWorktree: `id:${parentId}` }
+    })
+    if (scenario.accepted) {
+      await update
+      expect(setWorktreeLineage).toHaveBeenCalledWith(
+        childId,
+        expect.objectContaining({ parentWorktreeId: parentId })
+      )
+      expect(setWorkspaceLineage).toHaveBeenCalled()
+    } else {
+      await expect(update).rejects.toThrow('Parent worktree must be on the same execution host.')
+      expect(setWorktreeLineage).not.toHaveBeenCalled()
+      expect(setWorkspaceLineage).not.toHaveBeenCalled()
+    }
   })
 
   it('clears workspace lineage when manually removing a parent', async () => {

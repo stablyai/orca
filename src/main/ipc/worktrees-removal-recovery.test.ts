@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import * as filesystemAuth from './filesystem-auth'
+import * as scopedRootsInvalidation from './registered-worktree-roots-scoped-invalidation'
 import * as authorizedRootsCache from './registered-worktree-roots-cache'
 import * as localWorktreeFilesystem from '../local-worktree-filesystem'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -126,7 +126,7 @@ describe('registerWorktreeHandlers', () => {
 
   beforeEach(() => {
     runtimeStub = setupWorktreeHandlers()
-    vi.spyOn(filesystemAuth, 'invalidateAuthorizedRootsCacheForRepo').mockClear()
+    vi.spyOn(scopedRootsInvalidation, 'invalidateAuthorizedRootsCacheForRepo').mockClear()
     vi.spyOn(authorizedRootsCache, 'invalidateAuthorizedRootsCache').mockClear()
   })
 
@@ -160,8 +160,8 @@ describe('registerWorktreeHandlers', () => {
       true
     )
 
-    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledOnce()
-    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledWith(
+    expect(scopedRootsInvalidation.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledOnce()
+    expect(scopedRootsInvalidation.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledWith(
       store,
       'repo-1'
     )
@@ -188,8 +188,8 @@ describe('registerWorktreeHandlers', () => {
 
     await handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
 
-    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledOnce()
-    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledWith(
+    expect(scopedRootsInvalidation.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledOnce()
+    expect(scopedRootsInvalidation.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledWith(
       store,
       'repo-1'
     )
@@ -344,8 +344,8 @@ describe('registerWorktreeHandlers', () => {
       worktreeId: 'repo-1::/workspace/feature-wt'
     })
 
-    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledOnce()
-    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledWith(
+    expect(scopedRootsInvalidation.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledOnce()
+    expect(scopedRootsInvalidation.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledWith(
       store,
       'repo-1'
     )

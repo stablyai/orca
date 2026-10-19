@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { readRuntimeMetadata } from './runtime-metadata'
-import { classifyRuntimeLongPoll } from './runtime-rpc'
+import { classifyRuntimeLongPoll } from './runtime-rpc/runtime-rpc-long-poll'
 import { createLongPollServer as createServer } from './runtime-rpc-long-poll-server.test-fixture'
 import {
   sendRequest,
@@ -842,14 +842,12 @@ describe('OrcaRuntimeRpcServer', () => {
     it('does not emit keepalive frames for short RPCs', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()
-      // Why: a 10ms interval means any frame in the first ~100ms of a short
-      // RPC would show up; `status.get` returns in <10ms so no keepalive
-      // should ever fire. Locks in the "keepalive is long-poll-only" invariant
-      // so a future refactor can't silently re-broaden the timer.
-      const server = createServer({
-        runtime,
-        userDataPath,
-        keepaliveIntervalMs: 10
+      const server = createServer({ runtime, userDataPath, keepaliveIntervalMs: 10 })
+      const originalDispatch = server['dispatcher'].dispatch.bind(server['dispatcher'])
+      vi.spyOn(server['dispatcher'], 'dispatch').mockImplementation(async (request, context) => {
+        // Keep the real response pending long enough to expose an incorrectly armed timer.
+        await sleep(50)
+        return originalDispatch(request, context)
       })
       await server.start()
 
@@ -862,11 +860,10 @@ describe('OrcaRuntimeRpcServer', () => {
         })
         await session.done
 
-        const keepalives = session.frames.filter((f) => f._keepalive === true)
         const terminals = session.frames.filter((f) => f.ok !== undefined)
         expect(terminals).toHaveLength(1)
         expect(terminals[0]).toMatchObject({ id: 'req_short', ok: true })
-        expect(keepalives).toHaveLength(0)
+        expect(session.frames.filter((f) => f._keepalive === true)).toHaveLength(0)
       } finally {
         await server.stop()
       }

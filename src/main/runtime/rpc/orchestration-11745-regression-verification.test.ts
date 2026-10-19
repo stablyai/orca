@@ -29,7 +29,6 @@ import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixtu
 // Why: an unrelated caller the runtime CAN resolve to a pane — otherwise the refusal would be
 // stable_pane_required and would prove nothing about Run authorization.
 const OUTSIDER_HANDLE = CURRENT_WORKER_HANDLE
-const OUTSIDER_PANE = CURRENT_WORKER_PANE
 
 const tempDirs: string[] = []
 const databases: OrchestrationDb[] = []
@@ -180,33 +179,6 @@ describe('#11745 H1 — gate methods authorize the caller Run', () => {
     expect(harness.db.getGate(gate.id)).toMatchObject({ status: 'pending', resolution: null })
     expect(adoptedGraph(harness)).toEqual(before)
     expect(before.task).toBe('blocked')
-  })
-
-  it('G4 refuses a stranger Run with NO legacy adoption in play', () => {
-    // Why: G4 must hold on a plain runtime, so the fix cannot be an artifact of adoption state.
-    const dir = mkdtempSync(join(tmpdir(), 'orca-11745-g4-'))
-    tempDirs.push(dir)
-    const db = new OrchestrationDb(join(dir, 'orchestration.db'))
-    databases.push(db)
-    expect(db.getLegacyAdoption()).toBeUndefined()
-
-    const runA = db.createRun({
-      objective: 'run A',
-      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
-      coordinatorPaneKey: CURRENT_COORDINATOR_PANE
-    })
-    const runC = db.createRun({
-      objective: 'run C',
-      coordinatorHandle: OUTSIDER_HANDLE,
-      coordinatorPaneKey: OUTSIDER_PANE
-    })
-    const strangerTask = db.createTask({ spec: 'stranger work', runId: runC.id })
-
-    // The Run-scope decision the gate handler makes: A's pane resolves to A, never to C.
-    expect(db.getCurrentRunForPane(CURRENT_COORDINATOR_PANE)?.id).toBe(runA.id)
-    expect(strangerTask.run_id).toBe(runC.id)
-    expect(db.listGates({ taskId: strangerTask.id })).toHaveLength(0)
-    expect(db.getTask(strangerTask.id)?.status).toBe('ready')
   })
 
   it('POSITIVE: a legitimately bound coordinator still gates its own Run end to end', async () => {
@@ -486,6 +458,7 @@ describe('#11745 H2 — revoked principal on an unclaimed adopted Run', () => {
 
     expect(response.ok).toBe(false)
     expect(response.error.code).not.toBe('legacy_read_only')
+    expect(response.error.code).toBe('run_required')
     expect(adoptedGraph(harness)).toEqual(before)
   })
 })

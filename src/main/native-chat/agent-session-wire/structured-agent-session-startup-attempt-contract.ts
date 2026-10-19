@@ -2,7 +2,11 @@
 // module, so it must not pull in the host or Node-only process code.
 
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type {
+  AgentSessionRecord,
+  AgentSessionExecutionLocation,
+  AgentSessionProcessIdentity
+} from '../../../shared/agent-session-record'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
@@ -41,6 +45,12 @@ export type StructuredAgentSessionStartupAttempt = {
   readonly signal?: AbortSignal
   /** Any stdout frame or stderr line from the child: proof the start is still moving. */
   readonly onOutput?: () => void
-  /** The conversation's option revision now; a report stamps it as its read begins. */
-  readonly optionRevision: () => number
+}
+
+export type StructuredAgentSessionAcquisitionReceipt = Pick<
+  StructuredAgentSessionStartupAttempt,
+  'attemptId' | 'fence' | 'spawnToken'
+> & {
+  location: AgentSessionExecutionLocation
+  process?: AgentSessionProcessIdentity
 }

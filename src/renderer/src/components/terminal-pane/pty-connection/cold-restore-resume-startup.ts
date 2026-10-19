@@ -1,15 +1,15 @@
 import { useAppStore } from '@/store'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
-import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
+import {
+  resolveSshHostReportedPlatform,
+  resolveAgentResumeLaunchTarget
+} from '@/lib/agent-resume-launch-target'
 import {
   agentResumeOriginNamesAnotherExecutionHost,
   sleepingRecordNamesAnotherExecutionHost
 } from '@/lib/sleeping-record-execution-host-scope'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../../../shared/tui-agent-launch-defaults'
+import { resolveResumeLaunchRecipe } from '../../../../../shared/tui-agent-launch-defaults'
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
@@ -78,24 +78,19 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       executionHostId: session.executionHostId,
       worktreePath: session.worktree?.path,
       terminalWindowsShell: state.settings?.terminalWindowsShell,
-      tabShellOverride: session.shellOverride
+      tabShellOverride: session.shellOverride,
+      // Why the transport's runtime: the pane's own connection names the SSH target's owner.
+      remotePlatform: resolveSshHostReportedPlatform(
+        state,
+        session.executionHostId,
+        session.transport.getRuntimeEnvironmentId?.() ?? null
+      )
     })
     const startupPlan = buildAgentResumeStartupPlan({
       agent,
       providerSession,
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-      agentArgs:
-        launchConfig !== undefined
-          ? launchConfig.agentArgs
-          : resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
-      agentEnv:
-        launchConfig !== undefined
-          ? launchConfig.agentEnv
-          : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
-      ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-      ...(launchConfig?.ompResumeFilePath
-        ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
-        : {}),
+      ...resolveResumeLaunchRecipe(launchConfig),
       platform: resumeTarget.platform,
       shell: resumeTarget.shell
     })

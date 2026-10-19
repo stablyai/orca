@@ -91,6 +91,8 @@ export type MarkdownDocState =
       stale?: boolean
       saving?: boolean
       saveError?: string
+      /** Changes only on phone edits and saves, not host metadata updates. */
+      localRevision?: number
       readOnlyReason?: string
       truncated?: true
       byteLength?: number

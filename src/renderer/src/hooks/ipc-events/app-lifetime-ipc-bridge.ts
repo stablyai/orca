@@ -27,6 +27,7 @@ import { registerTerminalPresentationIpcBridge } from './terminal-presentation-i
 import { registerPtySourceDisownedIpcBridge } from './pty-source-disowned-ipc-bridge'
 import { registerTerminalRequestIpcBridge } from './terminal-request-ipc-bridge'
 import { registerAgentLaunchTabIpcBridge } from './agent-launch-tab-ipc-bridge'
+import { registerTerminalPaneRevealIpcBridge } from './terminal-pane-reveal-ipc-bridge'
 import { registerTerminalUiRoutingIpcBridge } from './terminal-ui-routing-ipc-bridge'
 import { registerUpdaterStatusIpcBridge } from './updater-status-ipc-bridge'
 import { createWorktreeEventRuntime } from './worktree-event-runtime'
@@ -46,18 +47,7 @@ function remountTerminalTabsAwaitingHostHydration(): void {
   }
 }
 
-export type IpcEventsCleanupPhase =
-  | 'agent.disposeAsyncState'
-  | 'mobile.disposeHydration'
-  | 'runtimeStore.unsubscribe'
-  | 'agentStore.unsubscribe'
-  | 'ipc.dispose'
-  | 'directSsh.stop'
-  | 'notifications.reset'
-
-export function installAppLifetimeIpcEvents(
-  onCleanupPhase?: (phase: IpcEventsCleanupPhase) => void
-): () => void {
+export function installAppLifetimeIpcEvents(): () => void {
   const unsubs: (() => void)[] = []
   const backgroundWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
   unsubs.push(backgroundWakeDispatcher.dispose)
@@ -127,6 +117,7 @@ export function installAppLifetimeIpcEvents(
   registerAgentLaunchTabIpcBridge(unsubs)
   registerPtySourceDisownedIpcBridge(unsubs)
   registerTerminalUiRoutingIpcBridge(unsubs)
+  registerTerminalPaneRevealIpcBridge(unsubs)
   registerSessionTabIpcBridge(unsubs)
   registerMobileAndTerminalCloseIpcBridge(unsubs, backgroundWakeDispatcher.request)
   registerUpdaterStatusIpcBridge(unsubs)
@@ -145,18 +136,11 @@ export function installAppLifetimeIpcEvents(
 
   return () => {
     agentStatusBridge.disposeAsyncState()
-    onCleanupPhase?.('agent.disposeAsyncState')
     disposeMobileDriverHydration()
-    onCleanupPhase?.('mobile.disposeHydration')
     unsubscribeRuntimeEnvironmentStore()
-    onCleanupPhase?.('runtimeStore.unsubscribe')
     agentStatusBridge.unsubscribeStore()
-    onCleanupPhase?.('agentStore.unsubscribe')
     unsubs.forEach((unsubscribe) => unsubscribe())
-    onCleanupPhase?.('ipc.dispose')
     stopDirectSshStateBridge()
-    onCleanupPhase?.('directSsh.stop')
     resetAgentHookCompletionNotificationCoordinators()
-    onCleanupPhase?.('notifications.reset')
   }
 }

@@ -172,3 +172,40 @@ export function pruneCountBaseline(root, baselinePath, header, current) {
   fs.writeFileSync(file, formatCountBaseline(pruned, header, parseCountNotes(text)))
   return totalCount(pruned)
 }
+
+/**
+ * Gate for a count ratchet `{ name, baselinePath, header, collect(root), fix, unit }`: a file above
+ * its baseline fails with `fix`, one below it fails until pruned. `--prune` lowers rows only.
+ */
+export function runCountRatchet(ratchet, root, arg) {
+  const current = ratchet.collect(root)
+  if (arg === '--prune') {
+    const total = pruneCountBaseline(root, ratchet.baselinePath, ratchet.header, current)
+    console.log(`${ratchet.name} baseline pruned to ${total}.`)
+    return 0
+  }
+  const baselineFile = path.join(root, ratchet.baselinePath)
+  const baseline = parseCountBaseline(
+    fs.existsSync(baselineFile) ? fs.readFileSync(baselineFile, 'utf8') : ''
+  )
+  const { grown, shrunk } = diffCounts(current, baseline)
+  for (const { file, now, allowed } of grown) {
+    console.error(`${file}: ${now} ${ratchet.unit}, baseline allows ${allowed}.`)
+  }
+  if (grown.length > 0) {
+    console.error(ratchet.fix.join('\n'))
+  }
+  for (const { file, now, allowed } of shrunk) {
+    console.error(`${file}: now ${now}, baseline ${allowed}.`)
+  }
+  if (shrunk.length > 0) {
+    console.error(
+      `The baseline may only shrink. Fix it: pnpm check:${ratchet.name}-ratchet --prune`
+    )
+  }
+  if (grown.length + shrunk.length > 0) {
+    return 1
+  }
+  console.log(`${ratchet.name} ratchet OK — ${totalCount(current)} grandfathered ${ratchet.unit}.`)
+  return 0
+}

@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+@source not '../**/*.test.{ts,tsx}';
+@source not '../**/*.spec.{ts,tsx}';
 @import 'tw-animate-css';
 @import '@xterm/xterm/css/xterm.css';
 @import 'katex/dist/katex.min.css';
@@ -6,6 +8,7 @@
 @import './markdown-preview.css';
 @import './terminal.css';
 @import './mobile-page.css';
+@import '../../../shared/styles/scrollbar-sleek.css';
 
 @font-face {
   font-family: 'Geist';
@@ -90,6 +93,7 @@
   --color-ring: var(--ring);
   --color-editor-surface: var(--editor-surface);
   --color-agent-question: var(--agent-question);
+  --color-agent-working: var(--agent-working);
   --color-agent-question-text: var(--agent-question-text);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -229,6 +233,8 @@
      it (sidebar, tabs, dashboard, kanban). Orange, not amber: it has to stay
      separable from working-yellow at a glance. */
   --agent-question: var(--color-orange-600);
+  /* The working-state yellow every agent working/monitoring glyph paints. */
+  --agent-working: var(--color-yellow-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
   /* Workspace PR-state tones: same hue in both themes so a status keeps its
@@ -520,6 +526,13 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
   gap: 6px;
 }
 
+/* Why: a folded back toast is squeezed to the front toast's height without clipping, so a taller
+   toast's content hangs below the stack; hovering it re-expands the stack in a loop. clip, not
+   hidden: hidden makes a scroll container that focusing a folded control would scroll. */
+[data-sonner-toaster] [data-sonner-toast][data-expanded='false'][data-front='false'] {
+  overflow: clip;
+}
+
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
   /* Why: Sonner's native action slots otherwise share the copy row and squeeze
      long notices; indent the wrapped footer to align with text after the icon. */
@@ -702,58 +715,6 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
     width: 0;
     height: 0;
   }
-}
-
-/* ── Sleek scrollbar (VS Code-like) ─────────────────── */
-
-.scrollbar-sleek {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 34%, transparent) transparent;
-}
-
-.scrollbar-sleek::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
-}
-
-.scrollbar-sleek::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.scrollbar-sleek::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--muted-foreground, #737373) 28%, transparent);
-  border: 3px solid transparent;
-  border-radius: 0;
-  background-clip: padding-box;
-  min-height: 28px;
-}
-
-/* Thicker variant for dense data tables where the default 6px-thumb is hard to grab. */
-.scrollbar-sleek-lg {
-  scrollbar-width: auto;
-}
-
-.scrollbar-sleek-lg::-webkit-scrollbar {
-  width: 16px;
-  height: 16px;
-}
-
-.scrollbar-sleek-lg::-webkit-scrollbar-thumb {
-  border-width: 3px;
-  min-height: 36px;
-}
-
-.scrollbar-sleek::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent);
-}
-
-.scrollbar-sleek::-webkit-scrollbar-thumb:active {
-  background-color: color-mix(in srgb, var(--foreground, #171717) 36%, transparent);
-}
-
-.scrollbar-sleek-parent:hover .scrollbar-sleek,
-.scrollbar-sleek:hover {
-  scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent) transparent;
 }
 
 /* Why: no reserved `scrollbar-gutter` — paired with `overflow-y: auto`, a list
@@ -1279,8 +1240,8 @@ html.native-shell .app-layout {
   align-items: center;
   /* Keep adjacent actions aligned with the app's compact toolbar spacing. */
   gap: 4px;
-  min-height: 36px;
-  padding: 6px 14px;
+  min-height: 32px;
+  padding: 3px 14px;
   background: var(--editor-surface);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   flex-shrink: 0;
@@ -1389,11 +1350,13 @@ html.native-shell .app-layout {
 
 /* Why the extra qualifier: CommandItem also sets data-[selected=true]:bg-accent;
    this selector must beat that utility so light-mode selection is actually visible.
-   The role='option' arm covers virtualized rows that render outside cmdk. */
+   The role='option' arm covers virtualized rows that render outside cmdk; the
+   session-row arm is Session History's keyboard cursor, which has no cmdk either. */
 [data-slot='command-item'].jump-palette-item[data-selected='true'],
 [role='option'].jump-palette-item[data-selected='true'],
 .jump-palette-command [data-slot='command-item'][data-selected='true'],
-.jump-palette-command [role='option'][data-selected='true'] {
+.jump-palette-command [role='option'][data-selected='true'],
+.ai-vault-session-row[data-selected='true'] {
   /* Why: flat --accent (#f5f5f5) on the palette surface (#fff) is nearly invisible
      in light mode — the keyboard cursor has to read as a solid selected row.
      Mix foreground into background and draw an inset ring; expose the surface
@@ -1408,7 +1371,8 @@ html.native-shell .app-layout {
 .dark [data-slot='command-item'].jump-palette-item[data-selected='true'],
 .dark [role='option'].jump-palette-item[data-selected='true'],
 .dark .jump-palette-command [data-slot='command-item'][data-selected='true'],
-.dark .jump-palette-command [role='option'][data-selected='true'] {
+.dark .jump-palette-command [role='option'][data-selected='true'],
+.dark .ai-vault-session-row[data-selected='true'] {
   /* Why accent, not the light-mode mix: --accent (#404040) already reads clearly on
      dark surfaces; a low-%% foreground mix was a visible step down from the old row. */
   --jump-palette-selection-surface: var(--accent);

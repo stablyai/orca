@@ -10,19 +10,25 @@ const oxlintPackageDirectory = path.dirname(
 )
 const oxlintPath = path.join(oxlintPackageDirectory, 'bin', 'oxlint')
 
-export function runOxlintPluginOnSource({
+export function runOxlintPluginOnSource({ source, ...options }) {
+  return runOxlintPluginOnSources({ ...options, sources: [source] })[0]
+}
+
+export function runOxlintPluginOnSources({
   pluginName,
   pluginPath,
   rules,
-  source,
+  sources,
   extension = 'tsx'
 }) {
   const directory = mkdtempSync(path.join(tmpdir(), `orca-${pluginName}-lint-`))
-  const sourcePath = path.join(directory, `sample.${extension}`)
+  const sourcePaths = sources.map((_, index) =>
+    path.join(directory, `sample-${index}.${extension}`)
+  )
   const configPath = path.join(directory, 'oxlint.json')
 
   try {
-    writeFileSync(sourcePath, source)
+    sources.forEach((source, index) => writeFileSync(sourcePaths[index], source))
     writeFileSync(
       configPath,
       JSON.stringify({
@@ -42,7 +48,7 @@ export function runOxlintPluginOnSource({
     )
     const result = spawnSync(
       process.execPath,
-      [oxlintPath, '--config', configPath, '--format', 'json', sourcePath],
+      [oxlintPath, '--config', configPath, '--format', 'json', ...sourcePaths],
       { encoding: 'utf8' }
     )
     if (result.error) {
@@ -51,7 +57,16 @@ export function runOxlintPluginOnSource({
     if (!result.stdout.trim()) {
       throw new Error(result.stderr || `${pluginName} did not produce Oxlint output`)
     }
-    return JSON.parse(result.stdout).diagnostics
+    const diagnostics = JSON.parse(result.stdout).diagnostics
+    const byFile = new Map(sourcePaths.map((file) => [file, []]))
+    for (const diagnostic of diagnostics) {
+      const findings = byFile.get(path.resolve(diagnostic.filename))
+      if (!findings) {
+        throw new Error(`Unexpected Oxlint diagnostic file: ${diagnostic.filename}`)
+      }
+      findings.push(diagnostic)
+    }
+    return sourcePaths.map((file) => byFile.get(file))
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }

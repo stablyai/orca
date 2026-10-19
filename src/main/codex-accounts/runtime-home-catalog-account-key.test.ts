@@ -4,6 +4,7 @@
 
 import type * as NodeOs from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
@@ -23,6 +24,7 @@ vi.mock('electron', () => ({
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
@@ -62,7 +64,8 @@ async function wireCodexAccountKey(settings: ReturnType<typeof createSettings>) 
     // The resolvers main-process-runtime-service hands the runtime.
     prepareCodexLaunchHome: codexStructuredLaunchHomeResolvers.prepareCodexStructuredLaunch,
     readCodexLaunchHome: codexStructuredLaunchHomeResolvers.resolveCodexStructuredLaunchHome,
-    workspaceTrustSettings: () => settings
+    workspaceTrustSettings: () => settings,
+    stateDirectory: '/orca-data'
   }
   const resolve = (purpose: 'launch' | 'read') =>
     codex.resolveAccountHome(

@@ -7,11 +7,13 @@ import {
   installNodeRuntimeFromHostArchiveCommand,
   nodeRuntimeStoreDir,
   posixNodeRuntimeExecutable,
-  probeRemoteNodeRuntimeCommand,
-  REMOTE_NODE_RUNTIME_READY
-} from '../ssh/orcad-remote-node-runtime'
+  probeRemoteNodeRuntimeCommand
+} from '../managed-server/install/orcad-remote-node-runtime'
+import {
+  REMOTE_NODE_RUNTIME_READY,
+  assertRemoteNodeRuntimePromoted
+} from '../ssh/orcad-remote-node-runtime-report'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
-import { assertRemoteNodeRuntimePromoted } from '../ssh/orcad-remote-node-runtime-report'
 import { isGlibcBelow, PINNED_NODE_GLIBC_FLOOR } from '../ssh/pinned-runtime-host-target'
 import type { WslSpec } from './wsl-runner'
 

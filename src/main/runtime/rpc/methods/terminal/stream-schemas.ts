@@ -18,7 +18,11 @@ export const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
       ackOutputSourceRanges: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
       outputPause: z.literal(1).optional(),
+      outputPauseDropNotice: z.literal(1).optional(),
       writeUnavailable: z.literal(1).optional(),
+      // Why separate from writeUnavailable: older clients read that frame as rejected input and
+      // quarantine the next line, so only clients that know it can also mean "host lost" get it.
+      endpointLossNotice: z.literal(1).optional(),
       inputAck: z.literal(1).optional()
     })
     .optional(),

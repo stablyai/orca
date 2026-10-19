@@ -1,3 +1,5 @@
+import type { AgentSessionCurrentRequestsRead } from '../../../shared/agent-session-current-requests-wire'
+import { readCurrentRequestsPiece } from './agent-session-current-requests'
 import type {
   AgentSessionBackgroundTaskState,
   AgentSessionHistoryRequest,
@@ -74,6 +76,18 @@ export class StructuredAgentSessionBackgroundTaskChannel {
         backgroundTasks
       }
     }
+  }
+
+  async currentRequests(request: AgentSessionCurrentRequestsRead) {
+    await this.conversation(request.sessionId)
+    const work = hostStructuredAgentSessionCurrentWork(
+      { store: this.deps.store, sessions: this.sessions },
+      request.sessionId
+    )
+    if (!work) {
+      throw new Error('Current requests unavailable')
+    }
+    return readCurrentRequestsPiece(work.requestProjection(request.sessionId), request)
   }
 
   /** Resolves once the conversation is open and the subscriber holds its opening frame. */

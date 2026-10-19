@@ -15,10 +15,8 @@ import type {
 import { MobileNotificationReplayBuffer } from './mobile-notification-replay'
 import { notifyRuntimeListeners } from './runtime-async-boundaries'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
-import {
-  MobileNotificationDismissalStore,
-  type DeliveredNotificationIdentity
-} from './mobile-notification-dismissal-store'
+import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
+import type { DeliveredNotificationIdentity } from '../../shared/mobile-notification-identity'
 
 export type MobileNotificationDispatchEvent = {
   type: 'notification'

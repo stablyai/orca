@@ -1,4 +1,4 @@
-import type { AgentSessionThreadGoalChange } from '../../shared/agent-session-wire'
+import type { AgentSessionThreadGoalChange } from '../../shared/agent-session-thread-goal-wire'
 import { isCodexAppServerRequestError } from './codex-app-server-connection'
 import type { CodexSession } from './codex-structured-session-state'
 

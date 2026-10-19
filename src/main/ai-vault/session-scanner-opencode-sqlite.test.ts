@@ -222,6 +222,34 @@ describe('listOpenCodeSqliteSessions', () => {
     expect(candidates[1].file.path).toBe(buildOpenCodeSqliteCandidatePath(path, 'ses_old'))
   })
 
+  it('lists in-scope sessions past a newer out-of-scope one when scoped', async () => {
+    const { db, path } = createTempDb()
+    applyOpenCodeSchema(db)
+    insertSession(db, {
+      id: 'ses_in_scope',
+      directory: '/repo/app/packages/web',
+      timeCreated: 1_777_634_000_000,
+      timeUpdated: 1_777_634_001_000
+    })
+    insertSession(db, {
+      id: 'ses_elsewhere',
+      directory: '/repo/app-sibling',
+      timeCreated: 1_777_634_002_000,
+      timeUpdated: 1_777_634_003_000
+    })
+    db.close()
+
+    const candidates = await listOpenCodeSqliteSessions({
+      dbPaths: [path],
+      limit: 1,
+      issues: [],
+      scopePaths: ['/repo/app']
+    })
+    expect(candidates.map((candidate) => candidate.file.path)).toEqual([
+      buildOpenCodeSqliteCandidatePath(path, 'ses_in_scope')
+    ])
+  })
+
   it('dedups matching session ids across databases and keeps the newest row', async () => {
     const { db: oldDb, path: oldPath } = createTempDb()
     applyOpenCodeSchema(oldDb)

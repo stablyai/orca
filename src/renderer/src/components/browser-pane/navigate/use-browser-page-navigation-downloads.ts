@@ -14,7 +14,7 @@ import { translate } from '@/i18n/i18n'
 import {
   getWorkspaceFileBrowserOpenTarget,
   REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE
-} from '@/lib/file-preview'
+} from '@/lib/workspace-file-browser-open-target'
 import { routeWorkspaceDocAddressSubmission } from './workspace-doc-address-submission'
 import {
   getWorkspaceFileDragRejectionMessage,

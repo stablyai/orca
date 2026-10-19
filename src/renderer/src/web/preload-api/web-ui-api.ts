@@ -1,6 +1,7 @@
 import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session-attachments'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 import { createWebExplorerRootSync } from './web-explorer-root-sync'
+import { createWebJiraFilterStateApi } from './web-jira-filter-state-api'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
@@ -39,6 +40,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   }
   let zoomLevel = readLocalWebUIState().uiZoomLevel
   return {
+    ...createWebJiraFilterStateApi(),
     /** Hydrates from the active host after replaying pending roots, falling back to local state on failure or host changes. */
     get: async () => {
       try {
@@ -231,6 +233,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onNewSimulatorTab: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
+    onRequestRemoteCliBrowserScope: () => noopUnsubscribe,
+    replyRemoteCliBrowserScope: () => {},
     onRequestTabSetProfile: () => noopUnsubscribe,
     replyTabSetProfile: () => {},
     onRequestTabClose: () => noopUnsubscribe,
@@ -261,8 +265,11 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onPublishAgentLaunchTab: () => noopUnsubscribe,
     onAgentLaunchPaneVerdict: () => noopUnsubscribe,
     replyAgentLaunchTabPublish: () => {},
+    onRevealTerminalPane: () => noopUnsubscribe,
+    replyTerminalPaneReveal: () => {},
     onSplitTerminal: () => noopUnsubscribe,
     onRenameTerminal: () => noopUnsubscribe,
+    onSetPaneTitle: () => noopUnsubscribe,
     onFocusTerminal: () => noopUnsubscribe,
     onFocusEditorTab: () => noopUnsubscribe,
     onCloseSessionTab: () => noopUnsubscribe,

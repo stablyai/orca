@@ -42,8 +42,6 @@ export type NativeChatVisualsSweepResult = { removed: number; failed: number }
 
 // Renamed under the locks and deleted after them; a cut-short delete leaves it for a later run.
 const EXPIRED_SUFFIX = '.expired'
-// The pre-rename root: native chat had no real users, and an update restarts every old child.
-const LEGACY_ROOT_NAME = 'native-chat-visuals'
 // Bounds one run's disk work; whatever is left goes in a later run.
 const MAX_REMOVALS_PER_RUN = 200
 const YIELD_EVERY = 32
@@ -69,13 +67,6 @@ export async function sweepNativeChatVisualsFolders(
 ): Promise<NativeChatVisualsSweepResult> {
   const result = { removed: 0, failed: 0 }
   const root = nativeChatScratchRootFor(deps.stateDirectory)
-  await rm(join(deps.stateDirectory, LEGACY_ROOT_NAME), { recursive: true, force: true }).catch(
-    (error: unknown) =>
-      deps.logger.warn('the pre-rename chat visuals root could not be removed', {
-        scope: 'nativeChatVisuals.sweep',
-        error
-      })
-  )
   // Listed before the records are read: a folder is created only after its chat's record, so
   // every folder seen here already has its record in the snapshot below.
   const entries = await listFolders(root)

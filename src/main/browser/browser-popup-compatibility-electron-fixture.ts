@@ -9,10 +9,9 @@ import {
 } from 'electron'
 import { renameSync, writeFileSync } from 'node:fs'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
-import { BrowserManager } from './browser-manager'
+import { BrowserPopupCompatibilityManager } from './browser-popup-compatibility-manager-fixture'
 import { BrowserRouteWebContentsRegistry } from './browser-route-webcontents-registry'
 import { initializeBrowserProcessUserAgent } from './browser-process-user-agent'
-import type { PopupChildWindowOptions } from './popup-origin-bar-window'
 import {
   BrowserPopupNativeFixture,
   popupFixtureContentSecurity as contentSecurity
@@ -21,6 +20,7 @@ import type {
   BrowserRouteGuestLifecycleClaim,
   BrowserRoutePageGuestIdentity
 } from './browser-route-page-authority'
+import { BrowserPopupAdapterProbeFixture } from './browser-popup-adapter-probe-fixture'
 
 const origin = process.env.ORCA_POPUP_FIXTURE_ORIGIN
 const statusPath = process.env.ORCA_POPUP_FIXTURE_STATUS
@@ -32,54 +32,7 @@ const fixtureStatusPath = statusPath
 applyBackgroundActivationPolicy()
 initializeBrowserProcessUserAgent('clean')
 
-class FixtureBrowserManager extends BrowserManager {
-  tabOpens: { url: string; activate: boolean | undefined }[] = []
-  childRequests: {
-    adopted: boolean
-    native: boolean
-    sessionMatches: boolean
-    security: ReturnType<typeof contentSecurity>
-    permission?: string
-  }[] = []
-  protected override openLinkInOrcaTab(pageId: string, url: string, activate?: boolean): boolean {
-    this.tabOpens.push({ url, activate })
-    writeStatus()
-    return super.openLinkInOrcaTab(pageId, url, activate)
-  }
-  protected override createPopupChildWindowWithOriginBar(
-    opener: WebContents,
-    targetUrl: string,
-    options: PopupChildWindowOptions
-  ): WebContents {
-    const contents = super.createPopupChildWindowWithOriginBar(opener, targetUrl, options)
-    const record = {
-      adopted: Boolean(options.webContents),
-      native: Boolean(options.nativeWindow),
-      sessionMatches: contents.session === opener.session,
-      security: contentSecurity(contents),
-      permission: 'pending'
-    }
-    this.childRequests.push(record)
-    if (!options.webContents) {
-      contents.once('did-finish-load', () => {
-        void contents
-          .executeJavaScript('Notification.requestPermission()')
-          .then((permission: unknown) => {
-            record.permission = typeof permission === 'string' ? permission : 'unknown'
-            writeStatus()
-          })
-          .catch(() => {
-            record.permission = 'unavailable'
-            writeStatus()
-          })
-      })
-    }
-    writeStatus()
-    return contents
-  }
-}
-
-const manager = new FixtureBrowserManager()
+const manager = new BrowserPopupCompatibilityManager(() => writeStatus())
 const guests = new Map<string, WebContents>()
 const hosts: BrowserWindow[] = []
 const blocked: number[] = []
@@ -95,6 +48,10 @@ const authority = Symbol('fixture-route-authority')
 let fixtureAuthority: symbol | null = authority
 let fixtureAuthorityThrows = false
 let revision = 0
+const adapterProbe =
+  process.env.ORCA_POPUP_FIXTURE_ADAPTER_PROBE === '1'
+    ? new BrowserPopupAdapterProbeFixture(() => writeStatus())
+    : null
 const native = new BrowserPopupNativeFixture({
   routeSession: () => fixtureRouteSession,
   failAuthority: (throwOnRead) => {
@@ -129,6 +86,8 @@ function writeStatus(error?: string): void {
         })),
       blocked,
       inputs,
+      electronVersion: process.versions.electron,
+      adapterProbe: adapterProbe?.events,
       windowsHidden: BaseWindow.getAllWindows().every((window) => !window.isVisible()),
       guestIds: Object.fromEntries([...guests].map(([name, guest]) => [name, guest.id]))
     })
@@ -143,6 +102,8 @@ async function createHost(name: string, partition: string, nativeControl = false
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Hidden popup probes still need compositor frames for real CDP input.
+      backgroundThrottling: false,
       webviewTag: true
     }
   })
@@ -162,7 +123,11 @@ async function createHost(name: string, partition: string, nativeControl = false
           writeStatus()
         })
         if (nativeControl) {
-          native.installControlHandler(guest)
+          if (adapterProbe) {
+            adapterProbe.install(guest)
+          } else {
+            native.installControlHandler(guest)
+          }
           await guest.loadURL(`${fixtureOrigin}/${name}`)
           resolve()
           return
@@ -295,6 +260,10 @@ async function run(): Promise<void> {
   if (process.env.ORCA_POPUP_FIXTURE_NATIVE_CONTROLS === '1') {
     await createHost('local-control', localPartition, true)
     await createHost('route-control', routePartition, true)
+  }
+  if (adapterProbe) {
+    await createHost('probe-one', localPartition, true)
+    await createHost('probe-two', localPartition, true)
   }
   ready = true
   writeStatus()

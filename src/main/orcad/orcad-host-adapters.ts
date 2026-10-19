@@ -1,10 +1,13 @@
 /** The Node host's stand-ins for Electron's app environment and secret store. */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import process from 'node:process'
+import { ORCAD_CLI_PACKAGE_FILENAME } from '../../shared/orcad-artifacts'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
-import { setSecretStore, type SecretStore } from '../../shared/secret-store'
+import { setSecretStore } from '../../shared/secret-store'
 import { resolveOrcadInstallRoot, resolveOrcadPath } from './orcad-app-paths'
 import { getOrcadCliLauncherPath } from './orcad-cli-launcher'
-import { describeOrcadSecretProtectionGap } from './orcad-secret-protection-gap'
+import { createOrcadSecretStore, type OrcadSecretStore } from './orcad-secret-store'
 
 let quitRegisteredHandlers = (): void => {}
 
@@ -48,25 +51,41 @@ function createNodeAppEnvironment(): AppEnvironment {
   }
 }
 
+let orcadSecretStore: OrcadSecretStore | null = null
+
+/** Loads the sealing key kept in `keyDir`; resolves whether sealing works. */
+export async function prepareOrcadSecretStore(
+  keyDir: string,
+  userDataPath: string
+): Promise<boolean> {
+  if (!orcadSecretStore) {
+    throw new Error('orcad_secret_store_not_installed — call installOrcadHostAdapters() first')
+  }
+  return orcadSecretStore.prepare({ keyDir, userDataPath })
+}
+
 /**
- * Why not silently plaintext: `isEncryptionAvailable() === false` already makes every
- * caller fall back to unsealed storage, which is a security posture, not a detail.
- * `describeProtectionGap()` gives the reason a client can surface.
+ * The Orca release this server was built from, stamped into the bundle's own `out/package.json`.
+ * Why: `status.get` and the updater report ORCA_APP_VERSION, which only the desktop's preflight
+ * sets, so a server read `0.0.0-dev`. The bundle wins over an inherited value from another build.
  */
-function createNodeSecretStore(): SecretStore {
-  return {
-    isEncryptionAvailable: () => false,
-    encryptString: () => {
-      throw new Error('orcad_secret_sealing_unavailable')
-    },
-    decryptString: () => {
-      throw new Error('orcad_secret_sealing_unavailable')
-    },
-    describeProtectionGap: () => describeOrcadSecretProtectionGap(process.platform)
+export function stampOrcadAppVersion(installRoot: () => string = resolveOrcadInstallRoot): void {
+  let version: unknown
+  try {
+    const path = join(installRoot(), ...ORCAD_CLI_PACKAGE_FILENAME.split('/'))
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    version = parsed && typeof parsed === 'object' && 'version' in parsed ? parsed.version : null
+  } catch {
+    return
+  }
+  if (typeof version === 'string' && version.length > 0) {
+    process.env.ORCA_APP_VERSION = version
   }
 }
 
 export function installOrcadHostAdapters(): void {
+  stampOrcadAppVersion()
   setAppEnvironment(createNodeAppEnvironment())
-  setSecretStore(createNodeSecretStore())
+  orcadSecretStore = createOrcadSecretStore()
+  setSecretStore(orcadSecretStore)
 }

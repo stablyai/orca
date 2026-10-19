@@ -15,6 +15,7 @@ import {
 } from './claude-structured-provider-fallback'
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { claudeFrameParentRef, isRootClaudeFrame } from './claude-turn-opening'
+import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
 
 export type ClaudeResultJournalContext = Pick<
   ClaudeMessageJournalContext,
@@ -25,9 +26,11 @@ export type ClaudeResultJournalContext = Pick<
   | 'corrections'
   | 'turn'
   | 'authenticationFailures'
+  | 'threadGoal'
 > & {
   prompts: ClaudeJournalPrompts
   context: ClaudeContextFacts
+  goalBackgroundWork: () => ClaudeGoalBackgroundWork
 }
 
 export function journalClaudeResult(
@@ -40,7 +43,9 @@ export function journalClaudeResult(
     turn,
     prompts,
     context,
-    authenticationFailures
+    authenticationFailures,
+    threadGoal,
+    goalBackgroundWork
   }: ClaudeResultJournalContext,
   message: Record<string, unknown>,
   observedAt: number
@@ -56,6 +61,7 @@ export function journalClaudeResult(
   }
   // Read before the settle below closes it: the result reports that turn's end.
   const endedTurnScope = turn.turnScope
+  const endedTurnStartedAt = turn.startedAt
   // Read before the settle below closes the turn: an error end the journal's Stop rule makes a
   // person's cancellation is theirs to decide as the end is written (`turnEndAfterStop`).
   const turnId = settlesTurn ? turn.id : null
@@ -71,6 +77,19 @@ export function journalClaudeResult(
     streamedBlocks.clear()
     streamedText.settle()
   }
+  const goal = threadGoal.settle(
+    message,
+    {
+      backgroundWork: goalBackgroundWork(),
+      stoppedByPerson: leftToStop,
+      turnStartedAt: endedTurnStartedAt
+    },
+    observedAt
+  )
+  if (goal) {
+    sink.appendItem(goal.identity, goal.body, { turnScope: endedTurnScope })
+    sink.publish()
+  }
   const kind = claudeProviderFrameKind(message)
   const failure = claudeResultFailure(message, leftToStop)
   const alreadyShown = authenticationFailures.resultAlreadyShown(message)
@@ -80,7 +99,7 @@ export function journalClaudeResult(
       message,
       failure?.text,
       undefined,
-      undefined,
+      { reportsFailure: failure !== null },
       // A result that settles no turn is a CHILD's result: this
       // translator only ever opens root turns.
       settlesTurn

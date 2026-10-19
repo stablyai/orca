@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getRuntimeMobileSessionSyncKey,
-  runtimeMobileSessionSyncKeysEqual,
+  runtimeMobileSessionSyncKeysEqual
+} from './sync-runtime-graph/sync-key'
+import {
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled

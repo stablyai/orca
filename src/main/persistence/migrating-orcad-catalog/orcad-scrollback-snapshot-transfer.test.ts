@@ -12,14 +12,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationManifest
-} from '../../../shared/orcad-migration-manifest'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type {
   OrcadMigrationSnapshotChunkRequest,
   OrcadMigrationTerminalScrollbackSnapshot
-} from '../../../shared/orcad-migration-scrollback'
+} from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import {
   getTerminalScrollbackSnapshotPath,
   type TerminalScrollbackSnapshotStorage

@@ -59,17 +59,31 @@ export async function extractRuntimeArchive(
   }
 }
 
+/** The served file isn't the pinned release (missing, oversized or a different checksum), so no
+ *  retry or network fix helps; only a newer Orca does. */
+export class ReleaseMismatchError extends Error {}
+
+/** What the person can do about a failed download. Only a proven mismatch blames the release;
+ *  every other failure (proxy, DNS, TLS, a dropped connection) is one the network can fix. */
+export function downloadFailureMessage(label: string, error: unknown): string {
+  return error instanceof ReleaseMismatchError
+    ? `The ${label} download didn't match the release Orca expects, so nothing was installed. Updating Orca may fix this.`
+    : `Couldn't download ${label}. Check your network connection or proxy, then try again.`
+}
+
 /** Retries transient network failures; a checksum mismatch or a cancel is final. */
 export async function downloadVerifiedArchive(
   archive: PinnedRuntimeArchive,
   destination: string,
   fetcher: MainHttpClient['fetch'],
   signal?: AbortSignal,
-  retryDelaysMs: readonly number[] = RUNTIME_ARCHIVE_RETRY_DELAYS_MS
+  retryDelaysMs: readonly number[] = RUNTIME_ARCHIVE_RETRY_DELAYS_MS,
+  /** The bytes this attempt has read so far; a retry counts from zero again. */
+  onBytes?: (bytes: number) => void
 ): Promise<void> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      await downloadVerifiedArchiveOnce(archive, destination, fetcher, signal)
+      await downloadVerifiedArchiveOnce(archive, destination, fetcher, signal, onBytes)
       return
     } catch (error) {
       const delay = retryDelaysMs[attempt]
@@ -91,9 +105,11 @@ async function downloadVerifiedArchiveOnce(
   archive: PinnedRuntimeArchive,
   destination: string,
   fetcher: MainHttpClient['fetch'],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onBytes?: (bytes: number) => void
 ): Promise<void> {
   const { label, url, archiveSha256: expectedSha256 } = archive
+  const maxBytes = archive.maxArchiveBytes ?? MAX_RUNTIME_ARCHIVE_BYTES
   const stall = new AbortController()
   const downloadSignal = signal ? AbortSignal.any([signal, stall.signal]) : stall.signal
   const stalled: HttpStatusError = Object.assign(new Error(`${label} download stalled`), {
@@ -101,18 +117,26 @@ async function downloadVerifiedArchiveOnce(
   })
   const stallTimer = setTimeout(() => stall.abort(stalled), 120_000)
   try {
-    const response = await fetcher(url, { redirect: 'follow', signal: downloadSignal })
+    // no-store: the verified file is the only copy, so Remove frees the space and a retry refetches.
+    const response = await fetcher(url, {
+      redirect: 'follow',
+      cache: 'no-store',
+      signal: downloadSignal
+    })
     if (!response.ok || !response.body) {
       await response.body?.cancel().catch(() => undefined)
-      throw Object.assign(
-        new Error(`${label} download failed: ${response.status} ${response.statusText}`),
-        { httpStatusCode: response.status }
-      )
+      const text = `${label} download failed: ${response.status} ${response.statusText}`
+      const missing = response.status === 404 || response.status === 410
+      throw Object.assign(missing ? new ReleaseMismatchError(text) : new Error(text), {
+        httpStatusCode: response.status
+      })
     }
+    // A compressed body declares its encoded size; the decoded bytes are still capped and hashed.
+    const encoding = response.headers.get('content-encoding')?.trim().toLowerCase() || 'identity'
     const declaredLength = Number(response.headers.get('content-length'))
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_RUNTIME_ARCHIVE_BYTES) {
+    if (encoding === 'identity' && Number.isFinite(declaredLength) && declaredLength > maxBytes) {
       await response.body.cancel().catch(() => undefined)
-      throw new Error(`${label} download exceeded the archive size limit`)
+      throw new ReleaseMismatchError(`${label} download exceeded the archive size limit`)
     }
     const handle = await open(destination, 'wx', 0o600).catch(async (error) => {
       await response.body?.cancel().catch(() => undefined)
@@ -132,8 +156,9 @@ async function downloadVerifiedArchiveOnce(
           stallTimer.refresh()
         }
         total += chunk.value.byteLength
-        if (total > MAX_RUNTIME_ARCHIVE_BYTES) {
-          throw new Error(`${label} download exceeded the archive size limit`)
+        onBytes?.(total)
+        if (total > maxBytes) {
+          throw new ReleaseMismatchError(`${label} download exceeded the archive size limit`)
         }
         hash.update(chunk.value)
         await writeAll(handle, chunk.value)
@@ -146,7 +171,7 @@ async function downloadVerifiedArchiveOnce(
     }
     const actual = hash.digest('hex')
     if (actual !== expectedSha256) {
-      throw new Error(
+      throw new ReleaseMismatchError(
         `${label} archive checksum mismatch: expected ${expectedSha256}, got ${actual}`
       )
     }
@@ -160,7 +185,7 @@ async function downloadVerifiedArchiveOnce(
   }
 }
 
-async function writeAll(
+export async function writeAll(
   handle: Awaited<ReturnType<typeof open>>,
   bytes: Uint8Array
 ): Promise<void> {

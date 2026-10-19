@@ -2,15 +2,21 @@ import { OrcaRuntimeWithAgentPromptRequestCorrelation } from '../../orca-runtime
 import type { RuntimeTerminalAgentStatusSnapshot } from '../../runtime-terminal-agent-status-query'
 import type { AgentStatus } from '../../../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
-import { detectTerminalWaitBlockedReason } from '../../terminal-wait-detection'
+import {
+  detectExplicitIdleStatusFromTitle,
+  detectTerminalWaitBlockedReason
+} from '../../terminal-wait-detection'
 import { isOpenCodeNativeTitle } from '../../../../shared/agent-detection'
 import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type {
+  RuntimePtyWorktreeRecord,
+  RuntimeVisibleTerminalState
+} from '../../runtime-terminal-state-records'
 import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../runtime-mobile-agent-status-projection'
 import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
-import { getRegisteredSshState } from '../../../ssh/ssh-target-registry'
+import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -28,6 +34,13 @@ export type TerminalWaitPermissionInputs = ReturnType<
 export type TerminalWaitStatusEvidence = Parameters<
   OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission['resolveAuthoritativeTerminalWaitPermission']
 >[1]
+
+export type TerminalInteractiveWaitEvidence = {
+  terminal: RuntimeTerminalAgentStatusSnapshot
+  explicitStatus: TerminalWaitStatusEvidence
+  promptReason: RuntimeTerminalWaitBlockedReason | null
+  unconfirmed: boolean
+}
 
 export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends OrcaRuntimeWithAgentPromptRequestCorrelation {
   protected abstract getExistingTerminalHandlesForPtyId(
@@ -55,10 +68,62 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     return this.terminalRunFacts.read(ptyId, incarnationId)
   }
 
+  /** Undefined when the pane changed or exited during a screen read; the caller then has no answer. */
+  protected readTerminalInteractiveWaitEvidence(
+    handle: string,
+    ptyId: string
+  ): TerminalInteractiveWaitEvidence | Promise<TerminalInteractiveWaitEvidence | undefined> {
+    if (this.getPaneAgentForTuiIdle(ptyId) !== 'claude' || !this.headlessTerminals.has(ptyId)) {
+      return this.buildTerminalInteractiveWaitEvidence(handle, ptyId, 'not-read')
+    }
+    return this.readCurrentTerminalWaitScreen(ptyId).then((screen) =>
+      this.getTerminalAgentStatusPtyId(handle) !== ptyId || screen === undefined
+        ? undefined
+        : this.buildTerminalInteractiveWaitEvidence(handle, ptyId, screen)
+    )
+  }
+
+  private buildTerminalInteractiveWaitEvidence(
+    handle: string,
+    ptyId: string,
+    screen: RuntimeVisibleTerminalState | null | 'not-read'
+  ): TerminalInteractiveWaitEvidence {
+    const observed = screen !== null && screen !== 'not-read'
+    // Why the rendered screen: Claude parks the cursor inside its dialog, and the line tail drops rows below it.
+    const { terminal, lifecycle } = this.getTerminalWaitPermissionInputs(
+      handle,
+      ptyId,
+      observed ? screen.lines.join('\n') : undefined
+    )
+    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
+    return {
+      terminal,
+      explicitStatus,
+      promptReason: this.resolveAuthoritativeTerminalWaitPermission(
+        terminal,
+        explicitStatus,
+        lifecycle,
+        observed
+      ),
+      // A Claude dialog could not be ruled out: no screen, no hook status, no live working/idle title.
+      unconfirmed:
+        screen === null && !explicitStatus && !this.hasConfirmedNonPermissionTitle(terminal)
+    }
+  }
+
+  private hasConfirmedNonPermissionTitle(terminal: RuntimeTerminalAgentStatusSnapshot): boolean {
+    return (
+      terminal.titleStatusIsLive &&
+      (terminal.titleStatus === 'working' ||
+        detectExplicitIdleStatusFromTitle(terminal.title ?? '') === 'idle')
+    )
+  }
+
   protected resolveAuthoritativeTerminalWaitPermission(
     terminal: RuntimeTerminalAgentStatusSnapshot,
     explicitStatus: { status: AgentStatus; updatedAt: number } | null,
-    lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
+    lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined,
+    observedOnScreen = false
   ): RuntimeTerminalWaitBlockedReason | null {
     const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
     if (!blockedByWaitText) {
@@ -68,6 +133,9 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       terminal.titleStatusIsLive &&
       terminal.titleStatus !== null &&
       terminal.titleStatus !== 'permission' &&
+      (!observedOnScreen ||
+        terminal.titleStatus !== 'idle' ||
+        detectExplicitIdleStatusFromTitle(terminal.title ?? '') === 'idle') &&
       !isOpenCodeNativeTitle(terminal.title) &&
       blockedByWaitText !== 'agent-approval-prompt'
     if (liveTitleClearsBlockedText && lifecycle?.status !== terminal.titleStatus) {
@@ -85,7 +153,10 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       explicitStatus && explicitStatus.status !== 'permission' ? explicitStatus.updatedAt : -1,
       lifecycle?.status && lifecycle.status !== 'permission' ? lifecycle.updatedAt : -1
     )
-    return newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt ? blockedByWaitText : null
+    return (observedOnScreen && newestClearAt < 0) ||
+      (newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt)
+      ? blockedByWaitText
+      : null
   }
 
   /**

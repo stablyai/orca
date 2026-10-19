@@ -67,13 +67,15 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
 
   protected readPtyForegroundProcessFromController(
     ptyId: string,
-    afterTitleObservation = 0
+    afterTitleObservation = 0,
+    afterPendingRead = false
   ): Promise<PtyForegroundProcessRead> | null {
-    return this.ptyForegroundAgent.read(ptyId, afterTitleObservation)
+    return this.ptyForegroundAgent.read(ptyId, afterTitleObservation, afterPendingRead)
   }
 
   protected async recheckHookAgentPresenceForPty(
-    ptyId: string
+    ptyId: string,
+    exitedSince?: number
   ): Promise<'live' | 'unverifiable' | 'exited' | null> {
     if (!this.checkHookAgentPresenceFn) {
       return null
@@ -81,7 +83,9 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     const verdicts = await Promise.all(
       Array.from(this.collectAgentStatusPaneKeysForPty(ptyId), (paneKey) =>
         // SAFETY: Keep the original TypeError if collecting pane keys invalidates this callback.
-        this.checkHookAgentPresenceFn!(paneKey)
+        exitedSince === undefined
+          ? this.checkHookAgentPresenceFn!(paneKey)
+          : this.checkHookAgentPresenceFn!(paneKey, exitedSince)
       )
     )
     if (verdicts.includes('live')) {

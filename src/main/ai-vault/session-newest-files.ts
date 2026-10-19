@@ -10,14 +10,15 @@ export class SessionNewestFiles {
     this.limit = Math.max(0, Math.trunc(limit) || 0)
   }
 
-  add(file: FileWithMtime): void {
+  /** Returns the file this add left out: the new one, or the oldest it displaced. */
+  add(file: FileWithMtime): FileWithMtime | null {
     // The backfill enumerates with no limit; skip the insert search entirely.
     if (!Number.isFinite(this.limit)) {
       this.files.push(file)
-      return
+      return null
     }
     if (!this.wouldRetain(file.mtimeMs)) {
-      return
+      return file
     }
     let low = 0
     let high = this.files.length
@@ -30,9 +31,7 @@ export class SessionNewestFiles {
       }
     }
     this.files.splice(low, 0, file)
-    if (this.files.length > this.limit) {
-      this.files.pop()
-    }
+    return this.files.length > this.limit ? (this.files.pop() ?? null) : null
   }
 
   wouldRetain(mtimeMs: number): boolean {

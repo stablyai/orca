@@ -18,9 +18,10 @@ pnpm reclaim-space --tests-stopped
 
 Answer `Y` to apply that preview, or use `pnpm reclaim-space --apply --tests-stopped` to apply directly.
 
-The command reuses the historical test cache, Electron distribution, and dev bundle cleanup scripts.
+The command reuses the historical test cache, Electron distribution, dev bundle, and Vite cache cleanup scripts.
 It shares complete Electron distributions through the repository cache and removes idle
-`out/electron-dev` bundles, which development rebuilds on demand. With `--tests-stopped`, it also
+`out/electron-dev` bundles, which development rebuilds on demand. It also removes tracked
+`.cache/vite` dependency caches unused for 30 days. With `--tests-stopped`, it also
 removes stamped historical test checkouts and shared seeds older than 30 days; tests regenerate them when needed. It leaves source files,
 dependency installs, worktree registrations, and other build output alone. Reported sizes are
 logical file data; APFS clones and hardlinks mean actual disk savings can be smaller.
@@ -32,6 +33,11 @@ checkout age uses directory modification time, which ordinary reuse does not ref
 checkout is unused. Without that flag, historical caches are excluded from both preview and apply.
 Cache cleanup skips symlinks, malformed stamps, future formats, and publication/copy locks.
 See [release source sharing](./release-source-sharing.md) for the cache and locking details.
+
+Vite dev servers record cache use at startup and shutdown. Cleanup retains recent caches,
+caches owned by a live process, and caches whose ownership cannot be verified, including caches
+created before tracking was added. A maintenance lock prevents cleanup racing with server startup.
+Desktop and web caches are reclaimed together; the next dev launch regenerates them as needed.
 
 Use `--repo DIRECTORY` to choose another local repository. Git's worktree list determines scope,
 including registered worktrees outside Orca's workspace directory. Folder workspaces without Git
@@ -45,9 +51,9 @@ without waiting for an Electron upgrade. The manual command migrates older insta
 Read-only Electron package directories are retained and reported as skipped. Cache publication
 or copying failures are also reported as skipped rather than silently omitted.
 
-`pnpm dev` and `pnpm dev-stable-name` start an automatic repository-wide Electron cleanup worker
+`pnpm dev` and `pnpm dev-stable-name` start an automatic repository-wide Electron and Vite cleanup worker
 in the background after the dev process starts. It never prompts or waits before launching the app.
-The worktree being launched is excluded from both Electron sharing and dev bundle removal; active
+The worktree being launched is excluded from Electron sharing, dev bundle removal, and Vite cleanup; active
 sibling apps and recent unfinished builds remain protected by the existing bundle checks.
 Background sweep output is suppressed; worker start or exit failures are reported without stopping dev. Set `ORCA_SKIP_DEV_STORAGE_RECLAIM=1` to opt out.
 The worker finishes independently if the dev app exits, and each cleanup operation has a ten-minute limit.

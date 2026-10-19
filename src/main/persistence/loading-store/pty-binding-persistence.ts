@@ -11,6 +11,10 @@ import type { PtyBindingSourceExpectation } from './store'
 
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { SessionHostPartitionOperations } from './session-host-partitions'
+import {
+  withdrawUnstartedPane,
+  type UnstartedPaneKept
+} from '../terminal-topology/unstarted-pane-withdraw'
 import { resolveHostId } from './session-host-partitions'
 import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
@@ -25,6 +29,7 @@ import type {
 import {
   admitPane,
   moveLeaf,
+  topologyCommitContext,
   withdrawPane,
   type TerminalTopologyCommitContext
 } from '../terminal-topology/terminal-topology-commit'
@@ -229,7 +234,7 @@ export class PtyBindingPersistenceOperations {
    */
   moveTerminalLeafToNewTab(request: TerminalLeafMoveRequest): Promise<TerminalLeafMoveResult> {
     return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
-      moveLeaf(request, topologyCommitContext(this))
+      moveLeaf(request, this.topology())
     )
   }
 
@@ -239,29 +244,26 @@ export class PtyBindingPersistenceOperations {
     hostId?: string | null
   ): Promise<TerminalPaneAdmissionOutcome> {
     return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
-      admitPane(resolveHostId(hostId), admission, topologyCommitContext(this))
+      admitPane(resolveHostId(hostId), admission, this.topology())
     )
   }
 
+  /** With `stillStarting`, a pane whose terminal bound or is starting stays (UnstartedPaneKept). */
   withdrawTerminalPane(
     pane: CommandOf<'closePane'>,
-    hostId?: string | null
-  ): Promise<LayoutRefusalCode | null> {
+    hostId?: string | null,
+    stillStarting?: () => boolean
+  ): Promise<LayoutRefusalCode | UnstartedPaneKept | null> {
+    const resolved = resolveHostId(hostId)
     return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
-      withdrawPane(resolveHostId(hostId), pane, topologyCommitContext(this))
+      stillStarting
+        ? withdrawUnstartedPane(resolved, pane, this.topology(), stillStarting)
+        : withdrawPane(resolved, pane, this.topology())
     )
   }
-}
 
-function topologyCommitContext(
-  owner: PtyBindingPersistenceOperations
-): TerminalTopologyCommitContext {
-  const { runtime, sessions } = owner[ptyBindingPersistenceOperationsContext]
-  return {
-    state: runtime.state,
-    hostIds: () => sessions.getWorkspaceSessionHostIds(),
-    getSession: (hostId) => sessions.getWorkspaceSession(hostId),
-    markDirty: (domain) => runtime.dirtyProfileStateDomains?.add(domain)
+  private topology(): TerminalTopologyCommitContext {
+    return topologyCommitContext(this[ptyBindingPersistenceOperationsContext])
   }
 }
 

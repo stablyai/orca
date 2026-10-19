@@ -27,7 +27,13 @@ export async function writeStructuredAgentSessionOption(
         .then(() => undefined),
     publish: () => session && context.publish(sessionId, session.journal)
   }
-  if (input.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID || !session?.child) {
+  const child = session?.child
+  if (
+    input.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID ||
+    !child ||
+    child.phase === 'starting' ||
+    child.close !== undefined
+  ) {
     return recordStructuredAgentSessionOptionIntent(context.deps, ctx, input)
   }
   // Held where a start is, so a close, a Stop admitted now or quit ends the wait from outside.
@@ -36,8 +42,6 @@ export async function writeStructuredAgentSessionOption(
     return await performSetOption(ctx, input, wait.signal)
   } finally {
     wait.end()
-    // Whatever the write's outcome, the child may hold what it asked for now.
-    context.optionRevisions.advance(sessionId)
   }
 }
 

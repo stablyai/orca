@@ -564,7 +564,8 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ source: 'runtime-session', viewMode: 'chat' })
     )
     expect(spawn).not.toHaveBeenCalled()
-    expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
+    // The final release restores throttling on the next task, after any native destruction.
+    await vi.waitFor(() => expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]]))
     expect(result.tab).toMatchObject({
       type: 'terminal',
       status: 'ready',

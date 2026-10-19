@@ -4,7 +4,7 @@ import {
   recentTerminalOutputIncludesPath,
   recentTerminalPathCandidatesIncludePath
 } from '../../terminal-output-path-candidates'
-import { clampTerminalViewport } from '../../terminal-viewport'
+import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
 
 export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRuntimeWithGetOrchestrationDispatchAuthority {
   protected abstract enqueueLayout(

@@ -145,7 +145,8 @@ if [[ -n "${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "${__orca_claude_binary:-}" &&
     # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
     case "$__orca_claude_pointer" in '~/'*) __orca_claude_pointer="${HOME:-}/${__orca_claude_pointer#??}" ;; esac
     __orca_claude_home="$(cat "$__orca_claude_pointer" 2>/dev/null || :)"
-    if [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ]; then
+    if [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ] &&
+      { [ -z "${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ] || [ "${CLAUDE_CONFIG_DIR%/}" != "${ORCA_CLAUDE_USER_CONFIG_DIR%/}" ]; }; then
       command claude "$@"; return
     fi
     # Why: Orca's value replaced the user's own at spawn, so System default restores theirs.

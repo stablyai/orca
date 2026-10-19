@@ -99,10 +99,11 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.managedAccountEnvOverride',
         COPY.managedAccountEnvOverride
       ),
-    accountSwitchInProgress: () =>
+    accountSwitchInProgress: (values) =>
       translate(
         'components.native-chat.failureWords.accountSwitchInProgress',
-        COPY.accountSwitchInProgress
+        COPY.accountSwitchInProgress,
+        values
       ),
     managedAccountUnsupported: () =>
       translate(
@@ -133,6 +134,12 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate(
         'components.native-chat.failureWords.agentCommandNotRunnable',
         COPY.agentCommandNotRunnable,
+        values
+      ),
+    runtimeNotInstalled: (values) =>
+      translate(
+        'components.native-chat.failureWords.runtimeNotInstalled',
+        COPY.runtimeNotInstalled,
         values
       ),
     chooseClaudeAccount: () =>
@@ -167,6 +174,12 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
     ...ATTACHMENT_FAILURE_PIECES,
     emptyMessage: () =>
       translate('components.native-chat.failureWords.emptyMessage', COPY.emptyMessage),
+    commandUnavailable: (values) =>
+      translate(
+        'components.native-chat.failureWords.commandUnavailable',
+        COPY.commandUnavailable,
+        values
+      ),
     queueFull: () => translate('components.native-chat.failureWords.queueFull', COPY.queueFull),
     writeFailed: () =>
       translate('components.native-chat.failureWords.writeFailed', COPY.writeFailed),

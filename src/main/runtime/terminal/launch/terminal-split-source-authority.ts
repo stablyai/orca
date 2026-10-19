@@ -1,20 +1,19 @@
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import { OrcaRuntimeWithSplitPtyBackedTerminal } from './terminal-split-surface'
-import {
-  resolveTerminalSessionWorktreeId,
-  runtimeWorktreeIdsEqual
-} from '../../runtime-worktree-path-identity'
+import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session-pane-ownership'
 import type {
   AgentTeamsTmuxCompatRequest,
   AgentTeamsTmuxCompatResponse
-} from '../../claude-agent-teams-service'
+} from '../../claude-agent-teams-types'
 import {
   ensureClaudeAgentTeamsShimDir,
   resolveClaudeAgentTeamsShimBin
 } from '../../claude-agent-teams-shim-env'
 import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { SPLIT_PANE_WAIT_TIMEOUT_MESSAGE } from './terminal-split-wait-timeout'
 
 export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRuntimeWithSplitPtyBackedTerminal {
   abstract getTerminalHandleForPaneKey(
@@ -47,7 +46,7 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     const sessionWorktreeId = session ? resolveTerminalSessionWorktreeId(session, worktreeId) : null
     const persistedTab = sessionWorktreeId
       ? session?.tabsByWorktree[sessionWorktreeId]?.find(
-          (tab) => tab.id === tabId && runtimeWorktreeIdsEqual(tab.worktreeId, worktreeId)
+          (tab) => tab.id === tabId && worktreeIdsEqual(tab.worktreeId, worktreeId)
         )
       : undefined
     const persistedLayout = session?.terminalLayoutsByTabId?.[tabId]
@@ -72,8 +71,8 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     const rendererMounted = Boolean(
       rendererTab &&
       rendererLeaf &&
-      runtimeWorktreeIdsEqual(rendererTab.worktreeId, worktreeId) &&
-      runtimeWorktreeIdsEqual(rendererLeaf.worktreeId, worktreeId) &&
+      worktreeIdsEqual(rendererTab.worktreeId, worktreeId) &&
+      worktreeIdsEqual(rendererLeaf.worktreeId, worktreeId) &&
       (rendererLeaf.ptyId === ptyId || (persisted && rendererLeaf.ptyId === null))
     )
     // Only a contradiction is trusted: the window's graph lags, so an unlisted pane proves nothing.
@@ -90,7 +89,7 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     // Why: renderer adoption can precede graph sync; this path still requires reveal success before commit.
     const projected = [...this.mobileSessionTabsByWorktree.entries()].some(
       ([candidateWorktreeId, snapshot]) =>
-        runtimeWorktreeIdsEqual(candidateWorktreeId, worktreeId) &&
+        worktreeIdsEqual(candidateWorktreeId, worktreeId) &&
         snapshot.tabs.some(
           (tab) =>
             tab.type === 'terminal' &&
@@ -187,7 +186,7 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
         if (idx !== -1) {
           this.graphSyncCallbacks.splice(idx, 1)
         }
-        reject(new Error('Timed out waiting for split pane handle'))
+        reject(new Error(SPLIT_PANE_WAIT_TIMEOUT_MESSAGE))
       }, timeoutMs)
 
       const check = (): void => {

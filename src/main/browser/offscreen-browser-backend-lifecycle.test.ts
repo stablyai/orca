@@ -7,8 +7,22 @@ const mocks = vi.hoisted(() => ({
   finishLoads: true
 }))
 
+class MockDebugger extends EventEmitter {
+  attached = false
+
+  isAttached(): boolean {
+    return this.attached
+  }
+
+  detach(): void {
+    this.attached = false
+    this.emit('detach', {}, 'target closed')
+  }
+}
+
 class MockWebContents extends EventEmitter {
   readonly id: number
+  readonly debugger = new MockDebugger()
   url = ''
   title = ''
 
@@ -375,6 +389,27 @@ describe('OffscreenBrowserBackend lifecycle', () => {
     await shutdown
 
     expect(peakRetirements).toBe(4)
+  })
+
+  it('ends a live debugger session before destroying the page', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
+      unregisterGuest: vi.fn()
+    }
+    const backend = new OffscreenBrowserBackend(browserManager as never)
+    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
+    const window = mocks.windows[0]
+    window.webContents.debugger.attached = true
+    const destroyedWhenDetached: boolean[] = []
+    window.webContents.debugger.on('detach', () => {
+      destroyedWhenDetached.push(window.isDestroyed())
+    })
+
+    await backend.closeTab('page-1')
+
+    // A screencast reacts to 'detach' synchronously; it must see a page that is still whole.
+    expect(destroyedWhenDetached).toEqual([false])
+    expect(window.isDestroyed()).toBe(true)
   })
 
   it('closes the page even when daemon retirement throws', async () => {

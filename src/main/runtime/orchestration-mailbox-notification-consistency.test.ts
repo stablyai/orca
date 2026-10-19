@@ -247,7 +247,8 @@ describe('orchestration notification mailbox consistency', () => {
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
     const unownedRun = createBoundRun(db, 'Unowned backlog')
-    for (let index = 0; index < 500; index += 1) {
+    // More than one 50-message page must not hide later owned mail.
+    for (let index = 0; index < 51; index += 1) {
       db.insertMessage({
         from: TERMINAL_HANDLE,
         to: detachedHandle,
@@ -702,6 +703,7 @@ describe('orchestration notification mailbox consistency', () => {
     expect(checked).toMatchObject({ runId: run.id, count: 1 })
 
     await vi.advanceTimersByTimeAsync(500)
+    expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
     const redrive = vi.spyOn(harness.runtime, 'deliverPendingMessagesForHandle')
     harness.runtime.onPtyExit(PTY_ID, 0)
     await Promise.resolve()

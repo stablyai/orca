@@ -129,9 +129,12 @@ describe('inline visuals launch preference', () => {
       expect(disabled.calls.slice(0, openIndex).map(({ method }) => method)).not.toContain(
         'config/read'
       )
-      expect(
-        disabled.calls.find(({ method }) => method === 'thread/start')?.params
-      ).not.toHaveProperty('config')
+      const disabledOpen = disabled.calls.find(({ method }) => method === 'thread/start')
+      const scratchDirOverride = `shell_environment_policy.set.${NATIVE_CHAT_SCRATCH_DIR_ENV}`
+      expect(disabledOpen?.params?.config).not.toHaveProperty([
+        'sandbox_workspace_write.writable_roots'
+      ])
+      expect(disabledOpen?.params?.config).not.toHaveProperty([scratchDirOverride])
       expect(existsSync(nativeChatScratchFolderFor(stateDirectory, 'disabled'))).toBe(false)
       expect(first.closed).toBe(false)
       expect(first.calls).toEqual(firstCalls)

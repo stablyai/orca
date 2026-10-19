@@ -1,6 +1,9 @@
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
+import { AiVaultChatForkSourceSchema } from '../../../shared/ai-vault-chat-fork-contract'
+import type { AiVaultAgent, AiVaultSession } from '../../../shared/ai-vault-types'
 import type {
   AiVaultPrepareSessionResumeArgs,
+  AiVaultPrepareChatForkArgs,
+  AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault-resume-preparation'
 import {
@@ -86,13 +89,42 @@ function isMissingPairedResumePreparation(error: unknown): boolean {
  * makes the copy (`agentForksThroughChat`) has the chat's host make it here; the result is that
  * copy, which a plain resume opens and no chat owns (`copied: true`).
  */
+type ForkPreparationRequest = (
+  args: AiVaultPrepareSessionResumeRequest
+) => Promise<AiVaultPrepareSessionResumeResult>
+
+export function prepareAiVaultSessionForFork(
+  session: AiVaultSession,
+  request?: ForkPreparationRequest
+): Promise<{ session: AiVaultSession; copied: boolean }>
+export function prepareAiVaultSessionForFork(
+  session: AiVaultPrepareChatForkArgs,
+  request?: ForkPreparationRequest
+): Promise<{ session: AiVaultResumeCommandSession; copied: boolean; sourceAgent?: AiVaultAgent }>
 export async function prepareAiVaultSessionForFork(
-  session: AiVaultSession
-): Promise<{ session: AiVaultSession; copied: boolean }> {
-  if (!agentForksThroughChat(session.agent)) {
-    return { session: await prepareAiVaultSessionHome(session, true), copied: false }
+  session: AiVaultSession | AiVaultPrepareChatForkArgs,
+  request: ForkPreparationRequest = (args) => window.api.aiVault.prepareSessionResume(args)
+): Promise<{ session: AiVaultResumeCommandSession; copied: boolean; sourceAgent?: AiVaultAgent }> {
+  if ('sourceChat' in session) {
+    const result = await request(session)
+    const source = AiVaultChatForkSourceSchema.parse(result.cliForkSource)
+    return {
+      session: {
+        ...source,
+        executionHostId:
+          parseExecutionHostId(session.executionHostId)?.id ?? LOCAL_EXECUTION_HOST_ID
+      },
+      sourceAgent: source.sourceAgent,
+      copied: result.forkedSession !== undefined
+    }
   }
-  const result = await window.api.aiVault.prepareSessionResume({
+  if (!agentForksThroughChat(session.agent)) {
+    return {
+      session: await prepareAiVaultSessionHome(session, true, false, request),
+      copied: false
+    }
+  }
+  const result = await request({
     agent: session.agent,
     sessionId: session.sessionId,
     filePath: session.filePath,
@@ -123,7 +155,8 @@ export function aiVaultCliForkHostTooOldMessage(): string {
 async function prepareAiVaultSessionHome(
   session: AiVaultSession,
   fork: boolean,
-  terminalResume = false
+  terminalResume = false,
+  request: ForkPreparationRequest = (args) => window.api.aiVault.prepareSessionResume(args)
 ): Promise<AiVaultSession> {
   if (fork && !aiVaultSessionNeedsResumePreparation(session)) {
     return session
@@ -136,9 +169,7 @@ async function prepareAiVaultSessionHome(
     executionHostId: session.executionHostId,
     ...(fork ? { fork: true } : {})
   }
-  const result = await (terminalResume
-    ? prepareAiVaultTerminalResumeRequest(args)
-    : prepareAiVaultSessionResumeRequest(args))
+  const result = await (terminalResume ? prepareAiVaultTerminalResumeRequest(args) : request(args))
   if (result.useRealCodexHome) {
     return { ...session, codexHome: null }
   }

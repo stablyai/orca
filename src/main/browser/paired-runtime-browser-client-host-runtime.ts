@@ -1,3 +1,4 @@
+import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../shared/browser-client-profile-switch-protocol'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { app } from 'electron'
@@ -117,6 +118,7 @@ const browserClientHosts =
             browserHostClientId: getBrowserClientHostId(),
             hostCapabilities: [
               'webview',
+              BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY,
               BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
               BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY
             ],

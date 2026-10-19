@@ -127,7 +127,7 @@ export type BrowserApi = {
   onAgentInputFocusGuard: (
     callback: (data: { browserPageId: string; token: string; active: boolean }) => void
   ) => () => void
-  agentInputFocusGuardReady: (token: string) => void
+  agentInputFocusGuardReady: (token: string, composing: boolean) => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void

@@ -788,7 +788,7 @@ describe('registerWorktreeHandlers', () => {
     expect(result.setup?.command).toContain('printf')
   })
 
-  it('splits split-mode setup into the startup terminal without surfacing the workspace', async () => {
+  it('opens Setup beside the startup terminal without surfacing the workspace', async () => {
     addWorktreeMock.mockResolvedValue({})
     listWorktreesMock.mockResolvedValueOnce([
       {
@@ -818,12 +818,13 @@ describe('registerWorktreeHandlers', () => {
       startup: { command: 'claude' }
     })
 
-    expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(1)
+    expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(2)
+    expect(runtimeStub.splitTerminal).not.toHaveBeenCalled()
     // A user who moved on must not be scrolled to the new workspace by its setup pane (#9944).
-    expect(runtimeStub.splitTerminal).toHaveBeenCalledWith(
-      'term-startup',
+    expect(runtimeStub.createTerminal).toHaveBeenLastCalledWith(
+      'id:repo-1::/workspace/improve-dashboard',
       {
-        direction: 'vertical',
+        title: 'Setup',
         command: expect.stringContaining('setup-runner.sh'),
         env: expect.any(Object),
         activate: false,

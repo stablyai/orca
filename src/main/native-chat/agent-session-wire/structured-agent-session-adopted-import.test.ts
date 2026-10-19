@@ -1,7 +1,7 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Source validation must finish before a new session claims the provider conversation.
 
-import { mkdtemp, rm, writeFile, truncate } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -161,7 +161,6 @@ async function attach(
       probe: { outcome: 'reservation-unused' }
     },
     callerKey: 'client-1',
-    optionRevision: () => 0,
     params,
     now: () => NOW,
     onAttached
@@ -303,7 +302,7 @@ describe('adopting a provider conversation on create', () => {
       const transcriptPath = join(root, 'rollout.jsonl')
       if (kind === 'oversized') {
         await writeCodexRollout(transcriptPath, 'original turn')
-        await truncate(transcriptPath, 16 * 1024 * 1024 + 1)
+        await appendFile(transcriptPath, 'x'.repeat(16 * 1024 * 1024 + 1))
       } else if (kind === 'empty' || kind === 'invalid') {
         await writeFile(transcriptPath, kind === 'empty' ? '' : 'not json\n')
       }
@@ -324,7 +323,7 @@ describe('adopting a provider conversation on create', () => {
       expect(store?.getRecord(SESSION)).toBeNull()
       expect(store?.listOperationRows()).toEqual([])
       if (kind === 'oversized') {
-        expect(JSON.stringify(result)).toContain('import bound')
+        expect(JSON.stringify(result)).toContain('byte limit')
       }
     }
   )

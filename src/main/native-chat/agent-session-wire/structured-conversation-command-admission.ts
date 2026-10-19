@@ -4,7 +4,6 @@ import {
 } from '../../../shared/agent-child-work-stop-targets'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentSessionCurrentContextRows } from '../../../shared/agent-session-context-clear'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -19,6 +18,12 @@ import {
   type AgentSessionRefusalReason,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire-refusals'
+
+/** The session's child work: `open` decides (the provider's own account), `views` word it. */
+export type ConversationCommandChildWork = {
+  views: readonly AgentChildWorkView[] | undefined
+  open: boolean
+}
 
 /** What admission reads of a turn: the journal, its fence, and only the provider's stop capability. */
 export type ConversationCommandAdmissionContext = {
@@ -55,7 +60,7 @@ export function conversationCommandInFlight(): AgentSessionWireRefusal {
 export function conversationCommandBlocked(
   ctx: ConversationCommandAdmissionContext,
   record: AgentSessionRecord,
-  childWork: readonly AgentChildWorkView[] | undefined,
+  childWork: ConversationCommandChildWork,
   admission?: 'at-rest' | 'handover'
 ): AgentSessionWireRefusal | null {
   const { items, submissions } = agentSessionCurrentContextRows(
@@ -87,13 +92,12 @@ export function conversationCommandBlocked(
       'Resolve the pending question or approval before using this command.'
     )
   }
-  // The same liveness fold the strip's monitoring indicator reads: settled rows block nothing.
-  // Child records are the live generation's: its adapter ends them on every close, so with no
-  // generation live, any still running are an ended one's leftovers and hold nothing.
-  if (work.liveFence !== null && agentChildWorkLiveness(childWork) !== null) {
+  // Open work is the live generation's: its adapter ends it on every close, so with no generation
+  // live, any still open is an ended one's leftover and holds nothing.
+  if (work.liveFence !== null && childWork.open) {
     return blocked(
       'backgroundTasksRunning',
-      stripOffersStop(childWork ?? [], ctx.adapter.backgroundTaskStops?.(ctx.sessionId))
+      stripOffersStop(childWork.views ?? [], ctx.adapter.backgroundTaskStops?.(ctx.sessionId))
         ? 'Stop background tasks before using this command.'
         : 'Wait for background tasks to finish before using this command.'
     )

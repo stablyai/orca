@@ -5,6 +5,7 @@
 // client opts in; with no subscriber it does no work.
 
 import type { ExecutionHostId } from '../../shared/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/workspace-layout-load'
 import { stableJson } from '../../shared/workspace-layout/workspace-layout-load-report'
 import {
@@ -40,6 +41,10 @@ export class WorkspaceLayoutStream {
   private dirty: Set<ExecutionHostId> | 'all' | null = null
   private liveTitlesDirty = false
   private failureLogged = false
+  /** Its own flag, so a routing warning never hides a later projection or listener failure. */
+  private routingFailureLogged = false
+  /** The last change frame's position; never reset, so a reply's position outlives resubscribes. */
+  private seq = 0
 
   constructor(
     private readonly deps: {
@@ -54,6 +59,8 @@ export class WorkspaceLayoutStream {
   /** Every workspace's layout now, then each change until `unsubscribe`. */
   subscribe(listener: LayoutListener): {
     snapshot: { key: string; layout: PublishedWorkspaceLayout }[]
+    /** The position the snapshot holds. */
+    seq: number
     unsubscribe: () => void
   } {
     if (this.listeners.size === 0) {
@@ -70,6 +77,7 @@ export class WorkspaceLayoutStream {
     const snapshot = [...this.shown].map(([key, { layout }]) => ({ key, layout }))
     return {
       snapshot,
+      seq: this.seq,
       unsubscribe: () => {
         if (!this.listeners.delete(listener) || this.listeners.size > 0) {
           return
@@ -93,6 +101,12 @@ export class WorkspaceLayoutStream {
     }
     this.schedule()
     this.liveTitlesDirty = true
+  }
+
+  /** The position holding every write made so far: a pending flush is sent first. */
+  settledSeq(): number {
+    this.flush()
+    return this.seq
   }
 
   private schedule(): void {
@@ -161,15 +175,44 @@ export class WorkspaceLayoutStream {
     }
     this.projectedPartitions = partitions
     const projected = new Map<string, Published>()
+    const unroutable = new Set<string>()
     for (const [hostId, workspaces] of partitions) {
       for (const [key, workspace] of workspaces) {
         // Only the owning partition's copy is published; a stray copy elsewhere is not shown.
-        if (this.deps.homeHostId(key) === hostId) {
+        if (this.homeOf(key, unroutable) === hostId) {
           projected.set(key, workspace)
         }
       }
     }
+    for (const key of unroutable) {
+      const kept = this.published.get(key)
+      // Kept as last published: a 'removed' frame would make the window drop its tabs.
+      if (kept && !projected.has(key)) {
+        projected.set(key, kept)
+      }
+    }
     return projected
+  }
+
+  /**
+   * A workspace the router throws on is not guessed (`repoId::path` repeats across hosts, so a
+   * default could publish another host's copy); it is noted in `unroutable`. It never stops the rest.
+   */
+  private homeOf(key: string, unroutable: Set<string>): ExecutionHostId | null {
+    try {
+      return this.deps.homeHostId(key)
+    } catch (error) {
+      // Switch point: a window-owned build keeps failing the whole projection, as today.
+      if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+        throw error
+      }
+      unroutable.add(key)
+      if (!this.routingFailureLogged) {
+        this.routingFailureLogged = true
+        console.warn('[workspace-layout] layout stream routing failed:', error)
+      }
+      return null
+    }
   }
 
   /** Every pane's live title, in tab and pane order; null for a pane with none. */
@@ -204,7 +247,9 @@ export class WorkspaceLayoutStream {
     }
     this.published = next
     this.shown = shown
-    for (const event of events) {
+    for (const unsequenced of events) {
+      // Numbered as sent, so a failed projection never skips a position a reply could name.
+      const event = { ...unsequenced, seq: ++this.seq }
       for (const listener of this.listeners) {
         // One failing listener must not cost the others an event the stream has now published.
         try {

@@ -12,6 +12,7 @@ import {
   type AutomationRun,
   type AutomationRunStatus
 } from '../../shared/automations-types'
+import { automationRunRecency } from '../../shared/automation-session-reuse'
 
 export const RUN_TERMINAL_GRACE_MS = 10 * 60_000
 export const RUN_TERMINALS_KEPT_PER_AUTOMATION = 3
@@ -35,6 +36,8 @@ export type HeadlessRunTerminalRetentionDeps = {
   closeRunTerminal: (run: AutomationRun) => Promise<boolean>
   /** Drops the closed terminal from the run, keeping its status, error and output. */
   forgetRunTerminal: (run: AutomationRun) => Promise<void>
+  /** The automation's dispatch lane; a sweep reads and closes its runs' terminals inside it. */
+  inAutomationLane: <T>(automationId: string, operation: () => Promise<T>) => Promise<T>
   now?: () => number
 }
 
@@ -69,44 +72,64 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
     return run.status === 'completed' || (await deps.shellAloneAtPrompt(run))
   }
 
-  const sweepOnce = async (policy: { keep: number; graceMs: number }): Promise<number> => {
+  // Runs inside the automation's lane, so no run of it takes a pane while this reads and closes.
+  const sweepAutomation = async (
+    automationId: string,
+    policy: { keep: number; graceMs: number }
+  ): Promise<number> => {
     let closedCount = 0
-    const byAutomation = new Map<string, AutomationRun[]>()
-    for (const run of deps.listRuns()) {
-      if (!run.terminalPaneKey || STARTING.has(run.status)) {
-        continue
-      }
+    let kept = 0
+    const ownedPaneKeys = new Set<string>()
+    const runs = deps
+      .listRuns()
+      .filter(
+        (run): run is PanedRun =>
+          run.automationId === automationId &&
+          Boolean(run.terminalPaneKey) &&
+          !STARTING.has(run.status)
+      )
+      .toSorted((a, b) => automationRunRecency(b) - automationRunRecency(a))
+    for (const run of runs) {
       if (!firstSeenAt.has(run.id)) {
         firstSeenAt.set(run.id, now())
       }
-      byAutomation.set(run.automationId, [...(byAutomation.get(run.automationId) ?? []), run])
-    }
-    for (const runs of byAutomation.values()) {
-      let kept = 0
-      for (const run of runs.toSorted((a, b) => runRecency(b) - runRecency(a))) {
-        try {
-          // A terminal already gone holds no keep slot; only live ones stay viewable.
-          if (!deps.runTerminalAlive(run)) {
-            if (isFinalAutomationRunStatus(run.status)) {
-              await forget(run)
-            }
-            continue
+      try {
+        // A terminal already gone holds no keep slot; only live ones stay viewable.
+        if (!deps.runTerminalAlive(run)) {
+          if (isFinalAutomationRunStatus(run.status)) {
+            await forget(run)
           }
-          if (kept < policy.keep) {
-            kept += 1
-            continue
-          }
-          if (!(await mayClose(run, policy.graceMs))) {
-            continue
-          }
-          if (await deps.closeRunTerminal(run)) {
-            closedCount += 1
-          }
-          await forget(run)
-        } catch (error) {
-          console.error('[automations] could not close a run terminal:', error)
+          continue
         }
+        // A reused pane's fate is its newest run's; older runs on it keep their link until it goes.
+        if (ownedPaneKeys.has(run.terminalPaneKey)) {
+          continue
+        }
+        ownedPaneKeys.add(run.terminalPaneKey)
+        if (kept < policy.keep) {
+          kept += 1
+          continue
+        }
+        if (!(await mayClose(run, policy.graceMs))) {
+          continue
+        }
+        if (await deps.closeRunTerminal(run)) {
+          closedCount += 1
+        }
+        await forget(run)
+      } catch (error) {
+        console.error('[automations] could not close a run terminal:', error)
       }
+    }
+    return closedCount
+  }
+
+  const sweepOnce = async (policy: { keep: number; graceMs: number }): Promise<number> => {
+    let closedCount = 0
+    for (const automationId of new Set(deps.listRuns().map((run) => run.automationId))) {
+      closedCount += await deps.inAutomationLane(automationId, () =>
+        sweepAutomation(automationId, policy)
+      )
     }
     return closedCount
   }
@@ -145,6 +168,4 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
   }
 }
 
-function runRecency(run: AutomationRun): number {
-  return run.dispatchedAt ?? run.startedAt ?? run.createdAt
-}
+type PanedRun = AutomationRun & { terminalPaneKey: string }

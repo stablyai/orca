@@ -139,6 +139,9 @@ export async function attachPtyFromRuntimeController(
         sequenceBeforeProviderAttach
       )
     }
+    if (attachResult?.lastTitle) {
+      deps.runtime?.seedTerminalRestoreTail?.(ptyId, { lastTitle: attachResult.lastTitle })
+    }
     return true
   } catch {
     return false

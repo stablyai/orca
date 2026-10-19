@@ -212,6 +212,26 @@ describe('skill discovery', () => {
     ])
   })
 
+  it("discovers a project's OpenCode skills as OpenCode's", async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const repo = join(root, 'repo')
+    const opencodeSkill = join(repo, '.opencode', 'skills', 'release-notes')
+    await mkdir(opencodeSkill, { recursive: true })
+    await writeFile(join(opencodeSkill, 'SKILL.md'), '# Release notes\n\nWrite release notes.')
+
+    const result = await discoverSkills({
+      homeDir: join(root, 'home'),
+      cwd: join(root, 'missing-cwd'),
+      repos: [makeRepo(repo)]
+    })
+
+    const skill = result.skills.find((candidate) => candidate.name === 'Release notes')
+    expect(result.sources.find((source) => source.path === skill?.rootPath)).toMatchObject({
+      sourceKind: 'repo',
+      owner: 'opencode'
+    })
+  })
+
   it('filters discovery by requested directory name and source kind', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')

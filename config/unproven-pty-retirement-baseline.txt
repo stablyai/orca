@@ -1,0 +1,14 @@
+# PTY retirements on no exit proof per file: PtyRetirementWithoutProof.because, and raw
+# ptyOwnership.delete outside finishPtyShutdown. This is a RATCHET: counts may only go DOWN.
+# Retire through finishPtyShutdown on a PtyExitProof, or record the stop durably first.
+# Prune after a fix: pnpm check:unproven-pty-retirement-ratchet --prune
+
+1 src/main/ipc/pty/ipc/renderer-kill.ts # SSH provider unregistered: R4-4 tab-close replay
+1 src/main/ipc/pty/pane/absent-pane-owner.ts # host-confirmed absence, untyped
+1 src/main/ipc/pty/pane/spawn-registration.ts # drops ownership even when the discard shutdown threw
+1 src/main/ipc/pty/provider/bind-listeners.ts # observed provider exit, untyped
+1 src/main/ipc/pty/provider/local-configure.ts # observed local exit, untyped
+1 src/main/ipc/pty/provider/ownership-state.ts # deletePtyOwnership, test-only caller
+1 src/main/ipc/pty/provider/state-cleanup.ts # clearPtyOwnershipForConnection, test-only caller
+3 src/main/ipc/pty/runtime/kill.ts # 2x SSH provider unregistered (R4-4); unconfirmed follow-up stop of a rejected spawn
+1 src/main/ssh/legacy-relay/legacy-relay-pane-stops.ts # COMPAT(legacy-relay-bridge): deleted with the folder

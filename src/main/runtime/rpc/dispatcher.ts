@@ -187,6 +187,14 @@ export class RpcDispatcher {
       )
       return clientHostedBrowser.result
     }
+    const desktopBrowser = await (runtime.routeDesktopBrowserBridgeRpc?.(
+      request.method,
+      params,
+      context
+    ) ?? { handled: false as const })
+    if (desktopBrowser.handled) {
+      return desktopBrowser.result
+    }
 
     const compatibility = await legacyOrchestration.tryHandle(request, params, context.signal)
     if (compatibility.handled) {

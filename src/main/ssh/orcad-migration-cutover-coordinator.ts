@@ -11,15 +11,15 @@ import type {
   OrcadMigrationCatalogAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 import type {
   OrcadMigrationSnapshotChunkRequest,
   OrcadMigrationSnapshotChunkResult
-} from '../../shared/orcad-migration-scrollback'
+} from '../../shared/orcad-migration/orcad-migration-scrollback'
 import type {
   OrcadMigrationSourceCutover,
   OrcadMigrationSourceCutoverPhase
-} from '../../shared/orcad-migration-source-cutover'
+} from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import { resolveDurableOrcadCatalogMutation } from './orcad-catalog-durable-mutation'
 import { ORCAD_MIGRATION_DESTINATION_UNSUPPORTED } from './orcad-migration-catalog-client'
 import {
@@ -31,9 +31,9 @@ import {
   transferOrcadMigrationSnapshots,
   type OrcadMigrationSnapshotSource
 } from './orcad-migration-snapshot-coordinator'
-import type { OrcadMigrationPreflightStore } from './ssh-target-orcad-preflight'
+import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-preflight'
 import { sshRelayMigrationCutoverPort } from './orcad-migration-ssh-relay-source'
-import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 
 /** The destination's catalog operations, served by the T6-9 orcad.migration.* client. */
 export type OrcadMigrationDestinationCatalog = {

@@ -3,6 +3,11 @@ name: Windows native preparation comparison
 on:
   workflow_dispatch:
     inputs:
+      comparison:
+        description: Bounded comparison to run on the existing Windows slots.
+        type: choice
+        default: native-preparation
+        options: [native-preparation, windows-security]
       source_sha:
         description: Exact commit containing this benchmark and the Windows compiler candidate.
         required: true
@@ -49,11 +54,19 @@ jobs:
           cache-pnpm-store: 'false'
           cache-pnpm-verification: 'false'
       - name: Compare isolated cold and same-build warm preparation
+        if: inputs.comparison != 'windows-security'
         shell: bash
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           BENCHMARK_RUNNER: ${{ matrix.os }}
         run: node config/scripts/benchmark-windows-native-preparation.mjs
+      - name: Compare warm Windows security builds and qualify fallback
+        if: inputs.comparison == 'windows-security'
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BENCHMARK_RUNNER: ${{ matrix.os }}
+        run: node config/scripts/benchmark-windows-security-reuse.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:

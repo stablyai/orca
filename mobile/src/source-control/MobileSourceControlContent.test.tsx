@@ -1,16 +1,46 @@
-import { createElement, useState, type ReactElement } from 'react'
+import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileSourceControlContent } from './MobileSourceControlContent'
 import * as branchFormat from './mobile-branch-entry-format'
+import type { SectionListProps } from 'react-native'
+import type {
+  MobileBranchEntryView,
+  MobileGitStatusEntryView
+} from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
-  SectionList: ({ ListFooterComponent }: { ListFooterComponent: ReactElement }) =>
-    createElement('SectionList', null, ListFooterComponent),
+  SectionList: (props: SectionListProps<MobileBranchEntryView | MobileGitStatusEntryView>) =>
+    createElement(
+      'SectionList',
+      props,
+      typeof props.ListFooterComponent === 'function'
+        ? createElement(props.ListFooterComponent)
+        : props.ListFooterComponent,
+      props.sections.map((section) =>
+        createElement(
+          'Section',
+          { key: section.key },
+          props.renderSectionHeader?.({ section }),
+          section.data.slice(0, 20).map((item, index) =>
+            createElement(
+              'Row',
+              { key: item.path },
+              props.renderItem?.({
+                item,
+                index,
+                section,
+                separators: { highlight: noop, unhighlight: noop, updateProps: noop }
+              })
+            )
+          )
+        )
+      )
+    ),
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Text: 'Text',
   TextInput: 'TextInput',
@@ -222,9 +252,9 @@ afterEach(() => {
 })
 
 describe('committed branch files during commit-message typing', () => {
-  it.each(['scroll', 'sections'])('keeps the footer without revisiting rows in %s', (layout) => {
+  it.each(['clean', 'dirty'])('keeps the list without revisiting rows in %s', (layout) => {
     const initial = initialState()
-    if (layout === 'sections') {
+    if (layout === 'dirty') {
       initial.sections = [{ area: 'staged', title: 'Staged Changes', data: [] }]
     }
     const format = vi.spyOn(branchFormat, 'formatMobileBranchEntryMeta')
@@ -247,7 +277,30 @@ describe('committed branch files during commit-message typing', () => {
     expect(format).not.toHaveBeenCalled()
   })
 
-  it('updates the footer when each of its inputs changes independently', () => {
+  it.each([false, true])(
+    'passes all committed files through the list window (dirty: %s)',
+    (dirty) => {
+      const initial = initialState()
+      const first = initial.branchEntries[0]
+      if (!first) {
+        throw new Error('missing branch fixture')
+      }
+      initial.branchEntries = Array.from({ length: 20_000 }, (_, index) => ({
+        ...first,
+        path: `file-${index}.ts`
+      }))
+      if (dirty) {
+        initial.sections = [{ area: 'staged', title: 'Staged Changes', data: [] }]
+      }
+      render(initial)
+      expect(rows().length).toBeGreaterThan(0)
+      expect(rows().length).toBeLessThanOrEqual(20)
+      const list = renderer?.root.find((node) => String(node.type) === 'SectionList')
+      expect(list?.props.sections.at(-1).data).toBe(initial.branchEntries)
+    }
+  )
+
+  it('updates rows and section messages when their inputs change', () => {
     const initial = initialState()
     const format = vi.spyOn(branchFormat, 'formatMobileBranchEntryMeta')
     render(initial)
@@ -310,5 +363,26 @@ describe('committed branch files during commit-message typing', () => {
     expect(text()).toContain('Reconnecting to desktop')
     expect(text()).toContain('offline')
     expect(format).not.toHaveBeenCalled()
+  })
+})
+
+describe('AI commit message button', () => {
+  function generateButton() {
+    return renderer?.root.find(
+      (node) =>
+        String(node.type) === 'Pressable' &&
+        (node.props.accessibilityLabel === 'Generate commit message with AI' ||
+          node.props.accessibilityLabel === 'Cancel commit message generation')
+    )
+  }
+
+  it('matches desktop: a typed message blocks regenerating, and cancel stays available', () => {
+    render()
+    expect(generateButton()?.props.disabled).toBe(false)
+    patch({ commitMessage: 'my own message' })
+    expect(generateButton()?.props.disabled).toBe(true)
+    expect(generateButton()?.props.accessibilityHint).toBe('Clear the message to regenerate.')
+    patch({ generatingMessage: true })
+    expect(generateButton()?.props.disabled).toBe(false)
   })
 })

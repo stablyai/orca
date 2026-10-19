@@ -73,10 +73,11 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   ui: { disposition: 'per-field', item: 38 },
   githubCache: notApplicableDisposition(21, 'Cache keyed by repoId, which the move keeps.'),
   workspaceSession: { disposition: 'per-field', item: 22 },
-  workspaceSessionsByHostId: notApplicableDisposition(
-    22,
-    "WSL projects live in 'local', i.e. workspaceSession."
-  ),
+  workspaceSessionsByHostId: {
+    disposition: 'rewrite-desktop',
+    item: 22,
+    note: "The desktop seeds the WSL host's session from the moved 'local' rows (D1b-7c)."
+  },
   remoteLayoutSnapshots: { disposition: 'rewrite-desktop', item: 47 },
   sshTargets: notApplicableDisposition(62),
   sshTargetGenerationCounter: notApplicableDisposition(62),

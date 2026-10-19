@@ -214,7 +214,8 @@ describe('createGitHubSlice cache bounds', () => {
     vi.useRealTimers()
   })
 
-  it('bounds restored PR and issue caches', async () => {
+  it('bounds restored PR and issue caches, and tells main', async () => {
+    vi.useFakeTimers()
     const store = createTestStore()
     const pr = Object.fromEntries(
       Array.from({ length: 505 }, (_, index) => [
@@ -236,6 +237,10 @@ describe('createGitHubSlice cache bounds', () => {
     expect(Object.keys(store.getState().issueCache)).toHaveLength(500)
     expect(store.getState().prCache['repo-id::branch-0']).toBeUndefined()
     expect(store.getState().issueCache['repo-id::0']).toBeUndefined()
+    vi.advanceTimersByTime(1000)
+    expect(mockApi.cache.setGitHub).toHaveBeenLastCalledWith({
+      cache: { pr: store.getState().prCache, issue: store.getState().issueCache }
+    })
   })
 
   it('bounds PR and issue caches as fetches add entries', async () => {

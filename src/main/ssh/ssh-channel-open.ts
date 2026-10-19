@@ -1,5 +1,6 @@
-import { trackSshConnectionChannelLifetime } from './ssh-connection-channel-lifetime'
-import { CONNECT_TIMEOUT_MS, createSshOperationAbortError } from './ssh-connection-utils'
+import { trackSshConnectionChannelLifetime } from './connection/ssh-connection-channel-lifetime'
+import { CONNECT_TIMEOUT_MS } from './connection/ssh-connection-timing'
+import { createSshOperationAbortError } from './connection/ssh-exec-options'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 
 // Upper bound on waiting for an aborted channel's open/close to settle before rejecting anyway.

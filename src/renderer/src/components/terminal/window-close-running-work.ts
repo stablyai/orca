@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { isRemoteExecutionHostPtyId } from '../../../../shared/remote-execution-host-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { collectTabPtyIds } from './running-terminal-close-guard'
 import { probePtyRunningWork } from './pty-running-work-probe'
 
@@ -32,10 +32,12 @@ export type WindowCloseRunningWork =
  *
  * Two deliberate asymmetries:
  *
- * - **Quit only considers remote ptys.** Quitting is an unambiguous instruction to end this
+ * - **Quit only considers SSH relay ptys.** Quitting is an unambiguous instruction to end this
  *   machine's processes (#524), but it is not an instruction to end execution on someone else's:
- *   the client detaches while the relay keeps running, and a target with a bounded grace period
- *   then SIGKILLs that work once the countdown expires.
+ *   an SSH relay (`ssh:` ids) keeps its terminals only for its grace period after the client
+ *   detaches, then kills them. A paired runtime (`remote:` ids: `orca serve`, managed SSH/WSL
+ *   orcad) owns its terminals outright and keeps them after the client quits, so quitting
+ *   endangers nothing there, reachable or not (#29916).
  * - **Only a remote `unverifiable` warns.** A local probe has no transport to lose, so its failure
  *   means the pty is gone. A remote one that cannot be reached is the case
  *   `docs/reference/ssh-execution-boundary.md` exists to protect: loss of contact is not evidence
@@ -51,7 +53,7 @@ export async function assessWindowCloseRunningWork(params: {
       .flatMap((tab) => collectTabPtyIds(state, tab.id))
   )
   const candidatePtyIds = params.isQuitting
-    ? [...ptyIds].filter(isRemoteExecutionHostPtyId)
+    ? [...ptyIds].filter((ptyId) => parseAppSshPtyId(ptyId) !== null)
     : [...ptyIds]
   if (candidatePtyIds.length === 0) {
     return { kind: 'none' }

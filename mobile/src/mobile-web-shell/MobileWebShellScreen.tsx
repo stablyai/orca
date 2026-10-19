@@ -33,6 +33,7 @@ import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
 import { useReportedHostAreaServing } from './host-area-serving'
 import { isHostRouteOf } from './page-route-policy'
+import { PageRouteUnavailableScreen } from './PageRouteUnavailableScreen'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellWaitingFrame'
@@ -134,12 +135,8 @@ export type MobileWebShellScreenProps = {
   hostId: string
   /** The screen this shell stands in for, which the page cannot derive from a document served at `/`. */
   route: BridgeInitRoute
-  /**
-   * What to render when the bundle does not list this route, or lists it needing a grant this app
-   * does not implement. Required, because every caller has a native screen behind it: that is what
-   * the negotiation falls back to, and a shell with nothing behind it would paint a blank instead.
-   */
-  fallback: ReactNode
+  /** False for the catch-all, whose pathnames have no screen in this app. */
+  appNamesRoute?: boolean
   /**
    * The page applied a one-shot route param and asks for it to be erased (ruling 34), naming what
    * it applied. Only a caller that put one on the route ever hears this, and the comparison is
@@ -159,7 +156,7 @@ export type MobileWebShellScreenProps = {
 export function MobileWebShellScreen({
   hostId,
   route,
-  fallback,
+  appNamesRoute,
   onRouteParamClear,
   runtime
 }: MobileWebShellScreenProps) {
@@ -190,6 +187,7 @@ export function MobileWebShellScreen({
     hostId,
     routePathname: route.pathname,
     wide: isWideLayout,
+    appNamesRoute,
     runtime
   })
   // Full screen from the download on, as on a phone; while checking, nobody knows the page owns it.
@@ -308,7 +306,7 @@ export function MobileWebShellScreen({
     onBinaryFramesDropped: reportDroppedBinaryFrames
   })
 
-  // A route that moved under a screen that stayed mounted: the session switch keeps `paneKey` out
+  // A route that moved under a screen that stayed mounted: the session route keeps `paneKey` out
   // of its key so a notification tap for another pane is a tab switch rather than a page reload,
   // and this is how the page hears about it. Nothing is tracked here — which route the page has,
   // and which one is still owed it, belong to the host, which outlives any one run of this effect.
@@ -352,8 +350,8 @@ export function MobileWebShellScreen({
     }
   }, [hostId, unreadable])
 
-  if (state.kind === 'native-route') {
-    return fallback
+  if (state.kind === 'route-unavailable') {
+    return <PageRouteUnavailableScreen hostId={hostId} />
   }
   if (state.kind === 'wall') {
     return <ProtocolBlockScreen verdict={state.verdict} />

@@ -1,6 +1,7 @@
 import type { AppState } from '@/store/types'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from './floating-workspace-panel-reveal'
+import { markVisited, readPreviousActive } from './worktree-activation-visit'
 
 type FloatingPanelState = Pick<
   AppState,
@@ -21,6 +22,8 @@ export function revealWorkspaceSurface(
       | 'recordWorktreeVisit'
       | 'isNavigatingHistory'
       | 'revealWorktreeInSidebar'
+      | 'activeWorktreeId'
+      | 'activeWorkspaceExecutionHostId'
     >,
   worktreeId: string,
   createdTabIds?: readonly string[]
@@ -29,13 +32,14 @@ export function revealWorkspaceSurface(
     revealFloatingWorkspacePanel(state)
     return
   }
+  const previousActive = readPreviousActive(state)
   state.setActiveView('terminal')
   if (createdTabIds) {
     state.setActiveWorktree(worktreeId, undefined, { createdTabIds })
   } else {
     state.setActiveWorktree(worktreeId)
   }
-  state.markWorktreeVisited(worktreeId)
+  markVisited(state, worktreeId, previousActive)
   if (!state.isNavigatingHistory) {
     state.recordWorktreeVisit(worktreeId)
   }

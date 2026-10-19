@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto'
 import { readFile, mkdir, rm, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+const { darkBuildMarkers } = createRequire(import.meta.url)('../dark-build-switches.cjs')
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 
@@ -118,7 +121,8 @@ export async function writeMobileWebBundleTree({
   protocolWindow,
   // Empty for a tree with no route list at all: a shell reading it finds no screen listed and
   // renders every route natively.
-  routes = []
+  routes = [],
+  env = process.env
 }) {
   const assets = written
     .map(({ path, sha256, byteLength, contentType }) => ({ path, sha256, byteLength, contentType }))
@@ -143,5 +147,9 @@ export async function writeMobileWebBundleTree({
     await writeFile(join(outDir, asset.path), asset.bytes)
   }
   await writeFile(join(outDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+  // Outside the manifest, so the page's bytes and buildId stay what the switch compiled.
+  for (const marker of darkBuildMarkers(env)) {
+    await writeFile(join(outDir, marker.fileName), marker.text, 'utf8')
+  }
   return { manifest, outDir }
 }

@@ -30,6 +30,8 @@ import {
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { layoutOwnerPaneGestures } from './terminal-pane-layout-owner-gestures'
 
 /** Builds the imperative PaneManager option bag from the mount context. */
 export function createTerminalPaneManagerOptions(
@@ -83,7 +85,7 @@ export function createTerminalPaneManagerOptions(
         context.deps.updateTabTitle(tabId, paneTitle)
       }
     },
-    onLayoutChanged: (intent) => {
+    onLayoutChanged: () => {
       scheduleRuntimeGraphSync()
       context.deps.syncExpandedLayout()
       context.syncCanExpandState()
@@ -91,7 +93,7 @@ export function createTerminalPaneManagerOptions(
       context.syncPaneLayoutRevision()
       context.queueResizeAll(false)
       if (context.shouldPersistLayout()) {
-        context.deps.persistLayoutSnapshot(intent)
+        context.deps.persistLayoutSnapshot()
       }
     },
     onPaneDragActiveChange: (active) => {
@@ -105,6 +107,15 @@ export function createTerminalPaneManagerOptions(
     },
     resolveExternalPaneDropTarget,
     onExternalPaneDrop,
+    // Switch point: in-tab pane moves and divider ratios go through main.
+    ...(ORCA_LAYOUT_OWNER_IS_MAIN
+      ? layoutOwnerPaneGestures({
+          worktreeId,
+          tabId,
+          managerRef,
+          shouldPersistLayout: context.shouldPersistLayout
+        })
+      : {}),
     terminalLigaturesEnabled: () =>
       resolveTerminalLigaturesEnabled(
         settingsRef.current?.terminalLigatures,

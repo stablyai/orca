@@ -202,6 +202,7 @@ ORCA terminal create --worktree active --command "pnpm dev" --json
 ORCA terminal split --terminal <handle> --direction vertical --json
 ORCA terminal split --terminal <handle> --direction horizontal --command "npm test" --json
 ORCA terminal rename --terminal <handle> --title "New Name" --json
+ORCA terminal set-pane-title --terminal <handle> --title "REVIEWER" --json
 ORCA terminal switch --terminal <handle> --json
 ORCA terminal close --terminal <handle> --json
 ORCA terminal close --worktree id:<repoId>::<worktreePath> --all --json
@@ -214,6 +215,7 @@ Terminal rules:
 - A bulk close fails when the execution host cannot confirm every PTY stopped. Treat that as `unverifiable`; do not report the processes as exited or retry against another host.
 - Use workspace Sleep, not close, when the terminals and agent sessions should resume later. `terminal stop` is legacy compatibility plumbing and should not be used in new agent workflows.
 - `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
+- A paired server has no window. `terminal switch --environment <name>` moves the desktop app on this machine to that server's terminal, and reports `navigated: false` when no desktop here shows that server.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
 - `accepted: true` proves input acceptance, not a started turn. Use the receipt's `turn_started` stage when submission proof is needed; never resend on silence.

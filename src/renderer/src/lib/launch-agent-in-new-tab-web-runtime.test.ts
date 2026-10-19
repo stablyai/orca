@@ -98,15 +98,18 @@ describe('launchAgentInNewTab paired web runtime', () => {
         pasteDraftAfterLaunch: false
       })
     )
-    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'web-runtime',
-      targetGroupId: 'group-1',
-      activate: true,
-      agentSessionKind: 'fresh',
-      agent: 'claude',
-      viewMode: 'terminal'
-    })
+    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      {
+        worktreeId: 'wt-1',
+        environmentId: 'web-runtime',
+        targetGroupId: 'group-1',
+        activate: true,
+        agentSessionKind: 'fresh',
+        agent: 'claude',
+        viewMode: 'terminal'
+      },
+      { notifyFailure: false }
+    )
     expect(mocks.createTab).not.toHaveBeenCalled()
     await Promise.resolve()
     // Why: host creation is async, so the user may be viewing another worktree by the time it lands.
@@ -134,25 +137,28 @@ describe('launchAgentInNewTab paired web runtime', () => {
         pasteDraftAfterLaunch: false
       })
     )
-    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'web-runtime',
-      targetGroupId: 'group-1',
-      activate: true,
-      agentSessionKind: 'fresh',
-      launchAgent: 'codex',
-      command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
-      env: { CODEX_PROFILE: 'captured' },
-      launchConfig: {
-        agentCommand: "codex '--model' 'gpt-5' '--reasoning-effort' 'high'",
-        agentArgs: '--model gpt-5 --reasoning-effort high',
-        agentEnv: { CODEX_PROFILE: 'captured' }
+    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      {
+        worktreeId: 'wt-1',
+        environmentId: 'web-runtime',
+        targetGroupId: 'group-1',
+        activate: true,
+        agentSessionKind: 'fresh',
+        launchAgent: 'codex',
+        command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
+        env: { CODEX_PROFILE: 'captured' },
+        launchConfig: {
+          agentCommand: "codex '--model' 'gpt-5' '--reasoning-effort' 'high'",
+          agentArgs: '--model gpt-5 --reasoning-effort high',
+          agentEnv: { CODEX_PROFILE: 'captured' }
+        },
+        startupCommandDelivery: 'shell-ready',
+        prompt: 'fix the spinner',
+        promptDelivery: 'auto-submit',
+        viewMode: 'terminal'
       },
-      startupCommandDelivery: 'shell-ready',
-      prompt: 'fix the spinner',
-      promptDelivery: 'auto-submit',
-      viewMode: 'terminal'
-    })
+      { notifyFailure: false }
+    )
     expect(mocks.createTab).not.toHaveBeenCalled()
   })
 })

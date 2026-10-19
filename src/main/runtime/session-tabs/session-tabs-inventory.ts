@@ -33,6 +33,14 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     ResolveBrowserNetworkExecutionHostForWorktreeMethods['getValidatedExplicitWorktreeIdSelector']
   >
 
+  abstract getExplicitSessionWorktreeIdSelector(
+    ...args: Parameters<
+      ResolveBrowserNetworkExecutionHostForWorktreeMethods['getExplicitSessionWorktreeIdSelector']
+    >
+  ): ReturnType<
+    ResolveBrowserNetworkExecutionHostForWorktreeMethods['getExplicitSessionWorktreeIdSelector']
+  >
+
   protected abstract hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
     ...args: Parameters<
       HydrateHeadlessMobileSessionTabsFromWorkspaceSessionMethods['hydrateHeadlessMobileSessionTabsFromWorkspaceSession']
@@ -122,7 +130,7 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     clientNavigationId?: string,
     options?: { includeInitialSurfaceLaunch?: true }
   ): Promise<RuntimeMobileSessionTabsResult> {
-    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
+    const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     if (explicitWorktreeId) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId, {
         allowAttachedWindow: true,
@@ -130,8 +138,11 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       })
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId)
       await this.refreshMobileSessionPtyRecords(explicitWorktreeId)
-      this.restoreLivePairedRendererSessionOwnedMobileTerminals(explicitWorktreeId)
-      return this.getMobileSessionTabsForWorktree(explicitWorktreeId, clientNavigationId, options)
+      // Why: the refresh may discover a surviving PTY under the host's original path spelling.
+      const resolvedId =
+        this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ?? explicitWorktreeId
+      this.restoreLivePairedRendererSessionOwnedMobileTerminals(resolvedId)
+      return this.getMobileSessionTabsForWorktree(resolvedId, clientNavigationId, options)
     }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, {

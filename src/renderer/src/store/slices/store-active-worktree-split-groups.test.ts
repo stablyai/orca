@@ -368,7 +368,6 @@ describe('setActiveWorktree', () => {
       'terminalLayoutsByTabId',
       'pendingStartupByTabId',
       'pendingInitialCwdByTabId',
-      'pendingSetupSplitByTabId',
       'pendingIssueCommandSplitByTabId',
       'automaticAgentResumeClaimsByTabId',
       'tabBarOrderByWorktree',

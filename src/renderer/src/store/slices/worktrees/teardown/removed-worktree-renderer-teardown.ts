@@ -58,7 +58,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   }
   // Why: renderer state follows the successful backend result, so blocked dirty deletes keep their terminals intact.
   // Why browsers first: unregister Chromium guests before other teardown can intercept them (avoids a browser-state race).
-  await get().shutdownWorktreeBrowsers(worktreeId)
+  await Promise.resolve(get().shutdownWorktreeBrowsers(worktreeId))
   await get().shutdownWorktreeTerminals(worktreeId, {
     shutdownReason: 'remove-worktree',
     // The backend removal above already killed the workspace's PTYs.

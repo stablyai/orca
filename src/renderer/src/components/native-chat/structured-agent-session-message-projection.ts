@@ -1,11 +1,11 @@
-import { agentSessionCurrentContextRows } from '../../../../shared/agent-session-context-clear'
+import { selectAgentSessionCurrentRequests } from '../../../../shared/agent-session-current-requests'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/structured-agent-session-message-projection'
 import { projectStructuredAgentSessionMessages as projectMessages } from '../../../../shared/structured-agent-session-message-projection'
-import { projectStructuredQuestionMessages } from './structured-agent-question-projection'
+import { projectStructuredQuestionMessages } from '../../../../shared/structured-agent-question-projection'
 import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/structured-agent-session-live-turn'
 
 /** The desktop's transcript: a message the host accepted and then rejected stays where it was
@@ -26,12 +26,14 @@ export type StructuredPromptItem = AgentJournalRenderItem & {
  *  (`isActionableStructuredAgentSessionPrompt`) when the host names them. */
 export function pendingStructuredSessionPrompts({
   journalItems,
+  currentRequests,
   actionablePromptIds
 }: {
   journalItems: AgentJournalRenderItem[]
+  currentRequests?: AgentJournalRenderItem[]
   actionablePromptIds?: readonly string[]
 }): StructuredPromptItem[] {
-  return agentSessionCurrentContextRows(journalItems).items.filter(
+  return selectAgentSessionCurrentRequests({ items: journalItems, currentRequests }).filter(
     (item): item is StructuredPromptItem =>
       (item.body.kind === 'approval' || item.body.kind === 'question') &&
       item.body.resolution.state === 'pending' &&

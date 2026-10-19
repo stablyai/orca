@@ -34,6 +34,12 @@ async function restrictAsync(
   return verifyAfterApply(security, targetPath, isDirectory)
 }
 
+/** Restricts one file on the thread pool; never rejects, resolves whether the DACL holds. */
+export function restrictWindowsFile(filePath: string): Promise<boolean> {
+  const security = securityFor(filePath)
+  return security ? restrictAsync(security, filePath, false) : Promise.resolve(false)
+}
+
 /** Verifies and, only when that fails, rewrites the DACL on the calling thread. */
 export function restrictWindowsPathSync(targetPath: string, isDirectory: boolean): boolean {
   const security = securityFor(targetPath)
@@ -59,7 +65,7 @@ export function restrictWindowsPathSync(targetPath: string, isDirectory: boolean
  * restriction holds. Without the addon the file is written plainly and this is false; with it, a
  * failed create throws like any other write failure.
  */
-export function writeRestrictedWindowsFile(targetPath: string, contents: string): boolean {
+export function writeRestrictedWindowsFile(targetPath: string, contents: string | Buffer): boolean {
   const security = securityFor(targetPath)
   if (!security) {
     writeFileSync(targetPath, contents, { encoding: 'utf-8', mode: 0o600 })
@@ -68,7 +74,7 @@ export function writeRestrictedWindowsFile(targetPath: string, contents: string)
   security.addon.createFileWithDacl(
     targetPath,
     hardenedDaclSddl(security.userSid, false),
-    Buffer.from(contents, 'utf-8')
+    typeof contents === 'string' ? Buffer.from(contents, 'utf-8') : contents
   )
   // Why read it back: FAT32 and some shares accept the descriptor and silently drop it.
   return verifyAfterApply(security, targetPath, false)

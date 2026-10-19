@@ -89,8 +89,6 @@ const UNREGISTERED_ON_MAIN = [
   'src/main/grok/windows-grok-hook-script.test.ts',
   // Whole file is `describe.runIf(platform === 'win32')`; runs on no machine.
   'src/main/ipc/preflight-windows-path-refresh.repro.test.ts',
-  // Nested `describe.skipIf(!isWindows)` real-shell block; never exercised in CI.
-  'src/main/ipc/pty-encoding.test.ts',
   // `describeWindows` ternary over the whole file; runs on no machine.
   'src/main/providers/windows-shell-preflight-runtime.windows.test.ts',
   // Whole file is `describe.runIf(platform === 'win32')`; runs on no machine.

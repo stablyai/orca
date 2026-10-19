@@ -150,6 +150,7 @@ describe('registerPtyHandlers', () => {
         // Why out-of-band: an in-band empty pty:data chunk is ambiguous with chunks fully consumed by renderer OSC-9999 stripping.
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: result.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop',
           markerSeq: 42
         })
@@ -280,6 +281,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop'
         })
       } finally {
@@ -318,6 +320,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop'
         })
       } finally {
@@ -364,6 +367,7 @@ describe('registerPtyHandlers', () => {
 
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop'
         })
         expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
@@ -441,6 +445,7 @@ describe('registerPtyHandlers', () => {
 
           expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
             id: spawnResult.id,
+            hiddenDropEpisode: expect.any(Number),
             reason: 'hidden-drop'
           })
           expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
@@ -475,6 +480,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop'
         })
         vi.advanceTimersByTime(2)
@@ -509,6 +515,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
         expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'unhide'
         })
 
@@ -600,6 +607,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
         expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'unhide'
         })
       } finally {
@@ -652,6 +660,7 @@ describe('registerPtyHandlers', () => {
         setHidden(null, { id: result.id, hidden: false })
         expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:modelRestoreNeeded', {
           id: result.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'unhide',
           markerSeq: 42
         })
@@ -709,6 +718,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: result.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop',
           markerSeq: 42
         })

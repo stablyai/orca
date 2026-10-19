@@ -7,7 +7,7 @@ import { isFolderRepo } from '../../../../shared/repo-kind'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 import { getWorktreeCardPrDisplay } from '@/components/sidebar/worktree-card-pr-display'
 import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
-import { getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubRepoCacheKey } from '../../../../shared/github/github-cache-key'
 import {
   getHostedReviewCacheKey,
   linkedReviewHintKey

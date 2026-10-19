@@ -463,6 +463,24 @@ describe('workspace cleanup broad scan opt-in', () => {
     })
   })
 
+  it('reads host-written terminal use as activity for a disconnected SSH workspace', async () => {
+    const sshRepo: Repo = { ...REPO, id: 'repo-ssh', connectionId: 'ssh-1' }
+    const allMeta: Record<string, WorktreeMeta> = {
+      'repo-ssh::/remote/shells': makeWorktreeMeta({
+        lastActivityAt: NOW - 45 * DAY_MS,
+        lastTerminalUseAt: NOW - 2 * DAY_MS
+      })
+    }
+
+    const legacy = await scanWorkspaceCleanup(makeStore([sshRepo], allMeta))
+    const optIn = await scanWorkspaceCleanup(makeStore([sshRepo], allMeta), {
+      includeAllWorkspaces: true
+    })
+
+    expect(legacy.candidates).toEqual([])
+    expect(optIn.candidates[0]).toMatchObject({ reasons: [], lastActivityAt: NOW - 2 * DAY_MS })
+  })
+
   it('keeps a canonical-only SSH cleanup row blocked while local metadata collides', async () => {
     const worktreeId = 'repo-1::/shared/workspace'
     const localRepo = { ...REPO, path: '/local/repo' }

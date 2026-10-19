@@ -11,7 +11,7 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { PersistedOpenFile } from '../../../shared/workspace-session-state-types'
 import { createOrcadMigrationManifest } from '../../ssh/orcad-migration-manifest-export'
 import { orcadMigrationRefusalReason } from '../../ssh/orcad-migration-refusal-reason'
-import { collectUntransferredDependentBlockers } from '../../ssh/ssh-target-orcad-dependents'
+import { collectUntransferredDependentBlockers } from '../../ssh/targets/ssh-target-orcad-dependents'
 import { collectOrcadMigrationUntransferredDependencyCensus } from './orcad-source-dependency-census'
 import { collectOrcadMigrationSourceDormantState } from './orcad-source-dormant-state'
 
@@ -247,6 +247,25 @@ describe('#28946: stale tab selections and isolated browser profiles', () => {
     expect(clientState?.mobileClientTabSelectionsByDeviceId).toBeUndefined()
     // The retained profile keeps them, device registration included.
     expect(state).toEqual(before)
+  })
+
+  // Every host a phone ever showed a terminal on: the phone names the pane, not the tab.
+  it('carries a phone selection that names a live terminal pane', () => {
+    const state = sourceState()
+    host(state).tabsByWorktree = { [WORKTREE_A]: [terminal('tab-1')] }
+    host(state).unifiedTabs = { [WORKTREE_A]: [unifiedTab('tab-1', 'terminal')] }
+    host(state).tabGroups = { [WORKTREE_A]: [group(['tab-1'], 'tab-1')] }
+    const selection = {
+      activeTabId: 'tab-1::leaf-1',
+      activeGroupId: 'group-1',
+      activeTabIdByGroupId: { 'group-1': 'tab-1' }
+    }
+    state.mobileClientTabSelectionsByDeviceId = { phone: { [WORKTREE_A]: selection } }
+
+    expect(census(state).totalCount).toBe(0)
+    expect(
+      exportState(state).payload.dormantState?.clientState?.mobileClientTabSelectionsByDeviceId
+    ).toEqual({ phone: { [WORKTREE_A]: selection } })
   })
 
   it('keeps the part of a selection that still names a moved tab', () => {

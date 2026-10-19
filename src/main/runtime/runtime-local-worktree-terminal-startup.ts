@@ -190,8 +190,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     ports.canSpawn &&
     shouldSeedWorktreePrimaryTerminal({
       hasPrimarySurface: didSpawnStartup,
-      // Preserve background create behavior for attribution-only callers.
-      callerProvidesSurface: args.promisedAgentChat === true || args.createdWithAgent !== undefined
+      callerProvidesSurface: callerProvidesInitialSurface(args)
     })
   ) {
     try {
@@ -236,12 +235,24 @@ function provisionArgs(
     primaryTerminalHandle,
     hasStartupTerminal,
     ...(args.request.setupOnly !== undefined ? { setupOnly: args.request.setupOnly } : {}),
-    callerProvidesSurface: args.promisedAgentChat === true,
+    callerProvidesSurface: callerProvidesInitialSurface(args),
     startupNeedsTerminal: args.startup !== undefined,
     setupCommandPlatform: setupPlatform(args.setup, 'posix'),
     observeSetupCompletion: args.request.observeSetupCompletion,
     ...(wrappedSetupCommand ? { wrappedSetupCommand } : {})
   }
+}
+
+function callerProvidesInitialSurface(
+  args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0]
+): boolean {
+  // Background agent creates already leave their initial surface to the caller.
+  return (
+    args.promisedAgentChat === true ||
+    (args.createdWithAgent !== undefined &&
+      args.request.activate !== true &&
+      args.request.runHooks !== true)
+  )
 }
 
 function setupPlatform(

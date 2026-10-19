@@ -1,5 +1,6 @@
 // Steps every command shares: lookups, placing a tab in the one tab order, and result shapes.
 
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { insertTabIdIntoOrder } from './tab-order'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import type {
@@ -17,6 +18,7 @@ import {
   type WorkspaceLayout,
   type WorkspaceLayoutModel
 } from './workspace-layout-model'
+import { workspaceRootGroupId } from './workspace-layout-minted-ids'
 import type { PaneOutcomeChanges } from './workspace-layout-pane-outcomes'
 import { withWorkspace } from './workspace-layout-removal'
 
@@ -114,11 +116,23 @@ export function locatePane(
 export type TabPlacement = { groupId?: string; afterTabId?: string; index?: number }
 
 /**
+ * The group a workspace with none gets. Switch point: the sender's (the window keeps its emptied
+ * group), else the workspace's root group id, which the window and the Loader mint too.
+ */
+function firstGroupId(key: string, placement: TabPlacement, context: LayoutContext): string {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return placement.groupId ?? workspaceRootGroupId(key)
+  }
+  return context.mintId()
+}
+
+/**
  * Puts a new tab in the one tab order: the named group, else the anchor's, else the first; a
  * workspace with no group gets one. Pinned tabs stay ahead of unpinned ones.
  */
 export function placeNewTab(
   workspace: WorkspaceLayout,
+  key: string,
   tab: LayoutTab,
   placement: TabPlacement,
   context: LayoutContext
@@ -133,7 +147,7 @@ export function placeNewTab(
     workspace.groups[0]
   const groups = [...workspace.groups]
   if (!group) {
-    group = { id: context.mintId(), tabOrder: [] }
+    group = { id: firstGroupId(key, placement, context), tabOrder: [] }
     groups.push(group)
   }
   let tabOrder: string[]

@@ -20,10 +20,11 @@ describe('agent chat permission modes', () => {
     expect(AGENT_CHAT_PERMISSION_MODES).toEqual(['ask', 'accept-edits', 'auto', 'full-access'])
   })
 
-  it('offers Claude every mode, Codex no edits-only mode, and any other agent none', () => {
+  it('offers Claude every mode, Codex no edits-only mode, ACP agents Ask and Full access', () => {
     expect(agentChatPermissionModes('claude')?.modes).toEqual(AGENT_CHAT_PERMISSION_MODES)
     expect(agentChatPermissionModes('codex')?.modes).toEqual(['ask', 'auto', 'full-access'])
-    expect(agentChatPermissionModes('grok')).toBeNull()
+    expect(agentChatPermissionModes('omp')?.modes).toEqual(['ask', 'full-access'])
+    expect(agentChatPermissionModes('pi')).toBeNull()
   })
 
   it('seeds a new chat from the host setting, narrowed to what its agent offers', () => {
@@ -34,7 +35,9 @@ describe('agent chat permission modes', () => {
     expect(newChatPermissionMode('codex', 'full-access')).toBe('full-access')
     expect(newChatPermissionMode('claude', 'retired-mode')).toBe('ask')
     expect(newChatPermissionMode('claude', undefined)).toBe('ask')
-    expect(newChatPermissionMode('grok', 'full-access')).toBeNull()
+    expect(newChatPermissionMode('omp', 'full-access')).toBe('full-access')
+    expect(newChatPermissionMode('omp', 'accept-edits')).toBe('ask')
+    expect(newChatPermissionMode('pi', 'full-access')).toBeNull()
   })
 })
 

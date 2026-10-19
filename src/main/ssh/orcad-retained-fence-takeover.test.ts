@@ -7,8 +7,8 @@ import {
   orphanInstallLockCommand,
   tryCreateInstallLockCommand,
   tryStealInstallLockCommand
-} from './ssh-relay-install-lock-commands'
-import { INSTALL_LOCK_STALE_SECONDS } from './ssh-relay-install-lock'
+} from '../managed-server/install/remote-install-lock-commands'
+import { INSTALL_LOCK_STALE_SECONDS } from '../managed-server/install/remote-install-lock'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const host = getRemoteHostPlatform(process.platform === 'darwin' ? 'darwin-arm64' : 'linux-x64')

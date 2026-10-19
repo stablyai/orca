@@ -24,16 +24,18 @@ import type {
   SkillCloudPackageDetails,
   SkillCloudPublishRequest,
   SkillCloudPublishResult,
-  SkillCloudService,
-  SkillCloudVersion,
+  SkillCloudVersion
+} from '../../shared/skill-cloud-contract'
+import type { SkillCloudService } from '../skills/skill-cloud-service'
+import type {
   ManagedSkillInstall,
   SkillInstallPreview,
   SkillInstallPreviewRequest,
   SkillInstallRequest,
   SkillInstallResult,
-  SkillProviderRootOverrides,
   SkillRemoveRequest
-} from './runtime-skill-types'
+} from '../../shared/skill-install-contract'
+import type { SkillProviderRootOverrides } from '../skills/skill-provider-destinations'
 export type RuntimeSkillCommandSurface = {
   setSkillCloudService(service: SkillCloudService): void
   assertAgentSkillSharingAllowed(): void
@@ -48,6 +50,10 @@ export type RuntimeSkillCommandSurface = {
   publishSkillPackageVersion(
     request: SkillCloudPublishRequest
   ): Promise<SkillCloudOperation<SkillCloudVersion>>
+  findOwnedSkillPackageId(
+    name: string,
+    options: SkillCloudOptions
+  ): ReturnType<SkillCloudService['findOwnedPackageId']>
   createSkillPackageShare(
     packageId: string,
     request: SkillCloudOptions & { pinnedVersionId?: string; idempotencyKey?: string }

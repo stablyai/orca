@@ -81,9 +81,16 @@ export function getAutomationTargetAvailability({
         return runtimeAvailability
       }
     }
-    const setup = projectHostSetups.find(
-      (candidate) => candidate.id === automation.runContext?.projectHostSetupId
+    const runContext = automation.runContext
+    const setupsWithId = projectHostSetups.filter(
+      (candidate) => candidate.id === runContext.projectHostSetupId
     )
+    // Why host-scoped: legacy setup ids are the repo id, so a moved host's retained SSH setup and
+    // its managed server's setup share one id (#27454).
+    const setup =
+      setupsWithId.find((candidate) =>
+        setupHostMatchesRunContext(candidate.hostId, runContext.hostId, automationHostTarget)
+      ) ?? setupsWithId[0]
     if (!setup) {
       return unavailable(
         'missing-project-host-setup',

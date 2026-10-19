@@ -34,3 +34,7 @@ it('routes native-chat journal and record-store SQLite contracts through Node', 
     ])
   )
 })
+
+it('runs plugin reconciliation with its native watcher under Node', () => {
+  expect(NODE_RUNTIME_INCLUDE).toContain('src/main/plugins/plugin-service-reconciliation.test.ts')
+})

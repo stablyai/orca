@@ -12,6 +12,7 @@ import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { focusTerminalInitiatedTab } from './terminal-command-state'
+import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
 
 type RuntimeTerminalSplitRequest = SplitTerminalPaneDetail & { worktreeId?: string }
 
@@ -115,6 +116,11 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         .setTabCustomTitle(tabId, title, recordInteraction === false ? { recordInteraction } : {})
     })
   )
+
+  // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
+  if (window.api.ui.onSetPaneTitle) {
+    unsubs.push(window.api.ui.onSetPaneTitle(applyRuntimePaneTitle))
+  }
 
   unsubs.push(
     window.api.ui.onFocusTerminal(

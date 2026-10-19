@@ -11,25 +11,24 @@ export function useStructuredAgentSessionSendOptions(
   launch: StructuredAgentSessionLaunchView | undefined,
   source: Pick<
     ReturnType<typeof useStructuredAgentSessionOptionState>,
-    'optionStateRef' | 'pendingOptionRef' | 'optionView' | 'takesSendOptions'
+    'optionStateRef' | 'pendingOptionsRef' | 'optionView' | 'takesSendOptions'
   >
 ): () => Readonly<Record<string, string>> | undefined {
-  const { optionStateRef, optionView, pendingOptionRef, takesSendOptions } = source
+  const { optionStateRef, optionView, pendingOptionsRef, takesSendOptions } = source
   return useCallback(() => {
     if (!takesSendOptions) {
       return undefined
     }
     // Read, not rendered: a pick the launch just took is not in this render's props yet.
     const selection = getStructuredAgentSessionLaunchSelection(sessionId)
-    // A pick on its way resolves as the picker shows it, so a gone model it names is replaced too.
-    const pending = pendingOptionRef.current
+    // A pick on its way resolves as the picker shows it.
     const view = optionView(optionStateRef.current, selection?.seed ?? launch?.seedOptions, {
       ...(selection?.held ?? launch?.heldOptions),
-      ...(pending ? { [pending.id]: pending.value } : {})
+      ...pendingOptionsRef.current
     })
     return structuredAgentSessionSendSelection(
       view.record.agent,
       structuredAgentSessionOptionSnapshot(view)
     )
-  }, [launch, optionStateRef, optionView, pendingOptionRef, sessionId, takesSendOptions])
+  }, [launch, optionStateRef, optionView, pendingOptionsRef, sessionId, takesSendOptions])
 }

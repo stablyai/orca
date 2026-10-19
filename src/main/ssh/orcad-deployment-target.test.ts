@@ -1,16 +1,16 @@
-import type * as ExecCommandModule from './ssh-relay-exec-command'
+import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   parseGlibcVersion,
   parseOrcadLinuxLibc,
   resolveOrcadDeploymentTargetFacts
 } from './orcad-deployment-target'
-import { SshConnection } from './ssh-connection'
-import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
-import { execCommand } from './ssh-relay-exec-command'
+import { SshConnection } from './connection/ssh-connection'
+import { createCallbacks, createTarget } from './connection/ssh-connection-test-fixtures'
+import { execCommand } from './remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
-vi.mock('./ssh-relay-exec-command', async (importOriginal) => ({
+vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))

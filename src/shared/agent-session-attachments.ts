@@ -17,6 +17,30 @@ export const AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS =
 
 export const AGENT_SESSION_ATTACHMENT_NAME_MAX_BYTES = 200
 
+/** Bytes a padded base64 string decodes to, without decoding it. */
+export function base64DecodedByteLength(base64: string): number {
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
+  return (base64.length / 4) * 3 - padding
+}
+
+/** The appends that carry a base64 body: whole groups at byte offsets, and one empty append for an
+ *  empty file, which the store still expects before a commit. */
+export function* agentSessionAttachmentAppends(
+  contentBase64: string
+): Generator<{ offset: number; contentBase64: string }> {
+  let charOffset = 0
+  do {
+    yield {
+      offset: (charOffset / 4) * 3,
+      contentBase64: contentBase64.slice(
+        charOffset,
+        charOffset + AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS
+      )
+    }
+    charOffset += AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS
+  } while (charOffset < contentBase64.length)
+}
+
 export type AgentSessionAttachmentUploadStartResult = { uploadId: string }
 export type AgentSessionAttachmentUploadCommitResult = {
   path: string

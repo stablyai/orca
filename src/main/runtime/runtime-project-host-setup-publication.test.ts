@@ -59,10 +59,10 @@ describe('RuntimeProjectHostSetupController publication', () => {
     expect(notifyReposChanged).toHaveBeenCalledTimes(1)
   })
 
-  it('publishes a rename without retiring cached worktree scans', () => {
+  it('publishes a rename without retiring cached worktree scans', async () => {
     const { controller, notifyReposChanged, invalidateResolvedWorktrees, retired } =
       makeController()
-    controller.updateSetup({ setupId: setup.id, updates: { displayName: 'renamed' } })
+    await controller.updateSetup({ setupId: setup.id, updates: { displayName: 'renamed' } })
     expect(notifyReposChanged).toHaveBeenCalledTimes(1)
     expect(invalidateResolvedWorktrees).toHaveBeenCalled()
     expect(retired).toEqual([])
@@ -70,9 +70,9 @@ describe('RuntimeProjectHostSetupController publication', () => {
 
   it.each([{ kind: 'folder' as const }, { path: '/srv/moved' }])(
     'retires cached worktree scans when a setup changes %o',
-    (updates) => {
+    async (updates) => {
       const { controller, notifyReposChanged, retired } = makeController()
-      controller.updateSetup({ setupId: setup.id, updates })
+      await controller.updateSetup({ setupId: setup.id, updates })
       expect(retired).toEqual(['repo-1'])
       expect(notifyReposChanged).toHaveBeenCalledTimes(1)
     }

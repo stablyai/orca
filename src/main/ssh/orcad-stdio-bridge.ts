@@ -3,15 +3,18 @@ import {
   OrcadHostUnsupportedError,
   OrcadStdioBridgeUnavailableError
 } from '../orcad/orcad-host-unavailable'
-import { resolveOrcadRemoteContext } from './orcad-remote-context'
-import { orcadWindowsHomeOpCommand } from './orcad-remote-windows-node'
+import { resolveOrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
+import { orcadWindowsHomeOpCommand } from '../managed-server/install/orcad-remote-windows-node'
 import {
   orcadPosixStdioBridgeCommand,
   type OrcadStdioBridgeMode
-} from './orcad-stdio-bridge-script'
-import { OrcadStdioBridgeDecoder, type OrcadStdioBridgeSignal } from './orcad-stdio-bridge-stream'
+} from '../managed-server/lifecycle/orcad-stdio-bridge-script'
+import {
+  OrcadStdioBridgeDecoder,
+  type OrcadStdioBridgeSignal
+} from '../managed-server/lifecycle/orcad-stdio-bridge-stream'
 import { isWslOrcadHostTarget, type OrcadHostTransport } from './orcad-host-transport'
-import type { RemoteCommandChannel } from './remote-install-transport'
+import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
 import { isWindowsRemoteHost } from './ssh-remote-platform'
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
 

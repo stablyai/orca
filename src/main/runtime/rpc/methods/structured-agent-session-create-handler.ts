@@ -18,6 +18,11 @@ import {
   structuredAgentSessionCreateIntentFingerprint
 } from './structured-agent-session-create'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  structuredAgentSessionClosedBeforeCreate,
+  structuredAgentSessionClosedBeforeCreateRefusal
+} from './structured-agent-session-close-before-create'
 
 /**
  * The attach-shaped entries take the location from the client instead of resolving it from a
@@ -85,6 +90,7 @@ export async function handleStructuredAgentSessionCreate(
         worktree: params.worktree,
         agent: params.agent,
         caller: callerFor(ctx),
+        structuredAgentCliSourceEvidence: ctx.structuredAgentCliSourceEvidence,
         ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
         ...(params.tabId ? { tabId: params.tabId } : {}),
         ...(params.options ? { options: params.options } : {}),
@@ -100,6 +106,13 @@ export async function handleStructuredAgentSessionCreate(
   })
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
+  }
+  // Nothing is created yet, so a close that came first refuses the create outright.
+  if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)
+  ) {
+    return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
   }
   return commitStructuredAgentSessionCreate({
     runtime: ctx.runtime,

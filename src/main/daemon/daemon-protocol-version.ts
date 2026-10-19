@@ -1,11 +1,13 @@
 // Why: daemons survive app updates, so wire behavior must be version-gated.
+// v49 makes the `claude` function follow the selection over the user's own CLAUDE_CONFIG_DIR.
+// v48 skips v47, which the 1.4.227 release (1.4.224 plus picks) took; its daemon is adopted as previous.
 // v46 starts each new Linux terminal in its own systemd scope beside the daemon's.
 // v45 starts new macOS tabs in the update-safe terminal host helper beside an existing daemon.
 // v44 gives every pane the `claude` function that follows the selected Claude account (v42 had it,
 // v43 dropped it with the revert); v41 stages long startup commands as sourced scripts; v40 rolled
 // the #25130/#24636 shell-wrapper changes and the wider agent list into a fresh daemon; older owners
 // stay attachable.
-export const PROTOCOL_VERSION = 46
+export const PROTOCOL_VERSION = 49
 export const CLAUDE_ACCOUNT_FUNCTION_DAEMON_PROTOCOL_VERSION = 42
 export const CLAUDE_ACCOUNT_FUNCTION_REVERTED_DAEMON_PROTOCOL_VERSION = 43
 // v39 gives plain fish panes Orca's codex function through XDG_DATA_DIRS.
@@ -39,7 +41,7 @@ export const CLEAN_DISCONNECT_PROTOCOL_VERSION = 24
 export const MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION = 29
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48
 ] as const
 
 export function supportsColorQueryReplyColors(protocolVersion: number): boolean {

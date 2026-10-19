@@ -7,7 +7,12 @@ import { test } from 'node:test'
 import {
   evaluateWatchSample,
   initialWatchState,
-  measuredBackground
+  measuredBackground,
+  measuredPhoneBackground,
+  phoneMinuteOver,
+  phoneShareLine,
+  PHONE_RULE_NAMES,
+  PHONE_WATCH_RULES
 } from './relay-reserve-watch-rules.mjs'
 import {
   ALARM_EVENT,
@@ -18,6 +23,7 @@ import {
   parseWatchArguments,
   parseWatchSegment,
   raiseAlarm,
+  readCellPhoneMinutes,
   readDirector503Minutes,
   readSeatBehindRowSample,
   recordOutcome,
@@ -47,7 +53,7 @@ const minutesBefore = (at, count) =>
   )
 const quiet503 = (at, perMinute = 10) => {
   const minutes = minutesBefore(at, 3)
-  return { ok: true, minutes, perMinute: Object.fromEntries(minutes.map((minute) => [minute, perMinute])), publishedThrough: minutes.at(-1) }
+  return { ok: true, minutes, perMinute: Object.fromEntries(minutes.map((minute) => [minute, perMinute])), publishedThrough: minutes.at(-1), unmetered: [] }
 }
 const sampleAt = (at, overrides = {}) => ({
   at,
@@ -93,7 +99,8 @@ test('503s trip only after three complete minutes over max(1.5x background, back
       ok: true,
       minutes,
       perMinute: Object.fromEntries(minutes.map((minute, index) => [minute, counts[index]])),
-      publishedThrough: minutes.at(-1)
+      publishedThrough: minutes.at(-1),
+      unmetered: []
     }
   }
   const twoOver = evaluateWatchSample(state, sampleAt(START, { director503: series([151, 140, 200]) }), LIMIT)
@@ -115,12 +122,12 @@ test('503s trip only after three complete minutes over max(1.5x background, back
 
 test('a quiet fleet with no 503 series at all reads zero, not unverifiable', () => {
   const minutes = minutesBefore(START, 10)
-  const quiet = { ok: true, minutes, perMinute: {}, publishedThrough: minutes.at(-1) }
+  const quiet = { ok: true, minutes, perMinute: {}, publishedThrough: minutes.at(-1), unmetered: [] }
   const [result] = run([sampleAt(START, { director503: quiet })], freshState({ background: { medianPerMinute: 0, source: 'measured' } }))
   assert.equal(result.rules.director503.status, 'pass')
   assert.deepEqual(Object.values(result.rules.director503.recent), [0, 0, 0])
   assert.equal(result.state.unverifiableStreak, 0)
-  assert.deepEqual(measuredBackground({}, minutes, minutes.at(-1)), { medianPerMinute: 0, minutes: 10, source: 'measured' })
+  assert.deepEqual(measuredBackground({ perMinute: {}, minutes, publishedThrough: minutes.at(-1), unmetered: [] }), { medianPerMinute: 0, minutes: 10, source: 'measured' })
 })
 
 test('503 minutes past the publishing front are left out, and only no front at all is unverifiable', () => {
@@ -129,20 +136,20 @@ test('503 minutes past the publishing front are left out, and only no front at a
   const judge = (director503) => evaluateWatchSample(state, sampleAt(START, { director503 }), LIMIT)
   // The front is two minutes behind: the three minutes before it are judged, the two after are not.
   const over = Object.fromEntries(minutes.map((minute) => [minute, 500]))
-  const behind = judge({ ok: true, minutes, perMinute: over, publishedThrough: minutes[7] })
+  const behind = judge({ ok: true, minutes, perMinute: over, publishedThrough: minutes[7], unmetered: [] })
   assert.equal(behind.rules.director503.status, 'trip')
   assert.deepEqual(Object.keys(behind.rules.director503.recent), minutes.slice(5, 8))
   // A sparse 503 series: minutes after its last point but within the front are zero, not late.
-  const sparse = judge({ ok: true, minutes, perMinute: { [minutes[2]]: 500 }, publishedThrough: minutes.at(-1) })
+  const sparse = judge({ ok: true, minutes, perMinute: { [minutes[2]]: 500 }, publishedThrough: minutes.at(-1), unmetered: [] })
   assert.equal(sparse.rules.director503.status, 'pass')
   assert.equal(sparse.state.unverifiableStreak, 0)
   // No request series at all.
-  const empty = judge({ ok: true, minutes, perMinute: {}, publishedThrough: null })
+  const empty = judge({ ok: true, minutes, perMinute: {}, publishedThrough: null, unmetered: [] })
   assert.equal(empty.rules.director503.status, 'unverifiable')
   assert.match(empty.rules.director503.reason, /request series is empty/)
   assert.equal(empty.state.unverifiableStreak, 1)
   // A front too far behind to leave three published minutes in the read.
-  const stale = judge({ ok: true, minutes, perMinute: {}, publishedThrough: minutes[1] })
+  const stale = judge({ ok: true, minutes, perMinute: {}, publishedThrough: minutes[1], unmetered: [] })
   assert.equal(stale.rules.director503.status, 'unverifiable')
   assert.match(stale.rules.director503.reason, new RegExp(`published only through ${minutes[1]}`))
 })
@@ -215,16 +222,21 @@ test('the duplicate read carries a positive control: no fresh ledger summary in 
   assert.equal(gap.state.unverifiableStreak, 1)
 })
 
-test('the measured background is the median of the minutes before the flip, published gaps as zero', () => {
+test('the measured background is the median of the metered minutes before the flip, published gaps as zero', () => {
   const minutes = ['2026-10-14T11:47', '2026-10-14T11:48', '2026-10-14T11:49']
   const front = minutes[2]
-  assert.equal(measuredBackground({ '2026-10-14T11:48': 30 }, minutes, front).medianPerMinute, 0)
-  assert.equal(measuredBackground({ [minutes[0]]: 10, [minutes[1]]: 30, [minutes[2]]: 20 }, minutes, front).medianPerMinute, 20)
-  assert.equal(measuredBackground({}, minutes, '2026-10-14T11:52').medianPerMinute, 0)
+  const background = (perMinute, publishedThrough, readMinutes = minutes, unmetered = []) =>
+    measuredBackground({ perMinute, minutes: readMinutes, publishedThrough, unmetered })
+  assert.equal(background({ '2026-10-14T11:48': 30 }, front).medianPerMinute, 0)
+  assert.equal(background({ [minutes[0]]: 10, [minutes[1]]: 30, [minutes[2]]: 20 }, front).medianPerMinute, 20)
+  assert.equal(background({}, '2026-10-14T11:52').medianPerMinute, 0)
   // Not published through the last minute yet, or no request series: no background yet.
-  assert.equal(measuredBackground({ [minutes[0]]: 10 }, minutes, minutes[1]), null)
-  assert.equal(measuredBackground({}, minutes, null), null)
-  assert.equal(measuredBackground({}, [], front), null)
+  assert.equal(background({ [minutes[0]]: 10 }, minutes[1]), null)
+  assert.equal(background({}, null), null)
+  assert.equal(background({}, front, []), null)
+  // An unmetered minute is left out, not read as zero; under half metered is no background.
+  assert.deepEqual(background({ [minutes[0]]: 10, [minutes[1]]: 30, [minutes[2]]: 20 }, front, minutes, [minutes[0]]), { medianPerMinute: 25, minutes: 2, source: 'measured' })
+  assert.equal(background({}, front, minutes, minutes.slice(1)), null)
 })
 
 test('any overrun trips at once', () => {
@@ -391,6 +403,17 @@ test('the 503 background needs flipped-at or an explicit value; flipped-at must 
 })
 
 // A cell, Cloud Monitoring and Cloud Logging, answering from `script` per sample.
+const METRICS_EVENT = 'orca_relay_runtime_metrics'
+// Each instance's line every 30 s inside the read's timestamp bounds, newest first.
+function metricsLines(filter, metrics) {
+  const [, from, to] = filter.match(/timestamp>="([^"]+)" AND timestamp<"([^"]+)"/)
+  const lines = []
+  for (let at = Math.ceil(Date.parse(from) / 30_000) * 30_000; at < Date.parse(to); at += 30_000) {
+    for (const deltas of metrics(at)) lines.push({ timestamp: new Date(at).toISOString(), jsonPayload: deltas })
+  }
+  return lines.reverse()
+}
+
 function fakeSources({
   cell = () => ({}),
   // Logged at each sample's minute, so it stays fresh for the positive control.
@@ -399,7 +422,9 @@ function fakeSources({
   // Requests of every other code per minute; zero is a minute with no traffic at all.
   perOther = () => 1_000,
   seatControl = true,
-  rolloutLease = null
+  rolloutLease = null,
+  // Each director instance's runtime-metrics deltas for the 30 s ending at `endedAt`.
+  metrics = () => [{}]
 } = {}) {
   let samples = 0
   const monitoringSpans = []
@@ -447,6 +472,7 @@ function fakeSources({
     const summaries = ledger(samples).map((entry) => ({ ...entry, jsonPayload: { ...entry.jsonPayload, event: SUMMARY_EVENT } }))
     if (filter.includes(SEAT_EVENT)) return { stdout: JSON.stringify(seatControl ? summaries : []) }
     if (filter.includes(SUMMARY_EVENT)) return { stdout: JSON.stringify(ledger(samples)) }
+    if (filter.includes(METRICS_EVENT)) return { stdout: JSON.stringify(metricsLines(filter, metrics)) }
     return { stdout: '[]' }
   }
   return { fetchImpl, runGcloud, monitoringSpans, readRolloutLease: async () => rolloutLease }
@@ -473,7 +499,7 @@ test('a segment samples once a minute, carries state to the next segment, and st
     assert.equal(first.state, 'watching')
     assert.equal(lines.length, 3)
     assert.equal(first.background.source, 'measured')
-    assert.equal(await readFile(join(directory, 'out'), 'utf8'), 'state=watching\nverdict=\n')
+    assert.equal(await readFile(join(directory, 'out'), 'utf8'), 'state=watching\nverdict=\nflip=admitMode\n')
     const second = await watchSegment(config, dependencies)
     assert.equal(second.state, 'tripped')
     assert.equal(second.samples, 5)
@@ -517,7 +543,7 @@ test('a watch that ended without a verdict records failed, which the workflow fl
     assert.equal((await recordOutcome(join(directory, 'watching.json'), output)).state, 'failed')
     await writeFile(join(directory, 'tripped.json'), JSON.stringify(freshState({ state: 'tripped', verdict: 'flip back x:\ny' })))
     assert.equal((await recordOutcome(join(directory, 'tripped.json'), output)).state, 'tripped')
-    assert.match(await readFile(output, 'utf8'), /state=tripped\nverdict=flip back x: y\n$/)
+    assert.match(await readFile(output, 'utf8'), /state=tripped\nverdict=flip back x: y\nflip=admitMode\n$/)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
@@ -525,10 +551,20 @@ test('a watch that ended without a verdict records failed, which the workflow fl
 
 // Google Storage and the director, as far as the flag tool's flip back reaches them. `onUpload`
 // returns 'conflict' to play another writer landing first, optionally with its own admitMode.
-function fakeFlipBack({ generation = '7', onUpload = () => 'ok', cellAnswers = true } = {}) {
+function fakeFlipBack({
+  generation = '7',
+  onUpload = () => 'ok',
+  cellAnswers = true,
+  flags = { admitMode: 'reserve', readinessLocal: true },
+  supportedFlags = {
+    admitMode: { type: 'enum', values: ['db', 'reserve'] },
+    readinessLocal: { type: 'boolean' },
+    phonePath: { type: 'enum', values: ['db', 'memory'] }
+  }
+} = {}) {
   const calls = []
   let uploads = 0
-  let object = { generation: Number(generation), flags: { admitMode: 'reserve', readinessLocal: true } }
+  let object = { generation: Number(generation), flags }
   let applied = object
   const fetchImpl = async (url, init = {}) => {
     const text = String(url)
@@ -557,10 +593,7 @@ function fakeFlipBack({ generation = '7', onUpload = () => 'ok', cellAnswers = t
           role: 'cell',
           cellId: CELL,
           flagsApplied: applied,
-          supportedFlags: {
-            admitMode: { type: 'enum', values: ['db', 'reserve'] },
-            readinessLocal: { type: 'boolean' }
-          },
+          supportedFlags,
           admitModeEffective: applied.flags.admitMode,
           runtime: { controls: 10 }
         })
@@ -753,6 +786,84 @@ test('a quiet fleet with zero director 503s watches on and never trips', async (
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
+})
+
+// 2026-10-18's false trips: 503s tripled with traffic, nearly all a host re-dialling early.
+const rateLimited = (perLine) => ({ placementRejectionsByReasonDelta: { 'host-rate-limited': perLine }, assign503sByCauseDelta: { 'placement-lane': perLine } })
+
+async function watchFor(minutes, sources, flippedAt = START - 2 * MINUTE) {
+  const directory = await mkdtemp(join(tmpdir(), 'relay-reserve-watch-'))
+  try {
+    let clock = START
+    const config = parseAt(
+      watchValues({ 'state-file': join(directory, 'state.json'), 'segment-minutes': String(minutes), 'flipped-at': new Date(flippedAt).toISOString() })
+    )
+    const lines = []
+    const state = await watchSegment(config, {
+      ...sources,
+      idToken: 'id',
+      retryDelayMs: 0,
+      now: () => clock,
+      sleep: async (ms) => { clock += ms },
+      log: (line) => lines.push(JSON.parse(line))
+    })
+    return { state, lines }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+}
+
+test('a host re-dialling inside its own interval never trips the 503 rule, however much it grows', async () => {
+  // Background 20/min, all re-dials; then 50/min, 48 of them re-dials. All 503s would trip at 40.
+  const flippedAt = START - 2 * MINUTE
+  const { state, lines } = await watchFor(20, fakeSources({
+    per503: (minute) => (minute < flippedAt ? 20 : 50),
+    metrics: (at) => [rateLimited(at <= flippedAt ? 10 : 24)]
+  }), flippedAt)
+  assert.equal(state.state, 'watching')
+  assert.deepEqual(state.background, { medianPerMinute: 0, minutes: 10, source: 'measured' })
+  assert.ok(lines.slice(1).every((line) => line.rules.director503.status === 'pass'))
+  assert.ok(lines.slice(1).every((line) => Object.values(line.rules.director503.recent).every((count) => count <= 2)))
+})
+
+test('503s the director could not serve trip after three minutes over the line, beside the re-dials', async () => {
+  const flippedAt = START - 2 * MINUTE
+  const { state } = await watchFor(10, fakeSources({
+    per503: (minute) => (minute < flippedAt ? 20 : 60),
+    // 10 re-dials a minute throughout; the 40 more after the flip are queue waits that timed out.
+    metrics: (at) => [{
+      ...rateLimited(5),
+      stickyRejectionsByReasonDelta: at <= flippedAt ? {} : { 'wait-timeout': 20 }
+    }]
+  }), flippedAt)
+  assert.equal(state.state, 'tripped')
+  assert.deepEqual(state.background, { medianPerMinute: 10, minutes: 10, source: 'measured' })
+  assert.match(state.verdict, /director503: director 503s above 30\/min for 3 min \(50, 50, 50\)/)
+})
+
+test('a minute no director instance logged runtime metrics for is unverifiable, not zero', async () => {
+  // Two instances, both silent for three minutes in the middle of the read.
+  const endedAt = START + 2 * MINUTE
+  const silent = (at) => at > endedAt - 5 * MINUTE && at <= endedAt - 2 * MINUTE
+  const reader = fakeSources({ per503: () => 50, metrics: (at) => (silent(at) ? [] : [rateLimited(12), rateLimited(12)]) })
+  const read = await readDirector503Minutes(
+    { ...fakeReader(), fetch: reader.fetchImpl, runGcloud: reader.runGcloud },
+    { projectId: 'onorca-cloud', directorService: 'orca-cloud-relay', endedAt, minutes: 10 }
+  )
+  assert.equal(read.ok, true)
+  assert.deepEqual(read.unmetered, read.minutes.slice(5, 8))
+  assert.equal(read.perMinute[read.minutes[0]], 2)
+  const judged = evaluateWatchSample(freshState({ background: { medianPerMinute: 0, source: 'measured' } }), sampleAt(START, { director503: read }), LIMIT)
+  assert.equal(judged.rules.director503.status, 'unverifiable')
+  assert.match(judged.rules.director503.reason, /no director runtime metrics for/)
+  // No line at all in the read is short, not a quiet fleet.
+  const unlogged = fakeSources({ per503: () => 50, metrics: () => [] })
+  const none = await readDirector503Minutes(
+    { ...fakeReader(), fetch: unlogged.fetchImpl, runGcloud: unlogged.runGcloud },
+    { projectId: 'onorca-cloud', directorService: 'orca-cloud-relay', endedAt, minutes: 10 }
+  )
+  assert.equal(none.ok, false)
+  assert.match(none.error, /runtime metrics read failed, truncated, or short/)
 })
 
 test('no request series at all is unverifiable and trips at the limit', async () => {
@@ -955,4 +1066,347 @@ test('an alarm is an escaped error annotation everywhere, and in write mode a pa
   assert.equal(calls.length, before)
   assert.match(lines.at(-2), /^::error title=Reserve watch refused for /)
   assert.match(lines.at(-1), /nothing pages: --project-id is not a GCP project id/)
+})
+
+// Step 6 phone rules. A quiet window, minute by minute: ordinary 4401s from phones whose pairing
+// was removed, an occasional failed confirm or half-open control. Synthetic: replaying a recorded
+// production window needs read access this suite does not have.
+const QUIET_PHONE_MINUTE = (index) => ({
+  credentialRefusals: [0, 1, 0, 2, 1][index % 5],
+  confirmFailures: [0, 0, 1, 0][index % 4],
+  attachDeadlines: [1, 0, 2, 0, 1, 3][index % 6],
+  acceptDatabaseErrors: 0,
+  renewalFailures: 0,
+  completedAccepts: [10, 12, 8][index % 3]
+})
+const phoneRead = (minuteCount, perMinute) => {
+  const minutes = Array.from({ length: minuteCount }, (_, index) => `2026-10-19T12:${String(index).padStart(2, '0')}`)
+  const rows = minutes.map((_, index) => perMinute(index))
+  const series = Object.fromEntries(Object.keys(rows[0]).map((signal) => [signal, rows.map((row) => row[signal])]))
+  return { ok: true, minutes, series, unmetered: [] }
+}
+const memoryCell = (overrides = {}) => healthyCell({ phonePathConfigured: 'memory', resumeAuditDropped: 0, ...overrides })
+const phoneState = (overrides = {}) =>
+  freshState({
+    flippedAt: START - 10 * MINUTE,
+    phoneSince: START - 10 * MINUTE,
+    phoneBackground: measuredPhoneBackground(phoneRead(10, QUIET_PHONE_MINUTE)),
+    ...overrides
+  })
+// The last 10 minutes as of watch minute `offset`, the newest minutes shaped by `spike`.
+const phoneSampleAt = (offset, spike = () => ({}), cell = memoryCell()) =>
+  sampleAt(START + offset * MINUTE, {
+    cell,
+    phone: phoneRead(10, (index) => ({ ...QUIET_PHONE_MINUTE(offset + index), ...spike(index) }))
+  })
+
+test('phone rules: a quiet hour replays without a trip', () => {
+  const results = run(Array.from({ length: 60 }, (_, offset) => phoneSampleAt(offset)), phoneState({ deadlineAt: START + 120 * MINUTE }))
+  assert.equal(results.length, 60)
+  assert.ok(results.every((result) => result.state.state === 'watching' && result.state.phoneTrip === null))
+  assert.deepEqual(Object.keys(results[0].rules).filter((name) => name.startsWith('phone')), PHONE_RULE_NAMES)
+})
+
+test('phone rules: judged as a share of attempts, over half and over the background', () => {
+  assert.equal(phoneShareLine(0), 0.5)
+  assert.equal(phoneShareLine(0.3), 0.55)
+  assert.equal(phoneShareLine(0.5), 0.6)
+  // Exactly half is not over; nor is a minute with under 4 attempts.
+  assert.equal(phoneMinuteOver('credentialRefusals', 9, 9, 0.5), false)
+  assert.equal(phoneMinuteOver('credentialRefusals', 11, 10, 0.5), true)
+  assert.equal(phoneMinuteOver('credentialRefusals', 3, 0, 0.5), false)
+  assert.equal(phoneMinuteOver('credentialRefusals', 4, 0, 0.5), true)
+  // Each accept makes one confirm: every confirm failing is all of them, not half the attempts.
+  assert.equal(phoneMinuteOver('confirmFailures', 4, 4, 0.6), true)
+  assert.equal(phoneMinuteOver('confirmFailures', 2, 4, 0.5), false)
+  assert.equal(phoneMinuteOver('confirmFailures', 9, 3, 0.5), false)
+  const background = measuredPhoneBackground(phoneRead(10, () => ({ ...QUIET_PHONE_MINUTE(0), credentialRefusals: 1, completedAccepts: 9 })))
+  assert.equal(background.share.credentialRefusals, 0.1)
+  assert.equal(measuredPhoneBackground({ ...phoneRead(10, QUIET_PHONE_MINUTE), unmetered: ['2026-10-19T12:03'] }), null)
+})
+
+test('phone rules: each fires on its own spike, and the watch goes on with the reserve rules', () => {
+  const spikes = {
+    phoneCredentialRefusals: { credentialRefusals: 25 },
+    phoneConfirmFailures: { confirmFailures: 25 },
+    phoneAttachDeadlines: { attachDeadlines: 25 },
+    phoneAcceptDatabaseErrors: { acceptDatabaseErrors: 25 }
+  }
+  for (const [rule, counts] of Object.entries(spikes)) {
+    const [result] = run([phoneSampleAt(0, (index) => (index >= 7 ? counts : {}))], phoneState())
+    assert.equal(result.state.state, 'watching', rule)
+    assert.match(result.state.phoneTrip, new RegExp(`turn off the phone path on ${CELL}: ${rule}: `), rule)
+  }
+  // Two minutes over the line is not three.
+  const [twoMinutes] = run([phoneSampleAt(0, (index) => (index >= 8 ? { credentialRefusals: 25 } : {}))], phoneState())
+  assert.equal(twoMinutes.state.phoneTrip, null)
+  // Once the watch turned the phone path off, the phone rules stand down.
+  const [off] = run([phoneSampleAt(0, () => ({ credentialRefusals: 50 }))], phoneState({ phoneOffAt: START }))
+  assert.deepEqual(Object.keys(off.rules).filter((name) => name.startsWith('phone')), [])
+})
+
+test('phone rules: judged only while the switch file says memory; reserve rules still flip the cell back', () => {
+  const [off] = run([sampleAt(START, { cell: healthyCell({ phonePathConfigured: 'db' }) })], freshState())
+  assert.deepEqual(Object.keys(off.rules).filter((name) => name.startsWith('phone')), [])
+  const [overrun] = run([phoneSampleAt(0, () => ({}), memoryCell({ enforcedUnits: 2_001 }))], phoneState())
+  assert.equal(overrun.state.state, 'tripped')
+  assert.equal(overrun.state.flip, 'admitMode')
+})
+
+test('phone rules: missing phone data turns off only the phone path, and needs a flipped-at background', () => {
+  const gap = (offset) => ({ ...phoneSampleAt(offset), phone: { ...phoneSampleAt(offset).phone, unmetered: ['2026-10-19T12:09'] } })
+  const results = run([gap(0), gap(1), gap(2)], phoneState())
+  assert.equal(results.at(-1).state.state, 'watching')
+  assert.equal(results.at(-1).state.unverifiableStreak, 0)
+  assert.match(results.at(-1).state.phoneTrip, /unverifiable: 3 samples/)
+  const [noBackground] = run([phoneSampleAt(0)], freshState({ flippedAt: null }))
+  assert.match(noBackground.rules.phoneCredentialRefusals.reason, /--flipped-at/)
+  // A gap before the judged 3 minutes changes nothing.
+  const early = { ...phoneSampleAt(0), phone: { ...phoneSampleAt(0).phone, unmetered: ['2026-10-19T12:02'] } }
+  const [earlyGap] = run([early], phoneState())
+  assert.equal(earlyGap.rules.phoneCredentialRefusals.status, 'pass')
+})
+
+test('phone rules: memory set partway through a watch measures from then, not from the reserve flip', () => {
+  const state = freshState({ flippedAt: START - 60 * MINUTE })
+  const [before, after] = run([sampleAt(START), phoneSampleAt(1)], state)
+  assert.equal(before.state.phoneSince, null)
+  assert.equal(after.state.phoneSince, START)
+  assert.equal(after.rules.phoneCredentialRefusals.status, 'pending')
+})
+
+test('phone rules: audit drops and failing renewals page once when sustained, and flip nothing', () => {
+  const dropping = (offset, dropped) => phoneSampleAt(offset, () => ({}), memoryCell({ resumeAuditDropped: dropped }))
+  // One drop, then none: no page.
+  const single = run([dropping(0, 0), dropping(1, 1), ...Array.from({ length: 8 }, (_, index) => dropping(index + 2, 1))], phoneState())
+  assert.ok(single.every((result) => result.pages.length === 0))
+  const rising = run(Array.from({ length: 9 }, (_, offset) => dropping(offset, offset * 3)), phoneState())
+  assert.deepEqual(rising.map((result) => result.pages.join()), ['', '', '', '', '', '', 'audit-drops', '', ''])
+  const renewing = run(Array.from({ length: 7 }, (_, offset) => phoneSampleAt(offset, () => ({ renewalFailures: 1 }))), phoneState())
+  assert.deepEqual(renewing.map((result) => result.pages.join()).filter(Boolean), ['renewal-failures'])
+  assert.ok([...rising, ...renewing].every((result) => result.state.state === 'watching' && result.state.phoneTrip === null))
+})
+
+test('the cell phone read sums each minute from the cell runtime metrics lines, and refuses an old image', async () => {
+  const endedAt = Date.parse('2026-10-19T12:03:00Z')
+  const line = (at, payload) => ({
+    timestamp: new Date(at).toISOString(),
+    jsonPayload: {
+      phoneRejectionsByCodeDelta: {},
+      resumeConfirmFailuresByCodeDelta: {},
+      phoneAttachDeadlinesDelta: 0,
+      phoneAcceptDatabaseErrorsDelta: 0,
+      resumeRenewalFailuresDelta: 0,
+      clientAcceptCompletedDelta: 0,
+      ...payload
+    }
+  })
+  let filter
+  const read = await readCellPhoneMinutes(
+    fakeReader({
+      runGcloud: async (args) => {
+        filter = args[2]
+        return {
+          stdout: JSON.stringify([
+            line(endedAt - 150_000, { phoneRejectionsByCodeDelta: { 4401: 2, 4404: 9 } }),
+            line(endedAt - 120_000, { resumeConfirmFailuresByCodeDelta: { 'reject-revoked': 1, error: 2 } }),
+            line(endedAt - 90_000, { phoneAttachDeadlinesDelta: 3, phoneAcceptDatabaseErrorsDelta: 1, resumeRenewalFailuresDelta: 4, clientAcceptCompletedDelta: 7 })
+          ])
+        }
+      }
+    }),
+    { cellId: CELL, endedAt, minutes: 3 }
+  )
+  assert.match(filter, /resource\.type="gce_instance"/)
+  assert.match(filter, new RegExp(`jsonPayload\\.cellId="${CELL}"`))
+  assert.deepEqual(read.series, {
+    credentialRefusals: [2, 0, 0],
+    confirmFailures: [3, 0, 0],
+    attachDeadlines: [0, 3, 0],
+    acceptDatabaseErrors: [0, 1, 0],
+    renewalFailures: [0, 4, 0],
+    completedAccepts: [0, 7, 0]
+  })
+  assert.deepEqual(read.unmetered, ['2026-10-19T12:02'])
+  const old = await readCellPhoneMinutes(
+    fakeReader({ runGcloud: async () => ({ stdout: JSON.stringify([{ timestamp: new Date(endedAt - 1).toISOString(), jsonPayload: {} }]) }) }),
+    { cellId: CELL, endedAt, minutes: 3 }
+  )
+  assert.match(old.error, /no phone counters/)
+  assert.equal(old.permanent, true)
+})
+
+// The watch over a memory cell whose phone metrics come from `phoneMetrics(at)`.
+async function phoneWatch(phoneMetrics, minutes) {
+  const directory = await mkdtemp(join(tmpdir(), 'relay-reserve-watch-'))
+  try {
+    let clock = START
+    const lines = []
+    const config = parseAt(watchValues({ 'state-file': join(directory, 'state.json'), 'segment-minutes': String(minutes) }))
+    const sources = fakeSources({
+      cell: () => ({ flagsApplied: { generation: 4, flags: { admitMode: 'reserve', readinessLocal: true, phonePath: 'memory' } } })
+    })
+    const runGcloud = async (args) =>
+      args[2]?.includes('gce_instance') ? { stdout: JSON.stringify(metricsLines(args[2], (at) => [phoneMetrics(at)])) } : sources.runGcloud(args)
+    const state = await watchSegment(config, {
+      ...sources,
+      runGcloud,
+      idToken: 'id',
+      accessToken: 'access',
+      audit: {},
+      retryDelayMs: 0,
+      now: () => clock,
+      sleep: async (ms) => { clock += ms },
+      log: (line) => lines.push(line)
+    })
+    return { state, lines }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+}
+const phoneCounters = (overrides = {}) => ({
+  phoneRejectionsByCodeDelta: {},
+  resumeConfirmFailuresByCodeDelta: {},
+  phoneAttachDeadlinesDelta: 0,
+  phoneAcceptDatabaseErrorsDelta: 0,
+  resumeRenewalFailuresDelta: 0,
+  clientAcceptCompletedDelta: 5,
+  ...overrides
+})
+
+test('a phone trip whose phonePath=db write fails keeps watching, retries each sample, and pages after 3 failures', async () => {
+  // No bucket here, so every write fails.
+  const { state, lines } = await phoneWatch((at) => phoneCounters(at > START ? { phoneAttachDeadlinesDelta: 20 } : {}), 15)
+  assert.equal(state.state, 'watching')
+  assert.equal(state.phoneOffAt, null)
+  assert.match(state.phoneTrip, /phoneAttachDeadlines: /)
+  const failures = lines.filter((line) => line.includes('orca_relay_reserve_watch_phone_path_off_failed'))
+  assert.ok(failures.length > 3, `${failures.length} failed writes`)
+  assert.equal(state.phoneOffFailures, failures.length)
+  const alarms = lines.filter((line) => line.includes('may still have phonePath=memory'))
+  assert.equal(alarms.length, 1)
+})
+
+test('a phone trip still unwritten when the watch ends leaves it to the flip back', () => {
+  const [last] = run([phoneSampleAt(0)], phoneState({ deadlineAt: START, phoneTrip: 'turn off the phone path on x: phoneAttachDeadlines: y' }))
+  assert.equal(last.state.state, 'tripped')
+  assert.equal(last.state.flip, 'phonePath')
+  assert.match(last.state.verdict, /phoneAttachDeadlines: y; phonePath=db did not land before the watch ended/)
+})
+
+test('a phone background broken by a restart or roll refuses the watch instead of turning phones off for certain', async () => {
+  const { state } = await phoneWatch((at) => (at < START - 8 * MINUTE ? {} : phoneCounters()), 5)
+  assert.equal(state.state, 'refused')
+  assert.match(state.verdict, /phone background.*incomplete.*later --flipped-at/)
+})
+
+test('a phone-rule flip back removes phonePath, and does nothing once the file no longer says memory', async () => {
+  const { fetchImpl, calls } = fakeFlipBack({ flags: { admitMode: 'reserve', readinessLocal: true, phonePath: 'memory' } })
+  const result = await flipBack(flipValues({ flip: 'phonePath' }), flipDependencies(fetchImpl, []))
+  assert.equal(result.written, true)
+  const upload = calls.find((call) => call.url.includes('/upload/storage/v1/'))
+  assert.match(upload.body, /"flags":\{"admitMode":"reserve","readinessLocal":true\}/)
+  assert.ok(!calls.some((call) => call.url.endsWith('/v1/admin/cell-admit-mode') && JSON.parse(call.body).admitMode))
+  const done = await flipBack(flipValues({ flip: 'phonePath' }), flipDependencies(fakeFlipBack().fetchImpl, []))
+  assert.equal(done.alreadyDb, true)
+})
+
+test('both flip backs land on a cell rolled back to an image without the phonePath switch', async () => {
+  const flags = { admitMode: 'reserve', readinessLocal: true, phonePath: 'memory' }
+  for (const flip of ['admitMode', 'phonePath']) {
+    const { fetchImpl, calls } = fakeFlipBack({ flags, supportedFlags: { admitMode: { type: 'enum', values: ['db', 'reserve'] }, readinessLocal: { type: 'boolean' } } })
+    const result = await flipBack(flipValues({ flip }), flipDependencies(fetchImpl, []))
+    assert.equal(result.written, true, flip)
+    const upload = calls.find((call) => call.url.includes('/upload/storage/v1/'))
+    assert.doesNotMatch(upload.body, /phonePath/, flip)
+  }
+})
+
+test('workflow: the flip back writes what the watch says tripped, and the whole cell when it says nothing', () => {
+  const workflow = watchWorkflow
+  assert.match(workflow, /flip: \$\{\{ steps\.outcome\.outputs\.flip \}\}/)
+  assert.match(workflow, /FLIP: \$\{\{ needs\.watch\.outputs\.flip \|\| 'admitMode' \}\}/)
+  assert.match(workflow, /--flip "\$\{FLIP\}"/)
+  // A failed phone flip back pages with the phone wording.
+  assert.match(workflow, /--verdict "\$\{VERDICT\}" --flip "\$\{FLIP\}"\n/)
+  assert.match(workflow, /ORCA_RELAY_CONTROL_ACCESS_TOKEN="\$\(gcloud auth print-access-token\)"\n\s+echo "::add-mask::/)
+})
+
+
+test('a failed phone flip back and the phone pages say what is still on', async () => {
+  const lines = []
+  const runGcloud = async () => ({ stdout: '' })
+  await raiseAlarm({ mode: 'dry-run', cellId: CELL, projectId: 'onorca-cloud', kind: 'flip-back-failed', reason: 'x', flip: 'phonePath' }, { runGcloud, log: (line) => lines.push(line) })
+  await raiseAlarm({ mode: 'dry-run', cellId: CELL, projectId: 'onorca-cloud', kind: 'renewal-failures', reason: 'y' }, { runGcloud, log: (line) => lines.push(line) })
+  assert.match(lines[0], /may still have phonePath=memory/)
+  assert.doesNotMatch(lines[0], /reserve mode/)
+  assert.match(lines[1], /cannot renew phone credentials/)
+})
+
+// Recorded, not synthetic: 26 h of c7, c28 and c29 runtime metrics (read-only, 10-18/19). The phone
+// counters are not on those images yet, so auth failures (host and phone 4401s, an over-count)
+// stand in for the refused or failed attempts, against completed accepts. They cannot stand in for
+// confirm failures: c28's 04:08Z minutes (9/9, 9/9, 11/10) read as confirms are a total outage.
+const PHONE_RULE_SIGNAL_NAMES = ['credentialRefusals', 'confirmFailures', 'attachDeadlines', 'acceptDatabaseErrors']
+const recordedPhoneMinutes = JSON.parse(readFileSync(new URL('./relay-phone-watch-recorded-quiet-minutes.json', import.meta.url), 'utf8')).cells
+// The minute index a recorded watch of `signal` from `start` trips at, or null; `minute(i)` may rewrite a minute.
+function recordedTrip({ authFailuresPerMinute: failures, completedAcceptsPerMinute: accepts }, signal, start, watchMinutes, minute = (i) => [failures[i], accepts[i]]) {
+  const { readMinutes, consecutiveMinutes } = PHONE_WATCH_RULES
+  const refused = failures.slice(start - readMinutes, start)
+  const background = measuredPhoneBackground({
+    ok: true,
+    minutes: refused,
+    unmetered: [],
+    series: { ...Object.fromEntries(PHONE_RULE_SIGNAL_NAMES.map((name) => [name, refused])), completedAccepts: accepts.slice(start - readMinutes, start) }
+  })
+  const line = phoneShareLine(background.share[signal])
+  let run = 0
+  for (let index = start; index < start + watchMinutes; index += 1) {
+    run = phoneMinuteOver(signal, ...minute(index), line) ? run + 1 : 0
+    if (run >= consecutiveMinutes) return index
+  }
+  return null
+}
+
+test('phone rules: 26 recorded hours of c7, c28 and c29 trip no attempt rule in any 60- or 300-minute watch', () => {
+  assert.deepEqual(Object.keys(recordedPhoneMinutes), ['production-gce-c7', 'production-gce-c28', 'production-gce-c29'])
+  for (const [cell, minutes] of Object.entries(recordedPhoneMinutes)) {
+    for (const watchMinutes of [60, 300]) {
+      for (let start = 10; start + watchMinutes <= minutes.authFailuresPerMinute.length; start += 5) {
+        assert.equal(recordedTrip(minutes, 'credentialRefusals', start, watchMinutes), null, `${cell}: a ${watchMinutes}-min watch from minute ${start} trips`)
+      }
+    }
+  }
+})
+
+// From minute 30 of each recorded hour, a broken path; it must trip by its third minute (sooner
+// when the minute before was already over) wherever those minutes carry 4 attempts each.
+const BROKEN_PATHS = {
+  'two refusals per accept': ['credentialRefusals', (failed, accepted) => [Math.max(2 * accepted, 4), accepted]],
+  'every accept errors on the database, phones give up after one try': ['acceptDatabaseErrors', (failed, accepted) => [accepted, 0]],
+  // Only trips are tested: the auth-failure stand-in cannot measure confirm false trips.
+  'every confirm fails': ['confirmFailures', (failed, accepted) => [accepted, accepted]]
+}
+test('phone rules: the same recorded hours trip on each broken path wherever its minutes are judged', () => {
+  for (const [name, [signal, breakMinute]] of Object.entries(BROKEN_PATHS)) {
+    for (const [cell, minutes] of Object.entries(recordedPhoneMinutes)) {
+      const { authFailuresPerMinute: failures, completedAcceptsPerMinute: accepts } = minutes
+      let judged = 0
+      for (let start = 10; start + 60 <= failures.length; start += 5) {
+        const broken = (index) => (index >= start + 30 ? breakMinute(failures[index], accepts[index]) : [failures[index], accepts[index]])
+        const judgedMinutes = [0, 1, 2].every((offset) => {
+          const [count, accepted] = broken(start + 30 + offset)
+          return (signal === 'confirmFailures' ? accepted : count + accepted) >= PHONE_WATCH_RULES.minAttemptsPerMinute
+        })
+        if (!judgedMinutes) continue
+        judged += 1
+        const at = recordedTrip(minutes, signal, start, 60, broken)
+        // Confirms may trip earlier: the stand-in reads as failing confirms on c28 (see above).
+        const earliest = signal === 'confirmFailures' ? start : start + 30
+        assert.ok(at !== null && at >= earliest && at <= start + 32, `${cell} ${name}: from minute ${start + 30} trips at ${at}`)
+      }
+      // Busy cells are judged most of the day; low-volume c7 rarely reaches 4 attempts a minute.
+      if (cell !== 'production-gce-c7') assert.ok(judged > 150, `${cell} ${name}: ${judged} judged`)
+    }
+  }
 })

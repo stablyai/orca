@@ -385,6 +385,48 @@ describe('shared agent-hook-listener', () => {
     expect(resolved?.payload.toolInput).toBeUndefined()
   })
 
+  it.each(['session_start', 'session_switch'])(
+    'clears an old OMP approval when %s starts with active jobs',
+    (eventName) => {
+      const blocked = normalizeHookPayload(
+        state,
+        'omp',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'tool_approval_requested',
+            tool_name: 'bash',
+            reason: 'Approve the old command'
+          }
+        },
+        'production'
+      )
+      if (!blocked) {
+        throw new Error('Missing approval status')
+      }
+      seedLegacyAgentStatusForTests(state, blocked)
+      const changed = normalizeHookPayload(
+        state,
+        'omp',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: eventName,
+            session_id: 'next-session',
+            is_idle: false,
+            has_pending_messages: false,
+            has_active_jobs: true
+          }
+        },
+        'production'
+      )
+      expect(changed?.payload.state).toBe('working')
+      expect(changed?.providerSession?.id).toBe('next-session')
+      expect(changed?.payload.toolName).toBeUndefined()
+      expect(changed?.payload.toolInput).toBeUndefined()
+    }
+  )
+
   it.each([
     ['auto_retry_start', 'auto_retry_end', 'working'],
     ['auto_compaction_start', 'auto_compaction_end', 'working'],

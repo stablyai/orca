@@ -92,18 +92,25 @@ it('only skips the unchanged smoke after a successful diff and dependency analys
   const workflow = parse(
     readFileSync(new URL('../../.github/workflows/pr.yml', import.meta.url), 'utf8')
   )
-  const step = workflow.jobs.preflight.steps.find(
-    (candidate) => candidate.name === 'Boot orcad and round-trip a terminal'
-  )
-  expect(step.env).toEqual({
-    BASE_SHA: '${{ github.event.pull_request.base.sha }}',
-    ORCA_BACKGROUND_LAUNCH: '1'
-  })
+  const steps = workflow.jobs.preflight.steps
+  const scope = steps.find((candidate) => candidate.id === 'orcad-smoke-scope')
+  expect(scope.env).toEqual({ BASE_SHA: '${{ github.event.pull_request.base.sha }}' })
   // See the localization gate: HEAD^1 removes the merge-base computation, so a shallow checkout
   // is enough and the payload head SHA is unused.
-  expect(step.run).toContain('node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA"')
-  expect(step.run).toContain('git diff --name-only --no-renames -z "$DIFF_BASE" HEAD')
-  expect(step.run).not.toContain('--diff-filter')
-  expect(step.run).toContain('&& [ "$scope" = false ]; then')
-  expect(step.run).toMatch(/else\s+pnpm run smoke:orcad-terminal\s+fi/)
+  expect(scope.run).toContain('node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA"')
+  expect(scope.run).toContain('git diff --name-only --no-renames -z "$DIFF_BASE" HEAD')
+  expect(scope.run).not.toContain('--diff-filter')
+  expect(scope.run).toMatch(
+    /&& \[ "\$scope" = false \]; then[\s\S]*run=false[\s\S]*else\s+echo 'run=true'/
+  )
+  // orcad refuses to build without the page, so the page builds exactly when the smoke runs.
+  const gated = "steps.orcad-smoke-scope.outputs.run == 'true'"
+  const page = steps.find(
+    (candidate) => candidate.uses === './.github/actions/build-mobile-web-bundle'
+  )
+  const smoke = steps.find((candidate) => candidate.name === 'Boot orcad and round-trip a terminal')
+  expect(page.if).toBe(gated)
+  expect(smoke.if).toBe(gated)
+  expect(smoke.run).toBe('pnpm run smoke:orcad-terminal')
+  expect(steps.indexOf(page)).toBeLessThan(steps.indexOf(smoke))
 })

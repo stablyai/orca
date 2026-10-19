@@ -10,6 +10,7 @@
  */
 
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { chatAgentsShareConversations } from '../../shared/structured-agent-cli-conversation-adoption'
 import {
   agentSessionOperationKey,
   evaluateAgentSessionOperation,
@@ -246,11 +247,17 @@ export function assertAdoptedConversationUnowned(
       continue
     }
     const holdsSameConversation = record.providerHandleChain.some(
-      (link) => agentSessionProviderHandleRoot(link.handle) === root
+      (link) =>
+        agentSessionProviderHandleRoot(link.handle) === root ||
+        // One id from two chat agents that open the same conversations (`opencode`, `opencode2`).
+        (link.handle.transport === adopted.handle.transport &&
+          link.handle.nativeId === adopted.handle.nativeId &&
+          chatAgentsShareConversations(link.handle.agent, adopted.handle.agent))
     )
     if (holdsSameConversation) {
       throw agentSessionRefusalError('agent_session_conflict', {
-        reason: 'conversationHeldElsewhere'
+        reason: 'conversationHeldElsewhere',
+        owner: { sessionId: record.sessionId, workspaceId: record.location.workspaceId }
       })
     }
   }

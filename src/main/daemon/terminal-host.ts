@@ -1,4 +1,5 @@
 import type { Session } from './session'
+import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
 import { SessionNotFoundError } from './types'
 import type { SessionInfo, TakePendingOutputResult, TerminalSnapshot } from './types'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
@@ -19,7 +20,6 @@ import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
 import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
 import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
-import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
 import {
   confirmTerminalHostForegroundProcess,
   confirmTerminalHostShellForeground,
@@ -229,8 +229,8 @@ export class TerminalHost {
 
   inspectProcess(
     sessionId: string,
-    options?: { expectedIncarnationId?: string; steadyState?: boolean }
-  ): Promise<TerminalHostProcessInspection> {
+    options?: PtyProcessInspectionOptions
+  ): ReturnType<typeof inspectTerminalHostProcess> {
     pruneRetiredPtyIncarnations(this.retiredIncarnations)
     const session = this.sessions.get(sessionId)
     if (
@@ -245,11 +245,9 @@ export class TerminalHost {
     }
     return inspectTerminalHostProcess({
       sessionId,
+      currentSession: () => this.sessions.get(sessionId),
       session: session?.isAlive ? session : null,
-      ...(options?.expectedIncarnationId
-        ? { expectedIncarnationId: options.expectedIncarnationId }
-        : {}),
-      ...(options?.steadyState === true ? { steadyState: true } : {}),
+      ...options,
       retiredIncarnation: this.retiredIncarnations.get(sessionId),
       authorityGeneration: this.authorityGeneration,
       nextObservationEpoch: () => ++this.observationEpoch

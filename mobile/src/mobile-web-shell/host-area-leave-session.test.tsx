@@ -36,7 +36,7 @@ vi.mock('lucide-react-native', mocks['lucide-react-native'])
 vi.mock('react-native-safe-area-context', mocks['react-native-safe-area-context'])
 vi.mock('../../modules/orca-mobile-web-shell/src', mocks['../../modules/orca-mobile-web-shell/src'])
 vi.mock('../app-update/use-wall-app-update', mocks['../app-update/use-wall-app-update'])
-vi.mock('../transport/client-context', mocks['../transport/client-context'])
+vi.mock('../transport/host-client-hooks', mocks['../transport/host-client-hooks'])
 vi.mock('./use-page-host-snapshot', mocks['./use-page-host-snapshot'])
 vi.mock('./use-mobile-web-shell-session', mocks['./use-mobile-web-shell-session'])
 
@@ -89,8 +89,7 @@ async function hopFromSession(viewport: { width: number; height: number }, href:
     mounted.tree = create(
       createElement(MobileWebShellScreen, {
         hostId: 'host-1',
-        route: { pathname: DETAIL },
-        fallback: null
+        route: { pathname: DETAIL }
       })
     )
   })

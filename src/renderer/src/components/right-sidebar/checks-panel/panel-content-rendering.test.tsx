@@ -4,7 +4,6 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
-import { ChecksPanelReviewHeader } from '../ChecksPanel'
 
 vi.mock('../HostedReviewActions', () => ({ default: () => null }))
 vi.mock('../SourceControlAgentActionDialog', () => ({ SourceControlAgentActionDialog: () => null }))
@@ -175,9 +174,7 @@ describe('checks panel concrete content', () => {
       titleSaving: false
     } satisfies ChecksPanelActiveContentModel
 
-    render(
-      <ChecksPanelActiveContent model={model} ReviewHeaderComponent={ChecksPanelReviewHeader} />
-    )
+    render(<ChecksPanelActiveContent model={model} />)
 
     expect(screen.getByText('Preserve mounted panel behavior')).toBeTruthy()
     expect(screen.getByText('No checks configured')).toBeTruthy()

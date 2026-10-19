@@ -21,6 +21,7 @@ import {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
+  spawnedPtyEnv,
   store
 } from '../orca-runtime-test-fixtures.spec'
 
@@ -143,8 +144,7 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-    const sourceEnv =
-      (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    const sourceEnv = spawnedPtyEnv(spawn.mock.calls[0]?.[0])
     const sourceLeafId = sourceEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
 
     const split = await runtime.splitTerminal(handle, { direction: 'vertical' })
@@ -154,8 +154,7 @@ describe('OrcaRuntimeService', () => {
       paneRuntimeId: -1
     })
 
-    const splitEnv =
-      (spawn.mock.calls[1]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    const splitEnv = spawnedPtyEnv(spawn.mock.calls[1]?.[0])
     const splitLeafId = splitEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
     expect(split.leafId).toBe(splitLeafId)
     expect(splitTerminal).not.toHaveBeenCalled()
@@ -428,7 +427,7 @@ describe('OrcaRuntimeService', () => {
     const sourceCall = spawn.mock.calls[0]?.[0] as
       | { cwd?: string; env?: Record<string, string>; worktreeId?: string }
       | undefined
-    const sourceEnv = sourceCall?.env ?? {}
+    const sourceEnv = spawnedPtyEnv(sourceCall)
     const sourceLeafId = sourceEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
 
     await expect(runtime.splitTerminal(handle, { direction: 'vertical' })).resolves.toMatchObject({
@@ -440,7 +439,7 @@ describe('OrcaRuntimeService', () => {
     const splitCall = spawn.mock.calls[1]?.[0] as
       | { cwd?: string; env?: Record<string, string>; worktreeId?: string }
       | undefined
-    const splitEnv = splitCall?.env ?? {}
+    const splitEnv = spawnedPtyEnv(splitCall)
     const splitLeafId = splitEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
     expect(sourceCall).toMatchObject({
       cwd: folderPath,
@@ -578,7 +577,7 @@ describe('OrcaRuntimeService', () => {
       expect(created.warning).toContain('could not make it discoverable')
       expect(created.warning).toContain(`orca terminal focus --terminal ${created.handle}`)
       const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
-      const spawnedEnv = spawnCall?.env ?? {}
+      const spawnedEnv = spawnedPtyEnv(spawnCall)
       expectStablePaneKeyEnv(spawnedEnv)
       const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
       expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {

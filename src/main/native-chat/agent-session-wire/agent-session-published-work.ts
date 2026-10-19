@@ -13,7 +13,15 @@ import type { StructuredAgentSessionCurrentWork } from './structured-agent-sessi
  *  Absent, a page states the raw record and no prompt ids, as an older host did. */
 export type AgentSessionPublishedWork = Pick<
   StructuredAgentSessionCurrentWork,
-  'publishedLatestTurn' | 'actionablePromptIds' | 'working'
+  | 'publishedLatestTurn'
+  | 'actionablePromptIds'
+  | 'actionablePrompts'
+  | 'working'
+  | 'viewKey'
+  | 'workViewKey'
+  | 'publishedSubmission'
+  | 'restatedSubmissions'
+  | 'requestProjection'
 >
 
 type PublishedWorkFields = Pick<
@@ -25,9 +33,10 @@ function publishedWorkFields(
   latestTurn: AgentSessionHistoryPage['latestTurn'],
   work: AgentSessionPublishedWork
 ): PublishedWorkFields {
+  const ids = work.actionablePromptIds()
   return {
     latestTurn: work.publishedLatestTurn(latestTurn ?? null),
-    actionablePromptIds: work.actionablePromptIds(),
+    ...(Buffer.byteLength(JSON.stringify(ids)) <= 8 * 1024 ? { actionablePromptIds: ids } : {}),
     working: work.working()
   }
 }
@@ -40,13 +49,19 @@ export function agentSessionPublishedWorkFields(
   return publishedWorkFields(snapshotLatestTurn(journal.snapshot()), work)
 }
 
-/** A page as the host publishes it: its turn record scoped by the projection, an ended
- *  generation's turn running nowhere. */
+/** Page-local effective values; off-page sends ride separately budgeted subscriber batches. */
 export function withPublishedWork(
   page: AgentSessionHistoryPage,
   work: AgentSessionPublishedWork | undefined
 ): AgentSessionHistoryPage {
-  return work ? { ...page, ...publishedWorkFields(page.latestTurn, work) } : page
+  if (!work) {
+    return page
+  }
+  return {
+    ...page,
+    ...publishedWorkFields(page.latestTurn, work),
+    submissions: page.submissions.map(work.publishedSubmission)
+  }
 }
 
 export function withPublishedWorkResult(

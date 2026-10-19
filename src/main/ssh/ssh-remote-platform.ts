@@ -1,4 +1,4 @@
-import type { RelayPlatform } from './relay-protocol'
+import type { RelayPlatform } from './remote-exec/remote-frame-protocol'
 
 export type RemotePathFlavor = 'posix' | 'windows'
 export type RemoteCommandDialect = 'posix' | 'powershell'

@@ -47,6 +47,10 @@ export function initializeTerminalScopes(
         : resolved.scopes
     )
   }
+  if (resolved.memory) {
+    // Why log every platform: an operator who set a limit must learn when it did nothing.
+    log('terminal-memory-limits', { platform: process.platform, ...resolved.memory })
+  }
   return resolved.ceiling
 }
 

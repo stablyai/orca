@@ -2,6 +2,7 @@
 // the shared assembler writes them. Events apply strictly in order; one the sink refuses under
 // backpressure holds every later one until the sink drains, so nothing is reordered or dropped.
 
+import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import {
   createProviderTimelineAssembler,
@@ -304,10 +305,11 @@ export class AcpStructuredLane {
 
 export function acpLaneChildWorkDelivery(
   deps: AcpStructuredSessionAdapterDeps,
-  sessionId: string
+  sessionId: string,
+  producer?: StructuredAgentSessionChildWorkProducer
 ): Pick<AcpStructuredLaneDeps, 'onChildWorkEvidence' | 'onChildWorkFailure'> {
   return {
-    onChildWorkEvidence: (evidence) => deps.onChildWorkEvidence?.(sessionId, evidence),
+    onChildWorkEvidence: (evidence) => deps.onChildWorkEvidence?.(sessionId, evidence, producer),
     onChildWorkFailure: (error) =>
       deps.logger?.error('publishing ACP child work failed', {
         scope: 'acp-child-work',

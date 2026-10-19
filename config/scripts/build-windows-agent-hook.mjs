@@ -19,7 +19,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     binName: 'orca-agent-hook',
     label: 'Windows agent hook',
     fingerprintInputs: [iconPath, join(repoRoot, 'config/scripts/build-windows-agent-hook.mjs')],
-    arch: readArg('--arch'),
+    arch: readArg('--arch') ?? process.arch,
     outputPath: readArg('--output') ?? join(crateRoot, '.build', 'orca-agent-hook.exe'),
     buildEnv: (version) => ({
       ORCA_HOOK_BUILD_VERSION: version,

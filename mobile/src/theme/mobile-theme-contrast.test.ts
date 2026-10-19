@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { colors } from './mobile-theme'
+import { colors, onBrightColors } from './mobile-theme'
 
 function channelLuminance(channel: number): number {
   const value = channel / 255
@@ -34,5 +34,12 @@ describe('mobile text contrast', () => {
     expect(contrastRatio(colors.textSecondary, colors.bgPanel)).toBeGreaterThan(
       contrastRatio(colors.textMuted, colors.bgPanel)
     )
+  })
+
+  it("keeps every colour on your own message's fill readable", () => {
+    for (const foreground of [colors.bgBase, onBrightColors.secondary, onBrightColors.link]) {
+      expect(contrastRatio(foreground, colors.textPrimary)).toBeGreaterThanOrEqual(4.5)
+    }
+    expect(contrastRatio(colors.bgBase, onBrightColors.codeBackground)).toBeGreaterThanOrEqual(4.5)
   })
 })

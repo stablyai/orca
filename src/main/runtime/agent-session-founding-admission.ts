@@ -1,4 +1,8 @@
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import {
+  AgentSessionRefusalError,
+  agentSessionRefusalError,
+  isAgentSessionRefusalError
+} from '../../shared/agent-session-wire-refusals'
 import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
 import { foundAgentSessionRecord } from './agent-session-record-founding'
 import {
@@ -41,7 +45,17 @@ export function commitAgentSessionFounding(
   if (state.records.has(request.sessionId)) {
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
   }
-  assertAdoptedConversationUnowned(state, request)
+  try {
+    assertAdoptedConversationUnowned(state, request)
+  } catch (error) {
+    if (isAgentSessionRefusalError(error)) {
+      throw new AgentSessionRefusalError({
+        ...error.refusal,
+        createAttemptRefusedBeforeCommit: true
+      })
+    }
+    throw error
+  }
   assertReservedTabUnheld(state, request)
   const founded = foundAgentSessionRecord(request, request)
   const record = request.adoptedHandleLink

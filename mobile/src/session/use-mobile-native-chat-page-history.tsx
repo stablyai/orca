@@ -10,7 +10,9 @@ type Row<TItem> = { item: TItem; index: number }
  *  instead: the list's own rows keep their indexes and stay drawn. */
 export function useMobileNativeChatPageHistory<TItem extends { id: string }>(
   rows: readonly TItem[],
-  renderRow: (row: Row<TItem>) => ReactElement
+  renderRow: (row: Row<TItem>) => ReactElement,
+  /** The chat shown: synthetic row ids (the streaming bubble, an echo) repeat across chats. */
+  scopeKey: string
 ): {
   listRows: readonly TItem[]
   renderListRow: (row: Row<TItem>) => ReactElement
@@ -18,15 +20,16 @@ export function useMobileNativeChatPageHistory<TItem extends { id: string }>(
   withHistory: (header: ReactElement | null) => ReactElement | null
 } {
   const onPage = Platform.OS === 'web'
-  // The row the list starts at, for as long as that row exists.
-  const [headId, setHeadId] = useState<string | null>(null)
+  // The row the list starts at, for as long as that row exists in this chat.
+  const [head, setHead] = useState<{ scopeKey: string; id: string } | null>(null)
+  const headId = head?.scopeKey === scopeKey ? head.id : null
   const headIndex = useMemo(
     () => (onPage && headId !== null ? rows.findIndex((row) => row.id === headId) : -1),
     [onPage, headId, rows]
   )
   const firstId = rows[0]?.id
   if (onPage && headIndex === -1 && firstId !== undefined && firstId !== headId) {
-    setHeadId(firstId)
+    setHead({ scopeKey, id: firstId })
   }
   const historyCount = Math.max(headIndex, 0)
   const historyRows = useMemo(

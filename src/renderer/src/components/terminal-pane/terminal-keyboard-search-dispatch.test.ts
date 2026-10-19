@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, afterEach } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { dispatchTerminalShortcutAction } from './terminal-keyboard-action-dispatch'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
@@ -71,4 +71,23 @@ describe('terminal find shortcut dispatch', () => {
     expect(context.focusSearchInput).not.toHaveBeenCalled()
     expect(context.setSearchOpen).not.toHaveBeenCalled()
   })
+})
+
+const { rejectAppStoreAccess } = vi.hoisted(() => ({
+  rejectAppStoreAccess: vi.fn(() => {
+    throw new Error('Pure helper tests must not access the app store')
+  })
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(rejectAppStoreAccess, {
+    getState: rejectAppStoreAccess,
+    getInitialState: rejectAppStoreAccess,
+    setState: rejectAppStoreAccess,
+    subscribe: rejectAppStoreAccess
+  })
+}))
+
+afterEach(() => {
+  expect(rejectAppStoreAccess).not.toHaveBeenCalled()
 })

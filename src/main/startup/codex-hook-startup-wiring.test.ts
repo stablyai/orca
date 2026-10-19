@@ -7,7 +7,8 @@ const fixture = vi.hoisted(() => {
     app: { isPackaged: true, on: vi.fn() },
     settings,
     pathReady: Promise.resolve(),
-    startCodexHooks: vi.fn()
+    startCodexHooks: vi.fn(),
+    installFirstWorkRename: vi.fn()
   }
 })
 
@@ -57,6 +58,9 @@ vi.mock('./gpu-lifecycle', () => ({ handleGpuChildCrash: vi.fn() }))
 vi.mock('./configure-process', () => ({ shouldInstallManagedHooks: () => false }))
 vi.mock('../agent-hooks/install-telemetry', () => ({ recordManagedHookInstallFailure: vi.fn() }))
 vi.mock('./main-process-observers', () => ({ initializeMainProcessObservers: vi.fn() }))
+vi.mock('./branch-rename-hook', () => ({
+  installFirstWorkRenameHookSubscription: fixture.installFirstWorkRename
+}))
 vi.mock('./main-process-account-services', () => ({
   initializeMainProcessAccountServices: vi.fn()
 }))
@@ -116,5 +120,17 @@ describe('Codex hook startup', () => {
     expect(isEnabled()).toBe(true)
     fixture.settings.disabledTuiAgents = ['codex']
     expect(isEnabled()).toBe(false)
+  })
+})
+
+// Why here: headless serve runs app readiness but never opens a window, so first-work rename
+// must be armed by readiness itself, not by the window's hook listener (STA-5871).
+describe('First-work rename startup', () => {
+  it('arms the hook subscription during app readiness, without a window', async () => {
+    fixture.installFirstWorkRename.mockClear()
+
+    await initializeReadyRuntimeServices()
+
+    expect(fixture.installFirstWorkRename).toHaveBeenCalledTimes(1)
   })
 })

@@ -98,6 +98,10 @@ export function isClaudeUsageWaitingForClaude(p: ProviderRateLimits): boolean {
 }
 
 export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
+  // Why: no refresh fixes an owner that cannot vouch for its usage, so never say "Refresh failed".
+  if (p.usageMetadata?.unverifiableOwner) {
+    return translate('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')
+  }
   const delegatedCliProvider = getDelegatedCliRefreshProvider(p)
   if (delegatedCliProvider === 'grok') {
     return translate('auto.components.status.bar.tooltip.e2c6a4f917', 'Run Grok to refresh')
@@ -177,6 +181,9 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
   )
   if (!p.error) {
     return fallback
+  }
+  if (p.usageMetadata?.unverifiableOwner) {
+    return p.error
   }
   const delegatedCliProvider = getDelegatedCliRefreshProvider(p)
   if (delegatedCliProvider === 'grok') {

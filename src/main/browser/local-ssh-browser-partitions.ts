@@ -61,6 +61,12 @@ export function localSshBrowserPartitionForSession(webSession: Session): string 
   return partitionBySession.get(webSession) ?? null
 }
 
+/** The SSH target a session's prepared route partition egresses through, or null if unrouted. */
+export function localSshBrowserTargetIdForSession(webSession: Session): string | null {
+  const partition = partitionBySession.get(webSession)
+  return partition ? (preparedByPartition.get(partition)?.targetId ?? null) : null
+}
+
 /**
  * Derives, binds, and proxies the route partition for (SSH target × browser
  * profile), fail-closed: the partition is only handed to the renderer once

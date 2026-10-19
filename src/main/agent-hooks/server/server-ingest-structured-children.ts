@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto'
 
 import { createAgentChildWorkAdmission } from '../../../shared/agent-status-child-work-admission'
-import type { AgentChildWorkRecord } from '../../../shared/agent-status-child-work'
+import {
+  agentChildWorkFencesEqual,
+  type AgentChildWorkRecord
+} from '../../../shared/agent-status-child-work'
+import { isLiveChildWork } from '../../../shared/agent-status-child-work-liveness'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import {
   reconcileAgentChildWorkEvidence,
@@ -62,7 +66,20 @@ export abstract class AgentHookServerIngestStructuredChildren extends AgentHookS
     return parent ? this.canonicalStatusStore.getChildren(parent) : []
   }
 
-  /** The same records as the views every surface reads; the one record-to-view projection. */
+  /** A record covers its current handles only while it answers to running work. */
+  getStructuredChildWorkHandles(subject: AgentStatusStructuredSessionSubject): Set<string> {
+    return new Set(
+      this.getStructuredChildWork(subject).flatMap((child) =>
+        child.membership === 'live' && isLiveChildWork(child)
+          ? this.canonicalStatusStore
+              .getAliasesForChild(child.childWorkId)
+              .filter(({ fence }) => agentChildWorkFencesEqual(fence, child.invocation))
+              .map(({ alias }) => alias)
+          : []
+      )
+    )
+  }
+
   getStructuredChildWorkViews(subject: AgentStatusStructuredSessionSubject): AgentChildWorkView[] {
     const children = this.getStructuredChildWork(subject)
     return projectAgentChildWorkViews(

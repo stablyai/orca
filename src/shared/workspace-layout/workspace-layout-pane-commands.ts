@@ -19,10 +19,11 @@ import {
   updateTab,
   type Applied
 } from './workspace-layout-command-steps'
-import type { CommandOf, LayoutContext } from './workspace-layout-command-types'
+import type { CommandOf, LayoutContext, WindowPaneDetach } from './workspace-layout-command-types'
 import {
   paneKeyOf,
   type LayoutTerminalTab,
+  type WorkspaceLayout,
   type WorkspaceLayoutModel
 } from './workspace-layout-model'
 import { retireTerminalPane, withWorkspace } from './workspace-layout-removal'
@@ -63,7 +64,11 @@ export function closePane(model: WorkspaceLayoutModel, command: CommandOf<'close
   if (!tab || !layoutContainsLeafId(tab.panes.root, command.leafId)) {
     return applied(model, { alreadyClosed: true })
   }
-  const ptyId = model.workspaces[command.workspace]!.leaves?.[command.leafId]?.ptyId
+  const leaf = model.workspaces[command.workspace]!.leaves?.[command.leafId]
+  if (command.userPaneClose && tab.panes.root?.type === 'leaf') {
+    return refuse('last_pane')
+  }
+  const ptyId = leaf?.ptyId
   const retired = retireTerminalPane(
     model,
     { workspaceKey: command.workspace, tab },
@@ -164,12 +169,13 @@ export function movePaneToNewTab(
   if (!layoutContainsLeafId(tab.panes.root, command.leafId)) {
     return refuse('pane_not_found')
   }
-  if (leafIdsOf(tab).length < 2) {
+  const detach = command.windowDetach
+  if (!detach && leafIdsOf(tab).length < 2) {
     return refuse('last_pane')
   }
   const { leafId } = command
-  const workspace = model.workspaces[command.workspace]!
-  const id = context.mintId()
+  const workspace = bindDetachedLeaf(model.workspaces[command.workspace]!, leafId, detach)
+  const id = detach?.tabId ?? context.mintId()
   const terminals = workspace.tabs.flatMap((entry) => (entry.kind === 'terminal' ? [entry] : []))
   const ordinal = getNextTerminalOrdinal(
     terminals.map((entry) => ({ defaultTitle: entry.terminal.defaultTitle, title: '' }))
@@ -180,6 +186,8 @@ export function movePaneToNewTab(
     createdAt: context.now(),
     customTitle: null,
     color: null,
+    // The chat pane's new tab opens in chat view, as the window's drag-out opens it.
+    ...(tab.panes.chatLeafId === leafId ? { viewMode: 'chat' as const } : {}),
     kind: 'terminal',
     terminal: {
       defaultTitle: `Terminal ${ordinal}`,
@@ -205,6 +213,7 @@ export function movePaneToNewTab(
   }
   const placed = placeNewTab(
     withSource,
+    command.workspace,
     moved,
     {
       groupId: command.groupId ?? sourceGroup?.id,
@@ -213,5 +222,25 @@ export function movePaneToNewTab(
     },
     context
   )
-  return applied(withWorkspace(model, command.workspace, placed), { tabId: id })
+  return applied(withWorkspace(model, command.workspace, placed), {
+    tabId: id,
+    ...(detach ? { ptyId: placed.leaves?.[leafId]?.ptyId ?? null } : {})
+  })
+}
+
+/** The window's terminal outranks a stale binding here; a stale copy's incarnation is dropped. */
+function bindDetachedLeaf(
+  workspace: WorkspaceLayout,
+  leafId: string,
+  detach: WindowPaneDetach | undefined
+): WorkspaceLayout {
+  const leaf = workspace.leaves?.[leafId]
+  if (!detach?.ptyId || leaf?.ptyId === detach.ptyId) {
+    return workspace
+  }
+  if (!leaf?.ptyId) {
+    return setLeaf(workspace, leafId, { ...leaf, ptyId: detach.ptyId })
+  }
+  const { incarnationId: _stale, ...rest } = leaf
+  return setLeaf(workspace, leafId, { ...rest, ptyId: detach.ptyId })
 }

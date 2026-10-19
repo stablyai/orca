@@ -14,6 +14,7 @@ import {
 import { replaceRuntimeEnvironmentRevisions } from '../../runtime/runtime-environment-revision'
 import { advanceRuntimeEnvironmentConnectionGeneration } from '../../store/slices/runtime-status-connection-generation'
 import { createWorktreeEventRuntime } from './worktree-event-runtime'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import {
   beginWorktreeLineageRefresh,
   invalidateRemoteWorktreeLineage,
@@ -27,8 +28,16 @@ vi.mock('../../store', () => ({
   useAppStore: {
     get getState() {
       return store.getState
+    },
+    get setState() {
+      return store.setState
     }
   }
+}))
+const sshStateGeneration = vi.hoisted(() => ({ value: 0 }))
+vi.mock('@/store/slices/runtime-environment-ssh', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getEnvironmentSshStateGeneration: () => sshStateGeneration.value
 }))
 vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { warning: vi.fn() } }))
@@ -103,6 +112,48 @@ describe('remote worktree event lineage refresh', () => {
     expect(responseBytes * 25).toBeGreaterThan(900_000)
   })
 
+  it('downloads nothing for a 25-repository save whose host publishes the values', async () => {
+    const rows = Array.from({ length: 105 }, (_, index) =>
+      makeWorktree({
+        id: `repo-${index % 25}::/home/orca/workspaces/project/feature-${index}`,
+        repoId: `repo-${index % 25}`,
+        hostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1',
+        sortOrder: index
+      })
+    )
+    const worktreesByRepo: Record<string, ReturnType<typeof makeWorktree>[]> = {}
+    for (const row of rows) {
+      ;(worktreesByRepo[row.repoId] ??= []).push(row)
+    }
+    store.setState({ worktreesByRepo, sortEpoch: 3 })
+    const { worktreeChangeRefreshQueue: queue } = createWorktreeEventRuntime(unsubs, () => false)
+    const now = 1_800_000_000_000
+    const events = Object.entries(worktreesByRepo).map(([repoId, repoRows]) => ({
+      type: 'worktreesChanged' as const,
+      repoId,
+      sortOrderOnly: true,
+      sortOrders: repoRows.map((row, index) => ({
+        worktreeId: row.id,
+        sortOrder: now - index * 1000
+      }))
+    }))
+    for (const event of events) {
+      queue.enqueue({ ...event, executionHostId: 'runtime:env-1' })
+    }
+    await flushPromises()
+    expect(store.getState().fetchWorktrees).not.toHaveBeenCalled()
+    expect(store.getState().fetchWorktreeLineage).not.toHaveBeenCalled()
+    expect(store.getState().sortEpoch).toBe(3)
+    expect(store.getState().worktreesByRepo['repo-0'][0].sortOrder).toBe(now)
+    // The save now costs only the pushed events (about 16 KB with real-length ids).
+    const eventBytes = events.reduce(
+      (sum, event) => sum + Buffer.byteLength(JSON.stringify(event)),
+      0
+    )
+    expect(eventBytes).toBeLessThan(15_000)
+  })
+
   it.each([undefined, false])(
     'keeps the full refresh for an older or unmarked event (%s)',
     async (sortOrderOnly) => {
@@ -169,7 +220,7 @@ describe('remote worktree event lineage refresh', () => {
     expect(store.getState().fetchWorktreeLineage).toHaveBeenCalledTimes(2)
     expect(store.getState().setActiveWorktree).toHaveBeenCalledWith('repo-rename::/new')
     expect(store.getState().purgeWorktreeTerminalState).toHaveBeenCalledWith([
-      { id: deleted.id, hostId: 'runtime:env-1' }
+      hostWorktreeTarget({ id: deleted.id, hostId: 'runtime:env-1' })
     ])
     expect(store.getState().removeWorkspaceSpaceWorktrees).toHaveBeenCalledWith([deleted.id])
   })
@@ -238,7 +289,7 @@ function createActualActionFixture() {
 }
 
 describe('order-only refresh with actual store actions', () => {
-  it('hydrates a cold client, then keeps new sortOrder and sortEpoch without a lineage download', async () => {
+  it('hydrates a cold client, then takes an older host order save without a lineage download or re-sort', async () => {
     const h = createActualActionFixture()
     h.queue.enqueue({ repoId: 'repo', executionHostId: 'runtime:env-1', sortOrderOnly: true })
     await vi.waitFor(() => expect(isRemoteWorktreeLineageFresh(store.getState, 'env-1')).toBe(true))
@@ -249,8 +300,112 @@ describe('order-only refresh with actual store actions', () => {
     h.queue.enqueue({ repoId: 'repo', executionHostId: 'runtime:env-1', sortOrderOnly: true })
     await vi.waitFor(() => expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(20))
     await flushPromises()
-    expect(store.getState().sortEpoch).toBe(beforeEpoch + 1)
+    // A sortOrder-only refetch must not schedule the next Smart re-sort and save (#27268).
+    expect(store.getState().sortEpoch).toBe(beforeEpoch)
     expect(h.lineageReadCount()).toBe(1)
+  })
+
+  it('patches a published order save in place without any host read or re-sort', async () => {
+    const h = createActualActionFixture()
+    await h.warm()
+    const readsBefore = runtimeEnvironmentCall.mock.calls.length
+    const beforeEpoch = store.getState().sortEpoch
+    h.queue.enqueue({
+      repoId: 'repo',
+      executionHostId: 'runtime:env-1',
+      sortOrderOnly: true,
+      sortOrders: [{ worktreeId: h.worktree.id, sortOrder: 99 }]
+    })
+    await flushPromises()
+    expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(99)
+    expect(store.getState().sortEpoch).toBe(beforeEpoch)
+    expect(runtimeEnvironmentCall.mock.calls.length).toBe(readsBefore)
+  })
+
+  it('refetches when a published row was never loaded here', async () => {
+    const h = createActualActionFixture()
+    await h.warm()
+    store.setState({ worktreesByRepo: {} })
+    h.setOrder(42)
+    h.queue.enqueue({
+      repoId: 'repo',
+      executionHostId: 'runtime:env-1',
+      sortOrderOnly: true,
+      sortOrders: [{ worktreeId: h.worktree.id, sortOrder: 99 }]
+    })
+    await vi.waitFor(() => expect(store.getState().worktreesByRepo.repo?.[0]?.sortOrder).toBe(42))
+  })
+
+  it('still retries lineage on a published save when the host snapshot is not fresh', async () => {
+    const h = createActualActionFixture()
+    h.queue.enqueue({
+      repoId: 'repo',
+      executionHostId: 'runtime:env-1',
+      sortOrderOnly: true,
+      sortOrders: [{ worktreeId: h.worktree.id, sortOrder: 99 }]
+    })
+    await vi.waitFor(() => expect(h.lineageReadCount()).toBe(1))
+    expect(
+      runtimeEnvironmentCall.mock.calls.filter(
+        ([request]) => request.method !== 'worktree.lineageList'
+      )
+    ).toEqual([])
+    expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(99)
+  })
+
+  it.each(['reconnect', 'event-stream gap'] as const)(
+    'refetches instead of applying values published before a %s',
+    async (gap) => {
+      const h = createActualActionFixture()
+      await h.warm()
+      const listing = Promise.withResolvers<void>()
+      h.holdListing(listing.promise)
+      h.queue.enqueue({ repoId: 'repo', executionHostId: 'runtime:env-1' })
+      h.queue.enqueue({
+        repoId: 'repo',
+        executionHostId: 'runtime:env-1',
+        sortOrderOnly: true,
+        sortOrders: [{ worktreeId: h.worktree.id, sortOrder: 99 }]
+      })
+      if (gap === 'reconnect') {
+        advanceRuntimeEnvironmentConnectionGeneration('env-1')
+      } else {
+        sshStateGeneration.value += 1
+      }
+      h.setOrder(200)
+      listing.resolve()
+      await vi.waitFor(() => expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(200))
+      await flushPromises()
+      expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(200)
+    }
+  )
+
+  it('leaves a same-id row owned by another host untouched', async () => {
+    const h = createActualActionFixture()
+    const local = makeWorktree({ id: h.worktree.id, repoId: 'repo', hostId: 'local', sortOrder: 5 })
+    store.setState({ worktreesByRepo: { repo: [h.worktree, local] } })
+    h.queue.enqueue({
+      repoId: 'repo',
+      executionHostId: 'runtime:env-1',
+      sortOrderOnly: true,
+      sortOrders: [{ worktreeId: h.worktree.id, sortOrder: 99 }]
+    })
+    await flushPromises()
+    expect(store.getState().worktreesByRepo.repo.map((row) => row.sortOrder)).toEqual([99, 5])
+  })
+
+  it('still bumps sortEpoch when a refetch changes more than sortOrder', async () => {
+    const h = createActualActionFixture()
+    const beforeEpoch = store.getState().sortEpoch
+    runtimeEnvironmentCall.mockImplementation(async () => ({
+      id: 'rpc',
+      ok: true,
+      result: makeDetectedResult('repo', [{ ...h.worktree, sortOrder: 30, isUnread: true }]),
+      _meta: { runtimeId: 'remote-runtime' }
+    }))
+    await store.getState().fetchWorktrees('repo', { executionHostId: 'runtime:env-1' })
+    expect(store.getState().worktreesByRepo.repo[0].isUnread).toBe(true)
+    expect(store.getState().sortEpoch).toBe(beforeEpoch + 1)
   })
 
   it('retries failed ordinary and best-effort reads on the next order-only event', async () => {

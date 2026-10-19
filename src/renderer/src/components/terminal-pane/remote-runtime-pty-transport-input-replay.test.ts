@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -109,6 +109,13 @@ function emitInputAck(streamId: number, seq: number, payload = new Uint8Array())
   )
 }
 
+function acknowledgeInputFrame(bytes: Uint8Array): void {
+  const frame = decodeTerminalStreamFrame(bytes)
+  if (frame?.opcode === TerminalStreamOpcode.Input) {
+    queueMicrotask(() => emitInputAck(frame.streamId, frame.seq))
+  }
+}
+
 /** Makes the `failAt`-th Input frame sent from now on throw, as a socket that died mid-write does. */
 function failInputFrame(failAt: number): void {
   let inputs = 0
@@ -141,6 +148,7 @@ async function connectPane(
     tabId: 'tab-1',
     leafId: 'pane:1'
   })
+  onTestFinished(() => transport.destroy?.())
   transport.attach({ existingPtyId: 'remote:terminal-1', cols: 80, rows: 24, callbacks })
   await vi.waitFor(() => expect(subscribeFrameCount()).toBe(1))
   const streamId = latestSubscribePayload().streamId
@@ -161,6 +169,51 @@ async function reconnect(
 describe('remote pane input across a silent outage', () => {
   beforeEach(() => {
     resetRemoteRuntimeTransport()
+  })
+
+  it('reports undelivered input on an endpoint-loss frame only when the pane held some', async () => {
+    let undelivered: boolean | undefined
+    const { transport, streamId } = await connectPane(
+      { inputAck: 1, writeUnavailable: 1, endpointLossNotice: 1 },
+      { onWriteUnavailable: () => (undelivered = transport.hasUndeliveredInput?.()) }
+    )
+    const endpointLost = (): void =>
+      subscriptionCallbacks?.onBinary?.(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.WriteUnavailable,
+          streamId,
+          seq: 1,
+          payload: new Uint8Array()
+        })
+      )
+
+    // An idle pane: the host dropped it unprompted, and nothing typed is at stake.
+    endpointLost()
+    expect(undelivered).toBe(false)
+
+    transport.sendInput('echo alive\r', 'driving')
+    endpointLost()
+    // Why revert-sensitive: the remount discards this, and saying nothing is the silent loss.
+    expect(undelivered).toBe(true)
+    transport.destroy?.()
+  })
+
+  it('treats the frame as refused input on a stream without acks', async () => {
+    let undelivered: boolean | undefined
+    const { transport, streamId } = await connectPane(
+      { writeUnavailable: 1 },
+      { onWriteUnavailable: () => (undelivered = transport.hasUndeliveredInput?.()) }
+    )
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.WriteUnavailable,
+        streamId,
+        seq: 1,
+        payload: new Uint8Array()
+      })
+    )
+    expect(undelivered).toBe(true)
+    transport.destroy?.()
   })
 
   it('names an input session and negotiates acks on subscribe', async () => {
@@ -240,6 +293,7 @@ describe('remote pane input across a silent outage', () => {
 
   it('keeps a paste still in size validation ahead of keys typed after the outage', async () => {
     const { transport } = await connectPane({ inputAck: 1 })
+    subscriptionSendBinary.mockImplementation(acknowledgeInputFrame)
     const paste = 'A'.repeat(300 * 1024)
     transport.sendInput(paste, 'driving')
     subscriptionCallbacks?.onError?.({
@@ -252,9 +306,90 @@ describe('remote pane input across a silent outage', () => {
     await reconnect({ inputAck: 1 }, 2)
 
     // Why the long timeout: 300 KiB byte-length validation yields and is slow on a loaded runner.
-    await vi.waitFor(() => expect(sentText()).toBe(`${paste}B\r`), { timeout: 10_000 })
+    await vi.waitFor(
+      () => {
+        const text = sentText()
+        expect(text).toHaveLength(paste.length + 2)
+        expect(text.indexOf('B')).toBe(paste.length)
+        // Keep a 300 KiB mismatch out of CI logs.
+        expect(text === `${paste}B\r`).toBe(true)
+      },
+      { timeout: 10_000 }
+    )
     transport.destroy?.()
   })
+
+  it.each(['acknowledged', 'legacy', 'accepted key'] as const)(
+    'releases the held paste prefix before its pending debounce suffix (%s host)',
+    async (host) => {
+      vi.useFakeTimers()
+      onTestFinished(() => {
+        vi.useRealTimers()
+      })
+      const capabilities: Record<string, 1> =
+        host === 'legacy' ? { outputPause: 1 } : { inputAck: 1 }
+      const { transport } = await connectPane(capabilities)
+      try {
+        let resumeSubscription!: () => void
+        const resumed = new Promise<void>((resolve) => {
+          resumeSubscription = resolve
+        })
+        let subscribed!: () => void
+        const replacementSubscribed = new Promise<void>((resolve) => {
+          subscribed = resolve
+        })
+        runtimeSubscribe.mockImplementation(
+          async (_args: unknown, callbacks: NonNullable<MultiplexSubscriptionCallbacks>) => {
+            subscriptionCallbacks = callbacks
+            await resumed
+            queueMicrotask(emitMultiplexReady)
+            return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+          }
+        )
+        subscriptionSendBinary.mockImplementation((bytes: Uint8Array) => {
+          if (decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.Subscribe) {
+            subscribed()
+          }
+          if (host !== 'legacy') {
+            acknowledgeInputFrame(bytes)
+          }
+        })
+        const paste = 'A'.repeat(300 * 1024)
+        transport.sendInput(paste, 'driving')
+        subscriptionCallbacks?.onError?.({
+          code: 'remote_runtime_unavailable',
+          message: 'Could not connect to the remote Orca runtime.'
+        })
+        transport.sendInput('B\r', 'driving')
+        // Finish validation while the replacement is blocked, before the 8 ms suffix debounce.
+        await vi.advanceTimersByTimeAsync(1)
+        expect(runtimeSubscribe).toHaveBeenCalledTimes(2)
+        resumeSubscription()
+        await replacementSubscribed
+        attachStream(latestSubscribePayload().streamId, capabilities)
+        const accepted =
+          host === 'accepted key' ? transport.sendInputAccepted?.('C', 'driving') : undefined
+        if (host === 'accepted key') {
+          transport.sendInput('D', 'driving')
+        }
+        await vi.advanceTimersByTimeAsync(20)
+        const expected = `${paste}B\r${host === 'accepted key' ? 'CD' : ''}`
+        const text = sentText()
+        expect(text).toHaveLength(expected.length)
+        expect(text.indexOf('B')).toBe(paste.length)
+        expect(text === expected).toBe(true)
+        if (host === 'accepted key') {
+          await expect(accepted).resolves.toBe(true)
+        }
+        if (host === 'legacy') {
+          expect(sentInputs().every((input) => input.seq === 0)).toBe(true)
+        }
+      } finally {
+        await transport.destroy?.()
+        vi.useRealTimers()
+      }
+    }
+  )
 
   it('never replays toward a host that does not acknowledge input', async () => {
     const { transport } = await connectPane({ outputPause: 1 })
@@ -605,6 +740,32 @@ describe('remote pane input across a silent outage', () => {
     await vi.waitFor(() => expect(sentInputs(2).map((input) => input.text)).toEqual(['ls\r']))
     transport.destroy?.()
   })
+
+  it.each([1, 2])(
+    'retains the whole held draft when replay chunk %i fails to send',
+    async (failingChunk) => {
+      const { transport } = await connectPane({ inputAck: 1 })
+      subscriptionCallbacks?.onClose?.()
+      const draft = `${'a'.repeat(16 * 1024)}${'b'.repeat(16 * 1024)}${'c'.repeat(16 * 1024)}`
+      expect(transport.sendInput(draft, 'driving')).toBe(true)
+      await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+      failInputFrame(failingChunk)
+      await reconnect({ inputAck: 1 }, 2)
+      await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(3))
+      await reconnect({ inputAck: 1 }, 3)
+      await vi.waitFor(() =>
+        expect(
+          sentInputs(3)
+            .map((input) => input.text)
+            .join('') === draft
+        ).toBe(true)
+      )
+      for (const replayed of sentInputs(3)) {
+        emitInputAck(latestSubscribePayload().streamId, replayed.seq)
+      }
+      await transport.destroy?.()
+    }
+  )
 
   it.each([1, 2])(
     'keeps earlier typing and the whole draft when chunk %i of an accepted write fails to send',

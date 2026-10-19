@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import {

@@ -26,7 +26,7 @@ export function createNewTerminalTab(
     void createWebRuntimeSessionTerminal({
       worktreeId: activeWorktreeId,
       environmentId: runtimeEnvironmentId,
-      command: shellOverride,
+      shell: shellOverride,
       ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
       activate: true
     })

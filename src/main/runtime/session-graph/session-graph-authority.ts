@@ -15,7 +15,18 @@ import { browserNetworkExecutionHostKey } from '../../browser/browser-network-ex
 import type { ClientHostedBrowserRpcRoute } from '../runtime-browser-client-automation'
 import { routeRuntimeBrowserClientAutomation } from '../runtime-browser-client-automation'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
-import { getBrowserHostLeaseRegistry } from '../browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
+import {
+  routeDesktopBrowserBridgeRpc,
+  type DesktopBrowserBridgeRoute
+} from '../desktop-browser-bridge/desktop-browser-bridge-route'
+import {
+  getDesktopBrowserBridgeRegistry,
+  isDesktopBrowserBridgeHostEnabled
+} from '../desktop-browser-bridge/desktop-browser-bridge-registry'
+import { runtimeBrowserCommandsFactoryIsAvailable } from '../runtime-browser-commands-factory'
+import { resolveRemoteCliBrowserScopeSelector } from '../desktop-browser-bridge/remote-cli-browser-scope'
+import type { RpcContext } from '../rpc/core'
 
 export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRuntimeWithHasTerminalsForWorktree {
   protected abstract resolveBrowserNetworkExecutionHostForWorktree(
@@ -202,6 +213,25 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
       params,
       pages: getRuntimeBrowserPageRegistry(this),
       leases: getBrowserHostLeaseRegistry(this),
+      resolveWorkspace: (selector) =>
+        resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveBrowserWorkspace(selector)
+    })
+  }
+
+  /** On orcad, sends this host's CLI browser commands to the desktop that opted in to serve them. */
+  routeDesktopBrowserBridgeRpc(
+    method: string,
+    params: unknown,
+    context: Pick<RpcContext, 'caller' | 'signal'>
+  ): Promise<DesktopBrowserBridgeRoute> {
+    return routeDesktopBrowserBridgeRpc({
+      method,
+      params,
+      caller: context.caller,
+      signal: context.signal,
+      hostEnabled: isDesktopBrowserBridgeHostEnabled(),
+      registry: getDesktopBrowserBridgeRegistry(this),
+      localBrowserAvailable: runtimeBrowserCommandsFactoryIsAvailable(),
       resolveWorkspace: (selector) => this.resolveBrowserWorkspace(selector)
     })
   }

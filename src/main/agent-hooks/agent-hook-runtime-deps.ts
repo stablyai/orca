@@ -15,6 +15,7 @@ export function agentHookRuntimeDeps(
     // Why: main's OSC parse is the only producer for a PTY agent, and this store is the only
     // place `worktree.ps` and the mobile projection read from.
     onTerminalAgentStatus: (event) => server.ingestTerminalStatus(event),
+    onTerminalProgramStatusFacet: (event) => server.ingestProgramStatusFacet(event),
     onClaudeTerminalEvidence: (paneKey, evidence) =>
       server.observeClaudeTerminalEvidence(paneKey, evidence),
     getAgentStatusSnapshot: () =>
@@ -34,11 +35,21 @@ export function agentHookRuntimeDeps(
       publishChildWork: (subject, evidence, provider) =>
         server.ingestStructuredChildWork(subject, evidence, provider),
       readChildWork: (subject) => server.getStructuredChildWorkViews(subject),
-      readChildWorkRecords: (subject) => server.getStructuredChildWork(subject)
+      readChildWorkRecords: (subject) => server.getStructuredChildWork(subject),
+      readChildWorkHandles: (subject) => server.getStructuredChildWorkHandles(subject)
     },
-    checkHookAgentPresence: (paneKey) => server.checkAgentPresence(paneKey),
+    readHookCliWriterObservation: (row) => server.readCliWriterObservation(row),
+    checkHookAgentPresence: (paneKey, exitedSince) =>
+      exitedSince === undefined
+        ? server.checkAgentPresence(paneKey)
+        : server.checkAgentPresenceSince(paneKey, exitedSince),
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
       server.reconcileEndedProcessForPaneKeys(paneKeys),
+    forgetHookAgentExit: (paneKeys) => {
+      for (const paneKey of paneKeys) {
+        server.forgetAgentExit(paneKey)
+      }
+    },
     dropAgentStatusForRemovedWorktree: (worktreeId, host) =>
       server.dropStatusEntriesForRemovedWorktree(worktreeId, host),
     buildAgentHookPtyEnv: () =>

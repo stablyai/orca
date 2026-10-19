@@ -8,6 +8,12 @@ const CONFLICT =
 const LINKED_PROJECT_TERMINALS = /orcad_migration_linked_project_terminals:(.+)/
 const UNOWNED_TERMINALS = /orcad_migration_linked_project_unowned_terminals:(.+)/
 
+/** A link refused only because a bridged relay terminal runs in that project; the bridge serves it. */
+export function isBridgedTerminalLinkConflict(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return LINKED_PROJECT_TERMINALS.test(message) || UNOWNED_TERMINALS.test(message)
+}
+
 /** Null for anything that is not such a conflict, including a transient staged claim. */
 export function orcadMigrationConflictGuidance(error: unknown): string | null {
   const message = error instanceof Error ? error.message : String(error)
@@ -15,16 +21,16 @@ export function orcadMigrationConflictGuidance(error: unknown): string | null {
   if (terminals) {
     return (
       `Terminals an older version of Orca started in ${terminals[1]} are still running, and this ` +
-      'host’s managed server already has that project from another Orca desktop. Close those ' +
-      'terminals in that version of Orca or end them on the host, then reconnect, or remove that ' +
-      'project from this desktop and connect again.'
+      'host’s managed server already has that project from another Orca desktop. Close them or ' +
+      'end them on the host, then reconnect, or remove that project from this desktop and ' +
+      'connect again.'
     )
   }
   const unowned = UNOWNED_TERMINALS.exec(message)
   if (unowned) {
     return (
       'A terminal an older version of Orca started on this host is still running, and Orca can’t ' +
-      'tell which project it belongs to. Close it in that version of Orca or end it on the host, ' +
+      'tell which project it belongs to. Close it or end it on the host, ' +
       `then reconnect. Or, to use this host’s managed server’s copy of ${unowned[1]}, remove that ` +
       'project from this desktop and connect again.'
     )

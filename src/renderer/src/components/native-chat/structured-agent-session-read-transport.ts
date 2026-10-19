@@ -1,3 +1,6 @@
+import { createReconnectScheduler } from './structured-agent-session-reconnect'
+import { createAgentSessionCurrentRequestsReader } from '../../../../shared/agent-session-current-requests-reader'
+import type { StructuredAgentSessionAction } from '../../../../shared/structured-agent-session-reducer'
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session-wire'
 import { createStructuredAgentSessionEventCoalescer } from '../../../../shared/structured-agent-session-coalescer'
@@ -10,7 +13,10 @@ import type { AgentSessionRefusalReference } from '../../../../shared/agent-sess
 import { readAgentSessionErrorRefusal } from '../../../../shared/agent-session-write-failure'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { subscribeStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import {
+  callStructuredAgentSession,
+  subscribeStructuredAgentSession
+} from '@/runtime/structured-agent-session-client'
 
 // A stream hands its failure over as the raw `{ code, message }` payload; `String()` of that is `[object Object]`.
 function readFailureText(error: unknown): string {
@@ -31,53 +37,8 @@ function readFailureText(error: unknown): string {
   return 'Something went wrong.'
 }
 
-const RECONNECT_FIRST_DELAY_MS = 750
-const RECONNECT_MAX_DELAY_MS = 30_000
-
-/** Each reconnect waits twice the last, up to the cap, until a read delivers. */
-function createReconnectScheduler(args: { shouldStop: () => boolean; reconnect: () => void }) {
-  let timer: ReturnType<typeof setTimeout> | null = null
-  let nextDelay = RECONNECT_FIRST_DELAY_MS
-  return {
-    schedule(): void {
-      if (args.shouldStop() || timer) {
-        return
-      }
-      const delay = nextDelay
-      nextDelay = Math.min(delay * 2, RECONNECT_MAX_DELAY_MS)
-      timer = setTimeout(() => {
-        timer = null
-        if (!args.shouldStop()) {
-          args.reconnect()
-        }
-      }, delay)
-    },
-    /** A read delivered, so the next failure is retried soon again. */
-    reset(): void {
-      nextDelay = RECONNECT_FIRST_DELAY_MS
-    },
-    /** The host is reachable again: a waiting retry runs now instead of after the grown wait. */
-    retryNow(): void {
-      nextDelay = RECONNECT_FIRST_DELAY_MS
-      if (!timer) {
-        return
-      }
-      clearTimeout(timer)
-      timer = null
-      if (!args.shouldStop()) {
-        args.reconnect()
-      }
-    },
-    dispose(): void {
-      if (timer) {
-        clearTimeout(timer)
-        timer = null
-      }
-    }
-  }
-}
-
 export function startStructuredAgentSessionReadTransport(args: {
+  applyRequests?: (action: StructuredAgentSessionAction) => void
   applyEvent: (event: AgentSessionSubscribeEvent, options?: { opensSubscription: true }) => void
   /** `message` is the failure's own text, for logs; `refusal` is what a surface words. */
   applyError: (message: string, refusal?: AgentSessionRefusalReference) => void
@@ -102,6 +63,8 @@ export function startStructuredAgentSessionReadTransport(args: {
   /** The open generation whose first frame has not arrived yet. */
   let openingFrameGeneration = 0
   let stateGeneration = 0
+  /** The current-request version whose failed read already reopened the subscription once. */
+  let failedRequestsVersion: string | undefined
   let unsubscribe = (): void => {}
   let shouldStopCoalescedEvent = (): boolean => true
   const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
@@ -124,6 +87,7 @@ export function startStructuredAgentSessionReadTransport(args: {
     connected = false
     // What already arrived is applied first: landing later, it would read as contact regained.
     coalescer.flush()
+    requestReader.invalidate()
     args.onContactLost()
     reconnectScheduler.schedule()
   }
@@ -170,6 +134,21 @@ export function startStructuredAgentSessionReadTransport(args: {
     return () =>
       !isCurrentOpenGeneration(readOpenGeneration) || readStateGeneration !== stateGeneration
   }
+  const requestReader = createAgentSessionCurrentRequestsReader({
+    read: (request) =>
+      callStructuredAgentSession(args.target, 'agentSession.currentRequests', request),
+    complete: (marker, items) => args.applyRequests?.({ type: 'requests-complete', marker, items }),
+    replaceMarker: (marker) => args.applyRequests?.({ type: 'requests-marker', marker }),
+    error: (error, marker) => {
+      reportReadFailure(error)
+      // Why: a reopen re-reads the same version, so a deterministic failure would resubscribe forever.
+      if (failedRequestsVersion === marker.version) {
+        return
+      }
+      failedRequestsVersion = marker.version
+      loseContact()
+    }
+  })
   const handleEvent = (event: AgentSessionSubscribeEvent, eventOpenGeneration: number): void => {
     if (!isCurrentOpenGeneration(eventOpenGeneration)) {
       return
@@ -180,6 +159,7 @@ export function startStructuredAgentSessionReadTransport(args: {
       reconnectScheduler.reset()
     }
     if (event.type === 'snapshot' || event.type === 'reset') {
+      requestReader.invalidate()
       coalescer.flush()
       if (!isCurrentOpenGeneration(eventOpenGeneration)) {
         return
@@ -202,11 +182,15 @@ export function startStructuredAgentSessionReadTransport(args: {
       coalescer.flush()
       if (isCurrentOpenGeneration(eventOpenGeneration)) {
         args.applyEvent(event, { opensSubscription: true })
+        requestReader.observe(event.currentRequests)
       }
       return
     }
     shouldStopCoalescedEvent = captureHistoryReadGuard()
     coalescer.push(event)
+    if (event.type !== 'end' && event.currentRequests?.sessionId === args.sessionId) {
+      requestReader.observe(event.currentRequests)
+    }
   }
   async function open(): Promise<void> {
     if (stopped || connected) {
@@ -224,6 +208,7 @@ export function startStructuredAgentSessionReadTransport(args: {
     }
     const currentOpenGeneration = ++openGeneration
     openingFrameGeneration = currentOpenGeneration
+    requestReader.invalidate()
     args.onHistoryReadInvalidated()
     unsubscribe()
     unsubscribe = (): void => {}
@@ -298,6 +283,7 @@ export function startStructuredAgentSessionReadTransport(args: {
     captureHistoryReadGuard,
     dispose: () => {
       stopped = true
+      requestReader.invalidate()
       openGeneration += 1
       args.onHistoryReadInvalidated()
       stopHostContactWatch()

@@ -38,6 +38,10 @@ const {
 } = require('./scripts/verify-packaged-mobile-web-bundle.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
 const {
+  assertPackagedServeSelectionEntry,
+  assertPackagedWebClient
+} = require('./scripts/verify-packaged-serve-payload.cjs')
+const {
   assertBundledRipgrepInstalled,
   bundledRipgrepExtraResources,
   bundledRipgrepMacSignIgnore,
@@ -54,6 +58,7 @@ const {
   orcadTemplateMacSignIgnore
 } = require('./scripts/packaged-orcad-template.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
+const { assertNotDarkBuild } = require('./dark-build-switches.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
 const {
   appImageNodeRuntimeFpmArgs,
@@ -260,6 +265,8 @@ module.exports = {
     '!config{,/**/*}',
     // Release archives and other build staging are not runtime resources.
     '!.build{,/**/*}',
+    // Worktree-local Vite dependency caches are development inputs.
+    '!.cache/vite{,.lock}{,/**/*}',
     '!docs{,/**/*}',
     '!mobile{,/**/*}',
     '!native{,/**/*}',
@@ -346,6 +353,8 @@ module.exports = {
   // entries reached solely from the Electron main process stay packed, since
   // asar redirects their app.asar paths.
   // Why: `orca serve` runs the orcad selection entry under ELECTRON_RUN_AS_NODE too (#27307).
+  // Why out/web and out/mobile-web: their assets are opened by path, and opening a packed file
+  // reads a /tmp extract Electron makes once and never remakes, so a /tmp sweep broke them (#27976).
   asarUnpack: [
     'out/package.json',
     'out/cli/**',
@@ -374,6 +383,8 @@ module.exports = {
     'out/main/parcel-watcher-process-entry.js',
     'out/main/orcad/orcad-local-serve-selection-entry.js',
     'out/main/chunks/**',
+    'out/web/**',
+    'out/mobile-web/**',
     'resources/**',
     'node_modules/ws/**',
     'node_modules/tweetnacl/**',
@@ -392,6 +403,7 @@ module.exports = {
     mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR,
     ensureWaylandClipboard = ensureBundledWaylandClipboard
   ) => {
+    assertNotDarkBuild([join(__dirname, '..', 'out', 'main'), mobileWebBundleDir])
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
     assertBundledRipgrepInstalled()
     assertProcessHostOutputBuilt()
@@ -493,6 +505,8 @@ module.exports = {
     // Why: inspect electron-builder's real output so a broken extraResources
     // mapping fails packaging before bundled content reaches users.
     verifyPackagedPluginResources(resourcesDir)
+    assertPackagedWebClient(resourcesDir)
+    assertPackagedServeSelectionEntry(resourcesDir)
     finalizePackagedRipgrep(resourcesDir)
     await finalizePackagedOrcadTemplate(resourcesDir, {
       platform: context.electronPlatformName,

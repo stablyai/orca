@@ -7,6 +7,11 @@ import { promisify } from 'node:util'
 import type { SFTPWrapper } from 'ssh2'
 import { latchLateSftpStreamErrors, type SftpStreamErrorLatch } from './sftp-stream-late-error'
 
+// Why: ssh2's WriteStream waits for each chunk's ack before writing the next, so an upload moves
+// one chunk per round trip. Buffering this much lets its _writev keep that many bytes of WRITE
+// requests in flight, as fastPut's default 64 x 32 KiB does.
+export const SFTP_UPLOAD_IN_FLIGHT_BYTES = 2 * 1024 * 1024
+
 export function mkdirSftp(
   sftp: SFTPWrapper,
   path: string,
@@ -59,7 +64,8 @@ export async function uploadFile(
     }
     // Why: rejected local sources must not leave an empty remote file.
     writeStream = sftp.createWriteStream(remotePath, {
-      flags: options?.exclusive ? 'wx' : 'w'
+      flags: options?.exclusive ? 'wx' : 'w',
+      highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
     })
     // Why: the OPEN reply can land after this transfer settles; without a listener that
     // outlives it, ssh2 throws it synchronously into the socket handler (#15479).

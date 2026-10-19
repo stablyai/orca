@@ -12,7 +12,7 @@ import type { LocalFileAccess } from '../../shared/local-file-access'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
-import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
+import { assertSshMutationExpectation } from '../ssh/connection/ssh-connection-generation'
 import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
 import { assertNotExists, rethrowWithUserMessage } from './filesystem-create-path-guards'
 import type {
@@ -206,14 +206,16 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:stageExternalPathsForRuntimeUpload',
     async (
       _event,
-      args: { sourcePaths: string[] }
+      args: { sourcePaths: string[]; nameExtensionlessImages?: boolean }
     ): Promise<{ sources: StagedExternalImportSource[] }> => {
       const sources: StagedExternalImportSource[] = []
       // Why: one budget for the whole drop — per-source counters would let five
       // 2 GB files through a ceiling meant to cap the drop.
       let totalBytes = 0
       for (const sourcePath of args.sourcePaths) {
-        const source = await stageOneSourceForRuntimeUpload(sourcePath, totalBytes)
+        const source = await stageOneSourceForRuntimeUpload(sourcePath, totalBytes, {
+          nameExtensionlessImages: args.nameExtensionlessImages
+        })
         totalBytes += stagedRuntimeUploadByteLength(source)
         sources.push(source)
       }

@@ -205,7 +205,10 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
   getTerminalPaneKey(handle: string): string | null {
     return (
       resolveStructuredWorkerAuthority(handle, this.getOrchestrationDbIfAvailable?.() ?? null)
-        ?.identity.paneKey ?? this.getPaneKeyForTerminalHandle(handle)
+        ?.identity.paneKey ??
+      this.getPaneKeyForTerminalHandle(handle) ??
+      this.getOrchestrationCompatibilitySshTerminal(handle)?.paneKey ??
+      null
     )
   }
 
@@ -227,7 +230,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
     try {
       const leaf = this.resolveLiveLeafForHandle(handle)
       if (!leaf?.ptyId) {
-        return null
+        return this.getOrchestrationCompatibilitySshTerminal(handle)?.paneKey ?? null
       }
       const pty = this.ptysById.get(leaf.ptyId)
       return pty?.connected === false ? null : this.getPaneKeyForTerminalHandle(handle)
@@ -242,5 +245,22 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
   getTerminalLivenessVerdict(handle: string): PtyLivenessVerdict | null {
     const record = this.getLivePtyForHandle(handle)?.record ?? this.handles.get(handle)
     return record?.ptyId ? this.getPtyLivenessVerdict(record.ptyId) : null
+  }
+
+  /** The hook store's verdict on the agent in this terminal, keeping exits proven since `exitedSince`. */
+  checkTerminalAgentPresence(
+    handle: string,
+    exitedSince: number
+  ): Promise<'live' | 'unverifiable' | 'exited' | null> {
+    const ptyId = (this.getLivePtyForHandle(handle)?.record ?? this.handles.get(handle))?.ptyId
+    return ptyId ? this.recheckHookAgentPresenceForPty(ptyId, exitedSince) : Promise.resolve(null)
+  }
+
+  /** A worker now owns this terminal; drop any agent exit the hook store proved before it. */
+  forgetTerminalAgentExit(handle: string): void {
+    const ptyId = (this.getLivePtyForHandle(handle)?.record ?? this.handles.get(handle))?.ptyId
+    if (ptyId) {
+      this.forgetHookAgentExitFn?.(this.collectAgentStatusPaneKeysForPty(ptyId))
+    }
   }
 }

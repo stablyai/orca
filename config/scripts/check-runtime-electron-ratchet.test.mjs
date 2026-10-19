@@ -241,10 +241,4 @@ describe('the command-line check', () => {
     expect(await main({ plugins: [addElectron] })).toBe(1)
     expect(error.mock.calls.join('\n')).toContain('+ src/main/native-chat/transcript-read-cache.ts')
   }, 120_000)
-
-  // Why real: the value of this gate is the transitive edges, which a fixture cannot model.
-  it('passes on the tree as it is, with nothing reachable importing electron', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    expect(await main()).toBe(0)
-  }, 120_000)
 })

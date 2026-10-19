@@ -6,7 +6,7 @@
  * catalog does not list every git worktree a terminal ever ran in.
  */
 import { z } from 'zod'
-import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../shared/orcad-migration-blob-transfer'
+import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import { hashWorktreeId } from '../../terminal-history-id'
 
 /** fish keeps its history in the distro's own fish data dir, not Orca's store, so it never moves. */

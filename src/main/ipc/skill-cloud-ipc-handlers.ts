@@ -20,7 +20,7 @@ import {
   supportsSkillRuntimeCancellation,
   supportsSkillRuntimeInstall
 } from '../skills/skill-runtime-capability'
-import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
 import { registerSkillInstallManagementIpcHandlers } from './skill-install-management-ipc-handlers'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 import { sendBundleInstallProgress, sendSkillInstallProgress } from './skill-install-progress-ipc'
@@ -50,6 +50,7 @@ function registerSharingHandlers(
   const preparations = new SkillSharePreparationService(
     join(app.getPath('userData'), 'skill-share-preparations'),
     {
+      findOwnedPackageId: (name, request) => runtime.findOwnedSkillPackageId(name, request),
       publishVersion: (request) => runtime.publishSkillPackageVersion(request),
       createShare: (packageId, request) => runtime.createSkillPackageShare(packageId, request)
     },

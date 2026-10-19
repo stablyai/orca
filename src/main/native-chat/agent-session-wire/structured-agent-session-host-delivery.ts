@@ -13,12 +13,15 @@ import {
   type StructuredAgentSessionConversationOpenOptions
 } from './structured-agent-session-conversation-open'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
+import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
 import { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 import { structuredAgentSessionCommandRunning } from './structured-agent-session-command-turn'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
+import type { StructuredAgentSessionStartReadiness } from './structured-agent-session-startup-attempt'
 import type {
   StructuredAgentSessionHostDeps,
-  StructuredAgentSessionHostSession
+  StructuredAgentSessionHostSession,
+  StructuredAgentSessionProviderChildIdentity
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
@@ -61,13 +64,23 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     sessionId: string,
     startedFor: string
   ) => Promise<StructuredAgentSessionResumeOutcome>
+  deliveryOrder: StructuredAgentSessionDeliveryOrder
+  readiness: (
+    sessionId: string,
+    child: StructuredAgentSessionProviderChildIdentity
+  ) => StructuredAgentSessionStartReadiness | null
   /** Stops a child the chat outgrew, so the start after it reads a new login or permission mode. */
   stopOutgrownAgent: (sessionId: string) => Promise<void>
   /** Read lazily: the host's mutation context is still assembling when this is built. */
   mutationContext: () => StructuredAgentSessionMutationContext
   clientDelivery: Pick<
     StructuredAgentSessionClientDelivery,
-    'publishRestored' | 'readChildWork' | 'readStopping' | 'publishStatus'
+    | 'publishRestored'
+    | 'readChildWork'
+    | 'childWorkOpen'
+    | 'readStopping'
+    | 'publishStatus'
+    | 'publishGenerationEnded'
   >
 }): StructuredAgentSessionConversationDelivery {
   const { deps, sessions } = input
@@ -87,6 +100,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
           currentWork: () =>
             hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId),
           childWork: () => input.clientDelivery.readChildWork(sessionId),
+          childWorkOpen: () => input.clientDelivery.childWorkOpen(sessionId),
           hasOpenDispatch: () => {
             const record = deps.store.getRecord(sessionId)
             return record !== null && deps.hasOpenDispatch?.(record) === true
@@ -103,6 +117,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       })
       return input.ensureProviderChild(sessionId, startedFor)
     },
+    readiness: input.readiness,
+    deliveryOrder: input.deliveryOrder,
     applyMessageOptions: (sessionId, options) =>
       applyStructuredAgentSessionMessageOptions(input.mutationContext(), sessionId, options),
     conversationFence: (sessionId) =>
@@ -126,6 +142,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     currentWork: (sessionId) =>
       hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId),
     readChildWork: input.clientDelivery.readChildWork,
+    workChanged: (sessionId) => input.clientDelivery.publishGenerationEnded(sessionId),
+    childWorkOpen: input.clientDelivery.childWorkOpen,
     stopping: input.clientDelivery.readStopping,
     now: () => deps.now?.() ?? Date.now()
   })
@@ -143,6 +161,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   }
   const wakesQueued = new Set<string>()
   const afterCommit = (sessionId: string, journal: AgentSessionJournal): void => {
+    input.deliveryOrder.reconcile(sessionId, journal.submissions())
     const work = hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId)
     if (
       wakesQueued.has(sessionId) ||
@@ -170,7 +189,9 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   // A chat open before its owner's death was proven revises what its open settled. Queued, never
   // awaited: the writer can hold this session's serialize (an attach recovering its lease).
   const stopResettling = deps.store.onDeathEvidence((sessionId) => {
-    if (sessions.has(sessionId)) {
+    const session = sessions.get(sessionId)
+    // A user close already settles and retires this handle; its next open re-derives any proof.
+    if (session && session.child?.close?.cause !== 'user-close') {
       void input
         .trackStart(
           input.serialize(sessionId, () =>

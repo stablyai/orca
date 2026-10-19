@@ -281,6 +281,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.unstubAllEnvs()
+  claude.setSelfExit(null)
   await stopStructuredAgentSessionRuntime()
   await rm(root, { recursive: true, force: true })
 })
@@ -402,7 +403,9 @@ describe('a structured Claude session over agentSession.*', () => {
       text: "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings.",
       failure: { kind: 'notSignedIn', account: 'system' }
     })
-    expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
+    await vi.waitFor(() =>
+      expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
+    )
     // A failed start is not auto-resumed into the same failure.
     expect(claude.connections).toHaveLength(1)
   })
@@ -410,7 +413,7 @@ describe('a structured Claude session over agentSession.*', () => {
   // The root's death is first-hand. Its descendants were never snapshottable, or one was seen
   // alive; either way the lease follows the root, so the reservation goes with it.
   it.each(['unverifiable', 'live'] as const)(
-    'releases a session whose CLI self-exited during create with its tree %s, refused in a sentence',
+    'releases a session whose CLI self-exited after spawn with its tree %s, with a readable failure',
     async (tree) => {
       claude.setSelfExit({
         message: 'claude stream-json exited (code 1): claude: not signed in',
@@ -419,18 +422,13 @@ describe('a structured Claude session over agentSession.*', () => {
 
       const failed = await call('agentSession.create', createIntentParams())
 
-      // Answered once, as the refusal a replay of this operation gives, never thrown first.
-      expect(failed).toMatchObject({
-        ok: true,
-        result: {
-          ok: false,
-          refusal: {
-            code: 'agent_session_operation_invalid',
-            // The CLI's stderr is log text; the person reads what the chat's start failure says.
-            message: 'Claude stopped before it finished starting. Send your message to try again.',
-            ownerVerdict: 'exited'
-          }
-        }
+      expect(failed).toMatchObject({ ok: true, result: { ok: true } })
+      await vi.waitFor(() => expect(leaseOf(SESSION).claimStatus).toBe('released'))
+      const failure = itemsOf(await subscribe()).find((item) => item.body?.kind === 'status')
+      expect(failure?.body).toMatchObject({
+        kind: 'status',
+        text: 'Claude stopped before it finished starting. Send your message to try again.',
+        failure: { kind: 'providerStartFailed' }
       })
       const lease = leaseOf(SESSION)
       // Latching here would refuse every later attach with agent_session_ownership_unknown,
@@ -438,7 +436,7 @@ describe('a structured Claude session over agentSession.*', () => {
       expect(lease).toMatchObject({ claimStatus: 'released', handoffStage: null })
       expect(lease.deathEvidence).toMatchObject({
         kind: 'exit-observed',
-        detail: 'the provider process exited; its descendants were not proven gone'
+        detail: 'claude stream-json exited (code 1): claude: not signed in'
       })
 
       claude.setSelfExit(null)
@@ -447,7 +445,7 @@ describe('a structured Claude session over agentSession.*', () => {
     }
   )
 
-  it('answers a create whose whole CLI tree exited as exited on the first call', async () => {
+  it('releases a spawned child whose whole CLI tree exited', async () => {
     claude.setSelfExit({
       message: 'claude stream-json exited (code 1): claude: not signed in',
       // The common case: the close ladder proves the root and every descendant gone.
@@ -456,22 +454,15 @@ describe('a structured Claude session over agentSession.*', () => {
 
     const failed = await call('agentSession.create', createIntentParams())
 
-    expect(failed).toMatchObject({
-      ok: true,
-      result: {
-        ok: false,
-        refusal: {
-          code: 'agent_session_operation_invalid',
-          message: 'Claude stopped before it finished starting. Send your message to try again.',
-          ownerVerdict: 'exited'
-        }
-      }
-    })
-    expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
+    expect(failed).toMatchObject({ ok: true, result: { ok: true } })
+    await vi.waitFor(() =>
+      expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
+    )
+    expect(leaseOf(SESSION).deathEvidence).toMatchObject({ kind: 'exit-observed' })
     claude.setSelfExit(null)
   })
 
-  it('releases a failed start that recorded no owner without claiming it exited', async () => {
+  it('keeps the owner when a published child failure has no proof of exit', async () => {
     claude.setSelfExit({
       message: 'claude stream-json exited (code 1): claude: not signed in',
       // The root was never seen to exit, so nothing proves this start's process gone.
@@ -479,15 +470,16 @@ describe('a structured Claude session over agentSession.*', () => {
     })
 
     await call('agentSession.create', createIntentParams())
-    claude.setSelfExit(null)
+    await vi.waitFor(() => expect(claude.live().closed).toBe(true))
 
-    // The adapter closed the stdio of what it spawned, and no owner was recorded to stop. The next
-    // start goes ahead; with no death evidence nothing reads the failed start as exited.
+    // Losing stdio is not proof that a published owner exited.
     expect(leaseOf(SESSION)).toMatchObject({
-      claimStatus: 'released',
+      claimStatus: 'live',
       handoffStage: null,
       deathEvidence: null
     })
+    expect(claude.connections).toHaveLength(1)
+    claude.setSelfExit(null)
   })
 
   it.each(['unverifiable', 'live'] as const)(
@@ -797,14 +789,18 @@ describe('a structured Claude session over agentSession.*', () => {
       handle: claudeProviderHandle(PROVIDER_SESSION, 'provider-opened-assistant'),
       origin: 'resumed'
     }
-    expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject(
-      lastCompletedTurn
+    await vi.waitFor(() =>
+      expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject(
+        lastCompletedTurn
+      )
     )
     // Open, close, open with no turn in between keeps that leaf.
     const reopened = await ok<{ fence: number }>('agentSession.ensure', ensureParams(resumed.fence))
     expect(reopened.fence).toBe(resumed.fence + 1)
-    expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject(
-      lastCompletedTurn
+    await vi.waitFor(() =>
+      expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject(
+        lastCompletedTurn
+      )
     )
   })
 

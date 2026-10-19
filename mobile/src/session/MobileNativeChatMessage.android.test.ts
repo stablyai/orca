@@ -34,20 +34,43 @@ vi.mock('react-native', async () => {
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  Bot: 'Bot',
   Brain: 'Brain',
+  Check: 'Check',
   ChevronDown: 'ChevronDown',
+  ChevronRight: 'ChevronRight',
   Copy: 'Copy',
+  Eye: 'Eye',
+  FileMinus2: 'FileMinus2',
+  FilePen: 'FilePen',
+  FilePlus2: 'FilePlus2',
+  Folder: 'Folder',
+  Globe: 'Globe',
+  ListChecks: 'ListChecks',
+  MessageSquareMore: 'MessageSquareMore',
+  Pencil: 'Pencil',
+  Plug: 'Plug',
+  Search: 'Search',
   SquareChevronRight: 'SquareChevronRight',
   SquareTerminal: 'SquareTerminal',
-  Wrench: 'Wrench',
-  ChevronRight: 'ChevronRight'
+  Wrench: 'Wrench'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
+vi.mock('./MobileNativeChatImageViewer', () => ({ MobileNativeChatImageViewer: 'ImageViewer' }))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { MobileNativeChatRowOverlaysHost } from './MobileNativeChatRowOverlaysHost'
+
+/** Rows inside the chat's overlay host, keyed by id as the list keys them. */
+const inChat = (...rows: NativeChatMessage[]) =>
+  createElement(
+    MobileNativeChatRowOverlaysHost,
+    { conversation: { surfaceId: 'chat', sessionId: null } },
+    rows.map((row) => createElement(MobileNativeChatMessage, { key: row.id, message: row }))
+  )
 
 const message: NativeChatMessage = {
   id: 'a1',
@@ -71,7 +94,7 @@ describe('MobileNativeChatMessage on Android', () => {
 
   it('opens the actions sheet from a long press on the bubble, and closes it again', () => {
     act(() => {
-      renderer = create(createElement(MobileNativeChatMessage, { message }))
+      renderer = create(inChat(message))
     })
     expect(byType('MessageActionsSheet')).toHaveLength(0)
     expect(
@@ -93,15 +116,33 @@ describe('MobileNativeChatMessage on Android', () => {
     expect(byType('MessageActionsSheet')).toHaveLength(0)
   })
 
+  it('opens the actions sheet from a long press on an attached picture, not the viewer', () => {
+    act(() => {
+      renderer = create(
+        inChat({
+          ...message,
+          role: 'user',
+          blocks: [
+            { type: 'text', text: 'Here is the screen.' },
+            { type: 'image-ref', url: 'file:///a.jpg', alt: 'a photo' }
+          ]
+        })
+      )
+    })
+    const [bubble] = byType('Pressable')
+    const picture = renderer!.root.findByProps({ accessibilityRole: 'imagebutton' })
+    expect(picture.props.onLongPress).toBe(bubble!.props.onLongPress)
+    act(() => picture.props.onLongPress())
+    expect(byType('MessageActionsSheet')).toHaveLength(1)
+  })
+
   it('disables inline selection for host notices too', () => {
     act(() => {
       renderer = create(
-        createElement(MobileNativeChatMessage, {
-          message: {
-            ...message,
-            role: 'system',
-            blocks: [{ type: 'text', text: 'fallback', presentation: 'history-item-too-large' }]
-          }
+        inChat({
+          ...message,
+          role: 'system',
+          blocks: [{ type: 'text', text: 'fallback', presentation: 'history-item-too-large' }]
         })
       )
     })
@@ -115,18 +156,16 @@ describe('MobileNativeChatMessage on Android', () => {
   it("opens the actions sheet from a long press on a plan's link", () => {
     act(() => {
       renderer = create(
-        createElement(MobileNativeChatMessage, {
-          message: {
-            ...message,
-            role: 'system',
-            blocks: [
-              {
-                type: 'text',
-                text: '1. Read [the guide](https://example.com)',
-                presentation: 'plan-document'
-              }
-            ]
-          }
+        inChat({
+          ...message,
+          role: 'system',
+          blocks: [
+            {
+              type: 'text',
+              text: '1. Read [the guide](https://example.com)',
+              presentation: 'plan-document'
+            }
+          ]
         })
       )
     })
@@ -148,7 +187,7 @@ describe('MobileNativeChatMessage on Android', () => {
       completedAt: 4_000
     }
     act(() => {
-      renderer = create(createElement(MobileNativeChatMessage, { message: reasoning }))
+      renderer = create(inChat(reasoning))
     })
     const [toggle] = byType('Pressable')
     // A long press on the headline stays a plain toggle tap.
@@ -167,17 +206,38 @@ describe('MobileNativeChatMessage on Android', () => {
     expect(byType('MessageActionsSheet')).toHaveLength(0)
   })
 
+  it('keeps the actions sheet open while the transcript row replaces the sent message under it', () => {
+    // A sent message is drawn as its echo until the transcript catches up with a row of its own id.
+    const echo: NativeChatMessage = {
+      ...message,
+      id: 'pending-1',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'Follow-up for the sheet test.' }]
+    }
+    act(() => {
+      renderer = create(inChat(message, echo))
+    })
+    const bodies = byType('Pressable').filter((node) => node.props.onLongPress !== undefined)
+    act(() => bodies.at(-1)!.props.onLongPress())
+    expect(byType('MessageActionsSheet').map((sheet) => sheet.props.message.id)).toEqual([
+      'pending-1'
+    ])
+
+    act(() => renderer!.update(inChat(message, { ...echo, id: 'transcript-7' })))
+    expect(byType('MessageActionsSheet').map((sheet) => sheet.props.message.id)).toEqual([
+      'pending-1'
+    ])
+  })
+
   it('renders the user bubble without inline selection', () => {
     act(() => {
-      renderer = create(
-        createElement(MobileNativeChatMessage, { message: { ...message, id: 'u1', role: 'user' } })
-      )
+      renderer = create(inChat({ ...message, id: 'u1', role: 'user' }))
     })
-    const texts = byType('Text').filter((node) => node.props.selectable !== undefined)
-    expect(texts.length).toBeGreaterThan(0)
-    for (const node of texts) {
-      expect(node.props.selectable).toBe(false)
-    }
+    // Markdown owns the bubble's text; on Android a long press on a link span opens the sheet.
+    const [markdown, ...others] = byType('MobileMarkdown')
+    expect(others).toHaveLength(0)
+    expect(markdown?.props).toMatchObject({ rangeSelectable: true, tone: 'onBright' })
+    expect(markdown?.props.onLongPress).toEqual(expect.any(Function))
     expect(
       byType('Pressable').filter((node) => node.props.accessibilityLabel === 'Copy message')
     ).toHaveLength(1)

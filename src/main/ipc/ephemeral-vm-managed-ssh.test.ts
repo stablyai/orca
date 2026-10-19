@@ -22,7 +22,9 @@ vi.mock('../ephemeral-vm-runtime-ssh', () => ({
   disconnectRuntimeOwnedSshTarget: vi.fn(async () => {}),
   removeRuntimeOwnedSshTarget: vi.fn(async () => {})
 }))
-vi.mock('./runtime-environments', () => ({ invalidateRuntimeEnvironmentTransport: vi.fn() }))
+vi.mock('./runtime-environments/runtime-environments', () => ({
+  invalidateRuntimeEnvironmentTransport: vi.fn()
+}))
 
 import type { Store } from '../persistence'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'

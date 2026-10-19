@@ -10,7 +10,7 @@ const connection = vi.hoisted((): { client: RpcClient | null; state: ConnectionS
   client: null,
   state: 'connected'
 }))
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => connection,
   useForceReconnect: () => vi.fn()
 }))

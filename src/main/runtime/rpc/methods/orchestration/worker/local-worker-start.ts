@@ -54,7 +54,6 @@ export async function startLocalWorker(args: {
   const terminal = args.params.terminal && resolveDispatchAssigneeParty(args.params.terminal, db)
   const params = terminal ? { ...args.params, terminal: terminal.address } : args.params
   const chat = terminal ? chatAssigneeOf(terminal) : null
-  const coordinatorPane = coordinator?.paneKey ?? null
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
   const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () => {
@@ -156,7 +155,7 @@ export async function startLocalWorker(args: {
     taskRunId: run.id,
     // A handle-less session creates root Tasks: Task lineage is recorded by terminal only.
     taskCreatedByTerminalHandle: coordinator?.terminalHandle ?? undefined,
-    taskCreatedByPaneKey: coordinatorPane ?? undefined,
+    taskCreatedByPaneKey: coordinator?.paneKey ?? undefined,
     taskCreatedByProcessIncarnation: coordinator?.terminalHandle
       ? (runtime.getTerminalProcessIncarnation(coordinator.terminalHandle) ?? undefined)
       : undefined,
@@ -201,8 +200,7 @@ export async function startLocalWorker(args: {
     mode = placed.mode
     resolvedWorktree = placed.worktree
     terminalHandle = placed.terminalHandle
-    const structuredSession = placed.structuredSession
-    const setupReceipt = placed.setupReceipt
+    const { structuredSession, setupReceipt } = placed
     const setupStage = {
       db,
       dispatchId: started.dispatch.id,
@@ -219,15 +217,16 @@ export async function startLocalWorker(args: {
     persistWorkerReadinessStage(setupStage)
 
     failedStage = 'agent_readiness'
-    // A structured session is ready the moment its attach returns ok: there is no boot-to-idle
-    // gap and no terminal title to read an idle edge from. Only the repo's wait-for-setup policy
-    // still holds it back, and that gate has to be waited on explicitly here.
+    // A structured worker's setup gate and its preamble's wait share one deadline: the timeout.
+    const readinessDeadline = Date.now() + (params.timeoutMs ?? 60_000)
+    // A structured session has no boot-to-idle gap or terminal title to read: its agent's start is
+    // waited out by the preamble's send. Only the repo's wait-for-setup policy is waited on here.
     const wait = structuredSession
       ? await awaitStructuredWorkerSetupGate({
           runtime,
           setup: setupReceipt,
           effects,
-          timeoutMs: params.timeoutMs ?? 60_000
+          timeoutMs: Math.max(0, readinessDeadline - Date.now())
         })
       : chat
         ? // A chat takes its task as a queued send whatever it is doing, so nothing is waited on.
@@ -284,6 +283,7 @@ export async function startLocalWorker(args: {
       launchReceipt: launch.receipt,
       mode,
       timeoutMs: params.timeoutMs ?? 60_000,
+      readinessDeadline,
       effects,
       terminalRevealWarning: placed.warning,
       onStage: (stage) => {

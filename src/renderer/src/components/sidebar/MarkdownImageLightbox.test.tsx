@@ -10,7 +10,7 @@ afterEach(() => {
 })
 
 describe('ExpandableMarkdownImage', () => {
-  it('opens an accessible dialog, traps focus, and restores focus after Escape', async () => {
+  it('opens an accessible dialog and restores focus after Escape', async () => {
     const user = userEvent.setup()
     render(
       <ExpandableMarkdownImage
@@ -22,13 +22,9 @@ describe('ExpandableMarkdownImage', () => {
 
     const trigger = screen.getByRole('button', { name: 'Expand image' })
     await user.click(trigger)
-    expect(screen.getByRole('dialog', { name: 'shot.png' })).toBeTruthy()
+    const dialog = screen.getByRole('dialog', { name: 'shot.png' })
     expect(screen.getAllByAltText('shot.png').length).toBeGreaterThanOrEqual(2)
-    const closeButton = screen.getByRole('button', { name: 'Close' })
-    expect(document.activeElement).toBe(closeButton)
-
-    await user.tab()
-    expect(document.activeElement).toBe(closeButton)
+    expect(document.activeElement).toBe(dialog)
 
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'shot.png' })).toBeNull())

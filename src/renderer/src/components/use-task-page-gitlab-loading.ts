@@ -1,6 +1,7 @@
 import type { TaskPageProviderMetadataModel } from './use-task-page-provider-metadata'
 import { useEffect } from 'react'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import { mapSettledWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog/gitlab-item-dialog-types'
@@ -10,6 +11,11 @@ import {
   isGitLabIssueFilter,
   isGitLabMRFilter
 } from './task-page-source-context'
+
+// Why: "All projects" fans out one list call per repo; staying below the runtime RPC queue's
+// foreground concurrency (8) leaves headroom for other callers on the same selector, such as the sidebar.
+export const GITLAB_TASK_FETCH_CONCURRENCY = 6
+
 function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
   return {
     repoPath: repo.path,
@@ -133,7 +139,10 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
                 }
               })
           }
-    void Promise.allSettled(eligibleRepos.map(fetchItems))
+    void mapSettledWithConcurrency(eligibleRepos, GITLAB_TASK_FETCH_CONCURRENCY, (repo) =>
+      // Why: a stale selection's results are discarded below, so skip the repos not yet started.
+      stale ? Promise.resolve({ repoId: repo.id, items: [], error: undefined }) : fetchItems(repo)
+    )
       .then((results) => {
         if (stale) {
           return

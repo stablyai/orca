@@ -11,12 +11,15 @@ export function clampConversationNameFirstPrompt(firstPrompt: string): string {
   return sliceAtCodeUnitLimit(firstPrompt.trim(), MAX_FIRST_PROMPT_LENGTH)
 }
 
+/** The naming request's first line; Session History reads it to hide these one-shot runs. */
+export const CONVERSATION_NAME_PROMPT_OPENING = "Name this chat from the user's first request."
+
 export function buildConversationNamePrompt(
   context: ConversationNameContext,
   customPrompt = ''
 ): string {
   const firstPrompt = clampConversationNameFirstPrompt(context.firstPrompt)
-  const basePrompt = `Name this chat from the user's first request.
+  const basePrompt = `${CONVERSATION_NAME_PROMPT_OPENING}
 Write a short, specific title of at most ${MAX_GENERATED_NAME_LENGTH} characters.
 Output only the title, with no heading, quotes, or explanation.
 

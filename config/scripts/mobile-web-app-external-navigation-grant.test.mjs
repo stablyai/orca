@@ -106,7 +106,7 @@ describeClosure(
       )
       expect(closure.local).toContain(SEAM)
       expect(closure.local).not.toContain(NATIVE)
-      expect(linkGrantCallers(closure)).toEqual(['src/components/MobileHtmlPreview.web.tsx'])
+      expect(linkGrantCallers(closure)).toEqual(['src/components/MobileHtmlPreview.tsx'])
       // The preview is mounted by the session's file reader rather than by a route of its own,
       // which is why the grant has no route to be pinned against except this one.
       expect(closure.local).toContain('src/session/MobileSessionFileReader.tsx')

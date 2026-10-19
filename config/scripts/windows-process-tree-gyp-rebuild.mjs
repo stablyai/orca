@@ -13,6 +13,7 @@ import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
+import { loadedNativeBuildDir } from './native-build-entry.cjs'
 
 const ROOT = resolve(import.meta.dirname, '..', '..')
 
@@ -75,9 +76,12 @@ export function nodeGypRebuildTimeoutMs(
     : 300_000
 }
 
-/** The binary the addon actually loads. */
+/** The binary the addon actually loads: the patched lib/index.js prefers a published entry. */
 export function windowsProcessTreeAddonPath(packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR) {
-  return join(packageDir, 'build', 'Release', 'windows_process_tree.node')
+  return join(
+    loadedNativeBuildDir(packageDir, '@vscode/windows-process-tree', { platform: 'win32' }),
+    'windows_process_tree.node'
+  )
 }
 
 /** The import whose absence tells the patched binary from the published prebuilt. */
@@ -263,11 +267,13 @@ export function ensureWindowsProcessTreeCommandLinePatch(
 }
 
 // Patched binding.gyp includes deps/node-addon-api; the tarball does not ship those headers.
+// `resolveFromDir` is the installed package when `packageDir` is a scratch copy outside the tree.
 export function stageWindowsProcessTreeNodeAddonApiHeaders(
-  packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR
+  packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR,
+  resolveFromDir = packageDir
 ) {
   const nodeAddonApiDir = dirname(
-    createRequire(join(packageDir, 'package.json')).resolve('node-addon-api/package.json')
+    createRequire(join(resolveFromDir, 'package.json')).resolve('node-addon-api/package.json')
   )
   const stagedHeaderDir = join(packageDir, 'deps', 'node-addon-api')
   mkdirSync(stagedHeaderDir, { recursive: true })

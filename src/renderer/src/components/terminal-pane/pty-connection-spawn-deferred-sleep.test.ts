@@ -83,6 +83,19 @@ vi.mock('@/runtime/resume-host-automatic-restores', () => ({
   resumeHostAutomaticRestores
 }))
 
+const drain = vi.hoisted(() => ({
+  queued: new Map<string, () => Promise<boolean>>()
+}))
+
+vi.mock('@/lib/pane-spawn-deferral-drain', () => ({
+  queueDeferredRestoreRetry: (
+    paneKey: string,
+    _env: string | null,
+    retry: () => Promise<boolean>
+  ) => drain.queued.set(paneKey, retry),
+  cancelDeferredRestoreRetry: (paneKey: string) => drain.queued.delete(paneKey)
+}))
+
 vi.mock('./terminal-pane-recovery', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   requestTerminalPaneRecovery: vi.fn(async () => {})
@@ -171,6 +184,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
+    drain.queued.clear()
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
@@ -229,6 +243,66 @@ describe('connectPanePty: a restore the host kept asleep', () => {
     expect(freshSpawns(transport)[1]).toMatchObject({ resumeSpawnIntent: 'user-resume' })
     expect(getPaneSpawnDeferral(paneKey)).toBeUndefined()
     binding.dispose()
+  })
+
+  it('resumes a hidden pane in the background once the host has room, as an automatic restore', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
+    const transport = deferringTransport()
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const paneKey = makePaneKey('tab-1', pane.leafId)
+    const deps = createDeps({
+      isVisibleRef: { current: false },
+      startup: {
+        command: "claude '--resume' 'provider-session-1'",
+        launchAgent: 'claude',
+        resumeProviderSession: RESUME
+      }
+    })
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared pane fixtures stand in for the xterm-backed pane, manager and deps connectPanePty reads, as in the sibling connectPanePty specs.
+    const binding = connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+    const retry = drain.queued.get(paneKey)
+    expect(retry).toBeTypeOf('function')
+
+    // Still capped: deferred again, and queued again for a later turn.
+    await expect(retry?.()).resolves.toBe(false)
+    await flushAsyncTicks(20)
+    expect(getPaneSpawnDeferral(paneKey)?.reason).toBe('live_cap')
+    expect(drain.queued.has(paneKey)).toBe(true)
+
+    transport.connect.mockImplementation(async () => 'resumed-pty')
+    await expect(drain.queued.get(paneKey)?.()).resolves.toBe(true)
+    await flushAsyncTicks(20)
+    expect(freshSpawns(transport)).toHaveLength(3)
+    expect(freshSpawns(transport)[2]).toMatchObject({ resumeSpawnIntent: 'automatic-restore' })
+    expect(getPaneSpawnDeferral(paneKey)).toBeUndefined()
+    binding.dispose()
+  })
+
+  it('stops the background retry when the pane is opened or closed', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = deferringTransport()
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const paneKey = makePaneKey('tab-1', pane.leafId)
+    const deps = createDeps({
+      isVisibleRef: { current: false },
+      startup: {
+        command: "claude '--resume' 'provider-session-1'",
+        launchAgent: 'claude',
+        resumeProviderSession: RESUME
+      }
+    })
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared pane fixtures stand in for the xterm-backed pane, manager and deps connectPanePty reads, as in the sibling connectPanePty specs.
+    const binding = connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+    expect(drain.queued.has(paneKey)).toBe(true)
+    binding.dispose()
+    expect(drain.queued.has(paneKey)).toBe(false)
   })
 
   it('does not remount a deferred pane, which would only be deferred again', async () => {
@@ -395,6 +469,8 @@ describe('connectPanePty: a restore the host kept asleep', () => {
     await flushAsyncTicks(20)
 
     expect(canResumeHostAutomaticRestores).toHaveBeenCalledWith(null)
+    // A crash pause waits for the user; nothing retries it in the background.
+    expect(drain.queued.has(paneKey)).toBe(false)
     const offer = getPaneSpawnDeferral(paneKey)?.resumeAutomaticRestores
     expect(offer).toBeTypeOf('function')
     transport.connect.mockImplementation(async () => 'resumed-pty')

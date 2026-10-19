@@ -20,6 +20,7 @@ import {
   AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
   AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
   AGENT_SKILL_SHARING_BUSY_CODE,
+  AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE,
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE
 } from '../../../shared/agent-skill-sharing-contract'
 import {
@@ -77,6 +78,9 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_LAUNCH_TARGET_FORBIDDEN_CODE,
   'agent_launch_replay_unsupported',
   'runtime_unavailable',
+  'chat_fork_source_unavailable',
+  'chat_fork_runtime_incompatible',
+  'chat_fork_anchor_changed',
   'selector_not_found',
   'selector_ambiguous',
   'terminal_handle_stale',
@@ -165,6 +169,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
   AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
   AGENT_SKILL_SHARING_BUSY_CODE,
+  AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE,
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
   SKILL_INSTALL_RPC_ERROR_CODE,
   // Why: an owner conflict is a distinct client decision (reload the host, re-adopt,

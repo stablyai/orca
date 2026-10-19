@@ -39,6 +39,7 @@ function adapterOf(
   return {
     acquire: vi.fn(async ({ fence, spawnToken }) => acquisition(fence, spawnToken)),
     releaseAcquisition,
+    hasOwnedAcquisition: () => true,
     dispatch: vi.fn(),
     cancelTurn: vi.fn(),
     answerPrompt: vi.fn(),
@@ -47,7 +48,7 @@ function adapterOf(
 }
 
 describe('StructuredAgentSessionAdapterRouter.releaseAcquisition', () => {
-  it('drops the owner even when its release reports a typed failure', async () => {
+  it('retains the actual owner after an unproved release for a scoped retry', async () => {
     const failure = new Error('root exited')
     const claude = adapterOf(vi.fn().mockRejectedValueOnce(failure).mockResolvedValue(false))
     const codex = adapterOf(vi.fn(async () => false))
@@ -56,10 +57,9 @@ describe('StructuredAgentSessionAdapterRouter.releaseAcquisition', () => {
     await router.acquire({ identity, fence: 1, spawnToken: 'spawn-1' })
 
     await expect(router.releaseAcquisition({ sessionId: 'session-1' })).rejects.toBe(failure)
-    // With no owner left, a later release asks every adapter instead of the stale one.
     await expect(router.releaseAcquisition({ sessionId: 'session-1' })).resolves.toBe(false)
     expect(claude.releaseAcquisition).toHaveBeenCalledTimes(2)
-    expect(codex.releaseAcquisition).toHaveBeenCalledTimes(1)
+    expect(codex.releaseAcquisition).not.toHaveBeenCalled()
   })
 })
 
@@ -359,10 +359,9 @@ describe('StructuredAgentSessionAdapterRouter.closeAll', () => {
     await router.closeAll()
     resolveAcquire(acquisition(2, 'spawn-2'))
 
-    // The route is NOT published behind a closed adapter, so nothing routes back out to it — and
-    // with no route the router has nothing to stop and no stop to report.
+    // Shutdown preserves the stop receipt for an acquisition that resolves behind it.
     await expect(acquiring).rejects.toThrow('router is closed')
-    await expect(router.closeSession('session-1')).resolves.toBe(false)
+    await expect(router.closeSession('session-1')).resolves.toBe(true)
     expect(closeSession).not.toHaveBeenCalled()
   })
 })

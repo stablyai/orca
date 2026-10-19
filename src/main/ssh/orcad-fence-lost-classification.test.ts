@@ -1,16 +1,22 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
-import { execOrcadStateMutation } from './orcad-state-mutation-exec'
-import { execOrcadRemote, execOrcadRemoteOr } from './orcad-remote-runtime-control'
+import { execOrcadStateMutation } from '../managed-server/host-state/orcad-state-mutation-exec'
+import {
+  execOrcadRemote,
+  execOrcadRemoteOr
+} from '../managed-server/install/orcad-remote-runtime-control'
 import {
   ORCAD_FENCE_LOST_MARKER,
   OrcadFenceLostError,
   isOrcadFenceLost,
   posixOrcadFenceGuard,
   runWithOrcadFence
-} from './orcad-activation-fence-scope'
-import { isUnconfirmedSshCommandTermination, sshCommandExitError } from './ssh-relay-exec-command'
+} from '../managed-server/activation/orcad-activation-fence-scope'
+import {
+  isUnconfirmedSshCommandTermination,
+  sshCommandExitError
+} from './remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { OrcadHostTransport } from './orcad-host-transport'
 

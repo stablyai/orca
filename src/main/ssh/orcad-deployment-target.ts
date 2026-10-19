@@ -6,8 +6,8 @@ import {
   type ServerTarget
 } from '../../shared/node-runtime-pin'
 import { ORCAD_SERVER_TARGET_FILENAME } from '../../shared/orcad-artifacts'
-import type { RemoteInstallTransport } from './remote-install-transport'
-import { execCommand } from './ssh-relay-exec-command'
+import type { RemoteInstallTransport } from '../managed-server/install/remote-install-transport'
+import { execCommand } from './remote-exec/remote-exec-command'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 
 /** The host answered the libc probe, but with nothing this client recognises. */

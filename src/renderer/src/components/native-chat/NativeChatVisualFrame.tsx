@@ -11,6 +11,7 @@ import {
 } from '../../../../shared/native-chat-visual-shell'
 import type { NativeChatVisualDocument } from './native-chat-visual-read-client'
 import { createNativeChatVisualHeightGovernor } from '../../../../shared/native-chat-visual-height-governor'
+import type { ReaderGesture } from './native-chat-autoscroll'
 import { useNativeChatVisualTheme } from './use-native-chat-visual-theme'
 import { useWebviewDragPassthroughActive } from '../browser-pane/host-guest/use-webview-drag-passthrough-active'
 
@@ -37,13 +38,16 @@ export function NativeChatVisualFrame({
   document: visual,
   title,
   themeScope,
-  onRetired
+  onRetired,
+  onReaderGesture
 }: {
   document: NativeChatVisualDocument
   title: string
   /** An element already mounted where the frame sits, so the first paint wears that scope's theme. */
   themeScope: RefObject<Element | null>
   onRetired: () => void
+  /** Uncancelled input; the transcript owner checks whether the conversation moved. */
+  onReaderGesture?: (gesture: ReaderGesture) => void
 }): React.JSX.Element {
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const theme = useNativeChatVisualTheme(themeScope)
@@ -51,9 +55,11 @@ export function NativeChatVisualFrame({
   const dragPassthrough = useWebviewDragPassthroughActive()
   // The latest theme for the next document build and the load-time post, without rebuilding on it.
   const themeRef = useRef(theme)
+  const onReaderGestureRef = useRef(onReaderGesture)
   useLayoutEffect(() => {
     themeRef.current = theme
-  }, [theme])
+    onReaderGestureRef.current = onReaderGesture
+  }, [onReaderGesture, theme])
   const [height, setHeight] = useState(NATIVE_CHAT_VISUAL_RESERVED_HEIGHT)
   const loadsRef = useRef(0)
   // The latest later load still awaiting an answer, and the timer that retires the frame.
@@ -112,6 +118,14 @@ export function NativeChatVisualFrame({
         if (!deferred) {
           applyHeight()
         }
+        return
+      }
+      if (message.kind === 'reader-scroll') {
+        onReaderGestureRef.current?.(
+          message.input === 'wheel'
+            ? { kind: 'wheel', deltaY: message.deltaY, zoom: false }
+            : { kind: 'touch-drag' }
+        )
         return
       }
       // A link opens only from a real gesture in this very frame: it must hold focus and the user

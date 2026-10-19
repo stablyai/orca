@@ -44,6 +44,7 @@ import {
   readCreatedAgentTerminalIdentity
 } from './web-runtime-terminal-identity'
 import { settleWebRuntimeTerminalPlacement } from './web-runtime-terminal-placement-settlement'
+import { buildPlainCreateTerminalParams } from './web-runtime-plain-terminal-create-params'
 
 export async function createWebRuntimeSessionTerminalResult(
   args: CreateWebRuntimeSessionTerminalArgs
@@ -221,23 +222,7 @@ export async function createWebRuntimeSessionTerminalResult(
     } else {
       const response = await callEnvironment({
         method: 'session.tabs.createTerminal',
-        params: {
-          worktree: toRuntimeWorktreeSelector(args.worktreeId),
-          afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
-          targetGroupId: args.targetGroupId,
-          command: args.command,
-          cwd: args.cwd,
-          ...(args.env ? { env: args.env } : {}),
-          ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
-          startupCommandDelivery: args.startupCommandDelivery,
-          ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
-          ...(args.launchToken ? { launchToken: args.launchToken } : {}),
-          ...(args.viewMode ? { viewMode: args.viewMode } : {}),
-          // Why: old hosts understand activate:false; new hosts use select/navigation for caller-local focus.
-          activate: false,
-          select: args.activate !== false,
-          navigation: 'caller'
-        },
+        params: await buildPlainCreateTerminalParams(environmentId, args),
         timeoutMs: 15_000
       })
       const created = unwrapRuntimeRpcResult(
@@ -311,7 +296,8 @@ export async function createWebRuntimeSessionTerminalResult(
     // to retry with a new operation ID and can duplicate a fresh agent.
     return {
       outcome: hostCreated ? { status: 'created' } : { status: 'failed', message },
-      ...(createdTabId ? { hostTabId: createdTabId } : {})
+      ...(createdTabId ? { hostTabId: createdTabId } : {}),
+      ...(hostCreated ? {} : { hostFailed: true as const })
     }
   }
 }

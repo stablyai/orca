@@ -34,7 +34,7 @@ import {
 import {
   projectStructuredQuestionMessages,
   structuredQuestionTranscript
-} from '../../renderer/src/components/native-chat/structured-agent-question-projection'
+} from '../../shared/structured-agent-question-projection'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'

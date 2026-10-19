@@ -22,8 +22,8 @@ import {
   advanceSshConnectionGeneration,
   assertSshMutationExpectation,
   resetSshConnectionGenerations
-} from './ssh/ssh-connection-generation'
-import { getRuntimeOwnedSshTargetId } from './ssh/ssh-connection-store'
+} from './ssh/connection/ssh-connection-generation'
+import { getRuntimeOwnedSshTargetId } from './ssh/connection/ssh-connection-store'
 import {
   _getLocalWorktreeScanGenerationCacheSize,
   getLocalWorktreeScanGeneration,
@@ -36,7 +36,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -255,10 +255,13 @@ describe('Store', () => {
     const group = store.createProjectGroup({ name: 'Platform', createdFrom: 'manual' })
     store.addRepo(makeRepo({ id: 'r1', projectGroupId: group.id, projectGroupOrder: 1 }))
 
-    const updated = store.updateRepo('r1', {
-      projectGroupId: '',
-      projectGroupOrder: Number.POSITIVE_INFINITY
-    } as never)
+    const updated = store.updateRepo(
+      { id: 'r1' },
+      {
+        projectGroupId: '',
+        projectGroupOrder: Number.POSITIVE_INFINITY
+      }
+    )
 
     expect(updated?.projectGroupId).toBeNull()
     expect(updated?.projectGroupOrder).toBe(1)
@@ -268,7 +271,7 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
 
-    const updated = store.updateRepo('r1', { executionHostId: 'runtime:env-1' })
+    const updated = store.updateRepo({ id: 'r1' }, { executionHostId: 'runtime:env-1' })
 
     expect(updated?.executionHostId).toBe('runtime:env-1')
     expect(store.getRepo('r1')?.executionHostId).toBe('runtime:env-1')

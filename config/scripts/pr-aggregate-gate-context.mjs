@@ -8,9 +8,6 @@ export const aggregateJob = aggregateWorkflow.jobs.verify
 export const aggregateShell = aggregateJob.steps.find(
   (step) => step.name === 'Require successful checks'
 )
-export const aggregateMarker = aggregateWorkflow.jobs.code_paths.steps.find(
-  (step) => step.id === 'verify_fast_path'
-)
 export const aggregateSelectors = PR_CHECK_JOBS.filter((job) => job !== 'orcad_browser')
 export const aggregateRequiredJobs = aggregateJob.needs.filter((job) => job !== 'code_paths')
 export const aggregateVariable = (job) => job.replaceAll('-', '_').toUpperCase()
@@ -27,7 +24,7 @@ export function compileAggregateExpression(expression, contexts = ['needs']) {
     ).evaluate()
 }
 
-export const aggregateShouldRun = compileAggregateExpression(aggregateJob.if)
+export const aggregateShouldRun = compileAggregateExpression(aggregateJob.if, ['needs', 'github'])
 const aggregateEnvironmentExpressions = Object.fromEntries(
   Object.entries(aggregateShell.env).map(([name, expression]) => [
     name,
@@ -47,7 +44,6 @@ export function aggregateEnvironment(needs) {
 export function aggregateNeeds(selected = 'true', overrides = {}) {
   const outputs = {
     should_run: 'true',
-    verify_fast_path: '1',
     ...Object.fromEntries(aggregateSelectors.map((job) => [job, selected])),
     ...overrides
   }

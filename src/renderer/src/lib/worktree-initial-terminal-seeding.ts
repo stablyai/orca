@@ -176,10 +176,7 @@ export function ensureWorktreeHasInitialTerminal(
       hasPrimarySurface: false,
       callerProvidesSurface: opts?.callerProvidesSurface === true,
       startupNeedsTerminal: sequencedStartup !== undefined,
-      issueCommandNeedsTerminal: issueCommand !== undefined,
-      ...(setup
-        ? { setupLaunchMode: useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab' }
-        : {})
+      issueCommandNeedsTerminal: issueCommand !== undefined
     }) &&
     !defaultTabs?.tabs.length &&
     opts?.createNewTerminalForStartup !== true

@@ -283,21 +283,23 @@ describe('structured agent session message sender', () => {
     expect(sendCalls()).toBe(1)
   })
 
-  it('keeps an open chat drawing a recorded send until its row arrives', async () => {
+  it('keeps an open chat drawing a send until a read covers its acknowledgement', async () => {
     const stop = subscribeToStructuredAgentSessionPendingSends(SESSION, () => {})
     const calls = deferredCalls()
     const a = send('a')
     await flush()
+    settleStructuredAgentSessionSendsFromJournal(SESSION, [], [], { epoch: 'e', sequence: 5 })
+    expect(phases()).toEqual(['a:sending'])
     calls[0].resolve(okSubmission(a.clientMessageId, 'accepted'))
     expect(await a.outcome).toBe('recorded')
     // The reply beat the history: the bubble stays, without blocking the next send.
     expect(phases()).toEqual(['a:recorded'])
     expect(structuredAgentSessionSendOut(SESSION)).toBe(false)
-    settleStructuredAgentSessionSendsFromJournal(
-      SESSION,
-      [submission(a.clientMessageId, 'accepted')],
-      []
-    )
+    settleStructuredAgentSessionSendsFromJournal(SESSION, [], [], { epoch: 'e', sequence: 0 })
+    expect(phases()).toEqual(['a:recorded'])
+    settleStructuredAgentSessionSendsFromJournal(SESSION, [], [], { epoch: 'other', sequence: 5 })
+    expect(phases()).toEqual(['a:recorded'])
+    settleStructuredAgentSessionSendsFromJournal(SESSION, [], [], { epoch: 'e', sequence: 5 })
     expect(phases()).toEqual([])
     stop()
   })

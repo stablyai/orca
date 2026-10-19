@@ -6,12 +6,65 @@ import type { NativeChatComposerHandle } from './NativeChatComposer'
 
 /** Focus attempts per reveal, including recovery from delayed programmatic restoration. */
 const REVEAL_FOCUS_FRAMES = 6
+const PENDING_FOCUS_MS = 1000
 
 const revealedComposerReclaims = new Map<string, () => void>()
+const mountedComposers = new Set<RefObject<NativeChatComposerHandle | null>>()
+let pendingFocusRequest: { tabId: string | null; cancel: () => void } | null = null
+let focusRequestGeneration = 0
+
+export type NativeChatComposerFocusIntent = {
+  request: (tabId: string) => void
+  cancel: () => void
+}
+
+/** Keep a new-chat action's focus intent through destination claim, navigation, or expiry. */
+export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusIntent {
+  focusRequestGeneration += 1
+  pendingFocusRequest?.cancel()
+  if (typeof document === 'undefined') {
+    return { request: () => undefined, cancel: () => undefined }
+  }
+  const cancel = (): void => {
+    if (pendingFocusRequest !== pending) {
+      return
+    }
+    pendingFocusRequest = null
+    clearTimeout(timeout)
+    document.removeEventListener('pointerdown', cancel, true)
+    document.removeEventListener('keydown', cancelForNavigation, true)
+  }
+  const cancelForNavigation = (event: KeyboardEvent): void => {
+    if (event.key === 'Tab') {
+      cancel()
+    }
+  }
+  const pending: { tabId: string | null; cancel: () => void } = { tabId: null, cancel }
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  pendingFocusRequest = pending
+  document.addEventListener('pointerdown', cancel, true)
+  document.addEventListener('keydown', cancelForNavigation, true)
+  return {
+    request: (tabId) => {
+      if (pendingFocusRequest !== pending) {
+        return
+      }
+      pending.tabId = tabId
+      clearTimeout(timeout)
+      timeout = setTimeout(cancel, PENDING_FOCUS_MS)
+      const reclaim = revealedComposerReclaims.get(tabId)
+      if (reclaim) {
+        cancel()
+        reclaim()
+      }
+    },
+    cancel
+  }
+}
 
 /** Re-clicking a chat's active tab claims its composer again, as a terminal tab refocuses xterm. */
 export function requestNativeChatComposerFocus(tabId: string): void {
-  revealedComposerReclaims.get(tabId)?.()
+  captureNativeChatComposerFocusIntent().request(tabId)
 }
 
 export type NativeChatComposerRevealFocusArgs = {
@@ -49,6 +102,13 @@ export function useNativeChatComposerRevealFocus({
   const [reclaimCount, setReclaimCount] = useState(0)
 
   useEffect(() => {
+    mountedComposers.add(composerRef)
+    return () => {
+      mountedComposers.delete(composerRef)
+    }
+  }, [composerRef])
+
+  useEffect(() => {
     if (!revealed || !composerReady) {
       return
     }
@@ -58,6 +118,11 @@ export function useNativeChatComposerRevealFocus({
       setReclaimCount((count) => count + 1)
     }
     revealedComposerReclaims.set(tabId, reclaim)
+    if (pendingFocusRequest?.tabId === tabId) {
+      pendingFocusRequest.cancel()
+      claimedRef.current = false
+      explicitRef.current = true
+    }
     return () => {
       if (revealedComposerReclaims.get(tabId) === reclaim) {
         revealedComposerReclaims.delete(tabId)
@@ -77,6 +142,7 @@ export function useNativeChatComposerRevealFocus({
     let cancelled = false
     let userInteracted = false
     let attempts = 0
+    const requestGeneration = focusRequestGeneration
     const ownerDocument = rootRef.current?.ownerDocument
     const cancelForPointer = (): void => {
       userInteracted = true
@@ -101,6 +167,10 @@ export function useNativeChatComposerRevealFocus({
       if (cancelled) {
         return
       }
+      if (requestGeneration !== focusRequestGeneration) {
+        stopWatchingUserIntent()
+        return
+      }
       if (userInteracted) {
         finish()
         return
@@ -118,7 +188,11 @@ export function useNativeChatComposerRevealFocus({
       }
       // Why: a live text field is a user edit — a batch worktree-create keeps its next name
       // field open behind the pane we just revealed, and the find bar keeps its query.
-      if (shouldPreserveEditableFocus(active)) {
+      const editingSiblingComposer =
+        explicitRef.current &&
+        rootRef.current?.contains(active) !== true &&
+        [...mountedComposers].some((ownerRef) => ownerRef.current?.contains(active))
+      if (shouldPreserveEditableFocus(active) && !editingSiblingComposer) {
         finish()
         return
       }

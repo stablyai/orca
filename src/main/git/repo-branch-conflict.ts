@@ -96,6 +96,14 @@ function buildRemoteBranchConflictRefs(
     if (!isSafeGitRefName(ref)) {
       continue
     }
+    // Why (#26344): the create is checking out that remote branch, so the same name on another
+    // remote (a fork's `upstream`) is not a collision; checking it would silently suffix the pick.
+    if (
+      isAllowedRemoteBaseRef(ref, allowedBaseRef) &&
+      resolveConfiguredRemoteBranchName(ref, remoteNames) === branchName
+    ) {
+      return []
+    }
     // Match the conflict policy's longest-remote-prefix interpretation when
     // remote names overlap (for example, `foo` and `foo/bar`).
     if (

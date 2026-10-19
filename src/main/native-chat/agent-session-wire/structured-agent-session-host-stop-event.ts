@@ -11,6 +11,7 @@ import { structuredAgentSessionConversationFence } from './structured-agent-sess
 import type { JournalStopSettle } from '../agent-session-journal/queued-message-pause'
 import { sentSinceStop } from './structured-agent-session-queued-stop'
 import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 
 /** How a stop ends the child, and why (`lastEndedChild`). A person's Stop wrote its event in its
  *  own step (`recorded` names its reason); any other stop names the reason its event records, with
@@ -20,6 +21,7 @@ export type StructuredAgentSessionStopEnding =
   | {
       cause: Exclude<StructuredAgentSessionStopCause, 'user-stop'>
       reason?: string
+      failure?: SubmissionRejectionFact
       /** The app is quitting, and why: a turn this stop cuts gets a row naming it. */
       quit?: AgentSessionResumeTrigger
       /** The idle sweep judged the agent resting (`owesWork`): a send it retires unanswered is

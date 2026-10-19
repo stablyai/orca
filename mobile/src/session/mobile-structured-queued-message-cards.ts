@@ -16,8 +16,7 @@ import { dispatchWasWithdrawn } from '../../../src/shared/structured-agent-sessi
 import { structuredAgentSessionAttemptFailureParts } from '../../../src/shared/structured-agent-session-rejection-words'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
-  type AgentSessionQueuedMessage,
-  type AgentSessionQueuePause
+  type AgentSessionQueuedMessage
 } from '../../../src/shared/agent-session-wire'
 import { readAgentMessageSource } from '../../../src/shared/agent-session-message-source'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
@@ -69,7 +68,7 @@ function returnedCaption(
   )
 }
 
-/** One card's own hold: a failed conversion; the queue's pause is the list's first row. */
+/** One card's own hold: a failed conversion; the queue's pause is the list's header. */
 function pausedCaption(reason: string | undefined, waitsForAgent: boolean): string {
   if (reason === QUEUED_MESSAGE_PAUSED_SEND_FAILED) {
     return waitsForAgent
@@ -78,10 +77,6 @@ function pausedCaption(reason: string | undefined, waitsForAgent: boolean): stri
   }
   // Absent or unknown (newer host) marker: a plain pause, promising no release rule.
   return 'Paused'
-}
-
-const QUEUE_PAUSE_LABELS: Readonly<Record<string, string>> = {
-  stopped: 'Queue paused because you interrupted'
 }
 
 /** Whether Resume would send anything: a waiting card with no hold of its own, ahead of any
@@ -96,12 +91,6 @@ export function mobileQueueHasResumableCard(cards: readonly MobileQueuedMessageC
     }
   }
   return false
-}
-
-/** The paused queue's first row. A reason this build does not know (a newer host's) reads as a
- *  plain pause. */
-export function mobileQueuePauseLabel(pause: Pick<AgentSessionQueuePause, 'reason'>): string {
-  return QUEUE_PAUSE_LABELS[pause.reason] ?? 'Queue paused'
 }
 
 /** Cards in published order. A waiting card is hidden once a live hand-off of it arrived — a

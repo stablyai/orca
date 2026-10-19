@@ -10,6 +10,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
   type AgentJournalItemIdentity,
+  type AgentJournalSubmission,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
 import type {
@@ -18,6 +19,7 @@ import type {
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
+import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-wire'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
@@ -31,6 +33,7 @@ import {
 import { readAgentSessionHistory } from './agent-session-history-page'
 import { jsonBytes } from './json-string-shortening'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
+import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
 
 // Longest id a client may name a session by, so the ids every frame repeats are at their widest.
@@ -143,6 +146,106 @@ describe('a bounded row', () => {
 })
 
 describe('frames to a bounded-frame subscriber', () => {
+  it('delivers every effective send within the byte budget on open, replay and no-row changes', async () => {
+    const cursor = journal.cursor()
+    const ids = Array.from({ length: 255 }, (_, index) => `unconfirmed-${index}`)
+    const options = Object.fromEntries(
+      Array.from({ length: 8 }, (_, index) => [`option-${index}`, 'x'.repeat(512)])
+    )
+    for (const clientMessageId of ids) {
+      await journal.appendSubmission({
+        clientMessageId,
+        payloadFingerprint: 'a'.repeat(64),
+        fence: 1,
+        handoverRecorded: true,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+        options
+      })
+      await journal.resolveDispatch({
+        clientMessageId,
+        state: 'pending',
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+    }
+    for (let index = 0; index < 9; index++) {
+      await append(message('x'.repeat(73_700)))
+    }
+    let held: ReadonlySet<string> = new Set()
+    const subscribers = new AgentSessionSubscribers({
+      readCurrentWork: () =>
+        new StructuredAgentSessionCurrentWork(
+          journal,
+          1,
+          0,
+          undefined,
+          undefined,
+          false,
+          () => held
+        )
+    })
+    const frames: AgentSessionSubscribeEvent[] = []
+    const emit = (event: AgentSessionSubscribeEvent) => frames.push(event)
+    const check = (state: 'pending' | 'unknown'): void => {
+      const delivered = new Map<string, AgentJournalSubmission>()
+      for (const frame of frames) {
+        expect(bridgeFrameBytes(frame)).toBeLessThanOrEqual(MOBILE_BRIDGE_MAX_FRAME_BYTES)
+        const submissions =
+          frame.type === 'batch'
+            ? frame.batch.submissions
+            : frame.type === 'snapshot' || frame.type === 'reset'
+              ? frame.page.submissions
+              : []
+        if (frame.type === 'batch') {
+          expect(submissions.length).toBeLessThanOrEqual(AGENT_SESSION_HISTORY_MAX_LIMIT)
+          expect(frame.working).toBe(state === 'pending')
+        }
+        for (const submission of submissions) {
+          delivered.set(submission.clientMessageId, submission)
+        }
+      }
+      expect([...delivered.keys()].sort()).toEqual([...ids].sort())
+      expect(
+        [...delivered.values()].every((submission) => submission.dispatchState === state)
+      ).toBe(true)
+    }
+    const close = subscribers.open({
+      id: 'phone',
+      sessionId: SESSION,
+      journal,
+      fence: 1,
+      emit,
+      boundedFrames: true
+    })
+    check('unknown')
+    close()
+    frames.length = 0
+    subscribers.open({
+      id: 'old-client',
+      sessionId: SESSION,
+      journal,
+      fence: 1,
+      emit,
+      boundedFrames: true,
+      cursor,
+      snapshotCatchUp: false
+    })
+    expect(
+      frames.filter((frame) => frame.type === 'batch' && frame.batch.items.length).length
+    ).toBeGreaterThan(1)
+    check('unknown')
+    frames.length = 0
+    held = new Set(ids)
+    subscribers.publish(SESSION, journal)
+    check('pending')
+    for (const frame of frames) {
+      expect(frame).toMatchObject({
+        type: 'batch',
+        batch: { cursor: journal.cursor(), items: [] }
+      })
+    }
+  })
+
   function largeQueue(): QueuePublication {
     // What an older build admitted under its 1 MiB bound.
     const queuedMessages: AgentSessionQueuedMessage[] = Array.from({ length: 40 }, (_, index) => ({

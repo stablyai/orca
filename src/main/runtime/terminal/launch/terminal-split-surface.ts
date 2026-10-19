@@ -9,6 +9,7 @@ import { runtimeSplitPlacement } from '../../runtime-terminal-spawn-placement'
 import { REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS, ownerSurfacing } from '../../orca-runtime-core'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { spawnInAdmittedPane, withdrawRuntimePane } from '../../runtime-pane-admission'
+import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/pty-first-size'
 
 export type TerminalSplitOptions = {
   direction?: 'horizontal' | 'vertical'
@@ -59,20 +60,18 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
     const paneKey = makePaneKey(parentTabId, leafId)
     const splitArgs: Parameters<typeof spawnInAdmittedPane>[2] = {
-      cols: 120,
-      rows: 40,
+      // Why unmeasured: a new split pane has no size of its own until the window lays it out.
+      ...UNMEASURED_PTY_SIZE,
       cwd: workspace.path,
       command: opts.command,
       commandDelivery: 'provider',
-      env: await this.buildTerminalWorkspaceEnv(
+      env: this.buildTerminalWorkspaceEnv(
         workspace,
         // A split is a plain shell: it takes the host's account pointer, as every create does.
         {
           ...(workspace.connectionId ? {} : this.accounts.hostLaunchEnvFor(null)),
           ...opts.env
-        },
-        paneKey,
-        parentTabId
+        }
       ),
       envToDelete: opts.envToDelete,
       connectionId: workspace.connectionId,

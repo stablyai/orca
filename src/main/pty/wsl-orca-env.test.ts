@@ -8,6 +8,23 @@ import {
 import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from './wsl-orca-env'
 
 describe('addOrcaWslInteropEnv', () => {
+  it.each(['1', '0'])(
+    'forwards Claude image override %s to WSL without path translation',
+    (value) => {
+      const env: Record<string, string> = { CLAUDE_CODE_FORCE_TERMINAL_IMAGES: value }
+
+      addOrcaWslInteropEnv(env)
+      addOrcaWslInteropEnv(env)
+
+      expect(env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe(value)
+      expect(
+        env.WSLENV.split(':').filter((entry) =>
+          entry.startsWith('CLAUDE_CODE_FORCE_TERMINAL_IMAGES')
+        )
+      ).toEqual(['CLAUDE_CODE_FORCE_TERMINAL_IMAGES/u'])
+    }
+  )
+
   it('marks the Orca terminal handle for Windows to WSL env import', () => {
     const env: Record<string, string> = { ORCA_TERMINAL_HANDLE: 'term_wsl' }
 

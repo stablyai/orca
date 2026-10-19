@@ -3,7 +3,7 @@ import {
   computeWorktreeSidebarHeaderDropPreview,
   type WorktreeSidebarHeaderDropPreview
 } from './worktree-sidebar-header-drop-preview'
-import type { Row } from './worktree-list/grouping/row-types'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
 import type { Repo } from '../../../../shared/repo-types'
 
 export type ProjectHeaderDragBucketKey = string

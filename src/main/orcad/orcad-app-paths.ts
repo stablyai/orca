@@ -7,6 +7,7 @@
  * beside, or resolves resources against. The failure surfaces far from here, as a missing
  * file rather than a missing implementation.
  */
+import { realpathSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
@@ -46,6 +47,8 @@ function resolveAppDataPath(): string {
  * Why argv[1] and not cwd: cwd is wherever the operator or supervisor happened to be,
  * so resolving siblings against it finds them only by luck. Node resolves argv[1] to an
  * absolute path before we see it; `resolve` covers a caller-supplied relative one.
+ * Node does not dereference a symlinked script in argv[1], so realpath does: the siblings
+ * live beside the bundle, not beside the link.
  */
 export function resolveOrcadInstallRoot(scriptPath = process.argv[1]): string {
   if (!scriptPath) {
@@ -54,7 +57,14 @@ export function resolveOrcadInstallRoot(scriptPath = process.argv[1]): string {
         'bundle root to resolve sibling entry points against'
     )
   }
-  return dirname(resolve(scriptPath))
+  const absolute = resolve(scriptPath)
+  let script = absolute
+  try {
+    script = realpathSync(absolute)
+  } catch {
+    // A missing script still names its directory; the sibling lookups report what is absent.
+  }
+  return dirname(script)
 }
 
 export function resolveOrcadPath(name: AppPathName): string {

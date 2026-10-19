@@ -30,6 +30,10 @@ export function runtimeStub(overrides: Record<string, unknown> = {}): unknown {
       return resolved
     },
     publishStructuredAgentSessionTab: () => {},
+    subscribeStructuredAgentAvailability: (read: (agents: unknown[]) => void) => {
+      read([])
+      return () => {}
+    },
     registerSubscriptionCleanup: subscriptions.register.bind(subscriptions),
     registerOwnedSubscriptionCleanup: subscriptions.registerOwned.bind(subscriptions),
     cleanupSubscription: subscriptions.cleanup.bind(subscriptions),
@@ -73,7 +77,7 @@ export async function expectDeclaredSurfaceExecutes(
 ): Promise<void> {
   const retirement = vi.fn()
   const runtime = runtimeStub({ retireStructuredAttention: retirement })
-  for (const { method, hostMethod, result } of STRUCTURED_CALLS) {
+  for (const { method, hostMethod, result, clientCapability } of STRUCTURED_CALLS) {
     const atRestCreate =
       method === 'agentSession.create' &&
       build.capabilities.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) &&
@@ -92,6 +96,18 @@ export async function expectDeclaredSurfaceExecutes(
       { clientKind: 'runtime', clientCapabilities },
       runtime
     )
+    if (clientCapability && !clientCapabilities.includes(clientCapability)) {
+      expect(replies).toMatchObject([
+        {
+          ok: false,
+          error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+        }
+      ])
+      if (expectedHostMethod) {
+        expect(hostCalls[expectedHostMethod].mock.calls.length).toBe(before)
+      }
+      continue
+    }
     if (expectedHostMethod) {
       expect(
         hostCalls[expectedHostMethod].mock.calls.length - before,

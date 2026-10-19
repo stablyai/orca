@@ -111,22 +111,27 @@ describe('Resume in New CLI launch', () => {
     mocks.launchAiVaultSessionInNewTab.mockReturnValue({ tabId: 'tab-1' })
   })
 
-  it.each(['command', 'arguments'] as const)(
-    'refuses effective OpenCode %s server routing before asking for any copy',
-    async (location) => {
+  // Either OpenCode chat may own a 2.x conversation, so the copy may open in either CLI.
+  it.each([
+    ['command', 'opencode'],
+    ['arguments', 'opencode'],
+    ['command', 'opencode2'],
+    ['arguments', 'opencode2']
+  ] as const)(
+    'refuses %s server routing on %s before asking for any copy',
+    async (location, cli) => {
       const chat = { ...owned, agent: 'opencode2' as const }
+      const agentCmdOverrides =
+        location === 'command' ? { [cli]: `${cli} --server http://synthetic-server` } : {}
       mocks.getState.mockReturnValue({
         activeWorktreeId: 'worktree-1',
         settings: {
+          agentCmdOverrides,
           agentDefaultArgs:
-            location === 'arguments' ? { opencode: '--server=http://synthetic-server' } : {}
+            location === 'arguments' ? { [cli]: '--server=http://synthetic-server' } : {}
         }
       })
-      renderActions(
-        location === 'command'
-          ? { opencode: 'opencode --server http://synthetic-server' }
-          : undefined
-      ).handleResumeInNewCli(chat, 'worktree-2')
+      renderActions(agentCmdOverrides).handleResumeInNewCli(chat, 'worktree-2')
       await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(1))
       expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('Remove --server'))
       expect(mocks.prepareAiVaultSessionForFork).not.toHaveBeenCalled()

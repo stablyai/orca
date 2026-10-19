@@ -1,8 +1,8 @@
 # Completed OMP agents still show active in Orca
 
 Reported: 2026-10-01
-Status: Confirmed worker status mismatch; cause not established. No fix applied.
-Context: Live status checks described as PR 24196 in this session. That PR number could not be resolved in the local fork, so no PR URL is claimed.
+Status: Confirmed worker status mismatch. This record describes the original investigation, not the current implementation.
+Fix and current verification: [PR #24196](https://github.com/stablyai/orca/pull/24196).
 Build observed during the test: `1.4.214-local.1790834225853.65731454c1c6`.
 Runtime: `696fd1e3-312f-4b8d-8d92-35f422dbe46e`.
 
@@ -16,10 +16,10 @@ Expected: After a turn and its background jobs complete, the agent status must s
 
 Run: `run_429bdaf8c24e`.
 
-| Worker | Task | Dispatch | Result | Live status |
-| --- | --- | --- | --- | --- |
-| A | `task_5b92fcefe26b` | `ctx_0fdb3ba46a37` | `succeeded`; dispatch `completed` | `unavailable`; liveness `unverifiable`, reason `missing_status`; activity `unknown` |
-| B | `task_b8afdc8d5ccc` | `ctx_1320df23f4dc` | `succeeded`; dispatch `completed` | `fresh`; activity `done`; main-agent outcome `success` |
+| Worker | Task                | Dispatch           | Result                            | Live status                                                                         |
+| ------ | ------------------- | ------------------ | --------------------------------- | ----------------------------------------------------------------------------------- |
+| A      | `task_5b92fcefe26b` | `ctx_0fdb3ba46a37` | `succeeded`; dispatch `completed` | `unavailable`; liveness `unverifiable`, reason `missing_status`; activity `unknown` |
+| B      | `task_b8afdc8d5ccc` | `ctx_1320df23f4dc` | `succeeded`; dispatch `completed` | `fresh`; activity `done`; main-agent outcome `success`                              |
 
 Worker A terminal: `term_a2263d24-1d7b-4f28-bc6e-b41f22abfa2c`.
 Worker B terminal: `term_0a4c7fb2-76e0-470c-bd48-e7ffe7703e2b`.
@@ -67,7 +67,7 @@ orca orchestration worker-list --run run_429bdaf8c24e --json
 orca worktree ps --json
 ```
 
-No status was changed by hand. Both worker terminals remain retained for inspection. No implementation changes or test runs were made in this investigation. Earlier automated test passes do not disprove this live failure.
+No status was changed by hand. Both worker terminals were retained at the end of this investigation. No implementation changes or test runs were made during that investigation. Earlier automated test passes do not disprove the recorded live failure.
 
 ## Fix acceptance checks
 

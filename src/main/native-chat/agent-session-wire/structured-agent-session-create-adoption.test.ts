@@ -117,7 +117,14 @@ it('refuses concurrent adoption of a provider conversation by another session', 
   expect(results.filter((result) => result.ok)).toHaveLength(1)
   expect(results.filter((result) => !result.ok)).toMatchObject([
     {
-      refusal: { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
+      refusal: {
+        code: 'agent_session_conflict',
+        details: {
+          reason: 'conversationHeldElsewhere',
+          owner: { sessionId: expect.any(String), workspaceId: params.location.workspaceId }
+        },
+        createAttemptRefusedBeforeCommit: true
+      }
     }
   ])
   expect(rig.store.listRecords()).toHaveLength(1)
@@ -139,20 +146,25 @@ it('refuses concurrent founding under a tab another chat already owns', async ()
   expect(rig.adapter.acquire).not.toHaveBeenCalled()
 })
 
-it('refuses history lost after discovery before founding anything', async () => {
-  const params = await adoptedParams()
-  await rm(join(rig.root, 'rollout.jsonl'))
-  expect(await rig.host.create(CALLER, params)).toMatchObject({
-    ok: false,
-    refusal: {
-      code: 'agent_session_identity_required',
-      details: { reason: 'transcriptUnreadable' },
-      createAttemptRefusedBeforeCommit: true
-    }
-  })
-  expect(rig.store.listRecords()).toEqual([])
-  expect(rig.store.listOperationRows()).toEqual([])
-})
+it.each(['missing', 'empty', 'malformed'] as const)(
+  'refuses %s history before founding anything',
+  async (source) => {
+    const params = await adoptedParams()
+    await (source === 'missing'
+      ? rm(join(rig.root, 'rollout.jsonl'))
+      : writeFile(join(rig.root, 'rollout.jsonl'), source === 'empty' ? '' : '{broken json}\n'))
+    expect(await rig.host.create(CALLER, params)).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_identity_required',
+        details: { reason: source === 'empty' ? 'transcriptNotFound' : 'transcriptUnreadable' },
+        createAttemptRefusedBeforeCommit: true
+      }
+    })
+    expect(rig.store.listRecords()).toEqual([])
+    expect(rig.store.listOperationRows()).toEqual([])
+  }
+)
 
 it('does not found a record whose account namespace its agent cannot drive', async () => {
   const params = createTestParams(undefined, {

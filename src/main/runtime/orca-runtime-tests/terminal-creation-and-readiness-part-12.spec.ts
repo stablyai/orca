@@ -231,8 +231,7 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           tabId: RESERVED_TAB_ID,
-          leafId: RESERVED_LEAF_ID,
-          env: expect.objectContaining({ ORCA_PANE_KEY: surface.paneKey })
+          leafId: RESERVED_LEAF_ID
         })
       )
       expect(spawn.mock.calls[0]?.[0]?.command).toContain('fix the build')

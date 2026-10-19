@@ -23,6 +23,9 @@ type CompletionSensitivePtyProvider = IPtyProvider & {
 export type PtyProcessInspectionOptions = {
   expectedIncarnationId?: PtyIncarnationId
   scanChildProcesses?: boolean
+  /** Adoption only: on Windows, a job member that left both the shell's tree and its console no
+   *  longer counts. Never for close checks: closing a Windows pane kills its whole job. */
+  ignoreDetached?: boolean
   /** A self-correcting cadence poll that reads only the process name: licenses a host to answer
    *  from a cheap capture and OMIT evidence. Never set by a caller that consumes evidence. */
   steadyState?: boolean

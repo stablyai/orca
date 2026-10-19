@@ -43,7 +43,7 @@ it('parses candidate files once and reports violations from both guards', () => 
     parseSpecifiers.mock.calls.filter(([file]) => file === 'src/main/consumer.ts')
   ).toHaveLength(1)
   expect(error).toHaveBeenCalledWith(expect.stringContaining('not a public process-host export'))
-  expect(error).toHaveBeenCalledWith(expect.stringContaining('through its index'))
+  expect(error).toHaveBeenCalledWith(expect.stringContaining('through old-client-session-tab-rows'))
 })
 
 it('uses fresh inputs on every invocation, including newly added files', () => {

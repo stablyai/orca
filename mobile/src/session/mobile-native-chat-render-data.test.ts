@@ -23,28 +23,27 @@ function user(id: string, text: string): NativeChatMessage {
 const fold = (messages: NativeChatMessage[]) => foldMobileNativeChatMessages(messages, 'claude')
 
 describe('mobileNativeChatEmptyState', () => {
-  it('invites a first message naming the agent, matching desktop copy', () => {
-    // waiting-session (live agent, no transcript) and ready (loaded, empty) both
-    // resolve to the shared "empty" copy with the agent label substituted.
-    const waiting = mobileNativeChatEmptyState('waiting-session', 'claude')
-    expect(waiting).toEqual({
-      title: 'Start a chat with Claude',
-      subtitle: 'Ask Claude to inspect code, explain output, or make a change.'
+  it('invites a first message into a loaded, empty chat, matching desktop copy', () => {
+    expect(mobileNativeChatEmptyState('ready', 'codex')).toEqual({
+      title: 'Start a chat with Codex',
+      subtitle: 'Ask Codex to inspect code, explain output, or make a change.'
     })
-    expect(mobileNativeChatEmptyState('ready', 'codex')?.title).toBe('Start a chat with Codex')
   })
 
-  it('invites a first message while the transcript file is still unwritten', () => {
-    // The spinner is already gone by then, so a bare list would read as broken.
-    expect(mobileNativeChatEmptyState('awaiting-transcript', 'claude')?.title).toBe(
-      'Start a chat with Claude'
-    )
-  })
+  it.each(['waiting-session', 'awaiting-transcript'] as const)(
+    'says the conversation is not found yet while %s, never that the chat is new',
+    (status) => {
+      // A chat with history whose agent reported no conversation reads the same as a new one.
+      expect(mobileNativeChatEmptyState(status, 'claude')).toEqual({
+        title: "Can't find this conversation yet",
+        subtitle:
+          'Send a message to start one, or open the terminal view to see what Claude is doing.'
+      })
+    }
+  )
 
   it('falls back to "the agent" when the agent is unknown', () => {
-    expect(mobileNativeChatEmptyState('waiting-session', null)?.title).toBe(
-      'Start a chat with the agent'
-    )
+    expect(mobileNativeChatEmptyState('ready', null)?.title).toBe('Start a chat with the agent')
   })
 
   it('prefers the provided error message over the default subtitle', () => {
@@ -81,6 +80,13 @@ describe('buildMobileNativeChatTransientData', () => {
     expect(last.id).toBe('p1')
     expect(last.role).toBe('user')
     expect(last.blocks).toEqual([{ type: 'text', text: 'queued' }])
+  })
+
+  it('times an echo from when it was sent, as desktop times its pending sends', () => {
+    const data = build([assistant('a1', 'hello')], null, [
+      { id: 'p1', text: 'queued', sentAt: 1_792_024_037_937 }
+    ])
+    expect(data.at(-1)?.timestamp).toBe(1_792_024_037_937)
   })
 
   it('renders a pending send with images as text followed by image-ref thumbnails', () => {
@@ -282,9 +288,8 @@ describe('foldMobileNativeChatMessages', () => {
     expect(folded.map((message) => message.id)).toEqual(['a1'])
   })
 
-  // Mobile draws no task list, so a hidden plan update must not split the run around it.
-  it('keeps one tool run across a Codex plan update it does not draw', () => {
-    const plan: NativeChatMessage = {
+  function planFrame(head: string): NativeChatMessage {
+    return {
       id: 'plan',
       role: 'system',
       timestamp: 0,
@@ -296,21 +301,33 @@ describe('foldMobileNativeChatMessages', () => {
           providerFrame: {
             provider: 'codex',
             kind: 'notification:turn/plan/updated',
-            payload: { head: '{}', byteLength: 2, digest: 'digest', truncated: false }
+            payload: { head, byteLength: head.length, digest: 'digest', truncated: false }
           }
         }
       ]
     }
+  }
+
+  // Desktop draws a Codex plan update in place, as its task list.
+  it('draws a Codex plan update where it happened, as an update_plan call', () => {
     const folded = fold([
       assistant('a1', 'Working.'),
       toolCall('c1'),
       toolResult('r1', 'ok'),
-      plan,
+      planFrame('{"plan":[{"step":"Port rows","status":"inProgress"}]}'),
       toolCall('c2'),
       toolResult('r2', 'ok')
     ])
+    expect(folded.map((message) => message.id)).toEqual(['a1', 'plan', 'c2'])
+    expect(folded[1]).toMatchObject({
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', name: 'update_plan', state: 'completed' }]
+    })
+  })
+
+  it('draws nothing for a plan update it cannot read', () => {
+    const folded = fold([assistant('a1', 'Working.'), planFrame('{}')])
     expect(folded.map((message) => message.id)).toEqual(['a1'])
-    expect(folded[0]?.blocks.filter((block) => block.type === 'tool-call')).toHaveLength(2)
   })
 
   it('still folds a result whose call is inside the window', () => {

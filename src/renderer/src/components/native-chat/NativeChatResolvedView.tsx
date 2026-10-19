@@ -133,20 +133,6 @@ export function NativeChatResolvedView({
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
   const fileLinkContext = useNativeChatFileLinkContext(terminalTabId)
   const onPaste = useNativeChatPasteBridge({ rootRef, composerRef, questionAnswerInputRef })
-  const contextMenu = useNativeChatContextMenu({
-    rootRef,
-    composerRef,
-    enabled: isVisible,
-    onSwitchToTerminal,
-    splitShortcutLabels: {
-      right: formatShortcutLabel('terminal.splitRight', keybindings),
-      down: formatShortcutLabel('terminal.splitDown', keybindings)
-    },
-    actions: {
-      onPaste,
-      ...(contextMenuActions ?? emptyNativeChatContextMenuActions)
-    }
-  })
 
   // Optimistic "queued" sends (mobile parity): a composer send is echoed
   // immediately and pruned once its real user turn lands in the transcript, so
@@ -333,6 +319,20 @@ export function NativeChatResolvedView({
   // Only the focused conversation accepts chat text-size shortcuts.
   useNativeChatFontSize(isConversation && isVisible && isFocusedGroup, rootRef)
   const find = useNativeChatFind(isVisible && isFocusedGroup, rootRef, composerRef, messageListRef)
+  const contextMenu = useNativeChatContextMenu({
+    rootRef,
+    composerRef,
+    enabled: isVisible,
+    onSwitchToTerminal,
+    splitShortcutLabels: {
+      right: formatShortcutLabel('terminal.splitRight', keybindings),
+      down: formatShortcutLabel('terminal.splitDown', keybindings)
+    },
+    actions: { onPaste, ...(contextMenuActions ?? emptyNativeChatContextMenuActions) },
+    messageListRef,
+    fileLinkContext,
+    onFind: find.open
+  })
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
 
   return (

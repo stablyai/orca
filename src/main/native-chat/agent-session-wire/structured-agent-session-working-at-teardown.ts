@@ -176,7 +176,11 @@ function liveTasks(
 type WorkingCandidateSession = {
   journal: AgentSessionJournal
   /** Only this host generation's own child counts. A restored-for-reading journal has none. */
-  child: { fence: number } | null
+  child: {
+    fence: number
+    phase?: 'starting' | 'ready'
+    heldSends?: () => ReadonlySet<string> | undefined
+  } | null
 }
 
 /** The offer one session is owed, taken right before teardown stops its provider child; null when
@@ -187,6 +191,8 @@ export function structuredAgentSessionWorkingAtStop(input: {
   getRecord: (sessionId: string) => AgentSessionRecord | null
   /** The session's child records, the same read the status feed publishes. */
   childWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
+  /** Child work the provider reported running and not over, recorded or not. */
+  childWorkOpen: (sessionId: string) => boolean
   /** False when the session's live child never answered its start; the exit reads the same fact. */
   startAnswered?: (sessionId: string) => boolean | undefined
   trigger: AgentSessionResumeTrigger
@@ -202,7 +208,8 @@ export function structuredAgentSessionWorkingAtStop(input: {
   const current = agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
   // A queued message reached no agent, and one handed to a start that never answered ran nowhere:
   // neither is work to resume. The next open or the exit keeps it as unsent.
-  const unanswered = input.startAnswered?.(sessionId) === false
+  const unanswered =
+    session.child.phase === 'starting' || input.startAnswered?.(sessionId) === false
   const handedOver = current.submissions.filter(
     (submission) =>
       !isQueuedAgentJournalSubmission(submission) &&
@@ -211,14 +218,23 @@ export function structuredAgentSessionWorkingAtStop(input: {
   const childWork = input.childWork(sessionId)
   const record = input.getRecord(sessionId)
   // The live generation is this host's own child, read first-hand like the rest, never the lease.
-  const { scope } = new StructuredAgentSessionCurrentWork(session.journal, session.child.fence)
+  const { scope } = new StructuredAgentSessionCurrentWork(
+    session.journal,
+    session.child.fence,
+    0,
+    undefined,
+    undefined,
+    false,
+    session.child.heldSends
+  )
   const status = structuredAgentSessionShownStatus(
     { items: current.items, submissions: handedOver },
     childWork,
     session.child.fence,
     scope
   )
-  if (status.state === 'done') {
+  // A helper the bounded store refused is still work to resume; `tasks` names only recorded ones.
+  if (status.state === 'done' && !input.childWorkOpen(sessionId)) {
     return null
   }
   const work = structuredAgentSessionResumeWork(current.items, handedOver, scope)

@@ -263,6 +263,21 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71
                  }
                  else {
                      // Stop processing immediately on unexpected error and log
+diff --git a/lib/utils.js b/lib/utils.js
+index af7918b6902a105a7c49813bc0bb4d687d87a7d4..1fca29d71f11ece98b8224b81ab78a6bc5b41a6d 100644
+--- a/lib/utils.js
++++ b/lib/utils.js
+@@ -15,8 +15,8 @@ function assign(target) {
+ }
+ exports.assign = assign;
+ function loadNativeModule(name) {
+-    // Check build, debug, and then prebuilds.
+-    var dirs = ['build/Release', 'build/Debug', "prebuilds/" + process.platform + "-" + process.arch];
++    // Check Orca's per-ABI build (published into package dirs shared across worktrees), build, debug, and then prebuilds.
++    var dirs = ["build/orca-napi-" + process.platform + "-" + process.arch, 'build/Release', 'build/Debug', "prebuilds/" + process.platform + "-" + process.arch];
+     // Check relative to the parent dir for unbundled and then the current dir for bundled
+     var relative = ['..', '.'];
+     var lastError;
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
 index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd8eeb4a79 100644
 --- a/src/conpty_console_list_agent.ts
@@ -706,6 +721,21 @@ index 98733dc0cd752b554bd94e45904ca341ad141bba..3dd5ad9b3124dbd5ba7f76679b26650d
          } else {
            // Stop processing immediately on unexpected error and log
            this._writeQueue.length = 0;
+diff --git a/src/utils.ts b/src/utils.ts
+index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..4bc8d760fe00e208f211570930cd163b77901810 100644
+--- a/src/utils.ts
++++ b/src/utils.ts
+@@ -10,8 +10,8 @@ export function assign(target: any, ...sources: any[]): any {
+ 
+ 
+ export function loadNativeModule(name: string): {dir: string, module: any} {
+-  // Check build, debug, and then prebuilds.
+-  const dirs = ['build/Release', 'build/Debug', `prebuilds/${process.platform}-${process.arch}`];
++  // Check Orca's per-ABI build (published into package dirs shared across worktrees), build, debug, and then prebuilds.
++  const dirs = [`build/orca-napi-${process.platform}-${process.arch}`, 'build/Release', 'build/Debug', `prebuilds/${process.platform}-${process.arch}`];
+   // Check relative to the parent dir for unbundled and then the current dir for bundled
+   const relative = ['..', '.'];
+   let lastError: unknown;
 diff --git a/src/win/conpty.cc b/src/win/conpty.cc
 index 7b286d3d64..5239ba4e40 100644
 --- a/src/win/conpty.cc

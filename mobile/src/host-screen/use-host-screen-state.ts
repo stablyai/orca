@@ -10,6 +10,7 @@ import type { Worktree } from '../worktree/workspace-list-sections'
 import type { ServedProjectSections } from '../worktree/project-sections-operations'
 import type { SectionRepo } from '../worktree/workspace-list-types'
 import { NO_SERVER_WORKSPACES, type ServerWorkspaces } from '../worktree/server-workspaces'
+import type { ProjectGroup } from '../../../src/shared/project-group-types'
 
 export function useHostScreenState(hostId: string | undefined, action: string | undefined) {
   const [initialCache] = useState(() =>
@@ -70,9 +71,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   const [serverWorkspaces, setServerWorkspaces] = useState<ServerWorkspaces>(NO_SERVER_WORKSPACES)
   // Why its own banner state: a tap on a server that needs an update says so until dismissed.
   const [serverNotice, setServerNotice] = useState<string | null>(null)
-  const [showSortPicker, setShowSortPicker] = useState(false)
-  const [showGroupPicker, setShowGroupPicker] = useState(false)
-  const [showFilterModal, setShowFilterModal] = useState(false)
+  const [showWorkspaceOptions, setShowWorkspaceOptions] = useState(false)
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
@@ -83,6 +82,8 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   // Desktop's "Also show pinned worktrees in their original lists"; off by default.
   const [showPinnedInGroups, setShowPinnedInGroups] = useState(false)
+  // A feed-built list's project groups on a host with no window to publish them.
+  const [hostProjectGroups, setHostProjectGroups] = useState<readonly ProjectGroup[]>([])
 
   return {
     actionTarget,
@@ -90,6 +91,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     clientRef,
     confirmDelete,
     confirmRemoveHost,
+    hostProjectGroups,
     actionError,
     error,
     fetchRepoMetadataInFlightRef,
@@ -117,6 +119,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setCatalogError,
     setConfirmDelete,
     setConfirmRemoveHost,
+    setHostProjectGroups,
     setActionError,
     setError,
     setHostLabelById,
@@ -134,22 +137,18 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setSearch,
     setServerNotice,
     setServerWorkspaces,
-    setShowFilterModal,
+    setShowWorkspaceOptions,
     setShowPinnedInGroups,
-    setShowGroupPicker,
     setShowSearch,
-    setShowSortPicker,
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
-    showFilterModal,
+    showWorkspaceOptions,
     showPinnedInGroups,
-    showGroupPicker,
     showSearch,
     setView,
     view,
     viewRef,
-    showSortPicker,
     sleptIds,
     worktreeCatalogRef,
     worktrees,

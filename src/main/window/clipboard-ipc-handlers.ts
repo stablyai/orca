@@ -6,8 +6,8 @@ import {
   type IpcMainInvokeEvent,
   type WebContents
 } from 'electron'
-import { spawn } from 'node:child_process'
 import { open, stat } from 'node:fs/promises'
+import { runProcess } from '@orca/process-host'
 import type { Store } from '../persistence'
 import { PATH_ACCESS_DENIED_MESSAGE } from '../ipc/filesystem-auth'
 import { resolveDesktopAuthorizedPath } from '../ipc/local-file-access-resolution'
@@ -43,6 +43,7 @@ import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-fi
 import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
+import { readClipboardNativeImage } from './clipboard-native-image'
 import { publishClipboardText } from './clipboard-text-publisher'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
 import { restoreNativeChatPastes, sweepExpiredNativeChatPastes } from './native-chat-paste-files'
@@ -87,19 +88,6 @@ export function setTrustedClipboardRendererWebContentsId(webContentsId: number |
   trustedClipboardRendererWebContentsId = webContentsId
 }
 
-// Run a short-lived OS clipboard helper (PowerShell / wl-copy / xclip), feeding
-// it stdin when provided; resolves only on a clean exit.
-function runCommand(command: string, args: string[], stdin?: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['pipe', 'ignore', 'ignore'] })
-    child.on('error', reject)
-    child.on('exit', (code) =>
-      code === 0 ? resolve() : reject(new Error(`${command} exited with ${code}`))
-    )
-    child.stdin?.end(stdin ?? '')
-  })
-}
-
 export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:readSelectionText')
@@ -137,7 +125,12 @@ export function registerClipboardHandlers(store: Store): void {
   // the clipboard in memory before the (slower) save lands.
   ipcMain.handle('clipboard:readImageThumbnail', (event): ClipboardImageThumbnail | null => {
     assertTrustedClipboardSender(event)
-    return buildClipboardImageThumbnail(clipboard.readImage())
+    try {
+      return buildClipboardImageThumbnail(readClipboardNativeImage())
+    } catch {
+      // The save call reports rejected source data; the preview is best effort.
+      return null
+    }
   })
   ipcMain.handle('clipboard:hasImage', (event): boolean => {
     assertTrustedClipboardSender(event)
@@ -159,7 +152,7 @@ export function registerClipboardHandlers(store: Store): void {
       if (!source) {
         return null
       }
-      const image = clipboard.readImage()
+      const image = readClipboardNativeImage()
       if (image.isEmpty()) {
         if (!source.windowsFileFormats) {
           return null
@@ -288,7 +281,7 @@ function makeClipboardFileDeps(
     desktop: process.env.XDG_CURRENT_DESKTOP,
     resolveFilePath,
     writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
-    runCommand
+    runProcess
   }
 }
 

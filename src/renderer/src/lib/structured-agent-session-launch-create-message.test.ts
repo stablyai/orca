@@ -202,7 +202,7 @@ describe('the first message owned by create', () => {
     ['new', {}],
     ['resumed', { resumeFrom: { providerSessionId: 'provider-session-1' } }]
   ])(
-    "carries the model the host's saved list moves a gone saved one to, %s, as a send does",
+    "keeps a remembered model the host's saved list lacks, %s: create names no other",
     async (_kind, resume) => {
       mocks.settings = {
         nativeChatSessionOptions: {
@@ -224,7 +224,8 @@ describe('the first message owned by create', () => {
           ...resume
         })
         await launch.launchResult
-        expect(createParams().options?.model).toBe('opus[1m]')
+        // The host seeds the remembered model itself.
+        expect(createParams().options?.model).toBeUndefined()
       } finally {
         mocks.settings = {}
       }

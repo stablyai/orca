@@ -43,4 +43,7 @@ export type CodexLeadTurnState = {
   /** When `state` first appeared; the root's own clock, published as `mainAgent.stateStartedAt`. */
   stateStartedAt: number
   model?: string
+  /** Execution-host-only identity of the root session and turn whose rollout end can be replayed as Stop. */
+  sessionId?: string
+  turnId?: string
 }

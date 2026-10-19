@@ -3,11 +3,11 @@ import { parsePersistedAutomationHostFilter } from '../../../shared/automation-h
 import type {
   OrcadMigrationClientStatePayload,
   OrcadMigrationUiRoutingState
-} from '../../../shared/orcad-migration-client-state'
+} from '../../../shared/orcad-migration/orcad-migration-client-state'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type {
   PersistedMobileClientTabSelection,
   PersistedState
@@ -242,6 +242,12 @@ function collectEligibleSessionIdentity(
   return { tabIds, groupIds }
 }
 
+/** A phone names a terminal by its pane, `${tabId}::${leafId}`; the pane moves with its tab. */
+function movedMobileTab(id: string, tabIds: ReadonlySet<string>): boolean {
+  const separator = id.indexOf('::')
+  return tabIds.has(id) || (separator !== -1 && tabIds.has(id.slice(0, separator)))
+}
+
 /** The selection without references to tabs or groups that did not move; null when none is left. */
 function representableMobileSelection(
   selection: PersistedMobileClientTabSelection,
@@ -251,7 +257,7 @@ function representableMobileSelection(
   const groupIds = eligible?.groupIds ?? new Set<string>()
   const next: PersistedMobileClientTabSelection = {
     activeTabId:
-      selection.activeTabId !== null && tabIds.has(selection.activeTabId)
+      selection.activeTabId !== null && movedMobileTab(selection.activeTabId, tabIds)
         ? selection.activeTabId
         : null,
     activeGroupId:

@@ -3,6 +3,7 @@
 
 import type { UnreadAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { NativeChatImageRefBlock } from '../../../../shared/native-chat-types'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
@@ -31,8 +32,10 @@ export type QueuedMessageCardHold =
 export type QueuedMessageCard = {
   messageId: string
   position: number
-  /** The draft's text blocks joined; drafts are text-only in v1. */
+  /** The draft's text blocks joined. */
   text: string
+  /** The draft's images, which an edit of its text keeps. */
+  images?: readonly NativeChatImageRefBlock[]
   state: 'waiting' | 'returned'
   hold: QueuedMessageCardHold
   /** A conversation command such as /compact: it never steers into a running turn. */
@@ -49,6 +52,13 @@ export type QueuedMessageCard = {
 
 function queuedMessageCardText(body: AgentSessionQueuedMessage['body']): string {
   return body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+}
+
+function queuedMessageCardImages(
+  body: AgentSessionQueuedMessage['body']
+): Pick<QueuedMessageCard, 'images'> {
+  const images = body.blocks.flatMap((block) => (block.type === 'image-ref' ? [block] : []))
+  return images.length > 0 ? { images } : {}
 }
 
 /**
@@ -87,6 +97,7 @@ export function projectQueuedMessageCards(
       messageId: message.messageId,
       position: message.position,
       text: queuedMessageCardText(message.body),
+      ...queuedMessageCardImages(message.body),
       state: message.state,
       hold,
       ...(message.body.command !== undefined
@@ -148,6 +159,7 @@ export function sendingQueuedMessageCards(
     // After every card the host holds, in send order.
     position: Number.MAX_SAFE_INTEGER - entries.length + index,
     text: queuedMessageCardText(entry.body),
+    ...queuedMessageCardImages(entry.body),
     state: 'waiting',
     hold: 'sending'
   }))

@@ -10,6 +10,7 @@ import {
 } from '../provider-process/provider-process-supervisor'
 import type { CodexAppServerSpawn } from './codex-app-server-process-tree-kill'
 import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 const BACKFILL_RECOVERY_KILL_SITE = 'codex-state-db-backfill-recovery'
 // Codex drains on its stdin end, as the Codex connection's root-only close asks; one value
@@ -36,7 +37,8 @@ export function spawnCodexBackfillRecoveryProcess(
       {
         stdio: ['pipe', 'ignore', 'ignore'],
         windowsHide: true,
-        env: process.env
+        env: process.env,
+        cwd: resolveWslInteropSpawnCwd()
       }
     )
     return { child, supervised: false }

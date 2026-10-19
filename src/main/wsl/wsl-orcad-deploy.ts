@@ -7,30 +7,30 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../shared/orcad-managed-runtime'
 import type { ServeReadiness } from '../server/serve-readiness'
 import type { WslHostDeferredUpdate } from '../../shared/wsl-host-types'
-import { recoverInterruptedOrcadActivation } from '../ssh/orcad-activation-recovery'
-import { readOrcadActivationRecord } from '../ssh/orcad-activation-record-store'
+import { recoverInterruptedOrcadActivation } from '../managed-server/activation/orcad-activation-recovery'
+import { readOrcadActivationRecord } from '../managed-server/activation/orcad-activation-record-store'
 import { materializeOrcadArtifact } from '../orcad/orcad-artifact-materializer'
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../ssh/orcad-installed-activation'
-import { orcadBoundPort } from '../ssh/orcad-managed-bound-port'
+import { orcadBoundPort } from '../managed-server/lifecycle/orcad-managed-bound-port'
 import {
   isForceableOrcadDeferral,
   managedOrcadDeployPolicy,
   managedOrcadInstallDir,
   managedOrcadSlot,
   probeManagedOrcadReadiness
-} from '../ssh/orcad-managed-runtime-context'
-import { isWaitingOrcadUpdateDeferral } from '../ssh/orcad-managed-auto-update'
-import { pruneManagedOrcadVersions } from '../ssh/orcad-managed-version-gc'
+} from '../managed-server/lifecycle/orcad-managed-runtime-context'
+import { isWaitingOrcadUpdateDeferral } from '../managed-server/lifecycle/orcad-managed-auto-update'
+import { pruneManagedOrcadVersions } from '../managed-server/lifecycle/orcad-managed-version-gc'
 import { wakeAlreadyActiveOrcad } from '../ssh/orcad-already-active-wake'
-import { resolveOrcadRemoteContext } from '../ssh/orcad-remote-context'
+import { resolveOrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
 import { deployOrcad } from '../ssh/orcad-remote-deploy'
-import { ORCAD_PID_FILENAME } from '../ssh/orcad-remote-launch'
-import { shellEscape } from '../ssh/ssh-connection-utils'
-import { execCommand } from '../ssh/ssh-relay-exec-command'
+import { ORCAD_PID_FILENAME } from '../managed-server/install/orcad-remote-host-support'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { execCommand } from '../ssh/remote-exec/remote-exec-command'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
-import { readLocalFullVersion } from '../ssh/remote-versioned-install'
+import { readLocalFullVersion } from '../managed-server/install/remote-versioned-install'
 import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import { readWslDistroRegistryIdShared } from './wsl-distro-registry-id'
@@ -221,7 +221,7 @@ async function launchOverTransport(
       ORCAD_PID_FILENAME
     )
     const pid = Number.parseInt(
-      await execCommand(conn, `cat ${shellEscape(pidFile)} 2>/dev/null || true`, { signal }),
+      await execCommand(conn, `cat ${quotePosixShell(pidFile)} 2>/dev/null || true`, { signal }),
       10
     )
     return {

@@ -112,6 +112,16 @@ export async function refreshHostAgentBaseEnvironmentAfterMiss(askedAt: number):
   ).catch(() => {})
 }
 
+/** Captures this host's shell env again now, so an explicit Refresh never reads a profile kept from
+ *  before it (Windows keeps a loaded one for good). */
+export async function recaptureHostShellEnvironment(): Promise<void> {
+  const startedAfter = Date.now()
+  await Promise.all([
+    resolveLoginShellEnvironment({ startedAfter }),
+    readPersistedWindowsPathSegmentsAsync({ forceRefresh: true, startedAfter })
+  ]).catch(() => {})
+}
+
 /** The base env every local agent launch on this host starts from, read from current settings. */
 export async function resolveHostAgentBaseEnvironment(
   settings: Pick<

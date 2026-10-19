@@ -143,7 +143,6 @@ async function attach(input: {
       probe: { outcome: 'reservation-unused' }
     },
     callerKey: 'client-1',
-    optionRevision: () => 0,
     params: input.params,
     now: () => NOW,
     onAttached: async (attached) => {

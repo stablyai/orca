@@ -8,9 +8,7 @@
 //
 // Owed work is derived on every tick, never stored, so there is nothing to disagree with it.
 
-import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
@@ -31,8 +29,8 @@ export type StructuredAgentSessionIdleSweepDeps = {
   now: () => number
   isDisposed: () => boolean
   deliveryActive: (sessionId: string) => boolean
-  /** The session's child records, the host's one read of them. */
-  childWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
+  /** Child work the provider reported running and not over, recorded or not. */
+  childWorkOpen: (sessionId: string) => boolean
   /** An orchestration dispatch that still owns this session's worker; derived from its database. */
   hasOpenDispatch: (sessionId: string) => boolean
   /** The provider holds a send it took and has not answered; see `holdsDispatch`. */
@@ -56,7 +54,8 @@ export type StructuredAgentSessionChildWorkReads = {
     StructuredAgentSessionCurrentWork,
     'activeTurnId' | 'hasActionablePrompt'
   > | null
-  childWork: () => readonly AgentChildWorkView[] | undefined
+  /** The provider's own account, never the bounded store, which may have refused a record. */
+  childWorkOpen: () => boolean
   hasOpenDispatch: () => boolean
   providerHoldsDispatch: () => boolean
 }
@@ -71,7 +70,7 @@ export function structuredAgentSessionChildHasOpenWork(
   const work = reads.currentWork()
   return (
     (work !== null && work.activeTurnId() !== null) ||
-    agentChildWorkLiveness(reads.childWork()) !== null ||
+    reads.childWorkOpen() ||
     reads.hasOpenDispatch() ||
     reads.providerHoldsDispatch() ||
     (work !== null && work.hasActionablePrompt())
@@ -173,7 +172,7 @@ export class StructuredAgentSessionIdleSweep {
             session.journal,
             session
           ),
-        childWork: () => this.deps.childWork(sessionId),
+        childWorkOpen: () => this.deps.childWorkOpen(sessionId),
         hasOpenDispatch: () => this.deps.hasOpenDispatch(sessionId),
         providerHoldsDispatch: () => this.deps.providerHoldsDispatch(sessionId)
       })

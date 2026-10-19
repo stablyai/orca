@@ -1,7 +1,15 @@
 import { translate } from '@/i18n/i18n'
 import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
 
-export type NativeChatResolvedPathOptions = {
+export type NativeChatAttachmentFocusOptions = { focus?: boolean }
+
+export type NativeChatResolvedPathOperation = {
+  apply: (insertReferences: ((paths: string[]) => void) | null) => boolean
+  cancel: () => void
+}
+
+export type NativeChatResolvedPathOptions = NativeChatAttachmentFocusOptions & {
+  operation?: NativeChatResolvedPathOperation
   /** Revalidates the destination without granting workspace-file provenance. */
   destinationIsCurrent?: () => boolean
   /** Revalidates internal path ownership when an IME-delayed attachment is applied. */
@@ -21,5 +29,9 @@ export function nativeChatAttachmentOwnerUnchanged(
   captured: NativeChatAttachmentOwner,
   current: NativeChatAttachmentOwner
 ): boolean {
+  if (captured.kind === 'remote' && current.kind === 'remote') {
+    // Why: an image saved on one server is unreadable on another.
+    return captured.clipboardImageEnvironmentId === current.clipboardImageEnvironmentId
+  }
   return captured.kind === current.kind && captured.kind !== 'not-ready'
 }

@@ -11,8 +11,7 @@ import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
   fakeClaude,
-  PROVIDER_SESSION_ID,
-  claudeStartupSettled
+  PROVIDER_SESSION_ID
 } from '../../claude/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -104,6 +103,7 @@ beforeEach(async () => {
     mintSpawnToken: () => 'spawn-a',
     modelCatalog: {
       read: async () => ({ origin: 'unknown' }),
+      retainedLiveModelIds: vi.fn(async () => []),
       recordLiveListing: (sessionId, listing) => savedListings.push({ sessionId, listing }),
       prewarm: async () => {},
       stop: () => {},
@@ -135,17 +135,19 @@ function lastPhase(): string | undefined {
 }
 
 describe('a publish-first Claude create whose init is slow', () => {
-  it('never persists the catalog default, and persists the reported model once started', async () => {
+  it('keeps provider defaults out of saved picks after starting', async () => {
     await expect(host.attach(CALLER, claudeParams())).resolves.toMatchObject({ ok: true })
 
     // Published, not yet answering: the record holds no model rather than a guessed one.
     expect(store.getRecord(SESSION)?.options?.model).toBeUndefined()
     expect(lastPhase()).toBe('starting')
 
-    await claudeStartupSettled(adapter, SESSION)
+    await vi.waitFor(() =>
+      expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready')
+    )
     await Promise.all(lifecycle)
 
-    expect(store.getRecord(SESSION)?.options?.model).toBe('claude-opus-9')
+    expect(store.getRecord(SESSION)?.options?.model).toBeUndefined()
     expect(lastPhase()).toBe('ready')
   })
 
@@ -156,7 +158,9 @@ describe('a publish-first Claude create whose init is slow', () => {
     ).resolves.toMatchObject({ ok: true })
     expect(store.getRecord(SESSION)?.options?.model).toBe('opus')
 
-    await claudeStartupSettled(adapter, SESSION)
+    await vi.waitFor(() =>
+      expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready')
+    )
     await Promise.all(lifecycle)
 
     expect(store.getRecord(SESSION)?.options?.model).toBe('opus')
@@ -166,7 +170,9 @@ describe('a publish-first Claude create whose init is slow', () => {
   it('keeps the picked model across a resume whose new child starts on its own default', async () => {
     const params = claudeParams()
     await host.attach(CALLER, { ...params, options: { model: 'opus' } })
-    await claudeStartupSettled(adapter, SESSION)
+    await vi.waitFor(() =>
+      expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready')
+    )
     await Promise.all(lifecycle)
     await host.close(SESSION, 'evict')
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
@@ -180,7 +186,9 @@ describe('a publish-first Claude create whose init is slow', () => {
     expect(store.getRecord(SESSION)?.options?.model).toBe('opus')
     expect(lastPhase()).toBe('starting')
 
-    await claudeStartupSettled(adapter, SESSION)
+    await vi.waitFor(() =>
+      expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready')
+    )
     await Promise.all(lifecycle)
 
     expect(store.getRecord(SESSION)?.options?.model).toBe('opus')
@@ -190,7 +198,9 @@ describe('a publish-first Claude create whose init is slow', () => {
     await host.attach(CALLER, claudeParams())
     expect(savedListings).toEqual([])
 
-    await claudeStartupSettled(adapter, SESSION)
+    await vi.waitFor(() =>
+      expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready')
+    )
     await Promise.all(lifecycle)
 
     // `started` hands over the listing; the settings readback after it, what the config resolved.
@@ -219,17 +229,21 @@ describe('a publish-first Claude create whose init is slow', () => {
       sessionId: SESSION,
       listing: expect.objectContaining({ models: LISTED })
     })
-    await claudeStartupSettled(adapter, SESSION)
+    await vi.waitFor(() =>
+      expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready')
+    )
     await Promise.all(lifecycle)
-    expect(store.getRecord(SESSION)?.options?.model).toBe('claude-opus-9')
+    expect(store.getRecord(SESSION)?.options?.model).toBeUndefined()
     expect(savedListings.at(-1)).toEqual({
       sessionId: SESSION,
       listing: expect.objectContaining({
         configuredDefault: expect.objectContaining({ modelId: 'claude-opus-9' })
       })
     })
-    // A later options read lists the models and says nothing more about the default.
+    // A later read refreshes the listing without re-learning the configured default.
+    const saved = savedListings.length
     await host.readOptions(SESSION)
+    expect(savedListings).toHaveLength(saved + 1)
     expect(savedListings.at(-1)?.listing).not.toHaveProperty('configuredDefault')
   })
 
@@ -241,7 +255,9 @@ describe('a publish-first Claude create whose init is slow', () => {
       return proveOwner(input)
     }
     await expect(host.attach(CALLER, claudeParams())).resolves.toMatchObject({ ok: true })
-    await claudeStartupSettled(adapter, SESSION)
+    await vi.waitFor(() =>
+      expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready')
+    )
     await Promise.all(lifecycle)
 
     await vi.waitFor(() =>

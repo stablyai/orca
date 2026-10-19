@@ -260,8 +260,17 @@ async function answerRecordedOperation<TValue>(
 }
 
 /** The recorded answer from the journal, or `rerun` when the plan says nothing durable landed. */
-function replayRecordedOperation<TValue>(
-  { plan, envelope }: AgentSessionMutationRequest<TValue>,
+export function replayRecordedOperation<TValue>(
+  {
+    plan,
+    envelope
+  }: {
+    plan: Pick<
+      MutationPlan<TValue>,
+      'replay' | 'rerunWhenReplayMissing' | 'recoverUnknownFromDurableState'
+    >
+    envelope: AgentSessionMutationEnvelope
+  },
   context: AgentSessionTurnContext,
   row: AgentSessionOperationRow
 ): AgentSessionMutationResult<TValue> | 'rerun' {

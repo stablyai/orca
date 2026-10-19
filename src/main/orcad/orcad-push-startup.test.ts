@@ -56,6 +56,13 @@ vi.mock('./orcad-app-paths', () => ({
   resolveOrcadPath: () => state.root,
   resolveUserDataPath: () => state.root
 }))
+// The fake store has no account settings; orcad-account-services.test.ts covers the real services.
+// Migration targets the real ~/.orca, which these fixtures do not redirect.
+vi.mock('./orcad-plaintext-credential-migration', () => ({
+  orcadCredentialRoot: () => state.root,
+  migratePlaintextCredentials: () => ({ sealed: 0, failed: 0 })
+}))
+vi.mock('./orcad-account-services', () => ({ createOrcadAccountServices: () => null }))
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: state.browserProvider }))
 vi.mock('./orcad-instance-lock', () => ({
   acquireOrcadInstanceLock: () => ({
@@ -123,6 +130,11 @@ vi.mock('../server/serve-readiness', () => ({
 }))
 vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {
+    readonly sidebarFacts = null
+    readonly agentTransitions = { seedRestoredRows() {} }
+    attachAgentStatusStore() {
+      return () => {}
+    }
     getRuntimeId() {
       return 'headless-runtime'
     }
@@ -181,10 +193,13 @@ vi.mock('../runtime/push/push-gateway-client', () => ({
 }))
 
 beforeEach(() => {
+  // startOrcad canonicalizes this; stubbing restores the prior value after each test.
+  vi.stubEnv('ORCA_USER_DATA_PATH', '')
   state.onSettingsChanged.mockReturnValue(state.removeSettingsListener)
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   rmSync(state.root, { recursive: true, force: true })
   state.profileStartupErrors.length = 0
   profile.settings = {}

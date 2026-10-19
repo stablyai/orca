@@ -304,7 +304,7 @@ describe("a new chat's effort pill before its agent starts", () => {
   it('keeps a saved effort over the default model’s', async () => {
     const { atRest, settled } = await newChatFrames('grok', { saved: { effort: 'high' } })
 
-    expect(atRest.current).toEqual({ model: 'grok-4', effort: 'high' })
+    expect(atRest.current).toEqual({ model: 'grok-4', effort: 'high', ...modeOf('grok') })
     expect(settled.effort?.value).toBe('high')
   })
 

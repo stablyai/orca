@@ -21,6 +21,7 @@ import {
 import { writeAgentJournalTurnRow } from '../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
+import type { ClaudeStartedSend } from './claude-structured-session-state'
 
 export type ClaudeOpenTurnDeps = {
   sink: StructuredAgentSessionEventSink
@@ -43,6 +44,8 @@ export class ClaudeOpenTurn {
    *  cycle's init (a background task finishing), so membership is read from the
    *  cycle's work, not from when the turn opened. */
   private cycleWorkObserved = false
+  /** The frame being journaled says which send the CLI is running, if any. */
+  private startedSend: ClaudeStartedSend | null = null
   private readonly opener: (
     frame: Record<string, unknown>,
     source: ClaudeTurnSource | null,
@@ -53,7 +56,13 @@ export class ClaudeOpenTurn {
     this.opener = createClaudeTurnOpener({
       isTurnOpen: () => this.isOpen,
       isSuppressed: () => this.reopenSuppressed,
-      open: (turn, observedAt) => this.open(turn, observedAt)
+      startedSend: () => this.startedSend,
+      open: (turn, observedAt) => {
+        if (this.startedSend) {
+          this.allowReopen()
+        }
+        this.open(turn, observedAt)
+      }
     })
   }
 
@@ -80,6 +89,11 @@ export class ClaudeOpenTurn {
       : AGENT_JOURNAL_THREAD_SCOPE
   }
 
+  /** When the open turn started, or null when none is open. */
+  get startedAt(): number | null {
+    return this.current?.startedAt ?? null
+  }
+
   get isOpen(): boolean {
     return this.current !== null
   }
@@ -89,6 +103,11 @@ export class ClaudeOpenTurn {
    *  cycle's first send is its opener, never a fold. */
   get openedInLiveProviderCycle(): boolean {
     return this.current !== null && this.cycleWorkObserved
+  }
+
+  /** Set per provider frame, so it never outlives the frame that carried it. */
+  observeStartedSend(send: ClaudeStartedSend | null): void {
+    this.startedSend = send
   }
 
   /** A root init frame: the CLI is starting a new request cycle. */

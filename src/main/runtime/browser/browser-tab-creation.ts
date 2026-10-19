@@ -15,7 +15,7 @@ import {
 import { browserNetworkExecutionHostKey } from '../../browser/browser-network-execution-route'
 import { waitForTabRegistration } from '../../ipc/browser-tab-registration-wait'
 import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../shared/browser-client-automation-protocol'
-import { BROWSER_HOST_WEBVIEW_CAPABILITY } from '../browser-host-capability-selection'
+import { BROWSER_HOST_WEBVIEW_CAPABILITY } from '../browser-host/browser-host-capability-selection'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 

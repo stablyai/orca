@@ -19,7 +19,7 @@ import type {
   PrepareCodexSessionResume
 } from '../ipc/pty/host-env/types'
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
-import { registerSshHandlers } from '../ipc/ssh'
+import { registerSshHandlers } from '../ipc/ssh/ssh'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
 import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'

@@ -54,6 +54,7 @@ export async function findOmpSessionByCwd(input: {
   cwd: string
   homeDir: string
   env: NodeJS.ProcessEnv
+  strictErrors?: boolean
 }): Promise<string | null> {
   const sessionId = input.sessionId.trim()
   if (!sessionId || !isAbsolute(input.cwd)) {
@@ -80,7 +81,17 @@ export async function findOmpSessionByCwd(input: {
           return file
         }
       }
-    } catch {
+    } catch (error) {
+      if (
+        input.strictErrors &&
+        !(
+          error instanceof Error &&
+          'code' in error &&
+          (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+        )
+      ) {
+        throw error
+      }
       // A stale or unreadable bucket must not replace a missing history with a blank chat.
     }
   }

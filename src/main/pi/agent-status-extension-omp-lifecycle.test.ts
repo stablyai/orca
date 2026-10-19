@@ -19,6 +19,34 @@ const OMP_RUNTIME_CASES = [
 ] as const
 
 describe('OMP agent_end contract', () => {
+  it.each(OMP_RUNTIME_CASES)(
+    'publishes %s startup identity before its first turn',
+    async (_name, args) => {
+      const harness = createAgentStatusExtensionHarness(args)
+      await harness.callHook(
+        'session_start',
+        {},
+        {
+          ...ompSession('resumed-session'),
+          isIdle: () => true,
+          hasPendingMessages: () => false,
+          getAsyncJobSnapshot: () => ({ running: [] }),
+          model: { provider: 'test-provider', id: 'test-model' }
+        }
+      )
+      await vi.waitFor(() => {
+        const startup = normalizedOmpPosts(harness).at(-1)
+        expect(startup).toMatchObject({
+          providerSession: {
+            id: 'resumed-session',
+            transcriptPath: '/sessions/resumed-session.jsonl'
+          },
+          payload: { state: 'done', sessionBoundary: true, model: 'test-provider/test-model' }
+        })
+      })
+    }
+  )
+
   it('keeps a Pi pane working until async subagents finish', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
 

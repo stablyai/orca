@@ -20,7 +20,6 @@ const LOCAL_RUNTIME = { kind: 'local' } as const
 export default function ArtifactsPage(): React.JSX.Element {
   const closePage = useAppStore((state) => state.closeArtifactsPage)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
   const refreshAuth = useAppStore((state) => state.refreshCurrentOrcaProfileAuth)
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
@@ -193,7 +192,6 @@ export default function ArtifactsPage(): React.JSX.Element {
         <ArtifactsPageAuthState
           needsReconnect={needsReconnect}
           configured={authStatus?.configured === true}
-          onConnect={() => void connect()}
           onOpenAccountSettings={openAccountSettings}
         />
       ) : loading && artifacts.length === 0 ? (

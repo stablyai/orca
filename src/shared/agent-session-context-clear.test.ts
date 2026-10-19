@@ -13,7 +13,7 @@ import {
 } from './agent-session-context-clear'
 import {
   currentAgentSessionThreadGoal,
-  currentAgentSessionThreadGoalBySequence
+  currentAgentSessionThreadGoalSourceBySequence
 } from './agent-session-thread-goal'
 import {
   activeStructuredAgentSessionTurnId,
@@ -140,15 +140,15 @@ describe('completed context clear projections', () => {
 
   it('resets the current goal in sorted snapshots and unordered host maps', () => {
     expect(currentAgentSessionThreadGoal([goalRow, clear])).toBeNull()
-    expect(currentAgentSessionThreadGoalBySequence([clear, goalRow])).toBeNull()
+    expect(currentAgentSessionThreadGoalSourceBySequence([clear, goalRow])?.goal).toBeNull()
     const newGoal = row(6, {
       kind: 'status',
       text: 'Goal set',
       threadGoal: { state: 'set', goal: { ...goal, objective: 'New goal' } }
     })
-    expect(currentAgentSessionThreadGoalBySequence([newGoal, goalRow, clear])?.objective).toBe(
-      'New goal'
-    )
+    expect(
+      currentAgentSessionThreadGoalSourceBySequence([newGoal, goalRow, clear])?.goal?.objective
+    ).toBe('New goal')
     expect(currentAgentSessionThreadGoal([goalRow], clear.sequence)).toBeUndefined()
   })
 

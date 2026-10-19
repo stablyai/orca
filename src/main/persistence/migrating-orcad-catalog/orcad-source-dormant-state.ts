@@ -2,8 +2,8 @@ import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationDormantStatePayload,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
-import type { OrcadMigrationDependencyKind } from '../../../shared/orcad-migration-preflight'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationDependencyKind } from '../../../shared/orcad-migration/orcad-migration-preflight'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { TerminalScrollbackSnapshotStorage } from '../../terminal-scrollback-snapshots'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
@@ -43,6 +43,15 @@ export type OrcadMigrationSourceDormantInspection = {
   blockedCounts: Record<TransferredDormantKind, number>
   /** What blocks the saved tabs and panes, each with the way to clear it. */
   blockedSessionItems: string[]
+  /** What a confirmed "Move anyway" leaves in this desktop's retained profile. */
+  leftBehindItems: string[]
+}
+
+/** The user confirmed "Move anyway" for this host: what can't move stays on this desktop. */
+export function orcadMigrationLeavesBehind(state: PersistedState, targetId: string): boolean {
+  return state.sshTargets.some(
+    (target) => target.id === targetId && target.managedServerLeaveBehind !== undefined
+  )
 }
 
 export function collectOrcadMigrationSourceDormantState(
@@ -156,11 +165,13 @@ export function collectOrcadMigrationSourceDormantState(
         : []
     })
     .sort((left, right) => compareKeys(left.repoId, right.repoId))
+  const leaveBehind = orcadMigrationLeavesBehind(state, scope.targetId)
   const workspaceSession = collectOrcadMigrationSourceWorkspaceSession(
     state,
     source,
     catalog,
-    storage
+    storage,
+    leaveBehind
   )
   const blockedSessionItems = [...workspaceSession.blockedItems]
   const automationState = collectOrcadMigrationSourceAutomationState(state, source, catalog)
@@ -174,10 +185,29 @@ export function collectOrcadMigrationSourceDormantState(
     workspaceSession.payload
   )
   blockedCounts['saved-port-forward'] = clientState.blockedCounts['saved-port-forward']
-  blockedSessionItems.push(
-    ...Array.from({ length: clientState.blockedCount }, () => 'a browser page close saved twice')
+  const leftBehindItems = [...workspaceSession.leftBehindItems]
+  const duplicateCloses = Array.from(
+    { length: clientState.blockedCount },
+    () => 'a browser page close saved twice'
   )
+  // "Move anyway": duplicate closes are already out of the payload. What the session still refuses
+  // is what can't be left behind (an unsaved draft), so it keeps blocking.
+  ;(leaveBehind ? leftBehindItems : blockedSessionItems).push(...duplicateCloses)
   blockedCounts['workspace-session'] = blockedSessionItems.length
+  if (leaveBehind) {
+    // Every row these counts name is already out of the payload. Saved port forwards never block,
+    // and the server itself refuses duplicate ports.
+    for (const kind of ORCAD_MIGRATION_TRANSFERRED_DORMANT_KINDS) {
+      if (
+        kind !== 'workspace-session' &&
+        kind !== 'saved-port-forward' &&
+        blockedCounts[kind] > 0
+      ) {
+        leftBehindItems.push(`${blockedCounts[kind]} saved ${kind} record(s)`)
+        blockedCounts[kind] = 0
+      }
+    }
+  }
   return {
     payload: {
       version: 1,
@@ -206,7 +236,8 @@ export function collectOrcadMigrationSourceDormantState(
       ...(clientState.payload ? { clientState: clientState.payload } : {})
     },
     blockedCounts,
-    blockedSessionItems
+    blockedSessionItems,
+    leftBehindItems
   }
 }
 

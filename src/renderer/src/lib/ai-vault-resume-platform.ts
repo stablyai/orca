@@ -9,18 +9,6 @@ import { parseWslUncPath } from '../../../shared/wsl-paths'
 // Which platform's grammar an Agent Session History resume is written in: the target
 // workspace's host, or Linux when the agent runs over SSH, a paired runtime, or WSL.
 
-export function getAiVaultResumeCodexHome(
-  codexHome: string | null,
-  platform: NodeJS.Platform
-): string | null {
-  // Why: WSL UNC Codex homes must be POSIX when invoking Linux commands.
-  // Keep original paths unchanged for non-Linux targets.
-  if (!codexHome || platform !== 'linux') {
-    return codexHome
-  }
-  return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
-}
-
 export function getAiVaultResumePlatform(
   state: Pick<
     AppState,

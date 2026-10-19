@@ -88,6 +88,24 @@ describe('startRuntimeLocalWorktreeTerminals reserved startup pane', () => {
 })
 
 describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
+  it.each([{}, { activate: true }, { runHooks: true }])(
+    'preserves an explicit promised chat during setup (%j)',
+    async (activation) => {
+      const { ports } = createPorts()
+      await startRuntimeLocalWorktreeTerminals({
+        request: { repoSelector: repo.id, name: 'chat', ...activation },
+        repo,
+        worktree,
+        setup: { runnerScriptPath: '/repo/setup.sh', envVars: {} },
+        promisedAgentChat: true,
+        ports
+      })
+      expect(ports.provision).toHaveBeenCalledWith(
+        expect.objectContaining({ callerProvidesSurface: true })
+      )
+    }
+  )
+
   it.each([false, true])(
     'passes the submitted setup-only choice to the host (%s)',
     async (setupOnly) => {

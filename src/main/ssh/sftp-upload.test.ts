@@ -1,11 +1,19 @@
 import { spawnSync } from 'node:child_process'
+import { EventEmitter } from 'node:events'
 import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Writable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import type { SFTPWrapper } from 'ssh2'
-import { removeDirectorySftp, uploadBuffer, uploadDirectory, uploadFile } from './sftp-upload'
+import type { SFTPWrapper, WriteStreamOptions } from 'ssh2'
+import { SFTP } from 'ssh2/lib/protocol/SFTP.js'
+import {
+  removeDirectorySftp,
+  SFTP_UPLOAD_IN_FLIGHT_BYTES,
+  uploadBuffer,
+  uploadDirectory,
+  uploadFile
+} from './sftp-upload'
 
 function createWritable(): Writable {
   return new Writable({
@@ -57,7 +65,8 @@ describe('sftp-upload', () => {
 
     expect(sftp.mkdir).toHaveBeenCalledWith('/remote/assets/nested', expect.any(Function))
     expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/nested/asset.txt', {
-      flags: 'wx'
+      flags: 'wx',
+      highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
     })
     const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
     expect(writeStream.listenerCount('close')).toBe(0)
@@ -78,7 +87,8 @@ describe('sftp-upload', () => {
 
     expect(sftp.mkdir).toHaveBeenCalledWith('/remote/assets/..fixtures', expect.any(Function))
     expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/..fixtures/asset.txt', {
-      flags: 'wx'
+      flags: 'wx',
+      highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
     })
   })
 
@@ -93,7 +103,8 @@ describe('sftp-upload', () => {
     await uploadDirectory(sftp, aliasDir, '/remote/assets')
 
     expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/asset.txt', {
-      flags: 'w'
+      flags: 'w',
+      highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
     })
     await rm(aliasDir, { force: true })
     await rm(realDir, { recursive: true, force: true })
@@ -114,7 +125,8 @@ describe('sftp-upload', () => {
         await uploadDirectory(sftp, localDir, '/remote/assets', localDir)
 
         expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/asset.txt', {
-          flags: 'w'
+          flags: 'w',
+          highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
         })
       } finally {
         await rm(linkedParent, { force: true })
@@ -279,5 +291,71 @@ describe('sftp-upload', () => {
     expect(sftp.rmdir).toHaveBeenNthCalledWith(1, '/remote/assets/nested', expect.any(Function))
     expect(sftp.unlink).toHaveBeenNthCalledWith(2, '/remote/assets/logo.png', expect.any(Function))
     expect(sftp.rmdir).toHaveBeenNthCalledWith(2, '/remote/assets', expect.any(Function))
+  })
+})
+
+describe('uploadFile over a high-latency link', () => {
+  // ssh2's own WriteStream over a fake session whose every request takes one "round trip".
+  function slowSftp(roundTripMs: number): {
+    sftp: SFTPWrapper
+    written: Map<number, Buffer>
+    maxInFlight: () => number
+  } {
+    let inFlight = 0
+    let peak = 0
+    const written = new Map<number, Buffer>()
+    const later = (cb: () => void): void => {
+      setTimeout(cb, roundTripMs)
+    }
+    const session = Object.assign(new EventEmitter(), {
+      server: false,
+      open: (_path: string, _flags: string, _mode: number, cb: (e: null, h: Buffer) => void) =>
+        later(() => cb(null, Buffer.from('h'))),
+      fchmod: (_h: Buffer, _mode: number, cb: (e: null) => void) => later(() => cb(null)),
+      write: (
+        _h: Buffer,
+        buf: Buffer,
+        off: number,
+        len: number,
+        pos: number,
+        cb: (e: null, n: number) => void
+      ) => {
+        inFlight += 1
+        peak = Math.max(peak, inFlight)
+        written.set(pos, Buffer.from(buf.subarray(off, off + len)))
+        later(() => {
+          inFlight -= 1
+          cb(null, len)
+        })
+      },
+      close: (_h: Buffer, cb: (e: null) => void) => later(() => cb(null))
+    })
+    const sftp = Object.assign(session, {
+      createWriteStream: (path: string, options: WriteStreamOptions) =>
+        SFTP.prototype.createWriteStream.call(session, path, options)
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: uploadFile only calls createWriteStream, which drives open/fchmod/write/close above.
+    return { sftp: sftp as unknown as SFTPWrapper, written, maxInFlight: () => peak }
+  }
+
+  it('keeps many writes in flight instead of one chunk per round trip', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
+    const contents = Buffer.alloc(4 * 1024 * 1024)
+    for (let i = 0; i < contents.length; i += 4096) {
+      contents[i] = i % 251
+    }
+    await writeFile(join(dir, 'node.tar.gz'), contents)
+    const { sftp, written, maxInFlight } = slowSftp(20)
+    try {
+      await uploadFile(sftp, join(dir, 'node.tar.gz'), '/remote/node.tar.gz')
+      // One 64 KiB read chunk per round trip would keep a single write in flight.
+      expect(maxInFlight()).toBeGreaterThanOrEqual(8)
+      const reassembled = Buffer.concat(
+        [...written.entries()].sort(([a], [b]) => a - b).map(([, chunk]) => chunk)
+      )
+      expect(reassembled.equals(contents)).toBe(true)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

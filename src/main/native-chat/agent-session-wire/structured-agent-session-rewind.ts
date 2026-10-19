@@ -1,10 +1,4 @@
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type {
   AgentSessionRewindParams,
@@ -12,21 +6,22 @@ import type {
   AgentSessionRewindResult
 } from '../../../shared/agent-session-rewind'
 import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
-import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
-import { openWithAgent } from './structured-agent-session-send-preparation'
+import {
+  runWithReadyStructuredAgentSessionOperation,
+  openWithReadyStructuredAgentSessionChild,
+  type ReadyOperationSelection
+} from './structured-agent-session-ready-operation'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
-import { rewindRefusal } from './structured-rewind-refusal'
-import { renameRewindTurnOpener } from './structured-rewind-journal-body'
+import { completedStructuredRewind } from './structured-rewind-replay'
+import { rewindRefusal, rewindRefusalBehindClear } from './structured-rewind-refusal'
+import { providerItemIdOf, structuredRewindCut } from './structured-rewind-cut'
 import { persistRewindRecord, recoverStructuredRewind } from './structured-rewind-recovery'
-import {
-  mergeRetainedHostLifecycleRows,
-  rewindProviderRows
-} from './structured-rewind-retained-host-rows'
+import { rewindInDoubt } from './structured-agent-session-send-preparation'
 
 export async function rewindStructuredAgentSession(
   context: StructuredAgentSessionMutationContext,
@@ -35,8 +30,14 @@ export async function rewindStructuredAgentSession(
   params: AgentSessionRewindParams
 ): Promise<AgentSessionMutationResult<AgentSessionRewindResult>> {
   const { sessionId, clientOperationId } = params.envelope
-  const store = context.deps.store
-  return context.serialize(sessionId, async () => {
+  const {
+    readChildWork,
+    childWorkOpen,
+    deps: { store }
+  } = context
+  const fields = { itemId: params.itemId, expectedEpoch: params.expectedEpoch }
+  const operation = { method: 'agentSession.rewind', fields }
+  const run = async (selection: ReadyOperationSelection) => {
     let completionReceipt: JournalOperationReceipt | undefined
     const result = await admitAndRunAgentSessionMutation<AgentSessionRewindResult>({
       store,
@@ -46,28 +47,14 @@ export async function rewindStructuredAgentSession(
       callerKey: caller.callerKey,
       envelope: params.envelope,
       // Only the provider can do this, so an agent at rest is started first.
-      prepareSession: openWithAgent(context, params.envelope, () => {
-        const journal = context.sessions.get(sessionId)?.journal
-        const floor = journal?.context.floor()
-        if (!journal || !floor) {
-          return { ok: true }
-        }
-        if (journal.cursor().epoch !== params.expectedEpoch) {
-          return rewindRefusal('stale-epoch')
-        }
-        const target = journal.snapshot().items.find((item) => item.itemId === params.itemId)
-        return !target || target.sequence <= floor.sequence
-          ? rewindRefusal('invalid-target')
-          : { ok: true }
-      }),
+      prepareSession: openWithReadyStructuredAgentSessionChild(context, params.envelope, selection),
       journal: () => context.sessions.get(sessionId)?.journal,
       currentWork: () =>
         hostStructuredAgentSessionCurrentWork({ store, sessions: context.sessions }, sessionId),
       publish: (journal) => context.publish(sessionId, journal),
       now: context.now,
       plan: {
-        method: 'agentSession.rewind',
-        fields: { itemId: params.itemId, expectedEpoch: params.expectedEpoch },
+        ...operation,
         recoverUnknownFromDurableState: true,
         settledOutcome: (rewind: AgentSessionRewindResult) => ({
           status: 'succeeded' as const,
@@ -83,17 +70,11 @@ export async function rewindStructuredAgentSession(
           if (outcome.status === 'succeeded' && outcome.rewind) {
             return outcome.rewind
           }
-          const prior = store.getRecord(sessionId)?.rewind
-          return prior?.operationId === clientOperationId &&
-            prior.callerKey === caller.callerKey &&
-            prior.phase === 'completed' &&
-            prior.epoch
-            ? {
-                itemId: prior.itemId,
-                epoch: prior.epoch,
-                ...(prior.sequence !== undefined ? { sequence: prior.sequence } : {})
-              }
-            : null
+          return completedStructuredRewind(
+            store.getRecord(sessionId)?.rewind,
+            caller.callerKey,
+            clientOperationId
+          )
         },
         run: async (ctx) => {
           await attachContext.runtimeState.flushEventSink(sessionId)
@@ -102,96 +83,34 @@ export async function rewindStructuredAgentSession(
           if (!support?.supported) {
             return rewindRefusal(support?.reason ?? 'unsupported')
           }
-          if (
-            record.rewind?.phase === 'prepared' ||
-            record.rewind?.phase === 'provider-succeeded'
-          ) {
+          if (rewindInDoubt(record)) {
             return rewindRefusal('outcome-unknown')
           }
-          if (conversationCommandBlocked(ctx, record, context.readChildWork(sessionId))) {
+          const childWork = { views: readChildWork(sessionId), open: childWorkOpen(sessionId) }
+          if (conversationCommandBlocked(ctx, record, childWork, 'handover')) {
             return rewindRefusal('busy')
           }
-          const snapshot = ctx.journal.snapshot()
-          const contextFloor = ctx.journal.context.floor()
-          const contextStart = contextFloor
-            ? snapshot.items.findIndex((item) => item.sequence > contextFloor.sequence)
-            : 0
-          const providerKeys = new Map(
-            snapshot.submissions.flatMap((submission) =>
-              submission.dispatchState === 'accepted' && submission.providerItemId
-                ? [
-                    [
-                      agentJournalSubmissionKey(submission.clientMessageId),
-                      submission.providerItemId
-                    ] as const
-                  ]
-                : []
-            )
-          )
-          const providerKey = (itemId: string) => providerKeys.get(itemId) ?? itemId
           if (ctx.journal.cursor().epoch !== params.expectedEpoch) {
             return rewindRefusal('stale-epoch')
           }
-          const selected = snapshot.items.findIndex((item) => item.itemId === params.itemId)
-          const key =
-            selected === -1 ||
-            (contextFloor && snapshot.items[selected].sequence <= contextFloor.sequence)
-              ? null
-              : parseAgentJournalItemKey(providerKey(params.itemId))
           // The head belongs to the record's provider: the record store refuses any other.
           const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
-          if (!key || !head || key.provider !== record.provider) {
+          const cut = head
+            ? structuredRewindCut(ctx.journal, {
+                itemId: params.itemId,
+                provider: record.provider,
+                nativeId: head.nativeId
+              })
+            : null
+          if (!cut) {
             return rewindRefusal('invalid-target')
           }
-          let boundary = selected
-          if (key.provider === 'codex') {
-            if (key.threadId !== head.nativeId) {
-              return rewindRefusal('invalid-target')
-            }
-            boundary = snapshot.items.findIndex((item) => {
-              if (contextFloor && item.sequence <= contextFloor.sequence) {
-                return false
-              }
-              const identity = parseAgentJournalItemKey(providerKey(item.itemId))
-              return (
-                (identity?.provider === 'codex' &&
-                  identity.threadId === key.threadId &&
-                  identity.turnId === key.turnId) ||
-                readAgentJournalTurn(item.body)?.turnId === key.turnId
-              )
-            })
-          } else {
-            return rewindRefusal('invalid-target')
-          }
-          const retained = snapshot.items
-            .slice(Math.max(0, contextStart), boundary)
-            .map(({ itemId, observedAt, turnScope, ...linkage }) => {
-              const body = ctx.journal.itemBody(itemId)
-              if (!body) {
-                throw new Error('agent_session_rewind:missing-retained-item')
-              }
-              const ownerFence = ctx.journal.itemFence(itemId)
-              return {
-                itemId: providerKey(itemId),
-                body: renameRewindTurnOpener(body, providerKey),
-                observedAt,
-                ...(turnScope ? { turnScope } : {}),
-                ...(ownerFence === undefined ? {} : { ownerFence }),
-                ...agentJournalLinkageFields(linkage)
-              }
-            })
-          if (
-            retained.length > 10_000 ||
-            Buffer.byteLength(JSON.stringify(retained), 'utf8') >
-              AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
-          ) {
-            return rewindRefusal('history-limit')
-          }
-          let prepared: AgentSessionRewindRecord = {
+          const contextFloor = ctx.journal.context.floor()
+          const prepared: AgentSessionRewindRecord = {
             operationId: clientOperationId,
             callerKey: caller.callerKey,
             itemId: params.itemId,
-            providerItemId: providerKey(params.itemId),
+            providerItemId: providerItemIdOf(ctx.journal, params.itemId),
             expectedEpoch: params.expectedEpoch,
             phase: 'prepared',
             ...(contextFloor && record.providerContextBoundary
@@ -199,30 +118,14 @@ export async function rewindStructuredAgentSession(
                   contextClearOperationId: record.providerContextBoundary.operationId,
                   contextClearSequence: contextFloor.sequence
                 }
-              : {}),
-            retained
+              : {})
           }
           await persistRewindRecord(store, sessionId, ctx.fence, prepared)
           ctx.publish()
           const provider = await ctx.adapter.rewind!({
             sessionId,
             fence: ctx.fence,
-            beforeTurnId: key.provider === 'codex' ? key.turnId : '',
-            onPrepared: async (items) => {
-              const retained = mergeRetainedHostLifecycleRows(
-                prepared.retained,
-                rewindProviderRows(items, ctx.now(), ctx.fence)
-              )
-              if (
-                retained.length > 10_000 ||
-                Buffer.byteLength(JSON.stringify(retained), 'utf8') >
-                  AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
-              ) {
-                throw new Error('agent_session_rewind:history-limit')
-              }
-              prepared = { ...prepared, retained }
-              await persistRewindRecord(store, sessionId, ctx.fence, prepared)
-            }
+            beforeTurnId: cut.beforeTurnId
           })
           const fence = store.getRecord(sessionId)!.lease.runtimeFence
           if (!provider.ok) {
@@ -231,8 +134,7 @@ export async function rewindStructuredAgentSession(
               await persistRewindRecord(store, sessionId, fence, {
                 ...prepared,
                 phase: 'refused',
-                reason,
-                retained: []
+                reason
               })
               const currentJournal = context.sessions.get(sessionId)?.journal
               if (currentJournal) {
@@ -241,24 +143,9 @@ export async function rewindStructuredAgentSession(
             }
             return rewindRefusal(reason)
           }
-          const confirmed = provider.items
-            ? mergeRetainedHostLifecycleRows(
-                prepared.retained,
-                rewindProviderRows(provider.items, ctx.now(), ctx.fence)
-              )
-            : prepared.retained
-          if (
-            confirmed.length > 10_000 ||
-            Buffer.byteLength(JSON.stringify(confirmed), 'utf8') >
-              AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
-          ) {
-            throw new Error('agent_session_rewind:history-limit')
-          }
           await persistRewindRecord(store, sessionId, fence, {
             ...prepared,
-            retained: confirmed,
-            phase: 'provider-succeeded',
-            hydrationVerified: true
+            phase: 'provider-succeeded'
           })
           const journal = context.sessions.get(sessionId)!.journal
           await attachContext.runtimeState.flushEventSink(sessionId)
@@ -268,7 +155,6 @@ export async function rewindStructuredAgentSession(
             journal,
             fence,
             undefined,
-            ctx.now,
             (rewind, currentFence, cursor) => {
               completionReceipt = store.conversationReceipts.rewind(
                 sessionId,
@@ -298,5 +184,15 @@ export async function rewindStructuredAgentSession(
           cursor: context.sessions.get(sessionId)!.journal.cursor()
         }
       : result
-  })
+  }
+  return runWithReadyStructuredAgentSessionOperation(
+    context,
+    caller.callerKey,
+    params.envelope,
+    operation,
+    run,
+    {
+      beforeAgent: () => rewindRefusalBehindClear(context.sessions.get(sessionId)?.journal, params)
+    }
+  )
 }

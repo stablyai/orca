@@ -22,7 +22,6 @@ export function WorkspaceSpaceManagerTable({
     hasRows,
     inspectedWorktree,
     isInitialScan,
-    maxSize,
     nextSelectedIds,
     getDeleteStateForWorktree,
     rows,
@@ -38,11 +37,11 @@ export function WorkspaceSpaceManagerTable({
     allVisibleSelected
   } = model
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
       {hasRows || isInitialScan ? (
-        <div className="overflow-x-auto rounded-lg border border-border/70 bg-background/30">
-          <div className="min-w-[46rem]">
-            <div className="grid grid-cols-[1.75rem_minmax(0,1.25fr)_minmax(9rem,0.55fr)_8rem_9.5rem] gap-3 border-b border-border/60 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        <div className="flex min-h-0 flex-1 flex-col overflow-x-auto rounded-lg border border-border/70 bg-background/30">
+          <div className="flex min-h-0 min-w-[40rem] flex-1 flex-col">
+            <div className="grid shrink-0 grid-cols-[1.75rem_minmax(0,1.4fr)_minmax(5rem,0.55fr)_5.5rem_6rem_9.5rem] gap-2 border-b border-border/60 px-3 py-1.5 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
               <div className="flex items-center">
                 <CheckButton
                   checked={visibleSelectionState}
@@ -85,6 +84,14 @@ export function WorkspaceSpaceManagerTable({
               </button>
               <button
                 type="button"
+                onClick={() => toggleSort('activity')}
+                className="flex items-center justify-end gap-1 text-right"
+              >
+                {translate('workspaceSpace.table.lastActive', 'Last active')}
+                <SortIndicator sortKey="activity" activeKey={sortKey} direction={sortDirection} />
+              </button>
+              <button
+                type="button"
                 onClick={() => toggleSort('size')}
                 className="flex items-center justify-end gap-1 text-right"
               >
@@ -102,7 +109,7 @@ export function WorkspaceSpaceManagerTable({
               </div>
             </div>
 
-            <div className="max-h-[28rem] overflow-y-auto scrollbar-sleek">
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
               {isInitialScan ? (
                 <div className="flex items-center justify-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
@@ -129,7 +136,6 @@ export function WorkspaceSpaceManagerTable({
                     <WorkspaceSpaceWorktreeRow
                       key={identity}
                       worktree={worktree}
-                      maxSize={maxSize}
                       selected={nextSelectedIds.has(identity)}
                       inspected={
                         inspectedWorktree !== null &&
@@ -141,9 +147,15 @@ export function WorkspaceSpaceManagerTable({
                       onToggleSelected={() => toggleSelection(worktree)}
                       onInspect={() => setInspectedWorktreeId(identity)}
                       onOpenWorkspace={() =>
-                        activateAndRevealWorktree(worktree.worktreeId, {
-                          navigationIntent: 'user-open'
-                        })
+                        window.location.pathname.endsWith('/space.html')
+                          ? void window.api.workspaceSpace.revealWorktree?.(
+                              worktree.worktreeId,
+                              worktree.executionHostId
+                            )
+                          : activateAndRevealWorktree(worktree.worktreeId, {
+                              navigationIntent: 'user-open',
+                              executionHostId: worktree.executionHostId
+                            })
                       }
                       onDelete={() => deleteWorktrees([worktree])}
                       onForceDelete={() => forceDeleteWorktree(worktree)}
@@ -154,7 +166,7 @@ export function WorkspaceSpaceManagerTable({
             </div>
           </div>
         </div>
-      ) : (
+      ) : !analysis && !scanError ? null : (
         <div className="rounded-lg border border-border/70 bg-background/30 px-4 py-10 text-center text-sm text-muted-foreground">
           {scanError
             ? translate(
@@ -172,6 +184,6 @@ export function WorkspaceSpaceManagerTable({
                 )}
         </div>
       )}
-    </>
+    </div>
   )
 }

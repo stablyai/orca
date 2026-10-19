@@ -65,6 +65,7 @@ export async function setupTerminalCreateSurfacing(
     setTabLayout,
     tabsByWorktree: {} as Record<string, { id: string; ptyId?: string | null; title?: string }[]>,
     folderWorkspaces: [],
+    sleepingAgentSessionsByPaneKey: {},
     projectGroups: [],
     repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'local' }],
     worktreesByRepo: {

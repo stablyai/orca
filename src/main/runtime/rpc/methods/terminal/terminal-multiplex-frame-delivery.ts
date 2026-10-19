@@ -6,6 +6,7 @@ import {
   encodeTerminalStreamText
 } from '../../../../../shared/terminal-stream-protocol'
 import { appendAckPendingOutput } from './terminal-stream-replay'
+import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
 import {
   isMultiplexStreamAttached,
   type TerminalMultiplexConnection
@@ -121,7 +122,11 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     stream: TerminalMultiplexStream,
     chunk: TerminalOutputFrameChunk
   ): void => {
-    if (!isMultiplexStreamAttached(state, stream) || stream.outputPaused) {
+    if (!isMultiplexStreamAttached(state, stream)) {
+      return
+    }
+    if (stream.outputPaused) {
+      notePausedOutputDropped(state, stream)
       return
     }
     if (

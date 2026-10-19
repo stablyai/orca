@@ -1,3 +1,4 @@
+import type { SleepingAgentLaunchConfig } from './agent-session-resume'
 import type { GlobalSettings } from './global-settings-types'
 import { isTuiAgent } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
@@ -168,4 +169,23 @@ export function resolveTuiAgentLaunchEnv(
     return { ...configuredEnv[agent] }
   }
   return getTuiAgentDefaultEnv(agent)
+}
+
+/**
+ * The command, args and env a resume relaunches with: only what its original Orca launch recorded.
+ * Why not settings defaults: an unrecorded launch (`claude` typed by hand) ran with none, and the
+ * defaults carry the permission bypass, so filling the gap would widen the resumed session.
+ */
+export function resolveResumeLaunchRecipe(
+  launchConfig: SleepingAgentLaunchConfig | undefined
+): SleepingAgentLaunchConfig {
+  if (!launchConfig) {
+    return { agentArgs: '', agentEnv: {} }
+  }
+  return {
+    agentArgs: launchConfig.agentArgs,
+    agentEnv: launchConfig.agentEnv,
+    ...(launchConfig.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
+    ...(launchConfig.ompResumeFilePath ? { ompResumeFilePath: launchConfig.ompResumeFilePath } : {})
+  }
 }

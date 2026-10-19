@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
@@ -11,6 +12,7 @@ import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
   hasIndexedDetectedWorktree,
+  resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
@@ -135,7 +137,8 @@ export function resolveWorktreeOperationRouteForHost(
 
 /**
  * Strict variant of the host-qualified resolver for callers that treat a null runtime as local:
- * rival HUBs projecting the same host report `ambiguous` instead of a transport-less route.
+ * rival HUBs projecting the same host, or rows that contradict each other about its transport,
+ * report `ambiguous` instead of a transport-less route.
  */
 export function resolveStrictWorktreeOperationRouteResultForHost(
   state: WorktreeOperationRouteState,
@@ -148,11 +151,32 @@ export function resolveStrictWorktreeOperationRouteResultForHost(
   }
   if (host.kind === 'ssh') {
     const hubOwners = collectHubOwnerEnvironmentIds(state, worktreeId, host.id)
-    if (hubOwners.hasAmbiguousOwner || hubOwners.environmentIds.size > 1) {
+    if (
+      hubOwners.environmentIds.size > 1 ||
+      (hubOwners.hasAmbiguousOwner && !isDirectListing(state, worktreeId, host.id, hubOwners))
+    ) {
       return { kind: 'ambiguous' }
     }
   }
   return { kind: 'resolved', route: resolveSelectedHostRoute(state, worktreeId, host) }
+}
+
+/** A direct repo row backs a listing no row ties to a server, so a same-id proxy cannot claim it. */
+function isDirectListing(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  executionHostId: ExecutionHostId,
+  hubOwners: { environmentIds: Set<string> }
+): boolean {
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  return (
+    hubOwners.environmentIds.size === 0 &&
+    Boolean(
+      state.repos?.some(
+        (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === executionHostId
+      )
+    )
+  )
 }
 
 function collectHubOwnerEnvironmentIds(
@@ -280,7 +304,7 @@ function resolveOwnerRouteResult(
     resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind !== 'missing' ||
     hasDetectedWorktree
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const hasKnownRepo = state.repos?.some((repo) => repo.id === repoId) === true
+  const hasKnownRepo = resolveIndexedRepoOwner(state.repos, repoId).kind !== 'missing'
   if (!hasKnownWorktree && !hasKnownRepo) {
     return { kind: 'missing' }
   }
@@ -341,7 +365,7 @@ function resolveUnstampedLocalWorktreeRoute(
   state: WorktreeOperationRouteState,
   repoId: string
 ): WorktreeOperationRoute | null {
-  const hasUnstampedRepoRow = state.repos?.some((repo) => repo.id === repoId) ?? false
+  const hasUnstampedRepoRow = resolveIndexedRepoOwner(state.repos, repoId).kind !== 'missing'
   return hasUnstampedRepoRow
     ? { executionHostId: LOCAL_EXECUTION_HOST_ID, runtimeEnvironmentId: null }
     : null

@@ -8,6 +8,7 @@ import type {
   RuntimeCreateAgentSessionResult
 } from '../../shared/agent-session-host-authority'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 
 function operationId(now = Date.now()): string {
@@ -274,19 +275,19 @@ describe('agent-session create operation ledger', () => {
       },
       folderWorkspace: null
     })
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    let planned: TerminalCreateOptions | undefined
+    vi.spyOn(runtime, 'createTerminal').mockImplementation(async (selector = '', opts = {}) => {
+      const scope = await runtime.resolveTerminalWorkspaceLaunchScope(selector)
+      planned = await runtime.resolveAgentTerminalCreateOptions(scope, opts)
+      return terminal()
+    })
 
     await runtime.createAgentSession(
       request(operationId(), { agent: 'claude-agent-teams', prompt: '' })
     )
 
-    expect(createTerminal).toHaveBeenCalledWith(
-      'id:worktree-1',
-      expect.objectContaining({
-        command: expect.stringContaining(
-          process.platform === 'linux' ? 'orca-ide claude-teams' : 'orca claude-teams'
-        )
-      })
+    expect(planned?.command).toContain(
+      process.platform === 'linux' ? 'orca-ide claude-teams' : 'orca claude-teams'
     )
   })
 

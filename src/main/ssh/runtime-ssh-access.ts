@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import {
   RuntimeSshAccessLinkRequestSchema,
   RuntimeSshAccessUnlinkRequestSchema,
@@ -17,36 +16,19 @@ import {
 } from '../../shared/runtime-environment-ssh-access-store'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import type { SshTarget } from '../../shared/ssh-types'
-import { runTargetLifecycle } from '../ipc/ssh-target-lifecycle-queue'
-import { requireManagedOrcadInfrastructure } from './orcad-managed-runtime-context'
+import { runTargetLifecycle } from '../ipc/ssh/ssh-target-lifecycle-queue'
+import { requireManagedOrcadInfrastructure } from '../managed-server/lifecycle/orcad-managed-runtime-context'
 import {
   closeOrcadManagedTunnel,
   ensureOrcadManagedTunnel,
   startOrcadManagedTunnel
-} from './orcad-managed-tunnel'
+} from '../managed-server/lifecycle/orcad-managed-tunnel'
 import { verifyRuntimeEnvironmentSshTunnel } from './runtime-ssh-access-verification'
+import { fingerprintRuntimeSshTarget } from './runtime-ssh-target-fingerprint'
 
 type TargetClaims = ReturnType<typeof requireManagedOrcadInfrastructure>['claims']
 
-export function fingerprintRuntimeSshTarget(target: SshTarget): string {
-  return createHash('sha256')
-    .update(
-      JSON.stringify({
-        host: target.host,
-        port: target.port,
-        username: target.username,
-        configHost: target.configHost,
-        identityFile: target.identityFile,
-        identityAgent: target.identityAgent,
-        identitiesOnly: target.identitiesOnly,
-        gssapiAuthentication: target.gssapiAuthentication,
-        proxyCommand: target.proxyCommand,
-        jumpHost: target.jumpHost,
-        systemSshConnectionReuse: target.systemSshConnectionReuse
-      })
-    )
-    .digest('hex')
-}
+export { fingerprintRuntimeSshTarget }
 
 function requireTarget(claims: TargetClaims, targetId: string): SshTarget & { generation: number } {
   const target = claims.listTargets().find((entry) => entry.id === targetId)

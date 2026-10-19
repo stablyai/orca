@@ -16,7 +16,6 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { currentAgentSessionThreadGoalBySequence } from '../../../shared/agent-session-thread-goal'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
 import { latestStructuredAgentContextFacts } from '../../../shared/structured-agent-session-context-usage'
 import {
@@ -46,6 +45,7 @@ import type {
   JournalItemAppendOptions,
   JournalItemLinkageVisitor,
   JournalLifecycleBatchInput,
+  JournalPlannedLifecycleBatchInput,
   JournalReadSince,
   JournalSubmissionConsume,
   JournalSubmissionInput,
@@ -67,6 +67,7 @@ import type {
 import type { JournalSubmissionWriter } from './journal-submission-writer'
 import type { JournalEpochController } from './journal-epoch-controller'
 import { JournalWriteQueue } from './journal-write-queue'
+import { journalItemExecutionFence, journalItemProvenance } from './journal-item-provenance'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
 import type { JournalItemAppender } from './journal-item-appender'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
@@ -74,6 +75,7 @@ import type { JournalStepWriter } from './journal-step-writer'
 import type { JournalStopMarks } from './journal-stop-marks'
 import type { JournalContextController } from './journal-context-controller'
 import type { JournalStopAcceptor } from './journal-stop-acceptance'
+import { journalThreadGoalSource, type JournalThreadGoalSource } from './journal-thread-goal-source'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
@@ -235,9 +237,12 @@ export class AgentSessionJournal {
   newestTurn = (): AgentJournalTurnLifecycle | null =>
     newestStructuredAgentSessionTurnBySequence(this.state.items.values())
 
+  /** The latest goal and its row, for a provider revising accounting after restart. */
+  threadGoalSource = (): JournalThreadGoalSource =>
+    journalThreadGoalSource(this.state.items.values())
+
   /** The latest goal the whole journal records, not only a client's loaded page. */
-  threadGoal = (): AgentJournalThreadGoal | null =>
-    currentAgentSessionThreadGoalBySequence(this.state.items.values()) ?? null
+  threadGoal = (): AgentJournalThreadGoal | null => this.threadGoalSource().goal
 
   /** The newest context facts the whole journal records, not only a client's loaded page. */
   contextUsage = (): AgentSessionContextUsage =>
@@ -246,8 +251,12 @@ export class AgentSessionJournal {
   /** Includes revisions and completion tombstones, whose timestamps disappear from render items. */
   lastActivityAt = (): number => this.state.lastActivityAt
 
-  /** The item's execution provenance (`JournalItemRow.ownerFence`), while it is in the timeline. */
-  itemFence = (itemId: string): number | undefined => this.state.itemFences.get(itemId)
+  /** Whose execution the item is now, while it is in the timeline: the run a reusable child's row
+   *  last named (`JournalItemRow.executionOwner`), else its creator (`JournalItemRow.ownerFence`). */
+  itemFence = (itemId: string): number | undefined => journalItemExecutionFence(this.state, itemId)
+
+  /** Both provenance facts as stored, for a rebuild that writes them again. */
+  itemProvenance = (itemId: string) => journalItemProvenance(this.state, itemId)
 
   /** Latest saved output at this fence, excluding client actions and recovery bookkeeping. */
   lastProviderActivityAt = (fence: number) => this.state.providerActivityAt.get(fence)
@@ -332,6 +341,10 @@ export class AgentSessionJournal {
   appendLifecycleBatch(input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> {
     return this.lifecycleBatchAppender.append(input)
   }
+
+  /** A lifecycle batch planned at its own turn in the queue (`JournalPlannedLifecycleBatchInput`). */
+  appendPlannedLifecycleBatch = (input: JournalPlannedLifecycleBatchInput) =>
+    this.lifecycleBatchAppender.appendPlanned(input)
 
   /** Several writes as one turn in the queue; see `JournalStepWriter`. */
   appendSteps: JournalStepWriter['append'] = (steps) => this.stepWriter.append(steps)

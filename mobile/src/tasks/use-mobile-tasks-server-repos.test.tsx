@@ -52,7 +52,7 @@ vi.mock('./mobile-tasks-dependencies', async () => {
     ...(await import('./host-repo-list')),
     ...(await import('../../../src/shared/task-providers')),
     ...(await import('./hosted-repo-selection')),
-    ...(await import('./mobile-work-items')),
+    ...(await import('../../../src/shared/work-items')),
     ...(await import('./github-work-item-source-errors')),
     ...(await import('./github-project-repo-match')),
     ...(await import('./github-project-reference')),

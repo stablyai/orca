@@ -188,7 +188,7 @@ export function sendPlan(
         .submissions()
         .find((entry) => entry.clientMessageId === clientMessageId)
       if (submission) {
-        return { clientMessageId, submission }
+        return { clientMessageId, submission: { ...submission } }
       }
       // A pending row wrote nothing, so the send runs for the first time. Succeeded: accepted,
       // then a new epoch dropped its row. Unknown: only builds before this one wrote that.
@@ -281,6 +281,7 @@ export function cancelPlan(params: {
   /** The session's child records, which name the tasks a background Stop reaches. */
   childWork?: () => readonly AgentChildWorkView[] | undefined
   acknowledgeStops?: (evidence: AgentChildWorkEvidence[]) => void
+  captureStops?: StructuredAgentSessionBackgroundStopInput['captureStops']
   unlisted?: StructuredAgentSessionBackgroundStopInput['unlisted']
 }): MutationPlan<AgentSessionCancelResult> {
   const named = params.turnId !== undefined ? { turnId: params.turnId } : {}

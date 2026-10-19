@@ -9,8 +9,8 @@ import type {
   SkillBundleInstallRequest,
   SkillBundleInstallResult
 } from '../../shared/skill-bundle-install-contract'
-import type { SkillInstallRequest, SkillInstallResult } from './runtime-skill-types'
-import type { RuntimeSkillCommandHost } from './runtime-skill-command-surface'
+import type { SkillInstallRequest, SkillInstallResult } from '../../shared/skill-install-contract'
+import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 import {
   createSkillInstallAuthority,
   folderExecutionHostId,

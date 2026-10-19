@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getWorkspaceCardPropertiesValue,
   getShownWorkspaceViewSections,
   type WorkspaceViewOptionContext,
   type WorkspaceViewOptionKey
@@ -67,5 +68,14 @@ describe('which Workspace options show', () => {
     expect(keys).toContain('cardDisplay')
     expect(keys).not.toContain('cardLayout')
     expect(keys).not.toContain('cardProperties')
+  })
+})
+
+describe('the Show properties value', () => {
+  it('reads Hover under the compact layout, else how many properties show, else nothing', () => {
+    expect(getWorkspaceCardPropertiesValue(['pr', 'host'], true)).toBe('hover')
+    expect(getWorkspaceCardPropertiesValue(['pr', 'host'], false)).toBe(2)
+    // Ids outside the Show properties list (Card display only) are not counted.
+    expect(getWorkspaceCardPropertiesValue(['cli', 'branch'], false)).toBeNull()
   })
 })

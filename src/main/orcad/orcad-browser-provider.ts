@@ -1,4 +1,4 @@
-import { access, mkdir } from 'node:fs/promises'
+import { access, mkdir, open, realpath } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
@@ -7,10 +7,8 @@ import {
   type RuntimeBrowserCommandsFactory,
   type RuntimeBrowserUnavailableCause
 } from '../runtime/runtime-browser-commands-factory'
-import {
-  ExternalChromiumBrowserProcess,
-  type ExternalChromiumLaunch
-} from './external-chromium-browser-process'
+import { ExternalChromiumBrowserProcess } from './external-chromium-browser-process'
+import type { ExternalChromiumLaunch } from './external-chromium-browser-session'
 import { resolveOrcadAgentBrowserBinary } from './orcad-agent-browser-binary'
 import { ElectronServeBrowserProcess } from './electron-serve-browser-process'
 
@@ -100,11 +98,28 @@ export function installedElectronCandidates(
   ]
 }
 
+/** The .deb/AppImage CLI shims (`orca-ide` on PATH) are bash scripts, not Electron. */
+async function isScriptShim(path: string): Promise<boolean> {
+  try {
+    const handle = await open(await realpath(path), 'r')
+    try {
+      const head = Buffer.alloc(2)
+      const { bytesRead } = await handle.read(head, 0, 2, 0)
+      return bytesRead === 2 && head[0] === 0x23 && head[1] === 0x21
+    } finally {
+      await handle.close()
+    }
+  } catch {
+    return true
+  }
+}
+
 /** Only paths with stable installer ownership qualify; never guess arbitrary AppImage locations. */
-export async function resolveInstalledElectronExecutable(): Promise<string | null> {
-  const candidates = installedElectronCandidates(process.platform, homedir(), process.env)
+export async function resolveInstalledElectronExecutable(
+  candidates: string[] = installedElectronCandidates(process.platform, homedir(), process.env)
+): Promise<string | null> {
   for (const candidate of candidates) {
-    if (await executableExists(candidate)) {
+    if ((await executableExists(candidate)) && !(await isScriptShim(candidate))) {
       return candidate
     }
   }

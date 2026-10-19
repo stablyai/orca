@@ -55,7 +55,15 @@ function rebuild(existing?: Partial<TerminalTab>): TerminalTab {
   const existingById = new Map<string, TerminalTab>(
     existing ? [[localTabId, { id: localTabId, ...existing } as TerminalTab]] : []
   )
-  const [mirrored] = buildMirroredTerminalTabs(snapshot(), ENVIRONMENT, existingById, {}, 0, 1_000)
+  const [mirrored] = buildMirroredTerminalTabs(
+    snapshot(),
+    ENVIRONMENT,
+    existingById,
+    {},
+    {},
+    0,
+    1_000
+  )
   return mirrored!.tab
 }
 

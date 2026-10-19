@@ -136,6 +136,8 @@ export type WorktreeSlice = {
   sortEpoch: number
   /** sortEpoch after the settle window; the sidebar sort reads this (see store/settled-sort-epoch.ts). */
   settledSortEpoch: number
+  /** Bumped by sortOrder-only changes, which skip sortEpoch so live Smart can't loop on its own saves. */
+  sortOrderEpoch: number
   /**
    * Worktree IDs that have been activated at least once during this app
    * session. The first activation of a worktree is special: its
@@ -233,6 +235,7 @@ export type WorktreeSlice = {
       loaderVisible?: boolean
       request?: PendingWorktreeCreation['request']
       provisioningLog?: string
+      checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
     }
   ) => void
   /** Drop a pending entry, clearing the active surface if it pointed at this

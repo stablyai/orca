@@ -12,7 +12,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
-vi.mock('lucide-react-native', () => ({ Check: 'Check', Moon: 'Moon' }))
+vi.mock('lucide-react-native', () => ({ Moon: 'Moon', Pin: 'Pin', PinOff: 'PinOff' }))
 vi.mock('../agent-history/worktree-navigation-actions', () => ({
   buildWorktreeNavigationActions: () => []
 }))
@@ -22,7 +22,8 @@ vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: 'ConfirmModal' }))
 vi.mock('../components/NewWorktreeModalController', () => ({
   NewWorktreeModalController: 'NewWorktreeModalController'
 }))
-vi.mock('../components/PickerModal', () => ({ PickerModal: 'PickerModal' }))
+vi.mock('./workspace-options-sheet', () => ({ WorkspaceOptionsSheet: 'WorkspaceOptionsSheet' }))
+vi.mock('./workspace-details-sheet', () => ({ WorkspaceDetailsSheet: 'WorkspaceDetailsSheet' }))
 
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
@@ -37,8 +38,8 @@ afterEach(() => {
   renderer = null
 })
 
-/** The long-press sheet's action labels for `row`. */
-async function actionLabels(row: Partial<Worktree>): Promise<string[]> {
+/** The long-press sheet for `row`. */
+async function renderSheet(row: Partial<Worktree>) {
   const controller = {
     actions: {},
     catalog: {},
@@ -47,13 +48,12 @@ async function actionLabels(row: Partial<Worktree>): Promise<string[]> {
     existingWorktreePaths: [],
     hostCapabilities: [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY],
     hostId: 'host-1',
-    sectionsResult: { uniqueRepos: [] },
-    settings: { activeFilterCount: 0 },
+    settings: {},
     showNewWorktree: false,
     state: {
       actionTarget: { worktreeId: 'wt', repo: 'orca', branch: 'main', ...row },
       confirmDelete: null,
-      view: { ...INITIAL_MOBILE_VIEW },
+      view: INITIAL_MOBILE_VIEW,
       hostLabelById: new Map(),
       pinnedIds: new Set()
     }
@@ -66,7 +66,15 @@ async function actionLabels(row: Partial<Worktree>): Promise<string[]> {
       })
     )
   })
-  const sheet = renderer!.root.find((node) => String(node.type) === 'ActionSheetContent')
+  return {
+    sheet: renderer!.root.find((node) => String(node.type) === 'ActionSheetContent'),
+    details: renderer!.root.find((node) => String(node.type) === 'WorkspaceDetailsSheet')
+  }
+}
+
+/** The long-press sheet's action labels for `row`. */
+async function actionLabels(row: Partial<Worktree>): Promise<string[]> {
+  const { sheet } = await renderSheet(row)
   return sheet.props.actions.map((action: { label: string }) => action.label)
 }
 
@@ -80,5 +88,20 @@ describe('the workspace long-press sheet', () => {
       'Pin',
       'Delete'
     ])
+  })
+
+  it('marks Pin with the pin icon, and Unpin with the crossed-out one', async () => {
+    const icon = async (row: Partial<Worktree>, label: string) =>
+      (await renderSheet(row)).sheet.props.actions.find(
+        (action: { label: string }) => action.label === label
+      ).icon
+    expect(await icon({}, 'Pin')).toBe('Pin')
+    act(() => renderer?.unmount())
+    expect(await icon({ isPinned: true }, 'Unpin')).toBe('PinOff')
+  })
+
+  it("shows the workspace's details above its actions", async () => {
+    const { details } = await renderSheet({ comment: 'Check iPad' })
+    expect(details.props.row).toMatchObject({ worktreeId: 'wt', comment: 'Check iPad' })
   })
 })

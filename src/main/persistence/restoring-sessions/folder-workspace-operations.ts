@@ -11,6 +11,7 @@ import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState
@@ -110,7 +111,8 @@ export class FolderWorkspacePersistenceOperations {
       ...(input.pendingFirstAgentMessageRename === true && input.createdWithAgent
         ? { pendingFirstAgentMessageRename: true }
         : {}),
-      lastActivityAt: 0,
+      // Switch point: creation is the workspace's first Recent stamp.
+      lastActivityAt: ORCA_SIDEBAR_INPUTS_IS_MAIN ? now : 0,
       createdAt: now,
       updatedAt: now
     }
@@ -140,6 +142,9 @@ export class FolderWorkspacePersistenceOperations {
         | 'pendingFirstAgentMessageRename'
         | 'firstAgentMessageRenameError'
         | 'lastActivityAt'
+        | 'smartTier'
+        | 'smartAt'
+        | 'lastTerminalUseAt'
         | 'diffComments'
       >
     > &
@@ -236,6 +241,14 @@ export class FolderWorkspacePersistenceOperations {
     }
     if (updates.lastActivityAt !== undefined && Number.isFinite(updates.lastActivityAt)) {
       workspace.lastActivityAt = updates.lastActivityAt
+    }
+    // Written as a pair; an absent tier is Rest, so its presence as a key is what clears it.
+    if ('smartTier' in updates) {
+      workspace.smartTier = updates.smartTier
+      workspace.smartAt = updates.smartAt
+    }
+    if (updates.lastTerminalUseAt !== undefined && Number.isFinite(updates.lastTerminalUseAt)) {
+      workspace.lastTerminalUseAt = updates.lastTerminalUseAt
     }
     if (updates.diffComments !== undefined) {
       workspace.diffComments = updates.diffComments

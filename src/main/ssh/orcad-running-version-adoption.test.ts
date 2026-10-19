@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcadActivationRecord } from './orcad-activation-record'
+import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import type { OrcadSlotOptions } from './orcad-recovery-slot'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
@@ -7,12 +7,23 @@ const mocks = vi.hoisted(() => ({
   wake: vi.fn(),
   readRecord: vi.fn(),
   probe: vi.fn(),
-  launch: vi.fn()
+  launch: vi.fn(),
+  fenceRefusal: vi.fn()
 }))
 
-vi.mock('./orcad-managed-wake', () => ({ wakeStoppedManagedOrcad: mocks.wake }))
-vi.mock('./orcad-activation-record-store', () => ({ readOrcadActivationRecord: mocks.readRecord }))
-vi.mock('./orcad-remote-build-hash', () => ({ readRemoteOrcadBuildHash: async () => 'hash' }))
+vi.mock('../managed-server/activation/orcad-activation-fence-hold', () => ({
+  orcadActivationFenceRefusal: mocks.fenceRefusal
+}))
+
+vi.mock('../managed-server/lifecycle/orcad-managed-wake', () => ({
+  wakeStoppedManagedOrcad: mocks.wake
+}))
+vi.mock('../managed-server/activation/orcad-activation-record-store', () => ({
+  readOrcadActivationRecord: mocks.readRecord
+}))
+vi.mock('../managed-server/install/orcad-remote-build-hash', () => ({
+  readRemoteOrcadBuildHash: async () => 'hash'
+}))
 vi.mock('./orcad-active-readiness', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   probeActiveOrcadReadiness: mocks.probe,
@@ -73,15 +84,46 @@ describe('adoptRunningOrcadVersion', () => {
     })
   })
 
-  it('defers to the deploy when the host was stopped, fenced, or moved to this build meanwhile', async () => {
+  it('defers to the deploy when the host was stopped, or moved to this build meanwhile', async () => {
     mocks.wake.mockResolvedValueOnce({ outcome: 'not-activated' })
-    await expect(adoptRunningOrcadVersion(slot, record(RUNNING), LOCAL)).resolves.toBeNull()
-    mocks.wake.mockResolvedValueOnce({ outcome: 'fenced' })
     await expect(adoptRunningOrcadVersion(slot, record(RUNNING), LOCAL)).resolves.toBeNull()
     mocks.wake.mockResolvedValueOnce({ outcome: 'serving' })
     mocks.readRecord.mockResolvedValueOnce(record(LOCAL))
     await expect(adoptRunningOrcadVersion(slot, record(RUNNING), LOCAL)).resolves.toBeNull()
     expect(mocks.probe).not.toHaveBeenCalled()
+  })
+
+  // #28833: after a reboot another desktop may be starting the server; a deploy would only defer
+  // on a terminal count no server it pairs with can give.
+  it('waits on a fence another run holds instead of deploying over an uncounted host', async () => {
+    mocks.wake.mockResolvedValueOnce({ outcome: 'fenced' })
+    mocks.fenceRefusal.mockResolvedValueOnce({
+      code: 'orcad_activation_fence_busy',
+      reason: 'busy'
+    })
+    await expect(adoptRunningOrcadVersion(slot, record(RUNNING), LOCAL)).resolves.toEqual({
+      outcome: 'deferred',
+      candidateVersion: LOCAL,
+      code: 'orcad_activation_fence_busy',
+      reason: 'busy',
+      forceable: false
+    })
+    expect(mocks.probe).not.toHaveBeenCalled()
+  })
+
+  it('retries the wake once after clearing an abandoned fence', async () => {
+    mocks.wake.mockResolvedValueOnce({ outcome: 'fenced' })
+    mocks.fenceRefusal.mockResolvedValueOnce({ code: 'c', reason: 'cleared', cleared: true })
+    mocks.wake.mockResolvedValueOnce({ outcome: 'started', readiness: READINESS })
+    await expect(adoptRunningOrcadVersion(slot, record(RUNNING), LOCAL)).resolves.toMatchObject({
+      version: RUNNING
+    })
+    mocks.wake.mockResolvedValue({ outcome: 'fenced' })
+    mocks.fenceRefusal.mockResolvedValue({ code: 'c', reason: 'cleared', cleared: true })
+    await expect(adoptRunningOrcadVersion(slot, record(RUNNING), LOCAL)).resolves.toMatchObject({
+      outcome: 'deferred'
+    })
+    expect(mocks.wake).toHaveBeenCalledTimes(4)
   })
 
   it('reports an unverifiable or unrecoverable host without touching it', async () => {

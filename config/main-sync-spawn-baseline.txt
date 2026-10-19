@@ -41,7 +41,6 @@
 1 src/main/pty/posix-pty-process-groups.ts
 1 src/main/pwsh.ts
 1 src/main/runtime/runtime-skill-install-authority.ts
-1 src/main/runtime/tls-certificate.ts
 1 src/main/skills/skill-discovery-target.ts
 2 src/main/startup/cli-launch-redirect.ts
 1 src/main/startup/linux-secret-service-probe.ts

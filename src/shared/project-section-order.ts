@@ -2,6 +2,7 @@
 import type { ProjectSectionEntry, ProjectSectionRepo } from './project-section-grouping'
 import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from './repo-display-labels'
 import type { ProjectOrderBy } from './ui-chrome-types'
+import { compareCodePoints, compareSidebarText } from './sidebar-list/text-order'
 
 export type ActivityItem = { lastActivityAt?: number }
 
@@ -40,7 +41,7 @@ export function recentRankForEntry(
   entry: readonly [string, ProjectSectionEntry<ActivityItem, ProjectSectionRepo>]
 ): RecentRank {
   let max = Number.NEGATIVE_INFINITY
-  for (const worktree of entry[1].items) {
+  for (const worktree of entry[1].activityItems ?? entry[1].items) {
     // Why: phone rows from older hosts may omit the timestamp; the desktop's always carry one.
     if ((worktree.lastActivityAt ?? Number.NEGATIVE_INFINITY) > max) {
       max = worktree.lastActivityAt ?? max
@@ -148,7 +149,7 @@ export function sortProjectEntries<
       if (ma !== mb) {
         return ma - mb
       }
-      return a[1].label.localeCompare(b[1].label)
+      return compareSidebarText(a[1].label, b[1].label) || compareCodePoints(a[0], b[0])
     })
   }
   if (!repoOrder) {
@@ -160,7 +161,7 @@ export function sortProjectEntries<
     if (ra !== rb) {
       return ra - rb
     }
-    return a[1].label.localeCompare(b[1].label)
+    return compareSidebarText(a[1].label, b[1].label) || compareCodePoints(a[0], b[0])
   })
 }
 

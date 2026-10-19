@@ -62,8 +62,6 @@ export function useTabGroupWorkspaceModel({
     useTabGroupCloseScopeCommands({
       groupId,
       worktreeId,
-      group,
-      groupTabs,
       closeItem,
       closeMany
     })

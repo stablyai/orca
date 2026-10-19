@@ -273,24 +273,56 @@ export function findIndexedRepoOwnerForHost<T extends RepoOwnerRecord>(
   return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
 }
 
-export function findIndexedFolderWorkspaceOwner<T extends FolderWorkspaceOwnerRecord>(
-  folderWorkspaces: readonly T[] | undefined,
+function catalogOwnerKey(id: string, executionHostId?: ExecutionHostId): string {
+  return executionHostId ? `${id}\0${executionHostId}` : id
+}
+
+/** An unqualified lookup keeps a twin (same id on two hosts) distinct from a missing row. */
+export function resolveIndexedFolderWorkspaceOwner(
+  folderWorkspaces: readonly FolderWorkspaceOwnerRecord[] | undefined,
   folderWorkspaceId: string,
   executionHostId?: ExecutionHostId
-): T | null {
+): IndexedFolderWorkspaceOwnerResolution {
   if (!folderWorkspaces) {
-    return null
+    return { kind: 'missing' }
   }
   let index = folderWorkspaceOwnerIndexCache.get(folderWorkspaces)
   if (!index) {
     index = buildCatalogOwnerIndex(folderWorkspaces)
     folderWorkspaceOwnerIndexCache.set(folderWorkspaces, index)
   }
-  const resolution = index.get(
-    executionHostId ? `${folderWorkspaceId}\0${executionHostId}` : folderWorkspaceId
+  return index.get(catalogOwnerKey(folderWorkspaceId, executionHostId)) ?? { kind: 'missing' }
+}
+
+/** An unqualified lookup keeps a twin (same id on two hosts) distinct from a missing row. */
+export function resolveIndexedProjectGroupOwner(
+  projectGroups: readonly ProjectGroupOwnerRecord[] | undefined,
+  projectGroupId: string,
+  executionHostId?: ExecutionHostId
+): IndexedProjectGroupOwnerResolution {
+  if (!projectGroups) {
+    return { kind: 'missing' }
+  }
+  let index = projectGroupOwnerIndexCache.get(projectGroups)
+  if (!index) {
+    index = buildCatalogOwnerIndex(projectGroups)
+    projectGroupOwnerIndexCache.set(projectGroups, index)
+  }
+  return index.get(catalogOwnerKey(projectGroupId, executionHostId)) ?? { kind: 'missing' }
+}
+
+export function findIndexedFolderWorkspaceOwner<T extends FolderWorkspaceOwnerRecord>(
+  folderWorkspaces: readonly T[] | undefined,
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
+): T | null {
+  const resolution = resolveIndexedFolderWorkspaceOwner(
+    folderWorkspaces,
+    folderWorkspaceId,
+    executionHostId
   )
-  // The cache is keyed by this exact array, so its owner retains the caller's row type.
-  return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the index is built from and cached on this exact array, so its owner is one of the caller's T rows.
+  return resolution.kind === 'resolved' ? (resolution.owner as T) : null
 }
 
 export function findIndexedProjectGroupOwner<T extends ProjectGroupOwnerRecord>(
@@ -298,17 +330,7 @@ export function findIndexedProjectGroupOwner<T extends ProjectGroupOwnerRecord>(
   projectGroupId: string,
   executionHostId?: ExecutionHostId
 ): T | null {
-  if (!projectGroups) {
-    return null
-  }
-  let index = projectGroupOwnerIndexCache.get(projectGroups)
-  if (!index) {
-    index = buildCatalogOwnerIndex(projectGroups)
-    projectGroupOwnerIndexCache.set(projectGroups, index)
-  }
-  const resolution = index.get(
-    executionHostId ? `${projectGroupId}\0${executionHostId}` : projectGroupId
-  )
-  // The cache is keyed by this exact array, so its owner retains the caller's row type.
-  return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
+  const resolution = resolveIndexedProjectGroupOwner(projectGroups, projectGroupId, executionHostId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the index is built from and cached on this exact array, so its owner is one of the caller's T rows.
+  return resolution.kind === 'resolved' ? (resolution.owner as T) : null
 }

@@ -151,6 +151,78 @@ describe('moved-code exemption', () => {
       rmSync(repo, { recursive: true, force: true })
     }
   })
+
+  it('keeps source boundaries across batches, missing files, and multibyte contents', () => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-batch-'))
+    try {
+      const git = (...args) => {
+        const result = runProcessSync({ program: 'git', args, cwd: repo })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      const files = Array.from({ length: 40 }, (_, index) => `file ${index} é.ts`)
+      const sources = files.map((_, index) =>
+        index === 0 ? '' : `  const café${index} = '🐳'\r\n\r\n// missing\nlastLine()`
+      )
+      files.forEach((file, index) => writeFileSync(path.join(repo, file), sources[index]))
+      git('add', '--all')
+      git(
+        '-c',
+        'commit.gpgsign=false',
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@example.invalid',
+        'commit',
+        '-qm',
+        'base'
+      )
+      const base = git('rev-parse', 'HEAD')
+      const expected = sources.map((_, index) =>
+        index === 0 ? [] : [`const café${index} = '🐳'`, '// missing', 'lastLine()']
+      )
+      expect(
+        collectBaseLineBlocks(repo, base, ['missing.ts', ...files, 'also-missing.ts'])
+      ).toEqual(expected)
+      expect(collectBaseLineBlocks(repo, base, [])).toEqual([])
+      expect(collectBaseLineBlocks(repo, base, ['missing.ts'])).toEqual([])
+      expect(collectBaseLineBlocks(path.join(repo, 'absent'), base, files)).toEqual([])
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')('reads filenames containing newlines', () => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-newline-'))
+    try {
+      const git = (...args) => {
+        const result = runProcessSync({ program: 'git', args, cwd: repo })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      const file = 'line\nbreak.ts'
+      writeFileSync(path.join(repo, file), 'const kept = true\n')
+      git('add', '--all')
+      git(
+        '-c',
+        'commit.gpgsign=false',
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@example.invalid',
+        'commit',
+        '-qm',
+        'base'
+      )
+      expect(collectBaseLineBlocks(repo, git('rev-parse', 'HEAD'), [file])).toEqual([
+        ['const kept = true']
+      ])
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('unloaded plugin directive unused warning', () => {

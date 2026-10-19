@@ -7,12 +7,16 @@ permissions:
   contents: read
 
 jobs:
-  warm-linux-arm:
+  warm-linux-runtime:
     if: github.event_name != 'pull_request'
     concurrency:
-      group: ci-cache-warmup-linux-arm-${{ github.event.pull_request.number || github.ref }}
+      group: ci-cache-warmup-linux-runtime-${{ matrix.runner }}-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name != 'schedule' }}
-    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04-arm, blacksmith-4vcpu-ubuntu-2404]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -50,7 +54,8 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
-          cache-pnpm-store-lookup-only: 'true'
+          # Windows PR consumers download packages directly; retain only the build caches.
+          cache-pnpm-store: 'false'
       - name: Verify native cache is usable
         run: node config/scripts/ensure-native-runtime.mjs --check-only
 

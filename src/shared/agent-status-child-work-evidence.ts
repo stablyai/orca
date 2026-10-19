@@ -80,6 +80,8 @@ export type AgentChildWorkStopAcknowledgedEvidence = {
   type: 'stop-acknowledged'
   observedAt: number
   childWorkId: AgentChildWorkId
+  /** The provider handle the Stop named, for the host's open-work set, which keys by handle. */
+  handleId: string
   invocation: AgentChildWorkInvocationFence
   outcome?: AgentChildWorkOutcome
 }

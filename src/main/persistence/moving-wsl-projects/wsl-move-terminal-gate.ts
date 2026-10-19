@@ -8,7 +8,7 @@ import type { AgentStatusState } from '../../../shared/agent-status-types'
 import {
   MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS,
   MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES
-} from '../../../shared/orcad-migration-scrollback'
+} from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal-scrollback-limits'
 
 export type WslMovePaneFacts = {

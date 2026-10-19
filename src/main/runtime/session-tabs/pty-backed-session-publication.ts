@@ -12,6 +12,7 @@ import {
   getHeadlessMobileSessionGroupId
 } from '../mobile-session-layout-projection'
 import {
+  appendChatTabOrder,
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
 } from '../mobile-session-tab-merge'
@@ -94,6 +95,16 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
           candidate.parentTabId === args.tabId &&
           candidate.viewMode !== undefined
       )?.viewMode
+    // Why: republishing a surface must not drop the tab's manual name; a new split leaf inherits it.
+    const customTitle = (
+      existingTab ??
+      existing?.tabs.find(
+        (candidate): candidate is RuntimeMobileSessionTerminalTab =>
+          candidate.type === 'terminal' &&
+          candidate.parentTabId === args.tabId &&
+          candidate.customTitle !== undefined
+      )
+    )?.customTitle
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${args.tabId}::${args.leafId}`,
@@ -102,6 +113,7 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       ptyId: pty.ptyId,
       incarnationId: pty.incarnationId,
       title,
+      ...(customTitle !== undefined ? { customTitle } : {}),
       ...(pty.launchAgent ? { launchAgent: pty.launchAgent } : {}),
       ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
       ...(viewMode ? { viewMode } : {}),
@@ -147,11 +159,16 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       activeGroupId: existing?.activeGroupId ?? getHeadlessMobileSessionGroupId(worktreeId),
       activeTabId: activeTab?.id ?? null,
       activeTabType: activeTab?.type ?? null,
-      tabGroups: mergeMobileSessionTabGroups(
-        worktreeId,
+      tabGroups: appendChatTabOrder(
+        mergeMobileSessionTabGroups(
+          worktreeId,
+          existing?.tabGroups ?? [],
+          terminalTabs,
+          activeTab?.type === 'terminal' ? activeTab : null
+        ),
         existing?.tabGroups ?? [],
-        terminalTabs,
-        activeTab?.type === 'terminal' ? activeTab : null
+        tabs,
+        activeTab?.id ?? null
       ),
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs

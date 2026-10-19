@@ -11,11 +11,14 @@ import {
 } from '../orca-runtime-test-mocks.spec'
 import { RpcDispatcher, TERMINAL_METHODS } from '../orca-runtime-test-mocks/terminal-rpc.spec'
 import {
+  TEST_REPO_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   makeRuntimeStoreWithWorkspaceSession,
+  spawnedPtyEnv,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import type { RuntimeStore } from '../runtime-store-contract'
 import { wireHeadlessServeRuntime } from '../orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
@@ -203,8 +206,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
 
-    const spawnedEnv =
-      (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    const spawnedEnv = spawnedPtyEnv(spawn.mock.calls[0]?.[0])
     expect(spawnedEnv.ORCA_TAB_ID).toBe(tabId)
     expect(spawnedEnv.ORCA_PANE_KEY).toBe(`${tabId}:${leafId}`)
   })
@@ -227,8 +229,7 @@ describe('OrcaRuntimeService', () => {
       leafId
     })
 
-    const spawnedEnv =
-      (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    const spawnedEnv = spawnedPtyEnv(spawn.mock.calls[0]?.[0])
     expect(spawnedEnv.ORCA_TAB_ID).not.toBe(tabId)
     expect(spawnedEnv.ORCA_TAB_ID).not.toMatch(/^web-terminal-/)
     expect(spawnedEnv.ORCA_PANE_KEY).toMatch(`${spawnedEnv.ORCA_TAB_ID}:`)
@@ -502,7 +503,9 @@ describe('OrcaRuntimeService', () => {
 
   it.each([
     ['the named group', { targetGroupId: 'group-named' }, { cols: 90, rows: 30 }],
-    ['the active group when none is named', {}, { cols: 63, rows: 60 }]
+    ['the active group when none is named', {}, { cols: 63, rows: 60 }],
+    // A caller that measured its own pane beats any group size.
+    ["the caller's own pane", { initialSize: { cols: 101, rows: 33 } }, { cols: 101, rows: 33 }]
   ])('starts a host terminal at the measured size of %s', async (_case, opts, expected) => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-cli' })
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
@@ -707,6 +710,70 @@ describe('OrcaRuntimeService', () => {
     expect(electronMocks.ipcMain.removeListener).toHaveBeenCalledWith(
       'terminal:tabCreateReply',
       expect.any(Function)
+    )
+  })
+})
+
+function titledHeadlessRuntime() {
+  const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession({
+    ...getDefaultWorkspaceSession(),
+    activeRepoId: TEST_REPO_ID,
+    activeWorktreeId: TEST_WORKTREE_ID
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The shared fixture supplies RuntimeStore methods; its legacy Mock return type loses callable signatures.
+  const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore)
+  runtime.setPtyController({
+    spawn: vi.fn(async () => ({ id: 'titled-pty' })),
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null
+  })
+  return { runtime, getSession }
+}
+
+describe('a titled terminal on a host with no window', () => {
+  it('saves the title as the tab name', async () => {
+    const { runtime, getSession } = titledHeadlessRuntime()
+
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      title: 'cli-created'
+    })
+
+    const saved = getSession().tabsByWorktree[TEST_WORKTREE_ID]
+    expect(saved?.find((tab) => tab.id === created.tabId)?.customTitle).toBe('cli-created')
+  })
+
+  // A window reads a saved name on hydration and shows it over the agent's live title, so a tab
+  // the window never revealed (a background worker) must not get one.
+  it('saves no name for a background terminal', async () => {
+    const { runtime, getSession } = titledHeadlessRuntime()
+
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      title: 'worker-1',
+      presentation: 'background'
+    })
+
+    const saved = getSession().tabsByWorktree[TEST_WORKTREE_ID]?.find(
+      (tab) => tab.id === created.tabId
+    )
+    expect(saved).toBeDefined()
+    expect(saved?.customTitle ?? null).toBeNull()
+  })
+
+  it('lists the saved name once the terminal itself has no title, as after a restart', async () => {
+    const { runtime } = titledHeadlessRuntime()
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      title: 'cli-created'
+    })
+    // A restarted host rebuilds the terminal's record from the process list, without a title.
+    const pty = runtime['ptysById'].get('titled-pty')!
+    pty.title = null
+    pty.titleUpdatedAt = null
+
+    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.terminals.find((terminal) => terminal.handle === created.handle)?.title).toBe(
+      'cli-created'
     )
   })
 })

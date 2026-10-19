@@ -6,6 +6,8 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { HeldPaneReopenOutcome } from '../newer-daemon-hold-state'
 import { holdForNewerDaemon } from './newer-daemon-hold-pane'
 import { NEWER_DAEMON_HOLD_ERROR } from '../../../../../shared/newer-daemon-hold'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { holdInPlaceResumeUntilSettled } from './in-place-resume-hold'
 
 import {
   awaitAgentStatusStartupSnapshot,
@@ -131,7 +133,7 @@ function connectDeferredSessionReattach(
     .finally(() => {
       session.transportConnectInFlightSince = null
     })
-  return Promise.resolve(reattachPromise)
+  const outcome = Promise.resolve(reattachPromise)
     .then(async (result): Promise<HeldPaneReopenOutcome> => {
       if (!isCurrentReattach()) {
         session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
@@ -237,4 +239,9 @@ function connectDeferredSessionReattach(
       session.deps.clearTabPtyId(session.deps.tabId, deferredReattachSessionId)
       return startFreshInstead()
     })
+  // Switch point: main clears the gone terminal's binding before this reattach's fresh start.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    holdInPlaceResumeUntilSettled(() => !session.disposed, coldRestoreStartup, outcome)
+  }
+  return outcome
 }

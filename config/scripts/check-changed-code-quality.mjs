@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { runProcessSync } from '@orca/process-host'
 import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
@@ -228,6 +229,55 @@ function normalizeSourceLine(line) {
   return line.replace(/\s+/g, ' ').trim()
 }
 
+function readBaseSourceBatch(root, comparisonBase, files) {
+  // Git 2.25 supports --batch; its newline protocol cannot represent newline paths.
+  if (files.some((file) => /[\r\n]/.test(`${comparisonBase}:${file}`))) {
+    return null
+  }
+  try {
+    const result = runProcessSync({
+      program: 'git',
+      args: ['cat-file', '--batch'],
+      cwd: root,
+      input: files.map((file) => `${comparisonBase}:${file}\n`).join(''),
+      captureStdoutAsBytes: true,
+      maxOutputBytes: 64 * 1024 * 1024,
+      timeoutMs: null
+    })
+    if (result.code !== 0 || !result.stdoutBytes) {
+      return null
+    }
+    const output = result.stdoutBytes
+    const sources = []
+    let offset = 0
+    for (const file of files) {
+      const end = output.indexOf(10, offset)
+      if (end === -1) {
+        return null
+      }
+      const header = output.subarray(offset, end).toString('utf8')
+      offset = end + 1
+      if (header === `${comparisonBase}:${file} missing`) {
+        continue
+      }
+      const match = /^[0-9a-f]{40}(?:[0-9a-f]{24})? blob (\d+)$/.exec(header)
+      if (!match) {
+        return null
+      }
+      const size = Number(match[1])
+      if (!Number.isSafeInteger(size) || output[offset + size] !== 10) {
+        return null
+      }
+      sources.push(output.subarray(offset, offset + size).toString('utf8'))
+      offset += size + 1
+    }
+    return offset === output.length ? sources : null
+  } catch {
+    // Preserve per-file reads when a batch exceeds the output limit or cannot run.
+    return null
+  }
+}
+
 export function collectBaseLineBlocks(root, comparisonBase, files = null) {
   // Why: in a split, the moved code's base text lives in the ORIGINAL file, which is
   // often deleted or renamed away. Deleted paths never reach the changed-file list
@@ -239,21 +289,32 @@ export function collectBaseLineBlocks(root, comparisonBase, files = null) {
       runGit(root, ['diff', '--name-only', '--no-renames', '-z', comparisonBase, '--'])
     ).filter((file) => SOURCE_FILE_PATTERN.test(file))
   const blocks = []
-  for (const file of paths) {
-    const result = spawnSync('git', ['show', `${comparisonBase}:${file}`], {
-      cwd: root,
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024
-    })
-    if (result.status !== 0 || typeof result.stdout !== 'string') {
-      continue
+  for (let start = 0; start < paths.length; start += 32) {
+    const batch = paths.slice(start, start + 32)
+    let sources = readBaseSourceBatch(root, comparisonBase, batch)
+    if (sources === null) {
+      sources = []
+      for (const file of batch) {
+        try {
+          const result = runProcessSync({
+            program: 'git',
+            args: ['show', `${comparisonBase}:${file}`],
+            cwd: root,
+            maxOutputBytes: 64 * 1024 * 1024,
+            timeoutMs: null
+          })
+          if (result.code === 0) {
+            sources.push(result.stdout)
+          }
+        } catch {
+          // Failed source reads were already skipped by the per-file implementation.
+          continue
+        }
+      }
     }
-    blocks.push(
-      result.stdout
-        .split(/\r?\n/)
-        .map(normalizeSourceLine)
-        .filter((line) => line !== '')
-    )
+    for (const source of sources) {
+      blocks.push(source.split(/\r?\n/).map(normalizeSourceLine).filter(Boolean))
+    }
   }
   return blocks
 }

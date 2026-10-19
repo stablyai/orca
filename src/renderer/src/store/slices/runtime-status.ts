@@ -1,6 +1,8 @@
-import type { StateCreator } from 'zustand'
-import type { AppState } from '../types'
-import type { RuntimeStatusSlice } from './runtime-status-types'
+import type {
+  RuntimeStatusSlice,
+  RuntimeStatusStoreSetState,
+  RuntimeStatusStoreState
+} from './runtime-status-types'
 export type { RuntimeEnvironmentStatus, RuntimeStatusSlice } from './runtime-status-types'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
@@ -40,10 +42,11 @@ export {
   setRuntimeEnvironmentConnectionGenerationForTests
 } from './runtime-status-connection-generation'
 
-export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeStatusSlice> = (
-  set,
-  get
-) => ({
+export const createRuntimeStatusSlice: (
+  set: RuntimeStatusStoreSetState,
+  get: () => RuntimeStatusStoreState,
+  store?: unknown
+) => RuntimeStatusSlice = (set, get) => ({
   runtimeEnvironments: [],
   runtimeEnvironmentCatalogHydrated: false,
   runtimeEnvironmentCatalogSettled: false,

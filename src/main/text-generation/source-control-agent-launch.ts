@@ -3,7 +3,6 @@ import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { resolveCliCommand } from '../codex-cli/command'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 import { wslAwareSpawn } from '../git/runner'
-import { getSpawnArgsForWindows } from '../win32-utils'
 import type {
   SourceControlAgentSpawnInput,
   SpawnedSourceControlAgentProcess,
@@ -77,10 +76,11 @@ function spawnWindowsAgent(
   const resolvedBinary = resolveCliCommand(input.binary, {
     pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null
   })
-  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, input.args)
+  // Why no cmd.exe wrapping here: process-host runs an npm/pnpm `.cmd` shim as
+  // node + script, which keeps a multi-line argv prompt intact (#28768).
   return spawnProcess({
-    program: spawnCmd,
-    args: spawnArgs,
+    program: resolvedBinary,
+    args: input.args,
     env: withCliRuntimeOnPath(resolvedBinary, spawnEnv),
     ...(input.useCwdForNative ? { cwd: input.cwd } : {})
   })

@@ -300,7 +300,7 @@ describe('release checkout materialization', () => {
     expect(relative(cacheRoot, checkout.root)).not.toMatch(/^\.\./)
   }, 180_000)
 
-  // v1.4.221 still needs the pinned test-only parser for its dense match path.
+  // Keep @streamparser/json in root devDependencies: v1.4.221's dense parser imports it.
   // Default cache root: package resolution must walk up into the repo's node_modules.
   it('runs the released dense parser with its retained test dependency', async () => {
     const checkout = await materializeReleaseCheckout('v1.4.221')

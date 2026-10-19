@@ -72,6 +72,15 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     this.writeRecoveryPromise = recovery
   }
 
+  // Why: a dropped daemon socket is the earliest signal, and waiting for a keystroke to find it left
+  // every pane frozen on stale output until then. Reconnecting first means a live daemon keeps its
+  // sessions; only a refused connect (isDaemonGoneError) respawns.
+  protected recoverAfterEndpointLoss(): void {
+    if (this.activeSessionIds.size > 0) {
+      this.reconnectAfterWriteFailure()
+    }
+  }
+
   protected notifyActiveSessionsWriteUnavailable(): void {
     // Snapshot first: a listener that kills a pane would mutate activeSessionIds
     // mid-iteration and silently skip the sibling this fan-out exists to reach.

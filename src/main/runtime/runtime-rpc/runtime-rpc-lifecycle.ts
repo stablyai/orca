@@ -1,10 +1,9 @@
-import { ALLOW_INSECURE_WEB_PAIRING_ENV } from '../../../shared/web-origin-security'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch-runtime-capability'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
 import { watchRuntimeMetadataOwnership } from '../runtime-metadata-ownership-watch'
 import type { RpcTransport } from '../rpc/transport'
 import { UnixSocketTransport } from '../rpc/unix-socket-transport'
-import { WebSocketTransport } from '../rpc/ws-transport'
+import { PinnedPortUnavailableError, WebSocketTransport } from '../rpc/ws-transport'
 import {
   clearWsFallbackPort,
   readWsFallbackPort,
@@ -100,6 +99,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
             host,
             port: this.wsPort,
             preferPinnedPort: this.preferPinnedWsPort,
+            requirePinnedPort: this.requirePinnedWsPort,
             // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
             ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
           })
@@ -115,6 +115,10 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           console.error('[runtime] Failed to start WebSocket transport:', error)
           this.mobileSocketWiring?.dispose()
           this.mobileSocketWiring = null
+          if (error instanceof PinnedPortUnavailableError) {
+            await socketTransport.stop().catch(() => {})
+            throw error
+          }
         }
       }
     }
@@ -177,6 +181,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     host: string
     port: number
     preferPinnedPort: boolean
+    requirePinnedPort?: boolean
     fallbackPort?: number
   }): Promise<{ transport: WebSocketTransport; endpoint: string }> {
     const deviceRegistry = this.deviceRegistry
@@ -190,13 +195,11 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       staticRoot: this.webClientRoot,
       ...(options.fallbackPort !== undefined ? { fallbackPort: options.fallbackPort } : {}),
       ...(options.preferPinnedPort ? { preferPinnedPort: true } : {}),
+      ...(options.requirePinnedPort ? { requirePinnedPort: true } : {}),
       fallbackLadder: wsFallbackPortLadder(this.wsPort)
     })
     const mobileSocketWiring = this.ensureMobileSocketWiring(deviceRegistry, e2eeKeypair)
-    this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport, (ws) => ({
-      transport: 'direct',
-      ...wsTransport.webPageOf(ws)
-    }))
+    this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport)
 
     try {
       await wsTransport.start()
@@ -260,6 +263,13 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         if (socket.clientCapabilities.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)) {
           this.runtime.noteAgentLaunchClientReady?.()
         }
+        // Why once per socket: only phones send runtime.clientCapabilities.update.
+        if (socket.device.scope === 'runtime') {
+          this.runtime.sidebarFacts?.noteRuntimeClient(
+            socket.connectionId,
+            socket.clientCapabilities
+          )
+        }
       },
       onClose: (socket, hasOtherConnections) => {
         if (!socket) {
@@ -275,7 +285,6 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           this.runtime.onClientDisconnected(socket.device.clientId)
         }
       },
-      allowInsecureWebPairing: () => process.env[ALLOW_INSECURE_WEB_PAIRING_ENV] === '1',
       // Why: relay attempts are authorized upstream; only direct failures should prompt local re-pairing.
       onUnpairedDeviceAuthFailure: (metadata) => {
         if (metadata.transport === 'direct') {

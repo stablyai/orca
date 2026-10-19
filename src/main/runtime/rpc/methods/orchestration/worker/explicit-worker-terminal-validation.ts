@@ -1,6 +1,6 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'

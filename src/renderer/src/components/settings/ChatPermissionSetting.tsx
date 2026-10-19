@@ -5,7 +5,7 @@ import { SettingsRow } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { getChatPermissionSearchEntry } from './chat-permission-search'
 
-/** This host's mode for new Claude and Codex chats; each chat keeps its own once created. */
+/** This host's mode for new chats; each chat keeps its own once created. */
 export function ChatPermissionSetting({
   settings,
   updateSettings,

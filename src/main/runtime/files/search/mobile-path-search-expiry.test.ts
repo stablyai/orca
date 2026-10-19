@@ -18,6 +18,13 @@ async function collect(): Promise<void> {
   await new Promise<void>((resolve) => setImmediate(resolve))
 }
 
+// Why: a loaded CI worker can defer weak-target clearing past one fixed round of full GCs.
+async function collectUntil(released: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 20 && !released(); attempt++) {
+    await collect()
+  }
+}
+
 function inventory(path: string): RuntimeMobileFilePathInventory {
   return { paths: [path], totalCount: 1, truncated: false }
 }
@@ -52,7 +59,7 @@ describe('mobile file path inventory expiry', () => {
     expect(retained.deref()).toBeDefined()
 
     vi.advanceTimersByTime(1)
-    await collect()
+    await collectUntil(() => retained.deref() === undefined)
     expect(retained.deref() === undefined).toBe(true)
     expect(vi.getTimerCount()).toBe(0)
     await expect(cache.get('ssh-host:workspace', async () => inventory('new.ts'))).resolves.toEqual(
@@ -67,7 +74,9 @@ describe('mobile file path inventory expiry', () => {
     }
     const retired = await releaseOwner()
     expect(vi.getTimerCount()).toBe(1)
-    await collect()
+    await collectUntil(
+      () => retired.owner.deref() === undefined && retired.paths.deref() === undefined
+    )
     expect(retired.owner.deref() === undefined).toBe(true)
     expect(retired.paths.deref() === undefined).toBe(true)
     vi.advanceTimersByTime(TTL_MS)

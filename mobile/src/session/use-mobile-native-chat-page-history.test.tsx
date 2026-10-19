@@ -20,7 +20,7 @@ describe('useMobileNativeChatPageHistory', () => {
   let history: History | null = null
 
   function Harness({ items }: { items: Item[] }): null {
-    history = useMobileNativeChatPageHistory(items, renderRow)
+    history = useMobileNativeChatPageHistory(items, renderRow, 'chat')
     return null
   }
 

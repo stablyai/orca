@@ -4,14 +4,62 @@ import { isSshConnectInFlight, trackSshConnect } from '@/ssh/ssh-connect-in-flig
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { PtyTransport } from '../pty-transport-types'
 import { createUnresolvedOwnerPtyTransport } from '../unresolved-owner-pty-transport'
+import { createLegacyRelayBridgeTransport } from '../legacy-relay-bridge-transport'
+import {
+  legacyRelayBridgePtyIdForPane,
+  releaseLegacyRelayBridgePaneClaim
+} from '../legacy-relay-bridge-panes'
 
 /** Inert: the reconnect overlay and the host's conversion own this pane, so input never remounts it. */
-export function createUnservedSshPaneTransport(): PtyTransport {
+function createUnservedSshPaneTransport(): PtyTransport {
   return {
     ...createUnresolvedOwnerPtyTransport(
       'SSH connection is not active. Use the reconnect dialog or Settings to connect.'
     ),
     ownsRecovery: () => true
+  }
+}
+
+/** COMPAT(legacy-relay-bridge): the host stayed unmoved, and connected, for terminals the bridge serves. */
+function isBridgedUnservedSshTarget(targetId: string): boolean {
+  // Why not status: a dropped link keeps this, and the bridge holds its panes until it returns.
+  const server = useAppStore.getState().sshConnectionStates.get(targetId)?.managedServer
+  return server?.kind === 'relay' && server.bridged === true
+}
+
+/**
+ * COMPAT(legacy-relay-bridge, revisit 2027-01-15): on a host that stayed unmoved for them, a relay
+ * terminal main reports serving reattaches in its relay-era tab; every other pane stays inert.
+ */
+export function createUnservedSshRowTransport(
+  session: ConnectPanePtySession,
+  targetId: string
+): PtyTransport {
+  const inert = createUnservedSshPaneTransport()
+  if (!isBridgedUnservedSshTarget(targetId)) {
+    return inert
+  }
+  const tabId = session.deps.tabId
+  const leafId = session.deps.restoredLeafId ?? session.pane.leafId
+  // Why no bound id: only a pane main lists may skip the dial that converts the host.
+  const ptyId = legacyRelayBridgePtyIdForPane({ tabId, leafId, boundPtyId: null })
+  if (!ptyId) {
+    return inert
+  }
+  session.legacyRelayBridgePtyId = ptyId
+  const bridged = createLegacyRelayBridgeTransport(ptyId, inert)
+  // Why both: an unmount detaches a bound pane, and either frees the shell for a converted row.
+  const release = (): void => releaseLegacyRelayBridgePaneClaim(ptyId, tabId, leafId)
+  return {
+    ...bridged,
+    detach: (options) => {
+      release()
+      bridged.detach?.(options)
+    },
+    destroy: (options) => {
+      release()
+      return bridged.destroy?.(options)
+    }
   }
 }
 

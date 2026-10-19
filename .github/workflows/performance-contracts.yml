@@ -5,6 +5,7 @@ on:
     - cron: '15 9 * * *'
   workflow_dispatch:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - '.github/workflows/performance-contracts.yml'
       - 'config/vitest.performance.config.ts'
@@ -40,6 +41,7 @@ concurrency:
 
 jobs:
   contracts:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     strategy:
       fail-fast: false
       matrix:

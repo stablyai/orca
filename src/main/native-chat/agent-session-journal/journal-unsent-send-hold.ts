@@ -1,6 +1,6 @@
 // What becomes of a send the host accepted and can no longer hand over: an earlier host process
 // quit or crashed first (settled at the next open), or the chat is closing. Either way the agent
-// provably never got it. A person's message (typed, or a launch's first prompt) is kept as a card
+// provably never got it. A person's text (typed, or a launch's first prompt) is kept as a card
 // at the head of the queue, an ordinary one: like every card the chat closed with, it waits for the
 // chat's next turn (`queued-message-pause.ts`). Everything else is rejected as before, because
 // something else re-derives it or the person re-runs it. The submission itself is always rejected,
@@ -31,7 +31,7 @@ export type UnsentSendHold =
 /** The body an unsent send is kept with, or null when it is rejected instead:
  *  - a card's own hand-off: its rejection already returns the card (`rejectedDraftSettlement`);
  *  - `/compact` and other commands: a command in flight is not resumed, the person re-runs it;
- *  - an image: cards are text-only;
+ *  - a direct image: it retains the existing rejected-send recovery instead of becoming a card;
  *  - a send not from a person: orchestration mail (the mailbox re-sends it), a dispatch preamble
  *    or a restart continuation (their owners re-derive them), a kind this build does not know, and
  *    a row with no source that is not a person's (it could be either). */

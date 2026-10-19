@@ -1,7 +1,10 @@
 import type { RuntimeWorkspaceSelectors as WorkspaceSelectors } from '../../workspaces/workspace-selectors'
 import type { OrcaRuntimeWithApplyMobileSessionTabNavigation as MobileSessionNavigation } from './apply-mobile-session-tab-navigation'
 import type { OrcaRuntimeWithStopTerminalsForWorktree as WorktreeTerminalStop } from '../../terminal/stop/worktree-terminal-stop'
-import type { MobileTerminalCommand } from '../../terminal/launch/mobile-terminal-startup'
+import type {
+  MobileTerminalCommand,
+  MobileTerminalResumeCommand
+} from '../../terminal/launch/mobile-terminal-startup'
 import { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from './build-headless-mobile-session-browser-tabs'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
 import { isAgentLaunchRunningIn } from '../../../agent-launch/agent-launch-pane-attachment'
@@ -32,6 +35,9 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
   protected abstract isDeliberatelyParkedPane(
     ...args: Parameters<MobileSessionNavigation['isDeliberatelyParkedPane']>
   ): ReturnType<MobileSessionNavigation['isDeliberatelyParkedPane']>
+  protected abstract resolvePaneOwnedResumeStartup(
+    ...args: Parameters<MobileSessionNavigation['resolvePaneOwnedResumeStartup']>
+  ): ReturnType<MobileSessionNavigation['resolvePaneOwnedResumeStartup']>
   protected abstract isWorktreeTerminalSleepHeld(
     ...args: Parameters<WorktreeTerminalStop['isWorktreeTerminalSleepHeld']>
   ): ReturnType<WorktreeTerminalStop['isWorktreeTerminalSleepHeld']>
@@ -137,11 +143,12 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
   ): Promise<RuntimeMobileSessionTabsResult> {
     const navigation = opts.navigation ?? (opts.notifyClients === false ? 'caller' : 'all')
     const targetsHost = navigationTargetsHost(navigation)
-    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
-    const worktreeId =
-      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
+    let worktreeId = explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     await this.refreshMobileSessionPtyRecords(worktreeId)
+    // Why: the renderer can publish the host's spelling while inventory refresh is pending.
+    worktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ?? worktreeId
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const directTab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
     const tab = leafId
@@ -199,8 +206,11 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
         // bare materialize would put a plain shell under the agent icon.
         // Re-resolve the launch like the create path; providers skip startup
         // commands when attaching to live sessions, so this cannot double-launch.
-        let agentStartup: MobileTerminalCommand = {}
-        if (tab.launchAgent) {
+        // Why: an agent already ran here and the host recorded its session; resume it rather than
+        // start a bare shell or a fresh agent (#27147, #27777).
+        const resumeStartup = await this.resolvePaneOwnedResumeStartup(worktreeId, tab)
+        let agentStartup: MobileTerminalCommand | MobileTerminalResumeCommand = resumeStartup ?? {}
+        if (resumeStartup === undefined && tab.launchAgent) {
           let workspace
           try {
             workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
@@ -228,7 +238,14 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
             env: agentStartup.env,
             startupCommandDelivery: agentStartup.startupCommandDelivery,
             launchConfig: agentStartup.launchConfig,
-            launchAgent: tab.launchAgent,
+            launchAgent: agentStartup.launchAgent ?? tab.launchAgent,
+            // Why: a resume is restore work, so the host's restore admission must see it.
+            ...('resumeProviderSession' in agentStartup
+              ? {
+                  resumeProviderSession: agentStartup.resumeProviderSession,
+                  spawnIntent: automatic ? 'automatic-restore' : 'user-resume'
+                }
+              : {}),
             launchRuntime: agentStartup.launchRuntime,
             targetGroupId,
             ...(automatic ? { refuseSleptWorktree: true } : {})

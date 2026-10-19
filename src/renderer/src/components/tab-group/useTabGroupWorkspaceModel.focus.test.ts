@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 
+vi.mock('../confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => async () => true
+}))
+
 const mocks = vi.hoisted(() => ({
   activateTab: vi.fn(),
   activateWebRuntimeSessionTab: vi.fn(),
@@ -361,6 +365,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
 
     model.commands.closeOthers(firstUnified.id)
+    await Promise.resolve()
 
     expect(mocks.closeTab).toHaveBeenCalledWith(
       'terminal-2',

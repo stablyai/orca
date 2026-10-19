@@ -13,6 +13,7 @@ function bypassCoalescing(event: AgentSessionSubscribeEvent): boolean {
     // A queue list lands at once: held, the card would be missing for a moment after the send's
     // own "Sending…" card went with its queued answer.
     event.queuedMessages !== undefined ||
+    event.currentRequests !== undefined ||
     event.batch.items.some((item) => item.body.kind !== 'message' || item.body.role !== 'assistant')
   )
 }
@@ -75,7 +76,11 @@ function mergeBatch(
 export function createStructuredAgentSessionEventCoalescer(
   emit: (event: AgentSessionSubscribeEvent) => void,
   delayMs = STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS
-): { push: (event: AgentSessionSubscribeEvent) => void; flush: () => void; dispose: () => void } {
+): {
+  push: (event: AgentSessionSubscribeEvent) => void
+  flush: () => void
+  dispose: () => void
+} {
   let pending: Extract<AgentSessionSubscribeEvent, { type: 'batch' }> | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
   const flush = (): void => {

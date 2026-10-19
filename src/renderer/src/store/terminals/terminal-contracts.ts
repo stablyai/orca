@@ -11,6 +11,9 @@ export type AutomaticAgentResumeClaim = {
   providerSession: AgentProviderSessionMetadata
 }
 
+/** Agents whose panes restart in place onto a newly selected account. */
+export type AccountRestartAgent = 'codex' | 'claude'
+
 export type CodexRestartNotice = {
   previousAccountLabel: string
   nextAccountLabel: string

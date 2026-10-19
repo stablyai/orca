@@ -20,6 +20,8 @@ import {
   localFileHandleMock
 } from './filesystem-test-harness'
 
+const diskPreconditionMock = vi.hoisted(() => ({ writeLocalTextFileWithDiskPrecondition: vi.fn() }))
+vi.mock('./filesystem/local-disk-write-precondition', () => diskPreconditionMock)
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
 vi.mock('node:fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
@@ -307,6 +309,30 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow('Cannot write to a directory')
 
     expect(writeFileMock).not.toHaveBeenCalled()
+  })
+
+  it('routes a guarded save through the shared compare-and-write and returns its refusal', async () => {
+    lstatMock.mockResolvedValue({ isDirectory: () => false })
+    diskPreconditionMock.writeLocalTextFileWithDiskPrecondition.mockResolvedValueOnce({
+      ok: false,
+      diskConflict: 'changed'
+    })
+    registerFilesystemHandlers(store as never)
+    const diskPrecondition = { expectedSignature: 'a-b-1' }
+
+    await expect(
+      handlers.get('fs:writeFile')!(null, {
+        filePath: path.resolve('/workspace/repo/file.txt'),
+        content: 'data',
+        diskPrecondition
+      })
+    ).resolves.toEqual({ ok: false, diskConflict: 'changed' })
+
+    expect(diskPreconditionMock.writeLocalTextFileWithDiskPrecondition).toHaveBeenCalledWith(
+      path.resolve('/workspace/repo/file.txt'),
+      'data',
+      diskPrecondition
+    )
   })
 
   it.each([

@@ -3,18 +3,38 @@ name: WSL orcad E2E
 # WSL via orcad (step C10) on real WSL2 distros: a GitHub-hosted windows-2025 runner imports a
 # pinned Ubuntu 24.04 rootfs twice (systemd off and on) and runs
 # src/main/wsl/wsl-orcad-real-distro-lane.test.ts against both: deploy and launch, the wsl.exe
-# stdio bridge, runtime RPC, liveness recovery, holder survival and teardown. Not a required check.
+# stdio bridge, runtime RPC, liveness recovery, holder survival, structured chat and teardown. Not a required check.
 # Hosted WSL2 was proven in #27783: WSL 2.7.14, import 13-18 s, cold boot 8-14 s.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - 'src/main/wsl/**'
-      - '!src/main/wsl/**/*.test.ts'
-      - 'src/main/wsl/wsl-orcad-real-distro-lane.test.ts'
-      # This lane executes only the real distro test above.
+      - 'src/main/runtime/**'
+      - 'src/main/native-chat/**'
+      - 'src/main/claude/**'
+      - 'src/main/claude-accounts/**'
+      - 'src/main/codex/**'
+      - 'src/main/acp/**'
+      - 'src/main/pi/**'
+      - 'src/main/orcad/**'
+      - 'src/main/server/**'
+      - 'src/main/persistence/**'
+      - 'mobile/src/**'
+      - 'src/main/ipc/*wsl*'
+      - 'src/shared/**'
+      - 'src/renderer/src/components/native-chat/**'
+      - 'src/renderer/src/lib/*agent-session*'
+      - 'config/scripts/*orcad*'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
       - 'src/main/ssh/orcad-*'
-      - '!src/main/ssh/orcad-*.test.ts'
-      - 'src/main/ssh/remote-install-transport.ts'
+      - 'src/main/managed-server/**'
+      - 'src/packages/process-host/**'
+      # Unit tests never run in this lane; only the real distro test below does.
+      - '!**/*.test.ts'
+      - '!**/*.test.tsx'
+      - 'src/main/wsl/wsl-orcad-real-distro-lane.test.ts'
       - '.github/workflows/wsl-orcad-e2e.yml'
   workflow_dispatch:
 
@@ -38,6 +58,7 @@ env:
 jobs:
   # The distro is linux-x64-glibc; its node-pty slot only builds on Linux, and nothing else is needed.
   template:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Build the linux-x64-glibc orcad template
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -48,11 +69,11 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
+      - uses: ./.github/actions/build-mobile-web-bundle
       - name: Build the template
         run: |
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc
-          pnpm build:orcad
           node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
       - uses: actions/upload-artifact@v7
         with:
@@ -78,20 +99,32 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      # The image ships WSL 2.7.14, where stopping a systemd distro drops the VM-wide WSLInterop
-      # entry (microsoft/WSL#13885, fixed in 3.0.1). The lane asserts the fixed behavior, so it
-      # installs a pinned 3.0.1 MSI; `wsl --update` asks the GitHub API and gets rate-limited (403).
+      # WSL before 3.0.1 drops the VM-wide WSLInterop entry when a systemd distro stops
+      # (microsoft/WSL#13885). Images from 20261007 ship 3.0.1, where reinstalling the MSI fails
+      # with 1603, so install only when older; `wsl --update` gets rate-limited by the GitHub API.
+      - name: Check the installed WSL version
+        id: wsl-version
+        run: |
+          "ImageOS=$env:ImageOS ImageVersion=$env:ImageVersion"
+          $details = (wsl.exe --version) -join "`n"
+          $details
+          $match = [regex]::Match($details, '(?m)^WSL version:\s*(\d+(?:\.\d+){2,3})\s*$')
+          # Inbox WSL has no --version, so an unreadable version means the package is needed.
+          $installed = if ($LASTEXITCODE -eq 0 -and $match.Success) { [version]$match.Groups[1].Value } else { [version]'0.0.0' }
+          $needsInstall = $installed -lt [version]'3.0.1'
+          "Installed WSL $installed; minimum 3.0.1; install needed: $needsInstall"
+          "needs-install=$($needsInstall.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
       - name: Restore the pinned WSL package
         id: wsl-msi-cache
+        if: steps.wsl-version.outputs.needs-install == 'true'
         uses: actions/cache/restore@v5
         with:
           path: ${{ runner.temp }}/wsl-msi
           key: wsl-orcad-msi-${{ env.WSL_MSI_SHA256 }}
       - name: Install WSL 3.0.1
+        if: steps.wsl-version.outputs.needs-install == 'true'
         timeout-minutes: 8
         run: |
-          "ImageOS=$env:ImageOS ImageVersion=$env:ImageVersion"
-          wsl.exe --version
           $dir = Join-Path $env:RUNNER_TEMP 'wsl-msi'
           New-Item -ItemType Directory -Force $dir | Out-Null
           $msi = Join-Path $dir 'wsl.msi'
@@ -99,18 +132,34 @@ jobs:
           if ((Get-FileHash $msi -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:WSL_MSI_SHA256) {
             Remove-Item $msi; throw 'WSL package checksum mismatch'
           }
-          $install = Start-Process msiexec.exe -ArgumentList @('/i', $msi, '/qn', '/norestart', '/l*v', (Join-Path $env:RUNNER_TEMP 'wsl-msi.log')) -Wait -PassThru
-          if ($install.ExitCode -notin 0, 3010) { throw "WSL install failed: $($install.ExitCode)" }
+          # Kept beside the receipts so the always() upload carries it.
+          New-Item -ItemType Directory -Force $env:ORCA_WSL_ORCAD_LANE_RECEIPTS | Out-Null
+          $log = Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'wsl-msi-install.log'
+          $install = Start-Process msiexec.exe -ArgumentList @('/i', $msi, '/qn', '/norestart', '/l*v', $log) -Wait -PassThru
+          if ($install.ExitCode -notin 0, 3010) {
+            if (Test-Path $log) {
+              $lines = @(Get-Content $log)
+              $failed = ($lines | Select-String -SimpleMatch 'Return value 3' | Select-Object -First 1).LineNumber
+              if ($failed) { '--- msiexec log before the failing action'; $lines[[math]::Max(0, $failed - 40)..($failed - 1)] }
+              '--- msiexec log tail'; $lines | Select-Object -Last 60
+            }
+            throw "WSL install failed: $($install.ExitCode)"
+          }
           wsl.exe --shutdown
-          $version = [version](((wsl.exe --version) -join "`n") -replace '(?s)^\D*?(\d+\.\d+\.\d+).*$', '$1')
-          wsl.exe --version
-          if ($version -lt [version]'3.0.1') { throw "WSL $version is older than 3.0.1" }
       - name: Save the pinned WSL package
-        if: steps.wsl-msi-cache.outputs.cache-hit != 'true'
+        if: steps.wsl-version.outputs.needs-install == 'true' && steps.wsl-msi-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
           path: ${{ runner.temp }}/wsl-msi
           key: wsl-orcad-msi-${{ env.WSL_MSI_SHA256 }}
+      - name: Verify WSL is at least 3.0.1
+        run: |
+          $details = (wsl.exe --version) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "Could not read the WSL version: $details" }
+          $details
+          $match = [regex]::Match($details, '(?m)^WSL version:\s*(\d+(?:\.\d+){2,3})\s*$')
+          if (-not $match.Success) { throw 'Could not parse the WSL version' }
+          if ([version]$match.Groups[1].Value -lt [version]'3.0.1') { throw "WSL $($match.Groups[1].Value) is older than 3.0.1" }
       - name: Restore the pinned rootfs
         id: rootfs-cache
         uses: actions/cache/restore@v5
@@ -140,6 +189,7 @@ jobs:
             # A non-root default user, as on a real install; git for the lane's repo.
             $setup = "set -e; id orca >/dev/null 2>&1 || useradd -m -s /bin/bash orca; " +
               "printf '[boot]\nsystemd=$($d.Systemd)\n[user]\ndefault=orca\n' > /etc/wsl.conf; " +
+              "printf 'export ORCA_BACKGROUND_LAUNCH=1\nexport USERPROFILE=`$HOME\nexport APPDATA=`$HOME/.config\nexport LOCALAPPDATA=`$HOME/.local/share\nexport XDG_CONFIG_HOME=`$HOME/.config\nexport XDG_DATA_HOME=`$HOME/.local/share\nexport XDG_CACHE_HOME=`$HOME/.cache\nexport XDG_STATE_HOME=`$HOME/.local/state\nexport CLAUDE_CONFIG_DIR=`$HOME/.claude\nexport CODEX_HOME=`$HOME/.codex\n' >> /home/orca/.profile; " +
               "command -v git >/dev/null || (apt-get update -qq && apt-get install -y -qq git)"
             wsl.exe -d $d.Name -u root --exec sh -c $setup
             if ($LASTEXITCODE -ne 0) { throw "provisioning $($d.Name) failed: $LASTEXITCODE" }
@@ -166,6 +216,20 @@ jobs:
         with:
           path: ${{ runner.temp }}/wsl-rootfs
           key: wsl-orcad-rootfs-${{ env.ROOTFS_SHA256 }}
+      - name: Isolate the desktop test home
+        run: |
+          New-Item -ItemType Directory -Force $env:ORCA_WSL_ORCAD_LANE_RECEIPTS | Out-Null
+          $files = @('.claude/settings.json', '.claude.json', '.codex/hooks.json', '.codex/config.toml') | ForEach-Object { Join-Path $env:USERPROFILE $_ }
+          $hashes = @($files | ForEach-Object {
+            @{ Path = $_; Hash = $(if (Test-Path $_) { (Get-FileHash $_ -Algorithm SHA256).Hash } else { 'absent' }) }
+          })
+          $hashes | ConvertTo-Json | Set-Content (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'real-home-hashes.json')
+          $homeDir = Join-Path $env:RUNNER_TEMP 'wsl-orcad-desktop-home'
+          foreach ($name in @('HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME')) {
+            $path = Join-Path $homeDir $name
+            New-Item -ItemType Directory -Force $path | Out-Null
+            "$name=$path" >> $env:GITHUB_ENV
+          }
       - name: 'Phase 1: deploy, RPC, kill orcad, terminate distro'
         timeout-minutes: 20
         env:
@@ -177,8 +241,8 @@ jobs:
           node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/wsl-orcad-real-distro-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'launch.log')
           if ($global:LASTEXITCODE -ne 0) { throw "launch phase failed: $global:LASTEXITCODE" }
       # A new process: the holders must have kept both distros Running since phase 1 exited.
-      - name: 'Phase 2: holders survive, reconnect, teardown'
-        timeout-minutes: 10
+      - name: 'Phase 2: holders survive, chat, reconnect, teardown'
+        timeout-minutes: 15
         env:
           ORCA_RUN_WSL_ORCAD_LANE: '1'
           ORCA_WSL_ORCAD_LANE_PHASE: survive
@@ -186,6 +250,16 @@ jobs:
         run: |
           node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/wsl-orcad-real-distro-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'survive.log')
           if ($global:LASTEXITCODE -ne 0) { throw "survive phase failed: $global:LASTEXITCODE" }
+      - name: Real desktop agent configuration is unchanged
+        if: always()
+        run: |
+          $baseline = Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'real-home-hashes.json'
+          if (Test-Path $baseline) {
+            foreach ($file in (Get-Content $baseline -Raw | ConvertFrom-Json)) {
+              $hash = if (Test-Path $file.Path) { (Get-FileHash $file.Path -Algorithm SHA256).Hash } else { 'absent' }
+              if ($hash -ne $file.Hash) { throw "Real agent configuration changed: $($file.Path)" }
+            }
+          }
       # Belt and braces for the runner: a missing VM-wide interop entry is restored, then fails.
       - name: WSLInterop is intact
         if: ${{ !cancelled() && steps.import.outcome == 'success' }}

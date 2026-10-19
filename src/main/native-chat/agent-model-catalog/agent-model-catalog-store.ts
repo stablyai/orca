@@ -35,11 +35,11 @@ export type { AgentModelCatalogFailure }
 
 // The execution host's one model catalog per (agent, launch fingerprint):
 // served immediately at any age, refreshed in the background when old, and
-// written through by every successful listing a live session already performs.
+// written through by each session's startup and later capability listings.
 // Each entry keeps two listings: the last account-level discovery (the only
 // source of the configured default and default efforts, and the only clock a
-// refresh follows) and the last live session's listing (which models exist and
-// their efforts). Readers see the two merged; neither write erases the other.
+// refresh follows) and the last received session listing (which models exist
+// and their efforts). Readers see the two merged; neither write erases the other.
 // Success-only: a failure, timeout or empty list is never stored as a catalog
 // and never persisted — it is held separately under a short TTL so a burst of
 // picker opens does not hammer a dead binary, then dies on its own (see
@@ -48,11 +48,12 @@ export type { AgentModelCatalogFailure }
 export const AGENT_MODEL_CATALOG_FRESH_MS = 10 * 60_000
 export const AGENT_MODEL_CATALOG_MAX_ENTRIES = 256
 
-/** Lists an agent's models without a session, under the account a launch would pin. `signal`
- *  stops the listing and its child once the host that asked is going away. */
+/** Lists an agent's models before a chat, under the account a launch would pin. `signal` stops
+ *  the listing and its child once the host that asked is going away; `workspacePath` is the folder
+ *  of the chat that asked, where a listing that opens a session runs. */
 export type AgentModelCatalogProbe = (
   accountHome: AgentSessionAccountHome,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; workspacePath?: string }
 ) => Promise<AgentModelCatalogSuccess>
 
 /** Who lists, by identity: a live session's per-spawn handle, or the session-less probe. */

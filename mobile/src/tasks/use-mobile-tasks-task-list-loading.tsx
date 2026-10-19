@@ -29,7 +29,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     client,
     clientRef,
     connState,
-    countGitHubItems,
+    countGitHubItemPages,
     fetchGitHubItemsPage,
     githubMode,
     gitlabFilter,
@@ -53,7 +53,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     setGithubRepoSources,
     setGithubSourceErrors,
     setGithubSourceFallbacks,
-    setGithubTotalCount,
+    setGithubCountedTotalPages,
     setItems,
     setLoading,
     setRefreshing,
@@ -141,15 +141,15 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             setGithubCurrentPage(0)
             setItems(page.items)
             if (effectiveRepoIds.size > 0) {
-              void countGitHubItems(requestClient, queriedRepos).then((count) => {
+              void countGitHubItemPages(requestClient, queriedRepos).then((totalPages) => {
                 if (isCurrent()) {
-                  setGithubTotalCount(count)
+                  setGithubCountedTotalPages(totalPages)
                 }
               })
             } else {
               // Why: the default all-repos view must not spend GitHub Search
               // quota on totals before the user narrows the repository scope.
-              setGithubTotalCount(null)
+              setGithubCountedTotalPages(null)
             }
             if (page.failedCount > 0) {
               setError(buildPartialRepositoryNotice(page.failedCount, queriedRepos.length))
@@ -272,7 +272,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       appliedQuery,
       client,
       connState,
-      countGitHubItems,
+      countGitHubItemPages,
       fetchGitHubItemsPage,
       gitlabFilter,
       gitlabView,

@@ -6,6 +6,8 @@ on:
       - opened
       - synchronize
       - reopened
+      - ready_for_review
+      - converted_to_draft
     paths:
       - 'mobile/**'
       # Why all of src/shared: mobile imports hundreds of its modules, directly and through the RPC
@@ -30,6 +32,7 @@ on:
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
       - 'config/scripts/run-mobile-ci-tests.mjs'
+      - 'config/oxlint-code-quality-native-plugins.json'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
       - '.github/actions/restore-pnpm-verification/**'
@@ -94,7 +97,7 @@ concurrency:
 jobs:
   verify:
     name: Mobile verify
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     # Why ARM: 209s of this job is Vitest and nothing here needs x86: no Android SDK, emulator, gradle,
     # Hermes or Watchman, no docker, and no artifacts. The Gemfile.lock lists the generic `ruby`
     # platform, so frozen bundler installs without an aarch64-linux entry.
@@ -151,6 +154,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Why here: pr.yml runs these import rules before mobile's install, when mobile's tsconfig
+      # (which extends expo's) can't load, so its import cycles were never seen. Zero tolerance.
+      - name: Lint mobile imports with mobile dependencies installed
+        working-directory: .
+        run: node node_modules/oxlint/bin/oxlint --config config/oxlint-code-quality-native-plugins.json mobile --deny-warnings
 
       # Call installed tools so pnpm's dependency refresh cannot race between checks.
       - name: Typecheck
@@ -230,6 +239,10 @@ jobs:
           FASTLANE_SKIP_UPDATE_CHECK: '1'
           FASTLANE_OPT_OUT_USAGE: '1'
         run: bundle exec fastlane lanes
+
+      - name: Smoke-check CocoaPods
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        run: bundle exec pod --version
 
       - name: Lint
         run: pnpm lint

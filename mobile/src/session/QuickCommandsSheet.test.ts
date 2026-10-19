@@ -87,6 +87,7 @@ describe('QuickCommandsSheet', () => {
           client: {} as RpcClient,
           repoId: 'repo-1',
           repoName: 'Repo',
+          agentPromptMaxLength: null,
           onLaunch
         })
       )
@@ -109,6 +110,7 @@ describe('QuickCommandsSheet', () => {
           client: {} as RpcClient,
           repoId: 'repo-1',
           repoName: 'Repo',
+          agentPromptMaxLength: null,
           onLaunch: () => true
         })
       )
@@ -146,6 +148,7 @@ describe('QuickCommandsSheet', () => {
           client: {} as RpcClient,
           repoId: 'repo-1',
           repoName: 'Repo',
+          agentPromptMaxLength: null,
           onLaunch: () => true
         })
       )
@@ -172,6 +175,7 @@ describe('QuickCommandsSheet', () => {
           client: {} as RpcClient,
           repoId: null,
           repoName: 'Folder workspace',
+          agentPromptMaxLength: null,
           onLaunch: () => true
         })
       )
@@ -195,6 +199,7 @@ describe('QuickCommandsSheet', () => {
           client: {} as RpcClient,
           repoId: 'repo-1',
           repoName: 'Repo',
+          agentPromptMaxLength: null,
           onLaunch: () => true
         })
       )

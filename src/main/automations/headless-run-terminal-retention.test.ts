@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationRun, AutomationRunStatus } from '../../shared/automations-types'
+import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import {
   createHeadlessRunTerminalRetention,
   RUN_TERMINAL_GRACE_MS,
@@ -32,10 +33,14 @@ function harness(runs: AutomationRun[]) {
   // Runs whose shell is proven alone at its prompt; any other is unproven, as a live agent reads.
   const idleShell = new Set<string>()
   const dead = new Set<string>()
+  const lanes = new Map<string, Promise<void>>()
   const retention = createHeadlessRunTerminalRetention({
+    inAutomationLane: (automationId, operation) =>
+      runKeyedSerializedOperation(lanes, automationId, operation),
     listRuns: () => runs.filter((run) => !forgotten.some((gone) => gone.id === run.id)),
     terminalClientUse: (run) => use.get(run.id) ?? 'unused',
-    runTerminalAlive: (run) => !dead.has(run.id),
+    // A closed pane is gone for every run on it.
+    runTerminalAlive: (run) => !dead.has(run.id) && !closed.includes(run.terminalPaneKey ?? ''),
     shellAloneAtPrompt: async (run) => idleShell.has(run.id),
     closeRunTerminal: async (run) => {
       closed.push(run.terminalPaneKey ?? '')
@@ -45,7 +50,7 @@ function harness(runs: AutomationRun[]) {
       forgotten.push(run)
     }
   })
-  return { retention, closed, forgotten, use, idleShell, dead }
+  return { retention, closed, forgotten, use, idleShell, dead, lanes }
 }
 
 beforeEach(() => {
@@ -224,5 +229,92 @@ describe('headless run terminal retention', () => {
     h.idleShell.add('exited')
     expect(await h.retention.drain()).toBe(2)
     expect(h.closed.toSorted()).toEqual(['tab-exited:1', 'tab-missing:1'])
+  })
+
+  it('keeps older runs linked to a reused pane until its newest run lets it go', async () => {
+    // Five reuse-session runs share one agent's pane; one older run had its own.
+    const shared = [1, 2, 3, 4, 5].map((n) => ({
+      ...makeRun(`r${n}`, n),
+      terminalPaneKey: 'tab-shared:1'
+    }))
+    const h = harness([makeRun('r0', 0), ...shared])
+    await h.retention.sweep()
+    vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS * 10)
+    await h.retention.sweep()
+
+    expect(h.closed).toEqual([])
+    expect(h.forgotten).toEqual([])
+
+    await h.retention.drain()
+    expect(h.closed.toSorted()).toEqual(['tab-r0:1', 'tab-shared:1'])
+    // Once the pane is gone, the older records follow it.
+    expect(h.forgotten.map((run) => run.id).toSorted()).toEqual([
+      'r0',
+      'r1',
+      'r2',
+      'r3',
+      'r4',
+      'r5'
+    ])
+  })
+
+  it('closes nothing while a run of the automation holds its lane, then sees that run', async () => {
+    const runs = [0, 1, 2, 3].map((n) => makeRun(`r${n}`, n))
+    const h = harness(runs)
+    await h.retention.sweep()
+    vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
+
+    let finishDispatch = (): void => {}
+    // A reuse run picks r0's pane and records it before releasing the lane.
+    const dispatch = runKeyedSerializedOperation(h.lanes, 'nightly', async () => {
+      await new Promise<void>((resolve) => (finishDispatch = resolve))
+      runs.push({ ...makeRun('reuse', 4, 'dispatched'), terminalPaneKey: 'tab-r0:1' })
+    })
+    const sweeping = h.retention.sweep()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.closed).toEqual([])
+
+    finishDispatch()
+    await dispatch
+    await sweeping
+    // r0's pane is the reuse run's now: r0 keeps its link, and the oldest other terminal closes.
+    expect(h.closed).toEqual(['tab-r1:1'])
+    expect(h.forgotten.map((run) => run.id)).toEqual(['r1'])
+  })
+
+  it('a dispatch queued behind a closing sweep never sees the closing pane as free', async () => {
+    const runs = [0, 1, 2, 3].map((n) => makeRun(`r${n}`, n))
+    const h = harness(runs)
+    await h.retention.sweep()
+    vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
+    let finishClose = (): void => {}
+    const closeRunTerminal = vi.fn(
+      () => new Promise<boolean>((resolve) => (finishClose = () => resolve(true)))
+    )
+    const slow = createHeadlessRunTerminalRetention({
+      listRuns: () => runs.filter((run) => !h.forgotten.some((gone) => gone.id === run.id)),
+      terminalClientUse: () => 'unused',
+      runTerminalAlive: () => true,
+      shellAloneAtPrompt: async () => false,
+      closeRunTerminal,
+      forgetRunTerminal: async (run) => {
+        h.forgotten.push(run)
+      },
+      inAutomationLane: (automationId, operation) =>
+        runKeyedSerializedOperation(h.lanes, automationId, operation)
+    })
+    await slow.sweep()
+    vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
+
+    const sweeping = slow.sweep()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(closeRunTerminal).toHaveBeenCalledTimes(1)
+    // The pane's close is still in flight; a dispatch waits for it.
+    const sawForgotten = runKeyedSerializedOperation(h.lanes, 'nightly', async () =>
+      h.forgotten.map((run) => run.id)
+    )
+    finishClose()
+    await sweeping
+    expect(await sawForgotten).toEqual(['r0'])
   })
 })

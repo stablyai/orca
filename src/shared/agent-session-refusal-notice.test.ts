@@ -465,7 +465,10 @@ describe('the notice for every reason a host names', () => {
         failure.details?.reason !== 'hostUnsupported' &&
         write !== 'read-history'
       const saysNotDone =
-        write === 'read-history' && failure.code === 'agent_session_journal_unreadable'
+        write === 'read-history' &&
+        (failure.code === 'agent_session_journal_unreadable' ||
+          (failure.code === 'agent_session_identity_required' &&
+            failure.details?.reason === 'transcriptUnreadable'))
       // "Run /clear when it's done" already says the command has yet to happen.
       const clearWhileWorking = (
         [

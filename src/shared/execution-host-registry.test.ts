@@ -92,6 +92,15 @@ describe('execution host registry', () => {
     ])
   })
 
+  it('hides machine-provider SSH targets the same way', () => {
+    const hosts = buildExecutionHostRegistry({
+      repos: [{ connectionId: 'machine-0123', executionHostId: 'ssh:machine-0123' }],
+      settings: { activeRuntimeEnvironmentId: null },
+      sshTargetLabels: new Map([['machine-0123', 'omarchy-dev']])
+    })
+    expect(hosts.some((h) => h.id.includes('machine-0123'))).toBe(false)
+  })
+
   it('hides runtime-owned (ephemeral VM) SSH targets from repo-derived hosts', () => {
     const hosts = buildExecutionHostRegistry({
       // A VM-backed repo carries the hidden runtime-owned target on both fields.

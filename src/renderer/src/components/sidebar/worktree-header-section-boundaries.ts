@@ -1,6 +1,6 @@
 import { estimateRenderRowSize } from './worktree-list/viewport/virtual-rows'
 import type { RenderRow } from './worktree-list/listing/render-row'
-import type { GroupHeaderRow } from './worktree-list/grouping/row-types'
+import type { GroupHeaderRow } from '../../../../shared/sidebar-list/row-types'
 
 function getEstimatedRenderRowStarts(
   rows: readonly RenderRow[],

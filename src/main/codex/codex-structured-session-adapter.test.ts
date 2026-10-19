@@ -171,7 +171,19 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         cwd: '/work/repo',
         approvalPolicy: 'on-request',
         sandbox: 'workspace-write',
-        approvalsReviewer: 'user'
+        approvalsReviewer: 'user',
+        // A user's `inherit = "core"` policy would strip these from every command the chat runs.
+        config: {
+          'shell_environment_policy.set.ORCA_AGENT_SESSION_ID': 'session-1',
+          'shell_environment_policy.set.ORCA_STRUCTURED_SESSION': '1',
+          'shell_environment_policy.set.ORCA_CLI_COMMAND': expect.stringMatching(
+            /^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/
+          ),
+          'shell_environment_policy.set.ORCA_USER_DATA_PATH': expect.any(String),
+          'shell_environment_policy.set.ORCA_ENVIRONMENT': '',
+          'shell_environment_policy.set.ORCA_PAIRING_CODE': '',
+          'shell_environment_policy.set.ORCA_REMOTE_PAIRING': ''
+        }
       }
     })
     expect(acquisition.process).toEqual({
@@ -225,8 +237,8 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         path: '/rollouts/thread-proven.jsonl'
       })
     })
-    expect(acquisition.link.origin).toBe('resumed')
-    expect(acquisition.link.handle).toEqual(codexProviderHandle('thread-proven'))
+    expect(acquisition.link?.origin).toBe('resumed')
+    expect(acquisition.link?.handle).toEqual(codexProviderHandle('thread-proven'))
   })
 
   it('starts a thread in place of a creation Codex never saved, and says which it replaced', async () => {

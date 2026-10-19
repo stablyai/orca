@@ -131,12 +131,10 @@ async function readsWorking(): Promise<boolean> {
   )
 }
 
-/** Whether the CLI was written `hello`, once the delivery loop has settled what it does with it. */
-async function helloWritten(): Promise<boolean> {
-  await vi.waitFor(() =>
-    expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
-  )
-  return claude.connections[0]!.sent.some((message) => JSON.stringify(message).includes('hello'))
+async function expectHeld(id: string): Promise<void> {
+  expect(await submission(id)).toMatchObject({ dispatchState: 'pending' })
+  expect((await submission(id))?.handedOverAt).toBeUndefined()
+  expect(claude.connections[0]!.sent).toEqual([])
 }
 
 it('holds the message from a start that never answers, and a Stop ends it: stopped, nothing working', async () => {
@@ -150,7 +148,7 @@ it('holds the message from a start that never answers, and a Stop ends it: stopp
   const [connection] = claude.connections
 
   // Accepted, and held while initialize is still unanswered.
-  expect(await helloWritten()).toBe(false)
+  await expectHeld(id)
   expect(connection!.calls).toEqual([{ subtype: 'initialize' }])
   expect(host['sessions'].get(SESSION)?.child?.phase).toBe('starting')
   expect(await readsWorking()).toBe(true)
@@ -182,7 +180,9 @@ async function sendHello(written: boolean): Promise<string> {
   if (!sent.ok) {
     throw new Error('send refused')
   }
-  await vi.waitFor(async () => expect(await helloWritten()).toBe(written))
+  await (written
+    ? vi.waitFor(() => expect(claude.connections[0]!.sent).toHaveLength(1))
+    : expectHeld(sent.value.clientMessageId))
   return sent.value.clientMessageId
 }
 
@@ -215,7 +215,7 @@ it.each(['user-close', 'evict'] as const)(
 // doubt, as for any running child.
 it('leaves a message in doubt when the start answered and the chat closes before the echo', async () => {
   answerInitialize()
-  await adapter['sessions'].get(SESSION)?.startup.settled
+  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
   const id = await sendHello(true)
 
   await host.close(SESSION, 'user-close')

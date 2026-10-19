@@ -2,6 +2,7 @@ name: macOS updater regression tests
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - '.github/workflows/macos-updater-tests.yml'
       - 'src/main/macos-update-running-instances*'
@@ -24,6 +25,7 @@ concurrency:
 
 jobs:
   updater:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: macos-15
     timeout-minutes: 20
     steps:

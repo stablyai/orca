@@ -10,15 +10,17 @@ import {
   removeSharedSkillInstall
 } from '../skills/skill-install-management-service'
 import { toLinuxPath } from '../wsl'
+import type { SkillBundleInstallPreviewRequest } from '../../shared/skill-bundle-install-contract'
 import type {
-  SkillBundleInstallPreviewRequest,
   SkillInstallPreviewRequest,
   SkillInstallRequest,
   SkillRemoveRequest,
-  ManagedSkillInstall,
+  ManagedSkillInstall
+} from '../../shared/skill-install-contract'
+import type {
   SkillUploadBeginRequest,
   SkillUploadChunkRequest
-} from './runtime-skill-types'
+} from '../../shared/skill-upload-session-contract'
 import {
   RuntimeSkillInstallCommands,
   SKILL_SSH_UNAVAILABLE

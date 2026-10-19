@@ -1,4 +1,4 @@
-import { HEADER_LENGTH, MAX_MESSAGE_SIZE } from './relay-protocol'
+import { HEADER_LENGTH, MAX_MESSAGE_SIZE } from '../../shared/relay-frame-decoder'
 import { SshMultiplexerWriterLaneScheduler } from './ssh-multiplexer-writer-lane-scheduler'
 import type { WriteAmbiguityReason, WriteRefusalReason } from '../../shared/pty-write-settlement'
 

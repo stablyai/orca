@@ -44,8 +44,21 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     const incomingIds = new Set(
       incoming?.tabs.flatMap((tab) => getMobileSessionSnapshotTabIdentityKeys(tab)) ?? []
     )
+    // Why: a headless-built base preserves every terminal, so a renderer publication over it
+    // (the first after a restart) must still drop the tabs the renderer durably closed (STA-4897).
+    const retiredTabIds =
+      incoming && this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)
+        ? new Set(this.listRendererRetiredTerminalTabs(incoming, existing).map(({ tab }) => tab.id))
+        : null
     return existing.tabs.filter((tab) => {
       if (getMobileSessionSnapshotTabIdentityKeys(tab).some((id) => incomingIds.has(id))) {
+        return false
+      }
+      if (
+        tab.type === 'terminal' &&
+        retiredTabIds?.has(tab.id) &&
+        !this.hasLiveOrPersistedServeOrSshOwnedPtyBinding(existing.worktree, tab)
+      ) {
         return false
       }
       return this.shouldPreserveHeadlessMobileSessionTab(existing, tab)

@@ -12,6 +12,8 @@ export type PaneSpawnDeferral = {
 
 // Why module state: the pane session is imperative and outlives renders; overlays only read it.
 const deferralsByPaneKey = new Map<string, PaneSpawnDeferral>()
+// Why: a hidden pane holding its sleeping agent's resume until shown owns that session too, with no overlay.
+const revealHoldsByPaneKey = new Map<string, () => boolean>()
 const listeners = new Set<() => void>()
 
 function notify(): void {
@@ -35,9 +37,41 @@ export function getPaneSpawnDeferral(paneKey: string): PaneSpawnDeferral | undef
   return deferralsByPaneKey.get(paneKey)
 }
 
-/** A mounted pane holding a restore its host deferred; it owns that session's resume. */
+/** A mounted pane holding a restore its host deferred, or one held until shown; it owns that session's resume. */
 export function isPaneSpawnDeferred(paneKey: string): boolean {
-  return deferralsByPaneKey.has(paneKey)
+  return deferralsByPaneKey.has(paneKey) || revealHoldsByPaneKey.get(paneKey)?.() === true
+}
+
+export function holdPaneResumeUntilShown(paneKey: string, isHolding: () => boolean): void {
+  revealHoldsByPaneKey.set(paneKey, isHolding)
+}
+
+/** Only the hold's own pane releases it; a remount may already have replaced it. */
+export function releasePaneResumeHold(paneKey: string, isHolding: () => boolean): void {
+  if (revealHoldsByPaneKey.get(paneKey) === isHolding) {
+    revealHoldsByPaneKey.delete(paneKey)
+  }
+}
+
+// Why: a pane's start that resumes its record in place (shown, or a hidden pane's background wake)
+// owns it until that start settles; main clears the gone terminal's binding meanwhile.
+const inPlaceResumesByPaneKey = new Map<string, Set<() => boolean>>()
+
+/** Returns the release; `isLive` lets a disposed pane stop owning a start that never settles. */
+export function holdPaneResumeInPlace(paneKey: string, isLive: () => boolean): () => void {
+  const holds = inPlaceResumesByPaneKey.get(paneKey) ?? new Set()
+  holds.add(isLive)
+  inPlaceResumesByPaneKey.set(paneKey, holds)
+  return () => {
+    holds.delete(isLive)
+    if (holds.size === 0 && inPlaceResumesByPaneKey.get(paneKey) === holds) {
+      inPlaceResumesByPaneKey.delete(paneKey)
+    }
+  }
+}
+
+export function isPaneResumingInPlace(paneKey: string): boolean {
+  return [...(inPlaceResumesByPaneKey.get(paneKey) ?? [])].some((isLive) => isLive())
 }
 
 function subscribe(listener: () => void): () => void {

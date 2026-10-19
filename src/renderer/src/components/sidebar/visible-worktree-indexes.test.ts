@@ -23,7 +23,7 @@ vi.mock('../../../../shared/resolved-worktree-lineage', async (importOriginal) =
 
 import { computeVisibleWorktreeIds } from './compute-visible-worktrees'
 import type { computeVisibleWorktrees } from './compute-visible-worktrees'
-import { getCyclicProjectedWorktreeLineageIds } from './worktree-lineage-projection'
+import { getCyclicProjectedWorktreeLineageIds } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
 
 type IdentifiedWorktree = Worktree & { instanceId: string }

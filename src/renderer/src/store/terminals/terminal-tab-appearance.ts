@@ -9,6 +9,11 @@ export function createTerminalTabAppearanceActions(
 ): Pick<TerminalSlice, 'setTabCustomTitle' | 'setTabColor'> {
   return {
     setTabCustomTitle: (tabId, title, opts) => {
+      // Why: a remote server's tab is named on that server, which republishes the name back here.
+      const state = get()
+      void import('@/runtime/web-runtime-terminal-rename').then(({ renameHostTerminalTab }) =>
+        renameHostTerminalTab(state, tabId, title)
+      )
       set((s) => {
         const next = { ...s.tabsByWorktree }
         for (const wId of Object.keys(next)) {

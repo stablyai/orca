@@ -11,7 +11,7 @@ import {
   openMobileE2EEV2Frame,
   sealMobileE2EEV2Frame
 } from '../../../shared/mobile-e2ee-v2-framing'
-import { deriveSharedKey } from './e2ee-crypto'
+import { deriveSharedKey } from '../../../shared/e2ee-crypto'
 import type { RpcBinarySendResult } from './rpc-binary-sender'
 import { E2EEChannel } from './e2ee-channel'
 import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'

@@ -3,7 +3,7 @@ import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { AppState } from '@/store/types'
 import { isPairedWebClientWindow } from './desktop-window-chrome'
-import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from './worktree-runtime-owner'
 
 export const MANAGED_BROWSER_UNAVAILABLE_MESSAGE =
   "Managed browser tabs are unavailable because this web client's paired runtime does not support browser streaming."
@@ -66,7 +66,7 @@ export function getClientCreationActionPolicy(
   const runtimeEnvironmentId = floatingWorkspace
     ? null
     : worktreeId
-      ? getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      ? runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
       : (state.settings?.activeRuntimeEnvironmentId?.trim() ?? null)
   const runtimeStatus = runtimeEnvironmentId
     ? (state.runtimeStatusByEnvironmentId?.get(runtimeEnvironmentId)?.status ?? null)

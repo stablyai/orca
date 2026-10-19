@@ -14,8 +14,8 @@ name: Cut Release
 #      semver within a channel, so a regressing "latest" is the one thing
 #      that breaks auto-update for fresh installs.
 #   5. Write package.json, commit (detached), tag, push tag.
-#   6. If ref was the tip of origin/main, fast-forward main to include the
-#      version-bump commit so developers see the right version locally.
+#   6. If ref was the tip of origin/main, try to fast-forward its version;
+#      a pull-request-only rule leaves main unchanged and still pushes the tag.
 #   7. Build and publish artifacts from the tag.
 
 on:
@@ -779,13 +779,18 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PUSH_MAIN" == "true" ]]; then
-            # Fast-forward main to include the version-bump commit.
-            git push origin "HEAD:refs/heads/main"
-            git push origin "$TAG"
-          else
-            # Off-main release — only the tag is published; main is untouched.
-            git push origin "$TAG"
+            push_log="$RUNNER_TEMP/release-push-main.log"
+            if git push origin "HEAD:refs/heads/main" >"$push_log" 2>&1; then
+              cat "$push_log"
+            elif grep -Fq 'GH013' "$push_log" && grep -Fq 'Changes must be made through a pull request.' "$push_log"; then
+              cat "$push_log"
+              echo "::notice::Main requires pull requests; leaving its version unchanged and publishing only $TAG."
+            else
+              cat "$push_log"
+              exit 1
+            fi
           fi
+          git push origin "$TAG"
 
       # Why: a patch cut from a base older than #24155 has no orcad template to build or ship.
       - name: Detect whether the tag ships the orcad template

@@ -40,7 +40,7 @@ vi.mock('./headless-serve-ssh-registration', () => ({
   })
 }))
 vi.mock('../ipc/mobile', () => ({ registerMobileHandlers: vi.fn() }))
-vi.mock('../ipc/runtime-environment-mobile-relay-hosts', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-mobile-relay-hosts', () => ({
   createRuntimeEnvironmentMobileRelayHosts: vi.fn()
 }))
 vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))

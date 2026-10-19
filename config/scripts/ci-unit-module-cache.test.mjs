@@ -1,6 +1,7 @@
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import {
@@ -144,6 +145,26 @@ it('uses an optional exact restore after install and saves successful scoped pro
   expect(save.with.key).toBe(steps[restore].with.key)
   expect(workflow.on.workflow_call.inputs.module_cache.default).toBe('off')
   expect(workflow.on.workflow_call.inputs.run_relay_integration.default).toBe(true)
+})
+
+it('retains four workers on ARM and the four-core Blacksmith unit runner', () => {
+  const workflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
+  const step = workflow.jobs.test.steps.find((step) => step.name === 'Test shard')
+  const expression = [...step.run.matchAll(/\$\{\{(.+?)\}\}/g)].find((match) =>
+    match[1].includes('--maxWorkers')
+  )[1]
+  for (const [arch, runner] of [
+    ['ARM64', 'ubuntu-24.04-arm'],
+    ['ARM64', 'blacksmith-4vcpu-ubuntu-2404-arm'],
+    ['X64', 'blacksmith-4vcpu-ubuntu-2404']
+  ]) {
+    expect(runInNewContext(expression, { runner: { arch }, inputs: { runner } })).toBe(
+      '--maxWorkers=4'
+    )
+  }
+  expect(
+    runInNewContext(expression, { runner: { arch: 'X64' }, inputs: { runner: 'ubuntu-latest' } })
+  ).toBe('')
 })
 
 it('runs full same-source controls serially with five four-worker shards and included producer costs', () => {

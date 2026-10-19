@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
+import { getWorktreeCardDetails } from '../../../../shared/worktree/card-properties'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
@@ -8,7 +9,7 @@ import {
 } from '../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
 import {
   isDisconnectedRuntimeHostState,
@@ -46,7 +47,12 @@ export function useWorktreeCardFoundation({
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
-  const compactCards = !newCardStyle && settings?.compactWorktreeCards === true
+  const compactWorktreeCards = settings?.compactWorktreeCards === true
+  const cardDetails = useMemo(
+    () => getWorktreeCardDetails(cardProps, { compactWorktreeCards, newCardStyle }),
+    [cardProps, compactWorktreeCards, newCardStyle]
+  )
+  const { compactCards } = cardDetails
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -156,8 +162,10 @@ export function useWorktreeCardFoundation({
       EMPTY_WORKSPACE_PORTS
   )
 
+  // Why no hostId: the host-qualified lookup scans every row, and this runs per card per write.
+  // The chip only reads status, so a twin falls back to the direct SSH state.
   const sshOwnerEnvironmentId = useAppStore((s) =>
-    repo?.connectionId ? getExplicitRuntimeEnvironmentIdForWorktree(s, worktree.id) : null
+    repo?.connectionId ? runtimeEnvironmentIdUnlessTwin(s, worktree.id) : null
   )
   const sshStatus = useAppStore((s) => {
     // Why: runtime-owned SSH targets suppress their ssh:state-changed broadcasts, so don't show a false "disconnected" chip for them.
@@ -236,6 +244,7 @@ export function useWorktreeCardFoundation({
     projectGroups,
     newCardStyle,
     compactCards,
+    cardDetails,
     handleEditIssue,
     handleManageLinks,
     handleEditComment,

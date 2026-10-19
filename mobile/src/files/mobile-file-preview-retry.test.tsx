@@ -38,7 +38,7 @@ vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
 vi.mock('./MobileFileMarkdownPreview', () => ({ MobileFileMarkdownPreview: () => null }))
 vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
 // A host the shell has not reached by default: no client, so the screen settles on `waiting`.
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useForceReconnect: () => transport.forceReconnect,
   useHostClient: () => ({ ...transport.connection, clientId: null })
 }))

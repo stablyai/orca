@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,7 +12,6 @@ import { Store } from '../../../persistence/loading-store/store'
 import { closeTestStores, createSqliteTestStore } from '../../../persistence-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
-import { ALL_RPC_METHODS } from '.'
 import { FILE_METHODS } from './files'
 import { STRUCTURED_AGENT_SESSION_VISUAL_METHODS } from './structured-agent-session-visual'
 import {
@@ -59,10 +59,6 @@ async function writeVisual(name: string, html: string): Promise<void> {
 }
 
 describe('agentSession.readVisual', () => {
-  it('is registered on the runtime manifest', () => {
-    expect(ALL_RPC_METHODS.map((method) => method.name)).toContain('agentSession.readVisual')
-  })
-
   it("reads a file from the chat's own folder under the host's state directory", async () => {
     await writeVisual('chart.html', '<p>chart</p>')
     const reply = await call(

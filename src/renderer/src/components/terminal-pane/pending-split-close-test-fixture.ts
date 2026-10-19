@@ -121,7 +121,7 @@ export async function preparePendingSplitClose(
   ]
   const managerFixture = {
     getPanes: () => panes,
-    getLeafId: () => leafId,
+    getLeafId: (id: number) => panes.find((pane) => pane.id === id)?.leafId ?? null,
     getActivePane: () => null,
     closePane(id: number) {
       panes = panes.filter((pane) => pane.id !== id)

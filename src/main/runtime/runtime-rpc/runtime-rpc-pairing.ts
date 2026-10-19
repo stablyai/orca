@@ -2,7 +2,10 @@ import type { RuntimeDeviceGrant } from '../rpc/rpc-caller-scope'
 import type { DeviceRegistry, DeviceScope, TokenDeviceEntry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
-import type { RelayDeviceBinding, RelayRevokeOutbox } from '../relay/relay-revoke-outbox'
+import type {
+  RelayDeviceBinding,
+  RelayRevokeOutbox
+} from '../mobile-cloud-relay/relay-revoke-outbox'
 import type { PushUnregisterOutbox } from '../push/push-unregister-outbox'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
 import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
@@ -11,10 +14,11 @@ import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
 import { MobileDesktopRelay } from '../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileDesktopRelayHosts } from '../mobile-desktop-relay/mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from '../mobile-desktop-relay/mobile-relay-host-catalog'
+import { OnDemandServerWorktreeRows } from '../mobile-desktop-relay/on-demand-server-worktree-rows'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../shared/delegated-mobile-device-contract'
 import { allocateTerminalSubscriptionStreamId } from '../rpc/methods/terminal/terminal-subscription-stream-id'
-import { isStructuredNativeChatEnabled } from '../rpc/methods/structured-agent-session-policy'
+import { isStructuredNativeChatDefaultFor } from '../rpc/methods/structured-agent-session-policy'
 import {
   createWebClientUrl,
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
@@ -27,10 +31,6 @@ import {
 export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
   getDeviceRegistry(): DeviceRegistry | null {
     return this.deviceRegistry
-  }
-
-  getTlsFingerprint(): string | null {
-    return this.tlsFingerprint
   }
 
   getE2EEPublicKey(): string | null {
@@ -99,12 +99,16 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           listPhones: () => this.listRelayedPhones(),
           // Why: one allocator with local streams, so relayed ids never collide on the phone's socket.
           allocateStreamId: allocateTerminalSubscriptionStreamId,
-          nativeChatDefault: () => isStructuredNativeChatEnabled(this.runtime)
+          nativeChatDefault: (agent) => isStructuredNativeChatDefaultFor(this.runtime, agent)
         })
       : null
+    const { pairedServerRows } = this.runtime
+    this.detachPairedServerRows?.()
+    this.detachPairedServerRows = hosts && pairedServerRows ? pairedServerRows.attach(hosts) : null
     this.mobileRelayHostCatalog = hosts
       ? new MobileRelayHostCatalog({
           hosts,
+          serverRows: pairedServerRows ?? new OnDemandServerWorktreeRows(hosts),
           hostLabelOverrides: () => getHostDisplayLabelOverrides(this.runtime.getClientSettings()),
           getWorkspaceSession: (hostId) => this.runtime.getWorkspaceSessionForHost(hostId)
         })

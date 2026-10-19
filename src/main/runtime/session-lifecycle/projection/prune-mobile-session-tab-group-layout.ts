@@ -148,7 +148,9 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
           const leaf = this.leaves.get(this.getLeafKey(candidate.parentTabId, candidate.leafId))
           return leaf ? this.getLeafDisplayRecord(leaf) : null
         },
-        getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId)
+        getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId),
+        getPtyTitleObservedAtEpochMs: (ptyId) =>
+          ptyId ? (this.ptysById.get(ptyId)?.lastOscTitleEpochMs ?? null) : null
       }
     )
   }

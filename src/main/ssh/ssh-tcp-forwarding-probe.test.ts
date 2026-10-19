@@ -1,8 +1,8 @@
 import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ForwardChannelOpenFailure } from './ssh-port-forward-provider'
+import type { ForwardChannelOpenFailure } from './port-forwarding/ssh-port-forward-provider'
 import { checkForwardChannel, probeTcpForwarding } from './ssh-tcp-forwarding-probe'
-import { lastChannelOpenFailure } from './system-ssh-port-forward-provider'
+import { lastChannelOpenFailure } from './port-forwarding/system-ssh-port-forward-provider'
 
 type OpenCallback = (error: (Error & { reason?: number }) | undefined, channel?: unknown) => void
 

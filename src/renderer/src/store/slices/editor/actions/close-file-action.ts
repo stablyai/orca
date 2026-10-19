@@ -73,7 +73,7 @@ export function createCloseFileAction(
   get: EditorGet
 ): Pick<EditorSlice, 'closeFile'> {
   return {
-    closeFile: (fileId) => {
+    closeFile: (fileId, opts) => {
       // Why: capture untitled+dirty state before set() mutates the store, so cleanup of throwaway untitled files can decide after removal.
       const preClose = get().openFiles.find((f) => f.id === fileId)
       // Why: stale same-owner records survive tab close; retain other owners and pending drafts.
@@ -199,14 +199,19 @@ export function createCloseFileAction(
               browserTabsForWorktree[0]?.id ??
               null)
             : s.activeBrowserTabId
+        // Why: closing a background workspace's file must not change what the focused one shows.
+        const closesBackgroundFile =
+          activeWorktreeId !== null &&
+          closedWorktreeId !== undefined &&
+          closedWorktreeId !== activeWorktreeId
         const newActiveTabType =
-          remainingForWorktree.length > 0
+          remainingForWorktree.length > 0 || closesBackgroundFile
             ? s.activeTabType
             : browserTabsForWorktree.length > 0
               ? 'browser'
               : 'terminal'
         const newActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
-        if (activeWorktreeId && remainingForWorktree.length === 0) {
+        if (activeWorktreeId && remainingForWorktree.length === 0 && !closesBackgroundFile) {
           newActiveTabTypeByWorktree[activeWorktreeId] =
             browserTabsForWorktree.length > 0 ? 'browser' : 'terminal'
         }
@@ -219,6 +224,7 @@ export function createCloseFileAction(
           )
         const shouldDeactivateWorktree =
           activeWorktreeId !== null &&
+          !closesBackgroundFile &&
           remainingForWorktree.length === 0 &&
           browserTabsForWorktree.length === 0 &&
           terminalTabsForWorktree.length === 0 &&
@@ -243,6 +249,7 @@ export function createCloseFileAction(
         if (
           closedFile &&
           wtRecent &&
+          opts?.captureRecentlyClosed !== false &&
           !shouldDeleteFromDisk &&
           closedFile.mode !== 'markdown-preview'
         ) {

@@ -1,6 +1,9 @@
 import { useCallback, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import { applyPickerSuggestion, type NativeChatPickerItem } from './native-chat-picker-items'
+import {
+  applyPickerSuggestion,
+  type NativeChatPickerItem
+} from '../../../../shared/native-chat-picker-items'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { nativeChatImagesHoldSend } from './native-chat-image-reattach'
@@ -39,11 +42,13 @@ export function useNativeChatComposerSubmit(args: {
   disabled: boolean
   sendPty: () => void
   sendStructured: (text: string, attachments: readonly NativeChatComposerImageAttachment[]) => void
+  /** Runs a command Orca owns, like `/resume`; true means the draft never reaches the agent. */
+  consumeOrcaCommand?: (draft: string) => boolean
   setDraft: (value: string) => void
   setCaret: (caret: number) => void
 }): { send: () => void; goalMode: NativeChatComposerGoalMode } {
   const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
-  const { setCaret, setDraft, structuredTransport } = args
+  const { consumeOrcaCommand, setCaret, setDraft, structuredTransport } = args
   const threadGoal = structuredTransport?.threadGoal
   const [entered, setEntered] = useState(false)
   const active = entered && threadGoal !== undefined
@@ -99,6 +104,10 @@ export function useNativeChatComposerSubmit(args: {
   }, [draft, draftScopeKey, imageAttachments.length, setCaret, structuredTransport, threadGoal])
 
   const send = useCallback(() => {
+    // Before goal mode too: a navigation command must never become an objective.
+    if (consumeOrcaCommand?.(draft)) {
+      return
+    }
     if (nativeChatImagesHoldSend(imageAttachments)) {
       return
     }
@@ -119,6 +128,7 @@ export function useNativeChatComposerSubmit(args: {
     }
   }, [
     active,
+    consumeOrcaCommand,
     disabled,
     draft,
     imageAttachments,

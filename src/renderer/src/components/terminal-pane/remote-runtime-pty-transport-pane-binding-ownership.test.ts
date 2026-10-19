@@ -247,14 +247,20 @@ describe('remote runtime pane binding ownership', () => {
       leafId: 'pane:1'
     })
 
-    const connected = transport.connect({ url: '', callbacks: { onError } })
-    await new Promise((resolve) => setTimeout(resolve, 400))
-    releaseStaleInventory()
-    await preexisting
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    try {
+      const connected = transport.connect({ url: '', callbacks: { onError } })
+      await vi.advanceTimersByTimeAsync(400)
+      releaseStaleInventory()
+      await preexisting
 
-    await expect(connected).resolves.toMatchObject({ id: 'remote:env-1@@terminal-1' })
-    expect(onError).not.toHaveBeenCalledWith('Remote terminal was closed.')
-    expect(listCalls).toBeGreaterThanOrEqual(2)
-    transport.destroy?.()
+      await expect(connected).resolves.toMatchObject({ id: 'remote:env-1@@terminal-1' })
+      expect(onError).not.toHaveBeenCalledWith('Remote terminal was closed.')
+      expect(listCalls).toBeGreaterThanOrEqual(2)
+    } finally {
+      releaseStaleInventory()
+      transport.destroy?.()
+      vi.useRealTimers()
+    }
   })
 })

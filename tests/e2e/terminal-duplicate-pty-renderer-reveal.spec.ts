@@ -1,4 +1,7 @@
-import { mutateStoppedProfileState } from './helpers/persisted-profile-state'
+import {
+  mutateStoppedProfileState,
+  readPersistedProfileState
+} from './helpers/persisted-profile-state'
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -303,6 +306,24 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
     if (revealFailure) {
       throw revealFailure
     }
+
+    // Whatever the window saved, no stored pane may be left without its terminal: that pane
+    // would restore empty, and with no duplicate left the repair would never run again.
+    await session.close(secondApp)
+    secondApp = null
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const persisted = readPersistedProfileState(session.userDataDir) as PersistedData
+    const storedLayout = persisted.workspaceSession?.terminalLayoutsByTabId?.[restoredTabId]
+    const storedLeafIds = (node: TerminalLayoutSnapshot['root']): string[] =>
+      !node
+        ? []
+        : node.type === 'leaf'
+          ? [node.leafId]
+          : [...storedLeafIds(node.first), ...storedLeafIds(node.second)]
+    const unboundLeafIds = storedLeafIds(storedLayout?.root ?? null).filter(
+      (leafId) => !storedLayout?.ptyIdsByLeafId?.[leafId]
+    )
+    expect(unboundLeafIds).toEqual([])
   } finally {
     tui.cleanup()
     if (secondApp) {

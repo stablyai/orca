@@ -1,14 +1,14 @@
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { runOxlintPluginOnSource } from './oxlint-plugin-test-runner.mjs'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { runOxlintPluginOnSources } from './oxlint-plugin-test-runner.mjs'
 
 const pluginPath = path.resolve('config/oxlint-plugins/ime-enter-guard.mjs')
 
-function lintSource(source) {
-  return runOxlintPluginOnSource({
+function lintSources(sources) {
+  return runOxlintPluginOnSources({
     pluginName: 'ime-enter-guard',
     pluginPath,
-    source,
+    sources,
     rules: { 'ime-enter-guard/require-ime-guard': 'warn' }
   })
 }
@@ -118,12 +118,20 @@ const accepted = [
   ]
 ]
 
+const diagnosticsBySource = new Map()
+beforeAll(() => {
+  const sources = [...violations, ...accepted].map(([, source]) => source)
+  lintSources(sources).forEach((diagnostics, index) => {
+    diagnosticsBySource.set(sources[index], diagnostics)
+  })
+})
+
 describe('IME Enter guard Oxlint plugin', () => {
   it.each(violations)('reports %s', (_name, source) => {
-    expect(lintSource(source)).toHaveLength(1)
+    expect(diagnosticsBySource.get(source)).toHaveLength(1)
   })
 
   it.each(accepted)('accepts %s', (_name, source) => {
-    expect(lintSource(source)).toEqual([])
+    expect(diagnosticsBySource.get(source)).toEqual([])
   })
 })

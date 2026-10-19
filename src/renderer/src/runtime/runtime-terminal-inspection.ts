@@ -1,7 +1,6 @@
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
 import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal-input'
 import { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
-export { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import {
   getRemoteRuntimePtyEnvironmentId,
@@ -16,10 +15,6 @@ import {
   type TerminalProcessInspection
 } from '../../../shared/terminal-process-inspection'
 
-export type {
-  ClientOnlyUnverifiableInspection,
-  ClientOnlyUnverifiableReason
-} from '../../../shared/terminal-process-inspection'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 
 export type RuntimeTerminalProcessInspection = TerminalProcessInspection
@@ -28,8 +23,6 @@ const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
 function isRuntimePtyInputTooLarge(data: string): boolean | Promise<boolean> {
   return isTerminalInputTooLargeWithDeferredMeasurement(data)
 }
-
-export { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 
 function isRemoteInspectionPtyId(ptyId: string): boolean {
   return getRemoteRuntimePtyEnvironmentId(ptyId) !== null || parseAppSshPtyId(ptyId) !== null
@@ -190,5 +183,3 @@ function sendRuntimePtyInputWithinLimit(
     })
   return true
 }
-
-export { sendRuntimePtyInputVerified } from './runtime-terminal-verified-input'

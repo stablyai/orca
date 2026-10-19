@@ -1,7 +1,8 @@
+import { keybindingRunsInTextField, type KeybindingActionId } from '../../../shared/keybindings'
 import { isEditableTarget } from './editable-target'
 import { getShortcutPlatform } from './shortcut-platform'
 
-export function fileSearchClaimsTextKey(event: {
+type TextKeyEvent = {
   target: EventTarget | null
   key?: string
   code?: string
@@ -12,7 +13,9 @@ export function fileSearchClaimsTextKey(event: {
   isComposing?: boolean
   altGraph?: boolean
   getModifierState?: (key: string) => boolean
-}): boolean {
+}
+
+export function fileSearchClaimsTextKey(event: TextKeyEvent): boolean {
   if (!isEditableTarget(event.target)) {
     return false
   }
@@ -61,4 +64,27 @@ export function fileSearchClaimsTextKey(event: {
     return true
   }
   return false
+}
+
+export function textFieldClaimsActionKey(
+  event: TextKeyEvent,
+  actionId: KeybindingActionId
+): boolean {
+  if (!fileSearchClaimsTextKey(event)) {
+    return false
+  }
+  const platform = getShortcutPlatform()
+  // Why: AltGr and Mac Option chords that type a character or dead key stay with the field.
+  if (
+    event.altGraph ||
+    event.getModifierState?.('AltGraph') ||
+    (platform === 'darwin' &&
+      event.altKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      (event.key?.length === 1 || event.key === 'Dead'))
+  ) {
+    return true
+  }
+  return !keybindingRunsInTextField(actionId, event, platform)
 }

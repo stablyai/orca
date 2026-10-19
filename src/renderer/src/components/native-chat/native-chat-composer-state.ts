@@ -6,6 +6,7 @@ import {
   isSlashCommandDraft,
   applySlashSuggestion,
   slashCommandDispatchText,
+  type NativeChatSessionSkill,
   type SlashCommandSuggestion
 } from '../../../../shared/native-chat-slash-commands'
 import {
@@ -14,18 +15,20 @@ import {
   MID_PROMPT_SLASH_TRIGGER,
   type NativeChatPickerItem,
   type NativeChatSkillDiscoverySnapshot
-} from './native-chat-picker-items'
+} from '../../../../shared/native-chat-picker-items'
 
 export type { SlashCommandSuggestion }
 export { filterSlashCommands, isSlashCommandDraft, applySlashSuggestion, slashCommandDispatchText }
 export {
+  classifyNativeChatSend,
+  type NativeChatSendClassification
+} from '../../../../shared/native-chat-slash-commands'
+export {
   applyPickerSuggestion,
   buildNativeChatPickerItems,
-  classifyNativeChatSend,
   type NativeChatPickerItem,
-  type NativeChatSendClassification,
   type NativeChatSkillDiscoverySnapshot
-} from './native-chat-picker-items'
+} from '../../../../shared/native-chat-picker-items'
 
 type PickerAutocomplete = {
   query: string
@@ -67,7 +70,7 @@ export function deriveComposerAutocomplete(
   profile: NativeChatAgentProfile | null = null,
   discovery: NativeChatSkillDiscoverySnapshot = { ...EMPTY_DISCOVERY, skills },
   dismissedTriggerKey: string | null = null,
-  sessionSkillNames?: readonly string[]
+  sessionSkills?: readonly NativeChatSessionSkill[]
 ): ComposerAutocomplete {
   const before = draft.slice(0, caret)
   const leadingMatch = before.match(LEADING_SLASH_TRIGGER)
@@ -79,7 +82,7 @@ export function deriveComposerAutocomplete(
       profile,
       discovery,
       dismissedTriggerKey,
-      sessionSkillNames
+      sessionSkills
     )
   }
   const mentionMatch = before.match(/(?:^|\s)@(\S*)$/)
@@ -103,7 +106,7 @@ export function deriveComposerAutocomplete(
     profile,
     discovery,
     dismissedTriggerKey,
-    sessionSkillNames
+    sessionSkills
   )
 }
 
@@ -114,7 +117,7 @@ function deriveSlashAutocomplete(
   profile: NativeChatAgentProfile | null,
   discovery: NativeChatSkillDiscoverySnapshot,
   dismissedTriggerKey: string | null,
-  sessionSkillNames: readonly string[] | undefined
+  sessionSkills: readonly NativeChatSessionSkill[] | undefined
 ): ComposerAutocomplete {
   const triggerKey = `/:${triggerPosition}`
   if (dismissedTriggerKey === triggerKey) {
@@ -129,7 +132,7 @@ function deriveSlashAutocomplete(
     skillsEnabled ? discovery.skills : [],
     query,
     profile?.skillPrefix ?? '/',
-    skillsEnabled ? sessionSkillNames : []
+    skillsEnabled ? sessionSkills : []
   )
   return {
     mode: 'slash',

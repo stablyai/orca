@@ -1,4 +1,5 @@
 import type { PersistedUIState } from '../persisted-ui-state-types'
+import { compareCodePoints, createSidebarTextComparator } from '../sidebar-list/text-order'
 
 export type WorkspaceSortBy = PersistedUIState['sortBy']
 
@@ -28,6 +29,8 @@ export function recentActivityWithCreateGrace(
 /** How one surface reads the sort keys from its own rows. */
 export type WorkspaceRowSortReader<Row> = {
   label: (row: Row) => string
+  /** Host-qualified id; breaks ties between rows whose labels are equal. */
+  identity: (row: Row) => string
   repoLabel: (row: Row) => string
   /** Already floored by recentActivityWithCreateGrace. */
   recentActivity: (row: Row) => number
@@ -51,7 +54,10 @@ export function buildWorkspaceRowComparator<Row>(
   sortBy: WorkspaceSortBy,
   read: WorkspaceRowSortReader<Row>
 ): (a: Row, b: Row) => number {
-  const byLabel = (a: Row, b: Row): number => read.label(a).localeCompare(read.label(b))
+  const compareText = createSidebarTextComparator()
+  const byLabel = (a: Row, b: Row): number =>
+    compareText(read.label(a), read.label(b)) ||
+    compareCodePoints(read.identity(a), read.identity(b))
   return (a, b) => {
     switch (sortBy) {
       case 'name':
@@ -61,7 +67,7 @@ export function buildWorkspaceRowComparator<Row>(
       case 'recent':
         return read.recentActivity(b) - read.recentActivity(a) || byLabel(a, b)
       case 'repo':
-        return read.repoLabel(a).localeCompare(read.repoLabel(b)) || byLabel(a, b)
+        return compareText(read.repoLabel(a), read.repoLabel(b)) || byLabel(a, b)
       case 'manual':
         return compareManualRank(read.manualRank(a), read.manualRank(b)) || byLabel(a, b)
     }

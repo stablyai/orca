@@ -121,7 +121,9 @@ export function buildRestoredEditorOwnerTransition(
         ...tab,
         id: tabIdMigration.get(tab.id) ?? tab.id,
         entityId: migrations.get(tab.entityId) ?? tab.entityId,
-        groupId: targetGroupId
+        groupId: targetGroupId,
+        worktreeId: targetWorktreeId,
+        ...(tab.executionHostId ? { executionHostId: args.targetExecutionHostId } : {})
       }))
     ]
 

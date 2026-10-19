@@ -120,7 +120,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
-  it('requires replacement after repeated same-handle stream-end flaps', async () => {
+  it('paces same-handle stream-end flaps, then latches Reconnect once the ladder is spent', async () => {
     vi.useFakeTimers()
     try {
       resolvedPaneHandle = 'terminal-flapping'
@@ -145,44 +145,36 @@ describe('createRemoteRuntimePtyTransport', () => {
           : Promise.resolve({ ok: true, result: {} })
       )
 
-      for (let cycle = 0; cycle < 2; cycle += 1) {
+      // Why: flap delays grow to 30s, so 31s per cycle covers every rung.
+      for (let cycle = 0; cycle < 8; cycle += 1) {
         const endedStreamId = latestSubscribePayload().streamId
         subscriptionCallbacks?.onResponse({
           ok: true,
           result: { type: 'end', streamId: endedStreamId, code: 0 }
         })
-        await vi.advanceTimersByTimeAsync(16_000)
+        await vi.advanceTimersByTimeAsync(31_000)
         expect(subscribedTerminalHandles()).toHaveLength(cycle + 2)
         expect(latestSubscribePayload().terminal).toBe('terminal-flapping')
         emitSnapshot(latestSubscribePayload().streamId, `same handle ${cycle + 1}`)
         expect(transport.isConnected()).toBe(true)
       }
-
-      const condemnedStreamId = latestSubscribePayload().streamId
+      // Why: an endless flap resets the deadline on every reattach, so it must stop pacing and fence the handle.
       subscriptionCallbacks?.onResponse({
         ok: true,
-        result: { type: 'end', streamId: condemnedStreamId, code: 0 }
+        result: { type: 'end', streamId: latestSubscribePayload().streamId, code: 0 }
       })
-      await vi.advanceTimersByTimeAsync(16_000)
-
-      expect(subscribedTerminalHandles()).toEqual([
-        'terminal-flapping',
-        'terminal-flapping',
-        'terminal-flapping'
-      ])
-      expect(transport.getPtyId()).toBe('remote:env-1@@terminal-flapping')
-      expect(transport.isConnected()).toBe(false)
-      expect(onPtyExit).not.toHaveBeenCalled()
-
-      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 16_000)
+      expect(subscribedTerminalHandles()).toHaveLength(9)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
-      expect(subscribedTerminalHandles()).toHaveLength(3)
+      expect(transport.getPtyId()).toBe('remote:env-1@@terminal-flapping')
+      expect(onPtyExit).not.toHaveBeenCalled()
+      transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('reuses prior ready evidence when the trailing inventory poll fails', async () => {
+  it('reuses prior ready evidence fenced by an unanswered send when the trailing inventory poll fails', async () => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
@@ -204,6 +196,9 @@ describe('createRemoteRuntimePtyTransport', () => {
       let hostListCalls = 0
       runtimeCall.mockImplementation(
         async (args: { method: string; timeoutMs?: number }): Promise<unknown> => {
+          if (args.method === 'terminal.send') {
+            return new Promise(() => {})
+          }
           if (args.method !== 'session.tabs.list') {
             return { ok: true, result: {} }
           }
@@ -215,6 +210,13 @@ describe('createRemoteRuntimePtyTransport', () => {
         }
       )
 
+      // Why: an unanswered send fences early same-handle reuse, so only the window's ready evidence reattaches.
+      void transport.sendInputAccepted?.('unanswered', 'driving')
+      await vi.waitFor(() =>
+        expect(runtimeCall).toHaveBeenCalledWith(
+          expect.objectContaining({ method: 'terminal.send' })
+        )
+      )
       subscriptionCallbacks?.onResponse({
         ok: true,
         result: { type: 'end', streamId: oldStreamId, code: 0 }

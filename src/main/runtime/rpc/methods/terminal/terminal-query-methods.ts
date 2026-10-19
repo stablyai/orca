@@ -1,13 +1,17 @@
 import { defineMethod } from '../../core'
+import { remoteFileContentBudget } from '../files-remote-content-budget'
+import { remoteRpcResultExceedsContentBudget } from '../../../../../shared/remote-rpc-content-budget'
 import {
   TerminalHandle,
   TerminalInspectProcess,
   TerminalListParams,
   TerminalRead,
+  TerminalReadKittyFile,
   TerminalRecoverPane,
   TerminalRename,
   TerminalResolveActive,
-  TerminalResolvePane
+  TerminalResolvePane,
+  TerminalSetPaneTitle
 } from '../../../../../shared/rpc-contract/terminal-unary-params'
 
 export const TERMINAL_QUERY_METHODS = [
@@ -127,6 +131,14 @@ export const TERMINAL_QUERY_METHODS = [
     })
   }),
   defineMethod({
+    name: 'terminal.setPaneTitle',
+    permission: 'workspace',
+    params: TerminalSetPaneTitle,
+    handler: async (params, { runtime }) => ({
+      paneTitle: await runtime.setPaneTitle(params.terminal, params.title)
+    })
+  }),
+  defineMethod({
     name: 'terminal.clearBuffer',
     permission: 'workspace',
     params: TerminalHandle,
@@ -141,5 +153,18 @@ export const TERMINAL_QUERY_METHODS = [
     handler: async (params, { runtime }) => ({
       reset: await runtime.resetTerminalInputModes(params.terminal)
     })
+  }),
+  defineMethod({
+    name: 'terminal.readKittyFile',
+    permission: 'workspace',
+    params: TerminalReadKittyFile,
+    handler: async (params, { runtime, signal, clientKind, requestId }) => {
+      const result = await runtime.readKittyFile(params.terminal, params, signal)
+      const budget = remoteFileContentBudget(clientKind, requestId)
+      if (budget !== undefined && remoteRpcResultExceedsContentBudget(result, budget)) {
+        throw new Error('Kitty image file exceeds the connection reply limit')
+      }
+      return result
+    }
   })
 ]

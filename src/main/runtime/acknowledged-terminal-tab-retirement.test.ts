@@ -139,7 +139,7 @@ it('rechecks current pins after renderer acknowledgement', async () => {
 
 it('keeps persistence writable when worktree teardown finds remaining terminal rows', async () => {
   const f = fixture()
-  f.store.updateRepo('repo1', { executionHostId: 'ssh:target' })
+  f.store.updateRepo({ id: 'repo1' }, { executionHostId: 'ssh:target' })
   f.store.setWorktreeMeta(ACK_WORKTREE, { hostId: 'ssh:target' })
   f.store.setWorkspaceSession(f.store.getWorkspaceSession(), 'ssh:target')
   vi.spyOn(f.runtime, 'closeMobileSessionTab').mockResolvedValue(delegatedMobileSessionTabClose())

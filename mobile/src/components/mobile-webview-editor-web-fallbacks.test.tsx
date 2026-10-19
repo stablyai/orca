@@ -73,19 +73,8 @@ vi.mock('./TextInputModal', async () => {
   }
 })
 
-// Mocked so the native sibling can be rendered beside the web one for the toggle case below: the real
-// import is the codegen lookup this whole file exists because of.
-vi.mock('react-native-webview', async () => {
-  const React = await import('react')
-  return {
-    WebView: ({ children, ...props }: { children?: React.ReactNode }) =>
-      React.createElement('WebView', props, children)
-  }
-})
-
-import { MobileHtmlPreview, MOBILE_HTML_PREVIEW_SANDBOX } from './MobileHtmlPreview.web'
-import { MobileHtmlPreview as PhoneHtmlPreview } from './MobileHtmlPreview'
-import { MobileRichMarkdownEditor } from './MobileRichMarkdownEditor.web'
+import { MobileHtmlPreview, MOBILE_HTML_PREVIEW_SANDBOX } from './MobileHtmlPreview'
+import { MobileRichMarkdownEditor } from './MobileRichMarkdownEditor'
 
 const renderers: ReactTestRenderer[] = []
 
@@ -222,38 +211,24 @@ describe('the html preview on the page', () => {
     expect(findHosts(renderer, 'iframe')).toHaveLength(0)
   })
 
-  // Both siblings, one case: the toggle is a pair of tabs and a reader has to be told which one is
-  // showing. The two toolbars are the same code in two files, so a change to one that does not reach
-  // the other reds here rather than reaching a phone as a toggle that announces nothing.
-  for (const [surface, Preview] of [
-    ['the page', MobileHtmlPreview],
-    ['a phone', PhoneHtmlPreview]
-  ] as const) {
-    it(`says which side of the toggle is showing, on ${surface}`, () => {
-      const renderer = render(
-        createElement(Preview, { html: '<h1>hi</h1>', renderSource: renderSourceMarker })
-      )
-      const toggles = () => findHosts(renderer, 'Pressable')
-      expect(toggles()).toHaveLength(2)
-      expect(toggles().map((node) => node.props.accessibilityRole)).toEqual(['tab', 'tab'])
-      // The pair's own container, so the two tabs are a set rather than two loose ones.
-      expect(
-        findHosts(renderer, 'View').filter((node) => node.props.accessibilityRole === 'tablist')
-      ).toHaveLength(1)
-      // The showing side, which is what a screen reader has no other way to learn: the active
-      // position is styling and styling is not announced.
-      expect(toggles().map((node) => node.props.accessibilityState?.selected)).toEqual([
-        true,
-        false
-      ])
+  it('says which side of the toggle is showing', () => {
+    const renderer = render(
+      createElement(MobileHtmlPreview, { html: '<h1>hi</h1>', renderSource: renderSourceMarker })
+    )
+    const toggles = () => findHosts(renderer, 'Pressable')
+    expect(toggles()).toHaveLength(2)
+    expect(toggles().map((node) => node.props.accessibilityRole)).toEqual(['tab', 'tab'])
+    // The pair's own container, so the two tabs are a set rather than two loose ones.
+    expect(
+      findHosts(renderer, 'View').filter((node) => node.props.accessibilityRole === 'tablist')
+    ).toHaveLength(1)
+    // The showing side, which is what a screen reader has no other way to learn: the active
+    // position is styling and styling is not announced.
+    expect(toggles().map((node) => node.props.accessibilityState?.selected)).toEqual([true, false])
 
-      act(() => toggles()[1]?.props.onPress())
-      expect(toggles().map((node) => node.props.accessibilityState?.selected)).toEqual([
-        false,
-        true
-      ])
-    })
-  }
+    act(() => toggles()[1]?.props.onPress())
+    expect(toggles().map((node) => node.props.accessibilityState?.selected)).toEqual([false, true])
+  })
 
   it('never puts the artifact anywhere but the frame', () => {
     const renderer = render(

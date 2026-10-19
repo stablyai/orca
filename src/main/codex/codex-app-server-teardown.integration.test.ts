@@ -107,9 +107,10 @@ describe.runIf(process.platform !== 'win32')('Codex app-server process teardown'
     }
   }, 30_000)
 
-  it.concurrent.each(['normal', 'signal'] as const)(
+  it.concurrent.for(['normal', 'signal'] as const)(
     'reaps provider descendants before relaying a %s root exit in 40 consecutive launches',
-    async (exitMode) => {
+    { timeout: 60_000 },
+    async (exitMode, { expect }) => {
       for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
         const server = await openServer(iteration, exitMode)
         try {
@@ -121,11 +122,12 @@ describe.runIf(process.platform !== 'win32')('Codex app-server process teardown'
           await cleanupServer(server)
         }
       }
-    },
-    60_000
+    }
   )
 
-  it('does not settle a stdin-close/root-exit race before the descendant is reaped', async () => {
+  it.concurrent('does not settle a stdin-close/root-exit race before the descendant is reaped', async ({
+    expect
+  }) => {
     for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
       const server = await openServer(iteration, 'stdin-race')
       try {

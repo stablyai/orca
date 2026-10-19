@@ -1,4 +1,5 @@
 import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
+import { watchBatchFlushDelayMs } from '../../shared/filesystem-watch-batch-window'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
@@ -7,8 +8,8 @@ import {
 export type RemoteWatcherEventBatchOptions = {
   rootPath: string
   deliver: (events: FsChangeEvent[]) => void
-  trailingMs: number
-  maxWaitMs: number
+  leadingMs: number
+  intervalMs: number
   maxEvents: number
 }
 
@@ -71,13 +72,13 @@ function coalesceRemoteEvents(raw: FsChangeEvent[], rootPath: string): FsChangeE
 export function createRemoteWatcherEventBatch({
   rootPath,
   deliver,
-  trailingMs,
-  maxWaitMs,
+  leadingMs,
+  intervalMs,
   maxEvents
 }: RemoteWatcherEventBatchOptions): RemoteWatcherEventBatch {
   let buffered: FsChangeEvent[] = []
   let overflowed = false
-  let firstEventAt = 0
+  let lastFlushAt = 0
   let timer: ReturnType<typeof setTimeout> | null = null
   let closed = false
 
@@ -90,31 +91,28 @@ export function createRemoteWatcherEventBatch({
     const latched = overflowed
     buffered = []
     overflowed = false
-    firstEventAt = 0
 
     if (latched) {
+      lastFlushAt = Date.now()
       deliver([{ kind: 'overflow', absolutePath: rootPath }])
       return
     }
     const coalesced = coalesceRemoteEvents(pending, rootPath)
     if (coalesced.length > 0) {
+      lastFlushAt = Date.now()
       deliver(coalesced)
     }
   }
 
   function schedule(): void {
-    const now = Date.now()
-    if (firstEventAt === 0) {
-      firstEventAt = now
-    }
-    if (now - firstEventAt >= maxWaitMs) {
-      flush()
+    // Why: never push an armed flush back; resetting on each event starved delivery under continuous writes.
+    if (timer) {
       return
     }
-    if (timer) {
-      clearTimeout(timer)
-    }
-    timer = setTimeout(flush, trailingMs)
+    timer = setTimeout(
+      flush,
+      watchBatchFlushDelayMs(Date.now(), lastFlushAt, leadingMs, intervalMs)
+    )
   }
 
   return {
@@ -148,7 +146,6 @@ export function createRemoteWatcherEventBatch({
       }
       buffered = []
       overflowed = false
-      firstEventAt = 0
     }
   }
 }

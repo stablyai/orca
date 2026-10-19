@@ -1,3 +1,4 @@
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentForksThroughChat } from '../../shared/agent-resume-argv'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import type {
@@ -26,6 +27,18 @@ export async function copyStructuredChatConversation(
   if (!host || !ownership || !record || !copy) {
     throw new Error('This chat is no longer in Orca, so it cannot be copied to a new CLI.')
   }
+  return copyStructuredChatRecordConversation(record, ownership.providerSessionId)
+}
+
+export async function copyStructuredChatRecordConversation(
+  record: AgentSessionRecord,
+  providerSessionId: string
+): Promise<AiVaultPrepareSessionResumeResult> {
+  const host = getStructuredAgentSessionHost()
+  const copy = host?.deps.adapter.copyConversation
+  if (!host || !copy || !isAiVaultAgent(record.provider)) {
+    throw new Error('This chat cannot be copied to a new CLI.')
+  }
   const forkedSession = await copy.call(host.deps.adapter, {
     identity: {
       sessionId: record.sessionId,
@@ -35,12 +48,17 @@ export async function copyStructuredChatConversation(
       providerHandle:
         agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle ?? null
     },
-    providerSessionId: ownership.providerSessionId,
+    providerSessionId,
     accountHome: record.accountHome
   })
   if (
-    forkedSession.sessionId === ownership.providerSessionId ||
-    findResumeOwnership({ agent: args.agent, sessionId: forkedSession.sessionId, filePath: '' })
+    !forkedSession.sessionId.trim() ||
+    forkedSession.sessionId === providerSessionId ||
+    findResumeOwnership({
+      agent: record.provider,
+      sessionId: forkedSession.sessionId,
+      filePath: ''
+    })
   ) {
     throw new Error('The agent returned a conversation already owned by a chat instead of a copy.')
   }
@@ -49,7 +67,7 @@ export async function copyStructuredChatConversation(
     forkedSession: {
       ...forkedSession,
       // The chat's own agent, not the row's: an OpenCode 2 row's chat runs `opencode`.
-      agent: isAiVaultAgent(record.provider) ? record.provider : args.agent
+      agent: record.provider
     }
   }
 }

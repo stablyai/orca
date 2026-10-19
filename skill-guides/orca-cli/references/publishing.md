@@ -55,6 +55,9 @@ ORCA skills share --skill <selector> [--skill <selector> ...] --bundle-name <nam
   enable the switch in the desktop app if they want this action.
 - Orca stages one agent-published bundle at a time per host. If another publish is active,
   wait for it to finish before retrying `agent_skill_sharing_busy`.
+- Sharing again under a `--bundle-name` the account already published adds a new version to
+  that package. `agent_skill_bundle_name_taken` means the name is already in use; do not
+  retry, ask the user for a different name.
 - Run the command in an Orca terminal on the machine that stores the skills. Forwarded WSL,
   SSH, and paired-runtime invocations fail before discovery so Orca cannot read from the
   wrong filesystem.

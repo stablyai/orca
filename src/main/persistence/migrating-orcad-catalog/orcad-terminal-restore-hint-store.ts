@@ -12,7 +12,7 @@ import {
   isOrcadMigrationTerminalRestoreHintCwd,
   isOrcadMigrationTerminalRestoreHintPaneKey,
   type OrcadMigrationTerminalRestoreHint
-} from '../../../shared/orcad-migration-terminal-restore-hints'
+} from '../../../shared/orcad-migration/orcad-migration-terminal-restore-hints'
 import { ensureOrcadMigrationDirectory } from './orcad-migration-staged-file'
 
 const STORE_VERSION = 2

@@ -141,7 +141,7 @@ describe('Grok background tasks through the shared timeline', () => {
     }
   )
 
-  it('keeps the row and placement of a task whose snapshot the bound evicted', async () => {
+  it('keeps the label and placement of a running task beside 130 other running tasks', async () => {
     const fixture = await openAcpFixtureRig()
     await fixture.feed(await runningFrames())
     const [before] = await taskRows(fixture)
@@ -156,7 +156,11 @@ describe('Grok background tasks through the shared timeline', () => {
     const original = (await taskRows(fixture)).find((task) => task.block.taskId === taskId)
     expect(original?.row.itemId).toBe(before?.row.itemId)
     expect(original?.row.turnScope).toEqual(before?.row.turnScope)
-    expect(original?.block.state).toBe('done')
+    expect(original?.block).toMatchObject({
+      state: 'done',
+      label: before?.block.label,
+      parentToolUseId: 'call-1'
+    })
   })
 
   it('places a first task notice beside its original tool after its turn ended and another began', async () => {
