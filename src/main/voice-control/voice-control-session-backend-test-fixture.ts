@@ -32,6 +32,7 @@ export const SETTINGS: VoiceControlSettings = {
   maxSessionMinutes: 0,
   idleSuspendMinutes: 0,
   voiceSpeed: 1,
+  voiceGating: true,
   customInstructions: ''
 }
 

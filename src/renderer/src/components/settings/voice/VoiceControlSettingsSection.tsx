@@ -334,6 +334,31 @@ export function VoiceControlSettingsSection({
         </Select>
       </div>
 
+      <div className="flex items-center justify-between gap-4 py-2">
+        <div className="min-w-0 space-y-0.5">
+          <Label>
+            {translate(
+              'auto.components.settings.VoiceControlSettingsSection.511efa618c',
+              'Only stream when I speak'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.VoiceControlSettingsSection.59440347d8',
+              "A speech detector on this device opens the mic to the cloud only while you're talking — silence stays local and off the bill."
+            )}
+          </p>
+        </div>
+        <Switch
+          checked={control.voiceGating}
+          aria-label={translate(
+            'auto.components.settings.VoiceControlSettingsSection.511efa618c',
+            'Only stream when I speak'
+          )}
+          onCheckedChange={(voiceGating) => updateControl({ voiceGating })}
+        />
+      </div>
+
       <div className="space-y-1.5 py-2">
         <Label htmlFor="settings-voice-control-custom-instructions">
           {translate(

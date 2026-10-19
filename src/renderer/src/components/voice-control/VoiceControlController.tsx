@@ -99,6 +99,7 @@ export function VoiceControlController() {
       const session = await createVoiceControlSession({
         sessionId: started.sessionId,
         microphoneDeviceId: settings?.voice?.microphoneDeviceId ?? null,
+        voiceGating: settings?.voice?.control?.voiceGating ?? true,
         onIceFailed: () => {
           publishVoiceControlState({
             sessionId: started.sessionId,
@@ -141,7 +142,7 @@ export function VoiceControlController() {
       }
       await window.api.voiceControl.stop(started.sessionId)
     }
-  }, [settings?.voice?.microphoneDeviceId, stopControl])
+  }, [settings?.voice?.microphoneDeviceId, settings?.voice?.control?.voiceGating, stopControl])
 
   useEffect(() => {
     const cleanupState = window.api.voiceControl.onStateChanged((event) => {
