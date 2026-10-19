@@ -37,6 +37,7 @@ export class PiRpcTurns {
   private revision = 0
   private turn = 0
   private active?: string
+  private agentStarted = false
   private settling = false
   private compacting = false
   private stopped = false
@@ -114,12 +115,14 @@ export class PiRpcTurns {
         }
         return
       case 'agent_start':
-        if (!this.active && !this.delivery.holdsDispatch) {
-          throw new Error('Pi started an unsolicited agent run')
-        }
         this.touch()
+        // Extensions can wake an idle session without a host dispatch.
         this.open(at)
-        this.skipInitialUserEcho = this.delivery.consumeNext()
+        if (!this.agentStarted) {
+          this.agentStarted = true
+          this.delivery.consumeNext()
+          this.skipInitialUserEcho = true
+        }
         return
       case 'message_start':
       case 'message_update':
@@ -127,12 +130,15 @@ export class PiRpcTurns {
         this.touch()
         const message = piRpcMessageSchema.safeParse(frame.message)
         if (message.success && message.data.role === 'user' && frame.type === 'message_end') {
-          // agent_start already accepted the first prompt; user echoes consume queued inputs.
+          // The initiating echo may belong to an extension, not a queued host input.
           if (this.skipInitialUserEcho) {
             this.skipInitialUserEcho = false
           } else {
             this.delivery.consumeNext()
           }
+        }
+        if (message.success && message.data.role === 'assistant') {
+          this.skipInitialUserEcho = false
         }
         if (message.success && message.data.role === 'assistant' && frame.type === 'message_end') {
           this.lastStopReason = message.data.stopReason
@@ -155,6 +161,7 @@ export class PiRpcTurns {
         break
       case 'agent_end':
         // This can precede automatic retry or detached compaction.
+        this.agentStarted = false
         break
       case 'agent_settled':
         this.settling = true
@@ -222,6 +229,7 @@ export class PiRpcTurns {
       this.deps.lane.forgetCommand(this.active)
     }
     this.active = undefined
+    this.agentStarted = false
     this.settling = false
     this.revision++
   }
@@ -281,6 +289,7 @@ export class PiRpcTurns {
     })
     this.deps.lane.apply(events)
     this.active = undefined
+    this.agentStarted = false
     this.settling = false
     this.messages.reset()
     this.deps.idle()

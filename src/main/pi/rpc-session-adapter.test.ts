@@ -182,6 +182,84 @@ async function setup(
 }
 
 describe('Pi RPC session ownership and delivery', () => {
+  it('cancels an extension turn by its published identity and fences late events after reacquisition', async () => {
+    const h = await setup()
+    h.connection.receive({ type: 'agent_start' })
+    const [running] = await h.rig.turns()
+    expect(running?.state).toBe('running')
+    if (!running) {
+      throw new Error('Missing autonomous turn')
+    }
+    expect(await h.adapter.cancelTurn({ sessionId, fence: 7, turnId: running.turnId })).toEqual({
+      cancelled: true,
+      turnId: running.turnId
+    })
+    expect(h.connection.requests).toContain('abort')
+    h.connection.receive({ type: 'agent_end' })
+    h.connection.receive({ type: 'agent_settled' })
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect((await h.rig.turns())[0]?.outcome).toBe('cancellation')
+    await h.adapter.closeSession(sessionId)
+    await h.adapter.drainObservedExits()
+    h.adapter.acknowledgeSessionRelease(sessionId)
+    await h.adapter.acquire({ ...h.input, fence: 8 })
+    h.connection.receive({ type: 'agent_start' })
+    expect(await h.rig.turns()).toHaveLength(1)
+    const next = h.connections.at(-1)!
+    next.receive({ type: 'agent_start' })
+    next.receive({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Resumed wake' }],
+        stopReason: 'stop'
+      }
+    })
+    next.receive({ type: 'agent_end' })
+    next.receive({ type: 'agent_settled' })
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    const turns = await h.rig.turns()
+    expect(turns.map((turn) => turn.outcome)).toEqual(['cancellation', 'success'])
+    expect(turns[0]?.turnId).not.toBe(turns[1]?.turnId)
+    expect(h.settled).not.toHaveBeenCalled()
+  })
+
+  it('publishes one autonomous turn and its result after journal backpressure clears', async () => {
+    let blocked = true
+    const h = await setup({}, (sink) => ({
+      ...sink,
+      tryAppendTransition: (transition) =>
+        blocked
+          ? { accepted: false, reason: 'backpressure' }
+          : sink.tryAppendTransition!(transition)
+    }))
+    vi.useFakeTimers()
+    try {
+      h.connection.receive({ type: 'agent_start' })
+      h.connection.receive({ type: 'agent_start' })
+      h.connection.receive({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Done' }],
+          stopReason: 'stop'
+        }
+      })
+      h.connection.receive({ type: 'agent_end' })
+      h.connection.receive({ type: 'agent_settled' })
+      await vi.advanceTimersByTimeAsync(1)
+      expect(await h.rig.turns()).toHaveLength(0)
+      blocked = false
+      await vi.advanceTimersByTimeAsync(250)
+      expect((await h.rig.turns()).map((turn) => turn.outcome)).toEqual(['success'])
+      expect((await h.rig.rows()).filter((row) => row.body.kind === 'message')).toHaveLength(1)
+      expect(h.settled).not.toHaveBeenCalled()
+      expect(h.lifecycle).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('refuses a floating chat whose folder is gone with the reason the person reads', async () => {
     const h = await setup()
     await h.adapter.closeSession(sessionId)
