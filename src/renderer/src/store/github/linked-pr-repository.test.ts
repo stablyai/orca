@@ -9,7 +9,7 @@ import {
 } from '../slices/github-slice-test-harness'
 import { isStaleMergedGitHubReviewForHead } from '../slices/hosted-review-cache-state'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
-import { buildPRRefreshCandidate } from './worktree-refresh'
+import { buildPRRefreshCandidate, isStaleExactLinkedPRLookup } from './worktree-refresh'
 import {
   findLinkedGitHubPRRepository,
   foundPRForLinkedRepository,
@@ -90,18 +90,34 @@ describe('getLinkedGitHubPRRepository', () => {
   })
 
   it('finds the row by branch, refusing ambiguous detached rows', () => {
-    const state = { worktreesByRepo: { [repo.id]: [linkedRow(FRONTEND_URL)] } }
+    const state = { repos: [repo], worktreesByRepo: { [repo.id]: [linkedRow(FRONTEND_URL)] } }
     expect(findLinkedGitHubPRRepository(state, repo, 'main', 2383)).toEqual(FRONTEND)
     expect(findLinkedGitHubPRRepository(state, repo, 'main', 7)).toBeNull()
     const detached = { ...linkedRow(FRONTEND_URL), branch: '' }
     expect(
       findLinkedGitHubPRRepository(
-        { worktreesByRepo: { [repo.id]: [detached, { ...detached, id: 'other' }] } },
+        { repos: [repo], worktreesByRepo: { [repo.id]: [detached, { ...detached, id: 'other' }] } },
         repo,
         '',
         2383
       )
     ).toBeNull()
+  })
+
+  it('reads only rows on the repository’s own host when one repo id spans hosts', () => {
+    const local = { ...repo, executionHostId: 'local' as const }
+    const remote = { ...repo, executionHostId: 'ssh:box' as const }
+    const state = {
+      repos: [local, remote],
+      worktreesByRepo: {
+        [repo.id]: [
+          linkedRow(FRONTEND_URL, { id: 'local-row', hostId: 'local' }),
+          linkedRow(FRONTEND_URL, { id: 'remote-row', hostId: 'ssh:box' })
+        ]
+      }
+    }
+    expect(findLinkedGitHubPRRepository(state, local, 'main', 2383)).toEqual(FRONTEND)
+    expect(findLinkedGitHubPRRepository(state, remote, 'main', 2383)).toEqual(FRONTEND)
   })
 })
 
@@ -126,6 +142,14 @@ describe('cross-repository PR links in renderer refreshes', () => {
     expect(buildPRRefreshCandidate(store.getState(), linkedRow(undefined))).not.toHaveProperty(
       'linkedPRRepository'
     )
+  })
+
+  it('treats a lookup for the same number in another repository as stale', () => {
+    const id = linkedRow(FRONTEND_URL).id
+    expect(isStaleExactLinkedPRLookup(store.getState(), id, 2383, FRONTEND)).toBe(false)
+    // A result for the row's own #2383, or another repository's, must not land on this link.
+    expect(isStaleExactLinkedPRLookup(store.getState(), id, 2383, null)).toBe(true)
+    expect(isStaleExactLinkedPRLookup(store.getState(), id, 2383, API)).toBe(true)
   })
 
   it('every branch review lookup for the row asks the linked repository', async () => {

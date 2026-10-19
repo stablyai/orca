@@ -35,6 +35,7 @@ import {
   rememberAuthoritativelyRemovedWorktrees
 } from './authoritative-worktree-removal-memory'
 import type { FencedWorktreeMergeArgs } from './worktree-slice-types'
+import { findRepoForHost } from '../../repo-host-identity'
 
 export function preserveConcurrentManualOrder<T extends Worktree>(
   incoming: readonly T[],
@@ -185,7 +186,8 @@ export function mergeFetchedWorktrees(
       hasBranchScopedReviewContext: (worktree) =>
         hasBranchScopedHostedReviewContext(
           worktree,
-          s.repos.find((repo) => repo.id === args.repoId)
+          findRepoForHost(s.repos, args.repoId, { hostId: args.hostId, settings: s.settings }) ??
+            undefined
         ),
       updateWorktreeGitIdentity: s.updateWorktreeGitIdentity
     })

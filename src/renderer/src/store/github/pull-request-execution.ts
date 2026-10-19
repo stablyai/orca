@@ -62,7 +62,7 @@ export function startPullRequestLookup(args: {
     cacheKey,
     cached,
     linkedPRNumber,
-    linkedPRRepository,
+    linkedPRRepository: linkedRepo,
     fallbackPRNumber,
     fallbackPRSource,
     generation,
@@ -85,7 +85,7 @@ export function startPullRequestLookup(args: {
               repo: runtimeRepo.repo.id,
               branch,
               linkedPRNumber,
-              ...(linkedPRRepository ? { linkedPRRepository } : {}),
+              ...(linkedRepo ? { linkedPRRepository: linkedRepo } : {}),
               currentHeadOid: requestHeadOid,
               ...(options?.reason ? { reason: options.reason } : {}),
               ...(fallbackPRNumber !== null
@@ -104,7 +104,7 @@ export function startPullRequestLookup(args: {
               worktreeId: options?.worktreeId,
               currentHeadOid: requestHeadOid,
               linkedPRNumber,
-              ...(linkedPRRepository ? { linkedPRRepository } : {}),
+              ...(linkedRepo ? { linkedPRRepository: linkedRepo } : {}),
               fallbackPRNumber,
               fallbackPRSource,
               connectionId: repo?.connectionId ?? null,
@@ -128,14 +128,14 @@ export function startPullRequestLookup(args: {
                   repoId,
                   branch,
                   linkedPRNumber,
-                  ...(linkedPRRepository ? { linkedPRRepository } : {}),
+                  ...(linkedRepo ? { linkedPRRepository: linkedRepo } : {}),
                   fallbackPRNumber,
                   acceptMergedFallbackPR: fallbackPRNumber !== null && fallbackPRSource !== null,
                   currentHeadOid: requestHeadOid
                 })
             return normalizeGitHubPRForBranchOutcome(response)
           })()
-      const pr = foundPRForLinkedRepository(outcome, linkedPRRepository)
+      const pr = foundPRForLinkedRepository(outcome, linkedRepo)
       if (outcome.kind === 'upstream-error') {
         // Why: the runtime RPC path skips the coordinator broadcast that fills prRefreshStates on native, so record the classified error here for Checks parity with native (design criterion 2).
         if (runtimeRepo && prRequestGenerations.get(cacheKey) === generation) {
@@ -160,7 +160,7 @@ export function startPullRequestLookup(args: {
         let skippedStaleLinkedPRLookup = false
         set((s) => {
           // Why: unlinking a PR mid exact-linked-PR-lookup must stop the older result from restoring the manual link UI.
-          if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber)) {
+          if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber, linkedRepo)) {
             skippedStaleLinkedPRLookup = true
             return s
           }

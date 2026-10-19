@@ -28,7 +28,7 @@ import {
   hasHostedReviewLinkUpdates
 } from './hosted-review-link-mutation'
 import {
-  getHostedReviewPushTargetLookup,
+  isHostedReviewPushTargetStale,
   pushTargetPR,
   resolveGitHubReviewPushTarget
 } from './hosted-review-push-target'
@@ -93,8 +93,17 @@ export function createUpdateWorktreeMeta(
       }
     }
     let normalizedUpdates = normalizeWorkspaceAttachmentUpdate(existingWorktree, mutationUpdates)
+    const ownerRepo =
+      findRepoForHost(
+        get().repos,
+        existingWorktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId),
+        {
+          hostId: executionHostId,
+          settings: get().settings
+        }
+      ) ?? undefined
     // Why: manual PR linking supplies only the number; resolve the head branch so Push targets the review branch.
-    const linkedPrForPushTarget = pushTargetPR(existingWorktree, normalizedUpdates, get().repos)
+    const linkedPrForPushTarget = pushTargetPR(existingWorktree, normalizedUpdates, ownerRepo)
     // Why: an ambiguous owner must not throw past this update's { ok, error } contract — skip the lookup instead.
     const pushTargetOwner =
       linkedPrForPushTarget !== null &&
@@ -121,30 +130,22 @@ export function createUpdateWorktreeMeta(
     normalizedUpdates = normalizeGitHubPRSuppressionUpdate(
       normalizeWorkspaceAttachmentUpdate(worktreeForUpdate, mutationUpdates)
     )
+    // Why: the link may have moved to another repository's PR with the same number meanwhile.
     const currentResolvedPushTarget =
-      normalizedUpdates.linkedPR === linkedPrForPushTarget ? resolvedPushTarget : undefined
-    const existingHostedReviewPushTargetLookup = worktreeForUpdate
-      ? getHostedReviewPushTargetLookup(worktreeForUpdate)
-      : null
-    const nextHostedReviewPushTargetLookup = worktreeForUpdate
-      ? getHostedReviewPushTargetLookup({ ...worktreeForUpdate, ...normalizedUpdates })
-      : null
+      pushTargetPR(worktreeForUpdate, normalizedUpdates, ownerRepo) === linkedPrForPushTarget
+        ? resolvedPushTarget
+        : undefined
     // A lookup can finish after another editor changes the selected review.
     const shouldClearStaleHostedReviewPushTarget =
       Boolean(worktreeForUpdate?.pushTarget) &&
       normalizedUpdates.pushTarget === undefined &&
       currentResolvedPushTarget === undefined &&
-      existingHostedReviewPushTargetLookup !== null &&
-      existingHostedReviewPushTargetLookup.key !== nextHostedReviewPushTargetLookup?.key
+      worktreeForUpdate !== undefined &&
+      isHostedReviewPushTargetStale(worktreeForUpdate, normalizedUpdates, ownerRepo)
     const shouldRefreshHostedReview = Boolean(
       worktreeForUpdate && hasChangedHostedReviewLinkUpdates(normalizedUpdates, worktreeForUpdate)
     )
-    const reviewRepo = shouldRefreshHostedReview
-      ? (findRepoForHost(get().repos, worktreeForUpdate?.repoId ?? '', {
-          hostId: executionHostId,
-          settings: get().settings
-        }) ?? undefined)
-      : undefined
+    const reviewRepo = shouldRefreshHostedReview ? ownerRepo : undefined
     const reviewBranch = worktreeForUpdate?.branch.replace(/^refs\/heads\//, '')
 
     // Why: bump lastActivityAt on comment edits so the time-decay sort doesn't drop a just-touched worktree.

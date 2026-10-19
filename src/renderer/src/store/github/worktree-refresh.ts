@@ -1,6 +1,7 @@
 import type { AppState } from '../types'
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-request-refresh-types'
-import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { GitHubOwnerRepo, PRInfo } from '../../../../shared/github/pull-request-types'
+import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
@@ -107,6 +108,7 @@ export function isStaleExactLinkedPRLookup(
   state: AppState,
   worktreeId: string | undefined,
   linkedPRNumber: number | null | undefined,
+  linkedPRRepository: GitHubOwnerRepo | null = null,
   lookupIndex?: WorktreeLookupIndex
 ): boolean {
   if (!worktreeId || linkedPRNumber == null) {
@@ -115,7 +117,18 @@ export function isStaleExactLinkedPRLookup(
   const worktree = lookupIndex
     ? (lookupIndex.byId.get(worktreeId)?.first ?? null)
     : findWorktreeById(state, worktreeId)
-  return worktree?.linkedPR !== linkedPRNumber
+  if (worktree?.linkedPR !== linkedPRNumber) {
+    return true
+  }
+  // Why: relinking the same number to another repository makes the older lookup stale too.
+  const current = getLinkedGitHubPRRepository(
+    worktree,
+    getGitHubRepoLookupIndex(state.repos).findById(worktree.repoId) ?? undefined
+  )
+  return (
+    (current ? githubRepoIdentityKey(current) : null) !==
+    (linkedPRRepository ? githubRepoIdentityKey(linkedPRRepository) : null)
+  )
 }
 
 export function shouldClearDivergedLinkedMergedPR(args: {

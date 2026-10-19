@@ -200,24 +200,27 @@ describe('linked PR repositories at the GitHub IPC boundary', () => {
     linkedPRRepository
   })
 
-  it('forwards a well-formed linked repository and drops anything else', async () => {
+  it('forwards string-shaped linked repositories for the lookup to vet, dropping non-objects', async () => {
     registerGitHubHandlers(store as never, stats as never)
-    const extra = { owner: 'relayto', repo: 'relayto-frontend', token: 'x' }
 
-    await handlers['gh:enqueuePRRefresh'](null, {
-      candidate: candidate(extra),
-      reason: 'active'
-    })
-    await handlers['gh:enqueuePRRefresh'](null, {
-      candidate: candidate({ owner: 'not an owner', repo: 'x' }),
-      reason: 'active'
-    })
+    for (const linked of [
+      { owner: 'relayto', repo: 'relayto-frontend', token: 'x' },
+      { owner: 'not an owner', repo: 'x' },
+      'relayto/relayto-frontend'
+    ]) {
+      await handlers['gh:enqueuePRRefresh'](null, {
+        candidate: candidate(linked),
+        reason: 'active'
+      })
+    }
 
-    expect(enqueuePRRefreshMock.mock.calls[0]?.[0].linkedPRRepository).toEqual({
-      owner: 'relayto',
-      repo: 'relayto-frontend'
-    })
-    expect(enqueuePRRefreshMock.mock.calls[1]?.[0]).not.toHaveProperty('linkedPRRepository')
+    const forwarded = enqueuePRRefreshMock.mock.calls.map(([sent]) => sent.linkedPRRepository)
+    // The lookup refuses the malformed owner instead of querying this repository's #2383.
+    expect(forwarded).toEqual([
+      { owner: 'relayto', repo: 'relayto-frontend' },
+      { owner: 'not an owner', repo: 'x' },
+      undefined
+    ])
   })
 
   it('passes the linked repository to the direct PR lookup', async () => {

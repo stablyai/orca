@@ -12,6 +12,11 @@ import {
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import { isWorkspaceRepositoryAttachment } from '@/components/sidebar/worktree-attachment-editing'
 import type { LinkedReviewHints } from '../slices/hosted-review-cache-identity'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import {
+  worktreeHostMatchOptions,
+  worktreeMatchesHost
+} from '../slices/worktrees/listing/worktree-host-ownership'
 
 /**
  * The repository of the row's selected GitHub PR when its stored URL points
@@ -53,7 +58,7 @@ export function getLinkedGitHubPRRepository(
  * caller to pass it; a caller that forgot would cache a miss for everyone.
  */
 export function findLinkedGitHubPRRepository(
-  state: Pick<AppState, 'worktreesByRepo'>,
+  state: Pick<AppState, 'worktreesByRepo' | 'repos'>,
   repo: Repo | undefined,
   branch: string,
   linkedPRNumber: number | null | undefined
@@ -62,16 +67,20 @@ export function findLinkedGitHubPRRepository(
     return null
   }
   const branchName = branch.replace(/^refs\/heads\//, '')
+  // Why: one repo id can hold rows on several hosts; only this repo's host owns the lookup.
+  const hostId = getRepoExecutionHostId(repo)
+  const hostMatch = worktreeHostMatchOptions(state, repo.id, hostId)
   const owners = (state.worktreesByRepo?.[repo.id] ?? []).filter(
     (worktree) =>
       worktree.linkedPR === linkedPRNumber &&
-      worktree.branch.replace(/^refs\/heads\//, '') === branchName
+      worktree.branch.replace(/^refs\/heads\//, '') === branchName &&
+      worktreeMatchesHost(worktree, hostId, hostMatch)
   )
   return owners.length === 1 ? getLinkedGitHubPRRepository(owners[0], repo) : null
 }
 
 export function withLinkedGitHubPRRepository<T extends LinkedReviewHints>(
-  state: Pick<AppState, 'worktreesByRepo'>,
+  state: Pick<AppState, 'worktreesByRepo' | 'repos'>,
   repo: Repo | undefined,
   branch: string,
   hints: T | undefined

@@ -8,7 +8,7 @@ import type {
 } from '../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../shared/repo-types'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
-import { isValidGitHubApiRepository } from '../github/github-api-repository-validation'
+import { linkedPRRepositoryHint } from '../github/client/lookup/linked-pr-repository'
 import { getPRForBranch, type GitHubPRBranchLookupOptions } from '../github/client'
 import {
   clearVisiblePRRefreshWindow,
@@ -83,9 +83,7 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
           ? args.currentHeadOid.trim()
           : null
       const linkedPRRepository =
-        args.linkedPRNumber != null && isValidGitHubApiRepository(args.linkedPRRepository)
-          ? args.linkedPRRepository
-          : null
+        args.linkedPRNumber != null ? linkedPRRepositoryHint(args.linkedPRRepository) : null
       const lookupOptions: GitHubPRBranchLookupOptions | undefined = hostedReviewOptions
         ? { ...hostedReviewOptions }
         : args.acceptMergedFallbackPR === true || currentHeadOid !== null || linkedPRRepository

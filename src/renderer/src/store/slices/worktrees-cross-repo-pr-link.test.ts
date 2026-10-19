@@ -96,4 +96,69 @@ describe('a PR linked from another repository', () => {
     expect(getHostedReviewPushTargetLookup(row(OTHER_REPO_PR), repo)).toBeNull()
     expect(getHostedReviewPushTargetLookup(row(SAME_REPO_PR), repo)?.key).toContain('github:2383')
   })
+
+  it('a branch switch clears only the push target, keeping the link', async () => {
+    const store = createTestStore()
+    const pushTarget = { remoteName: 'origin', branchName: 'old/head' }
+    store.setState({
+      repos: [repo],
+      worktreesByRepo: { repo1: [{ ...row(OTHER_REPO_PR), pushTarget }] }
+    })
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', { branch: 'refs/heads/other' })
+    await vi.waitFor(() => expect(mockApi.worktrees.updateMeta).toHaveBeenCalled())
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({ linkedPR: 2383 })
+    expect(store.getState().worktreesByRepo.repo1[0].pushTarget).toBeUndefined()
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith(
+      expect.objectContaining({ updates: { pushTarget: undefined } })
+    )
+  })
+
+  it('upgrading a bare link to another repository drops the push target resolved for the bare number', async () => {
+    const store = createTestStore()
+    const bare = { provider: 'github' as const, type: 'pr' as const, number: 2383 }
+    store.setState({
+      repos: [repo],
+      worktreesByRepo: {
+        repo1: [{ ...row(bare), pushTarget: { remoteName: 'origin', branchName: 'docker-pr' } }]
+      }
+    })
+
+    await store
+      .getState()
+      .updateWorktreeMeta('repo1::/path/wt1', { linkedItems: [OTHER_REPO_PR], linkedPR: 2383 })
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      linkedPR: 2383,
+      linkedItems: [OTHER_REPO_PR]
+    })
+    expect(store.getState().worktreesByRepo.repo1[0].pushTarget).toBeUndefined()
+  })
+
+  it('a push-target restore that finishes after the link moved to another repository is dropped', async () => {
+    const store = createTestStore()
+    const bare = { provider: 'github' as const, type: 'pr' as const, number: 2383 }
+    const lookup = Promise.withResolvers<{
+      baseBranch: string
+      pushTarget: { remoteName: string; branchName: string }
+    }>()
+    mockApi.worktrees.resolvePrBase.mockReturnValueOnce(lookup.promise)
+    store.setState({ repos: [repo], worktreesByRepo: { repo1: [row(bare)] } })
+
+    const restoring = store.getState().ensureHostedReviewPushTarget('repo1::/path/wt1')
+    store.setState({ worktreesByRepo: { repo1: [row(OTHER_REPO_PR)] } })
+    lookup.resolve({
+      baseBranch: 'origin/docker-pr',
+      pushTarget: { remoteName: 'origin', branchName: 'docker-pr' }
+    })
+    await restoring
+
+    expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
+      repoId: 'repo1',
+      prNumber: 2383
+    })
+    expect(store.getState().worktreesByRepo.repo1[0].pushTarget).toBeUndefined()
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
 })

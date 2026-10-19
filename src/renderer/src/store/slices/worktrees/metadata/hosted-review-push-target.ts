@@ -82,25 +82,33 @@ function isLinkedFromOtherRepository(worktree: Worktree, repo: Repo | undefined)
 export function pushTargetPR(
   worktree: Worktree | undefined,
   updates: Partial<WorktreeMeta>,
-  repos: readonly Repo[]
+  repo: Repo | undefined
 ): number | null {
   const linkedPR = updates.linkedPR
   if (!isPositiveHostedReviewNumber(linkedPR)) {
     return null
   }
-  const next = worktree ? { ...worktree, ...updates } : undefined
-  return next &&
-    isLinkedFromOtherRepository(
-      next,
-      repos.find((repo) => repo.id === next.repoId)
-    )
+  return worktree && isLinkedFromOtherRepository({ ...worktree, ...updates }, repo)
     ? null
     : linkedPR
 }
 
+/** Whether an update leaves the push target of a review that is no longer the selected one. */
+export function isHostedReviewPushTargetStale(
+  worktree: Worktree,
+  updates: Partial<WorktreeMeta>,
+  repo: Repo | undefined
+): boolean {
+  const existing = getHostedReviewPushTargetLookup(worktree, repo)
+  return (
+    existing !== null &&
+    existing.key !== getHostedReviewPushTargetLookup({ ...worktree, ...updates }, repo)?.key
+  )
+}
+
 export function getHostedReviewPushTargetLookup(
   worktree: Worktree,
-  repo?: Repo
+  repo: Repo | undefined
 ): {
   key: string
   resolve: (target: RuntimeClientTarget) => Promise<GitPushTarget | undefined>

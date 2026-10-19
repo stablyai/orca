@@ -15,7 +15,7 @@ import {
 } from '../source-control/hosted-review-creation'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
-import { isValidGitHubApiRepository } from '../github/github-api-repository-validation'
+import { linkedPRRepositoryHint } from '../github/client/lookup/linked-pr-repository'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { listRepoWorktreeGraph } from '../repo-worktrees'
 import {
@@ -114,14 +114,14 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       ...getLocalProjectGhExecOptions(store, repo),
       admissionTier: args.admissionTier ?? ('background' as const)
     }
+    const linkedGitHubPRRepository =
+      args.linkedGitHubPR != null ? linkedPRRepositoryHint(args.linkedGitHubPRRepository) : null
     const review = await getHostedReviewForBranch({
       repoPath: repo.path,
       executionHostId: getRepoHostedReviewExecutionHostId(repo),
       branch: args.branch,
       linkedGitHubPR: args.linkedGitHubPR ?? null,
-      ...(args.linkedGitHubPR != null && isValidGitHubApiRepository(args.linkedGitHubPRRepository)
-        ? { linkedGitHubPRRepository: args.linkedGitHubPRRepository }
-        : {}),
+      ...(linkedGitHubPRRepository ? { linkedGitHubPRRepository } : {}),
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,

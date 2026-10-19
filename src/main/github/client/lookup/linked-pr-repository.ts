@@ -44,3 +44,18 @@ export function linkedPRLookupRepository(
     ...(sameHost.host ? { host: sameHost.host } : {})
   }
 }
+
+/**
+ * Untrusted boundary input: keeps any string-shaped hint so linkedPRLookupRepository
+ * refuses an invalid one, instead of dropping it into a bare-number lookup.
+ */
+export function linkedPRRepositoryHint(value: unknown): GitHubOwnerRepo | null {
+  if (typeof value !== 'object' || value === null || !('owner' in value) || !('repo' in value)) {
+    return null
+  }
+  const { owner, repo } = value
+  const host = 'host' in value ? value.host : undefined
+  return typeof owner === 'string' && typeof repo === 'string'
+    ? { owner, repo, ...(typeof host === 'string' && host ? { host } : {}) }
+    : null
+}
