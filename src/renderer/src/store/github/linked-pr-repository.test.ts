@@ -292,21 +292,31 @@ describe('repository identity in renderer review caches', () => {
     expect(store.getState().hostedReviewCache[cacheKey]?.data).toBeNull()
   })
 
-  it('does not cache a review that finished after the row moved its link elsewhere', async () => {
-    const pending = Promise.withResolvers<ReturnType<typeof reviewFrom> | null>()
-    mockApi.hostedReview.forBranch.mockReturnValueOnce(pending.promise)
+  it.each([
+    ['inferred', undefined],
+    ['caller-supplied', FRONTEND]
+  ])(
+    'does not cache a review that finished after the row moved its link elsewhere (%s repository)',
+    async (_label, linkedGitHubPRRepository) => {
+      const pending = Promise.withResolvers<ReturnType<typeof reviewFrom> | null>()
+      mockApi.hostedReview.forBranch.mockReturnValueOnce(pending.promise)
 
-    const request = fetchRowReview()
-    store.setState({
-      worktreesByRepo: {
-        [repo.id]: [linkedRow('https://github.com/relayto/relayto-api/pull/2383')]
-      }
-    })
-    pending.resolve(reviewFrom('relayto/relayto-frontend'))
-    await request
+      const request = store.getState().fetchHostedReviewForBranch(repo.path, 'main', {
+        repoId: repo.id,
+        linkedGitHubPR: 2383,
+        ...(linkedGitHubPRRepository ? { linkedGitHubPRRepository } : {})
+      })
+      store.setState({
+        worktreesByRepo: {
+          [repo.id]: [linkedRow('https://github.com/relayto/relayto-api/pull/2383')]
+        }
+      })
+      pending.resolve(reviewFrom('relayto/relayto-frontend'))
+      await request
 
-    expect(store.getState().hostedReviewCache[cacheKey]).toBeUndefined()
-  })
+      expect(store.getState().hostedReviewCache[cacheKey]).toBeUndefined()
+    }
+  )
 
   it('applies the same guards to direct PR lookups and cached PRs', () => {
     const docker = makePR({

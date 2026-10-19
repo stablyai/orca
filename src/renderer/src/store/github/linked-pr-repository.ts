@@ -190,7 +190,11 @@ export function isLinkMovedToOtherRepository(
   if (requested?.exactReviewKey) {
     return false
   }
-  const current = withLinkedGitHubPRRepository(state, repo, branch, requested)
+  // Why: re-derive from the row; a caller-supplied repository only says what was asked.
+  const current = withLinkedGitHubPRRepository(state, repo, branch, {
+    ...requested,
+    linkedGitHubPRRepository: undefined
+  })
   return (
     repositoryKey(current?.linkedGitHubPRRepository) !==
     repositoryKey(sent?.linkedGitHubPRRepository)
