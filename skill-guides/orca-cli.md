@@ -174,7 +174,9 @@ Card status uses `--workspace-status <id>`; defaults are `todo`, `in-progress`, 
 
 Issue/review links: `--pr` writes the GitHub pull request number. On `set` it also takes
 a full PR URL from any repository (for example a submodule's or a code repo's PR); the
-row then shows that PR's own state, checks, and merge. `--gitlab-issue` and
+row then shows that PR's own state, checks, and merge when the URL's GitHub host is the
+host of the workspace's `origin` or `upstream` GitHub remote. A URL on another host, or
+on a workspace with no GitHub remote, is stored but shows no PR. `--gitlab-issue` and
 `--gitlab-mr` write separate GitLab numbers and accept `#42` / `!77` respectively.
 All numbers must be positive safe integers. The GitLab flags also accept HTTP(S) URLs
 whose host/project match the workspace's stored GitLab source context or the repo's
