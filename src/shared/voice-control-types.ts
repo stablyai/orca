@@ -39,6 +39,8 @@ export type VoiceControlSettings = {
   idleSuspendMinutes: number
   /** Coordinator speech rate — the provider's audio post-processing (0.25–1.5; 1 = normal). Applies to new sessions. */
   voiceSpeed: number
+  /** Local VAD keeps silence off the wire; disable to stream the mic continuously. */
+  voiceGating: boolean
   /** Free-form persona/style notes appended after the core instructions; applies to new sessions. */
   customInstructions: string
 }

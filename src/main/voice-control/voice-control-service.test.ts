@@ -27,6 +27,7 @@ const SETTINGS: VoiceControlSettings = {
   // 0 disables idle auto-suspend so only the dedicated tests arm that timer.
   idleSuspendMinutes: 0,
   voiceSpeed: 1,
+  voiceGating: true,
   customInstructions: ''
 }
 
