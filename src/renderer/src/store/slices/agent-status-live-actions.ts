@@ -142,6 +142,17 @@ export function createAgentStatusLiveActions(
       return
     }
     const { entry } = builtResult
+    if (builtResult.providerSessionChanged) {
+      // Why: /clear (or any provider session replacement) mints a fresh conversation on this pane.
+      // The previous session's generated label describes work that no longer exists, and its
+      // presence is exactly what blocks the new session's first prompt from regenerating one, so
+      // drop it now — before that prompt arrives (#22642).
+      applyGeneratedTabTitleUpdate({
+        paneKey,
+        prompt: '',
+        options: { clearGeneratedTitle: true }
+      })
+    }
     // Sticky orchestration titles are replaced only when they still describe this dispatch.
     const hasMatchingOrchestrationLabels = Boolean(
       (entry.orchestration?.displayName?.trim() || entry.orchestration?.taskTitle?.trim()) &&
