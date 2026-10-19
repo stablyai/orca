@@ -23,6 +23,7 @@ import { FileReader } from './MobileSessionFileReader'
 import { MobileSessionContentState } from './MobileSessionContentState'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
 import { loadMarkdownPreviewImage } from '../files/mobile-markdown-image-source'
+import { terminalWheelProfiles } from './terminal-wheel-profiles'
 
 export function MobileSessionActiveContent({
   controller
@@ -109,7 +110,8 @@ export function MobileSessionActiveContent({
     keyboardLift,
     activeTerminalKeyboardLift,
     toastAnimatedStyle,
-    createTabBusy
+    createTabBusy,
+    visibleTabs
   } = controller
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
@@ -117,6 +119,7 @@ export function MobileSessionActiveContent({
     () => (client ? { client, worktreeId } : undefined),
     [client, worktreeId]
   )
+  const wheelProfiles = useMemo(() => terminalWheelProfiles(visibleTabs), [visibleTabs])
   const navigateToSender = useCallback(
     (senderWorktreeId: string, paneKey: string) => {
       const execution = executionHost ? `&executionHost=${encodeURIComponent(executionHost)}` : ''
@@ -125,6 +128,7 @@ export function MobileSessionActiveContent({
       )
     },
     [controller.router, hostId, executionHost]
+  )
   )
   const openSender = useMobileAgentMessageNavigation(
     client,
@@ -269,6 +273,7 @@ export function MobileSessionActiveContent({
             splitFrame={paneFrame}
             keyboardInset={keyboardLift}
             title={terminal.title}
+            tuiWheelProfile={wheelProfiles.get(terminal.handle) ?? 'one-row'}
             onFrame={notifyTerminalPaneFrame}
             keyboardLift={
               terminal.handle !== activeHandle &&

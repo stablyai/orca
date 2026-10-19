@@ -36,8 +36,15 @@ export function computeFitScale(scope: TerminalDocumentScope) {
 }
 
 export function updateTransform(scope: TerminalDocumentScope) {
+  // Why: a rubber-band pull past an end of the buffer rides on the pan without changing it.
   scope.surface!.style.transform =
-    'translate(' + scope.panX + 'px,' + scope.panY + 'px) scale(' + getTotalScale(scope) + ')'
+    'translate(' +
+    scope.panX +
+    'px,' +
+    (scope.panY + scope.overscrollY) +
+    'px) scale(' +
+    getTotalScale(scope) +
+    ')'
   if (scope.pixelScrollActive) {
     scope.term?.setViewportPixelOffset?.(scope.smoothScrollOffsetY / getTotalScale(scope))
   }
