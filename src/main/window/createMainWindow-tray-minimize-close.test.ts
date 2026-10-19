@@ -324,5 +324,47 @@ describe('createMainWindow', () => {
         isQuitting: false
       })
     })
+
+    it('asks the renderer for quit semantics when the renderer-drawn X ends the app', () => {
+      setPlatform('win32')
+      const ipcHandlers = captureIpcHandlers()
+      const { webContents } = setupCloseWindow()
+
+      createMainWindow(null, { getIsQuitting: () => false, getWindowCloseEndsApp: () => true })
+      ipcHandlers['window:request-close']?.()
+
+      expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
+        isQuitting: true
+      })
+    })
+
+    it('asks the renderer for quit semantics when a native close (Alt+F4) ends the app', () => {
+      setPlatform('win32')
+      const { windowHandlers, webContents } = setupCloseWindow()
+
+      createMainWindow(null, { getIsQuitting: () => false, getWindowCloseEndsApp: () => true })
+      windowHandlers.close({ preventDefault: vi.fn() } as never)
+
+      expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
+        isQuitting: true,
+        requestId: expect.any(Number)
+      })
+    })
+
+    it('still hides to the tray instead of asking when the close would end the app', () => {
+      setPlatform('win32')
+      const ipcHandlers = captureIpcHandlers()
+      const { webContents, instance } = setupCloseWindow()
+
+      createMainWindow(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tray guard reads only getSettings/getUI/updateUI, which makeStore provides.
+        makeStore(true, true) as never,
+        { getIsQuitting: () => false, getWindowCloseEndsApp: () => true }
+      )
+      ipcHandlers['window:request-close']?.()
+
+      expect(instance.hide).toHaveBeenCalledTimes(1)
+      expect(webContents.send).not.toHaveBeenCalledWith('window:close-requested', expect.anything())
+    })
   })
 })
