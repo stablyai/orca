@@ -7,6 +7,7 @@ export function shouldKeepHiddenStartupRendererQueriesLive(
 ): boolean {
   return (
     Boolean(startup?.telemetry?.agent_kind && startup.telemetry.agent_kind !== 'other') ||
+    Boolean(startup?.agentLaunch) ||
     isKnownTuiAgentTerminalStartupCommand(startup?.command ?? '')
   )
 }

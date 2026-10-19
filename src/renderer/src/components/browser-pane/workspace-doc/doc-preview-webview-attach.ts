@@ -16,7 +16,8 @@ export function attachDocPreviewWebview({
   onLoadStopped,
   onLoadFailed,
   onNavigated,
-  onTitleUpdated
+  onTitleUpdated,
+  onViewportMessage
 }: {
   previewId: string
   container: HTMLDivElement
@@ -27,6 +28,7 @@ export function attachDocPreviewWebview({
   onLoadFailed: (event: Electron.DidFailLoadEvent) => void
   onNavigated: () => void
   onTitleUpdated: (event: Electron.PageTitleUpdatedEvent) => void
+  onViewportMessage: (event: { message?: string }) => void
 }): { webview: Electron.WebviewTag; detach: () => void; reload: () => void } {
   const webview = document.createElement('webview') as Electron.WebviewTag
   // Why no allowpopups: the guest's preload intercepts a trusted click on a link before Chromium
@@ -51,6 +53,7 @@ export function attachDocPreviewWebview({
   // Why the document names its own tab: a preview is a browser tab, and this is how every other
   // one is named. What the document cannot do is name it the grant it is served over.
   webview.addEventListener('page-title-updated', onTitleUpdated)
+  webview.addEventListener('console-message', onViewportMessage)
   // Register before append so a guest attached mid-drag cannot swallow the pointer stream.
   registerPersistentWebview(previewId, webview)
   container.appendChild(webview)
@@ -65,6 +68,7 @@ export function attachDocPreviewWebview({
       webview.removeEventListener('did-navigate', onNavigated)
       webview.removeEventListener('did-navigate-in-page', onNavigated)
       webview.removeEventListener('page-title-updated', onTitleUpdated)
+      webview.removeEventListener('console-message', onViewportMessage)
       moveFocusToRendererBeforeWebviewDetach(webview)
       webview.remove()
       if (webviewRegistry.get(previewId) === webview) {

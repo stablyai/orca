@@ -3,6 +3,7 @@ import {
   LEGACY_PTY_ALLOCATION_HINT,
   LEGACY_TERMINAL_PROCESS_LIMIT_HINT,
   PTY_ALLOCATION_HINT,
+  TERMINAL_HOST_CAP_HINT,
   TERMINAL_PROCESS_LIMIT_HINT
 } from '../../../../shared/terminal-spawn-error-copy'
 
@@ -13,7 +14,8 @@ vi.mock('@/i18n/i18n', () => ({
       'auto.components.terminal.pane.TerminalErrorToast.ptyAllocationLimit':
         '系统无法再分配 pty 设备。',
       'auto.components.terminal.pane.TerminalErrorToast.terminalProcessLimit':
-        '系统无法再启动终端进程。'
+        '系统无法再启动终端进程。',
+      'auto.components.terminal.pane.TerminalErrorToast.hostTerminalCap': '主机终端已达上限。'
     })[key] ?? fallback
 }))
 
@@ -43,6 +45,10 @@ describe('localizeTerminalSpawnHints', () => {
     expect(localizeTerminalSpawnHints(LEGACY_TERMINAL_PROCESS_LIMIT_HINT)).toBe(
       '系统无法再启动终端进程。'
     )
+  })
+
+  it('translates the host terminal cap refusal', () => {
+    expect(localizeTerminalSpawnHints(TERMINAL_HOST_CAP_HINT)).toBe('主机终端已达上限。')
   })
 
   it('leaves unrelated errors untouched', () => {

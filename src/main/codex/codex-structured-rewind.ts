@@ -1,22 +1,8 @@
 import { readCodexThreadId, readCodexTurnId } from './codex-structured-thread-facts'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import { CODEX_RESTORE_MAX_OPERATIONS } from './codex-structured-journal-translation-restore'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../shared/agent-session-wire'
-import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from '../native-chat/agent-session-wire/agent-session-history-page-bounds'
 import { isCodexAppServerRequestError } from './codex-app-server-connection'
 import type { CodexSession } from './codex-structured-session-state'
-
-const MAX_PAGES = 100
-const MAX_ENTRIES = CODEX_RESTORE_MAX_OPERATIONS
-
-class CodexRewindTargetRetainedError extends Error {}
-class CodexRewindTargetMissingError extends Error {}
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -26,122 +12,60 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 function cursor(value: unknown): string | null {
-  if (value === null || (typeof value === 'string' && value.length > 0)) {
+  if (value === undefined || value === null) {
+    return null
+  }
+  if (typeof value === 'string' && value.length > 0) {
     return value
   }
   throw new Error('agent_session_rewind:invalid-provider-cursor')
 }
 
-/** Read both indexes to completion before accepting the retained history. */
-export async function verifyCodexRevertedHistory(
+/** Visits the provider's turn ids newest first, a page at a time, until `visit` answers. Only the
+ *  turns a rewind undoes are read, so a chat's length never bounds it. */
+async function findInCodexTurnsNewestFirst<T>(
   session: Pick<CodexSession, 'connection' | 'threadId'>,
-  reply: Record<string, unknown>,
-  beforeTurnId: string,
-  timeoutMs?: number,
-  targetPresence: 'absent' | 'present' = 'absent'
-): Promise<{ identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[]> {
-  let bytes = 0
-  let entries = 0
-  const turns = new Map<string, { id: string; items: unknown[] }>()
-  for (const [method, firstCursor] of [
-    ['thread/turns/list', cursor(reply.turnsBackwardsCursor)],
-    ['thread/items/list', cursor(reply.itemsBackwardsCursor)]
-  ] as const) {
-    let next = firstCursor
-    const seen = new Set<string>()
-    for (let page = 0; ; page += 1) {
-      if (page >= MAX_PAGES || (next !== null && seen.has(next))) {
-        throw new Error('agent_session_rewind:history-limit')
+  visit: (turnId: string, index: number) => T | undefined,
+  timeoutMs?: number
+): Promise<T | undefined> {
+  let next: string | null = null
+  const seen = new Set<string>()
+  let index = 0
+  do {
+    if (next !== null) {
+      if (seen.has(next)) {
+        throw new Error('agent_session_rewind:invalid-provider-cursor')
       }
-      if (next !== null) {
-        seen.add(next)
-      }
-      const result = record(
-        await session.connection.request(
-          method,
-          {
-            threadId: session.threadId,
-            cursor: next,
-            sortDirection: 'desc',
-            limit: AGENT_SESSION_HISTORY_MAX_LIMIT
-          },
-          { timeoutMs }
-        )
+      seen.add(next)
+    }
+    const page = record(
+      await session.connection.request(
+        'thread/turns/list',
+        {
+          threadId: session.threadId,
+          cursor: next,
+          sortDirection: 'desc',
+          limit: AGENT_SESSION_HISTORY_MAX_LIMIT
+        },
+        { timeoutMs }
       )
-      if (!Array.isArray(result.data)) {
-        throw new Error('agent_session_rewind:invalid-provider-page')
+    )
+    if (!Array.isArray(page.data)) {
+      throw new Error('agent_session_rewind:invalid-provider-page')
+    }
+    for (const raw of page.data) {
+      const turnId = record(raw).id
+      if (typeof turnId !== 'string' || !turnId) {
+        throw new Error('agent_session_rewind:invalid-retained-turn')
       }
-      bytes += Buffer.byteLength(JSON.stringify(result), 'utf8')
-      entries += result.data.length
-      if (bytes > AGENT_SESSION_HISTORY_MAX_PAGE_BYTES || entries > MAX_ENTRIES) {
-        throw new Error('agent_session_rewind:history-limit')
-      }
-      for (const raw of result.data) {
-        const item = record(raw)
-        const turnId = method === 'thread/turns/list' ? item.id : item.turnId
-        if (turnId === beforeTurnId && targetPresence === 'absent') {
-          throw new CodexRewindTargetRetainedError('agent_session_rewind:target-retained')
-        }
-        if (typeof turnId !== 'string' || !turnId) {
-          throw new Error('agent_session_rewind:invalid-retained-turn')
-        }
-        if (method === 'thread/turns/list') {
-          if (turns.has(turnId)) {
-            throw new Error('agent_session_rewind:duplicate-retained-turn')
-          }
-          turns.set(turnId, { id: turnId, items: [] })
-        } else {
-          const turn = turns.get(turnId)
-          if (!turn) {
-            throw new Error('agent_session_rewind:foreign-retained-item')
-          }
-          turn.items.push(record(item.item))
-        }
-      }
-      next = cursor(result.nextCursor)
-      if (next === null) {
-        break
+      const answer = visit(turnId, index++)
+      if (answer !== undefined) {
+        return answer
       }
     }
-  }
-  if (targetPresence === 'present' && !turns.has(beforeTurnId)) {
-    throw new CodexRewindTargetMissingError('agent_session_rewind:target-missing')
-  }
-  const items = new Map<
-    string,
-    { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
-  >()
-  const translator = createCodexJournalTranslator({
-    sink: {
-      appendItem: (identity, body) => {
-        items.set(agentJournalItemKey(identity), { identity, body })
-      },
-      appendTombstone: (identity) => {
-        items.delete(agentJournalItemKey(identity))
-      },
-      publish: () => {}
-    },
-    primaryThreadId: () => session.threadId
-  })
-  try {
-    const chronological = [...turns.values()].toReversed()
-    const retained =
-      targetPresence === 'present'
-        ? chronological.slice(
-            0,
-            chronological.findIndex((turn) => turn.id === beforeTurnId)
-          )
-        : chronological
-    const admission = translator.restoreThread(session.threadId, {
-      turns: retained.map((turn) => ({ ...turn, items: turn.items.toReversed() }))
-    })
-    if (!admission.accepted) {
-      throw new Error('agent_session_rewind:history-unreadable')
-    }
-    return [...items.values()]
-  } finally {
-    translator.dispose()
-  }
+    next = cursor(page.nextCursor)
+  } while (next !== null)
+  return undefined
 }
 
 async function preflightCodexRewind(
@@ -188,35 +112,44 @@ async function preflightCodexRewind(
   return { ok: true }
 }
 
+/**
+ * Whether a revert whose reply was lost took effect. Applied only when the newest turn is the last
+ * one the rewind keeps: anything else (the target, or an order this rewind can't explain) never
+ * truncates the chat.
+ */
 export async function recoverCodexRewind(
   session: CodexSession,
-  input: { fence: number; beforeTurnId: string },
+  input: { fence: number; beforeTurnId: string; keptTurnId: string | null },
   timeoutMs?: number
 ): ReturnType<NonNullable<StructuredAgentSessionAdapter['recoverRewind']>> {
   const admission = await preflightCodexRewind(session, input.fence, timeoutMs)
   if (!admission.ok) {
     return admission
   }
-  try {
-    const items = await verifyCodexRevertedHistory(
-      session,
-      { turnsBackwardsCursor: null, itemsBackwardsCursor: null },
-      input.beforeTurnId,
-      timeoutMs
-    )
-    if (session.fence !== input.fence || session.ended) {
-      return { ok: false, reason: 'invalid-target' }
-    }
-    if (session.activeTurnIds?.size || session.dispatchPending) {
-      return { ok: false, reason: 'busy' }
-    }
-    return { ok: true, items }
-  } catch (error) {
-    if (error instanceof CodexRewindTargetRetainedError) {
-      return { ok: false, reason: 'provider-refused' }
-    }
-    throw error
+  let turns = 0
+  const verdict = await findInCodexTurnsNewestFirst(
+    session,
+    (turnId, index) => {
+      turns++
+      if (turnId === input.beforeTurnId) {
+        return 'unapplied' as const
+      }
+      return turnId === input.keptTurnId ? index === 0 : undefined
+    },
+    timeoutMs
+  )
+  // A rewind to the first turn keeps none: only an emptied history is its revert.
+  const applied = verdict === true || (input.keptTurnId === null && turns === 0)
+  if (!applied && verdict !== 'unapplied') {
+    throw new Error('agent_session_rewind:outcome-unknown')
   }
+  if (session.fence !== input.fence || session.ended) {
+    return { ok: false, reason: 'invalid-target' }
+  }
+  if (session.activeTurnIds?.size || session.dispatchPending) {
+    return { ok: false, reason: 'busy' }
+  }
+  return applied ? { ok: true } : { ok: false, reason: 'provider-refused' }
 }
 
 export async function rewindCodexSession(
@@ -228,27 +161,18 @@ export async function rewindCodexSession(
   if (!admission.ok) {
     return admission
   }
-  let expectedItems: Set<string>
+  let targetPresent: boolean | undefined
   try {
-    const retained = await verifyCodexRevertedHistory(
+    targetPresent = await findInCodexTurnsNewestFirst(
       session,
-      { turnsBackwardsCursor: null, itemsBackwardsCursor: null },
-      input.beforeTurnId,
-      timeoutMs,
-      'present'
+      (turnId) => (turnId === input.beforeTurnId ? true : undefined),
+      timeoutMs
     )
-    expectedItems = new Set(retained.map(({ identity }) => agentJournalItemKey(identity)))
-    await input.onPrepared?.(retained)
-  } catch (error) {
-    return {
-      ok: false,
-      reason:
-        error instanceof CodexRewindTargetMissingError
-          ? 'invalid-target'
-          : error instanceof Error && error.message === 'agent_session_rewind:history-limit'
-            ? 'history-limit'
-            : 'provider-refused'
-    }
+  } catch {
+    return { ok: false, reason: 'provider-refused' }
+  }
+  if (!targetPresent) {
+    return { ok: false, reason: 'invalid-target' }
   }
   const current = await preflightCodexRewind(session, input.fence, timeoutMs)
   if (!current.ok) {
@@ -276,18 +200,10 @@ export async function rewindCodexSession(
     }
     throw error
   }
-  const reply = record(result)
-  if (record(reply.thread).id !== session.threadId) {
+  if (record(record(result).thread).id !== session.threadId) {
     throw new Error('agent_session_rewind:foreign-thread')
   }
-  const items = await verifyCodexRevertedHistory(session, reply, input.beforeTurnId, timeoutMs)
-  if (
-    items.length !== expectedItems.size ||
-    items.some(({ identity }) => !expectedItems.has(agentJournalItemKey(identity)))
-  ) {
-    throw new Error('agent_session_rewind:proof-mismatch')
-  }
-  return { ok: true, items }
+  return { ok: true }
 }
 
 export function observeCodexRewindActivity(
@@ -304,5 +220,6 @@ export function observeCodexRewindActivity(
   }
   if (turnId && method === 'turn/completed') {
     session.activeTurnIds?.delete(turnId)
+    session.abortedTurnIds?.delete(turnId)
   }
 }

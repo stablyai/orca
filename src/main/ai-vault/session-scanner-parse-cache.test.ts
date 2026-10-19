@@ -2,6 +2,8 @@ import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { isAiVaultScanCancelledError } from '../../shared/ai-vault-types'
+import { getSessionParseCacheEntry } from './session-parse-cache-store'
 import {
   parseAgentSessionFileCached,
   resetSessionParseCacheForTests,
@@ -9,6 +11,11 @@ import {
 } from './session-scanner-parse-cache'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
+import {
+  registerTranscriptConsumer,
+  resetTranscriptConsumersForTests,
+  type TranscriptReadOutcome
+} from './session-transcript-consumers'
 
 let tempRoots: string[] = []
 
@@ -17,6 +24,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  resetTranscriptConsumersForTests()
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
 })
@@ -284,5 +292,81 @@ describe('parseAgentSessionFileCached', () => {
     expect(second).toBe(first)
     expect(stats.fullParses).toBe(1)
     expect(stats.reused).toBe(1)
+  })
+
+  it('stores nothing for a parse cancelled before it reads', async () => {
+    const root = await makeTempDir()
+    const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
+    await writeFile(path, `${[userRecord(0, 'q'), assistantRecord(1, 'a')].join('\n')}\n`)
+    const candidate = await claudeCandidate(path)
+
+    await expect(
+      parseAgentSessionFileCached(
+        candidate,
+        process.platform,
+        undefined,
+        undefined,
+        AbortSignal.abort()
+      )
+    ).rejects.toSatisfy(isAiVaultScanCancelledError)
+    expect(getSessionParseCacheEntry(path)).toBeUndefined()
+
+    expect(await cachedParse(path)).toEqual(await freshParse(path))
+  })
+
+  it('keeps the earlier resume point when an append read is cancelled part way', async () => {
+    const root = await makeTempDir()
+    const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
+    await writeFile(path, `${[userRecord(0, 'q'), assistantRecord(1, 'a')].join('\n')}\n`)
+    await cachedParse(path)
+    const before = getSessionParseCacheEntry(path)
+    const beforeOffset = before?.resume?.byteOffset
+
+    // Several stream chunks, so the cancel lands with most of the append unread.
+    const filler = 'x'.repeat(2_000)
+    await appendFile(
+      path,
+      `${Array.from({ length: 200 }, (_, index) => userRecord(index + 2, `${index} ${filler}`)).join('\n')}\n`
+    )
+    const controller = new AbortController()
+    const outcomes: TranscriptReadOutcome[] = []
+    let messages = 0
+    const unregister = registerTranscriptConsumer({
+      beginRead: () => ({
+        message: () => {
+          messages += 1
+          controller.abort()
+        },
+        finish: (outcome) => outcomes.push(outcome)
+      })
+    })
+    await expect(
+      parseAgentSessionFileCached(
+        await claudeCandidate(path),
+        process.platform,
+        undefined,
+        undefined,
+        controller.signal
+      )
+    ).rejects.toSatisfy(isAiVaultScanCancelledError)
+    unregister()
+
+    expect(messages).toBeLessThan(200)
+    expect(outcomes).toEqual([
+      expect.objectContaining({ incomplete: true, cancelled: true, session: null })
+    ])
+    expect(getSessionParseCacheEntry(path)).toBe(before)
+    expect(getSessionParseCacheEntry(path)?.resume?.byteOffset).toBe(beforeOffset)
+
+    // The next uncancelled parse resumes from the kept point and matches a cold parse.
+    const stats = createSessionParseStats()
+    const resumed = await parseAgentSessionFileCached(
+      await claudeCandidate(path),
+      process.platform,
+      stats
+    )
+    expect(stats.incremental).toBe(1)
+    expect(resumed).toEqual(await freshParse(path))
+    expect(resumed?.messageCount).toBe(202)
   })
 })

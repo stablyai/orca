@@ -5,9 +5,7 @@ import {
   getDefaultWorkspaceSession,
   join,
   mkdtemp,
-  registerSshFilesystemProvider,
-  tmpdir,
-  unregisterSshFilesystemProvider
+  tmpdir
 } from '../orca-runtime-test-mocks.spec'
 import type { OrchestrationDb } from '../orchestration/db'
 import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
@@ -79,7 +77,9 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This isolated recovery path reaches only the supplied planner and missing-terminal settlement methods.
     runtime.setOrchestrationDb({
+      reconcileMissingWorkerTerminal: vi.fn(),
       listLegacyWorkerTerminalRecoveryRows: () =>
         cases.map(({ name, leafId, terminalHandle }) => ({
           dispatch_id: `dispatch-${name}`,
@@ -134,10 +134,11 @@ describe('OrcaRuntimeService', () => {
         worktreeId: TEST_WORKTREE_ID
       }
     ])
+    const getForegroundProcess = vi.fn(async () => null)
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
-      getForegroundProcess: async () => null,
+      getForegroundProcess,
       hasPty: (candidate) => candidate === 'pty-folder-legacy',
       listProcesses
     })
@@ -148,7 +149,10 @@ describe('OrcaRuntimeService', () => {
       deferredDispatchIds: ['dispatch-missing', 'dispatch-ambiguous']
     })
     expect(listProcesses).toHaveBeenCalledOnce()
-    expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
+    expect(listProcesses).toHaveBeenCalledWith('local', LIST_PROVIDER_DEADLINE)
+    expect(getForegroundProcess).not.toHaveBeenCalled()
+    await runtime.refreshPtyForegroundAgentFromController('pty-ambiguous')
+    expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-ambiguous')
     for (const { name, leafId } of cases.slice(0, 2)) {
       expect(
         getSession().sleepingAgentSessionsByPaneKey?.[`legacy-${name}:${leafId}`]
@@ -257,7 +261,7 @@ describe('OrcaRuntimeService', () => {
     )
     expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
     expect(listProcesses).toHaveBeenCalledTimes(3)
-    expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
+    expect(listProcesses).toHaveBeenCalledWith('local', LIST_PROVIDER_DEADLINE)
     expect(revealTerminalSession).toHaveBeenCalledWith(TEST_FOLDER_WORKSPACE_KEY, {
       ptyId: 'pty-folder-legacy',
       title: 'Folder worker',
@@ -273,7 +277,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('adopts an SSH folder legacy worker through its SSH workspace-session partition', async () => {
+  it('defers an SSH folder legacy worker while its folder path is unavailable', async () => {
     const connectionId = 'ssh-folder'
     const ptyId = `ssh:${connectionId}@@pty-folder-legacy`
     const workerPaneKey = `legacy-ssh-folder-worker:${HEADLESS_LEAF_ID}`
@@ -368,52 +372,21 @@ describe('OrcaRuntimeService', () => {
       })
     )
     runtime.setNotifier({ revealTerminalSession } as never)
-    registerSshFilesystemProvider(connectionId, {
-      stat: vi.fn(async () => ({ size: 0, type: 'directory', mtime: 1 }))
-    } as never)
 
-    try {
-      expect(sshSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeDefined()
-      expect(localSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
-      await expect(
-        runtime.reconcileLegacyWorkerTerminals({
-          connectionId,
-          materializeRenderer: true
-        })
-      ).resolves.toMatchObject({
-        adoptedDispatchIds: ['dispatch-ssh-folder'],
-        exitedDispatchIds: [],
-        deferredDispatchIds: []
+    expect(sshSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeDefined()
+    // Why: this process serves no SSH filesystem, so the folder path stays unavailable.
+    await expect(
+      runtime.reconcileLegacyWorkerTerminals({
+        connectionId,
+        materializeRenderer: true
       })
-    } finally {
-      unregisterSshFilesystemProvider(connectionId)
-    }
-
-    expect(sshSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
-    expect(localSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
-    expect(getWorkspaceSession).toHaveBeenCalledWith(`ssh:${connectionId}`)
-    expect(setWorkspaceSession).toHaveBeenCalledWith(expect.any(Object), `ssh:${connectionId}`)
-    expect(listProcesses).toHaveBeenCalledTimes(3)
-    expect(listProcesses).toHaveBeenCalledWith(connectionId, LIST_PROVIDER_DEADLINE)
-    expect(sshSession.tabsByWorktree[TEST_FOLDER_WORKSPACE_KEY]).toContainEqual(
-      expect.objectContaining({
-        id: 'legacy-ssh-folder-worker',
-        ptyId,
-        worktreeId: TEST_FOLDER_WORKSPACE_KEY
-      })
-    )
-    expect(revealTerminalSession).toHaveBeenCalledWith(TEST_FOLDER_WORKSPACE_KEY, {
-      ptyId,
-      title: 'SSH folder worker',
-      activate: false,
-      presentation: 'background',
-      tabId: 'legacy-ssh-folder-worker',
-      leafId: HEADLESS_LEAF_ID,
-      focus: false,
-      expectedProcessIdentity: {
-        terminalHandle: 'term_ssh_folder',
-        incarnationId
-      }
+    ).resolves.toMatchObject({
+      adoptedDispatchIds: [],
+      exitedDispatchIds: [],
+      deferredDispatchIds: ['dispatch-ssh-folder']
     })
+    expect(sshSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeDefined()
+    expect(localSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
+    expect(revealTerminalSession).not.toHaveBeenCalled()
   })
 })

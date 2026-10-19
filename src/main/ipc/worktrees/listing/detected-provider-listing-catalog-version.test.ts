@@ -35,13 +35,6 @@ const { getLocalWorktreeCatalogVersion, getLocalWorktreeScanGeneration } =
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing reads only id, path, displayName and connectionId off the repo row.
 const localRepo = { id: 'repo-local', path: '/repos/local', displayName: 'local' } as Repo
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above; connectionId routes the listing to the provider branch.
-const sshRepo = {
-  id: 'repo-ssh',
-  path: '/remote/repo',
-  displayName: 'remote',
-  connectionId: 'ssh-1'
-} as Repo
 
 function createStore(repo: Repo) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing reads only these store methods; the pruning that would need more is mocked above.
@@ -65,20 +58,8 @@ function worktreeAt(repo: Repo, path: string): GitWorktreeInfo {
   return { path, head: 'abc', branch: 'main', isBare: false, isMainWorktree: path === repo.path }
 }
 
-const sshListWorktrees = vi.fn()
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing calls only listWorktrees on the captured provider.
-const sshProvider = { listWorktrees: sshListWorktrees } as never
-
 function listLocal() {
   return listDetectedWorktreesForCapturedRepo(createStore(localRepo), localRepo, () => true)
-}
-function listSsh() {
-  return listDetectedWorktreesForCapturedRepo(
-    createStore(sshRepo),
-    sshRepo,
-    () => true,
-    sshProvider
-  )
 }
 
 // Why this suite exists: a client orders listings against the create and remove replies it has
@@ -88,7 +69,6 @@ describe('the catalog version a listing carries', () => {
   beforeEach(() => {
     __resetDetectedWorktreeScanCacheForTests()
     listRepoWorktreesMock.mockReset()
-    sshListWorktrees.mockReset()
   })
 
   it('is the generation the local scan began at, and a change bumps the current one past it', async () => {
@@ -121,18 +101,6 @@ describe('the catalog version a listing carries', () => {
     expect(listRepoWorktreesMock).toHaveBeenCalledTimes(1)
     expect(second && 'catalogVersion' in second ? second.catalogVersion : undefined).toEqual(
       first && 'catalogVersion' in first ? first.catalogVersion : undefined
-    )
-  })
-
-  it('is the generation the SSH provider listing began at', async () => {
-    sshListWorktrees.mockResolvedValue([worktreeAt(sshRepo, sshRepo.path)])
-    const atScanStart = getLocalWorktreeScanGeneration(sshRepo.id)
-
-    const listing = await listSsh()
-
-    expect(listing).toMatchObject({ authoritative: true })
-    expect(listing && 'catalogVersion' in listing ? listing.catalogVersion?.sequence : -1).toBe(
-      atScanStart
     )
   })
 

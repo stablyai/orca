@@ -102,7 +102,15 @@ export function createBridgeNotifyForwarder(args: {
       // to be enforced here because a page served from an older desktop bundle does not read
       // `storageOversize` and would write the key whole over what the device holds.
       const held = options.readStorage()
-      if (!pageMayWriteStorageKey(message.key, host.id, args.route(), held)) {
+      if (
+        !pageMayWriteStorageKey(
+          message.key,
+          host.id,
+          args.route(),
+          held,
+          options.ownsHostArea === true
+        )
+      ) {
         options.onDiagnostic?.({ kind: 'storage-refused', key: message.key })
         return
       }
@@ -117,7 +125,7 @@ export function createBridgeNotifyForwarder(args: {
     }
     if (message.name === BRIDGE_ROUTE_PARAM_CLEAR) {
       // Local, and the one frame that writes to the shell's own route (ruling 34). Carried up
-      // rather than acted on here: the param lives on the native route the switch holds, and
+      // rather than acted on here: the param lives on the native route that mounted the shell, and
       // whether this still names it is that holder's comparison to make.
       options.onRouteParamClear(message.param, message.value)
       return

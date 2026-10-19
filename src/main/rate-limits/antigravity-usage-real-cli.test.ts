@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { stdoutShowsModelTurn } from './antigravity-usage-response'
 import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { ptySizes } from '../delivery/visibility-state'
 import { buildPtyIpcSpawnOptions } from './spawn-options'
 import { commitPtyIpcSpawn } from './spawn-commit'

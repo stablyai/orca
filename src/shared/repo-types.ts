@@ -6,6 +6,7 @@ import type { ForkSyncMode } from './git-fork-sync'
 import type { GitRemoteIdentity } from './git-remote-identity'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
 import type { RepoProjectHostSetupMethod } from './project-types'
+import type { JiraProjectReference } from './jira-project-reference'
 
 // ─── Repo ────────────────────────────────────────────────────────────
 export type RepoKind = 'git' | 'folder'
@@ -40,6 +41,15 @@ export type WorktreeVisibilitySourcePreferences = {
   custom?: Record<string, ExternalWorktreeVisibility>
 }
 
+export type WorktreeVisibilityDefaults = {
+  /** Default for worktrees outside a recognized source. */
+  external?: ExternalWorktreeVisibility
+  /** Host-owned roots applied to every repository on that host. */
+  customSources?: CustomWorktreeVisibilitySource[]
+  /** Defaults for built-in and host-owned custom sources. */
+  sourcePreferences?: WorktreeVisibilitySourcePreferences
+}
+
 export type Repo = {
   id: string
   path: string
@@ -71,6 +81,8 @@ export type Repo = {
    *  identically to `'auto'`; writers leave it undefined on creation so
    *  existing persisted records stay forward-compatible. */
   issueSourcePreference?: IssueSourcePreference
+  /** Host-owned Jira project default; users can override it in each composer. */
+  defaultJiraProject?: JiraProjectReference | null
   /**
    * Per-project gh account binding (host + login only — never a token).
    * At spawn, Orca resolves a short-lived token via `gh auth token --user`

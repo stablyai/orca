@@ -4,7 +4,7 @@ import {
   AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS,
   buildRuntimeMobileAgentStatusProjectionForTests,
   resetRuntimeMobileAgentStatusProjectionCacheForTests
-} from './sync-runtime-graph'
+} from './sync-runtime-graph/agent-status-projection'
 
 // Reference: the pre-change whole-array serialization, kept verbatim apart from the sort, which
 // is now a code-unit compare — the projection is only ever `===`-compared, never displayed, so it
@@ -46,7 +46,15 @@ function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
         interrupted: entry.interrupted ?? null,
-        mainAgent: mainAgentKey(entry.mainAgent)
+        mainAgent: mainAgentKey(entry.mainAgent),
+        programStatus: entry.programStatus
+          ? [
+              entry.programStatus.state,
+              entry.programStatus.kind ?? null,
+              entry.programStatus.progress ?? null,
+              entry.programStatus.message ?? null
+            ]
+          : null
       }))
   )
 }
@@ -188,5 +196,23 @@ describe('mobile agent-status projection equivalence', () => {
     expect(project('failure')).not.toBe(project())
     // The main agent's own clock dates the failure on mobile, so moving it republishes too.
     expect(project('failure', 1740000001000)).not.toBe(project('failure'))
+  })
+})
+
+describe('mobile agent-status projection program-status facet', () => {
+  it('republishes on facet content but not on a new observedAt alone', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const facet = { state: 'working', progress: 10, observedAt: 1 }
+    const base = buildRuntimeMobileAgentStatusProjectionForTests({
+      'tab-0:leaf-0': makeEntry(0, { programStatus: facet })
+    })
+    const reobserved = buildRuntimeMobileAgentStatusProjectionForTests({
+      'tab-0:leaf-0': makeEntry(0, { programStatus: { ...facet, observedAt: 2 } })
+    })
+    const progressed = buildRuntimeMobileAgentStatusProjectionForTests({
+      'tab-0:leaf-0': makeEntry(0, { programStatus: { ...facet, progress: 20 } })
+    })
+    expect(reobserved).toBe(base)
+    expect(progressed).not.toBe(base)
   })
 })

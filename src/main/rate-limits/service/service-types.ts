@@ -36,7 +36,7 @@ export type InactiveCodexAccountInfo = {
 
 export type CodexHomePathResolver = (
   target?: CodexAccountSelectionTarget
-) => CodexRateLimitHomeResolution
+) => CodexRateLimitHomeResolution | Promise<CodexRateLimitHomeResolution>
 export type KimiHomeResolver = () => Promise<KimiHomeResolution>
 export type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
@@ -160,23 +160,6 @@ export function normalizeClaudeConfigDir(dir: string | null | undefined): string
   // Why: normalize mixed Windows separators for path attribution; preserve Linux case sensitivity.
   const trimmed = dir?.trim().replace(/\\/g, '/').replace(/\/+$/, '')
   return trimmed || null
-}
-
-export function delayUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) {
-    return Promise.resolve()
-  }
-  return new Promise((resolve) => {
-    const onAbort = (): void => {
-      clearTimeout(timer)
-      resolve()
-    }
-    const timer = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort)
-      resolve()
-    }, ms)
-    signal.addEventListener('abort', onAbort, { once: true })
-  })
 }
 
 export function isSameUsageWindow(

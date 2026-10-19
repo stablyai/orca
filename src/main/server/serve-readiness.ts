@@ -1,5 +1,6 @@
-import type { PairingOfferUnavailableReason } from '../runtime/runtime-rpc'
+import type { PairingOfferUnavailableReason } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
 import type { OrcadHealth } from '../orcad/orcad-health'
+import { describePtyProcessCeiling } from '../../shared/pty-process-ceiling-state'
 
 export type ServePairingUnavailableReason = PairingOfferUnavailableReason | 'disabled_by_operator'
 
@@ -110,6 +111,9 @@ function renderHumanReadiness(readiness: ServeReadiness): string {
         ` (${daemon.selfTest.coverage}: ${daemon.selfTest.verdict})` +
         `; terminals survive an orcad restart: ${daemon.ownsFreshSessions ? 'yes' : 'NO'}`
     )
+    if (daemon.processCeiling !== undefined) {
+      lines.push(`Terminal process ceiling: ${describePtyProcessCeiling(daemon.processCeiling)}`)
+    }
   }
   if (readiness.pairing.available) {
     if (readiness.pairing.webClientUrl) {

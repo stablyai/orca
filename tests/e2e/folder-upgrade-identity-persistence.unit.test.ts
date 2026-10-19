@@ -1,3 +1,4 @@
+import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 import type { AppState } from '../../src/renderer/src/store/types'
 import { getRemovedWorktreeIdsAfterAuthoritativeScan } from '../../src/renderer/src/store/slices/worktrees/listing/worktree-host-ownership'
@@ -28,8 +29,12 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
   const owner = makeRepo({ id: 'folder', path: 'C:\\projects\\draft', kind: 'folder' })
   store.addRepo(owner)
   const id = `folder::${owner.path}`
-  const before = store.setWorktreeMetaForHost(id, 'local', { comment: 'ongoing OMP work' })
-  store.setWorktreeMetaForHost(id, 'ssh:builder', { comment: 'other host' })
+  const before = store.setWorktreeMeta(hostWorktreeTarget({ id, hostId: 'local' }), {
+    comment: 'ongoing OMP work'
+  })
+  store.setWorktreeMeta(hostWorktreeTarget({ id, hostId: 'ssh:builder' }), {
+    comment: 'other host'
+  })
   store.setWorkspaceSession({
     ...getDefaultWorkspaceSession(),
     activeRepoId: owner.id,
@@ -37,7 +42,7 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
     activeTabId: 'omp-tab',
     tabsByWorktree: { [id]: [makeTerminalTab({ id: 'omp-tab', worktreeId: id })] }
   })
-  store.updateRepo(owner.id, { kind: 'git', folderUpgradeGitRootPath: 'C:/projects/draft' })
+  store.updateRepo(owner, { kind: 'git', folderUpgradeGitRootPath: 'C:/projects/draft' })
   store.flush()
   const reloaded = createStore()
   const repo = reloaded.getRepo(owner.id)
@@ -95,7 +100,7 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
 it('drops upgrade path evidence when execution ownership changes', () => {
   const store = createStore()
   store.addRepo(makeRepo({ id: 'folder', path: 'C:\\projects\\draft', kind: 'git' }))
-  store.updateRepo('folder', { folderUpgradeGitRootPath: 'C:/projects/draft' })
-  store.updateRepo('folder', { executionHostId: 'ssh:builder' })
+  store.updateRepo({ id: 'folder' }, { folderUpgradeGitRootPath: 'C:/projects/draft' })
+  store.updateRepo({ id: 'folder' }, { executionHostId: 'ssh:builder' })
   expect(store.getRepo('folder')?.folderUpgradeGitRootPath).toBeUndefined()
 })

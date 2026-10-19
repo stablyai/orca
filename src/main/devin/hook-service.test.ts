@@ -18,6 +18,7 @@ vi.mock('os', async () => {
 
 import { DevinHookService } from './hook-service'
 import {
+  applyDevinManagedHooks,
   getDevinConfigPath,
   getDevinManagedCommand,
   getDevinManagedScriptPath
@@ -171,6 +172,40 @@ describe('DevinHookService', () => {
       const decoded = Buffer.from(encoded!, 'base64').toString('utf16le')
       expect(decoded).toContain(`Test-Path -LiteralPath '${scriptPath}' -PathType Leaf`)
       expect(decoded).toContain('[Console]::In.ReadToEnd() | Out-Null')
+    } finally {
+      Object.defineProperty(process, 'platform', { value: previous })
+    }
+  })
+
+  it('registers a forward-slash cmd path on Windows and replaces the legacy backslash entry', () => {
+    const previous = process.platform
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      const scriptPath = 'C:\\Users\\ada\\.orca\\agent-hooks\\devin-hook.cmd'
+      const command = getDevinManagedCommand(scriptPath)
+      // Why: Git Bash strips backslashes from a bare path; forward slashes survive every host.
+      expect(command).toBe('C:/Users/ada/.orca/agent-hooks/devin-hook.cmd')
+      // A UNC home is cmd-safe but has no drive letter, so it keeps the encoded launcher.
+      expect(
+        getDevinManagedCommand('\\\\server\\share\\ada\\.orca\\agent-hooks\\devin-hook.cmd')
+      ).toMatch(/ -EncodedCommand \S+$/)
+
+      const next = applyDevinManagedHooks(
+        {
+          hooks: {
+            Stop: [
+              { hooks: [{ type: 'command', command: scriptPath }] },
+              { hooks: [{ type: 'command', command: 'C:\\tools\\user-hook.cmd' }] }
+            ]
+          }
+        },
+        command,
+        'devin-hook.cmd'
+      )
+      expect(next.hooks?.Stop?.flatMap((definition) => definition.hooks ?? [])).toEqual([
+        { type: 'command', command: 'C:\\tools\\user-hook.cmd' },
+        expect.objectContaining({ command })
+      ])
     } finally {
       Object.defineProperty(process, 'platform', { value: previous })
     }

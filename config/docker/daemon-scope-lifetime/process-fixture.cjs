@@ -28,6 +28,23 @@ if (role === 'worker') {
     env: command.env
   })
   daemon.unref()
+} else if (role === 'daemon' && ownership === 'terminals') {
+  // The baseline bundle predates terminal scopes, so its terminals stay in the daemon's scope.
+  const { startTerminalScopes = () => ({}), wrapPtySpawnInTerminalScope } = require(bundlePath)
+  const started = startTerminalScopes(nonce)
+  // Same argv and env a PTY spawn gets; a pipe-less child stands in for node-pty.
+  const terminals = JSON.parse(process.env.ORCA_FIXTURE_TERMINALS).map((script) => {
+    const wrapped = wrapPtySpawnInTerminalScope
+      ? wrapPtySpawnInTerminalScope('/bin/sh', ['-c', script], process.env)
+      : { file: '/bin/sh', args: ['-c', script], env: process.env }
+    return spawn(wrapped.file, wrapped.args, { env: wrapped.env, stdio: 'ignore' }).pid
+  })
+  fs.writeFileSync(
+    `${resultPath}.daemon`,
+    JSON.stringify({ pid: process.pid, terminals, ...started })
+  )
+  process.on('SIGTERM', () => process.exit(0))
+  setInterval(() => {}, 1000)
 } else if (role === 'daemon') {
   const { startScopeReaper } = require(bundlePath)
   const watcher = startScopeReaper?.(nonce, ownership !== 'shared')

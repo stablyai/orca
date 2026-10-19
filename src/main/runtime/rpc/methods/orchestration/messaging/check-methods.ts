@@ -17,6 +17,7 @@ import {
 export const ORCHESTRATION_CHECK_METHODS = [
   defineMethod({
     name: 'orchestration.check',
+    permission: 'workspace',
     params: CheckParams,
     handler: async (
       params,

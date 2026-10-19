@@ -4,40 +4,13 @@
   "family": "nativeChat.image-upload",
   "namedDeltas": [],
   "values": {
-    "147a6d6af2f1": {
-      "name": "image-uploaded",
-      "ordinal": 15,
-      "value": {
-        "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
-        "path": "/tmp/img-2.png",
-        "previewUri": "file:///b.png"
-      }
-    },
-    "2ec71b490683": {
+    "31f4965e4ed4": {
       "name": "image-uploaded",
       "ordinal": 8,
       "value": {
-        "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
         "path": "/tmp/img-1.png",
         "previewUri": "data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
       }
-    },
-    "4a3413975ca6": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": [
-        {
-          "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
-          "path": "/tmp/img-1.png",
-          "previewUri": "data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-        },
-        {
-          "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
-          "path": "/tmp/img-2.png",
-          "previewUri": "file:///b.png"
-        }
-      ]
     },
     "5c19acb9611e": {
       "name": "clipboard.commitImageUpload#2",
@@ -121,18 +94,16 @@
       "ordinal": 7,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.commitImageUpload\",\"params\":{\"uploadId\":\"upload-1\"}}"
     },
-    "8d51e9899739": {
-      "failure": {
-        "$rpc": "null"
-      },
-      "uploaded": [
+    "87c17cf78a60": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
         {
-          "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
           "path": "/tmp/img-1.png",
           "previewUri": "data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
         },
         {
-          "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
           "path": "/tmp/img-2.png",
           "previewUri": "file:///b.png"
         }
@@ -224,6 +195,14 @@
         }
       }
     },
+    "d7dc1460b465": {
+      "name": "image-uploaded",
+      "ordinal": 15,
+      "value": {
+        "path": "/tmp/img-2.png",
+        "previewUri": "file:///b.png"
+      }
+    },
     "e74ddb684ed1": {
       "name": "clipboard.startImageUpload#2",
       "ordinal": 10,
@@ -296,6 +275,21 @@
           }
         }
       }
+    },
+    "f6cdfabc3790": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "uploaded": [
+        {
+          "path": "/tmp/img-1.png",
+          "previewUri": "data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "path": "/tmp/img-2.png",
+          "previewUri": "file:///b.png"
+        }
+      ]
     }
   },
   "recording": {
@@ -321,10 +315,10 @@
             "a77c2409e01f"
           ],
           "settlements": {
-            "two": "4a3413975ca6"
+            "two": "87c17cf78a60"
           },
-          "state": "8d51e9899739",
-          "effects": ["994fccf9b305", "2ec71b490683", "147a6d6af2f1"]
+          "state": "f6cdfabc3790",
+          "effects": ["994fccf9b305", "31f4965e4ed4", "d7dc1460b465"]
         }
       }
     ]

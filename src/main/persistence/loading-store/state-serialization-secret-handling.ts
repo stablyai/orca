@@ -108,7 +108,10 @@ export class StateSerializationSecretHandlingOperations {
           }
           break
         case 'sshRemotePtyLeases':
-          stateToSave[domain] = this.runtime.state.sshRemotePtyLeases
+        case 'remoteLayoutSnapshots':
+        case 'legacyPaneKeyAliasEntries':
+        case 'migrationUnsupportedPtyEntries':
+          stateToSave[domain] = this.runtime.state[domain]
           break
         default:
           return undefined

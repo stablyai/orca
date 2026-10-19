@@ -3,7 +3,7 @@ import { CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { cn } from '@/lib/utils'
-import { i18n, translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRoadmapBar from './ProjectRoadmapBar'
 import { ProjectTitleCell } from './ProjectCellIdentity'
@@ -48,7 +48,7 @@ export default function ProjectRoadmap({
 }: Props): React.JSX.Element {
   const view = table.selectedView
   const prefersReducedMotion = usePrefersReducedMotion()
-  const locale = i18n.resolvedLanguage ?? i18n.language
+  const locale = getIntlLocale()
   // Why: the grid lives on UTC calendar days (parseRoadmapDate), so "today"
   // must be the viewer's LOCAL calendar date mapped to UTC midnight — the raw
   // instant would shift the marker into the wrong day off UTC.

@@ -58,7 +58,6 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
       if (wasAlreadyReady && initializedHandlesRef.current.has(handle)) {
         // Why: WebView reloaded (hot reload / Android churn); old xterm buffer is gone, so resubscribe for a fresh scrollback.
         unsubscribeTerminal(handle)
-        initializedHandlesRef.current.delete(handle)
         if (handle === activeHandleRef.current) {
           subscribeToTerminal(handle)
         }

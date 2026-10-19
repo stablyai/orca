@@ -5,6 +5,7 @@ import {
   type RemotePaneLayoutPusher
 } from './remote-pane-layout-push'
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
+import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
 import { appendPaneTerminalError, clearPaneTerminalError } from './terminal-error-accumulation'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
 import { updateTerminalRemoteRuntimeRecoveryUiState } from './terminal-remote-runtime-recovery-ui-state'
@@ -86,6 +87,10 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
     [cancelPendingRenameFrames]
   )
   const onPtyErrorRef = useRef((paneId: number, message: string) => {
+    if (message.includes(AGENT_LAUNCH_PANE_REFUSED_CODE)) {
+      // A launch pane's verdict reached the tab typed; its notice shows it, not an error.
+      return
+    }
     if (isTerminalSessionStateSaveFailure(message)) {
       setTerminalError(null)
       setTerminalErrorsByPaneId({})

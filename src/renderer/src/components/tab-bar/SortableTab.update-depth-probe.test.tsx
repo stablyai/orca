@@ -12,7 +12,7 @@
  */
 import type { ReactElement, ReactNode } from 'react'
 import { cloneElement, isValidElement, StrictMode, useEffect, useState } from 'react'
-import { act, render, cleanup } from '@testing-library/react'
+import { act, render, cleanup, fireEvent } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
@@ -68,9 +68,8 @@ vi.mock('@dnd-kit/sortable', () => ({
   })
 }))
 
-vi.mock('@/lib/use-tab-agent', () => ({ useTabAgent: () => null }))
-
 vi.mock('@/components/ui/tooltip', () => ({
+  TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   Tooltip: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TooltipTrigger: ({ children, asChild }: { children: ReactNode; asChild?: boolean }) =>
@@ -107,8 +106,27 @@ vi.mock('./TerminalTabLeadingIcon', () => ({
   }
 }))
 
+const menuCompletions: (() => void)[] = []
+vi.mock('./SortableTabContextMenu', () => ({
+  SortableTabContextMenu: ({
+    open,
+    onSessionSwitchComplete
+  }: {
+    open: boolean
+    onSessionSwitchComplete: () => void
+  }) => {
+    if (open) {
+      menuCompletions.push(onSessionSwitchComplete)
+    }
+    return open ? <div data-testid="open-menu" /> : null
+  }
+}))
+
 vi.mock('./shell-icons', () => ({ ShellIcon: () => <span /> }))
-vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => <span /> }))
+vi.mock('@/lib/agent-catalog', () => ({
+  AgentIcon: () => <span />,
+  getAgentLabel: (agent: string) => agent
+}))
 vi.mock('../sidebar/WorktreeCardHelpers', () => ({ FilledBellIcon: () => <span /> }))
 
 function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
@@ -140,6 +158,7 @@ function Harness({ tab }: { tab: TerminalTab }): ReactElement {
   return (
     <SortableTab
       tab={tab}
+      agent={null}
       unifiedTabId="unified-1"
       groupId="group-1"
       tabCount={1}
@@ -243,4 +262,23 @@ describe('SortableTab update-depth probe', () => {
     act(() => requestTerminalTabRename('terminal-tab-1'))
     expect(container.querySelector('[data-tab-rename-input]')).not.toBeNull()
   })
+})
+
+it('retires completion ownership for repeated gestures and batched blur/reopen', () => {
+  const { container } = render(<Harness tab={makeTab()} />)
+  const slot = container.querySelector('[data-tab-strip-slot]')!
+  act(() => fireEvent.contextMenu(slot))
+  const first = menuCompletions.at(-1)!
+  act(() => fireEvent.contextMenu(slot))
+  act(first)
+  expect(container.querySelector('[data-testid="open-menu"]')).not.toBeNull()
+  const second = menuCompletions.at(-1)!
+  act(() => {
+    window.dispatchEvent(new Event('blur'))
+    fireEvent.contextMenu(slot)
+  })
+  act(second)
+  expect(container.querySelector('[data-testid="open-menu"]')).not.toBeNull()
+  act(menuCompletions.at(-1)!)
+  expect(container.querySelector('[data-testid="open-menu"]')).toBeNull()
 })

@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -43,6 +44,7 @@ describe('remote runtime request connection integration', () => {
           kind: 'git'
         }
       ]
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo.list over the real socket only calls the runtime methods defined below.
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'fetch-runtime-test',
@@ -50,7 +52,7 @@ describe('remote runtime request connection integration', () => {
         cleanupSubscriptionsForConnection: () => {},
         cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
-        listRepos: () => repos
+        listVisibleRepos: () => repos
       } as unknown as OrcaRuntimeService
       const server = new OrcaRuntimeRpcServer({
         runtime,
@@ -69,7 +71,9 @@ describe('remote runtime request connection integration', () => {
         if (!pairing) {
           throw new Error('invalid pairing')
         }
-        const connection = new RemoteRuntimeRequestConnection(pairing)
+        const connection = new RemoteRuntimeRequestConnection(
+          pairedRuntimeConnectionFromOffer(pairing)
+        )
         try {
           await expect(
             connection.request('repo.list', undefined, REMOTE_RUNTIME_REQUEST_TIMEOUT_MS)
@@ -189,7 +193,7 @@ describe('remote runtime request connection integration', () => {
 
         const events: RuntimeClientEventStreamMessage[] = []
         const subscription = await subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
-          pairing,
+          pairedRuntimeConnectionFromOffer(pairing),
           'runtime.clientEvents.subscribe',
           undefined,
           REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
@@ -204,8 +208,10 @@ describe('remote runtime request connection integration', () => {
             }
           }
         )
-        const desktop = new RemoteRuntimeRequestConnection(pairing)
-        const mobile = new RemoteRuntimeRequestConnection(pairing)
+        const desktop = new RemoteRuntimeRequestConnection(
+          pairedRuntimeConnectionFromOffer(pairing)
+        )
+        const mobile = new RemoteRuntimeRequestConnection(pairedRuntimeConnectionFromOffer(pairing))
         try {
           await waitFor(() => events.some((event) => event.type === 'ready'))
 
@@ -364,7 +370,7 @@ describe('remote runtime request connection integration', () => {
         const subscriptions = await Promise.all(
           clientEvents.map((events) =>
             subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
-              pairing,
+              pairedRuntimeConnectionFromOffer(pairing),
               'runtime.clientEvents.subscribe',
               undefined,
               REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
@@ -381,7 +387,9 @@ describe('remote runtime request connection integration', () => {
             )
           )
         )
-        const requester = new RemoteRuntimeRequestConnection(pairing)
+        const requester = new RemoteRuntimeRequestConnection(
+          pairedRuntimeConnectionFromOffer(pairing)
+        )
         try {
           await waitFor(() =>
             clientEvents.every((events) => events.some((e) => e.type === 'ready'))
@@ -414,7 +422,7 @@ describe('remote runtime request connection integration', () => {
           }
           const reconnectedEvents: RuntimeClientEventStreamMessage[] = []
           const reconnected = await subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
-            pairing,
+            pairedRuntimeConnectionFromOffer(pairing),
             'runtime.clientEvents.subscribe',
             undefined,
             REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
@@ -578,7 +586,7 @@ describe('remote runtime request connection integration', () => {
           return () => sessionTabListeners.delete(listener)
         },
         watchFileExplorer: async () => () => {},
-        listRepos: () => [repo],
+        listVisibleRepos: () => [repo],
         showRepo: (selector: string) => {
           if (selector !== repo.id && selector !== `id:${repo.id}`) {
             throw new Error('repo_not_found')
@@ -627,7 +635,9 @@ describe('remote runtime request connection integration', () => {
         }
 
         const events: RuntimeClientEventStreamMessage[] = []
-        const shared = new RemoteRuntimeSharedControlConnection(pairing)
+        const shared = new RemoteRuntimeSharedControlConnection(
+          pairedRuntimeConnectionFromOffer(pairing)
+        )
         const subscription = await shared.subscribe<RuntimeClientEventStreamMessage>(
           'runtime.clientEvents.subscribe',
           undefined,

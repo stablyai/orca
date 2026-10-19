@@ -4,6 +4,7 @@ import { extname } from 'node:path'
 import { isBinaryBuffer } from './binary-buffer'
 import { isPathInsideOrEqual } from './cross-platform-path'
 import { IMAGE_FILE_MIME_TYPES } from './image-file-extensions'
+import { FONT_FILE_MIME_TYPES } from './font-file-extensions'
 import {
   NodeFileReadTooLargeError,
   readNodeFileHandleWithinLimit
@@ -29,6 +30,7 @@ export type DocPreviewFileAccessResult = {
 
 const DOC_PREVIEW_BINARY_MIME_TYPES: Record<string, string> = {
   ...IMAGE_FILE_MIME_TYPES,
+  ...FONT_FILE_MIME_TYPES,
   '.pdf': 'application/pdf'
 }
 const DOC_PREVIEW_MAX_TEXT_BYTES = 10 * 1024 * 1024

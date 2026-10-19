@@ -1,6 +1,14 @@
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import {
+  notifyWorkspaceSessionWritten,
+  type WorkspaceSessionWriteListener
+} from './workspace-session-write-listeners'
+
+/** Gets the domains a write changed; undefined when it may have changed any of them. */
+export type StateWriteListener = (dirtyDomains: readonly string[] | undefined) => void
 
 const SAVE_DEBOUNCE_MS = 1_000
 const SAVE_MAX_WAIT_MS = 5_000
@@ -17,6 +25,8 @@ type WriteSchedulingOperationsRuntime = Pick<
   | 'writeGeneration'
   | 'writeTimer'
   | 'writesFrozen'
+  | 'workspaceSessionWriteListeners'
+  | 'stateWriteListeners'
 >
 
 const writeSchedulingOperationsContext = Symbol('WriteSchedulingOperations')
@@ -36,13 +46,37 @@ export class WriteSchedulingOperations {
     const { runtime } = this[writeSchedulingOperationsContext]
     await Promise.all([runtime.pendingWrite, runtime.activeViewPreference.waitForPendingWrite()])
   }
+
+  /** Called after each in-memory workspace-session write; listeners must not throw or block. */
+  onWorkspaceSessionWritten(listener: WorkspaceSessionWriteListener): () => void {
+    const { runtime } = this[writeSchedulingOperationsContext]
+    runtime.workspaceSessionWriteListeners.add(listener)
+    return () => {
+      runtime.workspaceSessionWriteListeners.delete(listener)
+    }
+  }
+
+  /** Called after each in-memory write that schedules a save; listeners must not throw or block. */
+  onStateWritten(listener: StateWriteListener): () => void {
+    const { runtime } = this[writeSchedulingOperationsContext]
+    runtime.stateWriteListeners.add(listener)
+    return () => {
+      runtime.stateWriteListeners.delete(listener)
+    }
+  }
 }
 
+/** `writtenHostId` names the one session partition this save changed, if it changed only one. */
 export function scheduleSave(
   owner: WriteSchedulingOperations,
-  dirtyDomains?: readonly string[]
+  dirtyDomains?: readonly string[],
+  writtenHostId?: ExecutionHostId
 ): void {
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
+  notifyWorkspaceSessionWritten(runtime, dirtyDomains, writtenHostId)
+  for (const listener of runtime.stateWriteListeners) {
+    listener(dirtyDomains)
+  }
   runtime.automationListProjectionCache = null
   const trackedDomains = runtime.dirtyProfileStateDomains
   if (dirtyDomains === undefined) {
@@ -72,13 +106,4 @@ export function scheduleSave(
     runtime.firstPendingSaveAt = null
     void enqueueWrite(writes, { skipIfClean: true }).catch(() => {})
   }, delay)
-}
-
-export function installWriteSchedulingOperationsContext(
-  target: WriteSchedulingOperations,
-  source: WriteSchedulingOperations
-): void {
-  Object.defineProperty(target, writeSchedulingOperationsContext, {
-    value: source[writeSchedulingOperationsContext]
-  })
 }

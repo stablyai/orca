@@ -32,23 +32,23 @@ export function useMonacoEditorDecorations(params: {
     conflictDecorationsEnabled
   } = params
 
-  const modelKeyRef = useRef<string | null>(null)
+  const completionModelRef = useRef<editor.ITextModel | null>(null)
   const markdownDocLinkDecorationsRef = useRef<MarkdownDocLinkDecorationController | null>(null)
   const conflictDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null)
 
   const updateMarkdownCompletionDocuments = useCallback((): void => {
-    const modelKey = editorRef.current?.getModel()?.uri.toString() ?? null
-    if (modelKeyRef.current && modelKeyRef.current !== modelKey) {
-      clearMarkdownDocCompletionDocuments(modelKeyRef.current)
+    const model = editorRef.current?.getModel() ?? null
+    if (completionModelRef.current && completionModelRef.current !== model) {
+      clearMarkdownDocCompletionDocuments(completionModelRef.current)
     }
-    modelKeyRef.current = modelKey
-    if (!modelKey) {
+    completionModelRef.current = model
+    if (!model) {
       return
     }
     if (language === 'markdown' && markdownDocuments) {
-      setMarkdownDocCompletionDocuments(modelKey, markdownDocuments)
+      setMarkdownDocCompletionDocuments(model, markdownDocuments)
     } else {
-      clearMarkdownDocCompletionDocuments(modelKey)
+      clearMarkdownDocCompletionDocuments(model)
     }
   }, [editorRef, language, markdownDocuments])
 
@@ -91,8 +91,8 @@ export function useMonacoEditorDecorations(params: {
 
   useEffect(() => {
     return () => {
-      if (modelKeyRef.current) {
-        clearMarkdownDocCompletionDocuments(modelKeyRef.current)
+      if (completionModelRef.current) {
+        clearMarkdownDocCompletionDocuments(completionModelRef.current)
       }
       markdownDocLinkDecorationsRef.current?.dispose()
       markdownDocLinkDecorationsRef.current = null

@@ -21,13 +21,6 @@ export function readCodexThreadId(payload: unknown): string | null {
   return nonEmptyString(record(root.thread)?.id) ?? nonEmptyString(root.threadId)
 }
 
-/** Rollout file for the thread, when Codex reports one. Journal recovery reads
- *  it; a null just falls back to the existing session-file resolver. */
-export function readCodexThreadPath(payload: unknown): string | null {
-  const root = record(payload)
-  return root ? nonEmptyString(record(root.thread)?.path) : null
-}
-
 /** `turn/start` responses carry `turn.id`; `turn/started` notifications carry
  *  the same under `turn`, and older builds put `turnId` on the envelope. */
 export function readCodexTurnId(payload: unknown): string | null {
@@ -96,6 +89,11 @@ export function readCodexErrorInfo(payload: unknown): { error: string; status?: 
 export function codexThreadStoppedRunning(payload: unknown): boolean {
   const type = record(record(payload)?.status)?.type
   return type === 'idle' || type === 'systemError'
+}
+
+/** Only an explicit active status establishes execution ownership. */
+export function codexThreadIsActive(payload: unknown): boolean {
+  return record(record(payload)?.status)?.type === 'active'
 }
 
 /** An `active` thread flags each request it has open on the user (an approval, a question). */

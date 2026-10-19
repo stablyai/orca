@@ -1,14 +1,10 @@
 import { useAppStore } from '@/store'
-import {
-  closeWebRuntimeSessionTab,
-  isWebRuntimeSessionActive,
-  toHostSessionTabId
-} from '@/runtime/web-runtime-session'
-import {
-  getLatestWebSessionTabsPublicationEpoch,
-  resolveHostSessionTabIdForWebSessionTab
-} from '@/runtime/web-session-tabs-sync'
-import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { closeWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { toHostSessionTabId } from '../../../../shared/terminal-surface-id'
+import { getLatestWebSessionTabsPublicationEpoch } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
+import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync/tracking-mappings'
+import { resolveTerminalCloseRoute } from '@/lib/terminal-close-route'
 import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
@@ -24,6 +20,7 @@ import {
   shouldConfirmRunningTerminalClose
 } from './running-terminal-close-guard'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
+import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import { getTerminalIncarnationHandle } from './terminal-close-incarnation'
 import {
   getWorktreeTerminalTabIds,
@@ -82,11 +79,9 @@ export function closeTerminalTab(
     return
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
-  const worktreeRoute = resolveTerminalWorktreeRoute(state, owningWorktreeId)
-  if (!worktreeRoute) {
-    options?.onCancel?.()
-    return
-  }
+  // Why no early return: an unrouted close still prunes locally and reaches main's close record;
+  // teardown of a PTY whose host is unproven fails closed on its own.
+  const worktreeRoute = resolveTerminalCloseRoute(state, owningWorktreeId, terminalTabId)
 
   // Why: a pinned tab routes through the confirmation guard instead of closing
   // outright. `force` is the post-confirmation re-entry, which skips the guard.
@@ -130,7 +125,7 @@ export function closeTerminalTab(
     return
   }
 
-  const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
+  const runtimeEnvironmentId = worktreeRoute?.runtimeEnvironmentId ?? null
   if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (options?.reason === 'pty-exit') {
       // Why: stream exit is not host-tab closure; the HUB snapshot decides whether reconnect restores or removes this tab.
@@ -237,7 +232,7 @@ export function closeTerminalTab(
     if (current.activeWorktreeId === owningWorktreeId) {
       // Why: agent-session and simulator tabs render without a terminal/editor/browser
       // entity, so only the unified renderable count can prove the worktree is empty
-      // (mirrors leaveWorktreeIfEmpty in useTabGroupTabCloseCommands).
+      // (mirrors leaveWorktreeIfEmpty in workspace-emptied-reaction.ts).
       const { renderableTabCount } = current.reconcileWorktreeTabModel(owningWorktreeId)
       if (renderableTabCount === 0) {
         const worktreeFile = current.openFiles.find((f) => f.worktreeId === owningWorktreeId)
@@ -249,6 +244,8 @@ export function closeTerminalTab(
           if (browserTab) {
             current.setActiveBrowserTab(browserTab.id)
             current.setActiveTabType('browser', owningWorktreeId)
+          } else if (options?.reason === 'pty-exit') {
+            runAsAutomaticDeselection(() => current.setActiveWorktree(null))
           } else {
             current.setActiveWorktree(null)
           }

@@ -3,8 +3,6 @@ import type { Repo } from '../shared/repo-types'
 import { isFullGitObjectId } from './git/commit-object-ref'
 import { hasLocalWorktreeBaseRef } from './git/worktree-base-ref-probe'
 import { getBaseRefDefault } from './git/repo'
-import { getSshGitProvider } from './providers/ssh-git-dispatch'
-import { prefetchRemoteWorktreeCreateBase } from './ipc/worktree-remote'
 import { resolveWorktreeCreateBase } from './worktree-create-base'
 
 type WorktreeCreateBaseGitOptions = {
@@ -134,12 +132,8 @@ export async function prefetchWorktreeCreateBase(args: {
   if (isFolderRepo(args.repo)) {
     return undefined
   }
+  // An `ssh:` repo is not served here, so there is no ref store to warm.
   if (args.repo.connectionId) {
-    const provider = getSshGitProvider(args.repo.connectionId)
-    if (!provider) {
-      return undefined
-    }
-    await prefetchRemoteWorktreeCreateBase(provider, args.repo, { baseBranch: args.baseBranch })
     return undefined
   }
   const prepareCheckout = args.prepareCheckout

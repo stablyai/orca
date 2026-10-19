@@ -31,11 +31,10 @@ const callRuntimeEnvironment =
     ) => unknown
   >()
 
-vi.mock('./runtime-environment-transport-routing', () => ({
+vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: (...args: Parameters<typeof callRuntimeEnvironment>) =>
     callRuntimeEnvironment(...args)
 }))
-vi.mock('./filesystem-auth', () => ({ authorizeExternalPath: () => {} }))
 // Why: see filesystem-runtime-upload-staging.test.ts — a real over-limit fixture
 // would allocate gigabytes on Windows.
 vi.mock('./runtime-import-limits', async (importOriginal) => ({
@@ -49,7 +48,7 @@ const {
   clearRuntimeEnvironmentManualDisconnect,
   markRuntimeEnvironmentManuallyDisconnected,
   RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
-} = await import('./runtime-environment-manual-disconnect')
+} = await import('./runtime-environments/runtime-environment-manual-disconnect')
 
 let workDir: string
 

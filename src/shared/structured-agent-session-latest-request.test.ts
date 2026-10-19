@@ -191,11 +191,15 @@ const ROWS: Row[] = [
     items: [
       userEntry('m1', 1),
       turn('t1', 2, { state: 'completed', outcome: 'success', completedAt: 50 }),
-      userEntry('steer', 3, 't1')
+      userEntry('steer', 3)
     ],
     submissions: [
       sent('m1', { dispatchState: 'accepted' }),
-      rejected('steer', 'no active turn to steer', 30)
+      sent('steer', {
+        dispatchState: 'rejected',
+        reason: 'no active turn to steer',
+        answeredInTurn: { turnItemId: 'codex:turn:t1', via: 'steer' }
+      })
     ],
     outcome: 'success',
     listed: true
@@ -318,4 +322,38 @@ describe('the sidebar verdict agrees with the rejection classifier', () => {
       expect(latestStructuredAgentSessionRequest([userEntry('m1', 1)], [submission])).toBeNull()
     }
   )
+})
+
+describe('the assistant line plain-text surfaces show', () => {
+  function message(
+    itemId: string,
+    sequence: number,
+    role: 'user' | 'assistant',
+    text: string
+  ): AgentJournalRenderItem {
+    return {
+      itemId,
+      revision: 0,
+      sequence,
+      observedAt: sequence,
+      body: { kind: 'message', role, blocks: [{ type: 'text', text }] }
+    }
+  }
+
+  it('keeps a visual line out of the preview every status reader shows', () => {
+    const items = [
+      message('ask', 1, 'user', 'chart it'),
+      message(
+        'said',
+        2,
+        'assistant',
+        'p95 is highest in ap-south.\n\n::orca-visual{file="latency.html" title="p95"}'
+      ),
+      message('only-visual', 3, 'assistant', '::orca-visual{file="table.html"}')
+    ]
+    // A reply that is nothing but a visual leaves the turn's earlier prose as the preview.
+    expect(projectStructuredAgentSessionStatusSummary(items).lastAssistantMessage).toBe(
+      'p95 is highest in ap-south.'
+    )
+  })
 })

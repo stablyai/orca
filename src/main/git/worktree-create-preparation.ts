@@ -9,6 +9,7 @@ import {
   persistWorktreeCreationBase,
   resolveWorktreeAddBaseContext,
   resolveWorktreeAddTimeoutMs,
+  trackSameNameRemoteBase,
   WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
 } from './worktree'
 import {
@@ -234,6 +235,13 @@ export async function finalizePreparedWorktree(
         await persistWorktreeCreationBase(
           worktreePath,
           branch,
+          baseContext.effectiveBase,
+          finalizeGitOptions
+        )
+        await trackSameNameRemoteBase(
+          worktreePath,
+          branch,
+          baseBranch,
           baseContext.effectiveBase,
           finalizeGitOptions
         )

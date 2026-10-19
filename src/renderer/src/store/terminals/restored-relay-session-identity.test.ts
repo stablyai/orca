@@ -95,19 +95,13 @@ describe('restored relay session identity (#17743)', () => {
     })
   })
 
-  it('keeps a deferred relay session id after a disconnect clears the row binding', async () => {
+  it('keeps a deferred relay session id while the host is disconnected', async () => {
     const store = seedStore('disconnected')
     store.getState().hydrateWorkspaceSession(persistedSession())
     await store.getState().reconnectPersistedTerminals()
 
     expect(store.getState().deferredSshSessionIdsByTabId[TAB_ID]).toBe(RELAY_PTY_ID)
-
-    // A relay drop clears the row binding. Loss of contact is not evidence the remote PTY exited,
-    // so the handle must survive into the next write.
-    store.getState().clearDirectSshTargetPtyBindings(TARGET_ID)
-
-    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].ptyId).toBeNull()
-    expect(store.getState().ptyIdsByTabId[TAB_ID]).toEqual([])
+    // Loss of contact is not evidence the remote PTY exited, so the handle survives into the next write.
     expect(buildWorkspaceSessionPayload(store.getState()).remoteSessionIdsByTabId).toEqual({
       [TAB_ID]: RELAY_PTY_ID
     })
@@ -117,7 +111,6 @@ describe('restored relay session identity (#17743)', () => {
     const store = seedStore('disconnected')
     store.getState().hydrateWorkspaceSession(persistedSession())
     await store.getState().reconnectPersistedTerminals()
-    store.getState().clearDirectSshTargetPtyBindings(TARGET_ID)
 
     // No live PTY, no row binding, host unreachable — `unverifiable`, never `exited`.
     expect([...getOrphanTerminalIds(store.getState(), WORKTREE_ID)]).toEqual([])

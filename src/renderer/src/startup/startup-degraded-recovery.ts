@@ -3,6 +3,14 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../store'
 import { getStartupErrorFallbackUI } from '../lib/startup-ui-hydration'
 import {
+  announceWebHostUnreachableAtStartup,
+  isWebHostUnreachableAtStartup
+} from './startup-web-host-unreachable'
+import {
+  announceWebPairingRefusedAtStartup,
+  isWebPairingRefusedAtStartup
+} from './startup-web-pairing-refused'
+import {
   collectTerminalProviderSnapshotPtyIds,
   refreshTerminalProviderSnapshotCapabilities
 } from '../components/terminal/terminal-provider-snapshot-capability'
@@ -30,6 +38,24 @@ function forceWorkspaceSessionReady(): void {
     // Why: the activation gate waits on this flag; a degraded boot must still release it
     // or no worktree ever gets its fallback terminal.
     terminalStartupRestorationReady: true
+  })
+}
+
+function announceDegradedStartup(): void {
+  // Why (issue #1158): sticky toast so the user knows they're in degraded "no-save" mode (hydrationSucceeded stays false); "Restart now" calls app.relaunch to recover.
+  toast.error(translate('auto.App.12e77cf12b', 'Session restore failed'), {
+    description: translate(
+      'auto.App.0a9e810705',
+      "Changes won't be saved until restart. Your previous tabs are safe on disk."
+    ),
+    duration: Infinity,
+    dismissible: true,
+    action: {
+      label: translate('auto.App.caea5b51b9', 'Restart now'),
+      onClick: () => {
+        void window.api.app.relaunch()
+      }
+    }
   })
 }
 
@@ -65,21 +91,18 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
   if (fallbackUI) {
     hydratePersistedUI(fallbackUI, 'startup')
   }
-  // Why (issue #1158): sticky toast so the user knows they're in degraded "no-save" mode (hydrationSucceeded stays false); "Restart now" calls app.relaunch to recover.
-  toast.error(translate('auto.App.12e77cf12b', 'Session restore failed'), {
-    description: translate(
-      'auto.App.0a9e810705',
-      "Changes won't be saved until restart. Your previous tabs are safe on disk."
-    ),
-    duration: Infinity,
-    dismissible: true,
-    action: {
-      label: translate('auto.App.caea5b51b9', 'Restart now'),
-      onClick: () => {
-        void window.api.app.relaunch()
-      }
-    }
-  })
+  const hostUnreachable = await isWebHostUnreachableAtStartup(error)
+  if (isCancelled()) {
+    return
+  }
+  if (hostUnreachable) {
+    // Still no-save until the reload: the host's catalog never loaded, so saving now would prune it.
+    announceWebHostUnreachableAtStartup(abortSignal)
+  } else if (isWebPairingRefusedAtStartup(error)) {
+    announceWebPairingRefusedAtStartup(error)
+  } else {
+    announceDegradedStartup()
+  }
   if (reconnectStarted) {
     // Why (issue #1158): re-running reconnect over its partially-mutated state would double-set ptyIds and drain pending* twice — force the flag, clear pending*.
     forceWorkspaceSessionReady()

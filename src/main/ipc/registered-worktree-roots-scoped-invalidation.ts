@@ -20,7 +20,7 @@ import {
  * import, folder->git upgrade) must keep using the global form.
  */
 export function invalidateAuthorizedRootsCacheForRepo(
-  store: Store | null | undefined,
+  store: Pick<Store, 'getRepos'> | null | undefined,
   repo: Repo | string
 ): void {
   if (!store || !markAuthorizedRootsOwnerDirty(store, repo)) {

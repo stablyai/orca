@@ -11,7 +11,7 @@ import type { TreeNode } from './file-explorer-types'
 
 vi.mock('./file-explorer-operation-owner', () => ({
   getFileExplorerOwnerUnresolvedMessage: () => 'unresolved',
-  requireMatchingFileExplorerOperationRoute: () => ({ settings: {} })
+  requireMatchingFileExplorerOperationRoute: () => ({ target: { kind: 'local' } })
 }))
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) => selector({})
@@ -53,7 +53,6 @@ function createHandlerParams(toggleDir: (worktreeId: string, dirPath: string) =>
     toggleDir,
     loadDir: vi.fn().mockResolvedValue(true),
     statPath: vi.fn().mockResolvedValue({ isDirectory: true }),
-    authorizeExternalPath: vi.fn(),
     markPathAsDirectory: vi.fn(),
     setSelectedPath: vi.fn(),
     scrollRef: createRef<HTMLDivElement>()

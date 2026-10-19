@@ -2,6 +2,7 @@ import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
+import type { JournalReducerState } from './journal-reducer'
 import type { JournalHostDatabase } from './journal-host-database'
 import { replaceJournalEpoch, type JournalReplacementItem } from './journal-epoch-replacement'
 import type { JournalQueuePauseRestatement } from './queued-message-pause'
@@ -20,8 +21,8 @@ export class JournalEpochController {
       serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
       database: () => JournalHostDatabase
       readOnly: () => boolean
-      setReadOnly: (readOnly: boolean) => void
       highestFence: () => number
+      state: () => JournalReducerState
       /** What of the live epoch's Stop and Resume a replacement restates. */
       queuePauseRestatement: () => JournalQueuePauseRestatement
       cursor: () => AgentJournalCursor
@@ -42,8 +43,8 @@ export class JournalEpochController {
   }
 
   /**
-   * Every reason takes the same writable guard. A latched store refuses a roll
-   * like any other write, and `schema_unreadable` has no production caller.
+   * Every reason takes the same writable guard: a newer Orca's database refuses a roll like any
+   * other write, and `schema_unreadable` has no production caller.
    *
    * Serialized like every other write, so the discard cannot land between an
    * admitted append's sequence assignment and its commit.
@@ -52,7 +53,6 @@ export class JournalEpochController {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
       this.start(reason, fence)
-      this.deps.setReadOnly(false)
       return this.deps.cursor()
     })
   }
@@ -71,6 +71,7 @@ export class JournalEpochController {
         reason,
         fence,
         items,
+        previous: this.deps.state(),
         queuePause: this.deps.queuePauseRestatement(),
         now: this.deps.now,
         mintEpoch: this.deps.mintEpoch,

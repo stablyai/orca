@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTuiIdleRuntime } from './tui-idle-wait-test-harness'
+import { waitForTranscriptIdle } from './agent-transcript-pane-test-harness'
+import { RuntimeMachineName } from './runtime-machine-name'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -175,16 +177,24 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
 
 describe('quiescence treats a missing output clock as quiet', () => {
   it('settles a pane that has never produced output but holds a live agent process', async () => {
-    // No launch metadata: Orca did not start this agent, so the quiet-foreground lane is
-    // the only evidence available, and `lastOutputAt` is null because nothing ever arrived.
-    const { runtime, handle } = await makeRuntime(null, 'codex')
-    const leaves =
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reading the runtime's own leaf map to assert the precondition this test depends on.
-      (runtime as never as { leaves: Map<string, { lastOutputAt: number | null }> }).leaves
-    expect([...leaves.values()][0].lastOutputAt).toBeNull()
+    const machineNameStart = vi
+      .spyOn(RuntimeMachineName.prototype, 'start')
+      .mockImplementation(() => {})
+    try {
+      // No launch metadata: Orca did not start this agent, so the quiet-foreground lane is
+      // the only evidence available, and `lastOutputAt` is null because nothing ever arrived.
+      const { runtime, handle } = await makeRuntime(null, 'codex')
+      const leaves =
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reading the runtime's own leaf map to assert the precondition this test depends on.
+        (runtime as never as { leaves: Map<string, { lastOutputAt: number | null }> }).leaves
+      expect([...leaves.values()][0].lastOutputAt).toBeNull()
 
-    await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 8_000 })
-    ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+      await expect(waitForTranscriptIdle({ runtime, handle }, 8_000)).resolves.toMatchObject({
+        condition: 'tui-idle',
+        satisfied: true
+      })
+    } finally {
+      machineNameStart.mockRestore()
+    }
   }, 20_000)
 })

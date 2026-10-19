@@ -1,3 +1,5 @@
+import { getPairedWebClientEnvironmentId } from './paired-web-client-host'
+
 export type SingleRuntimeLegacyOwnerState = {
   settings?: { activeRuntimeEnvironmentId?: string | null } | null
   runtimeEnvironments?: readonly { id: string }[]
@@ -6,6 +8,10 @@ export type SingleRuntimeLegacyOwnerState = {
 export function getSingleFocusedRuntimeEnvironmentId(
   state: SingleRuntimeLegacyOwnerState
 ): string | null {
+  const webHost = getPairedWebClientEnvironmentId(state)
+  if (webHost) {
+    return webHost
+  }
   const focused = state.settings?.activeRuntimeEnvironmentId?.trim()
   if (!focused) {
     return null

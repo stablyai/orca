@@ -30,13 +30,10 @@ import {
   quarantineProfileStateDatabase,
   type ProfileStateDatabaseQuarantine
 } from './profile-state-database-quarantine'
-import {
-  writeProfileStateAuthorityJsonExport,
-  writeProfileStateAuthorityCompatibilityExport,
-  writeProfileStateAuthorityCompatibilityExportAsync
-} from './legacy-json/profile-state-authority-exports'
+import { writeProfileStateAuthorityJsonExport } from './legacy-json/profile-state-authority-exports'
 import { buildCompleteDocumentReplacements } from './profile-state-complete-replacements'
 import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
+import { ensureProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
 
 /**
@@ -253,22 +250,6 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     )
   }
 
-  writeJsonCompatibilityExport(targetPath: string): number | undefined {
-    return writeProfileStateAuthorityCompatibilityExport(
-      this.openWritableDatabase().db,
-      targetPath,
-      this.observedRevision
-    )
-  }
-
-  writeJsonCompatibilityExportAsync(targetPath: string): Promise<number | undefined> {
-    return writeProfileStateAuthorityCompatibilityExportAsync(
-      this.openWritableDatabase().db,
-      targetPath,
-      this.observedRevision
-    )
-  }
-
   quarantineDatabase(quarantineRoot?: string, reason?: string): ProfileStateDatabaseQuarantine {
     this.assertActive()
     this.backupRotation?.assertIdle()
@@ -333,7 +314,16 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
 
   private openWritableDatabase(): NonNullable<ProfileStateSqliteAuthority['writableDatabase']> {
     this.assertActive()
-    this.writableDatabase ??= openWritableProfileStateDatabase(this.databasePath, this.profileId)
+    if (!this.writableDatabase) {
+      const opened = openWritableProfileStateDatabase(this.databasePath, this.profileId)
+      try {
+        ensureProfileStateAuthorityMarker(this.databasePath)
+        this.writableDatabase = opened
+      } catch (error) {
+        opened.db.close()
+        throw error
+      }
+    }
     return this.writableDatabase
   }
 }

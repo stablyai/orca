@@ -662,7 +662,8 @@ describe('terminal side-effect fact channel', () => {
     // Without the seed the tracker never saw 'working', so this idle title could not produce a completion fact.
     expect(batches.flatMap((batch) => batch.facts)).toContainEqual({
       kind: 'agent-idle',
-      title: 'Codex done'
+      title: 'Codex done',
+      status: 'idle'
     })
   })
 })

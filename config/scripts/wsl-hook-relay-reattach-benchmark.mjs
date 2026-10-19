@@ -280,14 +280,15 @@ async function main() {
   const bundlePath = join(bundleDir, 'wsl-agent-hook-relay.js')
   const versionPath = join(bundleDir, '.version')
   if (!existsSync(bundlePath) || !existsSync(versionPath)) {
-    await run(process.execPath, [join('config', 'scripts', 'build-relay.mjs')], {
+    await run(process.execPath, [join('config', 'scripts', 'build-wsl-guest.mjs')], {
       cwd: process.cwd()
     })
   }
 
   // Why: main's PTY graph reads app paths at import time; keep it inside a disposable directory.
   let userDataDir
-  let ptyIpc
+  let registerPtyHandlers
+  let killAllPty
   let cleanupPaths = []
   let manager = null
   let staller = null
@@ -302,8 +303,9 @@ async function main() {
       }
     })
     // Why sequential: concurrent jiti.import calls can each instantiate the module graph, and two
-    // copies of wsl-hook-relay-manager.ts would leave pty.ts refreshing a singleton we never see.
-    ptyIpc = await jiti.import('../../src/main/ipc/pty.ts')
+    // copies of wsl-hook-relay-manager.ts would leave the PTY graph refreshing a singleton we never see.
+    ;({ registerPtyHandlers } = await jiti.import('../../src/main/ipc/pty/register-handlers.ts'))
+    ;({ killAllPty } = await jiti.import('../../src/main/ipc/pty/kill-all.ts'))
     const { WslHookRelayManager, wslHookRelayManager } = await jiti.import(
       '../../src/main/agent-hooks/wsl-hook-relay-manager.ts'
     )
@@ -318,7 +320,7 @@ async function main() {
     const { FLOATING_TERMINAL_WORKTREE_ID } = await jiti.import('../../src/shared/constants.ts')
 
     // Why: if jiti ever returns a second manager module, our monkey-patch would miss the singleton
-    // that ensureWslHookRelayForReattach (loaded via pty.ts) closes over — fail closed now.
+    // that ensureWslHookRelayForReattach (loaded via the PTY graph) closes over — fail closed now.
     const singletonProbe = []
     const previousEnsure = wslHookRelayManager.ensureForDistro.bind(wslHookRelayManager)
     wslHookRelayManager.ensureForDistro = (probedDistro) => {
@@ -331,7 +333,7 @@ async function main() {
     wslHookRelayManager.ensureForDistro = previousEnsure
     if (singletonProbe.length !== 1 || singletonProbe[0] !== '__bench-singleton-probe__') {
       throw new Error(
-        'jiti duplicated the WSL hook-relay manager graph; reattach patch would not observe pty.ts'
+        'jiti duplicated the WSL hook-relay manager graph; reattach patch would not observe the PTY spawn path'
       )
     }
 
@@ -354,9 +356,9 @@ async function main() {
     const relayRefreshes = []
     let delivered = 0
 
-    // Why: pty.ts refreshes through the production singleton, so route that singleton at the
+    // Why: the PTY spawn path refreshes through the production singleton, so route that singleton at the
     // benchmark-scoped manager instead of calling the reattach helper from here — a removed or
-    // mislocated integration call in pty.ts must fail this benchmark.
+    // mislocated integration call in the PTY spawn path must fail this benchmark.
     wslHookRelayManager.ensureForDistro = (refreshedDistro) => {
       relayRefreshes.push(refreshedDistro)
       manager?.ensureForDistro(refreshedDistro)
@@ -367,7 +369,7 @@ async function main() {
     // hooks are on. This bench isolates the reattach call site (ensureWslHookRelayForReattach);
     // the manager's own hooks gate lives behind the ensureForDistro patch above, so it stays out
     // of the measurement — `manager` below resolves its own (enabled) managed-hook settings.
-    ptyIpc.registerPtyHandlers(
+    registerPtyHandlers(
       createRendererWindowStub(),
       runtime,
       undefined,
@@ -520,7 +522,7 @@ async function main() {
   } finally {
     manager?.disposeAll()
     await staller?.stop()
-    ptyIpc?.killAllPty?.()
+    killAllPty?.()
     if (userDataDir) {
       rmSync(userDataDir, { recursive: true, force: true })
     }

@@ -1,75 +1,42 @@
 import { describe, expect, it } from 'vitest'
-import { codexStructuredPermissionPolicyForSettings } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 
-const BYPASS = { approvalPolicy: 'never', sandbox: 'danger-full-access' }
-// Approvals on, writes confined to the workspace. Verified against codex 0.153.4: both values are
-// accepted on thread/start and thread/resume, and the reply echoes them back as the effective
-// policy even when the home's config.toml asks for `never` / `danger-full-access`.
-const MANUAL = { approvalPolicy: 'on-request', sandbox: 'workspace-write' }
+const FULL_ACCESS = {
+  approvalPolicy: 'never',
+  sandbox: 'danger-full-access',
+  approvalsReviewer: 'user'
+}
+const ASK = { approvalPolicy: 'on-request', sandbox: 'workspace-write', approvalsReviewer: 'user' }
 
-describe('codexStructuredPermissionPolicyForSettings', () => {
-  it('bypasses when the user has never opened Agent settings', () => {
-    expect(codexStructuredPermissionPolicyForSettings({ agentDefaultArgs: {} })).toEqual(BYPASS)
-    expect(codexStructuredPermissionPolicyForSettings({})).toEqual(BYPASS)
-    expect(codexStructuredPermissionPolicyForSettings(null)).toEqual(BYPASS)
-    expect(
-      codexStructuredPermissionPolicyForSettings({ agentDefaultArgs: { claude: '' } })
-    ).toEqual(BYPASS)
+describe('codexStructuredPermissionPolicy', () => {
+  it('maps Full access to no prompts and no sandbox', () => {
+    expect(codexStructuredPermissionPolicy('full-access')).toEqual(FULL_ACCESS)
   })
 
-  it('bypasses when Yolo wrote the flag, alone or beside other tokens', () => {
-    for (const codex of [
-      '--dangerously-bypass-approvals-and-sandbox',
-      '--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-sol',
-      '--model gpt-5.6-sol --dangerously-bypass-approvals-and-sandbox'
-    ]) {
-      expect(
-        codexStructuredPermissionPolicyForSettings({ agentDefaultArgs: { codex } }),
-        codex
-      ).toEqual(BYPASS)
+  // The thread open spreads this, so an omitted field is absent, not reset: a thread resumed from
+  // Full access would keep `never`. Ask states every field, the human reviewer too.
+  it('states every Ask field, the human reviewer too', () => {
+    expect(codexStructuredPermissionPolicy('ask')).toEqual(ASK)
+  })
+
+  it('routes Approve for me to Codex auto-review under the Ask sandbox', () => {
+    expect(codexStructuredPermissionPolicy('auto')).toEqual({
+      ...ASK,
+      approvalsReviewer: 'auto_review'
+    })
+  })
+
+  // A sandbox mode, never a `sandboxPolicy` object: Codex folds the user's own writable roots and
+  // network access into a mode, and a policy object would replace them.
+  it('names a sandbox mode for every mode', () => {
+    for (const mode of ['ask', 'auto', 'full-access'] as const) {
+      expect(codexStructuredPermissionPolicy(mode)).not.toHaveProperty('sandboxPolicy')
+      expect(typeof codexStructuredPermissionPolicy(mode).sandbox).toBe('string')
     }
   })
 
-  it('keeps quoted mentions and operands after -- in Manual', () => {
-    for (const codex of [
-      '--config "note=--dangerously-bypass-approvals-and-sandbox only as text"',
-      '-- --dangerously-bypass-approvals-and-sandbox'
-    ]) {
-      expect(
-        codexStructuredPermissionPolicyForSettings({ agentDefaultArgs: { codex } }),
-        codex
-      ).toEqual(MANUAL)
-    }
-  })
-
-  // Why an explicit policy rather than nothing: the thread-open path spreads this, so nothing
-  // means the fields are ABSENT, and absent is not a reset. A session flipped Yolo → Manual
-  // resumed with the Yolo thread's `approvalPolicy: never` still in force and escalated with no
-  // prompt. Manual has to say what it wants.
-  it('states the approval posture when Manual cleared the flag', () => {
-    expect(codexStructuredPermissionPolicyForSettings({ agentDefaultArgs: { codex: '' } })).toEqual(
-      MANUAL
-    )
-  })
-
-  it('never answers with an absent policy for either posture', () => {
-    for (const codex of ['', '--dangerously-bypass-approvals-and-sandbox', '--model gpt-5.6-sol']) {
-      expect(
-        codexStructuredPermissionPolicyForSettings({ agentDefaultArgs: { codex } }),
-        codex
-      ).toBeDefined()
-    }
-  })
-
-  // The passthrough that used to carry these to app-server is gone on purpose; only the
-  // permission posture is derived, and nothing else from the field reaches argv.
-  it('carries nothing but the permission posture out of the arguments field', () => {
-    expect(
-      codexStructuredPermissionPolicyForSettings({
-        agentDefaultArgs: {
-          codex: '--profile review --add-dir /repo -c model_reasoning_effort=high'
-        }
-      })
-    ).toEqual(MANUAL)
+  // Codex has no edits-only mode, so a stray one is the safer neighbour rather than more access.
+  it('asks for a mode Codex does not have', () => {
+    expect(codexStructuredPermissionPolicy('accept-edits')).toEqual(ASK)
   })
 })

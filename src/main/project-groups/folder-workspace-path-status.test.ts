@@ -2,13 +2,12 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   getFolderWorkspacePathStatus,
   getFolderWorkspacePathStatusForPath,
   inferFolderWorkspacePathConnection
 } from './folder-workspace-path-status'
-import type { IFilesystemProvider } from '../providers/types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 
@@ -48,28 +47,26 @@ describe('folder workspace path status', () => {
       await writeFile(filePath, 'hello')
 
       await expect(
-        getFolderWorkspacePathStatusForPath(
-          {
-            folderPath: root,
-            projectGroupId: 'group-1',
-            projectGroups: [makeGroup({ parentPath: root })],
-            repos: []
-          },
-          { getSshFilesystemProvider: () => undefined }
-        )
+        getFolderWorkspacePathStatusForPath({
+          folderPath: root,
+          projectGroupId: 'group-1',
+          projectGroups: [makeGroup({ parentPath: root })],
+          repos: []
+        })
       ).resolves.toEqual({ path: root, exists: true })
 
       await expect(
-        getFolderWorkspacePathStatusForPath(
-          {
-            folderPath: filePath,
-            projectGroupId: 'group-1',
-            projectGroups: [makeGroup({ parentPath: filePath })],
-            repos: []
-          },
-          { getSshFilesystemProvider: () => undefined }
-        )
-      ).resolves.toEqual({ path: filePath, exists: false, reason: 'not-directory' })
+        getFolderWorkspacePathStatusForPath({
+          folderPath: filePath,
+          projectGroupId: 'group-1',
+          projectGroups: [makeGroup({ parentPath: filePath })],
+          repos: []
+        })
+      ).resolves.toEqual({
+        path: filePath,
+        exists: false,
+        reason: 'not-directory'
+      })
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -79,69 +76,28 @@ describe('folder workspace path status', () => {
     const missingPath = join(tmpdir(), `orca-folder-status-missing-${randomUUID()}`)
 
     await expect(
-      getFolderWorkspacePathStatusForPath(
-        {
-          folderPath: missingPath,
-          projectGroupId: 'group-1',
-          projectGroups: [makeGroup({ parentPath: missingPath })],
-          repos: []
-        },
-        { getSshFilesystemProvider: () => undefined }
-      )
+      getFolderWorkspacePathStatusForPath({
+        folderPath: missingPath,
+        projectGroupId: 'group-1',
+        projectGroups: [makeGroup({ parentPath: missingPath })],
+        repos: []
+      })
     ).resolves.toEqual({ path: missingPath, exists: false, reason: 'missing' })
   })
 
-  it('routes inferred SSH folder scopes through the SSH filesystem provider', async () => {
-    const provider = {
-      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 1 })
-    } as unknown as IFilesystemProvider
-
+  it('reports unavailable for an inferred SSH scope, which this process does not serve', async () => {
     await expect(
-      getFolderWorkspacePathStatusForPath(
-        {
-          folderPath: '/workspace/platform',
-          projectGroupId: 'group-1',
-          projectGroups: [makeGroup()],
-          repos: [makeRepo({ connectionId: 'ssh-1' })]
-        },
-        { getSshFilesystemProvider: () => provider }
-      )
-    ).resolves.toEqual({ path: '/workspace/platform', exists: true })
-    expect(provider.stat).toHaveBeenCalledWith('/workspace/platform')
-  })
-
-  it('routes explicit SSH folder scopes through SSH without child repos', async () => {
-    const provider = {
-      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 1 })
-    } as unknown as IFilesystemProvider
-
-    await expect(
-      getFolderWorkspacePathStatusForPath(
-        {
-          folderPath: '/workspace/platform',
-          projectGroupId: 'group-1',
-          connectionId: 'ssh-1',
-          projectGroups: [makeGroup({ connectionId: 'ssh-1' })],
-          repos: []
-        },
-        { getSshFilesystemProvider: () => provider }
-      )
-    ).resolves.toEqual({ path: '/workspace/platform', exists: true })
-    expect(provider.stat).toHaveBeenCalledWith('/workspace/platform')
-  })
-
-  it('reports unavailable when an inferred SSH provider is missing', async () => {
-    await expect(
-      getFolderWorkspacePathStatusForPath(
-        {
-          folderPath: '/workspace/platform',
-          projectGroupId: 'group-1',
-          projectGroups: [makeGroup()],
-          repos: [makeRepo({ connectionId: 'ssh-1' })]
-        },
-        { getSshFilesystemProvider: () => undefined }
-      )
-    ).resolves.toEqual({ path: '/workspace/platform', exists: false, reason: 'unavailable' })
+      getFolderWorkspacePathStatusForPath({
+        folderPath: '/workspace/platform',
+        projectGroupId: 'group-1',
+        projectGroups: [makeGroup()],
+        repos: [makeRepo({ connectionId: 'ssh-1' })]
+      })
+    ).resolves.toEqual({
+      path: '/workspace/platform',
+      exists: false,
+      reason: 'unavailable'
+    })
   })
 
   it('reports ambiguous connection for mixed SSH scopes', () => {
@@ -187,11 +143,7 @@ describe('folder workspace path status', () => {
     ).toEqual({ kind: 'ambiguous' })
   })
 
-  it('supports direct path scope without a persisted project group', async () => {
-    const provider = {
-      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 1 })
-    } as unknown as IFilesystemProvider
-
+  it('reports a direct SSH path scope unavailable without a persisted project group', async () => {
     await expect(
       getFolderWorkspacePathStatus(
         {
@@ -199,44 +151,39 @@ describe('folder workspace path status', () => {
           getProjectGroups: () => [],
           getFolderWorkspaces: () => []
         },
-        { scope: 'path', path: '/workspace/platform', connectionId: 'ssh-1' },
-        { getSshFilesystemProvider: () => provider }
+        { scope: 'path', path: '/workspace/platform', connectionId: 'ssh-1' }
       )
-    ).resolves.toEqual({ path: '/workspace/platform', exists: true })
-    expect(provider.stat).toHaveBeenCalledWith('/workspace/platform')
+    ).resolves.toEqual({
+      path: '/workspace/platform',
+      exists: false,
+      reason: 'unavailable'
+    })
   })
 
-  it('keeps explicit SSH scopes isolated from unrelated same-path SSH repos', async () => {
-    const provider = {
-      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 1 })
-    } as unknown as IFilesystemProvider
-
-    await expect(
-      getFolderWorkspacePathStatusForPath(
-        {
-          folderPath: '/workspace/platform',
-          projectGroupId: 'group-1',
-          connectionId: 'ssh-1',
-          projectGroups: [
-            makeGroup({ id: 'group-1', connectionId: 'ssh-1' }),
-            makeGroup({ id: 'group-2', connectionId: 'ssh-2' })
-          ],
-          repos: [
-            makeRepo({ id: 'repo-1', path: '/workspace/platform/api', connectionId: 'ssh-1' }),
-            makeRepo({
-              id: 'repo-2',
-              path: '/workspace/platform/api',
-              projectGroupId: 'group-2',
-              connectionId: 'ssh-2'
-            })
-          ]
-        },
-        {
-          getSshFilesystemProvider: (connectionId) =>
-            connectionId === 'ssh-1' ? provider : undefined
-        }
-      )
-    ).resolves.toEqual({ path: '/workspace/platform', exists: true })
-    expect(provider.stat).toHaveBeenCalledWith('/workspace/platform')
+  it('keeps explicit SSH scopes isolated from unrelated same-path SSH repos', () => {
+    expect(
+      inferFolderWorkspacePathConnection({
+        folderPath: '/workspace/platform',
+        projectGroupId: 'group-1',
+        connectionId: 'ssh-1',
+        projectGroups: [
+          makeGroup({ id: 'group-1', connectionId: 'ssh-1' }),
+          makeGroup({ id: 'group-2', connectionId: 'ssh-2' })
+        ],
+        repos: [
+          makeRepo({
+            id: 'repo-1',
+            path: '/workspace/platform/api',
+            connectionId: 'ssh-1'
+          }),
+          makeRepo({
+            id: 'repo-2',
+            path: '/workspace/platform/api',
+            projectGroupId: 'group-2',
+            connectionId: 'ssh-2'
+          })
+        ]
+      })
+    ).toEqual({ kind: 'ssh', connectionId: 'ssh-1' })
   })
 })

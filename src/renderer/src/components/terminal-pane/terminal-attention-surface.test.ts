@@ -1,7 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'
-import { createTestStore, makeTab } from '@/store/slices/store-test-helpers'
+import {
+  createTestStore,
+  makeTab,
+  makeTabGroup,
+  makeUnifiedTab
+} from '@/store/slices/store-test-helpers'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
+import { resolveAgentAttention } from '@/attention/agent-attention-policy'
+
+// The user is present unless a test says otherwise.
+beforeEach(() => setPresenceGated(false))
+afterEach(() => setPresenceGated(true))
 
 const WORKSPACE = 'wt-1'
 const TAB = 'tab-1'
@@ -15,6 +27,13 @@ function seedLiveTab(): TestStore {
   const store = createTestStore()
   store.setState({
     tabsByWorktree: { [WORKSPACE]: [makeTab({ id: TAB, worktreeId: WORKSPACE })] },
+    activeGroupIdByWorktree: { [WORKSPACE]: 'main-group' },
+    unifiedTabsByWorktree: {
+      [WORKSPACE]: [makeUnifiedTab({ id: TAB, worktreeId: WORKSPACE, groupId: 'main-group' })]
+    },
+    groupsByWorktree: {
+      [WORKSPACE]: [makeTabGroup({ id: 'main-group', worktreeId: WORKSPACE, activeTabId: TAB })]
+    },
     ptyIdsByTabId: { [TAB]: ['pty-1'] },
     terminalLayoutsByTabId: {
       [TAB]: {
@@ -112,30 +131,7 @@ describe('createTerminalAttentionSurface', () => {
     expect(surfaceFor(store).resolveViewedSubjectKey(TAB)).toBeNull()
   })
 
-  it('counts only this workspace tabs when collecting outstanding attention', () => {
-    const store = seedLiveTab()
-    const foreignPane = makePaneKey('tab-elsewhere', OTHER_LEAF)
-    store.setState({
-      unreadAgentCompletionPanes: { [PANE]: 'agent-completion', [foreignPane]: 'agent-completion' },
-      unreadTerminalTabs: { [TAB]: 'terminal-bell', 'tab-elsewhere': 'terminal-bell' }
-    })
-    expect(surfaceFor(store).collectWorkspaceAttentionRemainder(WORKSPACE)).toEqual({
-      hasSurfaces: true,
-      unreadSubjectKeys: [PANE],
-      unreadGroupIds: [TAB]
-    })
-  })
-
-  it('reports a workspace with no tabs as owning no surfaces', () => {
-    const store = createTestStore()
-    expect(surfaceFor(store).collectWorkspaceAttentionRemainder(WORKSPACE)).toEqual({
-      hasSurfaces: false,
-      unreadSubjectKeys: [],
-      unreadGroupIds: []
-    })
-  })
-
-  it('treats only the active leaf of the active tab as viewed', () => {
+  it('treats every split pane of the tab on screen as viewed', () => {
     const store = seedLiveTab()
     store.setState({ activeWorktreeId: WORKSPACE, activeTabId: TAB })
     const hidden = createTerminalAttentionSurface(store.getState())
@@ -146,6 +142,128 @@ describe('createTerminalAttentionSurface', () => {
         workspaceId: WORKSPACE,
         surfaceKey: makePaneKey(TAB, OTHER_LEAF)
       })
-    ).toBe(false)
+    ).toBe(true)
+  })
+
+  describe('unread on a settled turn', () => {
+    const FLOATING_TAB = 'tab-floating'
+    const FLOATING_PANE = makePaneKey(FLOATING_TAB, LEAF)
+
+    function unreadFor(store: TestStore, workspaceId: string, surfaceKey: string): boolean {
+      const decision = resolveAgentAttention(
+        {
+          subject: { workspaceId, surfaceKey },
+          reason: 'agent-completion',
+          settlesTurn: true,
+          hasFreshActivityEvidence: false
+        },
+        createTerminalAttentionSurface(store.getState())
+      )
+      return decision.admitted && decision.unread !== null
+    }
+
+    function seedFloatingAgent(panelOpen: boolean): TestStore {
+      const store = createTestStore()
+      store.setState({
+        settings: { ...getDefaultSettings('/home/test'), floatingTerminalEnabled: true },
+        floatingWorkspacePanelOpen: panelOpen,
+        activeView: 'terminal',
+        activeWorktreeId: WORKSPACE,
+        activeTabId: TAB,
+        activeTabIdByWorktree: { [WORKSPACE]: TAB, [FLOATING_TERMINAL_WORKTREE_ID]: FLOATING_TAB },
+        tabsByWorktree: {
+          [WORKSPACE]: [makeTab({ id: TAB, worktreeId: WORKSPACE })],
+          [FLOATING_TERMINAL_WORKTREE_ID]: [
+            makeTab({ id: FLOATING_TAB, worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+          ]
+        },
+        activeGroupIdByWorktree: {
+          [WORKSPACE]: 'main-group',
+          [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group'
+        },
+        unifiedTabsByWorktree: {
+          [WORKSPACE]: [makeUnifiedTab({ id: TAB, worktreeId: WORKSPACE, groupId: 'main-group' })],
+          [FLOATING_TERMINAL_WORKTREE_ID]: [
+            makeUnifiedTab({
+              id: FLOATING_TAB,
+              worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+              groupId: 'floating-group'
+            })
+          ]
+        },
+        groupsByWorktree: {
+          [WORKSPACE]: [
+            makeTabGroup({ id: 'main-group', worktreeId: WORKSPACE, activeTabId: TAB })
+          ],
+          [FLOATING_TERMINAL_WORKTREE_ID]: [
+            makeTabGroup({
+              id: 'floating-group',
+              worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+              activeTabId: FLOATING_TAB
+            })
+          ]
+        },
+        ptyIdsByTabId: { [FLOATING_TAB]: ['pty-floating'] },
+        terminalLayoutsByTabId: {
+          [FLOATING_TAB]: {
+            root: { type: 'leaf', leafId: LEAF },
+            activeLeafId: LEAF,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF]: 'pty-floating' }
+          }
+        }
+      })
+      return store
+    }
+
+    function seedMainSplit(): TestStore {
+      const store = seedLiveTab()
+      store.setState({
+        activeView: 'terminal',
+        activeWorktreeId: WORKSPACE,
+        activeTabId: TAB,
+        ptyIdsByTabId: { [TAB]: ['pty-1', 'pty-2'] },
+        terminalLayoutsByTabId: {
+          [TAB]: {
+            root: {
+              type: 'split',
+              direction: 'vertical',
+              first: { type: 'leaf', leafId: LEAF },
+              second: { type: 'leaf', leafId: OTHER_LEAF }
+            },
+            activeLeafId: LEAF,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF]: 'pty-1', [OTHER_LEAF]: 'pty-2' }
+          }
+        }
+      })
+      return store
+    }
+
+    it('marks nothing for a floating agent pane shown in the open floating panel', () => {
+      expect(unreadFor(seedFloatingAgent(true), FLOATING_TERMINAL_WORKTREE_ID, FLOATING_PANE)).toBe(
+        false
+      )
+    })
+
+    it('marks a floating agent pane unread while the floating panel is closed', () => {
+      expect(
+        unreadFor(seedFloatingAgent(false), FLOATING_TERMINAL_WORKTREE_ID, FLOATING_PANE)
+      ).toBe(true)
+    })
+
+    it('marks the main active pane unread behind a non-terminal top-level view', () => {
+      const store = seedMainSplit()
+      store.setState({ activeView: 'tasks' })
+      expect(unreadFor(store, WORKSPACE, PANE)).toBe(true)
+    })
+
+    it('marks nothing for the active leaf of the viewed main tab', () => {
+      expect(unreadFor(seedMainSplit(), WORKSPACE, PANE)).toBe(false)
+    })
+
+    it('does not mark an inactive split leaf of the viewed main tab unread', () => {
+      expect(unreadFor(seedMainSplit(), WORKSPACE, makePaneKey(TAB, OTHER_LEAF))).toBe(false)
+    })
   })
 })

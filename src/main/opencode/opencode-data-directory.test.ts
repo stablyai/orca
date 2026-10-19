@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   resolveOpenCodeDataDirectory,
+  resolveOpenCodeDatabasePath,
   resolveOpenCodeStorageDirectory
 } from './opencode-data-directory'
 
@@ -42,5 +43,18 @@ describe('resolveOpenCodeDataDirectory', () => {
     expect(resolveOpenCodeStorageDirectory({}, '/users/test')).toBe(
       join('/users/test', '.local', 'share', 'opencode', 'storage')
     )
+  })
+
+  it('resolves default, relative, absolute and in-memory database selections', () => {
+    const environment = { XDG_DATA_HOME: '/pinned' }
+    expect(resolveOpenCodeDatabasePath(environment)).toBe(
+      join('/pinned', 'opencode', 'opencode.db')
+    )
+    expect(resolveOpenCodeDatabasePath({ ...environment, OPENCODE_DB: 'custom.db' })).toBe(
+      join('/pinned', 'opencode', 'custom.db')
+    )
+    const absolute = join(process.cwd(), 'selected.db')
+    expect(resolveOpenCodeDatabasePath({ ...environment, OPENCODE_DB: absolute })).toBe(absolute)
+    expect(resolveOpenCodeDatabasePath({ ...environment, OPENCODE_DB: ':memory:' })).toBeNull()
   })
 })

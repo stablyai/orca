@@ -1,14 +1,6 @@
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 
-export function emptyLayoutSnapshot(): TerminalLayoutSnapshot {
-  return {
-    root: null,
-    activeLeafId: null,
-    expandedLeafId: null
-  }
-}
-
 export function singlePaneLayoutSnapshot(
   leafId: string,
   ptyId?: string,

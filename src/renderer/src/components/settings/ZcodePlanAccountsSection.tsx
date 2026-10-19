@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { SearchableSetting } from './SearchableSetting'
 import { collectZcodeUsageWindows, ZcodeUsageWindowView } from './zcode-plan-usage-windows'
 import { useZcodePlanCredentials } from './use-zcode-plan-credentials'
+import { ZcodeCliSetupSection } from './ZcodeCliSetupSection'
 import { UnsealedCredentialNotice } from './UnsealedCredentialNotice'
 
 const SEARCH_KEYWORDS = [
@@ -160,7 +161,7 @@ export function ZcodePlanAccountsSection(): React.JSX.Element {
               <p className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.ZcodePlanAccountsSection.usingCliHelp',
-                  'Orca reads the Coding Plan key from ~/.zcode/cli/config.json. Save an API key below to link the plan here instead.'
+                  'Orca reads the selected Coding Plan from the ZCode CLI credential store on this computer. Save an API key below to link the plan here instead.'
                 )}
               </p>
             </>
@@ -329,6 +330,8 @@ export function ZcodePlanAccountsSection(): React.JSX.Element {
           )}
         </p>
       </SearchableSetting>
+
+      {credentialEditable ? <ZcodeCliSetupSection /> : null}
 
       {usageWindows.length > 0 ? (
         <SearchableSetting

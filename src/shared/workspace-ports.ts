@@ -73,3 +73,16 @@ export type WorkspacePortScanResult = {
   ports: WorkspacePort[]
   unavailableReason?: string
 }
+
+/** A scan of one execution host, named endpoint-relative (`local` or `ssh:<target>` as the host sees it). */
+export type WorkspacePortHostScanResult = WorkspacePortScanResult & {
+  executionHostId: string
+}
+
+export type WorkspacePortHostKillRequest = {
+  worktree: string
+  /** The host the row was scanned on; Stop is refused when the workspace now resolves elsewhere. */
+  executionHostId: string
+  pid: number
+  port: number
+}

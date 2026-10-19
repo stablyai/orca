@@ -89,6 +89,12 @@ describe('locale-translation-policy ja relocalization', () => {
     ).toBe('エージェントで絞り込み')
   })
 
+  it('preserves the native chat subagent label', () => {
+    expect(ja('Subagent', 'サブエージェント', 'components.native-chat.tool.row.subagent')).toBe(
+      'サブエージェント'
+    )
+  })
+
   it('leaves ranges and token samples out of the ellipsis rule', () => {
     expect(ja('Compare main...HEAD', 'main...HEAD を比較')).toBe('main...HEAD を比較')
   })

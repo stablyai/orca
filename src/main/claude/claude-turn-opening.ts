@@ -13,6 +13,8 @@ import {
   claudeText,
   type ClaudeMessageEnvelope
 } from './claude-structured-item-translation'
+import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import type { ClaudeStartedSend } from './claude-structured-session-state'
 import {
   claudeProviderResumedTurnTimingAnchor,
   type ClaudeCurrentTurn
@@ -30,8 +32,6 @@ export type ClaudeSendEchoTurnInput = {
   requestedAt?: number
   /** Provider key of the user row this turn is anchored to. */
   userItemId: string
-  /** The submission this echo acknowledged. */
-  openedBy?: string
 }
 
 /** The turn a replayed send echo opens, or null when this frame is not one. */
@@ -48,8 +48,7 @@ export function claudeTurnOpenedBySendEcho(
         turnId: envelope.uuid,
         startedAt: input.observedAt,
         ...(input.requestedAt === undefined ? {} : { requestedAt: input.requestedAt }),
-        userItemId: input.userItemId,
-        ...(input.openedBy === undefined ? {} : { openedBy: input.openedBy })
+        userItemId: input.userItemId
       }
     : null
 }
@@ -97,17 +96,21 @@ export function claudeStreamTurnStartSource(
 
 /** The provider produced, so a turn is running. Root-ness first, then the
  *  suppression latch, then idempotency — every frame of one reply stays inside
- *  the turn its first frame opened. */
+ *  the turn its first frame opened. A send the CLI has started is the turn's
+ *  opener, and like any accepted send it lifts the latch; with none, the
+ *  provider resumed on its own. */
 export function createClaudeTurnOpener(deps: {
   isTurnOpen: () => boolean
   isSuppressed: () => boolean
+  startedSend: () => ClaudeStartedSend | null
   open: (turn: ClaudeCurrentTurn, observedAt: number) => void
 }): (frame: Record<string, unknown>, source: ClaudeTurnSource | null, observedAt: number) => void {
   return (frame, source, observedAt) => {
     if (!source?.assistant || !isRootClaudeFrame(frame)) {
       return
     }
-    if (deps.isSuppressed() || deps.isTurnOpen()) {
+    const send = deps.startedSend()
+    if ((!send && deps.isSuppressed()) || deps.isTurnOpen()) {
       return
     }
     deps.open(
@@ -115,7 +118,10 @@ export function createClaudeTurnOpener(deps: {
         sessionId: source.sessionId,
         turnId: source.uuid,
         startedAt: observedAt,
-        userItemId: claudeProviderResumedTurnTimingAnchor(source.sessionId, source.uuid)
+        ...(send?.requestedAt === undefined ? {} : { requestedAt: send.requestedAt }),
+        userItemId: send
+          ? agentJournalSubmissionKey(send.clientMessageId)
+          : claudeProviderResumedTurnTimingAnchor(source.sessionId, source.uuid)
       },
       observedAt
     )

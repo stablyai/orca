@@ -110,7 +110,7 @@ export function isInstallDirAclSuspect(now: number = Date.now()): boolean {
   if (poison && poison.stage !== 'repaired') {
     return true
   }
-  // A 'repaired' stage is icacls's exit claim, not a reading of the tree — and the GPU
+  // A 'repaired' stage is the grant's own claim, not a reading of the tree — and the GPU
   // children die 48-1373ms after window creation while the probe answers 0.9-3.0s in. So
   // the claim stays provisional while this launch's probe is still out: the grace check
   // below keeps the suspicion until the reading corroborates it or the window lapses.
@@ -157,12 +157,12 @@ function startRepair(
     installDir,
     // Every caller here holds outstanding poison evidence — this launch's probe reading, or
     // the persisted marker that armed the gate — so a marker recording a completed repair
-    // describes a re-poisoned tree, or an icacls run that silently no-opped. It must not
+    // describes a re-poisoned tree, or a grant that silently no-opped. It must not
     // stand in for a repair. `marker-hit` therefore only ever means the budget is spent.
     poisonEvidenceOutstanding: true,
     onDone: (result) => {
       // A tree read poisoned AFTER this repair was dispatched disproves its success claim,
-      // whatever icacls exited: the gate's budget can expire while the child runs on under
+      // whatever the grant reported: the gate's budget can expire while the grant runs on under
       // its own, so the probe's reading is the later evidence. A clean reading since then
       // retires it — there was nothing left to repair.
       const claimDisproved =
@@ -241,7 +241,7 @@ function applyInstallDirAclProbeVerdict(
     return
   }
   // This reading was taken after the gate finished, so it outranks the gate's own verdict:
-  // a tree that still matches the signature was never repaired, whatever icacls exited.
+  // a tree that still matches the signature was never repaired, whatever the grant reported.
   if (poison?.stage === 'repaired') {
     poison = { installDir: poison.installDir, stage: 'failed' }
     // The claim also cleared the safe-graphics marker; disproved, it owes that back, or
@@ -257,7 +257,7 @@ function applyInstallDirAclProbeVerdict(
     }
   }
   // Re-writes the poison marker — re-arming the next launch's gate — even when the
-  // once-per-process latch means no icacls can run again this launch.
+  // once-per-process latch means no grant can run again this launch.
   startRepair(options.installDir ?? dirname(process.execPath), options)
 }
 

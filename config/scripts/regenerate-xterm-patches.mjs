@@ -194,7 +194,7 @@ function sameBytes(left, right) {
   )
 }
 
-function fetchPristinePackage(packageEntry, workDir) {
+export function fetchPristinePackage(packageEntry, workDir) {
   const target = path.join(workDir, 'pristine', packageEntry.name.replace(/[@/]/g, '_'))
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })

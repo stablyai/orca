@@ -2,10 +2,10 @@ import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import {
   forgetRuntimeWatcherProcessRoot,
   resetRuntimeWatcherProcessForTest,
-  subscribeViaRuntimeWatcherProcess,
-  type WatcherProcessEvent,
-  type WatcherProcessSubscription
+  subscribeViaRuntimeWatcherProcess
 } from '../ipc/parcel-watcher-process'
+import type { WatcherProcessEvent } from '../ipc/parcel-watcher-process-protocol'
+import type { WatcherProcessSubscription } from '../ipc/parcel-watcher-process-subscription'
 import {
   isWatcherProcessFailure,
   type WatcherProcessFailure

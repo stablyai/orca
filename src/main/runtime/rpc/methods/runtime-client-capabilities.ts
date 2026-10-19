@@ -5,6 +5,7 @@ import { ClientCapabilitiesUpdate } from '../../../../shared/rpc-contract/runtim
 export const RUNTIME_CLIENT_CAPABILITY_METHODS = [
   defineMethod({
     name: 'runtime.clientCapabilities.update',
+    permission: 'workspace',
     params: ClientCapabilitiesUpdate,
     handler: (params, { updateClientCapabilities }) => {
       if (!updateClientCapabilities) {

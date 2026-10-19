@@ -92,6 +92,7 @@ vi.mock('@/store', () => ({
     selector({
       agentActivityDisplayMode: 'full',
       acknowledgedAgentsByPaneKey: {},
+      retainedAgentsByPaneKey: {},
       dropAgentStatus: vi.fn(),
       dismissRetainedAgent: vi.fn(),
       acknowledgeAgents: vi.fn(),

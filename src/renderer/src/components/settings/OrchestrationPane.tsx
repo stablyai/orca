@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { ArrowRightLeft, GitBranch, ListChecks, Workflow, type LucideIcon } from 'lucide-react'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
-import type { SkillUsageExample } from '@/lib/skill-usage-example'
 import {
   ORCHESTRATION_SKILL_INSTALL_COMMAND,
-  ORCHESTRATION_SKILL_UPDATE_COMMAND
-} from '@/lib/orchestration-install-command'
+  ORCHESTRATION_SKILL_NAME
+} from '@/lib/agent-feature-install-commands'
+import type { SkillUsageExample } from '@/lib/skill-usage-example'
 import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -66,12 +65,6 @@ export function OrchestrationPane({
         activeSkillRuntime.agentRuntime
       )
     : ORCHESTRATION_SKILL_INSTALL_COMMAND
-  const orchestrationUpdateCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(
-        ORCHESTRATION_SKILL_UPDATE_COMMAND,
-        activeSkillRuntime.agentRuntime
-      )
-    : ORCHESTRATION_SKILL_UPDATE_COMMAND
 
   const {
     installed: orchestrationSkillDetected,
@@ -113,7 +106,6 @@ export function OrchestrationPane({
           'Enables agents to hand off context and coordinate work through Orca.'
         )}
         command={orchestrationInstallCommand}
-        installedCommand={orchestrationUpdateCommand}
         terminalTitle="Orchestration setup"
         terminalAriaLabel="Orchestration skill install terminal"
         terminalWorktreeId="settings-orchestration-skill-terminal"

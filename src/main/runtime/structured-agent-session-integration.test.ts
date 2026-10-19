@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 // One structured Codex session driven end to end over `agentSession.*`.
 //
 // Nothing here is stubbed except the Codex child itself: the RPC dispatcher, the
@@ -16,10 +17,8 @@ import type {
   openCodexAppServerConnection
 } from '../codex/codex-app-server-connection'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import {
-  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
+import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../ipc/desktop-renderer-runtime-capabilities'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../shared/agent-session-create-capabilities'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -44,6 +43,8 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 
 const journals = createTrackedJournalOpener()
 
@@ -51,16 +52,22 @@ const SESSION = 'session-integration-1'
 const THREAD = 'thread-integration'
 const TURN = 'turn-1'
 const WORKSPACE = 'workspace-1'
-// The capability set the desktop renderer advertises. Without the pending-send
+const JOURNAL_IDENTITY = {
+  sessionId: SESSION,
+  workspaceId: WORKSPACE,
+  hostId: 'local',
+  agent: 'codex' as const,
+  providerHandle: codexProviderHandle(THREAD)
+}
+// An eager-start client with current options capabilities. Without the pending-send
 // one the host holds the reply until the send settles, which is a shim for
 // clients too old to render a pending bubble — not what this suite models.
 const CLIENT = {
   clientId: 'device-a',
   clientKind: 'runtime' as const,
-  clientCapabilities: [
-    AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
-    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-  ]
+  clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES.filter(
+    (capability) => capability !== AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
+  )
 }
 
 // ─── the fake `codex app-server` ────────────────────────────────────────────
@@ -86,7 +93,7 @@ type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
 
 function fakeCodex(): CodexScript {
   const connections: FakeConnection[] = []
-  const openConnection = (async (launch, handlers = {}) => {
+  const openConnection: typeof openCodexAppServerConnection = async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
       handlers,
@@ -137,7 +144,7 @@ function fakeCodex(): CodexScript {
     }
     connections.push(connection)
     return connection
-  }) as typeof openCodexAppServerConnection
+  }
   const live = (): FakeConnection => {
     const connection = connections.at(-1)
     if (!connection) {
@@ -308,6 +315,20 @@ async function historyPage(
   return (response as { result: AgentSessionHistoryResult }).result
 }
 
+async function readKnownOptions(): Promise<RpcResponse> {
+  return vi.waitFor(async () => {
+    const result = await call('agentSession.options', { sessionId: SESSION })
+    expect(result).toMatchObject({
+      ok: true,
+      result: {
+        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
+        current: { model: 'gpt-live' }
+      }
+    })
+    return result
+  })
+}
+
 beforeEach(async () => {
   operations = 0
   root = await mkdtemp(join(tmpdir(), 'orca-structured-integration-'))
@@ -318,15 +339,16 @@ beforeEach(async () => {
   shellEnvironmentPolicy = { inheritAll: true, names: [] }
   const runtime = {
     getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
+    getClientSettings: () => ({ experimentalNativeChat: true }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
+    structuredAgentSessionLaunchSeedOptions: () => undefined,
     resolveStructuredAgentSessionCreateIntent: async () => {
       const {
         envelope: _envelope,
         providerHandle: _providerHandle,
         ...resolved
       } = attachParams(null)
-      return resolved
+      return { ...resolved, options: { model: 'gpt-live' } }
     },
     publishStructuredAgentSessionTab: () => {},
     ensureStructuredAgentSessionHost: () =>
@@ -337,7 +359,8 @@ beforeEach(async () => {
         claimKeyId: 'key-1',
         resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
         resolveCodexCommand: () => '/usr/local/bin/codex',
-        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+        resolveLaunchArgs: () => [],
+        resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
         resolveEnvironment: async () => {
           bootEnvironmentReads += 1
           return {
@@ -347,12 +370,14 @@ beforeEach(async () => {
           }
         },
         resolveShellEnvironmentPolicy: () => shellEnvironmentPolicy,
-        resolveCodexOverrides: () => {
+        resolveAgentLaunchEnv: (agent): Record<string, string> => {
+          if (agent !== 'codex') {
+            return {}
+          }
           codexOverrideReads += 1
           return { CODEX_PROFILE: configuredCodexProfile }
         },
-        openCodexConnection: codex.openConnection,
-        readProcessStartTime: async () => 1_700_000_000_000
+        ...scriptedCodexTransport(codex.openConnection)
       }).then(() => undefined),
     registerOwnedSubscriptionCleanup: vi.fn((_id: string, dispose: () => void) => ({
       releaseIfCurrent: dispose
@@ -401,15 +426,8 @@ afterEach(async () => {
 
 describe('a structured codex session over agentSession.*', () => {
   it('hydrates provider options after activating a legacy-imported journal', async () => {
-    const identity = {
-      sessionId: SESSION,
-      workspaceId: WORKSPACE,
-      hostId: 'local',
-      agent: 'codex' as const,
-      providerHandle: { kind: 'codex' as const, threadId: THREAD }
-    }
     const journal = await journals.open({
-      identity,
+      identity: JOURNAL_IDENTITY,
       stateDirectory: root
     })
     const rollout = join(root, 'legacy-rollout.jsonl')
@@ -436,13 +454,7 @@ describe('a structured codex session over agentSession.*', () => {
       createIntentParams()
     )
     expect(created.page.items.map(textOf)).toContain('legacy question')
-    expect(await call('agentSession.options', { sessionId: SESSION })).toMatchObject({
-      ok: true,
-      result: {
-        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
-        current: { model: 'gpt-live' }
-      }
-    })
+    await readKnownOptions()
   })
 
   it('dispatches and streams a plain first send from a fresh session', async () => {
@@ -516,24 +528,19 @@ describe('a structured codex session over agentSession.*', () => {
       createIntentParams()
     )
     expect(created.page.items).toEqual([])
-    expect(codex.live().calls[0]).toMatchObject({
-      method: 'thread/start',
-      params: { cwd: `/repos/${WORKSPACE}` }
-    })
+    // Create answers at spawn; the thread opens once Codex has initialized.
+    await vi.waitFor(() =>
+      expect(codex.live().calls.find((call) => call.method === 'thread/start')).toMatchObject({
+        params: { cwd: `/repos/${WORKSPACE}` }
+      })
+    )
     const fence = created.fence
 
     const stream = await subscribe('sub-1')
     expect(stream[0]).toMatchObject({ type: 'snapshot', sessionId: SESSION })
 
     // ── options ─────────────────────────────────────────────────────────────
-    const options = await call('agentSession.options', { sessionId: SESSION })
-    expect(options).toMatchObject({
-      ok: true,
-      result: {
-        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
-        current: { model: 'gpt-live' }
-      }
-    })
+    await readKnownOptions()
     await ok('agentSession.setOption', {
       envelope: envelope('agentSession.setOption', { key: 'model', value: 'gpt-live' }, fence),
       key: 'model',
@@ -544,10 +551,12 @@ describe('a structured codex session over agentSession.*', () => {
       key: 'effort',
       value: 'high'
     })
-    expect(await call('agentSession.options', { sessionId: SESSION })).toMatchObject({
-      ok: true,
-      result: { current: { model: 'gpt-live', effort: 'high' } }
-    })
+    await vi.waitFor(async () =>
+      expect(await call('agentSession.options', { sessionId: SESSION })).toMatchObject({
+        ok: true,
+        result: { current: { model: 'gpt-live', effort: 'high' } }
+      })
+    )
     expect(itemsOf(stream)).toEqual([])
 
     // ── send ────────────────────────────────────────────────────────────────
@@ -689,12 +698,9 @@ describe('a structured codex session over agentSession.*', () => {
     expect(resumed.fence).toBe(fence + 1)
     expect(reaped.closed).toBe(true)
     expect(codex.live().resumedThreadId).toBe(THREAD)
-    expect(await call('agentSession.options', { sessionId: SESSION })).toMatchObject({
+    expect(await readKnownOptions()).toMatchObject({
       ok: true,
-      result: {
-        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
-        current: { model: 'gpt-live', effort: 'high' }
-      }
+      result: { current: { effort: 'high' } }
     })
     // The journal belongs to the session, not to the process that just died.
     expect(resumed.page.items.map(textOf)).toContain('Two files.')
@@ -719,7 +725,7 @@ describe('a structured codex session over agentSession.*', () => {
     // The turn's lifecycle row outlives the turn: it is revised, never tombstoned.
     expect([...older.page.items, ...tail.page.items].map((item) => item.body?.kind)).toEqual([
       'message',
-      'status',
+      'turn',
       'message',
       'tool-call',
       'approval',
@@ -822,15 +828,8 @@ describe('a structured codex session over agentSession.*', () => {
     await stopping
 
     expect(waitedForFinalAppend).toBe(true)
-    const identity = {
-      sessionId: SESSION,
-      workspaceId: WORKSPACE,
-      hostId: 'local',
-      agent: 'codex' as const,
-      providerHandle: { kind: 'codex' as const, threadId: THREAD }
-    }
     const reopened = await journals.open({
-      identity,
+      identity: JOURNAL_IDENTITY,
       stateDirectory: root
     })
     expect(reopened.snapshot().items.map(textOf)).toContain('Final text before shutdown.')

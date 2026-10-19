@@ -3,8 +3,10 @@ import type {
   AgentJournalItemBody,
   AgentJournalPromptOption,
   AgentJournalQuestion,
-  AgentJournalQuestionItem
+  AgentJournalQuestionItem,
+  AgentJournalFreeTextInput
 } from '../../../shared/agent-session-journal-types'
+import { isPlanApprovalSubject } from '../../../shared/agent-session-approval-subject'
 import {
   boundInlineText,
   boundPayload,
@@ -33,10 +35,6 @@ export function cancelledJournalPromptBody(
       resolvedAt: null
     }
   }
-}
-
-export function boundJournalStatusText(text: string): string {
-  return boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
 }
 
 export function boundJournalPromptBody(body: AgentJournalApprovalItem): AgentJournalApprovalItem
@@ -68,16 +66,20 @@ export function boundJournalPromptBody(
                 : { ruleContent: boundPromptText(body.matchedAskRule.ruleContent) })
             }
           }),
+      // A newer Orca's subject is carried as it was: rebuilt as a plan, it would be a different
+      // request, and its fields are not this build's to bound.
       ...(body.subject === undefined
         ? {}
         : {
-            subject: {
-              kind: 'plan',
-              text: boundPromptText(body.subject.text),
-              ...(body.subject.filePath === undefined
-                ? {}
-                : { filePath: boundPromptText(body.subject.filePath) })
-            }
+            subject: isPlanApprovalSubject(body.subject)
+              ? {
+                  kind: 'plan',
+                  text: boundPromptText(body.subject.text),
+                  ...(body.subject.filePath === undefined
+                    ? {}
+                    : { filePath: boundPromptText(body.subject.filePath) })
+                }
+              : body.subject
           }),
       detail: body.detail === null ? null : boundPromptText(body.detail),
       options: boundPromptOptions(body.options)
@@ -96,7 +98,8 @@ export function boundJournalPromptBody(
       : {}),
     ...(body.freeTextQuestionId
       ? { freeTextQuestionId: boundPromptIdentifier(body.freeTextQuestionId) }
-      : {})
+      : {}),
+    ...(body.freeTextInput ? { freeTextInput: boundFreeTextInput(body.freeTextInput) } : {})
   }
 }
 
@@ -109,7 +112,19 @@ function boundPromptQuestion(question: AgentJournalQuestion): AgentJournalQuesti
     options: boundPromptOptions(question.options),
     ...(question.freeTextQuestionId
       ? { freeTextQuestionId: boundPromptIdentifier(question.freeTextQuestionId) }
-      : {})
+      : {}),
+    ...(question.freeTextInput ? { freeTextInput: boundFreeTextInput(question.freeTextInput) } : {})
+  }
+}
+
+function boundFreeTextInput(input: AgentJournalFreeTextInput): AgentJournalFreeTextInput {
+  return {
+    ...(input.allowEmpty === undefined ? {} : { allowEmpty: input.allowEmpty }),
+    ...(input.multiline === undefined ? {} : { multiline: input.multiline }),
+    ...(input.initialValue === undefined
+      ? {}
+      : { initialValue: boundPromptText(input.initialValue) }),
+    ...(input.placeholder === undefined ? {} : { placeholder: boundPromptText(input.placeholder) })
   }
 }
 

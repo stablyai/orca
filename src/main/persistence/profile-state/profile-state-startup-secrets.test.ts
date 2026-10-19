@@ -30,7 +30,7 @@ vi.mock('../../telemetry/client', () => ({ track: () => {} }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -135,20 +135,31 @@ describe.each(['serialized', 'parsed'] as const)(
           return { store, authority }
         }
 
+        // Only relay-era builds wrote this record; it reaches this build from disk.
+        const legacy = new ProfileStateSqliteAuthority(databaseFile, 'startup-secrets')
+        legacy.writeSerializedState(
+          Buffer.from(
+            JSON.stringify({
+              sshPtyConsumerRecoveries: [
+                {
+                  targetId: 'ssh-1',
+                  clientInstanceId: 'client-1',
+                  serverBuildId: 'server-1',
+                  clientGeneration: 1,
+                  ownerGeneration: 1,
+                  ownerLease: sealed(secrets.lease)
+                }
+              ]
+            })
+          )
+        )
+        legacy.close()
         const seeded = open()
         seeded.store.updateSettings({
           httpProxyUrl: secrets.proxy,
           opencodeSessionCookie: secrets.cookie
         })
         seeded.store.updateUI({ browserKagiSessionLink: secrets.kagi })
-        await seeded.store.upsertSshPtyConsumerRecovery({
-          targetId: 'ssh-1',
-          clientInstanceId: 'client-1',
-          serverBuildId: 'server-1',
-          clientGeneration: 1,
-          ownerGeneration: 1,
-          ownerLease: secrets.lease
-        })
         await seeded.store.flushAsync()
         seeded.store.freezeWrites()
 
@@ -173,11 +184,15 @@ describe.each(['serialized', 'parsed'] as const)(
         reopened.store.freezeWrites()
 
         keyState = 'available'
-        const restored = open().store
+        const { store: restored, authority: restoredAuthority } = open()
         expect(restored.getSettings().httpProxyUrl).toBe(secrets.proxy)
         expect(restored.getSettings().opencodeSessionCookie).toBe(secrets.cookie)
         expect(restored.getUI().browserKagiSessionLink).toBe(secrets.kagi)
-        expect(restored.getSshPtyConsumerRecovery('ssh-1')?.ownerLease).toBe(secrets.lease)
+        restored.updateSettings({ terminalFontSize: 20 })
+        await restored.flushAsync()
+        expect(
+          JSON.parse(restoredAuthority.readSerializedState() ?? 'null').sshPtyConsumerRecoveries
+        ).toMatchObject([{ ownerLease: sealed(secrets.lease) }])
       }
     )
   }

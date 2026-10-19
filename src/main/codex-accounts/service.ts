@@ -12,6 +12,7 @@ import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
 import type { CodexAccountSelectionTarget } from './runtime-selection'
 import { CodexAccountIdentity, type ResolvedCodexIdentity } from './codex-account-identity'
@@ -83,6 +84,7 @@ export class CodexAccountService {
   private cancelPendingCodexLogin: (() => boolean) | null = null
   private pendingLoginUrl: string | null = null
   private readonly pendingLoginUrlListeners = new Set<(url: string | null) => void>()
+  private openWslLoginUrl: ((url: string) => void) | null = null
   private readonly identity: CodexAccountIdentity
   private readonly configMirror: CodexConfigMirror
   private readonly managedHomePaths: CodexManagedHomePath
@@ -101,7 +103,7 @@ export class CodexAccountService {
       execFileSync(
         'wsl.exe',
         ['-d', distro, '--exec', 'bash', '-lc', buildEncodedWslBashCommand(script)],
-        { windowsHide: true, encoding: 'utf-8', timeout: 5000 }
+        { windowsHide: true, encoding: 'utf-8', timeout: 5000, cwd: resolveWslInteropSpawnCwd() }
       )
     )
     this.managedHomes = new CodexManagedHomeLifecycle(this.managedHomePaths)
@@ -181,6 +183,11 @@ export class CodexAccountService {
   /** Registration lasts the process's lifetime; there is no teardown to hand back. */
   onPendingLoginUrlChanged(listener: (url: string | null) => void): void {
     this.pendingLoginUrlListeners.add(listener)
+  }
+
+  /** Lets the desktop open a WSL login's link; orcad never sets one. */
+  setWslLoginUrlOpener(opener: ((url: string) => void) | null): void {
+    this.openWslLoginUrl = opener
   }
 
   private setPendingLoginUrl(url: string | null): void {
@@ -292,7 +299,8 @@ export class CodexAccountService {
         setCancel: (cancel) => {
           this.cancelPendingCodexLogin = cancel
         },
-        onAuthUrl: (url) => this.setPendingLoginUrl(url)
+        onAuthUrl: (url) => this.setPendingLoginUrl(url),
+        openWslAuthUrl: this.openWslLoginUrl
       })
     } finally {
       // Why: both die with the login server — no surface may keep offering a

@@ -20,8 +20,9 @@ export type NativeChatViewState =
  * Decide which surface to render. Any renderable message wins over loading/empty so optimistic
  * first sends never get replaced while transcript discovery catches up. Where the read retries on
  * its own (the structured chat), messages win over an error too: a read that fails after the
- * transcript loaded keeps it, and the error reaches the composer's error line. The terminal-backed
- * read does not retry, and its only messages on error are local echoes, so its error takes the pane.
+ * transcript loaded keeps it, and the error reaches the composer's error line. A read that does not
+ * retry takes the pane: the terminal-backed one, whose only messages on error are local echoes, and
+ * a structured read that failed for good.
  */
 export function selectNativeChatViewState(
   session: NativeChatSession,

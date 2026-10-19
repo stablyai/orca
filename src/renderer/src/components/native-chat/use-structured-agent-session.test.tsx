@@ -42,13 +42,15 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  structuredSessionOperationId: mocks.operationId,
-  useStructuredAgentSessionOutbox: () => ({
-    outbox: [],
+vi.mock('./structured-agent-session-operation-id', () => ({
+  structuredSessionOperationId: mocks.operationId
+}))
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: () => ({
+    pending: [],
     error: null,
     send: vi.fn(),
-    retry: vi.fn()
+    stopSends: vi.fn()
   })
 }))
 
@@ -393,8 +395,11 @@ describe('useStructuredAgentSession options', () => {
     const pending = new Promise<never>((_resolve, rejectPromise) => {
       reject = rejectPromise
     })
+    // Only the option write fails; a refused hold would surface on `error` for its own reason.
     mocks.call.mockImplementation((_target, method) =>
-      method === 'agentSession.options' ? Promise.resolve(OPTIONS) : pending
+      method === 'agentSession.options' || method === 'agentSession.hold'
+        ? Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
+        : pending
     )
     const { result, rerender } = renderHook(() =>
       useStructuredAgentSession({

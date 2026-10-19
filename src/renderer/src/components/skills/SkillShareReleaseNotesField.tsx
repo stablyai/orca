@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
@@ -35,7 +36,7 @@ export function SkillShareReleaseNotesField({
         <Label htmlFor="skill-release-notes" className="sr-only">
           {translate('auto.components.skills.SkillShareReviewContent.f0c0411549', 'Release notes')}
         </Label>
-        <textarea
+        <ImeTextarea
           id="skill-release-notes"
           value={value}
           onChange={(event) => onChange(event.target.value)}

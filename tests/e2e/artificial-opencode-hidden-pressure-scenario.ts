@@ -211,7 +211,7 @@ export async function runHiddenRealPtyPressureScenario<
     // whichever flush it collides with, so on a contended OSS shard it is
     // environment-dominated (seen at ~2s). Keep it only as a catastrophic-hang
     // detector — the original regression (input freezing for seconds) shows up in
-    // the median too. Aligns with ssh-docker-relay-perf's 2s worst-key tolerance.
+    // the median too.
     expect(measurement.worstLatencyMs).toBeLessThan(3_000)
     expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_HIDDEN_PRESSURE_TIMER_DRIFT_MS)
 

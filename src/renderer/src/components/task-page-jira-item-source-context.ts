@@ -1,4 +1,5 @@
 import type { JiraIssue, JiraSite } from '../../../shared/jira-types'
+import { getJiraAccountLabel } from '@/lib/jira-account-label'
 import {
   normalizeTaskSourceContext,
   type TaskSourceContext
@@ -24,6 +25,6 @@ export function bindTaskPageJiraItemSourceContext(args: {
       siteUrl: site.siteUrl,
       projectKey: args.issue.project.key
     },
-    accountLabel: site.email || site.displayName || site.siteUrl
+    accountLabel: getJiraAccountLabel(site)
   })
 }

@@ -4,11 +4,15 @@ import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalLayoutSnapshot } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
+import type { StructuredAgentId } from './agent-session-provider-handle'
 
 export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  /** The tab's manual name on the host, null when it has none. Absent from older hosts, so a
+   *  client keeps its own record then rather than reading absence as a cleared name. */
+  customTitle?: string | null
   quickCommandLabel?: string | null
   parentTabId: string
   leafId: string
@@ -97,7 +101,9 @@ export type RuntimeMobileSessionAgentTab = {
   title: string
   sessionId: string
   replacesSessionId?: string
-  agent: 'claude' | 'codex'
+  /** An agent the host registered. Beyond Claude and Codex, published only to clients advertising
+   *  the registered-agents capability. */
+  agent: StructuredAgentId
   color?: string | null
   isPinned?: boolean
   isActive: boolean

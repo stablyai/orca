@@ -115,23 +115,21 @@ describe('structured agent-session create-support probe', () => {
   )
 
   it.each([
-    ['codex', true, { supported: true }],
-    ['codex', false, { supported: false, reason: 'agent' }],
-    ['claude', true, { supported: true }],
-    ['claude', false, { supported: false, reason: 'agent' }]
+    ['codex', true],
+    ['codex', false],
+    ['claude', true],
+    ['claude', false]
   ] as const)(
-    'requires native Windows process identity proof before answering %s support (%s)',
-    async (agent, proofAvailable, expected) => {
+    'answers native Windows %s support whether or not process creation times are readable (%s)',
+    async (agent, creationTimesReadable) => {
       setPlatform('win32')
-      isWindowsProcessStartTimeAvailable.mockReturnValue(proofAvailable)
+      isWindowsProcessStartTimeAvailable.mockReturnValue(creationTimesReadable)
 
       await expectSupportWithoutInstall({
         agent,
         location: { executionHostId: 'local', wslDistro: null },
-        expected
+        expected: { supported: true }
       })
-
-      expect(isWindowsProcessStartTimeAvailable).toHaveBeenCalled()
     }
   )
 

@@ -38,6 +38,8 @@ export XDG_CONFIG_HOME="$state_dir/config"
 export XDG_CACHE_HOME="$state_dir/cache"
 export XDG_RUNTIME_DIR="$state_dir/runtime"
 export LIBGL_ALWAYS_SOFTWARE=1
+# Every entrypoint must serve the profile the caller chose, not the default one.
+export ORCA_USER_DATA_PATH="$state_dir/profile"
 mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 
@@ -81,6 +83,12 @@ if [[ -z "$ready_line" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$ORCA_USER_DATA_PATH/orca-runtime.json" || -e "$XDG_CONFIG_HOME/orca/orca-runtime.json" ]]; then
+  ls -la "$ORCA_USER_DATA_PATH" "$XDG_CONFIG_HOME" >&2 || true
+  echo "FAIL: serve ignored ORCA_USER_DATA_PATH; its runtime metadata is not in $ORCA_USER_DATA_PATH" >&2
+  exit 1
+fi
+
 registered_cli_verified=false
 if [[ "$entrypoint_kind" == appimage ]]; then
   registered_cli="$HOME/.local/bin/orca-ide"
@@ -94,6 +102,20 @@ if [[ "$entrypoint_kind" == appimage ]]; then
     || [[ "$registered_help" != *'Usage: orca <command>'* ]]; then
     echo "FAIL: registered CLI did not execute the packaged help command" >&2
     printf '%s\n' "$registered_help" >&2
+    exit 1
+  fi
+  # Pre-lease builds prune every generation under sha256(AppImage path); this build must not extract there.
+  installed_target=$(readlink "$XDG_CACHE_HOME/orca/appimage/launcher/installed" 2>/dev/null || true)
+  installed_namespace=$(basename "$(dirname "$(dirname "$(dirname "$(dirname "$installed_target")")")")")
+  legacy_namespace=$(printf '%s' /input/orca.AppImage | sha256sum | cut -c1-24)
+  if [[ ! -x "$installed_target" || "$installed_namespace" == "$legacy_namespace" ]]; then
+    echo "FAIL: installed CLI payload ${installed_target:-missing} is in the legacy namespace or missing" >&2
+    exit 1
+  fi
+  # A fresh cache means this serve unpacked the AppImage first, with progress on stderr.
+  if ! grep -q '\[serve\] AppImage copy ready after' "$stderr_log"; then
+    cat "$stderr_log" >&2
+    echo "FAIL: first AppImage serve did not report unpacking progress" >&2
     exit 1
   fi
   registered_cli_verified=true

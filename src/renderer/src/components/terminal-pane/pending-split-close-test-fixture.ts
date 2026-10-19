@@ -16,10 +16,11 @@ const store = vi.hoisted((): { current: AppState | null } => ({ current: null })
 vi.mock('../../store', () => ({ useAppStore: { getState: () => store.current } }))
 vi.mock('react', () => ({
   useCallback: (fn: unknown) => fn,
+  useEffect: () => {},
   useImperativeHandle: () => {},
   useRef: (current: unknown) => ({ current })
 }))
-vi.mock('../../runtime/web-runtime-session', () => ({ closeWebRuntimeTerminal: vi.fn() }))
+vi.mock('../../runtime/web-runtime-terminal-actions', () => ({ closeWebRuntimeTerminal: vi.fn() }))
 vi.mock('../../runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('../terminal/terminal-close-copy-kind', () => ({ resolveLeafCloseCopyKind: vi.fn() }))
 vi.mock('../terminal/running-terminal-close-guard', () => ({ RUNNING_CLOSE_PROBE_TIMEOUT_MS: 100 }))
@@ -120,7 +121,7 @@ export async function preparePendingSplitClose(
   ]
   const managerFixture = {
     getPanes: () => panes,
-    getLeafId: () => leafId,
+    getLeafId: (id: number) => panes.find((pane) => pane.id === id)?.leafId ?? null,
     getActivePane: () => null,
     closePane(id: number) {
       panes = panes.filter((pane) => pane.id !== id)
@@ -147,7 +148,6 @@ export async function preparePendingSplitClose(
     expandedStyleSnapshotRef: { current: new Map() },
     containerRef: { current: null },
     pendingPaneSizeRefreshFrameIdsRef: { current: [] },
-    ref: { current: null },
     clearSessionRestoredBannerForPane: vi.fn(),
     persistLayoutSnapshot: vi.fn(),
     setPendingCloseConfirmation: vi.fn(),

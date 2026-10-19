@@ -263,7 +263,12 @@ export function SidebarFeedbackDialog({
           // An unsupported image still routes through for its rejection toast,
           // but preventing default there would silently eat co-pasted text.
           const reserved = getReservedImageCapacity()
-          if (hasAttachableFeedbackImage(pasted, reserved.count, reserved.bytes)) {
+          // An optimistic shrink may fail; let co-pasted text insert now rather than restore it later.
+          if (
+            hasAttachableFeedbackImage(pasted, reserved.count, reserved.bytes, {
+              allowShrinking: event.clipboardData.getData('text/plain').length === 0
+            })
+          ) {
             event.preventDefault()
           }
           handleAddFiles(pasted)
@@ -352,6 +357,7 @@ export function SidebarFeedbackDialog({
 
         <SidebarFeedbackImageAttachments
           images={images}
+          pendingCount={pendingImageReadCount}
           disabled={isSubmitting}
           isDragActive={isDragActive}
           onAddFiles={handleAddFiles}

@@ -1,7 +1,8 @@
+import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 import type { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { WorktreeCreate } from './worktree-create-schemas'
+import type { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
 type ManagedWorktreeCreateArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
@@ -15,10 +16,14 @@ type CreateProvenance = Pick<
 export function buildManagedWorktreeCreateArgs(
   params: WorktreeCreateParams,
   provenance: CreateProvenance,
-  origin: { clientKind?: 'mobile' | 'runtime' } = {}
+  origin?: Parameters<typeof terminalImageViewerSupported>[0]
 ): ManagedWorktreeCreateArgs {
+  const viewerSupported = origin && terminalImageViewerSupported(origin)
   return {
     repoSelector: params.repo,
+    // A phone's retry key is the identity of its creation.
+    creationId: params.creationId ?? params.clientMutationId,
+    ...(viewerSupported !== undefined ? { terminalImageViewerSupported: viewerSupported } : {}),
     name: params.name ?? '',
     // Absent means the user typed the name, which must never be retired.
     ...(params.nameWasGenerated === true ? { nameWasGenerated: true } : {}),
@@ -36,6 +41,7 @@ export function buildManagedWorktreeCreateArgs(
     linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
     linkedGiteaPR: params.linkedGiteaPR,
     linkedWorkItem: params.linkedWorkItem,
+    linkedItems: params.linkedItems,
     linkedTaskSourceContext: params.linkedTaskSourceContext,
     comment: params.comment,
     displayName: params.displayName,
@@ -43,29 +49,40 @@ export function buildManagedWorktreeCreateArgs(
     telemetrySource: params.telemetrySource,
     workspaceStatus: params.workspaceStatus,
     manualOrder: params.manualOrder,
+    ...(params.nestWorkspaces !== undefined ? { nestWorkspaces: params.nestWorkspaces } : {}),
+    ...(params.refreshLocalBaseRefOnWorktreeCreate !== undefined
+      ? { refreshLocalBaseRefOnWorktreeCreate: params.refreshLocalBaseRefOnWorktreeCreate }
+      : {}),
+    ...(params.localBaseRefSuggestionDismissed !== undefined
+      ? { localBaseRefSuggestionDismissed: params.localBaseRefSuggestionDismissed }
+      : {}),
     sparseCheckout: params.sparseCheckout,
     pushTarget: params.pushTarget,
     runHooks: params.runHooks === true,
     activate: params.activate === true,
-    // Why: create-activation is the caller's own view intent; without this a paired
-    // client's create dragged every other connected client and the host with it.
-    // Why 'runtime' only: a phone has no terminal-provisioning renderer, so when it
-    // creates without a startup command the host renderer is what runs the repo's
-    // setup/default tabs off this activation. Scoping mobile would drop that work.
-    // Why the CLI is excluded by payload and not by version: the CLI also pairs as a
-    // 'runtime' device but has no viewer of its own, so scoping it makes --activate
-    // reveal nothing. Current CLIs say so explicitly with `navigation`, but an older
-    // CLI against an updated host cannot; `cliProvenanceRequest` is the marker every
-    // CLI has always sent, and no renderer or phone sends it.
+    // Mobile needs host-renderer provisioning; CLI activation also belongs to the host, not its observers.
     navigation: resolveRuntimeNavigationTarget({
-      ...(params.navigation ? { navigation: params.navigation } : {}),
-      ...(origin.clientKind === 'runtime' && params.cliProvenanceRequest === undefined
+      ...(params.navigation
+        ? {
+            // Older CLIs hardcode 'all' for --activate/--run-hooks; neither flag requests a client broadcast.
+            navigation:
+              params.cliProvenanceRequest !== undefined && params.navigation === 'all'
+                ? ('host' as const)
+                : params.navigation
+          }
+        : {}),
+      ...(origin?.clientKind === 'runtime' && params.cliProvenanceRequest === undefined
         ? { clientKind: origin.clientKind }
-        : {})
+        : {}),
+      defaultTarget: 'host'
     }),
     setupDecision: params.setupDecision,
+    ...(params.setupOnly !== undefined ? { setupOnly: params.setupOnly } : {}),
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,
     ...provenance,
+    // Why: a person initiated this create (the phone, CLI text and agent.launch don't surface the
+    // fallback yet); an automation run has no one watching, so it keeps the network error.
+    ...(provenance.automationProvenance ? {} : { allowLocalBaseFallback: true }),
     startup: params.startupCommand
       ? {
           command: params.startupCommand,

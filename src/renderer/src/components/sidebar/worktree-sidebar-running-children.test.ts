@@ -10,11 +10,9 @@ import { buildLegacyTaskRowModels } from '../../../../shared/agent-child-row-mod
 import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
 import type { AgentStatusEntry, AgentSubagentSnapshot } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import {
-  buildBackgroundTaskGroups,
-  buildBackgroundTaskGroupsFromViews
-} from '@/components/native-chat/background-task-roster'
-import { structuredSessionBackgroundTasksView } from '@/components/native-chat/structured-session-background-tasks-view'
+import { buildBackgroundTaskGroupsFromViews } from '../../../../shared/background-task-roster'
+import { buildBackgroundTaskGroups } from '@/components/native-chat/background-task-roster'
+import { structuredSessionBackgroundTasksView } from '../../../../shared/structured-session-background-tasks-view'
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'
 
 const NOW = 1_000_000

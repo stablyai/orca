@@ -4,7 +4,10 @@ import { writeFile } from 'node:fs/promises'
 import { homedir, tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { takeRealAgentHomeWriteViolations } from './vitest-real-agent-home-write-guard'
+import {
+  clearInheritedAgentStateEnv,
+  takeRealAgentHomeWriteViolations
+} from './vitest-real-agent-home-write-guard'
 
 // Why never-created paths: each sits under a missing folder or is a forced no-op removal, so even
 // with the guard off (the ablation) nothing lands in the real home.
@@ -17,6 +20,29 @@ afterEach(() => {
 })
 
 describe('vitest real-agent-home write guard', () => {
+  it.each([undefined, '', '0', 'true', '1'])(
+    'keeps only the explicitly opted-in Claude profile for %s',
+    (value) => {
+      vi.stubEnv('ORCA_REAL_CLAUDE_CLI_TEST', value)
+      vi.stubEnv('CLAUDE_CONFIG_DIR', '/tmp/explicit-claude-profile')
+      vi.stubEnv('CODEX_HOME', '/tmp/inherited-codex-profile')
+      vi.stubEnv('ORCA_USER_DATA_PATH', '/tmp/inherited-orca-state')
+      vi.stubEnv('ORCA_CODEX_LAUNCH_PREFLIGHT', '/tmp/inherited-live-cli')
+
+      clearInheritedAgentStateEnv()
+
+      expect(process.env.CLAUDE_CONFIG_DIR).toBe(
+        value === '1' ? '/tmp/explicit-claude-profile' : undefined
+      )
+      expect(process.env.CODEX_HOME).toBeUndefined()
+      expect(process.env.ORCA_USER_DATA_PATH).toBeUndefined()
+      expect(process.env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
+      expect(() => rmSync(missingRealFolder('.claude'), { force: true })).toThrow(
+        /real-agent-home guard/
+      )
+    }
+  )
+
   it('refuses a named-import sync write under the real ~/.codex', () => {
     const target = join(missingRealFolder('.codex'), 'config.toml')
     expect(() => writeFileSync(target, '[projects."/tmp/x"]\n')).toThrow(/real-agent-home guard/)

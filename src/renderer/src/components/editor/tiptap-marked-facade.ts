@@ -10,9 +10,71 @@ import {
   getDefaults,
   type MarkedOptions,
   type Token,
+  type Tokens,
   type TokensList,
   marked
 } from 'marked'
+import { ORDERED_LIST_MARKER_PATTERN } from '@tiptap/extension-list'
+
+// Same item start Tiptap's ordered list accepts, so every list it built can be re-read here.
+const EXTENDED_LIST_ITEM = new RegExp(`^(\\s*(?:${ORDERED_LIST_MARKER_PATTERN})[.)])(\\s+)`)
+
+function expandColumns(text: string, startColumn = 0): number {
+  let column = startColumn
+  for (const char of text) {
+    column = char === '\t' ? column + 4 - (column % 4) : column + 1
+  }
+  return column
+}
+
+// Marked's rule: tabs expand to 4-column stops; a gap wider than 4 means marker + 1.
+function getItemContentIndent(item: RegExpExecArray): number {
+  const markerEnd = expandColumns(item[1])
+  const contentStart = expandColumns(item[2], markerEnd)
+  return contentStart - markerEnd > 4 ? markerEnd + 1 : contentStart
+}
+
+// Like Marked's list, end at a quote line shallower than the current item's content;
+// Tiptap's tokenizer would absorb the outer quote's lines and nest them in the item.
+function sliceBeforeOuterQuote(source: string): string {
+  const lines = source.split('\n')
+  let contentIndent = 0
+  let outerQuoteLine = /^>/
+  for (const [index, line] of lines.entries()) {
+    const item = EXTENDED_LIST_ITEM.exec(line)
+    const lineIndent = expandColumns(/^\s*/.exec(line)?.[0] ?? '')
+    if (item && (index === 0 || lineIndent < contentIndent)) {
+      contentIndent = getItemContentIndent(item)
+      outerQuoteLine = new RegExp(`^ {0,${Math.max(0, Math.min(3, contentIndent - 1))}}>`)
+    } else if (index > 0 && outerQuoteLine.test(line)) {
+      return lines.slice(0, index).join('\n')
+    }
+  }
+  return source
+}
+
+function isListToken(token: Tokens.Generic | undefined): token is Tokens.List {
+  return token?.type === 'list' && Array.isArray(token.items)
+}
+
+class BlockquoteListTokenizer extends Tokenizer {
+  // Why: Marked's blockquote() lazy continuation calls `this.list(newText)!` (still so in
+  // v18), skipping the registered extended-marker (a., iii)) tokenizers, then reads `.raw`.
+  list(source: string): Tokens.List | undefined {
+    const token = super.list(source)
+    if (token || !EXTENDED_LIST_ITEM.test(source)) {
+      return token
+    }
+    const listSource = sliceBeforeOuterQuote(source)
+    for (const tokenize of this.options.extensions?.block ?? []) {
+      const extended = tokenize.call({ lexer: this.lexer }, listSource, [])
+      if (isListToken(extended)) {
+        return extended
+      }
+    }
+    return undefined
+  }
+}
 
 export function createTiptapMarkedFacade(): typeof marked {
   const registry = new Marked()
@@ -45,6 +107,8 @@ export function createTiptapMarkedFacade(): typeof marked {
       super({
         ...registry.defaults,
         ...options,
+        tokenizer:
+          options?.tokenizer ?? registry.defaults.tokenizer ?? new BlockquoteListTokenizer(),
         extensions: registry.defaults.extensions
       })
     }

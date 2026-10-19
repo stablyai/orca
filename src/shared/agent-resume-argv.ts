@@ -31,9 +31,8 @@ export function getAgentResumeArgv(
     case 'opencode':
       return providerSession.key === 'session_id' ? ['opencode', '--session', id] : null
     case 'opencode2':
-      return providerSession.key === 'session_id'
-        ? ['opencode2', '--standalone', '--session', id]
-        : null
+      // Why: the launch command owns standalone/shared mode, including user overrides.
+      return providerSession.key === 'session_id' ? ['opencode2', '--session', id] : null
     case 'pi':
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['pi', '--session', providerSession.transcriptPath]
@@ -76,5 +75,46 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['dsh-tui', '--resume', id] : null
     case 'jcode':
       return providerSession.key === 'session_id' ? ['jcode', '--resume', id] : null
+    case 'kiro':
+      return providerSession.key === 'session_id' ? ['kiro-cli', '--resume-id', id] : null
   }
+}
+
+/** Opens a copy of the conversation under a new id, leaving the original untouched: how a chat's
+ *  conversation continues in the CLI without a second writer. Only CLIs that can copy one. */
+const FORK_ARGV: Partial<
+  Record<ResumableTuiAgent, (providerSession: AgentProviderSessionMetadata) => string[] | null>
+> = {
+  claude: ({ id }) => ['claude', '--resume', id, '--fork-session'],
+  codex: ({ id }) => ['codex', 'fork', id],
+  grok: ({ id }) => ['grok', '--resume', id, '--fork-session'],
+  pi: ({ transcriptPath }) => (transcriptPath ? ['pi', '--fork', transcriptPath] : null)
+}
+
+/** Agents whose CLI cannot copy a conversation but whose chat protocol can (ACP `session/fork`, as
+ *  OpenCode 2.0.14 and OMP 17.0.5 advertise): the chat's host makes the copy, and the terminal opens
+ *  it with a plain resume. A host whose agent does not advertise the copy refuses it. OpenCode 2.x
+ *  lists its chats' conversations as `opencode2` rows. */
+const FORKS_THROUGH_CHAT: ReadonlySet<string> = new Set<ResumableTuiAgent>([
+  'opencode',
+  'opencode2',
+  'omp'
+])
+
+/** Whether "Resume in New CLI" can open a copy of this agent's conversations at all. A row's own
+ *  gate (`aiVaultSessionCliForkWorktreeId`) also checks that its copy can be made. */
+export function agentForksConversations(agent: string): boolean {
+  return Object.hasOwn(FORK_ARGV, agent) || FORKS_THROUGH_CHAT.has(agent)
+}
+
+export function agentForksThroughChat(agent: string): boolean {
+  return FORKS_THROUGH_CHAT.has(agent)
+}
+
+export function getAgentForkArgv(
+  agent: ResumableTuiAgent,
+  providerSession: AgentProviderSessionMetadata
+): string[] | null {
+  const forkArgv = FORK_ARGV[agent]
+  return forkArgv && providerSession.key === 'session_id' ? forkArgv(providerSession) : null
 }

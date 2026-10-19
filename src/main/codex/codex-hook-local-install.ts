@@ -1,3 +1,4 @@
+import { mkdirSync } from 'node:fs'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   createManagedCommandMatcher,
@@ -25,11 +26,8 @@ import {
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
 import { cleanupLegacyManagedHookRepresentations } from './codex-hook-legacy-cleanup'
 import { getManagedScript } from './codex-hook-script'
-import {
-  grantManagedCodexHookTrust,
-  type CodexManagedTrustGrantPlan
-} from './codex-hook-trust-grant'
-import { removeSelfComputedTrustBeforeGrant } from './codex-managed-trust-grant-plan'
+import type { CodexHookHashes } from './codex-hook-trust-derivation'
+import { writeCodexHookApprovalsBeforeEntries } from './codex-hook-approval-first-write'
 import { removeStaleRuntimeHookTrustEntries } from './codex-hook-trust-cleanup'
 import {
   promoteCodexRuntimeHookApprovalsToSystem,
@@ -42,12 +40,16 @@ import {
 } from './codex-hook-user-mirroring'
 import { getSystemCodexHomePath } from './codex-home-paths'
 
+/**
+ * A managed CODEX_HOME's hooks at launch prep: the user's hooks mirrored from
+ * ~/.codex, after Orca's entry in each event Codex listed, approved with
+ * Codex's own hash. The approval is written before the entry and taken back
+ * if the entry write fails.
+ */
 export async function installCodexHooksExclusively(
   runtimeHomePath: string,
-  getStatusAfterInstall: (
-    recentGrantEntries: readonly CodexTrustEntry[],
-    runtimeHomePath: string
-  ) => AgentHookInstallStatus
+  hashes: CodexHookHashes,
+  getStatus: (runtimeHomePath: string) => AgentHookInstallStatus
 ): Promise<AgentHookInstallStatus> {
   const configPath = getConfigPath(runtimeHomePath)
   const scriptPath = getManagedScriptPath()
@@ -100,9 +102,14 @@ export async function installCodexHooksExclusively(
     }
   }
 
-  // Why: Codex 0.129+ requires a per-hook config.toml trust entry or the hook needs manual /hooks-approve; precompute the hash to avoid that.
+  const listedLabels = new Set(
+    CODEX_EVENTS.map((eventName) => CODEX_EVENT_LABEL[eventName]).filter(
+      (label) => hashes[label] !== undefined
+    )
+  )
   const mirroredUserTrustEntries = moveMirroredRuntimeUserTrustAfterManagedStatusHook(
-    hookPlan.trustEntries
+    hookPlan.trustEntries,
+    listedLabels
   )
   const mirroredTrustEntries: CodexTrustEntry[] = mirroredUserTrustEntries.map(({ entry }) => entry)
   const managedTrustEntries: CodexTrustEntry[] = []
@@ -110,9 +117,23 @@ export async function installCodexHooksExclusively(
   for (const eventName of CODEX_EVENTS) {
     const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
+    const trustedHash = hashes[CODEX_EVENT_LABEL[eventName]]
+    if (trustedHash === undefined) {
+      // Why: an event Codex does not list would never run Orca's entry, or would hold it for review.
+      if (cleaned.length > 0) {
+        nextHooks[eventName] = cleaned
+      } else {
+        delete nextHooks[eventName]
+      }
+      continue
+    }
     const hook = buildCodexManagedHook(command, eventName)
     const definition: HookDefinition = { hooks: [hook] }
     nextHooks[eventName] = [definition, ...cleaned]
+    if (trustedHash === null) {
+      // Why: this Codex lists the entry with no hash, so it has no approvals to write.
+      continue
+    }
     // Why: the status hook must run before user hooks so a slow
     // PostToolUse/Stop hook cannot leave the sidebar stuck on the previous
     // state while Codex visibly reports that hooks are still running.
@@ -122,68 +143,58 @@ export async function installCodexHooksExclusively(
       groupIndex: 0,
       handlerIndex: 0,
       command,
-      timeoutSec: hook.timeout
+      timeoutSec: hook.timeout,
+      trustedHash,
+      // Why: Orca's setting is the only off switch for its hook (a /hooks toggle-off is overridden).
+      enabled: true
     })
   }
   const trustEntries: CodexTrustEntry[] = [...mirroredTrustEntries, ...managedTrustEntries]
-  let recentGrantEntries: readonly CodexTrustEntry[] = []
+  const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
 
   config.hooks = nextHooks
   writeManagedScript(scriptPath, getManagedScript())
-  writeCodexHooksJson(configPath, nextHooks)
-  // Why: trust entries write last so a half-write can't leave a hash pointing at a nonexistent hook.
-  // Why: surface trust-write failures — otherwise getStatus reports green for a hook Codex won't fire.
   try {
-    const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
+    // Why: the config.toml mirror and approvals land before hooks.json, which used to create the home.
+    mkdirSync(runtimeHomePath, { recursive: true })
     syncSystemConfigIntoManagedCodexHome({
       runtimeHomePath,
       systemHomePath: getSystemCodexHomePath()
     })
-    // Why: Codex is the only authority on its trust-hash algorithm, so the
-    // managed entries are granted through codex app-server RPCs (verified by
-    // re-list) whenever the installed CLI supports them; the granted entries
-    // then carry Codex's verbatim hashes into stale cleanup so it cannot
-    // delete what Codex just wrote. Mirrored user trust keeps its existing
-    // verbatim-carry lane either way.
-    const grantPlan: CodexManagedTrustGrantPlan = {
-      runtimeHomePath,
+    writeCodexHookApprovalsBeforeEntries(
       tomlPath,
-      managedCommand: command,
-      managedEntries: managedTrustEntries,
-      host: { kind: 'native' },
-      telemetryLane: 'managed'
-    }
-    // Why: the fallback below writes this trust back if the session fails.
-    const grant = await grantManagedCodexHookTrust(grantPlan, () =>
-      removeSelfComputedTrustBeforeGrant(grantPlan)
+      managedTrustEntries,
+      () => writeCodexHooksJson(configPath, nextHooks),
+      configPath
     )
-    if (grant.lane === 'rpc') {
-      recentGrantEntries = grant.entries
-      upsertHookTrustEntries(tomlPath, mirroredTrustEntries)
-      removeStaleRuntimeHookTrustEntries(tomlPath, configPath, [
-        ...mirroredTrustEntries,
-        ...grant.entries
-      ])
-    } else {
-      // Why: system user hook approvals are mirrored into runtime CODEX_HOME.
-      // If the user later revokes approval in ~/.codex/config.toml, preserving
-      // all old runtime [hooks.state.*] blocks would keep Orca Codex trusted.
-      // Upsert first so duplicate repair can preserve a disabled managed copy
-      // before stale cleanup removes old managed hook keys.
-      upsertHookTrustEntries(tomlPath, trustEntries)
-      removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
-    }
+  } catch (error) {
+    return trustWriteError(configPath, false, error)
+  }
+  try {
+    // Why: system user hook approvals are mirrored into runtime CODEX_HOME. If
+    // the user later revokes approval in ~/.codex/config.toml, preserving all
+    // old runtime [hooks.state.*] blocks would keep Orca Codex trusted.
+    upsertHookTrustEntries(tomlPath, mirroredTrustEntries)
+    removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
     applyMirroredRuntimeUserHookTrustStates(tomlPath, mirroredUserTrustEntries)
   } catch (error) {
-    return {
-      agent: 'codex',
-      state: 'error',
-      configPath,
-      managedHooksPresent: true,
-      detail: `Hooks installed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
-    }
+    return trustWriteError(configPath, true, error)
   }
   snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
   await cleanupLegacyManagedHookRepresentations()
-  return getStatusAfterInstall(recentGrantEntries, runtimeHomePath)
+  return getStatus(runtimeHomePath)
+}
+
+function trustWriteError(
+  configPath: string,
+  managedHooksPresent: boolean,
+  error: unknown
+): AgentHookInstallStatus {
+  return {
+    agent: 'codex',
+    state: 'error',
+    configPath,
+    managedHooksPresent,
+    detail: `Codex hooks could not be written: ${error instanceof Error ? error.message : String(error)}`
+  }
 }

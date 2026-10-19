@@ -8,7 +8,6 @@ import {
   getFolderWorkspacePathStatus,
   getFolderWorkspacePathStatusForPath
 } from '../../project-groups/folder-workspace-path-status'
-import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
@@ -18,13 +17,18 @@ import {
   FolderWorkspaceUpdateArgs,
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
+import { visibleFolderWorkspaces } from '../../ssh/orcad-retained-source'
+import {
+  isLocalWslMoveRow,
+  shouldDropWslMoveProjectUpdate
+} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 export function registerFolderWorkspaceHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  runtime: OrcaRuntimeService
+  runtime: Pick<OrcaRuntimeService, 'deleteFolderWorkspace'>
 ): void {
-  ipcMain.handle('folderWorkspaces:list', (): FolderWorkspace[] => store.getFolderWorkspaces())
+  ipcMain.handle('folderWorkspaces:list', (): FolderWorkspace[] => visibleFolderWorkspaces(store))
 
   ipcMain.handle('folderWorkspaces:getPathStatus', async (_event, rawArgs: unknown) => {
     const args = parseProjectGroupIpcArgs(
@@ -32,7 +36,7 @@ export function registerFolderWorkspaceHandlers(
       rawArgs,
       'invalid_folder_workspace_path_status_args'
     ) as FolderWorkspacePathStatusRequest
-    return getFolderWorkspacePathStatus(store, args, { getSshFilesystemProvider })
+    return getFolderWorkspacePathStatus(store, args)
   })
 
   ipcMain.handle(
@@ -52,16 +56,13 @@ export function registerFolderWorkspaceHandlers(
       if (!group || !folderPath) {
         throw new Error('folder_workspace_project_group_not_found')
       }
-      const status = await getFolderWorkspacePathStatusForPath(
-        {
-          folderPath,
-          projectGroupId: group.id,
-          connectionId: args.connectionId ?? group.connectionId ?? null,
-          projectGroups,
-          repos: store.getRepos()
-        },
-        { getSshFilesystemProvider }
-      )
+      const status = await getFolderWorkspacePathStatusForPath({
+        folderPath,
+        projectGroupId: group.id,
+        connectionId: args.connectionId ?? group.connectionId ?? null,
+        projectGroups,
+        repos: store.getRepos()
+      })
       assertFolderWorkspacePathUsable(status)
       const workspace = store.createFolderWorkspace({
         ...args,
@@ -80,6 +81,15 @@ export function registerFolderWorkspaceHandlers(
         rawArgs,
         'invalid_folder_workspace_update_args'
       )
+      const existing = store.getFolderWorkspace(args.folderWorkspaceId)
+      const ref = { folderWorkspaceId: args.folderWorkspaceId }
+      if (
+        existing &&
+        isLocalWslMoveRow(existing) &&
+        shouldDropWslMoveProjectUpdate(store, ref, args.updates)
+      ) {
+        return existing
+      }
       if (
         typeof args.updates.folderPath === 'string' &&
         args.updates.folderPath.trim().length > 0
@@ -89,19 +99,16 @@ export function registerFolderWorkspaceHandlers(
           return null
         }
         const projectGroups = store.getProjectGroups()
-        const status = await getFolderWorkspacePathStatusForPath(
-          {
-            folderPath: args.updates.folderPath,
-            projectGroupId: workspace.projectGroupId,
-            connectionId:
-              workspace.connectionId ??
-              projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId ??
-              null,
-            projectGroups,
-            repos: store.getRepos()
-          },
-          { getSshFilesystemProvider }
-        )
+        const status = await getFolderWorkspacePathStatusForPath({
+          folderPath: args.updates.folderPath,
+          projectGroupId: workspace.projectGroupId,
+          connectionId:
+            workspace.connectionId ??
+            projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId ??
+            null,
+          projectGroups,
+          repos: store.getRepos()
+        })
         assertFolderWorkspacePathUsable(status)
       }
       const updated = store.updateFolderWorkspace(args.folderWorkspaceId, args.updates)

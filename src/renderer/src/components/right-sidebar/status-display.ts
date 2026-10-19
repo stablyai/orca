@@ -124,14 +124,17 @@ export function shouldShowIgnoredDecoration(
   return !nodeStatus && isPathIgnored(ignored, relativePath)
 }
 
-export function buildIgnoredSet(ignoredPaths: readonly string[] | undefined): Set<string> {
+export function buildIgnoredSet(
+  ignoredPaths: readonly string[] | undefined,
+  rootPath?: string | null
+): Set<string> {
   const set = new Set<string>()
   if (!ignoredPaths) {
     return set
   }
   for (const rawPath of ignoredPaths) {
-    const trimmed = rawPath.endsWith('/') ? rawPath.slice(0, -1) : rawPath
-    set.add(normalizeRelativePath(trimmed))
+    const path = normalizeRelativePath(rawPath, rootPath)
+    set.add(path.endsWith('/') ? path.slice(0, -1) : path)
   }
   return set
 }

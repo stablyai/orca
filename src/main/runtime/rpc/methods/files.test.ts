@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -809,15 +810,19 @@ describe('file RPC methods', () => {
       })
     )
 
-    expect(runtime.searchRuntimeFiles).toHaveBeenCalledWith('id:wt-1', {
-      query: 'needle',
-      caseSensitive: true,
-      wholeWord: undefined,
-      useRegex: undefined,
-      includePattern: undefined,
-      excludePattern: undefined,
-      maxResults: 50
-    })
+    expect(runtime.searchRuntimeFiles).toHaveBeenCalledWith(
+      'id:wt-1',
+      {
+        query: 'needle',
+        caseSensitive: true,
+        wholeWord: undefined,
+        useRegex: undefined,
+        includePattern: undefined,
+        excludePattern: undefined,
+        maxResults: 50
+      },
+      { signal: undefined }
+    )
     expect(response).toMatchObject({ ok: true, result: { files: [], totalMatches: 0 } })
   })
 

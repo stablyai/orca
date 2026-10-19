@@ -1,9 +1,6 @@
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { OpenFile } from './editor'
 import { createRepoSlice } from './repos'
 import { createSparsePresetsSlice } from './sparse-presets'
 import { createWorktreeSlice } from './worktrees'
@@ -31,6 +28,7 @@ import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
 import { createRuntimeEnvironmentSshSlice } from './runtime-environment-ssh'
+import { createWslHostsSlice } from './wsl-hosts'
 import { createAgentStatusSlice } from './agent-status'
 import { createPaneForegroundAgentSlice } from './pane-foreground-agent'
 import { createDiffCommentsSlice } from './diffComments'
@@ -51,15 +49,18 @@ import { createFeedbackDraftSlice } from './feedback-draft'
 import { createTaskCreationDraftsSlice } from './task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './terminal-quick-command-hosts'
-import { translate } from '@/i18n/i18n'
-
-export const TEST_REPO = {
-  id: 'repo1',
-  path: '/repo1',
-  displayName: 'Repo 1',
-  badgeColor: '#000',
-  addedAt: 0
-}
+import { createStructuredSessionLaunchDirectorySlice } from './structured-session-launch-directories'
+import { createWorkspaceAttentionSlice } from './workspace-attention/workspace-attention-slice'
+import '@/i18n/i18n'
+import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
+export { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
+export {
+  makeTab,
+  makeLayout,
+  makeOpenFile,
+  makeUnifiedTab,
+  makeTabGroup
+} from './store-session-test-harness'
 
 export function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -88,6 +89,7 @@ export function createTestStore() {
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),
     ...createRuntimeEnvironmentSshSlice(...a),
+    ...createWslHostsSlice(...a),
     ...createAgentStatusSlice(...a),
     ...createPaneForegroundAgentSlice(...a),
     ...createDiffCommentsSlice(...a),
@@ -107,7 +109,9 @@ export function createTestStore() {
     ...createFeedbackDraftSlice(...a),
     ...createTaskCreationDraftsSlice(...a),
     ...createRemoteServerUpdatesSlice(...a),
-    ...createTerminalQuickCommandHostsSlice(...a)
+    ...createTerminalQuickCommandHostsSlice(...a),
+    ...createStructuredSessionLaunchDirectorySlice(...a),
+    ...createWorkspaceAttentionSlice(...a)
   }))
 }
 
@@ -124,31 +128,6 @@ export function seedStore(
   })
 }
 
-export function makeWorktree(
-  overrides: Partial<Worktree> & { id: string; repoId: string }
-): Worktree {
-  return {
-    path: '/tmp/wt',
-    head: 'abc123',
-    branch: 'refs/heads/feature',
-    isBare: false,
-    isMainWorktree: false,
-    displayName: 'feature',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    ...overrides
-  }
-}
-
 export function makeRuntimeOwnedWorktree(
   overrides: Partial<Worktree> & { id: string; repoId: string },
   runtimeEnvironmentId = 'runtime-1'
@@ -160,58 +139,24 @@ export function makeRuntimeOwnedWorktree(
   })
 }
 
-export function makeTab(
-  overrides: Partial<TerminalTab> & { id: string; worktreeId: string }
-): TerminalTab {
+/** A repo stamped as owned by `environmentId`, the way ingest stamps fetched rows. */
+export function runtimeOwnedRepoState(
+  environmentId: string,
+  id: string,
+  path: string,
+  extra: Partial<AppState> = {}
+): Partial<AppState> {
   return {
-    ptyId: null,
-    title: translate('auto.store.slices.store.test.helpers.b9a8117c33', 'Terminal 1'),
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: Date.now(),
-    ...overrides
-  }
-}
-
-export function makeLayout(): TerminalLayoutSnapshot {
-  return { root: null, activeLeafId: null, expandedLeafId: null }
-}
-
-export function makeOpenFile(
-  overrides: Partial<OpenFile> & { id: string; worktreeId: string }
-): OpenFile {
-  return {
-    filePath: overrides.id,
-    relativePath: 'file.ts',
-    language: 'typescript',
-    isDirty: false,
-    mode: 'edit',
-    ...overrides
-  }
-}
-
-export function makeUnifiedTab(
-  overrides: Partial<Tab> & { id: string; worktreeId: string; groupId: string }
-): Tab {
-  return {
-    entityId: overrides.id,
-    contentType: 'terminal',
-    label: translate('auto.store.slices.store.test.helpers.b9a8117c33', 'Terminal 1'),
-    customLabel: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: Date.now(),
-    ...overrides
-  }
-}
-
-export function makeTabGroup(
-  overrides: Partial<TabGroup> & { id: string; worktreeId: string }
-): TabGroup {
-  return {
-    activeTabId: null,
-    tabOrder: [],
-    ...overrides
+    repos: [
+      {
+        id,
+        path,
+        displayName: 'repo',
+        badgeColor: '',
+        addedAt: 0,
+        executionHostId: `runtime:${environmentId}`
+      }
+    ],
+    ...extra
   }
 }

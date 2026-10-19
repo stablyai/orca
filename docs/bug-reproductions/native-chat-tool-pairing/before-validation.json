@@ -1,0 +1,114 @@
+{
+  "recordedAt": "2026-10-09T19:59:42.766Z",
+  "appPath": "/Users/nwparker/orca/workspaces/orca/perf-2",
+  "baselineCommit": "51e7181850b022bae2d41091fe1229accef4bd50",
+  "headAtStart": "51e7181850b022bae2d41091fe1229accef4bd50",
+  "overlayFiles": [
+    "src/shared/native-chat-tool-fold.ts",
+    "src/main/native-chat/transcript-record-blocks.ts",
+    "src/main/native-chat/transcript-line-decoders-codex.ts"
+  ],
+  "currentSourceSha256": {
+    "src/shared/native-chat-tool-fold.ts": "3d75ee82c5c09bc796caef4d5127d55b3d291c03d3090f10a204622188aaba4a",
+    "src/main/native-chat/transcript-record-blocks.ts": "110990b4d8ebd6f28ea8702de92568fff5af398bffa5dafdb81d93b65f7da594",
+    "src/main/native-chat/transcript-line-decoders-codex.ts": "cbd4133da04988a9b86015349411a679a5b1b513738a7c10bf165869c49e05e4"
+  },
+  "baselineSourceSha256": {
+    "src/shared/native-chat-tool-fold.ts": "9390ea63c8948a705da09e25366e72dc0087a331aa2a04d6571c61478d1d2543",
+    "src/main/native-chat/transcript-record-blocks.ts": "9b82a474dabc49b82281a53fd4132055ccd4c369cb28c45876d618870e41d4f8",
+    "src/main/native-chat/transcript-line-decoders-codex.ts": "511b7083a211cdab0c68df2495469724957c278b159a3fc5123e00ea002a074a"
+  },
+  "specSha256": "708ebb635900d9a5ef0fd15a05a8ec08169afd998751eb34a93b22241dcaecb6",
+  "commands": {
+    "ensureElectron": "ORCA_BACKGROUND_LAUNCH=1 pnpm run ensure:electron-runtime",
+    "build": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec electron-vite build --mode e2e",
+    "test": "ORCA_BACKGROUND_LAUNCH=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/native-chat-tool-pairing-baseline-proof.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --retries=0 --output=/tmp/orca-perf-2-pr-proof/baseline-test-results"
+  },
+  "scope": "Only three chat implementation files overlaid; current hidden launch policy, real Claude JSONL fixture, real UI clicks, no DOM mutation",
+  "afterReference": {
+    "screenshot": "after.png",
+    "sha256": "0caedb0986fbd15c7cd8b8d6f8d8064e5e4043bfd01568050c4b14ccfd0e8b1c",
+    "validation": "after-provenance.json"
+  },
+  "ensure-electron": {
+    "exitCode": 0,
+    "signal": null,
+    "seconds": 0.58,
+    "logfile": "/tmp/orca-perf-2-pr-proof/ensure-electron.log"
+  },
+  "overlayStartedAt": "2026-10-09T19:59:43.364Z",
+  "baseline-build": {
+    "exitCode": 0,
+    "signal": null,
+    "seconds": 8.124,
+    "logfile": "/tmp/orca-perf-2-pr-proof/baseline-build.log"
+  },
+  "baselineBuildOutputSha256": {
+    "out/main/index.js": "62d8b312d8fa6d6f25b93ecdfb4f3b272d4ced03e50d946344d0a5e770277572",
+    "out/renderer/index.html": "cb36b8d736ba557cbc986026c4bd2cd4f88f20d87f86a54c386cf225c7365eed"
+  },
+  "baseline-test": {
+    "exitCode": 0,
+    "signal": null,
+    "seconds": 7.175,
+    "logfile": "/tmp/orca-perf-2-pr-proof/baseline-test.log"
+  },
+  "launch": {
+    "appPath": "/Users/nwparker/orca/workspaces/orca/perf-2",
+    "windows": [
+      {
+        "visible": false,
+        "focused": false
+      }
+    ],
+    "processId": 15523
+  },
+  "cleanup": {
+    "ownedProcessCheckCommand": "ps -p 15523 -o pid=,command=",
+    "exitCode": 1,
+    "stdout": "",
+    "allNativeWindowsHiddenAndUnfocusedAtEnd": true,
+    "fixtureShutdownCompleted": true
+  },
+  "beforeScreenshot": {
+    "file": "before.png",
+    "sha256": "05b92196f89016925d338febd452510f23b902ee475dffaa715fc18d97bad0dd"
+  },
+  "observedRegression": {
+    "outsideRunOutputOn": "printf silent_0",
+    "reverseNamedOutputsOn": ["printf silent_1", "printf silent_2", "printf silent_3"],
+    "namedCallRowsHaveNoOutputs": true,
+    "taskList": "Reject this failed replacement",
+    "taskState": "1 of 1 tasks completed"
+  },
+  "baselineTestPassed": true,
+  "restoredSourceSha256": {
+    "src/shared/native-chat-tool-fold.ts": "3d75ee82c5c09bc796caef4d5127d55b3d291c03d3090f10a204622188aaba4a",
+    "src/main/native-chat/transcript-record-blocks.ts": "110990b4d8ebd6f28ea8702de92568fff5af398bffa5dafdb81d93b65f7da594",
+    "src/main/native-chat/transcript-line-decoders-codex.ts": "cbd4133da04988a9b86015349411a679a5b1b513738a7c10bf165869c49e05e4"
+  },
+  "restoredByteForByte": true,
+  "temporarySpecRemoved": true,
+  "overlayEndedAt": "2026-10-09T19:59:58.674Z",
+  "restored-current-build": {
+    "exitCode": 0,
+    "signal": null,
+    "seconds": 6.993,
+    "logfile": "/tmp/orca-perf-2-pr-proof/restored-current-build.log"
+  },
+  "restoredBuildOutputSha256": {
+    "out/main/index.js": "4b5611df4675a9d9fcbb9ff555ff725b3b89121cd70ccf44f0e8a337b0fad80f",
+    "out/renderer/index.html": "4feff6c6cf322240ab4d4d5cb0555c1f9f4d55cb680fc111f87b050d0243a36d"
+  },
+  "currentAppRebuilt": true,
+  "renderedInspection": {
+    "inspected": true,
+    "before": "UNATTRIBUTED_OUTPUT on silent_0; PAIR_OWNER_THIRD/SECOND/FIRST on silent_1/2/3; composer task list1/1 shows rejected replacement",
+    "after": "PAIR_OWNER_FIRST/SECOND/THIRD on pairing_first/second/third; accepted pending task remains0/1",
+    "noDOMMutation": true
+  },
+  "currentChatSourcesMatchCopiedAfterProof": true,
+  "finalVerifiedAt": "2026-10-09T20:00:43.689Z",
+  "screenshot": "https://github.com/user-attachments/assets/b9f84d6e-a786-42d5-b895-8a4319f972cd",
+  "afterScreenshot": "https://github.com/user-attachments/assets/ae57901b-2e8d-4a35-b6c9-fe63129d9fea"
+}

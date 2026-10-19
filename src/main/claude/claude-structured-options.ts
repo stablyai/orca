@@ -1,10 +1,6 @@
-import type { EffortLevel, PermissionMode } from '@anthropic-ai/claude-agent-sdk'
+import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
-import { ClaudeControlRequestTimeoutError } from './claude-agent-sdk-control-requests'
-import {
-  AgentSessionOptionRejectedError,
-  isAgentSessionOptionRejectedError
-} from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import {
   claudeCatalogAdmitsModel,
   claudeModelEffortLevels,
@@ -17,7 +13,7 @@ import {
 import type { ClaudeSession } from './claude-structured-session-state'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
-const OPTION_ORDER = ['model', 'effort', 'fastMode', 'permissionMode'] as const
+const OPTION_ORDER = ['model', 'effort', 'fastMode'] as const
 
 /**
  * Efforts the settings readback cannot report. `max` applies for the rest of the
@@ -26,9 +22,6 @@ const OPTION_ORDER = ['model', 'effort', 'fastMode', 'permissionMode'] as const
  * that must not be read as the child refusing a level its own catalog offers.
  */
 const UNREPORTED_EFFORTS: ReadonlySet<string> = new Set(['max'])
-
-/** Writes that can move the main thread to another model or window: `opusplan` runs plan mode on Opus. */
-const CONTEXT_WINDOW_KEYS: ReadonlySet<string> = new Set(['model', 'permissionMode'])
 
 export function restoredClaudeStructuredSessionOptions(
   options: Readonly<Record<string, string>> | undefined
@@ -42,36 +35,25 @@ export function restoredClaudeStructuredSessionOptions(
 }
 
 /** The keys `setClaudeStructuredOption` writes; a pick made at rest is checked against these. */
-const CLAUDE_STRUCTURED_OPTION_KEYS = new Set(['model', 'permissionMode', 'effort', 'fastMode'])
+const CLAUDE_STRUCTURED_OPTION_KEYS = new Set(['model', 'effort', 'fastMode'])
 
 export function isClaudeStructuredOptionKey(key: string): boolean {
   return CLAUDE_STRUCTURED_OPTION_KEYS.has(key)
 }
 
-/** A client's write; the startup restore writes through `setClaudeStructuredOption` directly. */
+/** A client's write to a live session. */
 export function setClaudeStructuredSessionOption(
   session: ClaudeSession,
   input: { key: string; value: string },
   timeoutMs: number | undefined
 ): Promise<Readonly<Record<string, string>>> {
-  // Each write is a control request the CLI answers only after initialize.
-  if (session.startup.state !== 'proven') {
-    return Promise.reject(
-      new AgentSessionOptionRejectedError(
-        'Claude is still starting; options can be changed once it is ready.',
-        'providerStarting'
-      )
-    )
-  }
   return setClaudeStructuredOption(session, input, timeoutMs)
 }
 
 export async function setClaudeStructuredOption(
   session: ClaudeSession,
   input: { key: string; value: string },
-  timeoutMs: number | undefined,
-  /** What the key held before a restore cleared the map; a live write reads the map. */
-  heldBeforeRestore?: string
+  timeoutMs: number | undefined
 ): Promise<Readonly<Record<string, string>>> {
   const fastMode =
     input.key === 'fastMode'
@@ -80,17 +62,15 @@ export async function setClaudeStructuredOption(
   const apply =
     input.key === 'model'
       ? () => session.connection.setModel(input.value, { timeoutMs })
-      : input.key === 'permissionMode'
-        ? () => session.connection.setPermissionMode(input.value as PermissionMode, { timeoutMs })
-        : input.key === 'effort'
-          ? () =>
-              session.connection.applyFlagSettings(
-                { effortLevel: input.value as EffortLevel },
-                { timeoutMs }
-              )
-          : input.key === 'fastMode' && typeof fastMode === 'boolean'
-            ? () => session.connection.applyFlagSettings({ fastMode }, { timeoutMs })
-            : null
+      : input.key === 'effort'
+        ? () =>
+            session.connection.applyFlagSettings(
+              { effortLevel: input.value as EffortLevel },
+              { timeoutMs }
+            )
+        : input.key === 'fastMode' && typeof fastMode === 'boolean'
+          ? () => session.connection.applyFlagSettings({ fastMode }, { timeoutMs })
+          : null
   if (!apply) {
     throw new AgentSessionOptionRejectedError(
       `claude stream-json has no session option named ${input.key}`
@@ -99,17 +79,15 @@ export async function setClaudeStructuredOption(
   // One read answers every catalog question this write asks, so the guards below
   // cannot each pay a round trip for the same list nor disagree about the model.
   // Two writes ask nothing of it and so read nothing: an effort write with no current
-  // model has nothing to look up, and turning Fast off needs no support evidence —
-  // which is every restore replaying a stored `false`.
+  // model has nothing to look up, and turning Fast off needs no support evidence.
   const needsCatalog =
     input.key === 'model' ||
     (input.key === 'fastMode' && fastMode === true) ||
     (input.key === 'effort' && readClaudeCurrentModel(session).id !== undefined)
   const listed = needsCatalog ? await readClaudeListedModels(session, timeoutMs) : []
   // The child stores an effort its model has no control for and keeps it across
-  // every later model switch and restore, so refuse before the write rather than
-  // read the acceptance back as adoption. Refused here, restore drops the stale
-  // value instead of replaying it onto a model that cannot use it.
+  // every later model switch, so refuse before the write rather than read the
+  // acceptance back as adoption.
   if (input.key === 'effort') {
     const { modelId, levels } = claudeModelEffortLevels(session, listed)
     if (levels && !levels.has(input.value)) {
@@ -144,8 +122,7 @@ export async function setClaudeStructuredOption(
   }
   // set_model resolves for a model the provider never lists and the session then
   // fails every turn with zero tokens, so the acceptance proves nothing and only
-  // the catalog does. Restore replays a pick the provider may since have retired,
-  // which reaches here with no user error at all.
+  // the catalog does.
   if (input.key === 'model' && !claudeCatalogAdmitsModel(listed, input.value)) {
     throw new AgentSessionOptionRejectedError(`claude does not list a model named ${input.value}`)
   }
@@ -154,11 +131,16 @@ export async function setClaudeStructuredOption(
       ? claudeModelFastModeSupport(session, listed, input.value)
       : null
   const modelWasConfirmed = readClaudeCurrentModel(session).confirmed
+  session.reusableOptions.delete(input.key)
+  if (input.key === 'model') {
+    session.reusableOptions.delete('effort')
+    session.reusableOptions.delete('fastMode')
+  }
   const mutationSequence = ++session.optionMutationSequence
   // Read with the fence bump, so a write that lands after an earlier one's bookkeeping compares against it.
-  const held = heldBeforeRestore ?? session.options.get(input.key)
-  // Only a model write can stale the model report — an effort or permission-mode
-  // write does not change what the child is running. Leaving the stamp behind
+  const held = session.options.get(input.key)
+  // Only a model write can stale the model report — an effort or Fast write does
+  // not change what the child is running. Leaving the stamp behind
   // would drop the session back to the written model and refuse, on the next
   // effort write, a level the model actually running advertises.
   if (modelWasConfirmed && input.key !== 'model') {
@@ -167,7 +149,7 @@ export async function setClaudeStructuredOption(
   try {
     await apply()
     // Ahead of the fence checks: the child applied this write even if a newer one supersedes its bookkeeping.
-    if (CONTEXT_WINDOW_KEYS.has(input.key) && input.value !== held) {
+    if (input.key === 'model' && input.value !== held) {
       session.translator?.modelMayHaveChanged()
     }
     if (input.key === 'model') {
@@ -183,6 +165,7 @@ export async function setClaudeStructuredOption(
       if (mutationSequence !== session.optionMutationSequence) {
         return Object.fromEntries(session.options)
       }
+      session.reusableOptions.set('model', input.value)
       session.options.set('model', input.value)
       session.options.set('fastMode', 'false')
       session.confirmedOptions.delete('effort')
@@ -212,6 +195,11 @@ export async function setClaudeStructuredOption(
       : null
   if (mutationSequence !== session.optionMutationSequence) {
     return Object.fromEntries(session.options)
+  }
+  if (input.key === 'model' || (input.key === 'effort' && UNREPORTED_EFFORTS.has(input.value))) {
+    session.reusableOptions.set(input.key, input.value)
+  } else if (adopted !== null) {
+    session.reusableOptions.set(input.key, String(adopted))
   }
   if (input.key === 'fastMode' && typeof adopted === 'boolean') {
     session.reportedOptions.fastMode = adopted
@@ -246,45 +234,4 @@ export async function setClaudeStructuredOption(
     session.confirmedOptions.delete('fastMode')
   }
   return Object.fromEntries(session.options)
-}
-
-export async function restoreClaudeStructuredSessionOptions(
-  session: ClaudeSession,
-  timeoutMs: number | undefined
-): Promise<void> {
-  // Any write that was already in flight belongs to the previous acquisition
-  // state and must not repopulate this map after restore starts.
-  session.optionMutationSequence += 1
-  // The fence bump is not a write, so the report the session already holds is still
-  // current as of this instant; leaving the stamp behind would make every restored
-  // session read as unconfirmed until its next turn.
-  session.reportedModelMutation = session.optionMutationSequence
-  const options = [...session.options.entries()]
-  session.options.clear()
-  for (const [key, value] of options) {
-    try {
-      await setClaudeStructuredOption(session, { key, value }, timeoutMs, value)
-    } catch (error) {
-      // A write the CLI never answered must not fault a start that is otherwise fine. Silence is
-      // not a refusal, so the choice stays wanted, unconfirmed, and the next start retries it.
-      if (error instanceof ClaudeControlRequestTimeoutError) {
-        console.warn(
-          `[claude-structured] restore of ${key} for ${session.providerSessionId} was not answered in time; keeping it unconfirmed`
-        )
-        session.options.set(key, value)
-        session.confirmedOptions.delete(key)
-        continue
-      }
-      if (!isAgentSessionOptionRejectedError(error)) {
-        throw error
-      }
-      // A stale or unavailable preference must not poison every future acquire;
-      // the provider's current value remains authoritative and is re-persisted.
-      session.restoreSkippedOptions.add(key)
-      // The journal's window was measured under the value this child did not take.
-      if (CONTEXT_WINDOW_KEYS.has(key)) {
-        session.translator?.modelMayHaveChanged()
-      }
-    }
-  }
 }

@@ -650,6 +650,7 @@ describe('ReviewNotesSendMenuContent', () => {
   it('sends notes to the chosen agent and tracks the send once it succeeds', async () => {
     const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
     const onPromptDelivered = vi.fn()
+    const onPromptHandedOff = vi.fn()
     setStore({
       tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Terminal 1' })] },
       terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
@@ -665,7 +666,7 @@ describe('ReviewNotesSendMenuContent', () => {
       }
     ]
 
-    const tree = render({ onPromptDelivered })
+    const tree = render({ onPromptDelivered, onPromptHandedOff })
     ;(findByType(tree, 'DropdownMenuItem').props.onSelect as () => void)()
     await flushMicrotasks()
 
@@ -680,6 +681,10 @@ describe('ReviewNotesSendMenuContent', () => {
       launch_source: 'notes_send',
       request_kind: 'followup'
     })
+    // The notes are held from the hand-off until this send's own outcome, after its delivery.
+    expect(onPromptHandedOff).toHaveBeenCalledOnce()
+    await onPromptHandedOff.mock.calls[0][0]
+    expect(onPromptDelivered).toHaveBeenCalledTimes(1)
   })
 
   it('keeps selected-target note failures undelivered and uses selected wording', async () => {
@@ -854,13 +859,23 @@ describe('ReviewNotesSendMenuContent', () => {
   })
 
   it('always offers the new-agent launcher', () => {
-    const tree = render()
+    const onPromptHandedOff = vi.fn()
+    const tree = render({ onPromptHandedOff })
 
     expect(findByType(tree, 'QuickLaunchAgentMenuItems').props).toMatchObject({
       worktreeId: 'wt-1',
       groupId: 'group-1',
       prompt: 'my notes',
-      launchSource: 'notes_send'
+      launchSource: 'notes_send',
+      onPromptHandedOff
     })
+  })
+
+  // Every note already on its way leaves an empty prompt: no agent may start with no text.
+  it('disables the new-agent launcher when there is nothing left to send', () => {
+    expect(findByType(render({ prompt: '' }), 'QuickLaunchAgentMenuItems').props.disabled).toBe(
+      true
+    )
+    expect(findByType(render(), 'QuickLaunchAgentMenuItems').props.disabled).toBe(false)
   })
 })

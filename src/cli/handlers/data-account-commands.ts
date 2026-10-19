@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import type { HandlerContext } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
-import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type {
   ManagedDataAccountProvider,

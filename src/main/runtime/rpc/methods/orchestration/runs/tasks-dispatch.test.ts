@@ -393,6 +393,10 @@ describe('orchestration RPC methods', () => {
         expect.stringContaining('line one\nline two'),
         expect.objectContaining(dispatchPreambleSendOptions(expect.any(String)))
       )
+      const preamble = agentPrompt.mock.calls[0]![1]
+      expect(preamble).toContain('The coordinator cannot see this terminal')
+      expect(preamble).toContain('Do not exit the shell. Your terminal stays available')
+      expect(preamble).not.toContain('this chat')
       expect(rawSend).not.toHaveBeenCalled()
     })
 

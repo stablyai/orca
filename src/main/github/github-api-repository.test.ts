@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as SshGitDispatch from '../providers/ssh-git-dispatch'
 import type * as GitHubEnterpriseRepository from './github-enterprise-repository'
 import type * as GhUtils from './gh-utils'
 
@@ -7,21 +6,14 @@ const {
   getEnterpriseGitHubRepoSlugMock,
   getOwnerRepoMock,
   getOwnerRepoForRemoteMock,
-  getSshGitProviderGenerationMock,
   isGitHubHostAuthenticatedMock,
   shouldProbeGitRemoteMock
 } = vi.hoisted(() => ({
   getEnterpriseGitHubRepoSlugMock: vi.fn(),
   getOwnerRepoMock: vi.fn(),
   getOwnerRepoForRemoteMock: vi.fn(),
-  getSshGitProviderGenerationMock: vi.fn(() => 0),
   isGitHubHostAuthenticatedMock: vi.fn(),
   shouldProbeGitRemoteMock: vi.fn(async () => true)
-}))
-
-vi.mock('../providers/ssh-git-dispatch', async (importOriginal) => ({
-  ...(await importOriginal<typeof SshGitDispatch>()),
-  getSshGitProviderGeneration: getSshGitProviderGenerationMock
 }))
 
 vi.mock('./gh-utils', async (importOriginal) => ({
@@ -57,7 +49,6 @@ beforeEach(() => {
   getEnterpriseGitHubRepoSlugMock.mockReset().mockResolvedValue(null)
   getOwnerRepoMock.mockReset().mockResolvedValue(null)
   getOwnerRepoForRemoteMock.mockReset().mockResolvedValue(null)
-  getSshGitProviderGenerationMock.mockReset().mockReturnValue(0)
   isGitHubHostAuthenticatedMock.mockReset().mockResolvedValue(false)
   shouldProbeGitRemoteMock.mockReset().mockResolvedValue(true)
 })
@@ -204,23 +195,6 @@ describe('resolveGitHubRepoExecution', () => {
 })
 
 describe('origin repository cache', () => {
-  it('isolates Enterprise identity across SSH provider generations', async () => {
-    const beforeReconnect = { owner: 'acme', repo: 'widgets', host: 'github.acme-corp.com' }
-    const afterReconnect = { owner: 'acme', repo: 'other', host: 'github.acme-corp.com' }
-    getEnterpriseGitHubRepoSlugMock
-      .mockResolvedValueOnce(beforeReconnect)
-      .mockResolvedValueOnce(afterReconnect)
-
-    await expect(getOriginGitHubApiRepository('/remote/repo', 'ssh-1')).resolves.toEqual(
-      beforeReconnect
-    )
-    getSshGitProviderGenerationMock.mockReturnValue(1)
-    await expect(getOriginGitHubApiRepository('/remote/repo', 'ssh-1')).resolves.toEqual(
-      afterReconnect
-    )
-    expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(2)
-  })
-
   it('keeps an indeterminate auth inventory unverifiable during candidate discovery', async () => {
     getEnterpriseGitHubRepoSlugMock.mockResolvedValue(undefined)
 
@@ -279,83 +253,6 @@ describe('origin repository cache', () => {
     await expect(getOriginGitHubApiRepository('/repo')).resolves.toBeNull()
     await expect(getOriginGitHubApiRepository('/repo')).resolves.toBeNull()
     expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not reuse a cached answer after the SSH provider reconnects', async () => {
-    const oldRepository = {
-      owner: 'old-owner',
-      repo: 'widgets',
-      host: 'github.acme-corp.com'
-    }
-    const newRepository = {
-      owner: 'new-owner',
-      repo: 'widgets',
-      host: 'github.acme-corp.com'
-    }
-    getSshGitProviderGenerationMock.mockReturnValue(1)
-    getEnterpriseGitHubRepoSlugMock
-      .mockResolvedValueOnce(oldRepository)
-      .mockResolvedValueOnce(newRepository)
-
-    await expect(getOriginGitHubApiRepository('/repo', 'ssh-1')).resolves.toEqual(oldRepository)
-    await expect(getOriginGitHubApiRepository('/repo', 'ssh-1')).resolves.toEqual(oldRepository)
-    expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(1)
-
-    getSshGitProviderGenerationMock.mockReturnValue(2)
-    await expect(getOriginGitHubApiRepository('/repo', 'ssh-1')).resolves.toEqual(newRepository)
-    expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not reuse a cached negative after the SSH provider reconnects', async () => {
-    const repository = {
-      owner: 'acme',
-      repo: 'widgets',
-      host: 'github.acme-corp.com'
-    }
-    getSshGitProviderGenerationMock.mockReturnValue(1)
-    getEnterpriseGitHubRepoSlugMock.mockResolvedValueOnce(null).mockResolvedValueOnce(repository)
-
-    await expect(getOriginGitHubApiRepository('/repo', 'ssh-1')).resolves.toBeNull()
-    await expect(getOriginGitHubApiRepository('/repo', 'ssh-1')).resolves.toBeNull()
-    expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(1)
-
-    getSshGitProviderGenerationMock.mockReturnValue(2)
-    await expect(getOriginGitHubApiRepository('/repo', 'ssh-1')).resolves.toEqual(repository)
-    expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('isolates an in-flight probe from an older SSH provider generation', async () => {
-    const oldRepository = {
-      owner: 'old-owner',
-      repo: 'widgets',
-      host: 'github.acme-corp.com'
-    }
-    const newRepository = {
-      owner: 'new-owner',
-      repo: 'widgets',
-      host: 'github.acme-corp.com'
-    }
-    let resolveOldProbe: (repository: typeof oldRepository) => void = () => {}
-    const oldProbeResult = new Promise<typeof oldRepository>((resolve) => {
-      resolveOldProbe = resolve
-    })
-    getEnterpriseGitHubRepoSlugMock
-      .mockImplementationOnce(() => oldProbeResult)
-      .mockResolvedValueOnce(newRepository)
-    getSshGitProviderGenerationMock.mockReturnValue(1)
-
-    const oldProbe = getOriginGitHubApiRepository('/repo', 'ssh-1')
-    await vi.waitFor(() => expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(1))
-
-    getSshGitProviderGenerationMock.mockReturnValue(2)
-    const newProbe = getOriginGitHubApiRepository('/repo', 'ssh-1')
-    await vi.waitFor(() => expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(2))
-    await expect(newProbe).resolves.toEqual(newRepository)
-
-    resolveOldProbe(oldRepository)
-    await expect(oldProbe).resolves.toEqual(oldRepository)
-    await expect(getOriginGitHubApiRepository('/repo', 'ssh-1')).resolves.toEqual(newRepository)
-    expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(2)
   })
 })
 

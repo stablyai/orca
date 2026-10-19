@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { countLooseRefs } from '../../shared/loose-ref-count'
 import { RepoRefMaintenance } from '../../shared/repo-ref-maintenance'
 import { PACK_INDEX_MAINTENANCE_COOLDOWN_MS } from '../../shared/repo-pack-index-maintenance-policy'
@@ -20,6 +20,8 @@ const roots: string[] = []
 // three real `pack-refs` runs before the deferral budget is spent.
 const QUIET_MS = 25
 const THRESHOLD = 20
+let packFixtureRoot = ''
+let packFixtureBlobs: string[] = []
 
 function git(cwd: string, args: string[], input?: string): string {
   return execFileSync('git', args, {
@@ -45,11 +47,33 @@ function hasWriteOption(option: string): boolean {
 }
 
 async function createFragmentedPacks(repoPath: string): Promise<string[]> {
+  await cp(
+    join(packFixtureRoot, '.git', 'objects', 'pack'),
+    join(repoPath, '.git', 'objects', 'pack'),
+    {
+      recursive: true
+    }
+  )
+  return packFixtureBlobs
+}
+
+beforeAll(async () => {
+  // Each test gets its own pack files; generating the same 64 packs only needs to happen once.
+  packFixtureRoot = await mkdtemp(join(tmpdir(), 'orca-fragmented-packs-'))
+  git(packFixtureRoot, ['init', '--quiet'])
+  packFixtureBlobs = await buildFragmentedPacks(packFixtureRoot)
+})
+
+afterAll(async () => {
+  await rm(packFixtureRoot, { recursive: true, force: true })
+})
+
+async function buildFragmentedPacks(repoPath: string): Promise<string[]> {
   const objects = join(repoPath, '.git', 'objects')
-  const blobs: string[] = []
-  for (let index = 0; index < PACK_INDEX_THRESHOLD; index += 1) {
-    const blob = git(repoPath, ['hash-object', '-w', '--stdin'], `packed-${index}\n`)
-    blobs.push(blob)
+  const files = Array.from({ length: PACK_INDEX_THRESHOLD }, (_, index) => `packed-${index}`)
+  await Promise.all(files.map((file) => writeFile(join(repoPath, file), `${file}\n`)))
+  const blobs = git(repoPath, ['hash-object', '-w', ...files]).split('\n')
+  for (const blob of blobs) {
     git(repoPath, ['pack-objects', join(objects, 'pack', 'pack')], `${blob}\n`)
     await rm(join(objects, blob.slice(0, 2), blob.slice(2)))
   }

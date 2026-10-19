@@ -433,8 +433,6 @@ const JA_AUDIT_OVERRIDES = {
     'ステージ済みの変更からコミットメッセージを生成します。',
   lan: 'LAN',
   deploy: 'deploy',
-  'Connect this source to check for Hermes automations in the remote profile.':
-    'このソースに接続すると、リモートプロファイル内の Hermes オートメーションを確認できます。',
   'Notes sent to active agent.': 'メモをアクティブな Agent に送信しました。',
   'Review before attaching. Captured page context may include visible site content.':
     '添付する前に確認してください。取得したページのコンテキストには、表示中のサイトの内容が含まれる場合があります。',

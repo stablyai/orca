@@ -12,10 +12,7 @@ export class StructuredAgentSessionCreateError extends Error {
   }
 }
 
-/**
- * The host proved it created nothing. The class itself is the verdict:
- * `launchStructuredAgentSession` is the only place that decides it against the shared allowlist.
- */
+/** A known create failure; the launch classifier keeps uncertain earlier attempts recoverable. */
 export class StructuredAgentSessionCreateRefusalError extends StructuredAgentSessionCreateError {
   constructor(
     message: string,
@@ -26,6 +23,9 @@ export class StructuredAgentSessionCreateRefusalError extends StructuredAgentSes
     this.name = 'StructuredAgentSessionCreateRefusalError'
   }
 }
+
+/** The source disappeared before any create was sent; no host cancellation is owed. */
+export class StructuredAgentSessionCreateAbandonedError extends StructuredAgentSessionCreateRefusalError {}
 
 /**
  * Refused with a code that does not prove the session is absent. A sibling opened here would sit

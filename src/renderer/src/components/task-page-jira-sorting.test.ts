@@ -38,6 +38,40 @@ describe('TaskPage Jira sorting functionality', () => {
     return { id, name }
   }
 
+  it('sorts optional planning values with missing values distinct from zero', () => {
+    const empty = jiraIssue('ALP-1', 'Empty', 'To Do')
+    const small = {
+      ...jiraIssue('ALP-2', 'Small', 'To Do'),
+      storyPoints: 0,
+      originalEstimateSeconds: 0,
+      remainingEstimateSeconds: 0,
+      sprint: 'Sprint 2',
+      parent: { key: 'ALP-9', title: 'Epic 2' }
+    }
+    const large = {
+      ...jiraIssue('ALP-3', 'Large', 'To Do'),
+      storyPoints: 5,
+      originalEstimateSeconds: 7200,
+      remainingEstimateSeconds: 3600,
+      sprint: 'Sprint 10',
+      parent: { key: 'ALP-10', title: 'Epic 10' }
+    }
+    for (const column of [
+      'storyPoints',
+      'originalEstimate',
+      'remainingEstimate',
+      'sprint',
+      'parent'
+    ] as const) {
+      expect(
+        sortJiraIssues([large, small, empty], column, 'asc').map((issue) => issue.key)
+      ).toEqual(['ALP-1', 'ALP-2', 'ALP-3'])
+      expect(
+        sortJiraIssues([small, large, empty], column, 'desc').map((issue) => issue.key)
+      ).toEqual(['ALP-3', 'ALP-2', 'ALP-1'])
+    }
+  })
+
   describe('getJiraPriorityWeight', () => {
     it('returns default weight for missing priority', () => {
       expect(getJiraPriorityWeight(undefined, undefined, [])).toBe(0)

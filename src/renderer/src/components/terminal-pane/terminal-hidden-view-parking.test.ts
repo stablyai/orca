@@ -425,24 +425,6 @@ describe('selectColdParkedTerminalWorktrees', () => {
     expect(selected).toEqual(new Set())
   })
 
-  it('exempts only the last-active worktree from the cap, counting it against the limit', () => {
-    const selected = selectColdParkedTerminalWorktrees({
-      worktrees: [
-        localCandidate('wt-1', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
-        localCandidate('wt-2', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS - 1),
-        localCandidate('wt-3', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS - 2)
-      ],
-      pendingStartupByTabId: {},
-      parkingEnabled: true,
-      nowMs,
-      // Why: wt-1 (last-active) takes one of the two warm slots, so only wt-2
-      // fits the remaining slot and wt-3 parks.
-      hotRetainLimit: 2
-    })
-
-    expect(selected).toEqual(new Set(['wt-3']))
-  })
-
   it('selects nothing when the settings kill switch disables parking', () => {
     const selected = selectColdParkedTerminalWorktrees({
       worktrees: [

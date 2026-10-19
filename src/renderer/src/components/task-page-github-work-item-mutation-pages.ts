@@ -1,5 +1,6 @@
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { parseGitHubIssueOrPRLink } from '../../../shared/github/links'
 import { getRegistryMergedTaskPageGitHubWorkItem } from './task-page-github-work-item-mutation-composition'
 import {
   getStickyHideEntry,
@@ -74,7 +75,10 @@ export function reapplyPendingTaskPageGitHubMutationsToCache(args: {
         autoMergeEnabled: merged.autoMergeEnabled
       },
       item.repoId,
-      { sourceContext: args.sourceContextByRepoId?.get(item.repoId) }
+      {
+        sourceContext: args.sourceContextByRepoId?.get(item.repoId),
+        ownerRepo: parseGitHubIssueOrPRLink(item.url)?.slug
+      }
     )
   }
 }

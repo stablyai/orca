@@ -156,11 +156,6 @@ export function resetScreenDependencies(dependencies: ScreenDependencies): void 
   dependencies.backSends = 0
 }
 
-/** The caller's native screen, as a component so `findAllByType` can name it without a host string. */
-export function NativeFallback(): null {
-  return null
-}
-
 export function readyState(sessionId: string): MobileWebShellSessionState {
   return {
     kind: 'ready',
@@ -196,14 +191,12 @@ export function unmountRenderedScreens(): void {
 export type ScreenComponent = ComponentType<{
   hostId: string
   route: { pathname: string }
-  fallback: ReactElement
 }>
 
 function element(Screen: ScreenComponent): ReactElement {
   return createElement(Screen, {
     hostId: 'host-1',
-    route: { pathname: '/h/host-1' },
-    fallback: createElement(NativeFallback)
+    route: { pathname: '/h/host-1' }
   })
 }
 

@@ -1,250 +1,428 @@
-import { useEffect, useRef, useState } from 'react'
-import { Animated, Pressable, Text, View } from 'react-native'
-import { ChevronDown, SquareChevronRight, SquareTerminal, Wrench } from 'lucide-react-native'
-import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
-import type { NativeChatDiffLine as DiffLine } from '../../../src/shared/native-chat-diff'
-import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
-import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
 import {
-  createToolInputDisplay,
-  summarizeToolRun,
-  truncateToolDetail
-} from '../../../src/shared/native-chat-tool-summary'
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import {
-  describeActiveToolCall,
-  formatActiveToolLabel,
-  formatToolCallCount,
+  Animated,
+  Pressable,
+  ScrollView,
+  Text,
+  useWindowDimensions,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent
+} from 'react-native'
+import { Check } from 'lucide-react-native'
+import {
+  describeLatestToolCall,
+  NATIVE_CHAT_TOOL_ACTIVITY_COPY,
   selectActiveToolCall
 } from '../../../src/shared/native-chat-tool-activity'
-import { isShellActivityToolCall } from '../../../src/shared/native-chat-tool-icon'
-import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { nativeChatToolRunIconName } from '../../../src/shared/native-chat-tool-icon'
+import { nativeChatToolLineIdentity } from '../../../src/shared/native-chat-tool-line-identity'
+import { pairNativeChatToolResults } from '../../../src/shared/native-chat-tool-pairing'
+import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-run-outcome'
+import {
+  NATIVE_CHAT_TOOL_RUN_SENTENCE_ENGLISH,
+  nativeChatToolRunSentence
+} from '../../../src/shared/native-chat-tool-run-sentence'
+import { countToolCalls } from '../../../src/shared/native-chat-tool-summary'
+import { buildEditCards } from '../../../src/shared/native-chat-edit-cards'
+import {
+  isToolCallBlock,
+  type NativeChatBlock,
+  type NativeChatToolCallBlock
+} from '../../../src/shared/native-chat-types'
+import { buildNativeChatTaskListRows } from '../../../src/shared/native-chat-task-list-history'
 import { colors } from '../theme/mobile-theme'
-import { styles } from './mobile-native-chat-message-styles'
+import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
+import { MobileNativeChatToolLine } from './MobileNativeChatToolLine'
+import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
+import { MobileNativeChatTaskList } from './MobileNativeChatTaskList'
+import { MobileNativeChatOpenedDetailContext } from './mobile-native-chat-opened-detail'
+import {
+  MAX_DISCLOSURES,
+  MobileNativeChatDisclosureContext,
+  useMobileNativeChatDisclosure
+} from './mobile-native-chat-disclosure-store'
+import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
 
-const MAX_VISIBLE_TOOL_PAIRS = 6
-const MAX_TOOL_RUN_DIFF_ROWS = 240
+/** Desktop's 18rem: an opened run lists this much before it scrolls in place. */
+const MEMBERS_MIN_HEIGHT = 288
+/** Desktop's `NATIVE_CHAT_FOLLOW_REARM_PX`: this close to the end, the box follows new work. */
+const FOLLOW_REARM_PX = 24
 
-function DiffView({ lines }: { lines: DiffLine[] }): React.JSX.Element {
-  return (
-    <View style={styles.diff}>
-      {lines.map((line, i) => (
-        <Text
-          key={i}
-          style={[
-            styles.diffLine,
-            line.kind === 'add' && styles.diffAdd,
-            line.kind === 'del' && styles.diffDel,
-            line.kind === 'meta' && styles.diffMeta
-          ]}
-        >
-          {line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}
-          {line.text}
-        </Text>
-      ))}
-    </View>
-  )
+function fill(template: string, value: number): string {
+  return template.replaceAll('{{value0}}', String(value))
 }
 
-/** A single inline tool line — `▸ ToolName  preview` — that expands in place to
- *  show the call's diff/input or the result's body. Mirrors the reference design
- *  where tool calls read as flat lines in the conversation, not boxed blocks. */
-function ResultBody({
-  output,
-  isError,
-  diff
-}: {
-  output: string
-  isError?: boolean
-  diff: DiffLine[] | null
-}): React.JSX.Element {
-  if (diff) {
-    return <DiffView lines={diff} />
-  }
-  return (
-    <View style={[styles.toolResult, isError && styles.toolResultError]}>
-      <Text style={styles.mono}>{truncateToolDetail(output)}</Text>
-    </View>
-  )
-}
-
-/** One request: a tool call and its result rendered together as a single
- *  expandable line. `defaultExpanded` lets the group toggle open every line. */
-function ToolLine({
-  pair,
-  defaultExpanded,
-  diffLineLimit,
-  onOpenFile
-}: {
-  pair: ToolPair
-  defaultExpanded: boolean
-  diffLineLimit: number
-  onOpenFile?: (relativePath: string) => void
-}): React.JSX.Element {
-  const [expanded, setExpanded] = useState(defaultExpanded)
-  const { call, result } = pair
-  const name = call ? call.name : 'Result'
-  const inputDisplay = call ? createToolInputDisplay(call.input) : null
-  const preview = inputDisplay?.label ?? result?.output.split('\n')[0]?.slice(0, 80) ?? ''
-  // Why: collapsed tool rows are the common path; defer bounded diff parsing
-  // and detail formatting until the user asks to reveal the detail.
-  const callDiff = expanded && call ? diffFromToolCall(call.name, call.input, diffLineLimit) : null
-  const resultDiff = expanded && result ? diffFromText(result.output, diffLineLimit) : null
-  const callDetail = expanded && inputDisplay && !callDiff ? inputDisplay.formatDetail() : undefined
-  const hasDetail = callDiff !== null || result !== undefined || inputDisplay?.hasDetail === true
-  // The group toggle opens every line at once, bypassing the tap guard, so the
-  // panel has to consult it too — else a detail-less row echoes its own label
-  // under itself and no tap can dismiss it.
-  const showDetail = hasDetail && expanded
-  // A tool that targets a file (Read/Edit/Write…) renders its preview as a
-  // tappable link that opens the file, independent of the line's expand tap.
-  const filePath = inputDisplay?.filePath ?? null
-  const openable = filePath !== null && onOpenFile !== undefined
-  return (
-    <View>
-      <Pressable
-        style={styles.toolLine}
-        onPress={() => hasDetail && setExpanded((v) => !v)}
-        hitSlop={6}
-      >
-        {showDetail ? (
-          <ChevronDown size={15} color={colors.textMuted} strokeWidth={2} />
-        ) : (
-          <SquareChevronRight size={15} color={colors.textMuted} strokeWidth={2} />
-        )}
-        <Text style={styles.toolName}>{name}</Text>
-        {preview ? (
-          <Text
-            style={[styles.toolPreview, openable && styles.toolPreviewLink]}
-            numberOfLines={1}
-            onPress={openable ? () => onOpenFile!(filePath!) : undefined}
-            suppressHighlighting={!openable}
-          >
-            {preview}
-          </Text>
-        ) : null}
-      </Pressable>
-      {showDetail ? (
-        <View style={styles.toolDetail}>
-          {callDiff ? <DiffView lines={callDiff} /> : null}
-          {callDetail ? <Text style={styles.mono}>{callDetail}</Text> : null}
-          {result ? (
-            <ResultBody output={result.output} isError={result.isError} diff={resultDiff} />
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  )
-}
-
-/** Breathing label for a still-running tool, matching desktop's `animate-pulse`. */
+/** Desktop's `animate-pulse` on a live run's sentence. One element either way, so the
+ *  header never remounts as the run settles. */
 function PulsingText({
+  pulsing,
   style,
-  numberOfLines,
   children
 }: {
+  pulsing: boolean
   style?: React.ComponentProps<typeof Animated.Text>['style']
-  numberOfLines?: number
   children: React.ReactNode
 }): React.JSX.Element {
-  const pulse = useRef(new Animated.Value(1)).current
+  const opacity = useRef(new Animated.Value(1)).current
   useEffect(() => {
+    if (!pulsing) {
+      opacity.setValue(1)
+      return
+    }
     const animation = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.45, duration: 700, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true })
+        Animated.timing(opacity, { toValue: 0.5, duration: 1000, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 1000, useNativeDriver: true })
       ])
     )
     animation.start()
     return () => animation.stop()
-  }, [pulse])
+  }, [opacity, pulsing])
   return (
-    <Animated.Text style={[style, { opacity: pulse }]} numberOfLines={numberOfLines}>
+    <Animated.Text style={[style, { opacity }]} numberOfLines={2}>
       {children}
     </Animated.Text>
   )
 }
 
-/** A run of a message's tool calls/results, collapsed to a one-line summary that
- *  expands to the individual inline tool lines. `defaultExpanded` lets the global
- *  toolbar toggle drive every run at once while still allowing per-run override. */
+/** Desktop parity: `NativeChatToolRunAsides`. Rows drawn among an open run's lines, each keyed:
+ *  before the block they are keyed by, or after the last. */
+export type MobileNativeChatToolRunAsides = {
+  before: ReadonlyMap<NativeChatBlock, readonly React.JSX.Element[]>
+  after: readonly React.JSX.Element[]
+}
+
+/** Desktop parity: `NativeChatToolRunMembers`. An opened run's members in a bounded
+ *  box, so live work fills it instead of lengthening the chat. A live run opens on
+ *  what it is doing now and follows it while the reader stays at the end. */
+function ToolRunMembers({
+  followKey,
+  startsAtEnd,
+  memoryKey,
+  children
+}: {
+  /** How much work the run holds: a reader at the end follows it growing. Opening a detail
+   *  must not count. */
+  followKey: number
+  startsAtEnd: boolean
+  /** The run's disclosure key. The list recycles rows; the box comes back as the reader left it. */
+  memoryKey?: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  const { height } = useWindowDimensions()
+  const runScroll = useContext(MobileNativeChatDisclosureContext)?.runScroll
+  const [remembered] = useState(() =>
+    memoryKey === undefined ? undefined : runScroll?.get(memoryKey)
+  )
+  const scroller = useRef<ScrollView>(null)
+  const followsEnd = useRef(remembered?.followsEnd ?? startsAtEnd)
+  const pendingRestore = useRef(remembered !== undefined && !remembered.followsEnd)
+  // Desktop's rule: follow when the work changes, and only if the reader was at the end before
+  // it. Resolved here, with the update, so a later detail opening never inherits a follow.
+  useLayoutEffect(() => {
+    if (followsEnd.current) {
+      scroller.current?.scrollToEnd({ animated: false })
+    }
+  }, [followKey])
+  const details = useRef(new Map<string, number>())
+  const [openedHeight, setOpenedHeight] = useState(0)
+  // Room for the list plus what the reader has opened in it, up to half the screen.
+  const reportDetail = useCallback((detailId: string, detailHeight: number | null) => {
+    if (detailHeight === null) {
+      details.current.delete(detailId)
+    } else {
+      details.current.set(detailId, detailHeight)
+    }
+    let total = 0
+    for (const value of details.current.values()) {
+      total += value
+    }
+    setOpenedHeight(total)
+  }, [])
+  const onScroll = ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = nativeEvent
+    followsEnd.current =
+      contentSize.height - contentOffset.y - layoutMeasurement.height <= FOLLOW_REARM_PX
+    if (runScroll && memoryKey !== undefined) {
+      runScroll.delete(memoryKey)
+      runScroll.set(memoryKey, { top: contentOffset.y, followsEnd: followsEnd.current })
+      if (runScroll.size > MAX_DISCLOSURES) {
+        const oldest = runScroll.keys().next().value
+        if (oldest !== undefined) {
+          runScroll.delete(oldest)
+        }
+      }
+    }
+  }
+  // The remembered offset needs the rows laid out first, which the box's first size reports.
+  const onContentSizeChange = () => {
+    if (pendingRestore.current && remembered) {
+      pendingRestore.current = false
+      scroller.current?.scrollTo({ y: remembered.top, animated: false })
+    }
+  }
+  return (
+    <MobileNativeChatOpenedDetailContext.Provider value={reportDetail}>
+      <ScrollView
+        ref={scroller}
+        style={[
+          styles.members,
+          { maxHeight: Math.min(height / 2, MEMBERS_MIN_HEIGHT + openedHeight) }
+        ]}
+        nestedScrollEnabled
+        // As the transcript's own list: a row or file tap lands while the composer's keyboard is up.
+        keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={32}
+        onScroll={onScroll}
+        onContentSizeChange={onContentSizeChange}
+      >
+        {children}
+      </ScrollView>
+    </MobileNativeChatOpenedDetailContext.Provider>
+  )
+}
+
+/** Desktop parity: `NativeChatToolRun`. A run of tool calls under one sentence that
+ *  opens to the individual tool lines. */
 export function ToolRun({
   blocks,
   defaultExpanded,
   expandChildren,
-  activeCall,
+  disclosureId,
+  asides,
+  activeTurnIsWorking,
+  trailing,
+  awaitingAnswer = false,
+  previousTodoWrite,
+  previousUpdatePlan,
+  fontScale = 1,
   onOpenFile
 }: {
   blocks: NativeChatBlock[]
+  /** The last plan each task-list tool wrote before this run, so an update reads as its changes. */
+  previousTodoWrite?: NativeChatToolCallBlock
+  previousUpdatePlan?: NativeChatToolCallBlock
   defaultExpanded: boolean
-  /** Child tool lines stay collapsed when the turn caret drove the run open. */
+  /** The row this run belongs to. The list recycles rows, so what the reader opened is
+   *  remembered somewhere that outlives the row. */
+  disclosureId?: string
+  /** Rows drawn among the run's lines, each before the block it is keyed by, or after the last. */
+  asides?: MobileNativeChatToolRunAsides
+  /** Every line's default: open under the Tools toggle. */
   expandChildren: boolean
-  /** The still-running call, when the turn is live (desktop parity). */
-  activeCall: ReturnType<typeof selectActiveToolCall>
-  onOpenFile?: (relativePath: string) => void
+  /** Structured lifecycle state; keeps an orphaned running call from spinning. */
+  activeTurnIsWorking?: boolean
+  /** Whether this run is the working turn's last. Only that run is live. */
+  trailing?: boolean
+  /** The turn is blocked on the reader's answer, so its calls decide liveness. */
+  awaitingAnswer?: boolean
+  fontScale?: number
+  onOpenFile?: (path: string) => void
 }): React.JSX.Element {
-  const [open, setOpen] = useState(defaultExpanded)
-  const pairs = pairToolBlocks(blocks, MAX_VISIBLE_TOOL_PAIRS)
-  const diffLineLimit = Math.max(1, Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (pairs.length * 2 || 1)))
-  let callCount = 0
-  for (const block of blocks) {
-    if (block.type === 'tool-call') {
-      callCount++
-    }
-  }
-  callCount ||= pairs.length
-  const summary = summarizeToolRun(blocks)
-  // The call's input, not its word: Codex names a classified shell row
-  // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
-  // shares that word and ran none.
-  const ActiveToolIcon = activeCall && isShellActivityToolCall(activeCall) ? SquareTerminal : Wrench
+  // A reader's choice belongs to the default it deviated from, so toggling the Tools
+  // default back restores it.
+  const runKey = disclosureId === undefined ? undefined : `run:${disclosureId}:${defaultExpanded}`
+  const [open, setOpen] = useMobileNativeChatDisclosure(runKey, defaultExpanded)
+  // Rows drawn among the calls count as work too: a reader at the end follows them arriving.
+  const asideCount = asides
+    ? asides.after.length +
+      Array.from(asides.before.values()).reduce((count, rows) => count + rows.length, 0)
+    : 0
+  // Live is the turn's state, not a call's: deriving it from "some call is running"
+  // flipped the header to settled and back around every call.
+  const live =
+    activeTurnIsWorking === true && !awaitingAnswer
+      ? trailing !== false
+      : selectActiveToolCall(blocks, { activeTurnIsWorking }) !== null
+  const callCount = countToolCalls(blocks)
+  const sentence = nativeChatToolRunSentence(
+    blocks,
+    { live },
+    NATIVE_CHAT_TOOL_RUN_SENTENCE_ENGLISH
+  )
+  const latestCall = live ? blocks.findLast(isToolCallBlock) : undefined
+  const latestCallLabel = latestCall ? describeLatestToolCall(latestCall) : null
+  const outcome = nativeChatToolRunOutcome(blocks, { activeTurnIsWorking })
+  const headerIcon = nativeChatToolRunIconName(blocks.filter(isToolCallBlock))
+  const fallbackLabel =
+    callCount === 0
+      ? 'Result'
+      : callCount === 1
+        ? NATIVE_CHAT_TOOL_ACTIVITY_COPY.countOne
+        : fill(NATIVE_CHAT_TOOL_ACTIVITY_COPY.countN, callCount)
+  const marks = [
+    outcome.failedCallCount > 0
+      ? fill(NATIVE_CHAT_TOOL_ACTIVITY_COPY.failedCount, outcome.failedCallCount)
+      : null,
+    outcome.interruptedCallCount > 0
+      ? fill(NATIVE_CHAT_TOOL_ACTIVITY_COPY.interruptedCount, outcome.interruptedCallCount)
+      : null
+  ].filter((mark) => mark !== null)
+  const type = toolType(fontScale)
+  const iconSize = 15 * fontScale
+
   return (
-    <View style={styles.toolRun}>
-      <View style={styles.toolRunHeader}>
-        {activeCall ? (
-          <Pressable
-            style={styles.toolRunActive}
-            onPress={() => setOpen((v) => !v)}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: open }}
-            accessibilityLiveRegion="polite"
-          >
-            <ActiveToolIcon size={15} color={colors.textMuted} strokeWidth={2} />
-            <PulsingText style={styles.toolRunActiveLabel} numberOfLines={1}>
-              {formatActiveToolLabel(describeActiveToolCall(activeCall))}
-            </PulsingText>
-            {open ? <ChevronDown size={15} color={colors.textMuted} strokeWidth={2} /> : null}
-          </Pressable>
-        ) : (
-          <Pressable style={styles.toolRunToggle} onPress={() => setOpen((v) => !v)} hitSlop={6}>
-            {open ? (
-              <ChevronDown size={15} color={colors.textMuted} strokeWidth={2} />
-            ) : (
-              <SquareChevronRight size={15} color={colors.textMuted} strokeWidth={2} />
-            )}
-            <Text style={styles.toolRunCount}>{callCount}×</Text>
-            <Text style={styles.toolRunLabel} numberOfLines={1}>
-              {summary || formatToolCallCount(callCount)}
-            </Text>
-          </Pressable>
-        )}
-      </View>
+    <View style={styles.run}>
+      {/* One element for the run's whole life: live and settled are states of this
+          button, not two buttons. */}
+      <Pressable
+        style={styles.header}
+        onPress={() => setOpen(!open)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLiveRegion="polite"
+      >
+        {headerIcon ? (
+          <MobileNativeChatToolGlyph name={headerIcon} size={iconSize} color={colors.textMuted} />
+        ) : null}
+        <PulsingText
+          pulsing={live}
+          style={[styles.headerSentence, type.row, live && styles.headerSentenceLive]}
+        >
+          {sentence ?? fallbackLabel}
+        </PulsingText>
+        {marks.length > 0 ? (
+          // Never shrinks: it is the one thing the reader cannot afford to miss.
+          <Text style={[styles.lineMeta, styles.headerMarks, type.meta]} numberOfLines={1}>
+            {` · ${marks.join(', ')}`}
+          </Text>
+        ) : null}
+        {/* Only a stated success is marked done, and never while live. */}
+        {!live && outcome.succeeded ? (
+          <Check size={12 * fontScale} color={colors.textMuted} strokeWidth={2} />
+        ) : null}
+        {latestCallLabel ? (
+          <Text style={[styles.headerLatest, type.meta]} numberOfLines={1}>
+            {latestCallLabel}
+          </Text>
+        ) : null}
+      </Pressable>
       {open ? (
-        <View style={styles.toolRunBody}>
-          {pairs.map((pair, i) => (
-            <ToolLine
-              key={i}
-              pair={pair}
+        <ToolRunMembers
+          followKey={blocks.length + asideCount}
+          startsAtEnd={live}
+          memoryKey={runKey}
+        >
+          <ToolRunMemberList
+            blocks={blocks}
+            previousTodoWrite={previousTodoWrite}
+            previousUpdatePlan={previousUpdatePlan}
+            expandChildren={expandChildren}
+            disclosureId={disclosureId}
+            asides={asides}
+            fontScale={fontScale}
+            onOpenFile={onOpenFile}
+          />
+        </ToolRunMembers>
+      ) : null}
+    </View>
+  )
+}
+
+/** Desktop parity: `NativeChatToolRunMemberList`. Mounted only while the run is open,
+ *  so a collapsed run pays for none of the pairing. */
+function ToolRunMemberList({
+  blocks,
+  disclosureId,
+  asides,
+  previousTodoWrite,
+  previousUpdatePlan,
+  expandChildren,
+  fontScale,
+  onOpenFile
+}: {
+  blocks: NativeChatBlock[]
+  disclosureId?: string
+  asides?: MobileNativeChatToolRunAsides
+  previousTodoWrite?: NativeChatToolCallBlock
+  previousUpdatePlan?: NativeChatToolCallBlock
+  expandChildren: boolean
+  fontScale: number
+  onOpenFile?: (path: string) => void
+}): React.JSX.Element {
+  const taskLists = useMemo(
+    () =>
+      buildNativeChatTaskListRows(blocks, {
+        todowrite: previousTodoWrite,
+        update_plan: previousUpdatePlan
+      }),
+    [blocks, previousTodoWrite, previousUpdatePlan]
+  )
+  const { editCards, consumedResults } = useMemo(() => buildEditCards(blocks), [blocks])
+  const { resultByCall, pairedResults } = useMemo(() => pairNativeChatToolResults(blocks), [blocks])
+  const seen = new Map<string, number>()
+  const member = (block: NativeChatBlock, blockIndex: number): React.ReactNode => {
+    const taskList = taskLists.rows.get(block)
+    if (taskList) {
+      return (
+        <MobileNativeChatTaskList key={`tasks:${blockIndex}`} {...taskList} fontScale={fontScale} />
+      )
+    }
+    const edit = editCards.get(block)
+    if (edit) {
+      return (
+        <View key={`edit:${edit.key}`}>
+          {edit.files.map((file, fileIndex) => (
+            <MobileNativeChatDiffCard
+              key={`${edit.key}:${fileIndex}`}
+              file={file}
               defaultExpanded={expandChildren}
-              diffLineLimit={diffLineLimit}
+              disclosureKey={
+                disclosureId === undefined
+                  ? undefined
+                  : `diff:${disclosureId}:${expandChildren}:${edit.key}:${fileIndex}`
+              }
+              fontScale={fontScale}
               onOpenFile={onOpenFile}
             />
           ))}
-          {callCount > pairs.length ? (
-            <Text style={styles.toolPreview}>… {callCount - pairs.length} more tool calls</Text>
-          ) : null}
         </View>
-      ) : null}
-    </View>
+      )
+    }
+    // A result its call now owns is drawn by that call's line, not as a row of its own.
+    if (
+      taskLists.consumedResults.has(block) ||
+      consumedResults.has(block) ||
+      pairedResults.has(block) ||
+      (block.type !== 'tool-call' && block.type !== 'tool-result')
+    ) {
+      return null
+    }
+    const lineIdentity = nativeChatToolLineIdentity(block, seen, true)
+    return (
+      <MobileNativeChatToolLine
+        key={lineIdentity}
+        block={block}
+        result={block.type === 'tool-call' ? resultByCall.get(block) : undefined}
+        defaultExpanded={expandChildren}
+        disclosureKey={
+          disclosureId === undefined
+            ? undefined
+            : `line:${disclosureId}:${expandChildren}:${lineIdentity}`
+        }
+        fontScale={fontScale}
+        onOpenFile={onOpenFile}
+      />
+    )
+  }
+
+  return (
+    <>
+      {/* One flat keyed list with or without asides, so a row gaining its first never remounts a line. */}
+      {blocks.flatMap((block, blockIndex) => [
+        ...(asides?.before.get(block) ?? []),
+        member(block, blockIndex)
+      ])}
+      {asides?.after}
+    </>
   )
 }

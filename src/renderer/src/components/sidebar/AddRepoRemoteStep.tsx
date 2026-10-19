@@ -1,51 +1,49 @@
 import { useState } from 'react'
-import { CircleStop, FolderOpen, Settings } from 'lucide-react'
+import { FolderOpen, Plus } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
 import { RemoteFileBrowser } from './RemoteFileBrowser'
 import { SshTargetRow } from './SshTargetRow'
+import { AddServerSshHostDialog } from './AddServerSshHostDialog'
 import { translate } from '@/i18n/i18n'
 
 type RemoteStepProps = {
   sshTargets: (SshTarget & { state?: SshConnectionState })[]
   selectedTargetId: string | null
-  lockSshTargetSelection?: boolean
   remotePath: string
   remoteError: string | null
   isAddingRemote: boolean
-  isScanningNested?: boolean
   onSelectTarget: (id: string) => void
   onRemotePathChange: (value: string) => void
   onAdd: () => void
-  onOpenSshSettings: () => void
   onConnectTarget: (id: string) => Promise<void>
-  onStopNestedScan?: () => void
+  /** The paired server whose own SSH hosts are listed. */
+  server: {
+    environmentId: string
+    label: string
+    onTargetsChanged: () => void
+  }
 }
 
 export function RemoteStep({
   sshTargets,
   selectedTargetId,
-  lockSshTargetSelection = false,
   remotePath,
   remoteError,
   isAddingRemote,
-  isScanningNested,
   onSelectTarget,
   onRemotePathChange,
   onAdd,
-  onOpenSshSettings,
   onConnectTarget,
-  onStopNestedScan
+  server
 }: RemoteStepProps): React.JSX.Element {
   const [browsing, setBrowsing] = useState(false)
+  const [addingServerHost, setAddingServerHost] = useState(false)
   const selectedTarget = selectedTargetId
     ? sshTargets.find((target) => target.id === selectedTargetId)
     : null
-  const selectedTargetLabel =
-    selectedTarget?.label ||
-    (selectedTarget ? `${selectedTarget.username}@${selectedTarget.host}` : selectedTargetId)
   const selectedTargetStatus = selectedTarget?.state?.status ?? 'disconnected'
   const selectedTargetConnected = selectedTargetStatus === 'connected'
 
@@ -68,6 +66,7 @@ export function RemoteStep({
         </DialogHeader>
         <RemoteFileBrowser
           targetId={selectedTargetId}
+          runtimeEnvironmentId={server.environmentId}
           initialPath={remotePath || '~'}
           onSelect={(path) => {
             onRemotePathChange(path)
@@ -89,79 +88,57 @@ export function RemoteStep({
           )}
         </DialogTitle>
         <DialogDescription>
-          {lockSshTargetSelection
-            ? translate(
-                'auto.components.sidebar.AddRepoRemoteStep.lockedDescription',
-                'Enter the path to a Git repository on {{value0}}.',
-                { value0: selectedTargetLabel ?? 'this SSH target' }
-              )
-            : translate(
-                'auto.components.sidebar.AddRepoRemoteStep.80557be85a',
-                'Choose a connected SSH target and enter the path to a Git repository.'
-              )}
+          {translate(
+            'auto.components.sidebar.AddRepoRemoteStep.serverDescription',
+            'Choose an SSH host that {{server}} connects to, and enter the path to a Git repository on it.',
+            { server: server.label }
+          )}
         </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-3 pt-1">
-        {!lockSshTargetSelection ? (
-          <div className="space-y-1">
-            <label className="text-[11px] font-medium text-muted-foreground">
-              {translate('auto.components.sidebar.AddRepoRemoteStep.44637f43bd', 'SSH target')}
-            </label>
-            {sshTargets.length === 0 ? (
-              <div className="space-y-1.5 py-1">
-                <p className="text-xs text-muted-foreground">
-                  {translate(
-                    'auto.components.sidebar.AddRepoRemoteStep.df6fbcf880',
-                    'No SSH targets configured.'
-                  )}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={onOpenSshSettings}
-                >
-                  <Settings className="size-3.5" />
-                  {translate(
-                    'auto.components.sidebar.AddRepoRemoteStep.0416bde073',
-                    'Add in Settings'
-                  )}
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1 scrollbar-sleek">
-                {sshTargets.map((target) => (
-                  <SshTargetRow
-                    key={target.id}
-                    target={target}
-                    isSelected={selectedTargetId === target.id}
-                    onSelect={onSelectTarget}
-                    onConnect={onConnectTarget}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        ) : selectedTarget && !selectedTargetConnected ? (
-          <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2">
-            <p className="min-w-0 text-xs text-muted-foreground">
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium text-muted-foreground">
+            {translate('auto.components.sidebar.AddRepoRemoteStep.44637f43bd', 'SSH target')}
+          </label>
+          {sshTargets.length === 0 ? (
+            <p className="py-1 text-xs text-muted-foreground">
               {translate(
-                'auto.components.sidebar.AddRepoRemoteStep.lockedDisconnected',
-                '{{value0}} is disconnected.',
-                { value0: selectedTargetLabel ?? 'This SSH host' }
+                'auto.components.sidebar.AddRepoRemoteStep.serverEmpty',
+                '{{server}} has no SSH hosts yet.',
+                { server: server.label }
               )}
             </p>
-            <Button
-              variant="outline"
-              size="xs"
-              className="shrink-0"
-              onClick={() => onConnectTarget(selectedTarget.id)}
-            >
-              {translate('auto.components.sidebar.AddRepoRemoteStep.93e0221434', 'Connect')}
-            </Button>
-          </div>
-        ) : null}
+          ) : (
+            <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1 scrollbar-sleek">
+              {sshTargets.map((target) => (
+                <SshTargetRow
+                  key={target.id}
+                  target={target}
+                  isSelected={selectedTargetId === target.id}
+                  onSelect={onSelectTarget}
+                  onConnect={onConnectTarget}
+                />
+              ))}
+            </div>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setAddingServerHost(true)}
+          >
+            <Plus className="size-3.5" />
+            {translate('auto.components.sidebar.AddRepoRemoteStep.serverAddHost', 'Add SSH host')}
+          </Button>
+          <AddServerSshHostDialog
+            environmentId={server.environmentId}
+            serverLabel={server.label}
+            open={addingServerHost}
+            onOpenChange={setAddingServerHost}
+            onSaved={server.onTargetsChanged}
+          />
+        </div>
 
         <div className="space-y-1">
           <label className="text-[11px] font-medium text-muted-foreground">
@@ -214,12 +191,6 @@ export function RemoteStep({
                 'Add project on SSH host'
               )}
         </Button>
-        {isScanningNested ? (
-          <Button variant="outline" className="w-full" onClick={onStopNestedScan}>
-            <CircleStop className="size-3.5" />
-            {translate('auto.components.sidebar.AddRepoRemoteStep.5b205b5281', 'Stop scan')}
-          </Button>
-        ) : null}
       </div>
     </>
   )

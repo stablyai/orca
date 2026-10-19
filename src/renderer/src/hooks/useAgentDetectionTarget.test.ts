@@ -70,7 +70,7 @@ describe('getAgentDetectionTargetKeyForWorktree', () => {
     } as Parameters<typeof getAgentDetectionTargetKeyForWorktree>[0]
 
     expect(getAgentDetectionTargetKeyForWorktree(state, folderWorkspaceKey('runtime-folder'))).toBe(
-      'runtime:owner-env'
+      `runtime:owner-env:${encodeURIComponent(folderWorkspaceKey('runtime-folder'))}`
     )
     expect(projectGroupReads).toBe(0)
   })
@@ -116,7 +116,14 @@ describe('getAgentDetectionTargetKeyForWorktree', () => {
       }
     } as unknown as Parameters<typeof getAgentDetectionTargetKeyForWorktree>[0]
 
-    expect(getAgentDetectionTargetKeyForWorktree(state, 'repo-1::worktree-1')).toBe('runtime:env-1')
+    const key = getAgentDetectionTargetKeyForWorktree(state, 'repo-1::worktree-1')
+    // The workspace rides along so the paired host resolves its runtime (#19885).
+    expect(key).toBe('runtime:env-1:repo-1%3A%3Aworktree-1')
+    expect(parseAgentDetectionTargetKey(key)).toEqual({
+      kind: 'runtime',
+      environmentId: 'env-1',
+      worktreeId: 'repo-1::worktree-1'
+    })
   })
 
   it('builds one owner index per cold worktree and repo snapshot', () => {

@@ -15,9 +15,8 @@ function createRegistry(initialState: ConnectionState = 'connected') {
   let id = 0
   const registry = new RpcClientStreamRegistry({
     nextId: () => `rpc-${++id}`,
-    deviceToken: 'device-token',
     getState: () => state,
-    sendEncrypted: (request) => {
+    sendFrame: (request) => {
       if (state !== 'connected') {
         return false
       }

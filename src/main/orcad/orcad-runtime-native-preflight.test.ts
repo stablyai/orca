@@ -4,7 +4,9 @@ import type {
   WatcherProcessCallback,
   WatcherProcessHooks
 } from '../ipc/parcel-watcher-process-subscription'
+import { PtySpawnHealthTimeoutError } from '../daemon/pty-subprocess/spawn-preflight'
 import { preflightOrcadNativeRuntime } from './orcad-runtime-native-preflight'
+import { WindowsProcessTableTimeoutError } from '../windows/windows-process-table-timeout-error'
 
 const fixture = vi.hoisted(() => ({
   temp: vi.fn(),
@@ -12,17 +14,27 @@ const fixture = vi.hoisted(() => ({
   available: vi.fn(),
   startTime: vi.fn(),
   rows: vi.fn(),
+  creationTime: vi.fn(),
   subscribe: vi.fn(),
   unsubscribe: vi.fn(),
   dispose: vi.fn(),
   write: vi.fn(),
   remove: vi.fn()
 }))
-vi.mock('../daemon/pty-subprocess/spawn-preflight', () => ({ runPtySpawnHealthProbe: fixture.pty }))
+vi.mock('../daemon/pty-subprocess/spawn-preflight', () => ({
+  PTY_SPAWN_HEALTH_TIMEOUT_MS: 4_000,
+  PtySpawnHealthTimeoutError: class extends Error {
+    constructor(timeoutMs: number) {
+      super(`PTY spawn health check timed out after ${timeoutMs}ms`)
+    }
+  },
+  runPtySpawnHealthProbe: fixture.pty
+}))
 vi.mock('../windows/windows-process-table', () => ({
   isWindowsProcessTableAvailable: fixture.available,
   isWindowsProcessStartTimeAvailable: fixture.startTime,
-  readWindowsProcessIdentityTableFresh: fixture.rows
+  readWindowsProcessIdentityTableFresh: fixture.rows,
+  readWindowsProcessCreationTime: fixture.creationTime
 }))
 vi.mock('node:fs/promises', () => ({
   mkdtemp: fixture.temp,
@@ -77,9 +89,65 @@ describe('bundled native readiness', () => {
     )
   })
 
+  // A loaded Windows runner timed the whole-table snapshot out, and startup failed readiness.
+  it('identifies itself by one PID when the process-table snapshot times out', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    fixture.rows.mockRejectedValue(
+      new WindowsProcessTableTimeoutError('windows process table timed out')
+    )
+    fixture.creationTime.mockReturnValue(Date.now() - 1_000)
+    await expect(preflightOrcadNativeRuntime({ nativeFeatures: false })).resolves.toBeUndefined()
+    expect(fixture.creationTime).toHaveBeenCalledWith(process.pid)
+  })
+
+  it('still fails when neither the snapshot nor the one-PID query can identify it', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    fixture.rows.mockRejectedValue(
+      new WindowsProcessTableTimeoutError('windows process table timed out')
+    )
+    fixture.creationTime.mockReturnValue(null)
+    await expect(preflightOrcadNativeRuntime({ nativeFeatures: false })).rejects.toThrow(
+      'windows process table timed out'
+    )
+  })
+
+  it('never falls back for an unreadable table, only for a slow one', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    fixture.rows.mockRejectedValue(new Error('windows process table is unreadable'))
+    fixture.creationTime.mockReturnValue(Date.now() - 1_000)
+    await expect(preflightOrcadNativeRuntime({ nativeFeatures: false })).rejects.toThrow(
+      'windows process table is unreadable'
+    )
+    expect(fixture.creationTime).not.toHaveBeenCalled()
+  })
+
   it('does not admit a failed PTY in explicit qualification', async () => {
     fixture.pty.mockRejectedValue(new Error('PTY spawn health check timed out'))
     await expect(preflightOrcadNativeRuntime()).rejects.toThrow('PTY spawn health check timed out')
+  })
+
+  it('gives a cold first Windows PTY spawn a longer budget', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    await preflightOrcadNativeRuntime()
+    expect(fixture.pty).toHaveBeenCalledExactlyOnceWith(15_000)
+  })
+
+  it('retries a timed-out PTY probe once with the normal budget', async () => {
+    fixture.pty.mockRejectedValueOnce(new PtySpawnHealthTimeoutError(15_000))
+    await preflightOrcadNativeRuntime()
+    expect(fixture.pty.mock.calls).toEqual([[4_000], [4_000]])
+  })
+
+  it('fails when the retry also times out', async () => {
+    fixture.pty.mockRejectedValue(new PtySpawnHealthTimeoutError(4_000))
+    await expect(preflightOrcadNativeRuntime()).rejects.toThrow('timed out after 4000ms')
+    expect(fixture.pty).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry a PTY that spawned and failed', async () => {
+    fixture.pty.mockRejectedValue(new Error('PTY spawn health check exited with code 1'))
+    await expect(preflightOrcadNativeRuntime()).rejects.toThrow('exited with code 1')
+    expect(fixture.pty).toHaveBeenCalledOnce()
   })
 
   it('awaits actual watcher delivery and unsubscribe before disposing temporary state', async () => {

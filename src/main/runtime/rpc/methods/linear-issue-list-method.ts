@@ -4,6 +4,7 @@ import { ListIssues, McpListIssues } from '../../../../shared/rpc-contract/linea
 
 export const LINEAR_ISSUE_LIST_METHOD = defineMethod({
   name: 'linear.listIssues',
+  permission: 'workspace',
   params: ListIssues,
   handler: async (params, { runtime }) => {
     if (isMcpIssueListRequest(params)) {
@@ -17,6 +18,7 @@ export const LINEAR_ISSUE_LIST_METHOD = defineMethod({
 
 export const LINEAR_MCP_ISSUE_LIST_METHOD = defineMethod({
   name: 'linear.mcpListIssues',
+  permission: 'workspace',
   params: McpListIssues,
   handler: async (params, { runtime }) => runtime.linearMcpIssueList(params)
 })

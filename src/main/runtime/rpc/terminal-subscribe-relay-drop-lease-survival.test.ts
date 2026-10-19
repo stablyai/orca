@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 // Why: the stale-handle survival suite doubles subscribeToPtyExit, so it pins the wiring but
 // not the predicate that decides whether a PTY counts as exited. This wires that one call to
 // a real OrcaRuntimeService, because a relay drop reaches the phone through the predicate.

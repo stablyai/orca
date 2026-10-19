@@ -122,7 +122,7 @@ describe('async reset-credit ledger', () => {
 
     ledger.releaseFresh('first', attempt)
     expect(ledger.get('first')).toBe(attempt)
-    expect(ledger.getClaimedKey(attempt.scopeKey)).toBe('first')
+    expect(ledger.findAttemptFor('other', attempt.scopeKey, 'none')?.idempotencyKey).toBe('first')
     expect(store.replaceCodexResetCreditAttemptLedgerAndFlush).toHaveBeenCalledOnce()
     await expect(ledger.discardForRemovedAccount('account-1')).rejects.toThrow(
       'durability is unknown'

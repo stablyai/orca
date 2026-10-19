@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
+import { runProcess } from '@orca/process-host'
 
 const piRoot = resolve(process.argv[2] || '')
 assert.ok(process.argv[2], 'Pass an installed pi-coding-agent package directory')
@@ -25,10 +26,8 @@ try {
   const bundle = join(scratch, 'orca.cjs')
   await build({
     stdin: {
-      contents: [
+      contents:
         "export { getPiAgentStatusExtensionSource } from './src/main/pi/agent-status-extension-source';",
-        "export { runProcess } from './src/shared/child-process/run-process';"
-      ].join('\n'),
       resolveDir: process.cwd()
     },
     bundle: true,
@@ -37,7 +36,7 @@ try {
     outfile: bundle,
     packages: 'external'
   })
-  const { getPiAgentStatusExtensionSource, runProcess } = createRequire(import.meta.url)(bundle)
+  const { getPiAgentStatusExtensionSource } = createRequire(import.meta.url)(bundle)
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   const dead = await runProcess({

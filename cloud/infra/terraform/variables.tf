@@ -362,6 +362,12 @@ variable "relay_alert_notification_channels" {
   default     = []
 }
 
+variable "relay_cell_min_fix_level" {
+  type        = number
+  description = "Lowest RELAY_FIX_LEVEL a serving relay cell may run before the outdated-image alert fires. Raise it after a wave rolls every serving cell."
+  default     = 1
+}
+
 variable "relay_gce_domain" {
   type        = string
   description = "Parent DNS name for GCE relay cells; each cell is one exact host below it."
@@ -474,9 +480,27 @@ variable "relay_cloud_sql_private_ip" {
   default     = false
 }
 
+variable "relay_director_cloud_sql_proxy_sidecar" {
+  type        = bool
+  description = "Reach Cloud SQL from the director through a Cloud SQL Auth Proxy sidecar on 127.0.0.1 (the GCE cells run the same proxy beside the relay, over a Unix socket), instead of Cloud Run's built-in /cloudsql socket. A connect() on the built-in socket blocks the director's whole event loop until the connector's upstream dial ends, up to 10 s per attempt while the instance starts or fails over."
+  default     = false
+}
+
+variable "relay_dead_cell_verdict_alert" {
+  type        = bool
+  description = "Count and alert on directors withholding the dead-cell verdict for a reserve cell whose seat-feed polls fail (cell-poll-reachability.ts). Off in production until staging has proved it. Turning it on: apply the metric first, then the policy a few minutes later, because Cloud Monitoring refuses a policy on a log metric it cannot see yet."
+  default     = false
+}
+
+variable "relay_event_loop_stall_alert" {
+  type        = bool
+  description = "Count runtime samples whose event-loop delay max reached 5 s and alert on any. The p99 metric reads normal through a single long freeze."
+  default     = false
+}
+
 variable "relay_gce_cloud_sql_proxy_image" {
   type        = string
-  description = "Digest-pinned Cloud SQL Auth Proxy image used by private relay workers."
+  description = "Digest-pinned Cloud SQL Auth Proxy image used by private relay workers and the director sidecar."
   default     = "gcr.io/cloud-sql-connectors/cloud-sql-proxy@sha256:fc224915ef435afeb5b2a9421260a0d31986d5c8b7c7f5783c7f5d5885700cd2"
 
   validation {

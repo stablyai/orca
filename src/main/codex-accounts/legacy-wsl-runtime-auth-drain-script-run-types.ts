@@ -28,6 +28,7 @@ export type DrainApplyOutcome = {
   legacyAuth: string | null
   markerExists: boolean
   status: number
+  signal: NodeJS.Signals | null
   targetAuth: string
   targetCredentials: string | null
   targetMode: number

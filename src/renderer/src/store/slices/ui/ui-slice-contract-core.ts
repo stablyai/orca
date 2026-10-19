@@ -1,3 +1,7 @@
+import type {
+  AgentSubjectRead,
+  AgentSubjectReadIntent
+} from '@/attention/agent-subject-read-actions'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -39,6 +43,8 @@ export type AgentSendPopoverTargetMode = {
   sendingPaneKey?: string
   error?: string
   onPromptDelivered?: () => void
+  /** Told the send's own result the moment the prompt is handed to an agent. */
+  onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
 
 export type OpenAgentSendPopoverTargetModeArgs = {
@@ -49,6 +55,7 @@ export type OpenAgentSendPopoverTargetModeArgs = {
   label: string
   launchSource: LaunchSource
   onPromptDelivered?: () => void
+  onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
 
 export type TaskPageData = {
@@ -134,7 +141,12 @@ export type UISliceCore = {
   consumeDiffNotesSendMenuOpenRequest: (worktreeId: string) => void
   /** Per-agent "I've looked at this" timestamps (paneKey → ts). A row is unvisited when no ack exists or stateStartedAt is newer than the last ack. Persisted so visited rows don't return bold on relaunch. */
   acknowledgedAgentsByPaneKey: Record<string, number>
-  acknowledgeAgents: (paneKeys: string[]) => void
+  /** `explicit` only from a user action on the row (Mark read, a jump, a dashboard ack). */
+  acknowledgeAgents: (
+    paneKeys: string[],
+    reads?: readonly AgentSubjectRead[],
+    intent?: AgentSubjectReadIntent
+  ) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
   /** Per-pane cutoffs used to hide activity entries cleared by the user. */
   activityClearedAtByPaneKey: Record<string, number>

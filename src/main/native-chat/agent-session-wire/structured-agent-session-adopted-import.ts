@@ -49,18 +49,15 @@ async function readAdoptedTranscript(
   }
   const prepared = await prepareLegacyTranscriptImport({
     agent: params.agent,
-    sessionId:
-      adopt.providerHandle.kind === 'claude'
-        ? adopt.providerHandle.sessionId
-        : adopt.providerHandle.threadId,
-    options: { filePath: adopt.transcriptPath }
+    sessionId: adopt.providerHandle.nativeId,
+    options: { filePath: adopt.transcriptPath, source: adopt.source }
   })
   if (!prepared.ok) {
     throw new Error(prepared.error)
   }
   if (prepared.items.length === 0) {
     throw agentSessionRefusalError('agent_session_identity_required', {
-      reason: 'transcriptUnreadable'
+      reason: prepared.sourceEmpty ? 'transcriptNotFound' : 'transcriptUnreadable'
     })
   }
   return prepared.items
@@ -71,8 +68,20 @@ export async function importAdoptedTranscript(
   params: AgentSessionAttachParams,
   attached: AttachedJournal,
   record: AgentSessionRecord,
-  prepared: JournalReplacementItem[] | null
+  prepared: JournalReplacementItem[] | null,
+  options: { uncommittedCreate?: true } = {}
 ): Promise<void> {
+  if (options.uncommittedCreate) {
+    // A rolled-back create can leave imported history, but no conversation owns it yet.
+    if (prepared || attached.journal.cursor().sequence > 1) {
+      await attached.journal.replaceEpochItems(
+        params.adopt ? 'legacy_import' : 'session_created',
+        record.lease.runtimeFence,
+        prepared ?? []
+      )
+    }
+    return
+  }
   // The journal is the conversation's, which outlives a failed import; nothing here closes it.
   await applyAdoptedTranscript(params, attached, record, prepared)
 }
@@ -100,12 +109,9 @@ async function applyAdoptedTranscript(
   const imported = await importLegacyTranscriptIntoJournal({
     journal: attached.journal,
     agent: params.agent,
-    sessionId:
-      adopt.providerHandle.kind === 'claude'
-        ? adopt.providerHandle.sessionId
-        : adopt.providerHandle.threadId,
+    sessionId: adopt.providerHandle.nativeId,
     fence: record.lease.runtimeFence,
-    options: { filePath: adopt.transcriptPath }
+    options: { filePath: adopt.transcriptPath, source: adopt.source }
   })
   if (!imported.ok) {
     throw new Error(imported.error)

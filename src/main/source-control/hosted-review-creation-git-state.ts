@@ -3,7 +3,6 @@ import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
-import { isNoUpstreamError, normalizeGitErrorMessage } from '../../shared/git-remote-error'
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
 import type { GitUpstreamStatus } from '../../shared/git-status-types'
 import { gitExecFileAsync } from '../github/gh-utils'
@@ -13,11 +12,7 @@ import { parsePorcelainV1Records, type PorcelainV1Record } from '../git/porcelai
 import { resolveDefaultBaseRefViaExec } from '../git/repo'
 import { getUpstreamStatus } from '../git/upstream'
 import { findExistingWorktreeSymlinkPaths } from '../git/worktree-symlink-detection'
-import {
-  ExecutionHostNotDispatchableError,
-  resolveGitRouteForHost,
-  type ExecutionHostGitRoute
-} from '../providers/execution-host-provider-dispatch'
+import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
   getHostedReviewLocalGitOptions,
@@ -125,25 +120,8 @@ async function listSuffixRemoteBaseRefs(
 /**
  * Why not a `connectionId` check: `null` used to mean "local", "runtime host" and "unresolved"
  * alike, so a worktree whose owner is named only by `executionHostId` had its preflight git run
- * against this machine's copy of a remote path. `runtime:` is a routing mistake here rather than a
- * fallback — that environment's server runs its own git.
+ * against this machine's copy of a remote path. `runtime:` and `ssh:` hosts throw instead.
  */
-function requireHostedReviewGitRoute(executionHostId: ExecutionHostId): ExecutionHostGitRoute {
-  const route = resolveGitRouteForHost(executionHostId)
-  if (route.kind === 'runtime') {
-    throw new ExecutionHostNotDispatchableError(route.hostId)
-  }
-  return route
-}
-
-/** Loss of contact is not locality: an SSH host with no provider refuses, it does not run here. */
-function requireHostedReviewSshProvider(route: ExecutionHostGitRoute) {
-  if (route.kind !== 'ssh' || !route.provider) {
-    throw new Error('Remote connection dropped. Click Reconnect on the SSH target before retrying.')
-  }
-  return route.provider
-}
-
 async function runGitForHostedReview(
   repoPath: string,
   args: string[],
@@ -151,13 +129,7 @@ async function runGitForHostedReview(
   options: HostedReviewExecutionOptions = {},
   commandOptions: HostedReviewGitRunOptions = {}
 ): Promise<{ stdout: string; stderr?: string }> {
-  const route = requireHostedReviewGitRoute(executionHostId)
-  if (route.kind === 'ssh') {
-    const provider = requireHostedReviewSshProvider(route)
-    return commandOptions.timeoutMs === undefined
-      ? provider.exec(args, repoPath)
-      : provider.exec(args, repoPath, { timeoutMs: commandOptions.timeoutMs })
-  }
+  requireReachableGitRoute(executionHostId)
   return gitExecFileAsync(args, {
     cwd: repoPath,
     ...getHostedReviewLocalGitOptions(options),
@@ -267,13 +239,7 @@ export async function hasUncommittedChanges(
   executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
-  const route = requireHostedReviewGitRoute(executionHostId)
-  if (route.kind === 'ssh') {
-    // Why: the relay restricts generic git.exec, so use the structured status RPC for SSH dirty checks.
-    // No shared-link exclusion here: remote worktree creation skips the symlink
-    // and shared-directory passes entirely, so a remote worktree never has one.
-    return (await requireHostedReviewSshProvider(route).getStatus(repoPath)).entries.length > 0
-  }
+  requireReachableGitRoute(executionHostId)
   // Why: `-z` keeps paths raw so the shared-link comparison below can't be
   // defeated by Git quoting a path with spaces or non-ASCII bytes.
   const { stdout } = await gitExecFileAsync(['status', '--porcelain', '-z'], {
@@ -321,18 +287,6 @@ export async function getHostedReviewUpstreamStatus(
   executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<GitUpstreamStatus> {
-  const route = requireHostedReviewGitRoute(executionHostId)
-  if (route.kind !== 'ssh') {
-    return getUpstreamStatus(repoPath, undefined, getHostedReviewLocalGitOptions(options))
-  }
-  const provider = requireHostedReviewSshProvider(route)
-  try {
-    // Why: the relay blocks generic git.exec, so use its dedicated upstream RPC for SSH divergence.
-    return await provider.getUpstreamStatus(repoPath)
-  } catch (error) {
-    if (isNoUpstreamError(error)) {
-      return { hasUpstream: false, ahead: 0, behind: 0 }
-    }
-    throw new Error(normalizeGitErrorMessage(error, 'upstream'))
-  }
+  requireReachableGitRoute(executionHostId)
+  return getUpstreamStatus(repoPath, undefined, getHostedReviewLocalGitOptions(options))
 }

@@ -6,7 +6,7 @@ import {
   createRuntimeTransportMetadata,
   RUNTIME_SOCKET_NAME_REGEX,
   sweepOrphanedRuntimeSockets
-} from './runtime-rpc'
+} from './runtime-rpc/runtime-rpc-socket-metadata'
 
 describe('sweepOrphanedRuntimeSockets', () => {
   // Why: a pid we know is always alive and is never the test runner's own

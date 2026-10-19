@@ -1,5 +1,5 @@
 import type { OnMount } from '@monaco-editor/react'
-import type { IDisposable } from 'monaco-editor'
+import type { IDisposable, editor } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import {
   getMarkdownDocCompletionContext,
@@ -10,7 +10,7 @@ type MonacoApi = Parameters<OnMount>[1]
 
 let provider: IDisposable | null = null
 let providerMonaco: MonacoApi = null
-const documentsByModel = new Map<string, MarkdownDocument[]>()
+let documentsByModel = new WeakMap<editor.ITextModel, MarkdownDocument[]>()
 
 export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
   // Why: if Monaco was torn down and re-created (e.g. window reload), the old
@@ -21,7 +21,7 @@ export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
   }
   if (provider) {
     provider.dispose()
-    documentsByModel.clear()
+    documentsByModel = new WeakMap()
   }
   providerMonaco = monaco
 
@@ -34,7 +34,7 @@ export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
         return { suggestions: [] }
       }
 
-      const documents = documentsByModel.get(model.uri.toString()) ?? []
+      const documents = documentsByModel.get(model) ?? []
       const suffix = line.slice(position.column - 1)
       const range = {
         startLineNumber: position.lineNumber,
@@ -59,12 +59,12 @@ export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
 }
 
 export function setMarkdownDocCompletionDocuments(
-  modelKey: string,
+  model: editor.ITextModel,
   documents: MarkdownDocument[]
 ): void {
-  documentsByModel.set(modelKey, documents)
+  documentsByModel.set(model, documents)
 }
 
-export function clearMarkdownDocCompletionDocuments(modelKey: string): void {
-  documentsByModel.delete(modelKey)
+export function clearMarkdownDocCompletionDocuments(model: editor.ITextModel): void {
+  documentsByModel.delete(model)
 }

@@ -1,3 +1,4 @@
+import { defaultJiraListColumnIds, visibleJiraListColumns } from './jira-list-columns'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -159,7 +160,9 @@ describe('Jira issue status grouping', () => {
       throw new Error('Expected one Jira project scope')
     }
 
-    await expect(loadTaskPageJiraProjectStatusOrder(null, 'runtime:old', scope)).resolves.toEqual({
+    await expect(
+      loadTaskPageJiraProjectStatusOrder({ kind: 'local' }, 'runtime:old', scope)
+    ).resolves.toEqual({
       statusIdsByColumn: []
     })
     expect(warn).toHaveBeenCalledWith('[jira] Failed to load project status order:', error)
@@ -172,6 +175,7 @@ describe('Jira issue status grouping', () => {
         TooltipProvider,
         null,
         React.createElement(TaskPageJiraIssueList, {
+          columns: visibleJiraListColumns(defaultJiraListColumnIds()),
           formatUpdatedAt: () => 'today',
           getStatusTone: () => 'border-border',
           issues: [

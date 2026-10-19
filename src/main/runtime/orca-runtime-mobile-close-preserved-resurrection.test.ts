@@ -95,7 +95,7 @@ function makeDeferred() {
   return { promise, resolve }
 }
 
-function createHarness() {
+function createHarness(options: { restarted?: boolean } = {}) {
   let session = makeSession([TAB_A, TAB_B])
   const repo = {
     id: REPO_ID,
@@ -196,7 +196,10 @@ function createHarness() {
       runtime as unknown as { pairedRendererSessionOwnedPtyIds: Set<string> }
     ).pairedRendererSessionOwnedPtyIds.add(spec.ptyId)
   }
-  publishRendererSnapshot([TAB_A, TAB_B], 1)
+  // Why: a restarted host serves its disk-hydrated snapshot until the renderer's first publication.
+  if (!options.restarted) {
+    publishRendererSnapshot([TAB_A, TAB_B], 1)
+  }
 
   return {
     runtime,
@@ -452,6 +455,29 @@ describe('a committed paired close stays closed while its PTY lingers', () => {
     expect(republished, 'the preserved-merge resurrected a tab the host renderer closed').toEqual([
       TAB_B
     ])
+  })
+
+  it('red: the first renderer publication after a restart must not resurrect a retired tab', async () => {
+    const harness = createHarness({ restarted: true })
+    expect(await listParentTabIds(harness.runtime)).toEqual([TAB_A, TAB_B].sort())
+
+    harness.retirePersistedTab(TAB_A)
+    harness.publishRendererSnapshot([TAB_B], 1)
+
+    expect(
+      await listParentTabIds(harness.runtime),
+      'the first post-restart merge resurrected a tab the host renderer closed'
+    ).toEqual([TAB_B])
+    expect(harness.isRuntimeSessionOwned(PTY_A)).toBe(false)
+    expect(harness.isRuntimeSessionOwned(PTY_B)).toBe(true)
+  })
+
+  it('control: the first post-restart publication keeps a still-persisted tab it omits', async () => {
+    const harness = createHarness({ restarted: true })
+    harness.publishRendererSnapshot([TAB_B], 1)
+
+    expect(await listParentTabIds(harness.runtime)).toEqual([TAB_A, TAB_B].sort())
+    expect(harness.isRuntimeSessionOwned(PTY_A)).toBe(true)
   })
 
   it('control: a create still in flight is not retirement — its tab and ownership survive the omission', async () => {

@@ -98,6 +98,11 @@ export function AiVaultPanelSearch({
       'auto.components.right.sidebar.AiVaultPanel.noAgentsSelected',
       'No agents selected'
     )
+  } else if (search.titleOnly) {
+    message = translate(
+      'sessionSearch.panel.titleOnly',
+      'Full-text search is off on this computer, so only session titles are matched.'
+    )
   } else if (unavailable === 'disabled') {
     message = translate(
       'sessionSearch.panel.remoteDisabled',

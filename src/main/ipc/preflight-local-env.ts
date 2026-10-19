@@ -1,4 +1,8 @@
 import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
+import {
+  readGuestWindowsDriveMounts,
+  withoutWindowsDriveMountDirs
+} from './wsl-guest-windows-drive-path'
 
 function stringOnlyProcessEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   const result: Record<string, string> = {}
@@ -10,9 +14,17 @@ function stringOnlyProcessEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return result
 }
 
-export function buildLocalPreflightEnv(): Record<string, string> | undefined {
+export function buildLocalPreflightEnv(
+  guestWindowsDriveMounts: readonly string[] = readGuestWindowsDriveMounts()
+): Record<string, string> | undefined {
   if (process.platform !== 'win32') {
-    return undefined
+    if (guestWindowsDriveMounts.length === 0) {
+      return undefined
+    }
+    // In a WSL guest, detection must find the Linux CLI, not a Windows shim on /mnt/<drive>.
+    const env = stringOnlyProcessEnv(process.env)
+    env.PATH = withoutWindowsDriveMountDirs(env.PATH ?? '', guestWindowsDriveMounts)
+    return env
   }
   const env = stringOnlyProcessEnv(process.env)
   // Why: newly installed CLIs update persisted Windows Path, but the running

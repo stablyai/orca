@@ -39,17 +39,6 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
     state.runtimeEnvironmentId ? `runtime:${state.runtimeEnvironmentId}` : 'local'
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: ({
-    activeRuntimeEnvironmentId
-  }: {
-    activeRuntimeEnvironmentId: string | null
-  }) =>
-    activeRuntimeEnvironmentId
-      ? { kind: 'environment', environmentId: activeRuntimeEnvironmentId }
-      : { kind: 'local' }
-}))
-
 vi.mock('./NativeChatView', async () => {
   const { useEffect } = await import('react')
   return {

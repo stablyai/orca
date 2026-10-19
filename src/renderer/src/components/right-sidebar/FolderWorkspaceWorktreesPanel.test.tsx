@@ -670,24 +670,16 @@ describe('FolderWorkspaceWorktreesPanel', () => {
     expect(cardFor(child.id)?.parentElement?.parentElement).toBe(parentCard)
   })
 
-  it('pads legacy-style wrappers with the parent depth inset', () => {
-    const { child, grandchild } = seedThreeLevelLineage()
-    testState.store.settings = { experimentalNewWorktreeCardStyle: false }
+  it.each([false, true])(
+    'inherits lineage offsets without wrapper padding (new style: %s)',
+    (newStyle) => {
+      const { child, grandchild } = seedThreeLevelLineage()
+      testState.store.settings = { experimentalNewWorktreeCardStyle: newStyle }
 
-    renderPanel()
+      renderPanel()
 
-    // Why: the wrapper inset is the parent's, so depth 1 gets none and depth 2 gets one step.
-    expect(cardFor(child.id)?.parentElement?.getAttribute('style')).toBeNull()
-    expect(cardFor(grandchild.id)?.parentElement?.style.paddingLeft).toBe('14px')
-  })
-
-  it('leaves experimental-style wrappers unpadded at every depth', () => {
-    const { child, grandchild } = seedThreeLevelLineage()
-    testState.store.settings = { experimentalNewWorktreeCardStyle: true }
-
-    renderPanel()
-
-    expect(cardFor(child.id)?.parentElement?.getAttribute('style')).toBeNull()
-    expect(cardFor(grandchild.id)?.parentElement?.getAttribute('style')).toBeNull()
-  })
+      expect(cardFor(child.id)?.parentElement?.getAttribute('style')).toBeNull()
+      expect(cardFor(grandchild.id)?.parentElement?.getAttribute('style')).toBeNull()
+    }
+  )
 })

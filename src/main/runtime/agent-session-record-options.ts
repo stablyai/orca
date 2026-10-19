@@ -14,5 +14,7 @@ export function replaceAgentSessionRecordOptions(
   if (lease.runtimeFence !== replacement.fence || (lease.claimStatus !== 'live' && !atRest)) {
     throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'leaseMoved' })
   }
-  return { ...record, options: { ...replacement.options }, updatedAt: replacement.now }
+  return 'options' in replacement
+    ? { ...record, options: { ...replacement.options }, updatedAt: replacement.now }
+    : { ...record, permissionMode: replacement.permissionMode, updatedAt: replacement.now }
 }

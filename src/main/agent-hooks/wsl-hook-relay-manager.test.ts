@@ -7,8 +7,8 @@ import { join } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { RelayDispatcher } from '../../relay/dispatcher'
-import { registerWslHookFsHandlers } from '../../relay/wsl-hook-fs-bridge'
+import { RelayDispatcher } from '../../wsl-guest/dispatcher'
+import { registerWslHookFsHandlers } from '../../wsl-guest/wsl-hook-fs-bridge'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import { createWslHookSftpAdapter } from './wsl-hook-fs-adapter'
 import {
@@ -291,6 +291,25 @@ describe('WslHookRelayManager', () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(deps.ingest).toHaveBeenCalledTimes(1)
     manager.disposeAll()
+  })
+
+  it('unbinds owner interrupt reconciliation when the WSL transport is retired', async () => {
+    const unbind = vi.fn()
+    const bind = vi.fn<NonNullable<WslHookRelayManagerDeps['bindInterruptReconciliation']>>(
+      (_mux, _connectionId, _isCurrent) => unbind
+    )
+    const { manager } = createManager({ bindInterruptReconciliation: bind })
+    manager.ensureForDistro('Ubuntu', codexHome)
+    try {
+      await vi.waitFor(() => expect(bind).toHaveBeenCalledOnce())
+      expect(bind.mock.lastCall?.[1]).toBe('wsl:Ubuntu')
+      expect(bind.mock.lastCall?.[2]()).toBe(true)
+      manager.disposeAll()
+      expect(unbind).toHaveBeenCalledOnce()
+      expect(bind.mock.lastCall?.[2]()).toBe(false)
+    } finally {
+      manager.disposeAll()
+    }
   })
 
   it('waits for guest materialization when an explicit Pi or OMP launch needs it', async () => {

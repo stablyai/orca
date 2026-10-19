@@ -1,4 +1,5 @@
 import { readFile, readdir, readlink } from 'node:fs/promises'
+import { LSOF_NONBLOCKING_ARGS } from '../../shared/lsof-nonblocking-args'
 import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
 import { readWindowsProcessTable } from '../windows/windows-process-table'
 import { runPortScanCommand } from './port-scan-command-client'
@@ -117,6 +118,7 @@ async function scanDarwinLsofPorts(
   options: WorkspacePortScanOptions
 ): Promise<PlatformListeningPortScan> {
   const { stdout, spawnMs } = await runPortScanCommand('lsof', [
+    ...LSOF_NONBLOCKING_ARGS,
     '-nP',
     '-iTCP',
     '-sTCP:LISTEN',
@@ -258,6 +260,7 @@ async function loadDarwinProcessMetadata(pids: Set<number>): Promise<Map<number,
   // Why (#11161): sequential, not Promise.all — the probe worker dispatches one
   // command at a time, so issuing both at once would only queue the second.
   const cwdOutput = await runPortScanCommand('lsof', [
+    ...LSOF_NONBLOCKING_ARGS,
     '-a',
     '-p',
     pidList,

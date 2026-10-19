@@ -42,7 +42,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
         ]
       },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-      pendingCodexPaneRestartIds: {},
+      pendingPaneAccountRestarts: {},
       codexRestartNoticeByPtyId: {}
     })
     ;(globalThis as { window: typeof window }).window = {

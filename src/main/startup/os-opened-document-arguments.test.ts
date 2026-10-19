@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isMarkdownDocumentName } from '../ipc/markdown-documents'
+import { isMarkdownDocumentName } from '../../shared/markdown-document-paths'
 import { documentPathsFromArguments } from './os-opened-documents'
 
 describe('documentPathsFromArguments', () => {

@@ -1,5 +1,5 @@
 import { DaemonPtyAdapter } from '../../../src/main/daemon/daemon-pty-adapter'
-import { createLegacyDaemonAdapters } from '../../../src/main/daemon/daemon-init'
+import { createLegacyDaemonAdapters } from '../../../src/main/daemon/daemon-legacy-adapters'
 import { DaemonPtyRouter } from '../../../src/main/daemon/daemon-pty-router'
 
 export type DesktopDiscoveryGeneration = {

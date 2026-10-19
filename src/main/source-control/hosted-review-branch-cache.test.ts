@@ -123,6 +123,37 @@ describe('hosted review branch cache (#11532)', () => {
     expect(lookup).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps merged reviews fresh for only 60 seconds for older clients', async () => {
+    const lookup = vi.fn(async () => mergedReview)
+    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
+    vi.setSystemTime(START + 59_999)
+    await withHostedReviewBranchCache(identity, { headOid: 'aaa', active: true }, lookup)
+    expect(lookup).toHaveBeenCalledTimes(1)
+    vi.setSystemTime(START + 60_000)
+    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
+    expect(lookup).toHaveBeenCalledTimes(2)
+    await withHostedReviewBranchCache(identity, { headOid: 'bbb' }, lookup)
+    expect(lookup).toHaveBeenCalledTimes(3)
+  })
+
+  it('continues watching merged reviews whose checks are pending', async () => {
+    const lookup = vi.fn(async () => ({ ...mergedReview, status: 'pending' as const }))
+    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
+    vi.setSystemTime(START + 60_000)
+    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
+    expect(lookup).toHaveBeenCalledTimes(2)
+  })
+
+  it('bypasses a merged result for an explicit refresh', async () => {
+    const lookup = vi.fn(async () => mergedReview)
+    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
+    lookup.mockResolvedValue(openReview)
+    await expect(
+      withHostedReviewBranchCache(identity, { headOid: 'aaa', force: true }, lookup)
+    ).resolves.toEqual(openReview)
+    expect(lookup).toHaveBeenCalledTimes(2)
+  })
+
   it('drops a merged review once the inspected head moves off it', async () => {
     const lookup = vi.fn(async () => mergedReview)
 

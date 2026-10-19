@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useId, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { filterGitHubMentionOptions } from '@/components/github/github-mention-option-filter'
@@ -108,7 +109,7 @@ export function MentionTextarea({
           ))}
         </div>
       )}
-      <textarea
+      <ImeTextarea
         ref={textareaRef}
         role="combobox"
         aria-expanded={showSuggestions}

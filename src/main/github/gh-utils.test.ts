@@ -3,22 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, getSshGitProviderGenerationMock, getSshGitProviderMock } = vi.hoisted(
-  () => ({
-    gitExecFileAsyncMock: vi.fn(),
-    getSshGitProviderGenerationMock: vi.fn(() => 0),
-    getSshGitProviderMock: vi.fn()
-  })
-)
+const { gitExecFileAsyncMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn()
+}))
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   ghExecFileAsync: vi.fn()
-}))
-
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProviderGeneration: getSshGitProviderGenerationMock,
-  getSshGitProvider: getSshGitProviderMock
 }))
 
 import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
@@ -73,9 +64,6 @@ function gitRemoteListCalls(): unknown[][] {
 describe('github owner/repo resolution', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
-    getSshGitProviderGenerationMock.mockReset()
-    getSshGitProviderGenerationMock.mockReturnValue(0)
-    getSshGitProviderMock.mockReset()
     _resetOwnerRepoCache()
     _resetRemoteNameListingCache()
     __resetLocalGitConfigSignatureCacheForTests()
@@ -198,52 +186,6 @@ describe('github owner/repo resolution', () => {
 
     await expect(getOwnerRepoForRemote('/repo', 'upstream')).resolves.toBeNull()
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('resolves SSH repo remotes through the registered SSH git provider', async () => {
-    const sshProvider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'remote' && args[1] !== 'get-url') {
-          return { stdout: 'origin\n', stderr: '' }
-        }
-        if (args[2] === 'upstream') {
-          throw new Error("fatal: No such remote 'upstream'")
-        }
-        return { stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' }
-      })
-    }
-    getSshGitProviderMock.mockReturnValue(sshProvider)
-
-    await expect(getOwnerRepo('/home/user/orca', 'openclaw-2')).resolves.toEqual({
-      owner: 'stablyai',
-      repo: 'orca'
-    })
-
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(getSshGitProviderMock).toHaveBeenCalledWith('openclaw-2')
-    expect(sshProvider.exec).toHaveBeenCalledWith(
-      ['remote', 'get-url', 'origin'],
-      '/home/user/orca',
-      {
-        signal: expect.any(AbortSignal)
-      }
-    )
-  })
-
-  it('keeps local and SSH owner/repo cache entries separate for the same path', async () => {
-    const sshProvider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'remote' && args[1] !== 'get-url') {
-          return { stdout: 'origin\n', stderr: '' }
-        }
-        return { stdout: 'git@github.com:remote/orca.git\n', stderr: '' }
-      })
-    }
-    mockGitRemoteCommands({ origin: 'git@github.com:local/orca.git\n' })
-    getSshGitProviderMock.mockReturnValue(sshProvider)
-
-    await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'local', repo: 'orca' })
-    await expect(getOwnerRepo('/repo', 'ssh-1')).resolves.toEqual({ owner: 'remote', repo: 'orca' })
   })
 
   it('keeps local host and local WSL owner/repo cache entries separate for the same path', async () => {
@@ -747,7 +689,6 @@ describe('github owner/repo resolution', () => {
 describe('resolveIssueSource', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
-    getSshGitProviderMock.mockReset()
     _resetOwnerRepoCache()
     _resetRemoteNameListingCache()
   })

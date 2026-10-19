@@ -119,11 +119,35 @@ describe('decodeGrokTranscriptLine', () => {
           '<git_status>Working tree snapshot</git_status>'
         ].join('\n\n')
       }
+    ],
+    // Grok 1.0 appends the user's rules after the runtime context.
+    [
+      {
+        type: 'text',
+        text: [
+          '<user_info>\nOS Version: macos\nShell: /bin/zsh\n</user_info>',
+          '<rules>\n<user_rules description="Rules">\n<user_rule>\nBe brief.\n</user_rule>\n</user_rules>\n</rules>'
+        ].join('\n\n')
+      }
     ]
   ])('skips a standalone Grok user_info bootstrap row', (content) => {
     expect(
       decodeGrokTranscriptLine(JSON.stringify({ type: 'user', content }), 'fb-user-info')
     ).toBeNull()
+  })
+
+  it('keeps a row whose text continues past the known bootstrap sections', () => {
+    const line = JSON.stringify({
+      type: 'user',
+      content: [
+        {
+          type: 'text',
+          text: '<user_info>Runtime context</user_info>\n\n<rules>r</rules>\nFix the bug'
+        }
+      ]
+    })
+
+    expect(decodeGrokTranscriptLine(line, 'fb-user-info-tail')).toMatchObject({ role: 'user' })
   })
 
   it('keeps a real query that discusses the user_info tag', () => {

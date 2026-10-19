@@ -6,6 +6,7 @@ import { PrepareCodexForWslPaneParams } from '../../../../shared/rpc-contract/ag
 export const AGENT_HOOK_METHODS = [
   defineMethod({
     name: 'agentHooks.prepareCodexForWslPane',
+    permission: 'workspace',
     params: PrepareCodexForWslPaneParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {

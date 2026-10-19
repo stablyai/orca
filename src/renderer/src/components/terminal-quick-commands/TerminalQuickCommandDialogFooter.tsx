@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 
 type TerminalQuickCommandDialogFooterProps = {
   canSave: boolean
+  saving: boolean
   submitShortcutLabel: string
   onCancel: () => void
   onSave: () => void
@@ -11,13 +12,14 @@ type TerminalQuickCommandDialogFooterProps = {
 
 export function TerminalQuickCommandDialogFooter({
   canSave,
+  saving,
   submitShortcutLabel,
   onCancel,
   onSave
 }: TerminalQuickCommandDialogFooterProps): React.JSX.Element {
   return (
     <DialogFooter className="border-t border-border px-6 py-4 sm:justify-end">
-      <Button type="button" variant="outline" onClick={onCancel}>
+      <Button type="button" variant="outline" disabled={saving} onClick={onCancel}>
         {translate(
           'auto.components.terminal.quick.commands.TerminalQuickCommandDialogFooter.28370f16b9',
           'Cancel'

@@ -30,6 +30,7 @@ import {
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const writes = vi.hoisted(() => ({ failing: false }))
 
@@ -84,6 +85,7 @@ async function relaunch(
   // The lease-reconcile entries the host logs, by the failure each reports.
   const leaseReconcileLogged = vi.fn()
   const host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: {
       warn: (_message, fields) => {
         if (fields.scope === 'lease-reconcile') {
@@ -189,14 +191,14 @@ it('refuses a send over records a newer Orca wrote with the update words', async
   })
 })
 
-it('restores a chat for reading from records a newer Orca wrote', async () => {
+it('opens no chat from records a newer Orca wrote, and writes nothing trying', async () => {
   const { host, stateDirectory, leaseReconcileLogged } = await relaunch(true)
   const path = journalDatabasePath(stateDirectory)
   const bytes = await readFile(path)
 
   await expect(host.restoreReadableSessions([SESSION])).resolves.toBeUndefined()
 
-  expect(host.hasSession(SESSION)).toBe(true)
+  expect(host.hasSession(SESSION)).toBe(false)
   expect(leaseReconcileLogged).not.toHaveBeenCalled()
   expect(await readFile(path)).toEqual(bytes)
 })

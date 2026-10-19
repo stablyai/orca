@@ -1,11 +1,11 @@
 // Test fixture: a packaged Node slot whose runtime is the real pinned Node, laid out as shipped.
-import { existsSync } from 'node:fs'
+import { copyFileSync, existsSync, linkSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { copyFile, link, mkdir, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import type * as NodePty from 'node-pty'
 import { join, resolve } from 'node:path'
 import { it } from 'vitest'
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../shared/node-runtime-pin'
 import {
   ORCAD_NODE_PTY_DIR,
@@ -41,15 +41,17 @@ export function locatePinnedNodeForTests(): string | null {
   )
 }
 
-/** The Bun the last Bun orcad shipped on; only the design D7 cross-runtime gates still run it. */
-export const LAST_BUN_ORCAD_VERSION = '1.4.2'
+const crossRuntimeBunVersion = readFileSync(
+  new URL('../../../config/.bun-version', import.meta.url),
+  'utf8'
+).trim()
 
-/** Bun 1.4.2 (BUN_EXECUTABLE, else `bun` on PATH), the last runtime orcad shipped on, if any. */
+/** The shared Bun pin (BUN_EXECUTABLE, else `bun` on PATH), if available. */
 export function locateBunForTests(): string | null {
   const candidate = process.env.BUN_EXECUTABLE ?? 'bun'
   try {
     const result = runProcessSync({ program: candidate, args: ['--version'], timeoutMs: 10_000 })
-    return result.code === 0 && result.stdout.trim() === LAST_BUN_ORCAD_VERSION ? candidate : null
+    return result.code === 0 && result.stdout.trim() === crossRuntimeBunVersion ? candidate : null
   } catch {
     return null
   }
@@ -70,6 +72,41 @@ export async function writeNodeSlotFixture(
   await mkdir(join(runtime, '..'), { recursive: true })
   // Why a hard link: the runtime is ~120 MB, and a copy per test would dominate the suite.
   await link(pinnedNode, runtime).catch(() => copyFile(pinnedNode, runtime))
+  return { slotDir, runtime }
+}
+
+/** Installs a built or materialized slot under `<root>/orcad-test` with its pinned runtime beside it. */
+export function installPackagedOrcadSlotForTests(
+  root: string,
+  pinnedNode: string,
+  sourceDir = resolve('out/orcad')
+): { slotDir: string; runtime: string } {
+  const linkOrCopy = (from: string, to: string): void => {
+    try {
+      linkSync(from, to)
+    } catch {
+      copyFileSync(from, to)
+    }
+  }
+  const installTree = (source: string, destination: string): void => {
+    mkdirSync(destination, { recursive: true })
+    for (const entry of readdirSync(source, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        installTree(join(source, entry.name), join(destination, entry.name))
+      } else {
+        linkOrCopy(join(source, entry.name), join(destination, entry.name))
+      }
+    }
+  }
+  const slotDir = join(root, 'orcad-test')
+  installTree(sourceDir, slotDir)
+  const target = hostServerTarget()
+  const runtime = resolve(
+    slotDir,
+    ...orcadNodeRuntimeRelativePath(target, NODE_RUNTIME_ASSETS[target].executableSha256)
+  )
+  mkdirSync(join(runtime, '..'), { recursive: true })
+  linkOrCopy(pinnedNode, runtime)
   return { slotDir, runtime }
 }
 

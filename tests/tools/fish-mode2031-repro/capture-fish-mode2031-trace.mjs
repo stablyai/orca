@@ -33,13 +33,16 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 
 const require = createRequire(import.meta.url)
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../..')
 
 const pty = require(path.join(REPO_ROOT, 'node_modules/node-pty'))
 const { INITIAL_MODE_2031_REPLY_SCAN_STATE, mode2031SequenceFor, scanMode2031ReplyDecision } =
-  await import(path.join(REPO_ROOT, 'src/shared/terminal-color-scheme-protocol.ts'))
+  await import(
+    pathToFileURL(path.join(REPO_ROOT, 'src/shared/terminal-color-scheme-protocol.ts')).href
+  )
 
 // ---------------------------------------------------------------- args
 

@@ -36,6 +36,7 @@ function stubExecutor(onClose: () => void) {
     handle: vi.fn(async () => ({ status: 'completed' as const })),
     retirePage: vi.fn(async () => true),
     hasUnresolvedPage: vi.fn(() => false),
+    hostsPage: vi.fn(() => false),
     beginAuthorityTransition: vi.fn(),
     completeAuthorityTransition: vi.fn(),
     fenceNavigation: vi.fn(),

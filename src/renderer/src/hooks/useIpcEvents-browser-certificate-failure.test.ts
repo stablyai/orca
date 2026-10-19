@@ -85,7 +85,6 @@ function storeStateWithRuntime(
     settings: {
       terminalFontSize: 13,
       experimentalNativeChat: false,
-      openAgentTabsInChatByDefault: false,
       activeRuntimeEnvironmentId: 'env-a'
     }
   })

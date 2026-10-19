@@ -142,7 +142,16 @@ describe('structured worker stop', () => {
     })
   })
 
-  it.each([{ hasSession: false }, { claimStatus: 'conflicted' }, { record: null }])(
+  it('retains without closing a worker whose session has no durable record', async () => {
+    // Not being able to find the running session is not a reason to act on a guess.
+    const close = vi.fn(async () => {})
+    installHost({ record: null, close })
+    const result = await stopStructuredWorker(IDENTITY, 'd1')
+    expect(result).toMatchObject({ stopped: false, closeAttempted: false })
+    expect(close).not.toHaveBeenCalled()
+  })
+
+  it.each([{ hasSession: false }, { claimStatus: 'conflicted' }])(
     'retains without positive exit evidence: %j',
     async (options) => {
       installHost({ ...options, close: async () => {} })
@@ -252,6 +261,7 @@ describe('structured worker output', () => {
   })
 
   it('refuses to read a session the host no longer holds', async () => {
+    installHost({ historyThrows: true })
     await expect(
       readStructuredWorkerJournal({
         identity: IDENTITY,
@@ -261,6 +271,18 @@ describe('structured worker output', () => {
         agent: 'claude'
       })
     ).rejects.toThrow(/not attached/)
+  })
+
+  it('refuses, typed, when there is no host to find the running session with', async () => {
+    await expect(
+      readStructuredWorkerJournal({
+        identity: IDENTITY,
+        dispatchId: 'd1',
+        workerState: 'ready',
+        liveness: 'live',
+        agent: 'claude'
+      })
+    ).rejects.toMatchObject({ code: 'session_caller_not_live' })
   })
 
   it('reports an unverifiable worker as unknown, never as running', async () => {
@@ -441,7 +463,9 @@ describe('archiving a structured worker whose journal cannot be read', () => {
     await expect(captureStructuredWorkerArchive(IDENTITY, 'claude')).rejects.toThrow(/retained/)
   })
 
-  it('still retains when there is no host to look with', async () => {
-    await expect(captureStructuredWorkerArchive(IDENTITY, 'claude')).rejects.toThrow(/retained/)
+  it('still refuses when there is no host to look with', async () => {
+    await expect(captureStructuredWorkerArchive(IDENTITY, 'claude')).rejects.toMatchObject({
+      code: 'session_caller_not_live'
+    })
   })
 })

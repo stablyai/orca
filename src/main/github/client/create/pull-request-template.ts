@@ -1,7 +1,5 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { getSshFilesystemProvider } from '../../../providers/ssh-filesystem-dispatch'
-import { joinWorktreeRelativePath } from '../../../runtime/runtime-relative-paths'
 import { ghExecFileAsync, ghRepoExecOptions, githubRepoContext } from '../../gh-utils'
 import {
   getHostedReviewLocalGitOptions,
@@ -60,21 +58,11 @@ export async function readPullRequestTemplate(
     'docs/pull_request_template.md',
     'docs/PULL_REQUEST_TEMPLATE.md'
   ]
-  const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-  if (connectionId && !remoteProvider) {
+  if (connectionId) {
     return ''
   }
   for (const relativeCandidate of relativeCandidates) {
     try {
-      if (remoteProvider) {
-        const result = await remoteProvider.readFile(
-          joinWorktreeRelativePath(repoPath, relativeCandidate)
-        )
-        if (result.isBinary) {
-          continue
-        }
-        return result.content
-      }
       return await readFile(join(repoPath, relativeCandidate), 'utf8')
     } catch {
       // Try the next conventional PR template path.

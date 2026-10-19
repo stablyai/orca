@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitHistory, type RuntimeGitContext } from '@/runtime/runtime-git-client'
+import { getRuntimeGitHistory } from '@/runtime/runtime-git-status-client'
 import type { GitHistoryPanelState } from './git-history-panel'
 
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
@@ -16,7 +18,7 @@ const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
  * whenever the callback identity changes.
  */
 export function useSourceControlGitHistory({
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
   worktreePath,
   compareBaseRef,
@@ -26,7 +28,7 @@ export function useSourceControlGitHistory({
   isGitHistoryVisible,
   worktreeMap
 }: {
-  activeRepoSettings: RuntimeGitContext['settings']
+  activeRepoTarget: RuntimeClientTarget | null
   activeWorktreeId: string | null
   worktreePath: string | null
   compareBaseRef: string | null
@@ -49,7 +51,8 @@ export function useSourceControlGitHistory({
     ? (gitHistoryByWorktree[activeWorktreeId] ?? EMPTY_GIT_HISTORY_STATE)
     : EMPTY_GIT_HISTORY_STATE
   // Why: the read is routed by owner host, so track it as a stable string — a new settings object alone must not refetch.
-  const ownerHostKey = activeRepoSettings?.activeRuntimeEnvironmentId?.trim() ?? ''
+  const ownerHostKey =
+    activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : ''
 
   useEffect(() => {
     setGitHistoryByWorktree((prev) => {
@@ -100,7 +103,7 @@ export function useSourceControlGitHistory({
       const result = await getRuntimeGitHistory(
         {
           // Why: route the history read by the repo OWNER host, not the focused runtime.
-          settings: activeRepoSettings,
+          target: requireGitOwnerTarget(activeRepoTarget),
           worktreeId,
           worktreePath,
           connectionId
@@ -130,7 +133,7 @@ export function useSourceControlGitHistory({
       })
     }
   }, [
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     compareBaseRef,
     isBranchVisible,

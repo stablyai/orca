@@ -4,21 +4,15 @@ import { MobileDiffReviewScreenView } from '../components/MobileDiffReviewScreen
 import { firstReviewParam, normalizeReviewFilterParam } from './mobile-diff-review-screen-model'
 import { normalizeReviewAreaParam } from './mobile-diff-review-positioning'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
-import { useForceReconnect, useHostClient } from '../transport/client-context'
-import { useHostProtocolGates } from '../components/HostProtocolGate'
-import { useRouteHandoff } from '../navigation/route-handoff'
+import { useForceReconnect } from '../transport/host-client-hooks'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
+import { useHostProtocolGates } from '../components/host-protocol-gates-context'
+import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 
 /**
- * The review screen as a component rather than a route module, which is what lets a switch hold it.
- *
- * A route file that both reads the flag and calls `useMobileDiffReviewController` runs the whole
- * controller — its client subscriptions included — behind the page, because hooks cannot be
- * conditional. As an element passed for `fallback` it is created and not mounted, so the
- * controller runs only when the shell answers `native-route`. Same reason the explorer switch
- * builds its panel as an element.
- *
- * The params are read here rather than handed down, so this is the route body and the two route
- * files above it are the switch and its web sibling.
+ * The review screen as a component rather than a route module: the page's route file mounts it, and
+ * the native route file, which mounts the shell, cannot be imported by the page. It reads its own
+ * params.
  */
 export function MobileDiffReviewRouteScreen() {
   const params = useLocalSearchParams<{
@@ -41,8 +35,8 @@ export function MobileDiffReviewRouteScreen() {
   )
   // Not `useRouter`: inside the shell's page the session screen is native, so that replace has to
   // be handed back to the app rather than posted into a document that does not render it.
-  const router = useRouteHandoff()
-  const { client, state: connState } = useHostClient(hostId)
+  const router = useWorkspaceRouteHandoff()
+  const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
 
   const openSession = useCallback(() => {

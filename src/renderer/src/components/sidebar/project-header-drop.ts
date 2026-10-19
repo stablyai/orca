@@ -3,7 +3,7 @@ import {
   computeWorktreeSidebarHeaderDropPreview,
   type WorktreeSidebarHeaderDropPreview
 } from './worktree-sidebar-header-drop-preview'
-import type { Row } from './worktree-list/grouping/row-types'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
 import type { Repo } from '../../../../shared/repo-types'
 
 export type ProjectHeaderDragBucketKey = string
@@ -42,20 +42,6 @@ export function getSidebarOrderedRepoHeaderIdsByBucket(
     buckets.set(bucketKey, list)
   }
   return buckets
-}
-
-export function getLogicalRepoOrderRankById(
-  orderedRepoIds: readonly string[]
-): Map<string, number> {
-  const rankById = new Map<string, number>()
-  orderedRepoIds.forEach((repoId, index) => {
-    // Why: paired hosts can contribute the same logical project ID; its merged
-    // header must anchor to the first occurrence instead of whichever host loaded last.
-    if (!rankById.has(repoId)) {
-      rankById.set(repoId, index)
-    }
-  })
-  return rankById
 }
 
 export function getProjectGroupOrderForSidebarDrop(args: {

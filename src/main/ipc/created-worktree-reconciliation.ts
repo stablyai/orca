@@ -3,7 +3,7 @@ import { describeCreatedWorktree, listWorktreesSharedStrict } from '../git/workt
 import { WORKTREE_LIST_TIMEOUT_MS } from '../git/worktree-operation-options'
 import type { GitWorktreeExecOptions } from '../git/worktree'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
-import { areWorktreePathsEqual } from './worktree-path-comparison'
+import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
 
 export function findCreatedWorktree<T extends { path: string; branch?: string }>(
   worktrees: readonly T[],

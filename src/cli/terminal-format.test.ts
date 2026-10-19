@@ -7,6 +7,7 @@ import type {
 import {
   formatTerminalClose,
   formatTerminalFocus,
+  formatTerminalRead,
   formatTerminalSend,
   formatTerminalShow,
   formatTerminalWait
@@ -266,5 +267,24 @@ describe('blocked-reason rendering against a mixed-version host', () => {
     expect(formatTerminalShow(showResult(undefined))).toContain(
       'agentWait: interactive prompt (via prompt-text)'
     )
+  })
+})
+
+describe('formatTerminalRead draft separation', () => {
+  it('labels composer drafts outside terminal output', () => {
+    const output = formatTerminalRead({
+      terminal: {
+        handle: 'term_1',
+        status: 'running',
+        tail: ['Build passed', '❯'],
+        truncated: false,
+        nextCursor: null,
+        source: 'screen',
+        draft: 'proceed with the release'
+      }
+    })
+
+    expect(output).toContain('draft: "proceed with the release"')
+    expect(output).toContain('\n\nBuild passed\n❯')
   })
 })

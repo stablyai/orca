@@ -7,6 +7,7 @@ import type { TuiAgent } from './tui-agent'
 // grep of that module's consumers complete (the chip row is the one that must not diverge).
 
 export type SourceControlTextActionId = 'commitMessage' | 'pullRequest' | 'branchName'
+export type AiTextActionId = SourceControlTextActionId | 'conversationName'
 
 export type SourceControlLaunchActionId =
   | 'fixCommitFailure'
@@ -16,6 +17,7 @@ export type SourceControlLaunchActionId =
   | 'resolveComments'
 
 export type SourceControlActionId = SourceControlTextActionId | SourceControlLaunchActionId
+export type AiActionId = AiTextActionId | SourceControlLaunchActionId
 
 export type SourceControlActionRecipe = {
   agentId?: TuiAgent | CustomAgentId | null
@@ -23,9 +25,7 @@ export type SourceControlActionRecipe = {
   agentArgs?: string
 }
 
-export type SourceControlAiActionDefaults = Partial<
-  Record<SourceControlActionId, SourceControlActionRecipe>
->
+export type SourceControlAiActionDefaults = Partial<Record<AiActionId, SourceControlActionRecipe>>
 
 export const SOURCE_CONTROL_TEXT_ACTION_IDS = [
   'commitMessage',
@@ -46,6 +46,16 @@ export const SOURCE_CONTROL_ACTION_IDS = [
   ...SOURCE_CONTROL_LAUNCH_ACTION_IDS
 ] as const satisfies readonly SourceControlActionId[]
 
+export const AI_TEXT_ACTION_IDS = [
+  ...SOURCE_CONTROL_TEXT_ACTION_IDS,
+  'conversationName'
+] as const satisfies readonly AiTextActionId[]
+
+export const AI_ACTION_IDS = [
+  ...AI_TEXT_ACTION_IDS,
+  ...SOURCE_CONTROL_LAUNCH_ACTION_IDS
+] as const satisfies readonly AiActionId[]
+
 export const SOURCE_CONTROL_TEXT_ACTION_LABELS: Record<SourceControlTextActionId, string> = {
   commitMessage: 'Commit message',
   pullRequest: 'Pull request details',
@@ -65,13 +75,11 @@ export const SOURCE_CONTROL_ACTION_LABELS: Record<SourceControlActionId, string>
   ...SOURCE_CONTROL_LAUNCH_ACTION_LABELS
 }
 
-export const DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES: Record<
-  SourceControlActionId,
-  string
-> = {
+export const DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES: Record<AiActionId, string> = {
   commitMessage: '{basePrompt}',
   pullRequest: '{basePrompt}',
   branchName: '{basePrompt}',
+  conversationName: '{basePrompt}',
   fixCommitFailure: '{basePrompt}',
   fixPushFailure: '{basePrompt}',
   fixChecks: '{basePrompt}',
@@ -79,7 +87,7 @@ export const DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES: Record<
   resolveComments: '{basePrompt}'
 }
 
-const ACTION_ID_SET = new Set<string>(SOURCE_CONTROL_ACTION_IDS)
+const ACTION_ID_SET = new Set<string>(AI_ACTION_IDS)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -89,7 +97,7 @@ function isSafeRecordKey(key: string): boolean {
   return key !== '' && key !== '__proto__' && key !== 'constructor' && key !== 'prototype'
 }
 
-function isSourceControlActionId(value: string): value is SourceControlActionId {
+function isAiActionId(value: string): value is AiActionId {
   return ACTION_ID_SET.has(value)
 }
 
@@ -127,7 +135,7 @@ export function normalizeSourceControlAiActionDefaults(
 
   const normalized: SourceControlAiActionDefaults = {}
   for (const [key, item] of Object.entries(value)) {
-    if (!isSafeRecordKey(key) || !isSourceControlActionId(key)) {
+    if (!isSafeRecordKey(key) || !isAiActionId(key)) {
       continue
     }
     const defaultValue = normalizeSourceControlActionRecipe(item)
@@ -140,7 +148,7 @@ export function normalizeSourceControlAiActionDefaults(
 
 export function readSourceControlActionDefault(
   defaults: SourceControlAiActionDefaults | null | undefined,
-  actionId: SourceControlActionId
+  actionId: AiActionId
 ): SourceControlActionRecipe {
   const value = defaults?.[actionId]
   return {
@@ -154,7 +162,7 @@ export function readSourceControlActionDefault(
 
 export function resolveSourceControlActionCommandTemplate(
   defaults: SourceControlAiActionDefaults | null | undefined,
-  actionId: SourceControlActionId
+  actionId: AiActionId
 ): string {
   const template = readSourceControlActionDefault(defaults, actionId).commandInputTemplate
   return template !== undefined
@@ -164,7 +172,7 @@ export function resolveSourceControlActionCommandTemplate(
 
 export function setSourceControlActionDefault(
   defaults: SourceControlAiActionDefaults | null | undefined,
-  actionId: SourceControlActionId,
+  actionId: AiActionId,
   value: SourceControlActionRecipe
 ): SourceControlAiActionDefaults {
   return {
@@ -178,7 +186,7 @@ export function setSourceControlActionDefault(
 
 export function setSourceControlActionAgentDefault(
   defaults: SourceControlAiActionDefaults | null | undefined,
-  actionId: SourceControlActionId,
+  actionId: AiActionId,
   agentId: TuiAgent | CustomAgentId | null
 ): SourceControlAiActionDefaults {
   return setSourceControlActionDefault(defaults, actionId, { agentId })

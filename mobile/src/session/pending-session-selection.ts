@@ -135,13 +135,16 @@ export function resolveLaunchedSelection(
   }
 }
 
-/** Whether the host lists a launch's tab, which proves the agent started. */
+/** Whether the host lists a launch's running surface, which proves the agent started. */
 export function isLaunchedSurfaceListed(
   tabs: readonly MobileSessionTab[],
   surface: Partial<LaunchedSurface>
 ): boolean {
   const known: LaunchedSurface = { pane: null, sessionId: null, handle: null, ...surface }
-  return tabs.some((tab) => isLaunchedTab(tab, known))
+  // A host may list a launch's terminal tab before its agent exists; only a terminal proves a start.
+  return tabs.some(
+    (tab) => isLaunchedTab(tab, known) && (tab.type !== 'terminal' || tab.terminal !== null)
+  )
 }
 
 function isLaunchedTab(tab: MobileSessionTab, surface: LaunchedSurface): boolean {

@@ -12,14 +12,14 @@ vi.mock('@/store', () => ({
     getState: vi.fn()
   }
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-read-client', () => ({
   readRuntimeFileContent: readRuntimeFileContentMock
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: () => null
-}))
+
 vi.mock('@/lib/connection-context', () => ({
-  getConnectionIdForFile: () => undefined
+  // Why: the floating workspace is always client-local; other owners are still loading.
+  getConnectionIdForFile: (worktreeId: string) =>
+    worktreeId === 'global-floating-terminal' ? null : undefined
 }))
 
 import {
@@ -227,5 +227,22 @@ describe('ExternalFileChangeBanner', () => {
     await Promise.resolve()
 
     expect(setLastKnownDiskSignature).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'a floating-workspace tab, as the file the user named',
+      'global-floating-terminal',
+      'user-file'
+    ],
+    ['a project tab, inside its root', 'wt-1', undefined]
+  ])('keep-my-edits reads %s', async (_label, worktreeId, kind) => {
+    const tab: OpenFile = { ...file, worktreeId }
+    mockStoreState({}, [tab])
+
+    keepTabEditsOverExternalChange(tab)
+    await Promise.resolve()
+
+    expect(readRuntimeFileContentMock.mock.calls[0]?.[0]?.access?.kind).toBe(kind)
   })
 })

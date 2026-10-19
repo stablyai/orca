@@ -9,7 +9,9 @@ import type { AgentSessionResumeMarker } from '../../../shared/agent-session-res
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 
 /** The message body, built once so both the send and any test read the same text. */
-export function restartContinuationBody(marker: AgentSessionResumeMarker): AgentJournalMessageItem {
+export function restartContinuationBody(
+  marker: Pick<AgentSessionResumeMarker, 'activity'>
+): AgentJournalMessageItem {
   return {
     kind: 'message',
     role: 'user',
@@ -57,7 +59,7 @@ export function isRestartContinuationOf(
 export function restartContinuationEnvelope(
   sessionId: string,
   fence: number,
-  marker: AgentSessionResumeMarker,
+  marker: Pick<AgentSessionResumeMarker, 'activity'>,
   continuationId: string
 ): { envelope: AgentSessionMutationEnvelope; body: AgentJournalMessageItem } {
   const body = restartContinuationBody(marker)

@@ -5,6 +5,7 @@ import { MobileMarkdown } from './MobileMarkdown'
 
 vi.mock('react-native', () => ({
   Linking: { openURL: () => Promise.resolve() },
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },

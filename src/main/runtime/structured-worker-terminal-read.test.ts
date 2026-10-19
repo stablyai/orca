@@ -9,7 +9,8 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 }))
 
 const { readStructuredWorkerTerminal } = await import('./structured-worker-terminal-read')
-const { OrcaRuntimeWithResolveTerminalPane } = await import('./orca-runtime-resolve-terminal-pane')
+const { OrcaRuntimeWithResolveTerminalPane } =
+  await import('./terminal/recovery/resolve-terminal-pane')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

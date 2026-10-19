@@ -45,6 +45,16 @@ describe('agent prompt injection bytes', () => {
     expect(buildAgentPromptPasteBytes('brief', '')).toBe(`${BEGIN}brief${END}`)
   })
 
+  it('keeps generic prompt behavior for recognition-only agents', () => {
+    expect(agentPromptTakesLeadLine('dsb')).toBe(agentPromptTakesLeadLine(undefined))
+    expect(agentPromptSubmitJoinsPasteFrame('dsb')).toBe(false)
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(resolveAgentPromptSubmitDelayForAgent(platform, 'first\nsecond', 'dsb')).toBe(
+        resolveAgentPromptSubmitDelayForAgent(platform, 'first\nsecond', undefined)
+      )
+    }
+  })
+
   it('keeps submit separate from the paste frame', () => {
     expect(buildAgentPromptPasteBytes('hello')).not.toContain('\r')
   })

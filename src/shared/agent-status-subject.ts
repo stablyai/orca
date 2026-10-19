@@ -153,10 +153,6 @@ export function parseAgentStatusSubject(value: unknown): AgentStatusSubject | nu
   return null
 }
 
-export function isAgentStatusSubject(value: unknown): value is AgentStatusSubject {
-  return parseAgentStatusSubject(value) !== null
-}
-
 function subjectKeyTuple(subject: AgentStatusSubject): AgentStatusSubjectKeyTuple {
   const identity =
     subject.kind === 'pty-run'

@@ -47,7 +47,7 @@ export function retryFailedLocalWorktreeRemoval(
       purge: ({ worktreeId, repoId }) => {
         runtime.clearOptimisticReconcileToken(worktreeId)
         removeWorktreeMetadataAndTransientState(
-          store,
+          { store, runtime },
           worktreeId,
           LOCAL_EXECUTION_HOST_ID,
           args.snapshotPruneBatchId

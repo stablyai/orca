@@ -47,7 +47,7 @@ describe('StatusIndicator', () => {
     expect(markup).toContain('data-state-indicator-tooltip="Monitoring background tasks"')
     expect(markup).not.toContain(' title=')
     expect(markup).toContain('lucide-activity')
-    expect(markup).toContain('text-yellow-500')
+    expect(markup).toContain('text-agent-working')
     expect(markup).not.toContain('data-agent-spinner')
   })
 

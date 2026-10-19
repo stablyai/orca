@@ -43,6 +43,21 @@ export function hasWorkspaceCleanupRiskEscalated(
   )
 }
 
+export function getWorkspaceCleanupAgentStartedFailure(
+  target: PreflightFailureTarget,
+  candidate: WorkspaceCleanupCandidate
+): WorkspaceCleanupFailure {
+  return {
+    worktreeId: target.worktreeId,
+    ...(target.executionHostId ? { executionHostId: target.executionHostId } : {}),
+    displayName: candidate.displayName,
+    message: translate(
+      'auto.store.slices.workspace.cleanup.agentStartedSinceConfirmation',
+      'An agent is running in this workspace. Delete it again to review stopping the agent.'
+    )
+  }
+}
+
 export function hasValidWorkspaceCleanupUnverifiedConsent(
   candidateIdentity: string,
   consent: WorkspaceCleanupUnverifiedRemovalConsent | undefined,

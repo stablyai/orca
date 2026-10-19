@@ -15,14 +15,12 @@ import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence'
 import {
   closeTestStores,
-  createSqliteTestStore,
+  createStore,
   readPersistedStateJson,
+  testState,
   writePersistedStateJson
 } from '../persistence-test-harness'
 import { AutomationService } from './service'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-
-const testState = { dir: '' }
 
 vi.mock('electron', () => ({
   app: {
@@ -34,14 +32,6 @@ vi.mock('electron', () => ({
     decryptString: (ciphertext: Buffer) => ciphertext.toString('utf-8').slice('encrypted:'.length)
   }
 }))
-
-async function createStore(): Promise<Store> {
-  vi.resetModules()
-  installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store: StoreClass, initDataPath } = await import('../persistence')
-  initDataPath()
-  return createSqliteTestStore(StoreClass, { dataFile: join(testState.dir, 'orca-data.json') })
-}
 
 const makeRepo = (): Repo => ({
   id: 'r1',

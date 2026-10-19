@@ -3,7 +3,7 @@ import { readAgentProcess } from './agent-process-presence-probe'
 
 const run = vi.hoisted(() => vi.fn())
 const read = vi.hoisted(() => vi.fn())
-vi.mock('./child-process/run-process', () => ({ runProcess: run }))
+vi.mock('@orca/process-host', () => ({ runProcess: run }))
 vi.mock('node:fs/promises', () => ({ readFile: read }))
 const hostProcess = process
 function platform(name: string): void {

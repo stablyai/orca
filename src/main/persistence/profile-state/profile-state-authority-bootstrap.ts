@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import { publishProfileStateDatabase } from './profile-state-database-publication'
+import { ensureProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import type { ProfileStateAuthorityInitialState } from '../loading-store/profile-state-authority'
 import { isProfileStateSqliteAvailable, openProfileStateDatabase } from './profile-state-database'
 import { ProfileStateDatabaseOpenError } from './profile-state-database-errors'
@@ -88,6 +89,7 @@ export function bootstrapProfileStateAuthority(
         'diverged-json'
       )
     }
+    ensureProfileStateAuthorityMarker(options.databaseFile)
     return { classification, authority, initialState, migrated: false }
   } catch (error) {
     authority.close()

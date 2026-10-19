@@ -9,8 +9,7 @@
 import { useEffect, useEffectEvent, useState } from 'react'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 
-/** How far above the viewport the next page starts loading. The scroller's
- *  `zoom` may scale this, which changes only how early a page is asked for. */
+/** How far above the viewport the next page starts loading. */
 export const NATIVE_CHAT_OLDER_HISTORY_PREFETCH_PX = 600
 
 export type NativeChatOlderHistoryAutoload = {

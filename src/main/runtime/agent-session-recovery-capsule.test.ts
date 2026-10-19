@@ -11,9 +11,9 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-restart-resume-test-harness'
 import {
   AgentSessionRecoveryCapsule,
-  AGENT_SESSION_RECOVERY_CAPSULE_FILE,
-  type AgentSessionResumeFailureInput
+  AGENT_SESSION_RECOVERY_CAPSULE_FILE
 } from './agent-session-recovery-capsule'
+import type { AgentSessionResumeFailureInput } from './agent-session-recovery-capsule-entries'
 
 let directory: string
 let filePath: string
@@ -268,6 +268,24 @@ describe('durable restart offers', () => {
     // Not a fence: the same chat may be offered again by a later teardown.
     await capsule.record([marker()], NOW)
     expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'third' }), marker()])
+  })
+
+  it('forgets every record of any state except the ones kept, without a fence', async () => {
+    await capsule.record(
+      [marker(), marker({ sessionId: 'second' }), marker({ sessionId: 'kept' })],
+      NOW
+    )
+    await fileFailure()
+    expect(await capsule.listFailed(NOW)).toHaveLength(1)
+    await capsule.beginResume(['second'], 'operation-b', NOW)
+
+    const keep = (stored: { sessionId: string }) => stored.sessionId === 'kept'
+    expect(await capsule.dismiss('all', NOW, keep)).toBe(2)
+    expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'kept' })])
+    expect(await capsule.listFailed(NOW)).toEqual([])
+    // Unlike clearAll, a later teardown of a dismissed chat may offer it again.
+    await capsule.record([marker()], NOW)
+    expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'kept' }), marker()])
   })
 
   // A failure record has no expiry either; it ends only with the user's own actions.

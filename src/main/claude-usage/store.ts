@@ -14,18 +14,23 @@ import type {
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
 import type { ClaudeUsagePersistedState } from './types'
-import { scanClaudeUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
+import {
+  scanClaudeUsageFilesViaWorker,
+  splitUsageCacheFileViaWorker
+} from '../usage/usage-scan-worker-spawn'
 import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
 import { buildBreakdown, buildDaily, buildSummary } from './claude-usage-report-aggregation'
 import { buildRecentSessions } from './claude-usage-session-rows'
 import type { AutomationUsageLookupInput } from './claude-usage-automation-attribution'
 import { resolveAutomationRunUsage } from './claude-usage-automation-attribution'
+import { parseClaudeUsageReport, serializeClaudeUsageReport } from './persisted-usage-report'
 
 // Why: v5 widens Claude ownership keys (message-id / uuid fallbacks). Older
 // caches either lack ownership or used narrower keys and can under/over-count
 // after fork reclaim (#8006). v6 adds the 1-hour cache-write split, which older
 // caches never recorded, so their cost estimates stay stuck at the 5m rate (#15993).
-const SCHEMA_VERSION = 6
+// v7 stores protected column checkpoints on the worker and a separately protected report.
+const SCHEMA_VERSION = 7
 
 // Why: capture the path after configureDevUserDataPath() but before app.setName()
 // mutates Electron's derived userData location, matching the persistence/store pattern.
@@ -48,7 +53,7 @@ function getDefaultState(): ClaudeUsagePersistedState {
 }
 
 function normalizePersistedState(state: ClaudeUsagePersistedState): ClaudeUsagePersistedState {
-  if (state.schemaVersion === SCHEMA_VERSION) {
+  if (state.schemaVersion === 6 || state.schemaVersion === SCHEMA_VERSION) {
     return state
   }
   // Scanner changes invalidate totals, but preserving enabled keeps existing tracking on.
@@ -88,10 +93,13 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
       resolveCacheFile: getClaudeUsageFile,
       createDefaultState: getDefaultState,
       normalizeState: normalizePersistedState,
+      parseReport: parseClaudeUsageReport,
+      serializeReport: serializeClaudeUsageReport,
+      providerId: 'claude',
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyClaudeData',
-      jsonIndent: 2,
-      scan: scanClaudeUsageFilesViaWorker
+      scan: scanClaudeUsageFilesViaWorker,
+      splitCacheFile: splitUsageCacheFileViaWorker
     })
   }
 
@@ -142,6 +150,7 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
   }
 
   async getAutomationRunUsage(input: AutomationUsageLookupInput): Promise<AutomationRunUsage> {
+    await this.whenLoaded()
     return resolveAutomationRunUsage(input, {
       getState: () => this.state,
       refresh: (force) => this.refresh(force),

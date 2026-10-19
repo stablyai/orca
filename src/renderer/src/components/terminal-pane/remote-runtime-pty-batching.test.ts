@@ -15,13 +15,18 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
         maxPendingBytes: 8
       })
 
+      expect(batcher.hasPendingInput()).toBe(false)
       expect(batcher.push('a')).toBe(true)
       expect(batcher.push('b')).toBe(true)
       expect(flushes).toEqual([])
+      // Why: a remount during the debounce discards these, and the pane must know to say so.
+      await vi.advanceTimersByTimeAsync(0)
+      expect(batcher.hasPendingInput()).toBe(true)
 
       await vi.advanceTimersByTimeAsync(10)
 
       expect(flushes).toEqual(['ab'])
+      expect(batcher.hasPendingInput()).toBe(false)
     } finally {
       vi.useRealTimers()
     }

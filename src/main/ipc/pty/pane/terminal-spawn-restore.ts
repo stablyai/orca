@@ -1,4 +1,4 @@
-import type { PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { pendingByPaneKey, rendererSerializerReadiness } from './serializer-state'
 

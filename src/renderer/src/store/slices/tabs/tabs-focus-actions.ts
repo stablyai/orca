@@ -5,6 +5,18 @@ import {
   pushRecentTabId,
   sanitizeRecentTabIds
 } from '../tab-group-state'
+import type { Tab } from '../../../../../shared/tab-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { recordPromotedEditorTabsInLayoutOwner } from '../editor/tabs/editor-tab-layout-owner'
+import { withPreviewEnded } from './tab-preview-flag'
+
+/** Activation ends a preview unless it preserves it. */
+function withPreviewOnActivation(tab: Tab, preservePreview: boolean): Tab {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return { ...tab, isPreview: preservePreview ? tab.isPreview : false }
+  }
+  return preservePreview ? tab : withPreviewEnded(tab)
+}
 
 export function createTabsFocusActions(
   _set: TabsSliceSet,
@@ -40,6 +52,7 @@ export function createTabsFocusActions(
       ),
 
     activateTab: (tabId, opts) => {
+      const promoted: Tab[] = []
       set((state) => {
         const scopedWorktreeId = opts?.worktreeId
         let found: ReturnType<typeof findTabAndWorktree>
@@ -56,27 +69,16 @@ export function createTabsFocusActions(
           return state
         }
         const { tab, worktreeId } = found
-        // Why: activating a terminal tab dismisses its tab-level bell — the user has moved their eyes here.
-        // Why (activeWorktree guard below): only when the tab is in the active worktree, else the unseen signal is lost (mirrors focusGroup).
-        const terminalEntityId = tab.contentType === 'terminal' ? tab.entityId : null
-        const nextUnreadTerminalTabs =
-          state.activeWorktreeId === worktreeId &&
-          terminalEntityId &&
-          state.unreadTerminalTabs[terminalEntityId]
-            ? (() => {
-                const copy = { ...state.unreadTerminalTabs }
-                delete copy[terminalEntityId]
-                return copy
-              })()
-            : state.unreadTerminalTabs
+        if (ORCA_LAYOUT_OWNER_IS_MAIN && tab.isPreview && !opts?.preservePreview) {
+          promoted.push(tab)
+        }
         return {
           unifiedTabsByWorktree: {
             ...state.unifiedTabsByWorktree,
             [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
               item.id === tabId
                 ? {
-                    ...item,
-                    isPreview: opts?.preservePreview ? item.isPreview : false,
+                    ...withPreviewOnActivation(item, opts?.preservePreview === true),
                     ...(opts?.recordFocus === false ? {} : { lastFocusedAt: Date.now() })
                   }
                 : item
@@ -101,13 +103,13 @@ export function createTabsFocusActions(
           activeGroupIdByWorktree: {
             ...state.activeGroupIdByWorktree,
             [worktreeId]: tab.groupId
-          },
-          // Why: skip writing unreadTerminalTabs when the reference is unchanged, avoiding a no-op alloc that re-runs full-state selectors.
-          ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
-            ? { unreadTerminalTabs: nextUnreadTerminalTabs }
-            : {})
+          }
         }
       })
+      // Switch point: main records that activating a preview made it permanent.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && promoted.length > 0) {
+        recordPromotedEditorTabsInLayoutOwner(get(), promoted)
+      }
     }
   }
 }

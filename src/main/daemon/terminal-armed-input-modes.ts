@@ -5,7 +5,7 @@ const TRACKED_PRIVATE_MODES = new Set([9, 1000, 1002, 1003, 1004, 1005, 1006, 10
 // The one mode a terminal host arms for itself: ConPTY sends ?1004h at pane start and after RIS.
 const HOST_ARMABLE_MODE = 1004
 // Why one key per screen: kitty flags are per screen, so ownership must be too.
-type ModeKey = number | 'kitty-main' | 'kitty-alt'
+type ModeKey = number | 'kitty-main' | 'kitty-alt' | 'modify-other-keys'
 // host: HOST_ARMABLE_MODE armed before any marker or by a prompt a 133;C proved; the ground keeps it.
 // prompt: armed outside a command, unproven until C.
 // command: armed after C; still on at any 133;D, it triggers the ground until disarmed.
@@ -90,6 +90,11 @@ export class TerminalArmedInputModes {
     }
   }
 
+  /** `CSI > 4 ; n m`: pi arms modifyOtherKeys when its kitty query goes unanswered. */
+  applyModifyOtherKeys(level: number): void {
+    this.setArmed('modify-other-keys', level > 0)
+  }
+
   /** OSC 133;C: the prompt's enables were the host's; later ones are the command's. */
   markCommandStart(): void {
     for (const [key, owner] of this.owners) {
@@ -110,7 +115,9 @@ export class TerminalArmedInputModes {
     let left = false
     for (const [key, owner] of this.owners) {
       // The other screen's kitty flags stay parked in xterm and reach no input.
-      left ||= owner === 'command' && (typeof key === 'number' || key === this.kittyKey())
+      left ||=
+        owner === 'command' &&
+        (typeof key === 'number' || key === 'modify-other-keys' || key === this.kittyKey())
       if (owner === 'prompt') {
         this.owners.set(key, 'stale')
       }
@@ -147,7 +154,7 @@ export class TerminalArmedInputModes {
     }
   }
 
-  private setArmed(key: number, armed: boolean): void {
+  private setArmed(key: ModeKey, armed: boolean): void {
     if (!armed) {
       this.owners.delete(key)
     } else if (this.owners.get(key) !== 'host') {

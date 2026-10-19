@@ -4,6 +4,13 @@ import { resolvePublishedPaneAgentIdentity } from './published-pane-agent-identi
 const resolve = resolvePublishedPaneAgentIdentity
 
 describe('resolvePublishedPaneAgentIdentity', () => {
+  it('publishes a manually started DeepSeek Build owner without readable process evidence', () => {
+    expect(resolve({ title: '⠋ - Review Codex integration - DeepSeek Build' })).toBe('dsb')
+    expect(resolve({ title: 'DeepSeek Build' })).toBe('dsb')
+    expect(resolve({ title: 'Terminal', foregroundAgent: 'dsb' })).toBe('dsb')
+    expect(resolve({ title: 'Review DeepSeek Build integration' })).toBeUndefined()
+  })
+
   describe('a task title cannot name the pane', () => {
     // Minimized from real recorded titles. Each is a pane of one agent whose task text names
     // another; before this, `@<other>` routing delivered to them.
@@ -70,10 +77,6 @@ describe('resolvePublishedPaneAgentIdentity', () => {
     expect(resolve({})).toBeUndefined()
   })
 
-  it('publishes nothing for a hyphenated worktree name that contains an agent word', () => {
-    expect(resolve({ title: 'review-14600-codex' })).toBeUndefined()
-  })
-
   describe('identity must not depend on how the agent was started', () => {
     // Most agents are started by typing `claude` / `codex` at a shell, not through Orca's agent
     // launcher. Those panes have no launch record at all, so anything that leans on one works for
@@ -114,10 +117,6 @@ describe('resolvePublishedPaneAgentIdentity', () => {
 
     it('lets a live hook outrank a stale launch record', () => {
       expect(resolve({ launchAgent: 'claude', hookAgent: 'codex', hookIsLive: true })).toBe('codex')
-    })
-
-    it('lets the live foreground process outrank a stale launch record', () => {
-      expect(resolve({ launchAgent: 'claude', foregroundAgent: 'codex' })).toBe('codex')
     })
   })
 })

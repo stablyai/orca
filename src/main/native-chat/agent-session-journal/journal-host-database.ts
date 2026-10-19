@@ -6,20 +6,13 @@
 
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type Database from '../../sqlite/sync-database'
 import {
-  JOURNAL_SYNCHRONOUS,
-  journalDatabaseMigratesRecords,
-  NO_LEGACY_JOURNAL_RECORDS,
   openJournalDatabase,
-  readJournalDatabaseVersion,
   runJournalTransaction,
-  type JournalLegacyRecordImport,
   type OpenJournalDatabase
 } from './journal-database'
 import { journalOpenRefusalError } from './journal-open-failure'
-import { journalDirectoryFor } from './journal-paths'
 import { AgentSessionJournalError } from './journal-write-guards'
 
 const JOURNAL_DATABASE_FILE = 'agent-session-journal.db'
@@ -32,44 +25,23 @@ export class JournalHostDatabase {
   private connection: Database.Database | null
   /** A newer Orca wrote the database: every chat's history reads, and no chat writes. */
   readonly readOnly: boolean
-  /** The chat records file could not be read this launch, so its copy waits for a later one. */
-  readonly legacyRecordImportOwed: boolean
   /** A failed transaction's ROLLBACK failed too, so the transaction may still be open. */
   private stranded = false
 
   private constructor(
-    readonly stateDirectory: string,
-    opened: OpenJournalDatabase
+    opened: OpenJournalDatabase,
+    /** Where the database lives; per-runtime end records sit beside it. */
+    readonly stateDirectory: string
   ) {
     this.connection = opened.db
     this.readOnly = opened.readOnly
-    this.legacyRecordImportOwed = opened.legacyRecordImportOwed
   }
 
-  /** `readLegacyRecords` runs only when this open migrates to version 4, before any transaction. */
-  static async open(
-    stateDirectory: string,
-    readLegacyRecords: () => Promise<JournalLegacyRecordImport>
-  ): Promise<JournalHostDatabase> {
-    mkdirSync(stateDirectory, { recursive: true })
-    const migrates = journalDatabaseMigratesRecords(
-      readJournalDatabaseVersion(journalDatabasePath(stateDirectory))
-    )
-    return JournalHostDatabase.openWith(
-      stateDirectory,
-      migrates ? await readLegacyRecords() : NO_LEGACY_JOURNAL_RECORDS
-    )
-  }
-
-  /** The same open with the records file already read; tests pass `NO_LEGACY_JOURNAL_RECORDS`. */
-  static openWith(
-    stateDirectory: string,
-    legacyRecords: JournalLegacyRecordImport
-  ): JournalHostDatabase {
+  static open(stateDirectory: string): JournalHostDatabase {
     mkdirSync(stateDirectory, { recursive: true })
     return new JournalHostDatabase(
-      stateDirectory,
-      openJournalDatabase(journalDatabasePath(stateDirectory), legacyRecords)
+      openJournalDatabase(journalDatabasePath(stateDirectory)),
+      stateDirectory
     )
   }
 
@@ -88,36 +60,27 @@ export class JournalHostDatabase {
     return connection
   }
 
-  /** One IMMEDIATE transaction; see `runJournalTransaction`. */
-  transaction<T>(run: (db: Database.Database) => T): T {
-    return runJournalTransaction(this.db, run, () => {
-      this.stranded = true
-    })
-  }
-
-  /**
-   * The same transaction, committed without an fsync: for rows no reader follows until a later
-   * synced commit, which under WAL makes every earlier frame durable too. The setting is restored
-   * in the same task, so no other chat's commit runs under it.
-   */
-  unsyncedTransaction<T>(run: (db: Database.Database) => T): T {
+  /** One IMMEDIATE transaction; see `runJournalTransaction`. `streamed` commits without the per-commit
+   *  fsync: only for rows an OS crash may lose (`isJournalStreamedTextRevision`); the next FULL
+   *  commit makes them durable, so a crash can only lose a suffix of them. */
+  transaction<T>(run: (db: Database.Database) => T, streamed = false): T {
     const db = this.db
+    if (!streamed) {
+      return runJournalTransaction(db, run, () => {
+        this.stranded = true
+      })
+    }
+    // The level can change only outside a transaction; a stranded one restores FULL on recovery.
     db.pragma('synchronous = NORMAL')
     try {
-      return this.transaction(run)
+      return runJournalTransaction(db, run, () => {
+        this.stranded = true
+      })
     } finally {
-      // SQLite refuses the change inside a transaction; freeing a stranded one restores it.
       if (!db.isTransaction) {
-        db.pragma(`synchronous = ${JOURNAL_SYNCHRONOUS}`)
+        db.pragma('synchronous = FULL')
       }
     }
-  }
-
-  /** Where this chat's history lived before the journal was one database per host. */
-  legacyDirectoryFor(
-    identity: Pick<AgentSessionJournalIdentity, 'workspaceId' | 'sessionId'>
-  ): string {
-    return journalDirectoryFor(this.stateDirectory, identity)
   }
 
   /** Last, after every store has drained. A close that fails keeps the handle, so the retried
@@ -140,7 +103,7 @@ export class JournalHostDatabase {
         throw journalOpenRefusalError(error)
       }
     }
-    connection.pragma(`synchronous = ${JOURNAL_SYNCHRONOUS}`)
+    connection.pragma('synchronous = FULL')
     this.stranded = false
   }
 }

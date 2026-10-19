@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { RelayCredentialStore, type RelayIdentity } from './credential-store.js'
+import {
+  AUDIT_EVENT_RETENTION_MS,
+  CONFIRM_RESULT_RETENTION_MS,
+  RelayCredentialStore,
+  type RelayIdentity
+} from './credential-store.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
 
 const identity: RelayIdentity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
@@ -68,6 +73,29 @@ async function insertDirectAuthorization(
       deadline, consumed_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [auth.id, identity.userId, identity.relayHostId, 'device-1', 1, auth.deadline, auth.consumedAt]
+  )
+}
+
+async function insertConfirmResult(
+  database: RelayDatabase,
+  result: { reqId: string; committedAt: number }
+): Promise<void> {
+  await database.query(
+    `INSERT INTO relay_confirm_results
+     (user_id, relay_host_id, req_id, basis_conn_id, tuple_json, result_json, committed_at)
+     VALUES (?, ?, ?, 'basis-1', '{}', '{}', ?)`,
+    [identity.userId, identity.relayHostId, result.reqId, result.committedAt]
+  )
+}
+
+async function insertAuditEvent(
+  database: RelayDatabase,
+  event: { id: string; at: number }
+): Promise<void> {
+  await database.query(
+    `INSERT INTO relay_audit_events (id, at, type, user_id, relay_host_id, detail_json)
+     VALUES (?, ?, 'resume-confirmed', ?, ?, '{}')`,
+    [event.id, event.at, identity.userId, identity.relayHostId]
   )
 }
 
@@ -292,6 +320,48 @@ describe('credential cleanup invite reaper', () => {
     await store.cleanup()
     expect(await remainingIds(database, 'relay_connection_bases', 'basis_conn_id')).toEqual([])
     expect(await remainingIds(database, 'relay_direct_authorizations', 'direct_auth_id')).toEqual([])
+    await database.close()
+  })
+
+  it('reaps confirm results and audit events only past their retention windows', async () => {
+    const database = await openInMemoryRelayDatabase()
+    const store = new RelayCredentialStore(database, () => NOW)
+    await insertConfirmResult(database, { reqId: 'confirm-old', committedAt: NOW - CONFIRM_RESULT_RETENTION_MS })
+    await insertConfirmResult(database, {
+      reqId: 'confirm-recent',
+      committedAt: NOW - CONFIRM_RESULT_RETENTION_MS + 1
+    })
+    await insertAuditEvent(database, { id: 'audit-old', at: NOW - AUDIT_EVENT_RETENTION_MS })
+    await insertAuditEvent(database, { id: 'audit-recent', at: NOW - AUDIT_EVENT_RETENTION_MS + 1 })
+
+    await store.cleanup()
+
+    expect(await remainingIds(database, 'relay_confirm_results', 'req_id')).toEqual(['confirm-recent'])
+    expect(await remainingIds(database, 'relay_audit_events', 'id')).toEqual(['audit-recent'])
+    await database.close()
+  })
+
+  it('still replays a confirm result inside retention', async () => {
+    // The one reader: a retried confirm on the same basis gets the stored answer back.
+    const database = await openInMemoryRelayDatabase()
+    const store = new RelayCredentialStore(database, () => NOW)
+    await database.query(
+      `INSERT INTO relay_confirm_results
+       (user_id, relay_host_id, req_id, basis_conn_id, tuple_json, result_json, committed_at)
+       VALUES (?, ?, 'confirm-1', 'basis-1', '{}', ?, ?)`,
+      [identity.userId, identity.relayHostId, JSON.stringify({ v: 1, reqId: 'confirm-1' }), NOW - DAY_MS]
+    )
+
+    await store.cleanup()
+
+    expect(
+      await store.confirmResume({
+        ...identity,
+        reqId: 'confirm-1',
+        basisConnId: 'basis-1',
+        owningControlGeneration: 1
+      })
+    ).toEqual({ v: 1, reqId: 'confirm-1' })
     await database.close()
   })
 })

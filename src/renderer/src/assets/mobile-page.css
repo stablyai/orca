@@ -1163,12 +1163,7 @@
   flex-direction: column;
   background: var(--m-bg-base);
   color: var(--m-text-primary);
-  font-family:
-    'Geist',
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 13px;
   box-sizing: border-box;
   /* Why: the phone frame is viewport-fit now; the preview content must stay

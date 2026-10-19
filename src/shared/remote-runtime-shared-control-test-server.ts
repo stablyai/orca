@@ -1,3 +1,7 @@
+import {
+  pairedRuntimeConnectionFromOffer,
+  type PairedRuntimeConnection
+} from './paired-runtime-connection'
 import type { AddressInfo } from 'node:net'
 import { WebSocketServer, type WebSocket } from 'ws'
 import {
@@ -11,7 +15,8 @@ import {
 import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
 
 export type SharedControlTestServer = {
-  pairing: PairingOffer
+  pairing: PairedRuntimeConnection
+  offer: PairingOffer
   requests: { id: string; method: string; params?: unknown }[]
   auths: unknown[]
   connectionCount: () => number
@@ -140,7 +145,8 @@ export async function createSharedControlTestServer(
     throw new Error('Failed to create test pairing')
   }
   return {
-    pairing,
+    pairing: pairedRuntimeConnectionFromOffer(pairing),
+    offer: pairing,
     requests,
     auths,
     connectionCount: () => connectionCount,

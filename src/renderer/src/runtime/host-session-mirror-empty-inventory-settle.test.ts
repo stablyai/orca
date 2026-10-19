@@ -42,11 +42,10 @@ import {
   clearHostLiveTerminalProbesForTests,
   probeHostLiveTerminals
 } from './host-live-terminal-probe'
-import {
-  applyWebSessionTabsStorePatch,
-  clearWebSessionTabsTrackingForEnvironment,
-  type HostSessionMirrorSettle
-} from './web-session-tabs-sync'
+import { applyWebSessionTabsStorePatch } from './web-session-tabs-sync/store-patch'
+import { clearWebSessionTabsTrackingForEnvironment } from './web-session-tabs-sync/tracking-lifecycle'
+import type { HostSessionMirrorSettle } from './web-session-tabs-sync/mirror-settle'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const WORKTREE = 'repo1::/path/wt1'
 
@@ -81,7 +80,7 @@ function stubPairedHost(
       }
     }
   })
-  vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+  stubRuntimeEnvironmentBridge({ call })
   return calls
 }
 
@@ -322,7 +321,7 @@ describe('empty host inventory settling the session mirror', () => {
       ok: true,
       result: { terminals: [], totalCount: 0, truncated: false }
     }))
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+    stubRuntimeEnvironmentBridge({ call })
     let resumeSweeps = 0
     parkUntilHostSessionMirrorHydrates(environmentId, WORKTREE, () => {
       resumeSweeps += 1
@@ -512,7 +511,7 @@ describe('empty host inventory settling the session mirror', () => {
           resolveProbe = resolve
         })
     )
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+    stubRuntimeEnvironmentBridge({ call })
     replaceRuntimeEnvironmentRevisions([{ id: environmentId, createdAt: 1, pairingRevision: 11 }])
     let resumeSweeps = 0
     parkUntilHostSessionMirrorHydrates(environmentId, WORKTREE, () => {
@@ -551,7 +550,7 @@ describe('empty host inventory settling the session mirror', () => {
           responses.push(resolve)
         })
     )
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+    stubRuntimeEnvironmentBridge({ call })
     replaceRuntimeEnvironmentRevisions([{ id: environmentId, createdAt: 1, pairingRevision: 11 }])
     let resumeSweeps = 0
     parkUntilHostSessionMirrorHydrates(environmentId, WORKTREE, () => {
@@ -600,7 +599,7 @@ describe('empty host inventory settling the session mirror', () => {
           resolveProbe = resolve
         })
     )
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+    stubRuntimeEnvironmentBridge({ call })
     let resumeSweeps = 0
     parkUntilHostSessionMirrorHydrates(environmentId, WORKTREE, () => {
       resumeSweeps += 1

@@ -1,8 +1,11 @@
-// A chat journal a newer Orca wrote opens read-only here: its cards still show, and every queue
-// write (a queued send, Send-now, Delete, Resume) is refused with the words a send gets there.
+// A chat journal a newer Orca wrote does not open here: its history read and every queue write (a
+// queued send, Send-now, Delete, Resume) are refused as a newer Orca's chat, and nothing is written.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  openTestJournalHostDatabase,
+  SAVED_BY_NEWER_ORCA
+} from '../agent-session-journal/journal-host-database-test-support'
 import { JOURNAL_NEWER_SCHEMA_MESSAGE } from '../agent-session-journal/journal-open-failure'
 import { HOST_TEST_SESSION } from './structured-agent-session-host-test-data'
 import {
@@ -42,15 +45,11 @@ async function reopenOnNewerOrcaDatabase(close: () => Promise<unknown>): Promise
   Object.defineProperty(openTestJournalHostDatabase(rig.root), 'readOnly', { value: true })
 }
 
-/** A read-only journal's history answers as a `schema_unreadable` reset carrying its page. */
-async function readOnlyQueue() {
-  const answer = await rig.host.history({ sessionId: HOST_TEST_SESSION, direction: 'tail' })
-  expect(answer).toMatchObject({ ok: false, reset: 'schema_unreadable' })
-  const page = 'page' in answer ? answer.page : undefined
-  return {
-    cards: (page?.queuedMessages ?? []).map(({ messageId, state }) => ({ messageId, state })),
-    pause: page?.queuePause ?? null
-  }
+/** The history read a newer Orca's chat gets: refused, as every reader's is. */
+async function expectHistoryRefused(): Promise<void> {
+  await expect(
+    rig.host.history({ sessionId: HOST_TEST_SESSION, direction: 'tail' })
+  ).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
 }
 
 async function twoCardsBehindWork() {
@@ -68,26 +67,22 @@ async function twoCardsBehindWork() {
 }
 
 describe("a newer Orca's journal", () => {
-  it('shows the cards, and refuses a queued send, Send-now and Delete with the update words', async () => {
-    const { first, second, cards } = await twoCardsBehindWork()
+  it('refuses the history read, a queued send, Send-now and Delete with the update words', async () => {
+    const { first, second } = await twoCardsBehindWork()
     await reopenOnNewerOrcaDatabase(() => rig.host.close(HOST_TEST_SESSION, 'evict'))
-    expect(await readOnlyQueue()).toEqual({ cards, pause: null })
+    await expectHistoryRefused()
 
-    // The waiting cards would queue this send behind them; the journal takes no new draft.
     expect(await rig.send('third', 'queue-if-active').result).toMatchObject(REFUSED_BY_NEWER_ORCA)
     expect(await rig.sendNow(first)).toMatchObject(REFUSED_BY_NEWER_ORCA)
     expect(await rig.deleteQueued(second)).toMatchObject(REFUSED_BY_NEWER_ORCA)
-
-    expect(await readOnlyQueue()).toEqual({ cards, pause: null })
+    await expectHistoryRefused()
   })
 
   it('refuses Resume of the queue a restart paused with the update words', async () => {
-    const { cards } = await twoCardsBehindWork()
+    await twoCardsBehindWork()
     await reopenOnNewerOrcaDatabase(() => rig.restartHostProcess())
-    expect(await readOnlyQueue()).toEqual({ cards, pause: { reason: 'restarted' } })
+    await expectHistoryRefused()
 
     expect(await rig.resume()).toMatchObject(REFUSED_BY_NEWER_ORCA)
-
-    expect(await readOnlyQueue()).toEqual({ cards, pause: { reason: 'restarted' } })
   })
 })

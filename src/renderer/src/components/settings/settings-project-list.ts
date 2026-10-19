@@ -12,7 +12,7 @@ import {
   buildProjectGroupingIndex,
   isCheckoutScopedProjectSetup,
   type ProjectGroupingModel
-} from '@/components/sidebar/worktree-list/grouping/project-grouping'
+} from '../../../../shared/project-section-grouping'
 
 export type SettingsProject = {
   projectId: string

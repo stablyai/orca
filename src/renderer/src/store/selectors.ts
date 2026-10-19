@@ -17,28 +17,18 @@ import {
   getIndexedWorktreeMap as getCachedWorktreeMap,
   getIndexedWorktreesById as getCachedWorktreesById
 } from './worktree-repo-index'
+import { findKnownWorktreeById } from './slices/worktrees/listing/detected-worktree-meta'
 
 export { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
+export {
+  resetFloatingVisibleTabCountSelectorCacheForTest,
+  selectFloatingVisibleTabCount
+} from './floating-workspace-panel-selector'
 
 const EMPTY_WORKTREES: Worktree[] = []
 const EMPTY_TABS: TerminalTab[] = []
-const EMPTY_BROWSER_TABS: NonNullable<AppState['browserTabsByWorktree'][string]> = []
-const EMPTY_UNIFIED_TABS: NonNullable<AppState['unifiedTabsByWorktree'][string]> = []
-
-type FloatingVisibleTabCountState = Pick<
-  AppState,
-  'browserTabsByWorktree' | 'openFiles' | 'tabsByWorktree' | 'unifiedTabsByWorktree'
->
-type FloatingVisibleTabCountCache = {
-  terminalTabs: NonNullable<AppState['tabsByWorktree'][string]>
-  browserTabs: NonNullable<AppState['browserTabsByWorktree'][string]>
-  openFiles: AppState['openFiles']
-  unifiedTabs: NonNullable<AppState['unifiedTabsByWorktree'][string]>
-  count: number
-}
 
 const hasAnyWorktreesCache = new WeakMap<AppState['worktreesByRepo'], boolean>()
-let floatingVisibleTabCountCache: FloatingVisibleTabCountCache | null = null
 
 function getCachedHasAnyWorktrees(worktreesByRepo: AppState['worktreesByRepo']): boolean {
   const cached = hasAnyWorktreesCache.get(worktreesByRepo)
@@ -51,67 +41,6 @@ function getCachedHasAnyWorktrees(worktreesByRepo: AppState['worktreesByRepo']):
   const hasWorktrees = Object.values(worktreesByRepo).some((worktrees) => worktrees.length > 0)
   hasAnyWorktreesCache.set(worktreesByRepo, hasWorktrees)
   return hasWorktrees
-}
-
-export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountState): number {
-  const terminalTabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TABS
-  const browserTabs =
-    state.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_BROWSER_TABS
-  const unifiedTabs =
-    state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_UNIFIED_TABS
-  const cached = floatingVisibleTabCountCache
-  if (
-    cached &&
-    cached.terminalTabs === terminalTabs &&
-    cached.browserTabs === browserTabs &&
-    cached.openFiles === state.openFiles &&
-    cached.unifiedTabs === unifiedTabs
-  ) {
-    return cached.count
-  }
-
-  const terminalIds = new Set<string>()
-  for (const tab of terminalTabs) {
-    terminalIds.add(tab.id)
-  }
-  const browserIds = new Set<string>()
-  for (const tab of browserTabs) {
-    browserIds.add(tab.id)
-  }
-  const editorIds = new Set<string>()
-  for (const file of state.openFiles) {
-    if (file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-      editorIds.add(file.id)
-    }
-  }
-
-  let count = 0
-  for (const tab of unifiedTabs) {
-    if (tab.contentType === 'terminal') {
-      count += terminalIds.has(tab.entityId) ? 1 : 0
-    } else if (tab.contentType === 'browser') {
-      count += browserIds.has(tab.entityId) ? 1 : 0
-    } else if (tab.contentType === 'simulator') {
-      // Why: simulator unified tabs have no separate backing record; the tab
-      // itself is the visible floating workspace item.
-      count += 1
-    } else {
-      count += editorIds.has(tab.entityId) ? 1 : 0
-    }
-  }
-
-  floatingVisibleTabCountCache = {
-    terminalTabs,
-    browserTabs,
-    openFiles: state.openFiles,
-    unifiedTabs,
-    count
-  }
-  return count
-}
-
-export function resetFloatingVisibleTabCountSelectorCacheForTest(): void {
-  floatingVisibleTabCountCache = null
 }
 
 type FloatingWorkspaceUnreadState = Pick<
@@ -300,18 +229,41 @@ export const useWorktreesForRepo = (repoId: string | null) =>
   useAppStore((s) => (repoId ? (s.worktreesByRepo[repoId] ?? EMPTY_WORKTREES) : EMPTY_WORKTREES))
 export const useAllWorktrees = () => useAppStore((s) => getCachedAllWorktrees(s.worktreesByRepo))
 export const useWorktreeMap = () => useAppStore((s) => getCachedWorktreeMap(s.worktreesByRepo))
-export const useWorktreeById = (worktreeId: string | null, executionHostId?: ExecutionHostId) =>
-  useAppStore((s) =>
-    worktreeId
-      ? (s.getKnownWorktreeById(
-          worktreeId,
-          executionHostId ??
-            (worktreeId === s.activeWorktreeId
-              ? (s.activeWorkspaceExecutionHostId ?? undefined)
-              : undefined)
-        ) ?? null)
-      : null
+type WorktreeLookupHostState = Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>
+
+// Why: worktree ids repeat across hosts, so the active id must resolve on the host the user selected.
+function getWorktreeLookupHostId(
+  state: WorktreeLookupHostState,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
+): ExecutionHostId | undefined {
+  return (
+    executionHostId ??
+    (worktreeId === state.activeWorktreeId
+      ? (state.activeWorkspaceExecutionHostId ?? undefined)
+      : undefined)
   )
+}
+
+/** Catalog row (including folder and floating workspaces) read from this snapshot. */
+export function selectKnownWorktreeById(
+  state: WorktreeLookupHostState & Parameters<typeof findKnownWorktreeById>[0],
+  worktreeId: string | null,
+  executionHostId?: ExecutionHostId
+): NonNullable<ReturnType<typeof findKnownWorktreeById>> | null {
+  return worktreeId
+    ? (findKnownWorktreeById(
+        state,
+        worktreeId,
+        getWorktreeLookupHostId(state, worktreeId, executionHostId)
+      ) ?? null)
+    : null
+}
+export const useWorktreeById = (worktreeId: string | null, executionHostId?: ExecutionHostId) =>
+  useAppStore((s) => selectKnownWorktreeById(s, worktreeId, executionHostId))
+// File-list callers resolve operation ownership separately from the UI's active host.
+export const useKnownWorktreeById = (worktreeId: string | null) =>
+  useAppStore((s) => (worktreeId ? (findKnownWorktreeById(s, worktreeId) ?? null) : null))
 export const useActiveWorktree = () => {
   const activeWorktreeId = useActiveWorktreeId()
   return useAppStore((s) =>

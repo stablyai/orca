@@ -23,6 +23,7 @@ vi.mock('./host-tree-removal', () => ({
   removeHostTree: removeHostTreeMock
 }))
 
+import * as eventLoopYield from '../shared/event-loop-yield'
 import { readHistoryMeta } from './terminal-history'
 import {
   cancelPendingHistoryTreeRemovalRetries,
@@ -296,16 +297,34 @@ describe('history GC concurrency behaviour', () => {
     seedDecisionMatrix()
     const live = new Set([LIVE_WORKTREE_ID])
 
-    const first = runHistoryGc(live)
-    const second = runHistoryGc(live)
-    expect(second).toBe(first)
+    seedBulk(64, 64)
+    const reachedYield = Promise.withResolvers<void>()
+    const releaseYield = Promise.withResolvers<void>()
+    const originalYield = eventLoopYield.yieldToEventLoop
+    const yieldObserver = vi
+      .spyOn(eventLoopYield, 'yieldToEventLoop')
+      .mockImplementationOnce(async () => {
+        reachedYield.resolve()
+        await releaseYield.promise
+        await originalYield()
+      })
 
-    await first
-    // Each rename produces its own tombstone, so a second overlapping walk would condemn twice.
-    const orphanRemovals = removeHostTreeMock.mock.calls.filter(([dir]) =>
-      basename(dir).startsWith('orphan-old.')
-    )
-    expect(orphanRemovals).toHaveLength(1)
+    const first = runHistoryGc(live)
+    let second: Promise<void> | undefined
+    try {
+      await reachedYield.promise
+      // A second walk with this snapshot would delete the first caller's live history.
+      second = runHistoryGc(new Set([DEAD_WORKTREE_ID]))
+      releaseYield.resolve()
+      await Promise.all([first, second])
+
+      expect(survivingDirs().has('live-old')).toBe(true)
+      expect(survivingDirs().has('orphan-old')).toBe(false)
+    } finally {
+      releaseYield.resolve()
+      await Promise.all([first, second])
+      yieldObserver.mockRestore()
+    }
   })
 
   it('starts a fresh pass once the previous one has settled', async () => {
@@ -421,24 +440,53 @@ describe('history GC main-thread occupancy', () => {
     const syncTimer = setInterval(() => {
       ticks.sync += 1
     }, 4)
-    referenceSyncPruneDecisions(historyRoot, live)
-    clearInterval(syncTimer)
+    try {
+      referenceSyncPruneDecisions(historyRoot, live)
+    } finally {
+      clearInterval(syncTimer)
+    }
 
-    let last = performance.now()
-    const asyncTimer = setInterval(() => {
-      const now = performance.now()
-      maxAsyncGapMs = Math.max(maxAsyncGapMs, now - last - 4)
-      last = now
-      ticks.async += 1
-    }, 4)
-    await runHistoryGc(live)
-    clearInterval(asyncTimer)
+    const originalYield = eventLoopYield.yieldToEventLoop
+    const servicedYields: boolean[] = []
+    const yieldObserver = vi
+      .spyOn(eventLoopYield, 'yieldToEventLoop')
+      .mockImplementation(async () => {
+        let serviced = false
+        const probe = setTimeout(() => {
+          serviced = true
+        }, 0)
+        try {
+          await originalYield()
+          servicedYields.push(serviced)
+          if (serviced) {
+            ticks.async += 1
+          }
+        } finally {
+          clearTimeout(probe)
+        }
+      })
+    let asyncTimer: ReturnType<typeof setInterval> | undefined
+    try {
+      let last = performance.now()
+      asyncTimer = setInterval(() => {
+        const now = performance.now()
+        maxAsyncGapMs = Math.max(maxAsyncGapMs, now - last - 4)
+        last = now
+      }, 4)
+      await runHistoryGc(live)
+      maxAsyncGapMs = Math.max(maxAsyncGapMs, performance.now() - last - 4)
+      clearInterval(asyncTimer)
 
-    // A synchronous pass cannot tick at all, however long it takes.
-    expect(ticks.sync).toBe(0)
-    expect(ticks.async).toBeGreaterThan(5)
-    // Generous because shared CI runners stall an idle timer by tens of ms on their own; the
-    // failure this guards against is a whole-walk block, which is seconds.
-    expect(maxAsyncGapMs).toBeLessThan(2_000)
+      // Count real timer service at the owner's yields, independent of total walk duration.
+      expect(ticks.sync).toBe(0)
+      expect(ticks.async).toBeGreaterThan(5)
+      expect(servicedYields).not.toContain(false)
+      // Generous because shared CI runners stall an idle timer by tens of ms on their own; the
+      // failure this guards against is a whole-walk block, which is seconds.
+      expect(maxAsyncGapMs).toBeLessThan(2_000)
+    } finally {
+      clearInterval(asyncTimer)
+      yieldObserver.mockRestore()
+    }
   })
 })

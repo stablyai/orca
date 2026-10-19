@@ -11,6 +11,7 @@ import { testState, createStore, makeRepo } from '../persistence-test-harness'
 import type { Store } from '../persistence/loading-store/store'
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
 import type { RuntimeStore } from './runtime-store-contract'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
@@ -68,7 +69,9 @@ describe('runtime detected-worktree listing sweeps missing local metadata', () =
     const repo = makeRepo({ id: 'repo-1', path: repoPath })
     store.addRepo(repo)
     const missingId = `${repo.id}::${join(testState.dir, 'deleted-worktree')}`
-    store.setWorktreeMetaForHost(missingId, 'local', { displayName: 'Gone' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: missingId, hostId: 'local' }), {
+      displayName: 'Gone'
+    })
     expect(store.getWorktreeMeta(missingId)).toBeDefined()
 
     await queries(store, repo, [gitWorktree(repoPath)]).listDetected(repo)
@@ -83,7 +86,9 @@ describe('runtime detected-worktree listing sweeps missing local metadata', () =
     const livePath = join(testState.dir, 'live-worktree')
     mkdirSync(livePath, { recursive: true })
     const liveId = `${repo.id}::${livePath}`
-    store.setWorktreeMetaForHost(liveId, 'local', { displayName: 'Live' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: liveId, hostId: 'local' }), {
+      displayName: 'Live'
+    })
 
     await queries(store, repo, [gitWorktree(repoPath)]).listDetected(repo)
 
@@ -96,7 +101,9 @@ describe('runtime detected-worktree listing sweeps missing local metadata', () =
     const repo = makeRepo({ id: 'repo-1', path: repoPath })
     store.addRepo(repo)
     const missingId = `${repo.id}::${join(testState.dir, 'deleted-worktree')}`
-    store.setWorktreeMetaForHost(missingId, 'local', { displayName: 'Gone' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: missingId, hostId: 'local' }), {
+      displayName: 'Gone'
+    })
 
     await queries(store, repo, [], false).listDetected(repo)
 
@@ -115,7 +122,9 @@ describe('runtime detected-worktree listing sweeps missing local metadata', () =
     const repo = makeRepo({ id: 'repo-1', path: repoPath, connectionId: 'build-box' })
     store.addRepo(repo)
     const missingId = `${repo.id}::${join(testState.dir, 'deleted-worktree')}`
-    store.setWorktreeMetaForHost(missingId, 'local', { displayName: 'Gone' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: missingId, hostId: 'local' }), {
+      displayName: 'Gone'
+    })
 
     await queries(store, repo, [gitWorktree(repoPath)]).listDetected(repo)
 

@@ -58,7 +58,7 @@ const StatusIndicator = React.memo(function StatusIndicator({
         className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
         {...rest}
       >
-        <Activity className="size-3 text-yellow-500" aria-hidden="true" />
+        <Activity className="size-3 text-agent-working" aria-hidden="true" />
       </span>
     )
   } else if (status === 'failed') {

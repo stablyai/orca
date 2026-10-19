@@ -3,7 +3,7 @@ import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-sta
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal-osc-color-reply'
 import { createRemoteRuntimeTerminalColorPush } from './remote-runtime-terminal-color-push'
-import { RuntimeRpcCallError } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 
 const DARK = { foreground: '#ffffff', background: '#282c34' }
 const LIGHT = { foreground: '#2e3434', background: '#ffffff' }

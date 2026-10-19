@@ -6,6 +6,7 @@ import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { isReloadableSingleFileDiffTab } from './editor-panel-diff-reload'
 import type { EditorPanelDiffContentLoader } from './useEditorPanelDiffContentLoader'
 import type { EditorPanelFileContentLoader } from './useEditorPanelFileContentLoader'
+import { useQuickOpenHistoryVisit } from './use-quick-open-history-visit'
 
 type GitStatusByWorktree = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree']
 
@@ -52,6 +53,11 @@ export function useEditorPanelActiveTabContentLoad({
   loadFileContent,
   loadDiffContent
 }: UseEditorPanelActiveTabContentLoadParams): void {
+  useQuickOpenHistoryVisit(
+    activeFile,
+    activeFile ? fileContents[activeFile.id] : undefined,
+    isVisible
+  )
   const needsFileRead = (fileId: string): boolean => {
     const cached = fileContents[fileId]
     return (

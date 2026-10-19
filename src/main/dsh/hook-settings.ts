@@ -5,9 +5,9 @@ import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   wrapPosixHookCommand,
-  wrapWindowsHookCommand,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { readManagedHookEventsFromJson } from '../agent-hooks/managed-hooks-json-events'
 
 const DSH_SCRIPT_BASE = 'dsh-hook'
@@ -73,11 +73,9 @@ export function getDshRemoteManagedHooksPath(remoteHome: string): string {
 }
 
 export function getDshManagedCommand(scriptPath: string): string {
-  // Why: DSH runs hooks through `ctx.shell`, which the base profile binds to bash
-  // everywhere except Windows, where it binds to PowerShell — the same split these two
-  // wrappers already encode.
+  // Why: DSH runs hooks through `ctx.shell`: bash off Windows, PowerShell on it, which runs a bare .cmd too.
   return process.platform === 'win32'
-    ? wrapWindowsHookCommand(scriptPath)
+    ? wrapWindowsBatchHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
 }
 

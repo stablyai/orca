@@ -633,6 +633,10 @@ describe('fetchWorktrees', () => {
         { id: 'repo2', path: '/r2', displayName: 'R2', badgeColor: '#000', addedAt: 0 }
       ]
     } as Partial<AppState>)
+    // Ingest stamps server rows; the listing follows the row's host.
+    store.setState({
+      repos: store.getState().repos.map((repo) => ({ ...repo, executionHostId: 'runtime:env-1' }))
+    })
     // Why: a mobile-scope device token is denied non-allowlisted runtime RPCs.
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',

@@ -13,7 +13,6 @@ function row(hostId: Worktree['hostId']): WorktreeItemRow {
     repo: undefined,
     depth: 0,
     groupDepth: 0,
-    lineageTrail: [],
     isLastLineageChild: false,
     lineageChildCount: 0
   }

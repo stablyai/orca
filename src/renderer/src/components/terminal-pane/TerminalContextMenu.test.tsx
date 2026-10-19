@@ -129,6 +129,18 @@ describe('TerminalContextMenu', () => {
     expect(items.list.length).toBeGreaterThan(0)
   })
 
+  // Why: revealing a terminal file link lives in its click popover, not the right-click menu.
+  it.each(['Macintosh', 'Windows NT 10.0', 'Linux'])(
+    'offers no file-manager reveal item on %s',
+    (userAgent) => {
+      vi.stubGlobal('navigator', { userAgent })
+      renderMenu()
+      const labels = items.list.map((item) => childrenText(item.children))
+      expect(labels.length).toBeGreaterThan(0)
+      expect(labels.some((label) => /Reveal in|Open Containing Folder/.test(label))).toBe(false)
+    }
+  )
+
   it('renders a "Copy Context" item that triggers onCopyAgentSessionContext (issue #5020)', () => {
     const onCopyAgentSessionContext = vi.fn()
     const onForkAgentSession = vi.fn()
@@ -153,7 +165,7 @@ describe('TerminalContextMenu', () => {
     })
 
     const handoffItem = items.list.find(
-      (item) => childrenText(item.children) === 'Continue in New Session…'
+      (item) => childrenText(item.children) === 'Hand Off to Another Agent'
     )
     expect(handoffItem).toBeDefined()
 

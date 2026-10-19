@@ -5,11 +5,7 @@ vi.mock('@/i18n/i18n', () => ({
     fallback.replace(/\{\{(\w+)\}\}/g, (match, name: string) => String(options?.[name] ?? match))
 }))
 
-import {
-  connectedHostCountLabel,
-  connectingHostsLabel,
-  workspaceSyncProblemLabel
-} from './ssh-status-segment-copy'
+import { connectedHostCountLabel, connectingHostsLabel } from './ssh-status-segment-copy'
 
 describe('ssh status segment copy', () => {
   it('keeps the host noun singular for a lone connected host', () => {
@@ -18,9 +14,7 @@ describe('ssh status segment copy', () => {
     expect(connectedHostCountLabel(4)).toBe('4 hosts')
   })
 
-  it('distinguishes a sync conflict from a sync failure', () => {
+  it('labels hosts still connecting', () => {
     expect(connectingHostsLabel()).toBe('Connecting…')
-    expect(workspaceSyncProblemLabel('conflict')).toBe('Workspace conflict')
-    expect(workspaceSyncProblemLabel('error')).toBe('Workspace sync error')
   })
 })

@@ -53,6 +53,24 @@ function baseScenario(manifest: readonly RecordingScenario[], id: string): Recor
   return found
 }
 
+function omitRetiredInventoryAdmission(scenario: RecordingScenario): RecordingScenario {
+  if (scenario.id !== 'inventory-lifecycle.unmount-before-1') {
+    return scenario
+  }
+  // A late search refusal cannot start an inventory after this owner's unmount.
+  return {
+    ...scenario,
+    steps: scenario.steps.filter(
+      (step) =>
+        !(
+          ('bind' in step &&
+            (step.bind === 'old-inventory' || step.bind === 'lifecycle-old-inventory')) ||
+          ('complete' in step && step.complete === 'lifecycle-old-inventory')
+        )
+    )
+  }
+}
+
 /** The manifest scenario a pilot golden expands from, which its suite also mounts and mutates. */
 export type PilotGolden = DerivedGolden & { scenario: RecordingScenario }
 
@@ -144,7 +162,7 @@ export function familyGoldens(manifest: readonly RecordingScenario[]): DerivedGo
           actions
             .flatMap((action) => lifecycleSchedules(base, action))
             .filter(({ scenario }) => !id.includes('hydration') || !scenario.id.endsWith('-1'))
-        )
+        ).map(omitRetiredInventoryAdmission)
     })
   }
   return goldens

@@ -165,6 +165,10 @@ function getUpdatedRelativePath({
   initiatingWorktreeId: string | undefined
   initiatingWorktreePath: string
 }): string {
+  // Why: a tab stored by its full path is user-named (editorTabFileAccess); keep it that way.
+  if (relativePath === filePath) {
+    return updatedPath
+  }
   const worktreeRelative = relativePathInsideRoot(initiatingWorktreePath, filePath)
   // Both sides fold on the same flavor (the file's own absolute path) so the
   // comparison stays consistent and a legal POSIX backslash isn't mistaken for a

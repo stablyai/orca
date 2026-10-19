@@ -21,7 +21,7 @@ import { resetLocalStructuredChatsForTests } from './local-structured-chats'
 
 function setStructuredChat(enabled: boolean): void {
   useAppStore.setState({
-    settings: { ...useAppStore.getState().settings!, experimentalStructuredNativeChat: enabled }
+    settings: { ...useAppStore.getState().settings!, experimentalNativeChat: enabled }
   })
 }
 

@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { normalizeFolderWorkspaceName } from '../../../shared/folder-workspaces'
 import { getNextProjectGroupOrder } from '../../../shared/project-groups'
 import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-context'
@@ -9,6 +11,10 @@ import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-i
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
+import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-operations'
+import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState
@@ -56,6 +62,7 @@ export class FolderWorkspacePersistenceOperations {
     name?: string
     folderPath?: string | null
     linkedTask?: FolderWorkspace['linkedTask']
+    linkedItems?: FolderWorkspace['linkedItems']
     linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
     connectionId?: string | null
     creatorProvenance?: FolderWorkspace['creatorProvenance']
@@ -76,6 +83,14 @@ export class FolderWorkspacePersistenceOperations {
     const now = Date.now()
     const linkedTask = normalizeWorkspaceLinkedItem(input.linkedTask)
     const sourceContext = normalizeStoredTaskSourceContext(input.linkedTaskSourceContext)
+    const attachmentUpdates =
+      input.linkedItems === undefined
+        ? undefined
+        : normalizeWorkspaceAttachmentUpdate(undefined, {
+            linkedItems: input.linkedItems,
+            linkedWorkItem: linkedTask,
+            linkedTaskSourceContext: sourceContext
+          })
     const workspace: FolderWorkspace = {
       id: randomUUID(),
       projectGroupId: group.id,
@@ -83,10 +98,13 @@ export class FolderWorkspacePersistenceOperations {
       folderPath,
       connectionId: input.connectionId ?? group.connectionId ?? null,
       ...(input.creatorProvenance ? { creatorProvenance: input.creatorProvenance } : {}),
-      linkedTask,
-      linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(linkedTask, sourceContext)
-        ? sourceContext
-        : null,
+      linkedTask: attachmentUpdates ? (attachmentUpdates.linkedWorkItem ?? null) : linkedTask,
+      ...(attachmentUpdates ? { linkedItems: attachmentUpdates.linkedItems } : {}),
+      linkedTaskSourceContext: attachmentUpdates
+        ? attachmentUpdates.linkedTaskSourceContext
+        : isWorkspaceLinkedItemSourceContextMatch(linkedTask, sourceContext)
+          ? sourceContext
+          : null,
       comment: '',
       isArchived: false,
       isUnread: false,
@@ -96,7 +114,8 @@ export class FolderWorkspacePersistenceOperations {
       ...(input.pendingFirstAgentMessageRename === true && input.createdWithAgent
         ? { pendingFirstAgentMessageRename: true }
         : {}),
-      lastActivityAt: 0,
+      // Switch point: creation is the workspace's first Recent stamp.
+      lastActivityAt: ORCA_SIDEBAR_INPUTS_IS_MAIN ? now : 0,
       createdAt: now,
       updatedAt: now
     }
@@ -113,6 +132,7 @@ export class FolderWorkspacePersistenceOperations {
         | 'name'
         | 'folderPath'
         | 'linkedTask'
+        | 'linkedItems'
         | 'linkedTaskSourceContext'
         | 'comment'
         | 'isArchived'
@@ -125,13 +145,39 @@ export class FolderWorkspacePersistenceOperations {
         | 'pendingFirstAgentMessageRename'
         | 'firstAgentMessageRenameError'
         | 'lastActivityAt'
+        | 'smartTier'
+        | 'smartAt'
+        | 'lastTerminalUseAt'
         | 'diffComments'
       >
-    >
+    > &
+      WorkspaceAttachmentMutation
   ): FolderWorkspace | null {
     const workspace = this.getFolderWorkspace(id)
     if (!workspace) {
       return null
+    }
+    const linkedUpdates = normalizeWorkspaceAttachmentUpdate(
+      {
+        linkedItems: workspace.linkedItems,
+        linkedWorkItem: workspace.linkedTask,
+        linkedTaskSourceContext: workspace.linkedTaskSourceContext
+      },
+      {
+        linkedItemsBase: updates.linkedItemsBase,
+        linkedItems: updates.linkedItems,
+        linkedWorkItem: updates.linkedTask,
+        linkedTaskSourceContext: updates.linkedTaskSourceContext
+      }
+    )
+    if (linkedUpdates.linkedItems !== undefined) {
+      workspace.linkedItems = linkedUpdates.linkedItems
+    }
+    if (linkedUpdates.linkedWorkItem !== undefined) {
+      updates = { ...updates, linkedTask: linkedUpdates.linkedWorkItem }
+    }
+    if (linkedUpdates.linkedTaskSourceContext !== undefined) {
+      updates = { ...updates, linkedTaskSourceContext: linkedUpdates.linkedTaskSourceContext }
     }
     if (updates.name !== undefined) {
       workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
@@ -199,6 +245,14 @@ export class FolderWorkspacePersistenceOperations {
     if (updates.lastActivityAt !== undefined && Number.isFinite(updates.lastActivityAt)) {
       workspace.lastActivityAt = updates.lastActivityAt
     }
+    // Written as a pair; an absent tier is Rest, so its presence as a key is what clears it.
+    if ('smartTier' in updates) {
+      workspace.smartTier = updates.smartTier
+      workspace.smartAt = updates.smartAt
+    }
+    if (updates.lastTerminalUseAt !== undefined && Number.isFinite(updates.lastTerminalUseAt)) {
+      workspace.lastTerminalUseAt = updates.lastTerminalUseAt
+    }
     if (updates.diffComments !== undefined) {
       workspace.diffComments = updates.diffComments
     }
@@ -222,8 +276,12 @@ export class FolderWorkspacePersistenceOperations {
     return true
   }
 
-  moveProjectToGroup(repoId: string, groupId: string | null, order?: number): Repo | null {
-    const repo = this.state.repos.find((entry) => entry.id === repoId)
+  moveProjectToGroup(target: RepoHostTarget, groupId: string | null, order?: number): Repo | null {
+    const repo = findRepoRowForHostScopedWrite(
+      this.state.repos,
+      target.id,
+      getRepoExecutionHostId(target)
+    )
     if (!repo) {
       return null
     }
@@ -231,7 +289,7 @@ export class FolderWorkspacePersistenceOperations {
       groupId && (this.state.projectGroups ?? []).some((group) => group.id === groupId)
         ? groupId
         : null
-    const siblingRepos = this.state.repos.filter((entry) => entry.id !== repoId)
+    const siblingRepos = this.state.repos.filter((entry) => entry !== repo)
     repo.projectGroupId = normalizedGroupId
     repo.projectGroupOrder =
       typeof order === 'number' && Number.isFinite(order)

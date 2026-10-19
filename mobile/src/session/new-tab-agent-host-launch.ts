@@ -1,6 +1,7 @@
 import type { MobileQuickCommandLaunch } from '../terminal/quick-commands'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
+import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-launch-runtime-capability'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import {
@@ -32,6 +33,18 @@ export function launchesThroughHost(options: NewTabAgentLaunchOptions | undefine
   return options?.startupCommand === undefined && options?.enter !== false
 }
 
+/** The host's id for a session tab: a terminal pane is listed under its parent tab. */
+function hostTabIdOf(
+  tabs: readonly MobileSessionTab[],
+  sessionTabId: string | null | undefined
+): string | undefined {
+  const tab = sessionTabId ? tabs.find((candidate) => candidate.id === sessionTabId) : undefined
+  if (!tab) {
+    return undefined
+  }
+  return tab.type === 'terminal' ? tab.parentTabId : tab.id
+}
+
 /**
  * The "+" menu's agent start through `agent.launch`. The phone lands on the tab when it is listed,
  * which for a paste-after-start agent is long before the reply; the reply only reports delivery.
@@ -45,6 +58,8 @@ export async function launchNewTabAgentThroughHost(args: {
   options: NewTabAgentLaunchOptions | undefined
   /** Names this launch's pending selection, as it names the "+" lock. */
   lock: string
+  /** The session tab the user is on; the new tab follows it, as the plain "+" terminal does. */
+  activeSessionTabId?: string | null
   pendingSelectionRef: { current: PendingSessionSelection | null }
   fetchSessionTabs: () => Promise<void>
   getSessionTabs: () => readonly MobileSessionTab[]
@@ -55,6 +70,10 @@ export async function launchNewTabAgentThroughHost(args: {
   const { options, pendingSelectionRef, showToast } = args
   const prompt = options?.agentPrompt ?? options?.initialPrompt
   const reservation = reserveMobileAgentLaunch(args.agent)
+  // An older host would drop it anyway; asking only a host that reads it keeps the request as before.
+  const afterTabId = args.hostCapabilities?.includes(AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY)
+    ? hostTabIdOf(args.getSessionTabs(), args.activeSessionTabId)
+    : undefined
   // Why: armed before asking, because the reply waits for prompt delivery while the tab is listed
   // as soon as it exists. A tab the user picks meanwhile replaces this.
   pendingSelectionRef.current = launchedSelection(args.lock, reservation, null)
@@ -64,6 +83,7 @@ export async function launchNewTabAgentThroughHost(args: {
     worktreeId: args.worktreeId,
     agent: args.agent,
     reservation,
+    ...(afterTabId ? { placement: { afterTabId } } : {}),
     ...(prompt?.trim() ? { prompt: { text: prompt, delivery: 'submit' as const } } : {}),
     ...(options?.agentPrompt
       ? { launchSource: 'quick_command' }
@@ -77,6 +97,11 @@ export async function launchNewTabAgentThroughHost(args: {
   }
   if (launched.kind === 'failed') {
     args.reportCreateFailure(launched.message)
+    return true
+  }
+  if (launched.kind === 'tab-closed') {
+    // Why silent: the tab this "+" opened is gone, which is the answer; the close was a user's own.
+    pendingSelectionRef.current = withoutUnansweredLaunch(pendingSelectionRef.current, args.lock)
     return true
   }
   if (launched.kind === 'unknown') {

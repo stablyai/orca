@@ -1,4 +1,4 @@
-import { wslGatedRead } from './wsl-transcript-fs-access'
+import { readTranscriptFile } from './wsl-transcript-fs-access'
 import type { TranscriptFileHandle } from './wsl-transcript-fs-access'
 
 export const TAIL_CHUNK_BYTES = 64 * 1024
@@ -14,7 +14,16 @@ export async function readTranscriptByteAt(
   signal?: AbortSignal
 ): Promise<number | null> {
   const byte = Buffer.allocUnsafe(1)
-  const { bytesRead } = await wslGatedRead(handle, filePath, byte, 0, 1, position, 'exact', signal)
+  const { bytesRead } = await readTranscriptFile(
+    handle,
+    filePath,
+    byte,
+    0,
+    1,
+    position,
+    'exact',
+    signal
+  )
   signal?.throwIfAborted()
   return bytesRead === 1 ? byte[0] : null
 }
@@ -40,7 +49,7 @@ export async function findLastCompleteLineEnd(
     signal?.throwIfAborted()
     const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
     const buffer = Buffer.allocUnsafe(cursor - start)
-    const { bytesRead } = await wslGatedRead(
+    const { bytesRead } = await readTranscriptFile(
       handle,
       filePath,
       buffer,

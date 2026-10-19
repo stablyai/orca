@@ -88,6 +88,49 @@ describe('legacy shared Codex config compatibility', () => {
     expect(readFileSync(join(sharedRuntimeHome, 'auth.json'), 'utf-8')).toBe(staleSharedAuth)
   })
 
+  it('keeps an Orca-added MCP server while settings and trust still refresh', () => {
+    const baselinePath = join(sharedRuntimeHome, '.orca-config-settings-baseline.json')
+    const baseline = JSON.stringify({ version: 3, settings: {}, mcpServers: [] })
+    writeFileSync(baselinePath, baseline)
+    writeFileSync(
+      join(systemCodexHome, 'config.toml'),
+      ['model = "canonical"', '', '[projects."/revoked"]', 'trust_level = "untrusted"', ''].join(
+        '\n'
+      )
+    )
+    writeFileSync(
+      join(sharedRuntimeHome, 'config.toml'),
+      [
+        'model = "stale"',
+        '',
+        '[projects."/trusted-in-orca"]',
+        'trust_level = "trusted"',
+        '',
+        '[projects."/revoked"]',
+        'trust_level = "trusted"',
+        '',
+        '[hooks.state."orca:stop:0:0"]',
+        'enabled = true',
+        '',
+        '[mcp_servers.demo-mcp]',
+        'command = "demo"',
+        ''
+      ].join('\n')
+    )
+
+    syncLegacySharedCodexConfigForRetainedPanes({ sharedRuntimeHome, systemCodexHome })
+
+    const sharedConfig = readFileSync(join(sharedRuntimeHome, 'config.toml'), 'utf-8')
+    expect(sharedConfig).toContain('model = "canonical"')
+    expect(sharedConfig).not.toContain('model = "stale"')
+    expect(sharedConfig).toContain('[projects."/trusted-in-orca"]\ntrust_level = "trusted"')
+    expect(sharedConfig).toContain('[projects."/revoked"]\ntrust_level = "untrusted"')
+    expect(sharedConfig).not.toContain('[projects."/revoked"]\ntrust_level = "trusted"')
+    expect(sharedConfig).toContain('[hooks.state."orca:stop:0:0"]')
+    expect(sharedConfig).toContain('[mcp_servers.demo-mcp]\ncommand = "demo"')
+    expect(readFileSync(baselinePath, 'utf-8')).toBe(baseline)
+  })
+
   it('does not delete config when the canonical source is transiently missing', () => {
     const staleConfig = 'model_provider = "stale-provider"\n'
     writeFileSync(join(sharedRuntimeHome, 'config.toml'), staleConfig, 'utf-8')

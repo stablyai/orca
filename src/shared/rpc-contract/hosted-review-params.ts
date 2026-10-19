@@ -5,6 +5,7 @@ import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 export const HostedReviewForBranch = z.object({
   repo: requiredString('Missing repo selector'),
   branch: requiredString('Missing branch'),
+  force: z.boolean().optional(),
   admissionTier: OptionalGitAdmissionTier,
   currentHeadOid: z.string().nullable().optional(),
   // Only the caller's selected worktree; the host caps how many earn the fast tier.

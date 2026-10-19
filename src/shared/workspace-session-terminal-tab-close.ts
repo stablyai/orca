@@ -8,8 +8,9 @@ export type WorkspaceSessionTerminalTabCloseResult = {
   pinned: boolean
 }
 
-function pickNextActiveTab(
-  group: TabGroup,
+/** The tab a group shows after `closingIds` leave it: most recent remaining, else the closed tab's right neighbour, else the last. */
+export function pickNextActiveTabAfterClose(
+  group: Pick<TabGroup, 'tabOrder' | 'recentTabIds'>,
   closingIds: ReadonlySet<string>,
   remaining: readonly string[],
   remainingIds: ReadonlySet<string>
@@ -33,7 +34,7 @@ function pickNextActiveTab(
   )
 }
 
-function pruneGroupLayout(
+export function pruneGroupLayout(
   node: TabGroupLayoutNode | undefined,
   validGroupIds: ReadonlySet<string>
 ): TabGroupLayoutNode | undefined {
@@ -73,7 +74,7 @@ function collectTabPtyIds(
   return ids
 }
 
-function findUnifiedTerminalTabs(
+export function findUnifiedTerminalTabs(
   session: WorkspaceSessionState,
   worktreeId: string,
   tabId: string
@@ -159,6 +160,18 @@ function deriveActiveSurface(
   return { terminalTabId: terminalFallback, browserTabId: null, fileId: null, type: 'terminal' }
 }
 
+/** Whether this session holds the terminal tab, as a row or a unified tab. */
+export function workspaceSessionListsTerminalTab(
+  session: WorkspaceSessionState,
+  worktreeId: string,
+  tabId: string
+): boolean {
+  return (
+    session.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) === true ||
+    findUnifiedTerminalTabs(session, worktreeId, tabId).length > 0
+  )
+}
+
 export function closeTerminalTabInWorkspaceSession(
   session: WorkspaceSessionState,
   worktreeId: string,
@@ -199,7 +212,7 @@ export function closeTerminalTabInWorkspaceSession(
       const tabOrder = group.tabOrder.filter((id) => !closedVisibleIds.has(id))
       const remainingIds = new Set(tabOrder)
       const activeTabId = closedVisibleIds.has(group.activeTabId ?? '')
-        ? pickNextActiveTab(group, closedVisibleIds, tabOrder, remainingIds)
+        ? pickNextActiveTabAfterClose(group, closedVisibleIds, tabOrder, remainingIds)
         : group.activeTabId && remainingIds.has(group.activeTabId)
           ? group.activeTabId
           : (tabOrder[0] ?? null)

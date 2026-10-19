@@ -32,6 +32,7 @@ vi.mock('electron', () => ({
 }))
 
 import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
+import { markNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
 
 const isMac = process.platform === 'darwin'
 
@@ -385,6 +386,48 @@ describe('registerAppMenu', () => {
     expect(sendActionToFirstResponderMock).toHaveBeenCalledWith('paste:')
   })
 
+  it.each(
+    (['darwin', 'linux', 'win32'] as const).flatMap((platform) =>
+      ['popup', 'child', 'unavailable'].map((focus) => ({ platform, focus }))
+    )
+  )(
+    'routes native popup Edit actions to web contents on $platform with $focus focus',
+    ({ platform, focus }) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const popupContents = { paste: vi.fn(), copy: vi.fn(), selectAll: vi.fn(), send: vi.fn() }
+      const childContents = { paste: vi.fn(), copy: vi.fn(), selectAll: vi.fn(), send: vi.fn() }
+      const popupWindow = { webContents: popupContents }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The popup registry only stores window identity; Edit actions use the mocked webContents methods.
+      markNativeBrowserPopupWindow(popupWindow as unknown as Electron.BrowserWindow)
+      getFocusedWindowMock.mockReturnValue(popupWindow)
+      getFocusedWebContentsMock.mockReturnValue(
+        focus === 'child' ? childContents : focus === 'popup' ? popupContents : null
+      )
+      registerAppMenu(buildMenuOptions())
+
+      const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+      for (const label of ['Paste', 'Copy', 'Select All']) {
+        const click: unknown = editSubmenu.find((item) => item.label === label)?.click
+        expect(click).toBeTypeOf('function')
+        if (typeof click === 'function') {
+          click()
+        }
+      }
+
+      const target = focus === 'child' ? childContents : popupContents
+      const other = focus === 'child' ? popupContents : childContents
+      expect(target.paste).toHaveBeenCalledOnce()
+      expect(target.copy).toHaveBeenCalledOnce()
+      expect(target.selectAll).toHaveBeenCalledOnce()
+      expect(other.paste).not.toHaveBeenCalled()
+      expect(other.copy).not.toHaveBeenCalled()
+      expect(other.selectAll).not.toHaveBeenCalled()
+      expect(popupContents.send).not.toHaveBeenCalled()
+      expect(childContents.send).not.toHaveBeenCalled()
+      expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
+    }
+  )
+
   it.each(['linux', 'win32'] as const)(
     'does not invoke the native paste responder on %s without a focused window',
     (platform) => {
@@ -583,4 +626,34 @@ describe('registerAppMenu', () => {
     expect(appearanceSubmenu.find((item) => item.label === leftLabel)?.accelerator).toBeUndefined()
     expect(appearanceSubmenu.find((item) => item.label === rightLabel)?.accelerator).toBeUndefined()
   })
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'keeps the native quit role unless the host supplies a quit handler (%s, #15537)',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const quitMenu = platform === 'darwin' ? 'Orca' : 'File'
+      const findQuit = (): Electron.MenuItemConstructorOptions | undefined =>
+        getSubmenu(getTemplate(), quitMenu).find(
+          (item) =>
+            item.role === 'quit' || item.accelerator === 'CmdOrCtrl+Q' || item.label === 'Exit'
+        )
+
+      registerAppMenu(buildMenuOptions())
+      expect(findQuit()?.role).toBe('quit')
+
+      buildFromTemplateMock.mockClear()
+      const onQuit = vi.fn()
+      registerAppMenu({ ...buildMenuOptions(), onQuit })
+      const quit = findQuit()
+      expect(quit?.role).toBeUndefined()
+      expect(quit?.label).toBe(platform === 'darwin' ? 'Quit Orca' : 'Exit')
+      expect(quit?.accelerator).toBe(platform === 'win32' ? undefined : 'CmdOrCtrl+Q')
+      // Why untyped: the handler ignores its Electron arguments.
+      const click: unknown = quit?.click
+      if (typeof click === 'function') {
+        click()
+      }
+      expect(onQuit).toHaveBeenCalledOnce()
+    }
+  )
 })

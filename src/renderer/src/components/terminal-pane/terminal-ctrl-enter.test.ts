@@ -4,6 +4,42 @@ import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
 const PANE_KEY = 'tab:pane'
 
 describe('hasCtrlEnterCsiUAuthorityForPane', () => {
+  it.each([
+    { agent: 'dsb' as const, routingTrusted: true, shellForeground: false },
+    { agent: 'dsb' as const, routingConfirmationPending: true, shellForeground: false }
+  ])('keeps recognition-only foreground evidence %j off CSI-u', (foreground) => {
+    expect(
+      hasCtrlEnterCsiUAuthorityForPane(
+        { paneForegroundAgentByPaneKey: { [PANE_KEY]: foreground } },
+        PANE_KEY,
+        'DeepSeek Build'
+      )
+    ).toBe(false)
+  })
+
+  it.each(['DeepSeek Build', '⠋ - Review Codex - DeepSeek Build'])(
+    'keeps title-derived recognition-only identity %j off CSI-u',
+    (title) => {
+      expect(
+        hasCtrlEnterCsiUAuthorityForPane({ paneForegroundAgentByPaneKey: {} }, PANE_KEY, title)
+      ).toBe(false)
+      for (const foreground of [
+        { agent: 'dsb' as const, routingRevoked: true, shellForeground: false },
+        { agent: 'dsb' as const, shellForeground: true },
+        { agent: 'dsb' as const, shellForeground: false },
+        { agent: 'grok' as const, shellForeground: false }
+      ]) {
+        expect(
+          hasCtrlEnterCsiUAuthorityForPane(
+            { paneForegroundAgentByPaneKey: { [PANE_KEY]: foreground } },
+            PANE_KEY,
+            foreground.agent === 'grok' ? title : 'Grok'
+          )
+        ).toBe(false)
+      }
+    }
+  )
+
   it('authorizes only trusted Ctrl+Enter CSI-u consumers', () => {
     for (const agent of ['droid', 'grok'] as const) {
       expect(

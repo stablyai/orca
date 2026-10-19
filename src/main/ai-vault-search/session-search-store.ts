@@ -2,9 +2,10 @@ import type SyncDatabase from '../sqlite/sync-database'
 import { asRecord } from '../ai-vault/session-scanner-record-value'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type { TranscriptSessionIdentity } from '../ai-vault/session-transcript-consumers'
-import type {
-  SessionSearchFileIdentity,
-  SessionSearchIndexedFile
+import {
+  fileIdentity,
+  type SessionSearchFileIdentity,
+  type SessionSearchIndexedFile
 } from './session-search-file-cursor'
 import {
   SESSION_SEARCH_COMMIT_CHARS,
@@ -168,6 +169,37 @@ export class SessionSearchStore {
     } catch (error) {
       this.onError(error)
       return null
+    }
+  }
+
+  /** A cold list read must not rewrite a complete, unchanged search entry. */
+  coversTranscript(candidate: SessionFileCandidate): boolean {
+    const file = candidate.file
+    if (this.closed || typeof file.sizeBytes !== 'number') {
+      return false
+    }
+    const identity = fileIdentity(file)
+    try {
+      return (
+        this.db
+          .prepare(
+            // A row without a stored identity is uncovered so the rewrite records one.
+            `SELECT 1 FROM files WHERE path = ? AND state = 'current'
+           AND mtime_ms = ? AND size_bytes = ? AND byte_offset = size_bytes
+           AND (? IS NULL OR (CAST(dev AS REAL) = ? AND CAST(ino AS REAL) = ?))`
+          )
+          .get(
+            file.path,
+            file.mtimeMs,
+            file.sizeBytes,
+            identity?.dev ?? null,
+            identity?.dev ?? null,
+            identity?.ino ?? null
+          ) !== undefined
+      )
+    } catch (error) {
+      this.onError(error)
+      return false
     }
   }
 

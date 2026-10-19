@@ -1,3 +1,4 @@
+import { getDefaultSettings } from '../../../shared/constants'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
@@ -9,7 +10,7 @@ import type {
 import * as sleepingResume from './resume-sleeping-agent-session'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
-import { makeCreatedAgentWorktree as makeWorktree } from './worktree-activation-created-agent-test-state'
+import { makeCreatedAgentWorktree as makeWorktree } from './worktree-activation-created-agent.test-fixture'
 
 const initialState = useAppStore.getState()
 
@@ -48,10 +49,10 @@ function baseState(): Partial<AppState> {
     agentStatusByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
     settings: {
+      ...getDefaultSettings(''),
       agentCmdOverrides: {},
-      defaultTuiAgent: 'codex',
-      setupScriptLaunchMode: 'new-tab'
-    } as AppState['settings'],
+      defaultTuiAgent: 'codex'
+    },
     markWorktreeVisited: vi.fn(),
     recordWorktreeVisit: vi.fn(),
     refreshGitHubForWorktreeIfStale: vi.fn(),
@@ -317,12 +318,14 @@ describe('worktree agent activation seam', () => {
     expect(listSessions).not.toHaveBeenCalled()
   })
 
-  it('blocks seeding while detached and allows activation after the owning relay answers', async () => {
+  it('blocks seeding while detached and allows activation once the SSH target is connected', async () => {
     const worktree = makeWorktree()
     useAppStore.setState({
       ...baseState(),
       worktreesByRepo: { [worktree.repoId]: [{ ...worktree, hostId: 'ssh:box' }] },
-      remoteWorkspaceSyncStatusByTargetId: { box: { phase: 'offline' } as never }
+      sshConnectionStates: new Map([
+        ['box', { targetId: 'box', status: 'connected', error: null, reconnectAttempt: 0 }]
+      ])
     })
     const { listSessions } = stubInventory()
     listSessions.mockImplementation(async (scope?: unknown) => {

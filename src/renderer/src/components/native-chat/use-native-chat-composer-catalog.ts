@@ -1,17 +1,22 @@
 import { useMemo } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
 import {
-  sessionReportedSkillNames,
+  getNativeChatAgentProfile,
+  getVerifiedNativeChatCommands
+} from '../../../../shared/native-chat-agent-profiles'
+import {
+  sessionReportedSkills,
   sessionSlashCommandSuggestions,
+  type NativeChatSessionSkill,
   type SlashCommandSuggestion
 } from '../../../../shared/native-chat-slash-commands'
 import { structuredSlashCommands } from '../../../../shared/structured-agent-session-composer'
+import { withNativeChatResumeCommand } from './use-native-chat-resume-command'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
 export type NativeChatComposerCatalog = {
   agentCommands: readonly SlashCommandSuggestion[]
-  sessionSkillNames: readonly string[] | undefined
+  sessionSkills: readonly NativeChatSessionSkill[] | undefined
 }
 
 /**
@@ -19,7 +24,7 @@ export type NativeChatComposerCatalog = {
  * loaded — the only list that includes this repo's own commands and the skills
  * that reach the session through plugin roots — so it wins whenever it is
  * present. The curated per-agent catalog remains the answer for the PTY lane and
- * for a host that predates the report.
+ * for a host that predates the report. A structured chat adds Orca's `/resume`.
  */
 export function useNativeChatComposerCatalog(
   agent: AgentType,
@@ -28,18 +33,21 @@ export function useNativeChatComposerCatalog(
   const structured = Boolean(structuredTransport)
   const reported = structuredTransport?.sessionCommands
   const conversationCommands = structuredTransport?.conversationCommands
-  const agentCommands = useMemo(
+  const keepsScannedSkills = getNativeChatAgentProfile(agent)?.keepsScannedSkills === true
+  const agentCommands = useMemo(() => {
+    if (!structured) {
+      return getVerifiedNativeChatCommands(agent)
+    }
+    return withNativeChatResumeCommand(
+      reported === undefined
+        ? structuredSlashCommands(conversationCommands, agent)
+        : sessionSlashCommandSuggestions(agent, reported)
+    )
+  }, [agent, conversationCommands, reported, structured])
+  const sessionSkills = useMemo(
     () =>
-      !structured
-        ? getVerifiedNativeChatCommands(agent)
-        : reported !== undefined
-          ? sessionSlashCommandSuggestions(agent, reported)
-          : structuredSlashCommands(conversationCommands, agent),
-    [agent, conversationCommands, reported, structured]
+      reported !== undefined && !keepsScannedSkills ? sessionReportedSkills(reported) : undefined,
+    [keepsScannedSkills, reported]
   )
-  const sessionSkillNames = useMemo(
-    () => (reported !== undefined ? sessionReportedSkillNames(reported) : undefined),
-    [reported]
-  )
-  return { agentCommands, sessionSkillNames }
+  return { agentCommands, sessionSkills }
 }

@@ -15,19 +15,22 @@ import {
 } from './claude-structured-provider-fallback'
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { claudeFrameParentRef, isRootClaudeFrame } from './claude-turn-opening'
+import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
 
 export type ClaudeResultJournalContext = Pick<
   ClaudeMessageJournalContext,
   | 'sink'
   | 'streamedBlocks'
   | 'streamedText'
-  | 'subagents'
   | 'providerFallback'
   | 'corrections'
   | 'turn'
+  | 'authenticationFailures'
+  | 'threadGoal'
 > & {
   prompts: ClaudeJournalPrompts
   context: ClaudeContextFacts
+  goalBackgroundWork: () => ClaudeGoalBackgroundWork
 }
 
 export function journalClaudeResult(
@@ -35,12 +38,14 @@ export function journalClaudeResult(
     sink,
     streamedBlocks,
     streamedText,
-    subagents,
     providerFallback,
     corrections,
     turn,
     prompts,
-    context
+    context,
+    authenticationFailures,
+    threadGoal,
+    goalBackgroundWork
   }: ClaudeResultJournalContext,
   message: Record<string, unknown>,
   observedAt: number
@@ -56,18 +61,15 @@ export function journalClaudeResult(
   }
   // Read before the settle below closes it: the result reports that turn's end.
   const endedTurnScope = turn.turnScope
+  const endedTurnStartedAt = turn.startedAt
   // Read before the settle below closes the turn: an error end the journal's Stop rule makes a
   // person's cancellation is theirs to decide as the end is written (`turnEndAfterStop`).
   const turnId = settlesTurn ? turn.id : null
-  const leftToStop =
-    turnId !== null &&
-    sink.journalStopDecidesTurn?.(turnId, observedAt, turn.openedBy ?? undefined) === true
+  const leftToStop = turnId !== null && sink.journalStopDecidesTurn?.(turnId, observedAt) === true
   if (settlesTurn) {
     prompts.retryPendingCancellations()
     turn.suppressReopenOnFailure(message.is_error === true)
-    // The turn is over however it ended, so a foreground child still
-    // reported as working will never be settled by an event.
-    subagents.settleTurn(turn.groupKey)
+    corrections.abandon()
     context.settle(message, commandEnd ?? claudeTurnEndForResult(message, observedAt, leftToStop))
     // The turn is over. A block still awaiting its final keeps the text the
     // flush above journaled, but its live state goes: an interrupted turn
@@ -75,15 +77,29 @@ export function journalClaudeResult(
     streamedBlocks.clear()
     streamedText.settle()
   }
+  const goal = threadGoal.settle(
+    message,
+    {
+      backgroundWork: goalBackgroundWork(),
+      stoppedByPerson: leftToStop,
+      turnStartedAt: endedTurnStartedAt
+    },
+    observedAt
+  )
+  if (goal) {
+    sink.appendItem(goal.identity, goal.body, { turnScope: endedTurnScope })
+    sink.publish()
+  }
   const kind = claudeProviderFrameKind(message)
   const failure = claudeResultFailure(message, leftToStop)
-  if (failure || !isSettledClaudeResultKind(kind)) {
+  const alreadyShown = authenticationFailures.resultAlreadyShown(message)
+  if ((failure || !isSettledClaudeResultKind(kind)) && !alreadyShown) {
     providerFallback.append(
       kind,
       message,
       failure?.text,
       undefined,
-      undefined,
+      { reportsFailure: failure !== null },
       // A result that settles no turn is a CHILD's result: this
       // translator only ever opens root turns.
       settlesTurn

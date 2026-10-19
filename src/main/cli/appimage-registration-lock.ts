@@ -21,21 +21,29 @@ const LOCK_RETRIES = {
 
 export async function withAppImageRegistrationLock<T>(
   cacheRootPath: string,
-  operation: () => Promise<T>
+  operation: () => Promise<T>,
+  options: { deadlineAt?: number } = {}
 ): Promise<T> {
   await mkdir(cacheRootPath, { recursive: true, mode: 0o700 })
+  const waitMs = Math.min(
+    LOCK_ACQUIRE_DEADLINE_MS,
+    options.deadlineAt === undefined ? Infinity : options.deadlineAt - Date.now()
+  )
   let release: () => Promise<void>
   try {
+    if (waitMs <= 0) {
+      throw new Error('deadline already passed')
+    }
     release = await lock(join(cacheRootPath, LOCK_TARGET_NAME), {
       realpath: false,
-      retries: LOCK_RETRIES,
+      retries: { ...LOCK_RETRIES, maxRetryTime: waitMs },
       stale: LOCK_STALE_MS,
       update: APPIMAGE_EXTRACTION_TIMEOUT_MS / 10
     })
   } catch (error) {
     throw new Error(
       `Timed out waiting for another Orca process to finish CLI registration ` +
-        `(waited ${Math.round(LOCK_ACQUIRE_DEADLINE_MS / 1000)}s). ` +
+        `(waited ${Math.round(Math.max(waitMs, 0) / 1000)}s). ` +
         `If no other Orca is running, remove ${join(cacheRootPath, LOCK_TARGET_NAME)}.lock and retry.`,
       { cause: error }
     )

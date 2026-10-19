@@ -103,6 +103,15 @@ describe('resolveStructuredLaunchSeedOptions', () => {
     ).toEqual({ model: 'gpt-5.6-sol', effort: 'high', fastMode: 'true' })
   })
 
+  it('seeds a saved service tier', () => {
+    expect(
+      resolveStructuredLaunchSeedOptions(
+        persistedCodex({ 'gpt-5.6-sol': { serviceTier: 'ultrafast' } }),
+        'codex'
+      )
+    ).toEqual({ model: 'gpt-5.6-sol', serviceTier: 'ultrafast' })
+  })
+
   it('drops a seeded id whose persisted value is not a usable string', () => {
     // settings.json is user-writable, so a non-string `effort` must not reach a
     // record typed Record<string, string> and be emitted as a turn option.

@@ -56,8 +56,11 @@ export function encodeProfileStateWriterError(
   if (error instanceof ProfileStateDocumentCorruptionError) {
     return { code: error.code, message: error.message, outcome, domain: error.domain }
   }
+  if (error instanceof ProfileStateDatabaseOpenError) {
+    const cause = encodeOpenErrorCause(error.cause)
+    return { code: error.code, message: error.message, outcome, ...(cause ? { cause } : {}) }
+  }
   if (
-    error instanceof ProfileStateDatabaseOpenError ||
     error instanceof ProfileStateWriterError ||
     error instanceof ProfileStateIndeterminateWriteError ||
     error instanceof ProfileStateReadRollbackError
@@ -88,8 +91,29 @@ export function decodeProfileStateWriterError(data: ProfileStateWriterErrorData)
       data.code === 'identity-mismatch' ||
       data.code === 'invalid-profile-id'
     ) {
-      return new ProfileStateDatabaseOpenError(data.code, data.message)
+      return new ProfileStateDatabaseOpenError(
+        data.code,
+        data.message,
+        data.cause ? Object.assign(new Error(data.cause.message), data.cause) : undefined
+      )
     }
   }
   return new ProfileStateWriterError(data.code, data.message, data.outcome)
+}
+
+// Why: open failures are rare and fatal to startup; without the SQLite code the log cannot tell
+// a lock race from real damage (#27333). Messages are SQLite's or our validators', not user data.
+function encodeOpenErrorCause(cause: unknown): ProfileStateWriterErrorData['cause'] {
+  if (!(cause instanceof Error)) {
+    return undefined
+  }
+  const code = 'code' in cause && typeof cause.code === 'string' ? cause.code : undefined
+  // node:sqlite's extended result code (e.g. 261 = SQLITE_BUSY_RECOVERY) is the precise verdict.
+  const errcode =
+    'errcode' in cause && typeof cause.errcode === 'number' ? cause.errcode : undefined
+  return {
+    message: cause.message.slice(0, 500),
+    ...(code ? { code } : {}),
+    ...(errcode !== undefined ? { errcode } : {})
+  }
 }

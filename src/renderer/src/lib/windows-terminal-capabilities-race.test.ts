@@ -15,19 +15,13 @@ describe('Windows terminal capability probe ordering', () => {
     vi.unstubAllGlobals()
   })
 
-  it('does not let an older forced probe overwrite a newer identity proof', async () => {
-    let resolveOlderStatus!: (status: { hostPlatform: NodeJS.Platform }) => void
-    let resolveNewerStatus!: (status: {
-      hostPlatform: NodeJS.Platform
-      windowsProcessStartTimeAvailable: boolean
-    }) => void
-    const olderStatus = new Promise<{ hostPlatform: NodeJS.Platform }>((resolve) => {
+  it('does not let an older forced probe overwrite a newer answer', async () => {
+    let resolveOlderStatus!: (status: { hostPlatform: NodeJS.Platform | null }) => void
+    let resolveNewerStatus!: (status: { hostPlatform: NodeJS.Platform | null }) => void
+    const olderStatus = new Promise<{ hostPlatform: NodeJS.Platform | null }>((resolve) => {
       resolveOlderStatus = resolve
     })
-    const newerStatus = new Promise<{
-      hostPlatform: NodeJS.Platform
-      windowsProcessStartTimeAvailable: boolean
-    }>((resolve) => {
+    const newerStatus = new Promise<{ hostPlatform: NodeJS.Platform | null }>((resolve) => {
       resolveNewerStatus = resolve
     })
     const runtimeGetStatus = vi
@@ -57,24 +51,13 @@ describe('Windows terminal capability probe ordering', () => {
       now: 2_000
     })
 
-    resolveNewerStatus({ hostPlatform: 'win32', windowsProcessStartTimeAvailable: true })
-    await expect(newerProbe).resolves.toMatchObject({
-      hostPlatform: 'win32',
-      windowsProcessStartTimeAvailable: true
-    })
-    expect(getCachedWindowsTerminalCapabilities('local')).toMatchObject({
-      hostPlatform: 'win32',
-      windowsProcessStartTimeAvailable: true
-    })
+    resolveNewerStatus({ hostPlatform: 'win32' })
+    await expect(newerProbe).resolves.toMatchObject({ hostPlatform: 'win32' })
+    expect(getCachedWindowsTerminalCapabilities('local')).toMatchObject({ hostPlatform: 'win32' })
 
-    resolveOlderStatus({ hostPlatform: 'win32' })
-    await expect(olderProbe).resolves.toMatchObject({
-      hostPlatform: 'win32',
-      windowsProcessStartTimeAvailable: true
-    })
-    expect(getCachedWindowsTerminalCapabilities('local')).toMatchObject({
-      hostPlatform: 'win32',
-      windowsProcessStartTimeAvailable: true
-    })
+    // The older probe started first; its late, emptier answer must not replace the newer one.
+    resolveOlderStatus({ hostPlatform: null })
+    await expect(olderProbe).resolves.toMatchObject({ hostPlatform: 'win32' })
+    expect(getCachedWindowsTerminalCapabilities('local')).toMatchObject({ hostPlatform: 'win32' })
   })
 })

@@ -22,12 +22,6 @@ export function isWorkspaceSpaceAbortError(error: unknown): boolean {
   )
 }
 
-export function isWorkspaceSpaceRelayMethodMissing(error: unknown): boolean {
-  return Boolean(
-    error && typeof error === 'object' && (error as { code?: unknown }).code === -32601
-  )
-}
-
 export function classifyWorkspaceSpaceError(error: unknown): {
   status: Exclude<WorkspaceSpaceScanStatus, 'ok'>
   message: string

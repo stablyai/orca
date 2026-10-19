@@ -10,7 +10,8 @@ export type MonacoRevealScheduler = {
     line: number,
     column: number,
     matchLength: number,
-    onApplied?: () => void
+    onApplied?: () => void,
+    canApply?: () => boolean
   ) => void
 }
 
@@ -47,7 +48,8 @@ export function useMonacoRevealScheduler(): MonacoRevealScheduler {
       line: number,
       column: number,
       matchLength: number,
-      onApplied?: () => void
+      onApplied?: () => void,
+      canApply?: () => boolean
     ) => {
       cancelScheduledReveal()
       let waitFrames = 0
@@ -58,6 +60,9 @@ export function useMonacoRevealScheduler(): MonacoRevealScheduler {
           revealInnerRafRef.current = requestAnimationFrame(() => {
             revealRafRef.current = null
             revealInnerRafRef.current = null
+            if (canApply?.() === false) {
+              return
+            }
             const modelLineCount = editorInstance.getModel()?.getLineCount() ?? 0
             if (line > 1 && modelLineCount < line && waitFrames < MAX_REVEAL_CONTENT_WAIT_FRAMES) {
               // Why: fresh opens can mount an empty 1-line model before the async read; waiting stops the target line clamping to 1.

@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   CLAUDE_HOOK_SETTINGS,
   OPENCLAUDE_HOOK_SETTINGS,
+  getManagedEventHook,
   getManagedLifecycleHook,
-  getRemoteManagedCommand as getClaudeRemoteCommand
+  getRemoteManagedCommand as getClaudeRemoteCommand,
+  getRemoteManagedEventCommand
 } from '../claude/hook-settings'
 import {
   getManagedCommand as getCodexCommand,
@@ -25,11 +27,9 @@ import { getMuseManagedCommand, getMuseRemoteManagedCommand } from '../muse/hook
 import { getDshManagedCommand, getDshRemoteManagedCommand } from '../dsh/hook-settings'
 import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
 import { getJcodeManagedCommand, getJcodeRemoteManagedCommand } from '../jcode/hook-settings'
-import {
-  wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
-  wrapWindowsHookCommand
-} from './installer-utils'
+import { getKiroManagedCommand, getKiroRemoteManagedCommand } from '../kiro/hook-settings'
+import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
+import { wrapWindowsBatchHookCommand } from './windows-direct-cmd-hook-command'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
 import { REMOTE_MANAGED_HOOK_INSTALLER_AGENTS } from './remote-managed-hook-installers'
 import {
@@ -64,21 +64,22 @@ function antigravityPosixCommands(path: string): string[] {
   )
 }
 
+function claudeFamilyBuilders(settings: typeof CLAUDE_HOOK_SETTINGS): CommandBuilders {
+  return {
+    local: (path) => [
+      getManagedLifecycleHook(path, settings).command,
+      getManagedEventHook('PostCompact', path, settings).command
+    ],
+    remote: (path) => [
+      getClaudeRemoteCommand(path),
+      getRemoteManagedEventCommand('PostCompact', path)
+    ]
+  }
+}
+
 const buildersByAgent = new Map<string, CommandBuilders>([
-  [
-    'claude',
-    {
-      local: (path) => [getManagedLifecycleHook(path, CLAUDE_HOOK_SETTINGS).command],
-      remote: (path) => [getClaudeRemoteCommand(path)]
-    }
-  ],
-  [
-    'openclaude',
-    {
-      local: (path) => [getManagedLifecycleHook(path, OPENCLAUDE_HOOK_SETTINGS).command],
-      remote: (path) => [getClaudeRemoteCommand(path)]
-    }
-  ],
+  ['claude', claudeFamilyBuilders(CLAUDE_HOOK_SETTINGS)],
+  ['openclaude', claudeFamilyBuilders(OPENCLAUDE_HOOK_SETTINGS)],
   [
     'qoder',
     {
@@ -128,8 +129,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
         getManagedLifecycleHook(path, {
           configDirName: '.codebuddy',
           scriptBaseName: 'codebuddy-hook',
-          usesWindowsCompatLauncher: true,
-          windowsHookShell: 'powershell'
+          usesWindowsCompatLauncher: true
         }).command
       ],
       remote: (path) => [getClaudeRemoteCommand(path)]
@@ -149,7 +149,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
       local: (path) =>
         process.platform === 'win32'
           ? ANTIGRAVITY_EVENTS.map((event) =>
-              wrapWindowsCmdHookCommand(
+              wrapWindowsBatchHookCommand(
                 path.replace('antigravity-hook.cmd', event.windowsWrapperFileName)
               )
             )
@@ -227,6 +227,13 @@ const buildersByAgent = new Map<string, CommandBuilders>([
       local: (path) => [getJcodeManagedCommand(path)],
       remote: (path) => [getJcodeRemoteManagedCommand(path)]
     }
+  ],
+  [
+    'kiro',
+    {
+      local: (path) => [getKiroManagedCommand(path)],
+      remote: (path) => [getKiroRemoteManagedCommand(path)]
+    }
   ]
 ])
 
@@ -271,10 +278,7 @@ describe('managed hook command contract', () => {
         // Native PowerShell hooks evaluate these variables without Grok's dollar-byte scanner.
         const scannedCommand =
           platform === 'win32' &&
-          (agent === 'qoder' ||
-            agent === 'qoder-cn' ||
-            agent === 'qwen-code' ||
-            agent === 'codebuddy') &&
+          (agent === 'qoder' || agent === 'qoder-cn' || agent === 'qwen-code') &&
           command.startsWith('$scriptPath = Join-Path')
             ? command
                 .replaceAll('$LASTEXITCODE', '')

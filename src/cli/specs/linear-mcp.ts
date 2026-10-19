@@ -92,6 +92,7 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['linear', 'relation', 'remove'],
+    destructive: true,
     aliases: [['linear', 'relation', 'rm']],
     summary: 'Remove a Linear issue relation',
     usage:

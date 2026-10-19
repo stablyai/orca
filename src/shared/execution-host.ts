@@ -10,6 +10,14 @@ export type ExecutionHostId = typeof LOCAL_EXECUTION_HOST_ID | `ssh:${string}` |
 
 export type ExecutionHostScope = typeof ALL_EXECUTION_HOSTS_SCOPE | ExecutionHostId
 
+/** Whether work at this location runs natively on this machine, in a folder this process can read. */
+export function isNativeLocalLocation(location: {
+  executionHostId: string
+  wslDistro: string | null
+}): boolean {
+  return location.executionHostId === LOCAL_EXECUTION_HOST_ID && location.wslDistro === null
+}
+
 export type ParsedExecutionHost =
   | { kind: 'local'; id: typeof LOCAL_EXECUTION_HOST_ID }
   | { kind: 'ssh'; id: `ssh:${string}`; targetId: string }
@@ -45,13 +53,20 @@ export function getLocalExecutionHostLabel(platform: NodeJS.Platform | null = nu
   return 'This computer'
 }
 
-function normalizeHostPart(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : null
+/** Trims a stored id; blank is absent, since no write path normalizes it. */
+export function normalizeHostPart(value: string | null | undefined): string | null {
+  return value?.trim() || null
 }
 
 export function toSshExecutionHostId(targetId: string): `ssh:${string}` {
   return `ssh:${encodeURIComponent(targetId)}`
+}
+
+/** Legacy `connectionId` spelling: absent means this machine, present means that SSH target. */
+export function getConnectionExecutionHostId(
+  connectionId: string | null | undefined
+): ExecutionHostId {
+  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
 }
 
 export function toRuntimeExecutionHostId(environmentId: string): `runtime:${string}` {
@@ -62,10 +77,26 @@ export function toRuntimeExecutionHostId(environmentId: string): `runtime:${stri
 // SSH/run-target surfaces. The renderer can't read the target.owner field, so it
 // recognizes them by their deterministic id prefix. getRuntimeOwnedSshTargetId
 // (main) builds on this same prefix to keep the two in sync.
+// The prefix also means "address and filesystem are replaced every provision", so only
+// on-demand-runtime owners may use it; main decides hidden-ness from `owner` alone.
 export const RUNTIME_OWNED_SSH_TARGET_ID_PREFIX = 'runtime-ssh-'
+/** Machine-provider targets: owned like recipe VMs, but persistent, so not `runtime-ssh-`. */
+export const MACHINE_SSH_TARGET_ID_PREFIX = 'machine-'
 
+/** A recipe VM's target, whose address and filesystem are replaced every provision. */
 export function isRuntimeOwnedSshTargetId(targetId: string | null | undefined): boolean {
   return typeof targetId === 'string' && targetId.startsWith(RUNTIME_OWNED_SSH_TARGET_ID_PREFIX)
+}
+
+/**
+ * Any target Orca owns as plumbing, by id because the renderer never sees `owner`: hidden from
+ * SSH-host surfaces and never dialed by the renderer, which would dispose its owner's session.
+ */
+export function isOwnedSshTargetId(targetId: string | null | undefined): boolean {
+  return (
+    isRuntimeOwnedSshTargetId(targetId) ||
+    (typeof targetId === 'string' && targetId.startsWith(MACHINE_SSH_TARGET_ID_PREFIX))
+  )
 }
 
 export function parseExecutionHostId(value: string | null | undefined): ParsedExecutionHost | null {
@@ -109,6 +140,33 @@ export function parseExecutionHostId(value: string | null | undefined): ParsedEx
     }
   }
   return null
+}
+
+/** Whether a host id names another machine; an absent or unparsable id reads as this one. */
+export function isLocalExecutionHost(value: string | null | undefined): boolean {
+  return parseExecutionHostId(value)?.kind === 'local'
+}
+
+export function isRemoteExecutionHostId(value: string | null | undefined): boolean {
+  return (parseExecutionHostId(value)?.kind ?? 'local') !== 'local'
+}
+
+/**
+ * Bookkeeping for a worktree whose owner publications conflict. It is spelled as a runtime host so
+ * nothing treats the worktree as local, but no environment has this id and it must never be dialed.
+ */
+export const UNRESOLVED_OWNER_HOST_ID = 'runtime:unresolved-owner' satisfies ExecutionHostId
+
+export function isUnresolvedOwnerHostId(value: string | null | undefined): boolean {
+  return parseExecutionHostId(value)?.id === UNRESOLVED_OWNER_HOST_ID
+}
+
+/** {@link parseExecutionHostId} for transports: the unresolved-owner sentinel is not a host. */
+export function parseRoutableExecutionHostId(
+  value: string | null | undefined
+): ParsedExecutionHost | null {
+  const parsed = parseExecutionHostId(value)
+  return parsed?.id === UNRESOLVED_OWNER_HOST_ID ? null : parsed
 }
 
 export function normalizeExecutionHostId(value: string | null | undefined): ExecutionHostId | null {
@@ -165,8 +223,22 @@ export function getRepoExecutionHostId(repo: {
   if (executionHostId) {
     return executionHostId
   }
-  const connectionId = normalizeHostPart(repo.connectionId)
-  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+  return getConnectionExecutionHostId(normalizeHostPart(repo.connectionId))
+}
+
+/**
+ * Whether a row's files are on the machine whose catalog holds it. Strict: an unknown host id or a
+ * stale `connectionId` beside `local` reads as elsewhere, so it never matches a local checkout.
+ */
+export function isRepoOnCatalogHost(repo: {
+  connectionId?: string | null
+  executionHostId?: string | null
+}): boolean {
+  const executionHostId = normalizeHostPart(repo.executionHostId)
+  return (
+    (executionHostId === null || executionHostId === LOCAL_EXECUTION_HOST_ID) &&
+    normalizeHostPart(repo.connectionId) === null
+  )
 }
 
 export function getSshTargetIdForExecutionHost(
@@ -188,7 +260,7 @@ export function getSshTargetIdForExecutionHost(
 //     `contradictory`. Answering with it hands out an SSH connection for a row that declares
 //     itself local.
 //   - `runtime:<env>` is a different machine with its own SSH targets, and a nested one appears
-//     only in this field (`repoWithFetchedOwner` spreads it through). It is not dialable on its
+//     only in this field (`adoptFromEndpoint` spreads it through). It is not dialable on its
 //     own, but it is addressable as the pair (environmentId, targetId) — which is how the
 //     renderer reads it, recovering the environment from the worktree and looking the target up
 //     inside it (`selectRuntimeAwareSshStatus`). Dropping it makes a nested-SSH workspace read

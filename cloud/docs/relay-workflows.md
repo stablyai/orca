@@ -109,7 +109,7 @@ identity bootstrap apply. The providers require their exact workflows on
 `refs/heads/main` with the `production` environment. Missing values fail
 closed; no dedicated operations identity falls back to the shared deploy identity.
 
-The shared production identity is restricted to seven named direct Relay callers plus the exact
+The shared production identity is restricted to nine named direct Relay callers plus the exact
 regional-rehome and same-cap reusable wrapper/job pairs on `main` in the `production` environment.
 Its Artifact Registry and Cloud Run mutation permissions are scoped to the Orca repository, Relay
 director, and Relay fence broker; it cannot mutate the API or auth services.
@@ -215,7 +215,29 @@ promote while a same-cap restore has just returned an empty general US cell: the
 would land there and the canary would roll the new cell back. Both cells are declared rehome
 sources and sit in the same-cap migration-only list until each one's canary promotes it, then move
 to the general list. The shadow gate's fleet pool list tracks the 16-connection Asia pools, so
-whether a US cell belongs there is decided at promotion, not assumed.
+whether a US cell belongs there is decided at promotion, not assumed. Both were promoted to general
+on 2026-10-01, so the same-cap job now rolls them as general cells. They stay out of the fleet pool
+list because their pool is the US default of 10.
+
+C34 is a sixth Asia cell at the C31 shape in `asia-east2-c`, so the six Asia cells spread 2/2/2. It
+was its own topology wave, registered alone as migration-only, and the director was configured with
+`cell-ids` set to C34, all on 2026-10-05. It launched as a migration-only spare and has a promotion
+wave of its own, with the same five-minute canary C30 and C31 ran. Promotion compares the
+director's serving digest and C34's runtime digest with the one `image-digest` input, so C34 was
+first rolled to the director's image as a migration-only same-cap wave. Once its canary promoted
+it, it moved to the same-cap general list and the fleet pool list together, so the same-cap job now
+rolls it as a general cell and a rollback restores it general. It is a declared rehome source.
+
+C35 is a seventh Asia cell at the C34 shape in `asia-east2-a`, starting a third zone round. It was
+its own topology wave on image F (`sha256:41cba995…`), registered alone as migration-only, and then
+the director was configured with `cell-ids` set to C35. It launched as a migration-only spare and has
+a promotion wave of its own, with the same five-minute canary C30, C31 and C34 ran. Promotion
+compares the director's serving digest and C35's runtime digest with the one `image-digest` input,
+so C35 was first rolled to the director's image as a migration-only same-cap wave. Once its canary
+promoted it, it moved to the same-cap general list and the fleet pool list together, so the same-cap
+job now rolls it as a general cell and a rollback restores it general. It is a declared rehome source.
+Its pool of 16 leaves 3 connections under the usable Cloud SQL ceiling
+(`relay-cloud-sql-connection-budget.mjs`).
 Rollback returns
 Asia cells to migration-only; it does not destroy the network or use
 existing-only. The production topology dispatch remains unavailable until the
@@ -427,8 +449,8 @@ targeted Terraform plan, and per-cell heartbeat/admission oracle are unchanged.
 `Deploy Relay Production Same-Cap` rolls only the reviewed US 1,000/60 and Asia 3,000/60 serving
 sets and the two migration-only US 600/60 cells, C17 and C18, without changing a cell's connection
 shape. Use `canary-apply` for exactly one cell. A successful canary
-seals its commit, target and rollback digests, selector generation, and durable rehome generation;
-`batch-apply` accepts only that same authority and rolls two to ten cells sequentially. Both apply
+seals its commit, target and rollback digests, selector generation, durable rehome generation, and
+drain pace window; `batch-apply` accepts only that same authority and rolls two to ten cells sequentially. Both apply
 modes and `rollback` first refuse a cell whose hosts (controls) exceed 80% of the free slots on the
 other fresh general cells, since drained hosts with nowhere to go keep redialling and pin the cell.
 `verify` runs the same read-only check, so it reports the headroom answer before an apply is
@@ -439,8 +461,9 @@ margin covers. Each cell is isolated, drained until restart-safe, replaced
 from a targeted saved plan, and restored only after a new incarnation reports the exact digest, cap,
 heartbeat, and rehome protocol. Restart-safe means the cell runtime itself carries nothing live (no
 controls, in-flight connections, reserved connection units, splices, or queued bytes) and no
-migration is open, for a whole drain pace window, which every live restart-safe call must pass.
-Pre-auth and total connections are printed but do not reset the window: they include
+migration is open, on two consecutive samples the second of which is taken at or after the end
+of the drain pace window. Every live restart-safe call supplies that window (`--pace-window-ms`).
+Pre-auth and total connections are printed but do not restart the count: they include
 unauthenticated redials that lose nothing on a restart. Director activity leases left by hosts that already went or cannot
 be placed do not hold the restart; every `relay_capacity_transition_restart_progress` sample and
 the final verified line report them under `stranded`. The durable
@@ -487,7 +510,8 @@ drained. Then read the cell's live runtime image from
 2. **Dispatch `rollback`,** with the same `target-image-digest` and `rollback-image-digest`
    the failed wave used, the live selector generation, and the live tri-state membership
    with the failed cell listed under migration-only. The confirmation is
-   `ROLL_BACK_RELAY_SAME_CAP <rollback-digest> <cell-id>`.
+   `ROLL_BACK_RELAY_SAME_CAP <rollback-digest> <cell-id>` at the default drain pace (see
+   below for any other).
 3. The job classifies the cell itself and needs no extra input:
    - serving the **rollback** image and draining, it is `stranded`. The wave stopped before
      or during its template apply. The job re-isolates, re-drains, applies the reviewed
@@ -510,6 +534,128 @@ drained. Then read the cell's live runtime image from
 6. A `stranded` dispatch that fails at plan review means the template already carries the
    target image while the old instance is still up. Wait for the MIG to finish replacing it,
    then dispatch again; it will classify as `roll`.
+
+### Drain pace ladder
+
+The `drain-pace-window-ms` input sets the window the cell spreads its drain sends over. Each
+drained host re-dials the director as soon as it reads `drain`, so the window sets the re-placement
+arrival rate: hosts / window, about 1.8-2.7 hosts/s for a US cell at the default. The window also
+sets two waits: restart-safe needs an empty runtime on two consecutive 5-second samples, the
+second at or after the window's end, and the drain step's overall timeout is the 15-minute
+migration lease plus the window (20 minutes at the default, 35 at `1200000`). The runtime empties
+as the window closes, so a drain step takes about the window plus a few seconds to half a minute.
+
+- Allowed values are `300000` (the default, and every wave before this input), `60000`,
+  `30000`, `900000`, and `1200000`. The wave validator refuses anything else, and each cell job
+  checks again.
+- Below `300000` is for US general cells only (C7-C10, C13-C16, C19-C26, C32, C33). Asia drains
+  are bound by the target cells' own accept rate (about 4-6 hosts/s per Asia cell), not by the
+  window. Migration-only cells hold no hosts. Both stay at `300000` or slower.
+- `900000` and `1200000` are for any cell. They exist because c28's 1,901-host drain at `300000`
+  (about 6.3 hosts/s, 2026-10-07) held database lock time above its bar for about 10 minutes.
+  At `1200000` a 2,000-host Asia cell re-places about 1.7 hosts/s.
+- A non-default window must be named at the end of the confirmation, for example
+  `ROLL_RELAY_SAME_CAP <target-digest> <cells> drain-pace-window-ms=60000`. A confirmation that
+  names no window confirms `300000`, so a form left at another value fails closed.
+- A canary's authority records its window and its pace verdict (below). A batch may use that
+  window or a slower one, never a faster one. A batch below `300000` also needs the canary's pace
+  verdict to be PASS. Stepping back to `300000` or slower mid-ladder needs no new canary.
+- A cell on an image without paced drains rejects the window, and the job falls back to an
+  unpaced drain. The job records what the cell accepted, and a canary that did not drain at its own
+  window seals `UNVERIFIED`.
+- A window above `300000` needs the cell being drained to already run an image that accepts it
+  (the cap rose with this ladder's slow rungs). Before the isolate, the job reads the cap the cell
+  advertises on `/health` (`drainPaceWindowMaxMs`; an image without it has `300000`) and stops
+  with the cell untouched if the window is above it. Re-dispatch at `300000`, or after the cell's
+  next roll. If a cell still rejects the window at the drain, the job fails rather than drain
+  unpaced, and the cell stays isolated for an operator, as any failed cell does.
+
+**What judges a paced drain.** The shadow health gate (report only, after each cell) judges two
+checks the pace can move. Together they are the report's `paceVerdict`, which the canary seals:
+
+- **Director 503s** come from Cloud Run's own request counter (`run.googleapis.com/request_count`,
+  code 503), aligned per minute by Cloud Monitoring. A log read of them stops at its entry limit
+  in exactly the minutes that matter: it read only 20k of 10-01 c29's ~31k.
+- **Scheduled 503s are taken out**, using the director's `orca_relay_runtime_metrics` counters:
+  - drain-return deferrals;
+  - sticky and placement answers to a host's own early retry (`host-rate-limited`,
+    `host-in-flight`).
+
+  Each tells one host when to come back. What is left is lanes, capacity, or the database
+  refusing work. On 10-02 the early-retry answers were about three quarters of all 503s, and
+  they doubled with placement volume whether or not a drain was running.
+- **The background** is the median minute of the 10 same-day minutes before the drain. A busy
+  morning raises it with the window, and one incident minute inside it does not.
+
+| check | rule |
+|---|---|
+| `nonDrain503Budget` | Two consecutive minutes above max(1.5x background, background + 20) warn; above max(2x, background + 40) would-block. One minute above max(10x, 200) would-block on its own; any other single minute is a transient |
+| `drainDeferrals` | Warn if the largest Retry-After exceeds 30 s; would-block above 60 s. Reports deferrals and re-placements |
+
+A read that fails, hits its limit, or returns fewer director-metric samples than one instance
+emits (one per 30 s) makes both checks `unverified`. An empty answer is not a calm director.
+
+Replayed read-only against past rolls:
+- Every brownout and herd replayed is `would-block`: 10-01 c29, 09-23 c27, 09-24 c30, both 10-01
+  c28 windows, and the 09-28 and 09-30 herds. Each peaked at 5,999 non-drain 503s a minute or
+  more. 10-01 c29, for example, ran 9 minutes in a row over a 41.5/min line.
+- Clean rolls: all nine 10-02 cells, 10-01 c25, and 11 other US and Asia rolls have a pace
+  verdict of PASS. Their largest minute was 87, and none held two minutes over the warn line.
+- Two daytime Asia c29 rolls on 10-01 read WARN and WOULD_BLOCK on sustained non-drain 503s at the
+  default pace. Their largest minute was 112, still under the 200 single-minute line.
+- These 30 verdicts are unchanged from before the per-minute peak check was folded into this
+  one.
+
+The other checks (`cellServing`, `cellPool`, `cloudSqlFatal`, `fleetPool:*`) stay in the overall
+verdict as context. They read the new boot and fleet-wide pools, so a clean roll at any pace can
+still WARN on them, and every 10-02 roll did on `cloudSqlFatal`.
+
+The report records:
+- `background`: the pre-drain minutes;
+- `nonDrain503Budget.perMinute`: the per-minute series;
+- `drain`: the window, the window the cell applied, the host count, and the seconds from
+  isolation to restart-safe.
+
+Two other 503 rules exist, and neither needs this split. The pre-drain sample's 500/min rule reads
+the 10 minutes *before* a drain, and a previous cell's drain has ended by then. The incident
+monitor already excludes 503s from its director 5xx rule.
+
+**Procedure.** One rung at a time, on routine US same-cap rolls:
+
+1. Before the first rung, run a fresh canary. This input is evidence code, so merging it
+   invalidates any sealed monitor or canary authority. Staging has no paced-drain path today: its
+   capacity proof drains unpaced. A rung's first use is therefore one production canary.
+2. Roll a `canary-apply` at the next rung. Use `60000` after a clean `300000` roll. Use `30000`
+   only after a clean `60000` roll, and only once the director reports the drain-return lane's
+   service time (`drainReturnServiceMs`, #25645). At 30 s the lane holds only if that time stays
+   under about 190 ms.
+3. A rung is clean when:
+   - the canary job succeeded;
+   - its `paceVerdict` is PASS, sealed only from a report on that cell that drained at least 400
+     hosts at that pace;
+   - time to empty is within window + hosts / 50 s + 10 s. Take `settledAfterSeconds` minus the
+     one 5-second confirming sample; this is an upper bound, since it includes the isolate.
+
+   The batch check enforces the PASS. A canary that sealed anything else authorizes only
+   `300000` batches. The 400-host floor exists because a pace is an arrival rate (hosts /
+   window). A canary that small would test less than half the rate a 692-782-host US cell
+   (10-02) reaches at the same window. Pick a canary cell above it.
+4. Record each rung, and keep the shadow gate JSON artifact with the row:
+
+   | Field | Source |
+   |---|---|
+   | Cell, hosts, window | The report's `drain` block |
+   | Measured drain rate | `drainDeferrals.replacementsPeakPerMinute`, and hosts / time to empty |
+   | Non-drain 503s | `nonDrain503Budget.perMinute` against `background.medianPerMinute` |
+   | Lane deferrals | `drainDeferrals.deferralsTotal` and `retryAfterSecondsMax` |
+   | Roll time | The cell job's duration |
+
+   This job does not report four of the rung's bars: drain-to-reconnected p95 (20 s), the
+   drain-return lane's service time, over-cap cells (0), and selector compare-and-swap retries
+   (at most 2). Read them by hand where a source exists, or record them as unmeasured until the
+   director observability work lands.
+5. If any bar fails, set the input back to `300000` for the rest of the wave and stop the ladder.
+   The `300000` batch needs no new canary.
 
 ### Pre-drain fleet-health sample
 
@@ -568,6 +714,170 @@ after checkout and authentication, before package installation, revision checks,
 Their typed confirmations are `PAUSE_REGIONAL_REHOMING` and `DISABLE_REGIONAL_REHOMING`. Keep the
 default 3,600,000 ms drain grace so existing splices can finish. The job summary contains only fresh
 aggregate active, receipt, registration, completion, and abort counts.
+
+### Director deploy driver
+
+`dev/scripts/drive-relay-director-deploy.mjs` runs a whole director deploy from an operator machine
+with `gh` and `gcloud` logged in. It only dispatches the workflows above and reads their results; it
+holds no credentials and changes no workflow. It never fills in a workflow's typed confirmation: the
+operator types each one when the driver reaches it.
+
+```bash
+cd cloud
+node dev/scripts/drive-relay-director-deploy.mjs --commit <reviewed main SHA> --dry-run
+node dev/scripts/drive-relay-director-deploy.mjs --commit <reviewed main SHA> \
+  [--configure production-gce-c34=sha256:<cell image digest>]
+```
+
+It keeps no state between runs. Every decision comes from live state read at the start of each run:
+
+- the serving director's digest and configured cells, from `gcloud`;
+- the admission selector, from an `Operate Relay Asia Admission` `inspect`;
+- the rehome control, from a rehome `inspect` at the generation the newest rehome run printed, or
+  at `--rehome-generation`.
+
+Steps already done are skipped: a serving digest that matches is not deployed again, and cells
+already configured are not configured again. It always reads rehome, even when nothing is left to
+do, so it never reports success over a pause it cannot explain.
+
+The sequence:
+
+1. **Publish.** No `cloud-*` workflow is queued or running (all pages; the hourly clock-skew
+   monitor and `cloud-verify` excepted), and `main` is the reviewed commit. The publish workflow
+   builds whatever `main` is when it is dispatched, so the driver dispatches it straight after that
+   check, before the inspects and the typed phrase. It changes nothing serving, so a bad build needs
+   no cleanup. The digest is the registry digest of `relay:sha-<commit>`, and the run's own push
+   line must name the same digest. If `main` still moved in those seconds, the driver stops and
+   names the `--commit <built> --publish-run <run>` that deploys that build once it is reviewed.
+2. **Preflight, read-only**, then the operator types `DEPLOY <commit prefix>`.
+3. **Pause**, only if rehome is enabled, after the operator types `PAUSE_REGIONAL_REHOMING`.
+4. **Deploy** with that digest, the paused generation, `preserve` for both regional inputs, no
+   prune, and the old serving digest as predecessor.
+5. **Soak**, with `--configure` only, while no wave is configured yet. It watches 5 minutes of
+   director 5xx and stops if they exceed twice the 5 minutes before the new revision existed, plus
+   25. The window starts at the traffic switch (a minute before the deploy run completed) when this
+   run deployed, otherwise at the time of the run, so a re-run judges fresh traffic. It is read a
+   minute late, to allow for log lag. Then the operator types `CONFIGURE_ASIA_DIRECTOR` and each
+   pending wave is configured.
+6. **Digest check.** A rehome `inspect` bound to the serving and rollback digests that `gcloud`
+   reports now. A wrong digest fails here, read-only, before 15 minutes of monitor evidence is
+   spent on it.
+7. **Monitor.** The operator types `ENABLE_REGIONAL_REHOMING`. The prompt says this arms an
+   automatic enable, sent about 17 minutes later, and only if the monitor is green and its evidence
+   is at most 150 s old. The monitor dry-run then starts. Its artifact passes the same
+   `relay-monitor-evidence.mjs verify-authority` check the enable job runs.
+8. **Enable** with the verified digests, within 150 s of the monitor completing.
+
+Steps 6 to 8 run only for a pause this driver owns.
+
+**Ownership.** The driver owns a pause only if it can name the run that made it, and the live
+control is still at that run's generation. Two kinds of line in a run's log prove it paused
+rehome:
+
+- `pause`;
+- `recover-enable` with `recovered: true`, meaning a failed enable that disabled rehome again itself.
+
+The run must be a rehome-control run by the same GitHub user. A `recover-enable` with
+`recovered: false` found rehome already disabled, for example by a director safety pause, and is
+never adopted. A failed enable run is never counted as an enable, whatever it printed last. A fresh run that finds rehome paused stops. It goes ahead only
+with:
+
+- `--pause-run <run>`, which an earlier run of this driver printed; or
+- `--leave-rehome-paused`, which deploys and leaves rehome paused. It refuses an enabled switch.
+
+A pause made by anything else is never lifted.
+
+**Stops.** On any failure, Ctrl-C, SIGTERM or SIGHUP, the driver prints what changed:
+
+- `REHOME IS CHANGING` when a pause or enable run is in flight and will apply on its own;
+- `PAUSE UNCONFIRMED` or `ENABLE UNCONFIRMED` when such a run printed no usable result;
+- `REHOME IS PAUSED by this driver` with the owning run;
+- the serving director, re-read;
+- the published digest;
+- the rollback point, with the `gh workflow run` command that redeploys it.
+
+It ends with the single command that finishes from where it stopped. That command carries
+`--publish-run` and `--pause-run`, and the driver re-verifies both against the runs' logs and live
+state. Each run writes a timestamped log under `~/.orca/relay-director-deploy/`
+(`--log-directory` overrides it).
+
+## Reserve watch
+
+`Operate Relay Production Reserve Watch` watches one cell already switched to reserve mode and, on
+the first step 5 stop rule it trips, flips it back to db through the flag tool's own write
+(`operate-relay-cell-flags.mjs`: CAS, read-back, re-registration wait, Postgres record). It is
+manual only and inert until dispatched; `dry-run` logs the flag tool's plan instead of writing.
+`write` takes the flag workflow's confirmation, `WRITE_RELAY_CELL_FLAGS <cell-id>`.
+
+It samples once a minute for up to 300 minutes, re-authenticating every 55-minute segment because
+an ID token lasts an hour, and logs one JSON line per sample. The 503 background must predate the
+flip: give `flipped-at` (when the reserve write applied; the background is the median of the 10
+minutes before it) or `background-503-per-minute`, which overrides it. With neither, the watch is
+refused. A watch dispatched before the reserve write applied waits up to 10 minutes for the cell to
+report reserve, judging nothing meanwhile; a cell that never does ends the watch refused, without a
+write. It also refuses to start while any run holds the Cloud SQL rollout lease (same-cap and
+capacity rolls hold it for their whole run, and it names no cell), or when that lease cannot be
+read. It only reads the lease: holding it for hours would block every rollout. Pausing on a roll
+that starts mid-watch was not built, since a pause blinds the stop rules for the roll's length and
+a flip back mid-roll races its drain, so do not start a roll on a watched cell. It trips on, in
+this order:
+
+| Rule | Signal | Exact or proxy |
+|---|---|---|
+| Dead-man tripped | runtime-status `admitModeEffective=db` under a reserve switch file | Exact |
+| Overrun | runtime-status `enforcedConnectionUnits` over `connectionCapacity.hardCap` | Invariant check: the ledger already refuses past its cap, so this trips only if that refusal broke. It counts seats, bookings, in-flight and phone units |
+| 503s | Director non-drain 503s (the roll ladder's measure: `request_count` 503s less the drain-return deferrals and the `host-rate-limited` and `host-in-flight` re-dials the director's `orca_relay_runtime_metrics` count) above max(1.5x background, background + 20) for 3 complete minutes | Proxy that can miss: fleet-wide, since no signal attributes a 503 to a cell, so a problem on one cell can stay under the fleet's line |
+| Duplicate past grace | The ledger reconcile's `orca_relay_reserve_ledger_seat_behind_row` for the cell, reported again more than 90 s (60 s demotion close + 30 s map lag) after it was first seen, keyed by director instance, cell, epoch and row epoch | Proxy that can only over-count: the line names no host, so two hosts sharing that key read as one seat |
+| Host drop | runtime-status `controls` fell more than 5% (and at least 10 hosts) within 5 minutes with no `draining` sample | Exact |
+| Ledger drift | Queued plus dropped rows in each director's newest `orca_relay_reserve_ledger_summary`, over the cell's controls, above 0.5% for 2 minutes | Proxy that can only over-count: the summaries are fleet-wide, so exact only while this is the only reserve cell |
+
+Any rule it cannot read in a sample makes that sample unverifiable; `unverifiable-limit` such
+samples in a row is a trip of its own. The 503 read takes every response code in one query, and the
+newest minute any code has a point for is how far the series is published: a 503 minute at or
+before it with no point had no 503s, so a quiet fleet reads zero. Minutes past it are left out, not
+counted; fewer than 3 published minutes in the read, no request series at all, or an unparseable
+timestamp is unverifiable. This assumes the codes publish together; one code lagging the others
+delays a trip by its lag but cannot hide one, because a later read sees its points. A host's own
+early or duplicate re-dial says nothing about a cell and grows with traffic: on 2026-10-18 it was
+~98% of 503s and tripped c7 back twice with no fault. The subtraction is only trusted where the
+director logged: a judged minute no runtime-metrics line covers is unverifiable, a 10-minute read
+with fewer lines than a single instance logs (20) or at its entry limit is unverifiable, and the
+measured background leaves such minutes out (and is not measured with fewer than half of its 10
+metered). Coverage is any instance, not every one: an instance whose lines are missing while others
+log under-subtracts its re-dials, which can only push toward a trip, never hide one. The same measure is the
+background and `background-503-per-minute`. Until the
+minutes before `flipped-at` are published (3 minutes past it) the 503 rule is pending, which does
+not add to the streak. The duplicate read also takes `orca_relay_reserve_ledger_summary`, which
+every placing director logs each minute, in the same query and window: with no summary from the
+last 150 s in it, the read is blind and the sample unverifiable, not zero duplicates. The duplicate
+rule keys a seat by director instance, so a director restart (a new instance id) starts its
+first-seen clock over. A cell whose switch file no longer says reserve ends the watch without a
+write.
+
+In `write` mode a watch that fails, times out or is cancelled before a verdict flips the cell back
+as a trip would; the flip-back job and each of its steps run on `always()`, so a cancel during the
+lease wait does not skip the switch-file write. That cancel can still kill the process before
+Postgres records db, leaving the file at db and Postgres at reserve; a force-cancel can stop it
+outright. The workflow's only group is
+its own per-cell one, which a running run never yields. It stays out of the flag workflow's group
+because GitHub keeps one pending run per group and a newer one cancels it, so a flip back queued
+there could be dropped by any later flag dispatch, and a watch held there would block manual writes
+for hours. The flag tool's generation check (CAS) orders it against other writes instead; on a
+conflict it re-reads and retries, up to 5 times, while the switch file still says reserve, and stops
+if it already says db. A cell that still does not answer runtime-status after 4 tries with backoff
+cannot take the ordinary flip back: the run fails and prints the exact break-glass inputs for
+`Operate Relay Production Cell Flags` (`set=admitMode=default`, `break-glass=BREAK GLASS <cell-id>`).
+
+An operator watches the run. A refused watch and a flip back that did not land (no ID token, a
+failed login, a cell that does not answer) can each leave the cell in reserve with nothing watching
+it, so both raise an `::error::` annotation naming the cell, as the clock-skew monitor does. In
+`write` mode both also log `orca_relay_reserve_watch_alarm` (log `orca-relay-reserve-watch`,
+resource `global`) with the deploy identity, and the `Orca Relay: reserve cell may be unwatched`
+alert pages on any such line. A failed login cannot page: the runner then has no credentials for
+`gcloud logging write`, so only the `::error::` and the operator watching the run report it. Apply
+the root Terraform that adds the workflow to the shared deploy identity's provider condition and
+grants that identity `roles/logging.logWriter` before the first `write` run; until then the
+workflow cannot log in and no alarm line can be written.
 
 ## Mobile push gateway
 

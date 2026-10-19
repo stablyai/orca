@@ -5,6 +5,7 @@ import {
 } from '../../shared/git-merge-tree-capability'
 import { gitExecFileAsync } from '../git/runner'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from '../git/git-runtime-options'
+import { createLocalGitObjectQuarantine } from '../git/local-git-object-quarantine'
 import {
   clearGitCapabilityStateForTests,
   withLocalGitCapabilityCacheForExecution
@@ -234,20 +235,31 @@ async function loadConflictingFiles(
     headOid,
     baseOid
   ]
+  // Why: only the file list is read; the merged tree it writes would pile up as loose objects.
+  const quarantine = createLocalGitObjectQuarantine(repoPath, localGitOptions)
 
   return withLocalGitCapabilityCacheForExecution(
     { cwd: repoPath, wslDistro: localGitOptions.wslDistro },
-    (capabilities) =>
-      capabilities.runWithFallback(
+    (capabilities) => {
+      const runMergeTree = (args: string[]): Promise<{ stdout: string }> => {
+        const run = (env: NodeJS.ProcessEnv | undefined) =>
+          gitExecFileAsync(args, {
+            ...gitOptionsForWorktree(repoPath, localGitOptions),
+            ...(env ? { env } : {})
+          })
+        // Why only once supported: an old Git still gets the folder, and Git < 2.35 can't prune a leftover.
+        return capabilities.isKnownSupported('merge-tree-write-tree')
+          ? quarantine.run(run)
+          : run(undefined)
+      }
+      return capabilities.runWithFallback(
         'merge-tree-write-tree',
         () =>
           capabilities.runWithFallback(
             'merge-tree-merge-base',
             async () => {
               try {
-                const result = await gitExecFileAsync(modernArgs, {
-                  ...gitOptionsForWorktree(repoPath, localGitOptions)
-                })
+                const result = await runMergeTree(modernArgs)
                 return parseMergeTreeNameOnlyOutput(result.stdout)
               } catch (error) {
                 if (isUnsupportedMergeTreeWriteTreeError(error)) {
@@ -262,7 +274,7 @@ async function loadConflictingFiles(
                 throw error
               }
             },
-            () => loadConflictingFilesWithLegacyMergeTree(repoPath, legacyArgs, localGitOptions),
+            () => loadConflictingFilesWithLegacyMergeTree(runMergeTree, legacyArgs),
             isUnsupportedMergeTreeMergeBaseError
           ),
         async () => {
@@ -272,18 +284,16 @@ async function loadConflictingFiles(
         },
         isUnsupportedMergeTreeWriteTreeError
       )
+    }
   )
 }
 
 async function loadConflictingFilesWithLegacyMergeTree(
-  repoPath: string,
-  legacyArgs: string[],
-  localGitOptions: LocalGitExecOptions
+  runMergeTree: (args: string[]) => Promise<{ stdout: string }>,
+  legacyArgs: string[]
 ): Promise<string[]> {
   try {
-    const result = await gitExecFileAsync(legacyArgs, {
-      ...gitOptionsForWorktree(repoPath, localGitOptions)
-    })
+    const result = await runMergeTree(legacyArgs)
     return parseMergeTreeNameOnlyOutput(result.stdout)
   } catch (fallbackError) {
     const fallbackStdout = getGitErrorOutput(fallbackError, 'stdout')

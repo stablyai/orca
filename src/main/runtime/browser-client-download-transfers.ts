@@ -103,9 +103,12 @@ export class BrowserClientDownloadTransferStore {
   }
 
   // Why: page close and lease fencing must not leave half-written files in the remote workspace.
-  async releasePage(browserPageId: string): Promise<void> {
+  /** Omitting the generation releases every generation of the page. */
+  async releasePage(browserPageId: string, pageHostGeneration?: number): Promise<void> {
     const owned = [...this.sessions.values()].filter(
-      (session) => session.browserPageId === browserPageId
+      (session) =>
+        session.browserPageId === browserPageId &&
+        (pageHostGeneration === undefined || session.pageHostGeneration === pageHostGeneration)
     )
     for (const session of owned) {
       session.canceled = true
@@ -330,5 +333,5 @@ function isDestinationExistsError(error: unknown): boolean {
 }
 
 function sessionKey(browserPageId: string, transferId: string): string {
-  return `${browserPageId} ${transferId}`
+  return `${browserPageId}\u0000${transferId}`
 }

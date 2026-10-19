@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -112,6 +112,39 @@ describe('ConfirmationDialogProvider', () => {
 
     expect(onConfirmed).not.toHaveBeenCalled()
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
+  })
+
+  it('dismisses a prompt its caller aborts and shows the next one', async () => {
+    const first = new AbortController()
+    const settled: [string, boolean][] = []
+    function TwoPrompts(): React.JSX.Element {
+      const confirm = useConfirmationDialog()
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            void confirm({ title: 'First?', signal: first.signal }).then((c) =>
+              settled.push(['first', c])
+            )
+            void confirm({ title: 'Second?' }).then((c) => settled.push(['second', c]))
+          }}
+        >
+          ask both
+        </button>
+      )
+    }
+    render(
+      <ConfirmationDialogProvider>
+        <TwoPrompts />
+      </ConfirmationDialogProvider>
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask both' }))
+    expect(await screen.findByText('First?')).toBeInTheDocument()
+    act(() => first.abort())
+
+    expect(await screen.findByText('Second?')).toBeInTheDocument()
+    expect(settled).toEqual([['first', false]])
   })
 
   it('does not carry a checked box into the next prompt', async () => {

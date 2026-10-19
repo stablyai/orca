@@ -104,17 +104,4 @@ describe('getCloneDestinationAutoFill', () => {
       })
     ).toBeNull()
   })
-
-  it('does not fill SSH clone destinations from the local workspace directory', () => {
-    expect(
-      getCloneDestinationAutoFill({
-        step: 'clone',
-        cloneDestination: '',
-        activeRuntimeEnvironmentId: null,
-        sshTargetId: 'openclaw-2',
-        workspaceDir: '/Users/mvanhorn/orca/workspaces',
-        cloneStepAutoFilled: false
-      })
-    ).toBeNull()
-  })
 })

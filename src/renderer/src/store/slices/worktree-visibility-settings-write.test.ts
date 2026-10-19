@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import { markRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
 import { createTestStore } from './store-test-helpers'
 import { persistVisibilityAwareSettings } from './worktree-visibility-settings-write'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 it('preserves the active runtime default during unrelated local settings writes', async () => {
   const currentSettings = {
@@ -58,12 +59,8 @@ it('does not restore a stale owner after its visibility write resolves', async (
   markRuntimeEnvironmentCompatible('env-a')
   let resolveUpdate!: (value: unknown) => void
   const update = new Promise((resolve) => (resolveUpdate = resolve))
-  vi.stubGlobal('window', {
-    api: {
-      runtimeEnvironments: {
-        call: vi.fn().mockReturnValue(update)
-      }
-    }
+  stubRuntimeEnvironmentBridge({
+    call: vi.fn().mockReturnValue(update)
   })
   const currentSettings = {
     activeRuntimeEnvironmentId: 'env-a',
@@ -95,7 +92,7 @@ it('does not restore a stale owner after its visibility write resolves', async (
 
 it('rejects source-default writes before contacting an older runtime host', async () => {
   const runtimeCall = vi.fn()
-  vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+  stubRuntimeEnvironmentBridge({ call: runtimeCall })
   const currentSettings = {
     activeRuntimeEnvironmentId: 'env-a',
     worktreeVisibilityDefaults: { external: 'hide' }
@@ -120,7 +117,7 @@ it('rejects source-default writes before contacting an older runtime host', asyn
 
 it('rejects base visibility writes before contacting an unsupported runtime host', async () => {
   const runtimeCall = vi.fn()
-  vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+  stubRuntimeEnvironmentBridge({ call: runtimeCall })
   const currentSettings = {
     activeRuntimeEnvironmentId: 'env-a'
   } as GlobalSettings
@@ -147,16 +144,12 @@ it('does not publish a visibility write after a newer hydration starts', async (
     settings: currentSettings,
     worktreeVisibilityDefaultsByHost: {}
   } as unknown as AppState
-  vi.stubGlobal('window', {
-    api: {
-      runtimeEnvironments: {
-        call: vi.fn().mockResolvedValue({
-          ok: true,
-          result: { settings: { worktreeVisibilityDefaults: { external: 'show' } } },
-          _meta: { runtimeId: 'runtime-a' }
-        })
-      }
-    }
+  stubRuntimeEnvironmentBridge({
+    call: vi.fn().mockResolvedValue({
+      ok: true,
+      result: { settings: { worktreeVisibilityDefaults: { external: 'show' } } },
+      _meta: { runtimeId: 'runtime-a' }
+    })
   })
 
   await persistVisibilityAwareSettings({

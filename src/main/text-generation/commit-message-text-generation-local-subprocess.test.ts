@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import type * as ChildProcess from 'node:child_process'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { generateCommitMessageFromContext } from './commit-message-text-generation'
 import {
   createChildTerminationExpectation,
@@ -27,13 +27,26 @@ const spawnMock = vi.mocked(spawn)
 
 const expectChildTerminated = createChildTerminationExpectation(terminateWindowsProcessTreeMock)
 
+// These suites drive fake children down the Windows direct-child path, taskkill included. The POSIX
+// supervised stop with the Codex home lock (generation: timeout, cancel, output limit; discovery:
+// timeout, output limit) is in source-control-local-process.test.ts.
+const hostPlatform = process.platform
+
+afterEach(() => {
+  Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })
+  vi.unstubAllEnvs()
+})
+
 beforeEach(() => {
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+  // Windows resolves a bare agent name on PATH; the host's own installs must not answer it.
+  vi.stubEnv('PATH', '')
   terminateWindowsProcessTreeMock.mockClear()
   terminateWindowsProcessTreeMock.mockResolvedValue(undefined)
   spawnMock.mockClear()
 })
 
-describe('generateCommitMessageFromContext', () => {
+describe('generateCommitMessageFromContext on the Windows direct-child path', () => {
   it('caps local agent output before buffering unbounded data', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
     const child = {
@@ -225,12 +238,14 @@ describe('generateCommitMessageFromContext', () => {
           success: true,
           message: 'Update README'
         })
+        // Not an npm shim, so process-host falls back to its own cmd.exe line.
         expect(spawnMock).toHaveBeenCalledWith(
           'C:\\Windows\\System32\\cmd.exe',
-          ['/d', '/c', 'C:/tools/agent.cmd'],
+          ['/d /v:off /s /c ""C:/tools/agent.cmd""'],
           expect.objectContaining({
             cwd: 'C:\\repo',
-            windowsHide: true
+            windowsHide: true,
+            windowsVerbatimArguments: true
           })
         )
       })
@@ -265,7 +280,7 @@ describe('generateCommitMessageFromContext', () => {
       expect(result).toEqual({
         success: false,
         error:
-          'C:/tools/agent.cmd cannot be run as a Windows batch command with the prompt in argv. Remove {prompt} so Orca sends the prompt on stdin.'
+          "C:/tools/agent.cmd runs through a Windows batch script that cannot take the multi-line prompt as an argument. Point Settings at the agent's executable, or use a custom command without {prompt} so Orca sends the prompt on stdin."
       })
       expect(spawnMock).not.toHaveBeenCalled()
     })

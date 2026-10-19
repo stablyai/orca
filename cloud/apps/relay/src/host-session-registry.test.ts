@@ -7,7 +7,7 @@ import {
   RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME,
   RELAY_PROTOCOL_LIMITS
 } from '@orca-cloud/relay-contract'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type WebSocket from 'ws'
 import type { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
@@ -18,7 +18,11 @@ import {
   type ControlRenewalOutcome,
   type ControlRenewalRequest
 } from './control-renewal-statement.js'
-import { HostSessionRegistry, type HostSession } from './host-session-registry.js'
+import {
+  HostSessionRegistry,
+  IDLE_REHOME_MIN_CONTROL_AGE_MS,
+  type HostSession
+} from './host-session-registry.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
 import type { RelayRuntimeObserver } from './relay-observability.js'
 import {
@@ -126,6 +130,7 @@ function createRegistry(
   observer: {
     recordAuth: ReturnType<typeof vi.fn>
     recordControlClose: ReturnType<typeof vi.fn>
+    recordPostProofClose: ReturnType<typeof vi.fn>
     recordSpliceClose: ReturnType<typeof vi.fn>
   }
 } {
@@ -173,6 +178,7 @@ function createRegistry(
     recordReconnect: vi.fn(),
     recordSql: vi.fn(),
     recordControlClose: vi.fn(),
+    recordPostProofClose: vi.fn(),
     recordSpliceClose: vi.fn()
   } satisfies RelayRuntimeObserver
   const registry = new HostSessionRegistry(
@@ -1319,7 +1325,10 @@ describe('source-owned idle cutover', () => {
     sourceCellIncarnation: 'incarnation-1',
     targetCellId: 'target'
   }
-  async function source(store: Partial<RelayCredentialStore> = {}) {
+  async function source(
+    store: Partial<RelayCredentialStore> = {},
+    controlAgeMs = IDLE_REHOME_MIN_CONTROL_AGE_MS
+  ) {
     const h = createRegistry(vi.fn().mockResolvedValue('control:1'), store)
     const socket = new FakeSocket()
     h.registry.acceptControl(
@@ -1330,8 +1339,67 @@ describe('source-owned idle cutover', () => {
     )
     socket.removeAllListeners('message')
     await h.activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
+    // Moves the clock without firing the heartbeat timers that would close the session.
+    vi.setSystemTime(Date.now() + controlAgeMs)
     return { ...h, socket, session: h.registry.get(request)! }
   }
+  it.each([
+    { controlAgeMs: 0, outcome: 'busy' },
+    { controlAgeMs: IDLE_REHOME_MIN_CONTROL_AGE_MS - 1, outcome: 'busy' },
+    { controlAgeMs: IDLE_REHOME_MIN_CONTROL_AGE_MS, outcome: 'committed' },
+    { controlAgeMs: 60 * 60 * 1000, outcome: 'committed' }
+  ])('answers $outcome for a control socket $controlAgeMs ms old', async (row) => {
+    const { controlAgeMs, outcome } = row
+    const h = await source({}, controlAgeMs)
+    const commit = vi.fn().mockResolvedValue({ outcome: 'committed' })
+    expect(
+      await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
+    ).toEqual({ outcome })
+    expect(commit).toHaveBeenCalledTimes(outcome === 'busy' ? 0 : 1)
+    expect(h.socket.close).toHaveBeenCalledTimes(outcome === 'busy' ? 0 : 1)
+  })
+  it('restarts the age when the host rebinds its control socket', async () => {
+    const h = await source()
+    const rebound = new FakeSocket()
+    h.registry.acceptControl(
+      rebound as unknown as WebSocket,
+      identity,
+      undefined,
+      new Set([RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME])
+    )
+    rebound.removeAllListeners('message')
+    await h.activate(rebound as unknown as WebSocket, identity, h.session, 1, true, 1)
+    const commit = vi.fn().mockResolvedValue({ outcome: 'committed' })
+    expect(
+      await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
+    ).toEqual({ outcome: 'busy' })
+    expect(commit).not.toHaveBeenCalled()
+  })
+  it('closes a superseded socket whose refresh meets the cutover, not its successor', async () => {
+    const h = await source()
+    const successor = new FakeSocket()
+    h.registry.acceptControl(
+      successor as unknown as WebSocket,
+      identity,
+      undefined,
+      new Set([RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME])
+    )
+    successor.removeAllListeners('message')
+    await h.activate(successor as unknown as WebSocket, identity, h.session, 1, true, 1)
+    vi.setSystemTime(Date.now() + IDLE_REHOME_MIN_CONTROL_AGE_MS)
+    const commit = deferred<{ outcome: 'committed' }>()
+    const cutover = h.registry.idleRehome(
+      request,
+      vi.fn(() => commit.promise),
+      vi.fn().mockResolvedValue('not-committed')
+    )
+    h.socket.emit('message', Buffer.from(JSON.stringify({ type: 'auth-refresh', relayJwt: 'jwt' })), false)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'resolve-director')
+    expect(successor.close).not.toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'resolve-director')
+    commit.resolve({ outcome: 'committed' })
+    await cutover
+  })
   it('keeps either established client busy until both actually leave', async () => {
     const h = await source()
     h.session.activeConnIds.add('phone')
@@ -1970,5 +2038,164 @@ describe('paced drain', () => {
     const sendsAfterEmergency = sockets.map((socket) => socket.send.mock.calls.length)
     await vi.advanceTimersByTimeAsync(40_000)
     expect(sockets.map((socket) => socket.send.mock.calls.length)).toEqual(sendsAfterEmergency)
+  })
+})
+
+describe('controls closed after host proof but before wiring', () => {
+  let warn: MockInstance<typeof console.warn>
+  beforeEach(() => {
+    vi.useFakeTimers()
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+  afterEach(() => {
+    warn.mockRestore()
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+  const refusedLines = (): string[] =>
+    warn.mock.calls
+      .map((call) => String(call[0]))
+      .filter((line) => line.includes('control refused after proof'))
+
+  function expectRefusal(
+    observer: { recordPostProofClose: ReturnType<typeof vi.fn> },
+    code: number | null,
+    reason: string,
+    cause?: string
+  ): void {
+    expect(observer.recordPostProofClose).toHaveBeenCalledWith(reason)
+    const [line] = refusedLines()
+    expect(line).toContain(`host=${relayHostLogDigest(identity.relayHostId)} gen=1 app="1.4.173"`)
+    expect(line).toContain(`code=${code ?? 'none'} reason=${JSON.stringify(reason)}`)
+    if (cause) expect(line).toContain(`cause=${cause}`)
+    expect(line).not.toContain(identity.relayHostId)
+    expect(line).not.toContain(identity.sub)
+  }
+
+  it('logs an idle cutover refusal', async () => {
+    const h = createRegistry(vi.fn())
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: beginIdleWork only checks the host key's presence.
+    const idle = h.registry as unknown as { idleAttempts: Map<string, unknown> }
+    idle.idleAttempts.set(identity.relayHostId, {})
+    const socket = new FakeSocket()
+    await h.activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
+    expect(socket.close).toHaveBeenCalledWith(
+      RELAY_CLOSE_CODE.WRONG_CELL,
+      'idle cutover in progress'
+    )
+    expectRefusal(h.observer, RELAY_CLOSE_CODE.WRONG_CELL, 'idle cutover in progress')
+  })
+
+  it('logs a stalled activation queue once', async () => {
+    const stalled = deferred<string>()
+    const h = createRegistry(
+      vi.fn<RelayAssignmentStore['activateControl']>().mockReturnValueOnce(stalled.promise)
+    )
+    const first = h.activate(new FakeSocket() as unknown as WebSocket, identity, null, 1, false, 1)
+    const waiting = new FakeSocket()
+    const second = h.activate(waiting as unknown as WebSocket, identity, null, 1, false, 1)
+    await Promise.resolve()
+    await Promise.resolve()
+    vi.advanceTimersByTime(30_000)
+    expectRefusal(h.observer, RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'control activation queue stalled')
+    stalled.resolve('control:production-gce-c3:1')
+    await Promise.all([first, second])
+    expect(h.observer.recordPostProofClose).toHaveBeenCalledOnce()
+  })
+
+  it('logs a superseded activation', async () => {
+    const h = createRegistry(vi.fn())
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only compared by identity against the empty session map.
+    const stale = {} as HostSession
+    await h.activate(new FakeSocket() as unknown as WebSocket, identity, stale, 1, false, 1)
+    expectRefusal(h.observer, RELAY_CLOSE_CODE.PEER_DROPPED, 'control activation superseded')
+  })
+
+  it.each([
+    { error: new Error('wrong_assignment'), cause: 'wrong_assignment' },
+    { error: Object.assign(new Error('timeout'), { code: '57014' }), cause: 'database_transient' },
+    // Assembled at runtime so the secret scanner does not read the fixture as a real URL.
+    {
+      error: new Error(`connect ${['postgres', '//user:secret@db/relay'].join(':')}`),
+      cause: 'error'
+    }
+  ])('logs a failed host-proof assignment check as $cause', async ({ error, cause }) => {
+    const h = createRegistry(
+      vi.fn<RelayAssignmentStore['activateControl']>().mockRejectedValueOnce(error)
+    )
+    await h.activate(new FakeSocket() as unknown as WebSocket, identity, null, 1, false, 1)
+    expectRefusal(
+      h.observer,
+      RELAY_CLOSE_CODE.WRONG_CELL,
+      'assignment changed during host proof',
+      cause
+    )
+    expect(refusedLines()[0]).not.toContain('secret')
+  })
+
+  it('logs a drain that lands during activation', async () => {
+    const h = createRegistry(vi.fn().mockResolvedValue('control:production-gce-c3:1'))
+    h.registry.drain(100)
+    await h.activate(new FakeSocket() as unknown as WebSocket, identity, null, 1, false, 1)
+    expectRefusal(h.observer, RELAY_CLOSE_CODE.DRAINING, 'relay draining')
+  })
+
+  it('logs a host that hangs up during activation, with no cell close code', async () => {
+    const blocked = deferred<string>()
+    const h = createRegistry(
+      vi.fn<RelayAssignmentStore['activateControl']>().mockReturnValueOnce(blocked.promise)
+    )
+    const socket = new FakeSocket()
+    const activation = h.activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    socket.close()
+    blocked.resolve('control:production-gce-c3:1')
+    await activation
+    expectRefusal(h.observer, null, 'host closed during activation')
+  })
+
+  it('logs a host that hangs up while queued, with no cell close code', async () => {
+    const stalled = deferred<string>()
+    const h = createRegistry(
+      vi
+        .fn<RelayAssignmentStore['activateControl']>()
+        .mockReturnValueOnce(stalled.promise)
+        .mockResolvedValue('control:production-gce-c3:1')
+    )
+    const first = h.activate(new FakeSocket() as unknown as WebSocket, identity, null, 1, false, 1)
+    const queued = new FakeSocket()
+    const second = h.activate(queued as unknown as WebSocket, identity, null, 1, false, 1)
+    queued.close()
+    stalled.resolve('control:production-gce-c3:1')
+    await Promise.all([first, second])
+    expectRefusal(h.observer, null, 'host closed while queued')
+  })
+
+  it('logs the hang-up, not a stall, when the queued host left before the deadline', async () => {
+    const stalled = deferred<string>()
+    const h = createRegistry(
+      vi.fn<RelayAssignmentStore['activateControl']>().mockReturnValueOnce(stalled.promise)
+    )
+    const first = h.activate(new FakeSocket() as unknown as WebSocket, identity, null, 1, false, 1)
+    const queued = new FakeSocket()
+    const second = h.activate(queued as unknown as WebSocket, identity, null, 1, false, 1)
+    await Promise.resolve()
+    await Promise.resolve()
+    queued.readyState = queued.CLOSED
+    vi.advanceTimersByTime(30_000)
+    expect(queued.close).toHaveBeenCalledWith(
+      RELAY_CLOSE_CODE.LIMIT_EXCEEDED,
+      'control activation queue stalled'
+    )
+    expectRefusal(h.observer, null, 'host closed while queued')
+    stalled.resolve('control:production-gce-c3:1')
+    await Promise.all([first, second])
+  })
+
+  it('does not log a control that was wired', async () => {
+    const h = createRegistry(vi.fn().mockResolvedValue('control:production-gce-c3:1'))
+    await h.activate(new FakeSocket() as unknown as WebSocket, identity, null, 1, false, 1)
+    expect(h.observer.recordPostProofClose).not.toHaveBeenCalled()
+    expect(refusedLines()).toEqual([])
   })
 })

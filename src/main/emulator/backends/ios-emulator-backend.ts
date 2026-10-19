@@ -12,6 +12,7 @@ import {
   execServeSimCommand,
   parseServeSimCommandArgs,
   resolveServeSimExecutable,
+  serveSimKillArgs,
   stripEmulatorTargetArgs,
   type ServeSimExecutable
 } from '../serve-sim-execution'
@@ -261,7 +262,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
     deviceId: string,
     options: { helperPid?: number; includeOrphaned?: boolean } = {}
   ): Promise<void> {
-    await this.execServeSim(['--kill', '-q', deviceId]).catch(() => {})
+    await this.execServeSim(serveSimKillArgs(deviceId)).catch(() => {})
     // Why: serve-sim --kill depends on its state file; stale helper binaries
     // can survive state loss and keep old streams/listeners around.
     await killServeSimHelperProcessesForDevice(deviceId, options).catch(() => {})

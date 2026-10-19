@@ -1,6 +1,6 @@
+import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import { createTerminalStartupTiming } from '../terminal-startup-timing'
-import type { PtyReplayDataMeta } from '../pty-transport'
-import type { PtyTransportRecoveryState } from '../pty-transport-types'
+import type { PtyReplayDataMeta, PtyTransportRecoveryState } from '../pty-transport-types'
 import type { PtyDataMeta } from '../pty-dispatcher'
 import type { PtyPaneStartup } from '../pty-connection-types'
 
@@ -95,9 +95,23 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
             session.deps.onPtyRecoveryStateRef?.current?.(session.pane.id, state)
           }
         },
-        onOutputPauseChanged: (paused: boolean, supported: boolean): void => {
+        onOutputPauseChanged: (
+          paused: boolean,
+          supported: boolean,
+          dropsReported?: boolean
+        ): void => {
           if (isCurrent()) {
-            session.handleRemoteOutputPauseChanged(paused, supported)
+            session.handleRemoteOutputPauseChanged(paused, supported, dropsReported === true)
+          }
+        },
+        onPausedOutputDropped: (): void => {
+          if (isCurrent()) {
+            session.handleRemotePausedOutputDropped()
+          }
+        },
+        onSpawnDeferred: (reason: SpawnDeferralReason): void => {
+          if (isCurrent()) {
+            session.pendingSpawnDeferral = reason
           }
         }
       }
@@ -120,6 +134,11 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
   session.hiddenOutputRestoreLegacyPtyId = null
   // Bounded remote re-arms spent instead of the loss banner (per PTY stream).
   session.hiddenOutputRestoreRemoteAbandonCycles = 0
+  // Latest hidden-drop episode main reported, and the one a banner already disclosed:
+  // main's drop latch outlives unhide, so an unservable gap re-marks on every reveal.
+  session.hiddenOutputRestoreLatestDropEpisode = null
+  session.hiddenOutputRestoreUnhideSeq = null
+  session.hiddenOutputRestoreDisclosedGap = null
   session.hiddenOutputSnapshotScrollRestore = null
   // Why: hidden recovery state belongs to one PTY stream. Reattach/restart
   // can reuse the pane object for a different session before visibility.

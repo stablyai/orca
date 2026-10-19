@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { createTerminalShutdownGuardController } from './terminal-shutdown-guards'
 
-vi.mock('@/components/terminal-pane/pty-transport', () => ({
+vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn(() => [])
 }))
@@ -29,7 +29,7 @@ function harness(initial: Partial<AppState>, exitGuardPtyIds: readonly string[])
     get: (() => current) as never,
     keepIdentifiers: false,
     rendererShutdownPtyIds: exitGuardPtyIds,
-    runtimeEnvironmentId: null,
+    runtimeOwnsRemotePtys: false,
     set: set as never,
     tabs: []
   })

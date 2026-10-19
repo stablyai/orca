@@ -26,7 +26,10 @@ export function isImageMimeType(mimeType: string): boolean {
   )
 }
 
-export function parseImageAttachmentMetas(attachmentField: unknown): AttachmentMeta[] {
+export function parseImageAttachmentMetas(
+  attachmentField: unknown,
+  maxBytes = MAX_IMAGE_BYTES
+): AttachmentMeta[] {
   if (!Array.isArray(attachmentField)) {
     return []
   }
@@ -40,7 +43,7 @@ export function parseImageAttachmentMetas(attachmentField: unknown): AttachmentM
     if (!id || !isImageMimeType(mimeType)) {
       continue
     }
-    if (size > MAX_IMAGE_BYTES) {
+    if (size > maxBytes) {
       continue
     }
     const contentUrl = asString(record.content)

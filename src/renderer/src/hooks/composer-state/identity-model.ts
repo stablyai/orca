@@ -1,7 +1,7 @@
 import type * as React from 'react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
-import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
+import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
 
 export type ComposerIdentityModel = {
   linkedIssue: string

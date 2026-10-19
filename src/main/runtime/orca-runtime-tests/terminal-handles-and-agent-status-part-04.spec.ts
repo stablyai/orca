@@ -569,9 +569,12 @@ describe('OrcaRuntimeService', () => {
   it('releases a stable-pane claim when creation aborts before provider spawn', async () => {
     const releaseClaim = vi.fn()
     const spawn = vi.fn()
+    // C5e relies on this: a disconnected client is refused before the pane is adopted.
+    const adoptStablePane = vi.fn()
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       claimStablePaneCreate: vi.fn(() => releaseClaim),
+      adoptStablePane,
       spawn,
       write: () => true,
       kill: () => true,
@@ -589,6 +592,65 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('client_disconnected')
 
     expect(spawn).not.toHaveBeenCalled()
+    expect(adoptStablePane).not.toHaveBeenCalled()
     expect(releaseClaim).toHaveBeenCalledOnce()
+  })
+
+  // C5e relies on this: createTerminal checks the client again after adoption, before it spawns.
+  it('refuses before spawning when the client disconnects during pane adoption', async () => {
+    const abort = new AbortController()
+    const spawn = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      adoptStablePane: vi.fn(async () => {
+        abort.abort()
+        return null
+      }),
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await expect(
+      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        tabId: 'disconnected-during-adopt',
+        leafId: HEADLESS_LEAF_ID,
+        signal: abort.signal
+      })
+    ).rejects.toThrow('client_disconnected')
+
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  // C5e and C7 rely on this: createTerminal hands the client signal and the slept-worktree refusal to the spawn.
+  it('passes the client signal and the slept-worktree refusal to the spawn', async () => {
+    const spawn = vi.fn(async (_args: Record<string, unknown>) => {
+      throw new Error('spawn_reached')
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      adoptStablePane: vi.fn(async () => null),
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const abort = new AbortController()
+
+    await expect(
+      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        tabId: 'guards-forwarded',
+        leafId: HEADLESS_LEAF_ID,
+        signal: abort.signal,
+        refuseSleptWorktree: true
+      })
+    ).rejects.toThrow('spawn_reached')
+
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(spawn.mock.calls[0]?.[0]).toMatchObject({
+      signal: abort.signal,
+      refuseSleptWorktree: true
+    })
   })
 })

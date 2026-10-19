@@ -38,12 +38,9 @@ vi.mock('./terminal-pane-split-with-inherited-cwd', () => ({
   splitTerminalPaneWithInheritedCwd: vi.fn()
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
-vi.mock('./terminal-paste-coordinator', () => ({
-  planTerminalPasteWithYield: vi.fn(),
-  executeTerminalPastePlan: vi.fn()
-}))
+vi.mock('./terminal-paste-coordinator', () => ({ planTerminalPasteWithYield: vi.fn() }))
+vi.mock('./terminal-paste-executor', () => ({ executeTerminalPastePlan: vi.fn() }))
 vi.mock('./terminal-paste-runtime', () => ({ resolveTerminalPasteRuntime: vi.fn() }))
-vi.mock('./terminal-paste-ssh-platform', () => ({ getTerminalPasteSshRemotePlatform: vi.fn() }))
 vi.mock('./terminal-bracketed-paste', () => ({ pasteTerminalText: vi.fn() }))
 vi.mock('./terminal-pty-paste-writer', () => ({ writeTerminalPastePtyInput: vi.fn() }))
 vi.mock('./terminal-paste-errors', () => ({ formatTerminalPasteExecutionError: vi.fn() }))

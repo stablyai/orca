@@ -12,7 +12,12 @@ vi.mock('node:os', async (importOriginal) => {
 vi.mock('electron', () => ({ app: { getPath: () => hoisted.home } }))
 
 import { zcodeHookService } from './hook-service'
-import { getZCodeConfigPath, ZCODE_HOOK_EVENTS } from './hook-settings'
+import {
+  applyZCodeManagedHooks,
+  getZCodeConfigPath,
+  getZCodeManagedCommand,
+  ZCODE_HOOK_EVENTS
+} from './hook-settings'
 
 type ManagedHookEntry = { type: string; command: string; timeout?: number }
 type ZCodeConfigFile = {
@@ -157,6 +162,33 @@ describe('ZCodeHookService', () => {
       managedHooksPresent: true,
       detail: expect.stringContaining('hooks.enabled')
     })
+  })
+
+  it('registers a forward-slash cmd path on Windows and replaces the legacy backslash entry', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const scriptPath = 'C:\\Users\\ada\\.orca\\agent-hooks\\zcode-hook.cmd'
+    const command = getZCodeManagedCommand(scriptPath)
+    // Why: Git Bash strips backslashes from a bare path; forward slashes survive every host.
+    expect(command).toBe('C:/Users/ada/.orca/agent-hooks/zcode-hook.cmd')
+
+    const next = applyZCodeManagedHooks(
+      {
+        hooks: {
+          events: {
+            Stop: [
+              { hooks: [{ type: 'command', command: scriptPath }] },
+              { hooks: [{ type: 'command', command: 'C:\\tools\\user-hook.cmd' }] }
+            ]
+          }
+        }
+      },
+      command,
+      'zcode-hook.cmd'
+    )
+    expect(next.hooks?.events?.Stop).toEqual([
+      { hooks: [{ type: 'command', command: 'C:\\tools\\user-hook.cmd' }] },
+      { hooks: [expect.objectContaining({ command })] }
+    ])
   })
 
   it('writes an executable managed hook script that posts to the ZCode endpoint', () => {

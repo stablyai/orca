@@ -27,34 +27,36 @@ vi.mock('@/store', () => ({
 }))
 
 describe('provider rate-limit panels account scope', () => {
-  it('shows the local host scope for GitHub API budget', () => {
+  it('shows the Settings host, not the focused server, for GitHub API budget', () => {
     mocks.store.current = {
-      settings: { activeRuntimeEnvironmentId: null },
+      settings: { activeRuntimeEnvironmentId: 'runtime-focused' },
       openSettingsPage: vi.fn(),
       openSettingsTarget: vi.fn()
     }
 
-    const markup = renderToStaticMarkup(<GitHubRateLimitPanel />)
+    const markup = renderToStaticMarkup(<GitHubRateLimitPanel target={{ kind: 'local' }} />)
 
     expect(markup).toContain(`Budget scope: ${LOCAL_HOST_LABEL}`)
     expect(markup).toContain(
-      'GitHub API budget is fetched from the CLI on this desktop client. Use Settings &gt; Remote Orca Servers &gt; Advanced to view server-owned budgets.'
+      'GitHub API budget is fetched from the CLI on this desktop client. Choose a server in the Host menu at the top of Settings to see its budget.'
     )
     expect(markup).toContain('Open Remote Servers')
   })
 
   it('shows the remote server scope for GitLab API budget', () => {
     mocks.store.current = {
-      settings: { activeRuntimeEnvironmentId: 'runtime-1' },
+      settings: { activeRuntimeEnvironmentId: null },
       openSettingsPage: vi.fn(),
       openSettingsTarget: vi.fn()
     }
 
-    const markup = renderToStaticMarkup(<GitLabRateLimitPanel />)
+    const markup = renderToStaticMarkup(
+      <GitLabRateLimitPanel target={{ kind: 'environment', environmentId: 'runtime-1' }} />
+    )
 
     expect(markup).toContain('Budget scope: Remote server: runtime-1')
     expect(markup).toContain(
-      'GitLab API budget is fetched from the CLI on this remote server. Use Settings &gt; Remote Orca Servers &gt; Advanced to view another default runtime budget.'
+      'GitLab API budget is fetched from the CLI on this remote server. Choose another host in the Host menu at the top of Settings to see its budget.'
     )
   })
 })

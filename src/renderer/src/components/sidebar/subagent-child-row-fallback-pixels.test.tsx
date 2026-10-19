@@ -197,7 +197,7 @@ function stripMarkup(supportsTaskStop: boolean): string {
             tasks={TASKS}
             settledTasks={SETTLED_TASKS}
             supportsTaskStop={supportsTaskStop}
-            supportsStopAll
+            offersStopAll={!supportsTaskStop}
             stoppingTaskIds={new Set(['agent-working'])}
             stoppingAll={false}
             indicatorActive
@@ -221,7 +221,7 @@ describe('chat strip rows from a legacy background-task roster', () => {
     container.innerHTML = markup
     expect([...container.querySelectorAll('li')].map((row) => row.textContent)).toEqual([
       'Failed child · failed',
-      'Background agent · no recent updateStop',
+      'Background agent · status unavailableStop',
       'Cancelled child',
       'Approve edits · needs approvalStop',
       'Summarize logs900',

@@ -1,5 +1,6 @@
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
-import type { PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import { isWorktreeTerminalsSleepingError } from '../../../runtime/worktree-terminals-sleeping-error'
 
 export type PaneSpawnReservation = {
   promise: Promise<PaneSpawnReservationResult>
@@ -38,6 +39,23 @@ export function reservePaneSpawn(paneKey: string): PaneSpawnReservation {
   return reservation
 }
 
+/**
+ * Awaits a concurrent spawn of the same pane. Null when that spawn was an automatic one refused for a
+ * slept worktree: its refusal is not the pane's outcome, so a joining user wake must spawn itself.
+ */
+export async function joinPaneSpawn(
+  reservation: PaneSpawnReservation
+): Promise<PaneSpawnReservationResult | null> {
+  try {
+    return await reservation.promise
+  } catch (error) {
+    if (isWorktreeTerminalsSleepingError(error)) {
+      return null
+    }
+    throw error
+  }
+}
+
 /** Reserves the pane once no runtime create or other spawn holds it. */
 export async function reserveIdlePaneSpawn(ownerKey: string): Promise<PaneSpawnReservation> {
   for (;;) {
@@ -62,6 +80,17 @@ export function clearPaneSpawnReservation(
   if (paneSpawnReservationsByOwnerKey.get(paneKey) === reservation) {
     paneSpawnReservationsByOwnerKey.delete(paneKey)
   }
+}
+
+/** Whether a window or runtime spawn of this pane has begun and not yet bound or failed. */
+export function isPaneSpawnInFlight(worktreeId: string, paneKey: string): boolean {
+  for (const ownerKey of paneSpawnReservationsByOwnerKey.keys()) {
+    const parsed: unknown = JSON.parse(ownerKey)
+    if (Array.isArray(parsed) && parsed[1] === worktreeId && parsed[2] === paneKey) {
+      return true
+    }
+  }
+  return false
 }
 
 export function makePaneSpawnReservationKey(

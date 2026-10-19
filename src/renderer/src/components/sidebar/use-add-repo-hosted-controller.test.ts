@@ -12,9 +12,7 @@ vi.mock('react', async (importOriginal) => {
 
 const mocks = vi.hoisted(() => ({
   state: {
-    closeModal: vi.fn(),
-    openSettingsPage: vi.fn(),
-    openSettingsTarget: vi.fn()
+    closeModal: vi.fn()
   },
   markOnboardingProjectAdded: vi.fn(() => Promise.resolve())
 }))
@@ -91,23 +89,5 @@ describe('useAddRepoHostedController', () => {
     // Why: closing before selection keeps the composer visible under the
     // dialog's close animation while the new project lands in the picker.
     expect(order).toEqual(['close', 'added'])
-  })
-
-  it('SSH settings navigation closes both hosted dialog and composer modal', () => {
-    const onOpenChange = vi.fn()
-    const { handleOpenSshSettings } = useAddRepoHostedController({
-      open: true,
-      onOpenChange,
-      onProjectAdded: vi.fn()
-    })
-    handleOpenSshSettings()
-    expect(onOpenChange).toHaveBeenCalledWith(false)
-    expect(mocks.state.closeModal).toHaveBeenCalledTimes(1)
-    expect(mocks.state.openSettingsTarget).toHaveBeenCalledWith({
-      pane: 'ssh',
-      repoId: null,
-      sectionId: 'ssh'
-    })
-    expect(mocks.state.openSettingsPage).toHaveBeenCalledTimes(1)
   })
 })

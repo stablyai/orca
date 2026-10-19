@@ -1,3 +1,4 @@
+import * as inventoryBudget from './runtime-legacy-inventory-budget'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeFileListResult } from '../../../shared/runtime-types'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
@@ -87,12 +88,18 @@ describe('legacy Quick Open inventory expiry', () => {
   it('releases an idle 5,000-file response at its deadline without another lookup', async () => {
     async function populate() {
       const response = listing('one', 5_000)
-      const retired = new WeakRef(response)
+      const decode = vi.spyOn(inventoryBudget, 'decodeLegacyQuickOpenInventory')
       call.mockImplementationOnce(async () => response)
       expect(await search()).toEqual({
         files: ['src/feature-0/component.ts', 'src/feature-1/component.ts'],
         truncated: true
       })
+      const decoded = decode.mock.results[0]
+      if (decoded.type !== 'return') {
+        throw new Error('Inventory did not decode')
+      }
+      const retired = new WeakRef(decoded.value.result)
+      decode.mockClear()
       call.mockReset()
       return retired
     }
@@ -104,6 +111,42 @@ describe('legacy Quick Open inventory expiry', () => {
     await collectInventories()
     expect(retired.deref()).toBeUndefined()
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('evicts old complete inventories when their aggregate retention exceeds the byte allowance', async () => {
+    call.mockImplementation(async (_target, _method, params) => {
+      const worktree =
+        typeof params === 'object' &&
+        params !== null &&
+        'worktree' in params &&
+        typeof params.worktree === 'string'
+          ? params.worktree
+          : 'one'
+      return listing(worktree, 100_000)
+    })
+    for (let index = 0; index < 4; index += 1) {
+      await search(`large-${index}`)
+    }
+    expect(cached('large-0')).toBe(false)
+    expect(cached('large-3')).toBe(true)
+    vi.advanceTimersByTime(30_000)
+    expect(cached('large-3')).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
+    await search('new-owner')
+    expect(cached('new-owner')).toBe(true)
+  })
+
+  it('does not cache an oversized response and retries rather than treating recent paths as absent', async () => {
+    const value = listing()
+    value.files[0].relativePath = 'x'.repeat(65_537)
+    call.mockResolvedValueOnce(value)
+    await expect(search()).rejects.toThrow('too large')
+    expect(cached()).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
+    call.mockResolvedValueOnce(listing())
+    await search()
+    expect(call).toHaveBeenCalledTimes(2)
+    expect(cached()).toBe(true)
   })
 
   it('keeps one timer and strict expiry without renewing it on cache hits', async () => {

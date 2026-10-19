@@ -2,7 +2,7 @@ import { useCallback, useRef, useState, type RefObject } from 'react'
 import type { DragMoveEvent, DragOverEvent } from '@dnd-kit/core'
 import { useAppStore } from '../../store'
 import type { useHoveredTabInsertion } from './tab-insertion'
-import { applyDragPreviewTab, type TabDragActivationSnapshot } from './tab-drag-preview-activation'
+import type { TabDragActivationSnapshot } from '../../store/slices/tabs/tabs-slice-contract'
 import { resolveDragPreviewTabId } from './tab-drag-preview-target'
 import { getDragPointer } from './tab-drag-pointer'
 import {
@@ -66,7 +66,7 @@ export function useTabDragHoverPreview({
         return
       }
       lastPreviewRef.current = preview
-      applyDragPreviewTab({
+      useAppStore.getState().previewDragActiveTab({
         worktreeId,
         groupId: preview.groupId,
         tabId: preview.tabId,

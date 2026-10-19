@@ -22,11 +22,18 @@ const hiddenRendererPtys = new Set<string>()
 // registered interest suppresses the gate for that PTY.
 const deliveryInterestRendererPtys = new Set<string>()
 // Why: reveal must restore from the model only when bytes were actually
-// dropped. Doubles as the one-shot marker latch: the first gated drop emits a
-// restore marker, and the latch is consumed only by unmark (which re-emits)
-// or full PTY teardown — never by re-marking hidden, so drop memory survives
-// hidden remounts and renderer reloads.
-const droppedSinceHiddenPtys = new Set<string>()
+// dropped. Doubles as the marker latch: the first gated drop emits a restore
+// marker and every unhide re-emits one. It retires only when the renderer acks
+// the restore painted, or on PTY teardown — a retiring hidden pane unhides after
+// unregistering its marker handler, so spending it on unhide loses the gap.
+// 'awaiting-paint' = an unhide re-emitted the marker; a drop after that starts a
+// new episode the in-flight restore's snapshot may predate, so its ack must not
+// retire it.
+const droppedSinceHiddenPtys = new Map<
+  string,
+  { state: 'unrevealed' | 'awaiting-paint'; episode: number }
+>()
+let nextHiddenDropEpisode = 1
 // Why: a runtime background spawn has no renderer party to re-mark it after a
 // reload/crash, so its hidden mark must outlive renderer-scoped resets until a
 // renderer unmarks it (visible mount) or the PTY is torn down.
@@ -49,18 +56,36 @@ export function isHiddenPtyDeliveryGateEnabled(
 /** Renderer-reported "no visible view needs bytes" bit. Never clears drop
  *  memory: a hidden remount or renderer reload re-marks an already-dropped
  *  PTY, and erasing the latch there would make the eventual reveal skip the
- *  restore. Unmark is the only consumer of the latch. */
+ *  restore. */
 export function markHiddenRendererPty(id: string): void {
   hiddenRendererPtys.add(id)
 }
 
 /** Clears the hidden bit. Returns whether bytes were dropped while hidden so
- *  the caller can emit a restore marker to the now-visible renderer. */
-export function unmarkHiddenRendererPty(id: string): { droppedWhileHidden: boolean } {
+ *  the caller can emit a restore marker. Reads the latch without spending it:
+ *  the marker may reach no handler (see droppedSinceHiddenPtys). */
+export function unmarkHiddenRendererPty(id: string): {
+  droppedWhileHidden: boolean
+  hiddenDropEpisode?: number
+} {
   hiddenRendererPtys.delete(id)
   runtimeOwnedHiddenRendererPtys.delete(id)
-  const droppedWhileHidden = droppedSinceHiddenPtys.delete(id)
-  return { droppedWhileHidden }
+  const latch = droppedSinceHiddenPtys.get(id)
+  if (!latch) {
+    return { droppedWhileHidden: false }
+  }
+  latch.state = 'awaiting-paint'
+  return { droppedWhileHidden: true, hiddenDropEpisode: latch.episode }
+}
+
+/** Retires drop memory once the renderer reports painting a restore requested
+ *  for this episode. An older restore's ack must not retire a newer episode,
+ *  and an ack naming no episode retires nothing (fails toward recovery). */
+export function consumeHiddenRendererPtyDropMemory(id: string, hiddenDropEpisode?: number): void {
+  const latch = droppedSinceHiddenPtys.get(id)
+  if (latch?.state === 'awaiting-paint' && latch.episode === hiddenDropEpisode) {
+    droppedSinceHiddenPtys.delete(id)
+  }
 }
 
 export function isHiddenRendererPty(id: string): boolean {
@@ -104,18 +129,20 @@ export function shouldDropHiddenRendererPtyData(
 }
 
 /** Record one gated drop. Returns whether the caller should emit the one-shot
- *  empty restore-marker chunk (first drop since this PTY went hidden). */
+ *  empty restore-marker chunk (first drop since the latch was retired or last revealed). */
 export function recordHiddenRendererPtyDataDrop(
   id: string,
   chars: number
-): { shouldEmitRestoreMarker: boolean } {
+): { shouldEmitRestoreMarker: boolean; hiddenDropEpisode: number } {
   droppedHiddenDeliveryChars += chars
   droppedHiddenDeliveryChunks += 1
-  if (droppedSinceHiddenPtys.has(id)) {
-    return { shouldEmitRestoreMarker: false }
+  const latch = droppedSinceHiddenPtys.get(id)
+  if (latch?.state === 'unrevealed') {
+    return { shouldEmitRestoreMarker: false, hiddenDropEpisode: latch.episode }
   }
-  droppedSinceHiddenPtys.add(id)
-  return { shouldEmitRestoreMarker: true }
+  const episode = nextHiddenDropEpisode++
+  droppedSinceHiddenPtys.set(id, { state: 'unrevealed', episode })
+  return { shouldEmitRestoreMarker: true, hiddenDropEpisode: episode }
 }
 
 /** Renderer process replaced (reload / crash): its ref-counted interest

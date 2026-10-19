@@ -14,6 +14,18 @@ const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(async () => ({ url: 'about:blank', title: 'New Tab' }))
 }))
 
+vi.mock('./browser-page-pane', () => ({
+  BrowserPagePane: () => {
+    throw new Error('Adoption chrome tests must not render the local browser pane')
+  }
+}))
+
+vi.mock('../workspace-doc/workspace-doc-page-pane', () => ({
+  WorkspaceDocPagePane: () => {
+    throw new Error('Adoption chrome tests must not render a workspace document pane')
+  }
+}))
+
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), loading: vi.fn(), message: vi.fn() }
 }))

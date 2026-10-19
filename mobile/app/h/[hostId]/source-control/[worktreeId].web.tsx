@@ -1,17 +1,14 @@
+import { withWorkspaceRoute } from '../../../../src/navigation/workspace-route'
 import { useLocalSearchParams } from 'expo-router'
 import { MobileSourceControlPanel } from '../../../../src/source-control/MobileSourceControlPanel'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 import { parseSourceControlHubTab } from '../../../../src/source-control/mobile-source-control-hub-tab'
 
 /**
- * Web sibling for the source-control hub.
- *
- * This page is what the shell renders for this route, so there is no shell to mount here and no
- * flag to read: the switch already happened natively. Its native file also reaches
- * OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a
- * browser, and the route manifest imports every route — one throwing module takes the bundle down.
+ * The page's route for the source-control hub: the screen itself. The native route file mounts the shell, whose
+ * native view module throws at import in a browser, and the manifest imports every route.
  */
-export default function MobileSourceControlScreen() {
+export default withWorkspaceRoute(function MobileSourceControlScreen() {
   // Through `firstParam`, as the native sibling does. The page reaches this route only through
   // `init.route`, whose params are a `Record<string, string>`, so an array cannot arrive today —
   // read the same way regardless, because the two files are meant to be the same screen and a
@@ -33,4 +30,4 @@ export default function MobileSourceControlScreen() {
       embedded={false}
     />
   )
-}
+})

@@ -1,4 +1,5 @@
-import { callRuntimeRpc, RuntimeRpcCallError } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../shared/runtime-types'
 

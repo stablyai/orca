@@ -5,7 +5,10 @@ const mocks = vi.hoisted(() => ({
   handleGuestWillDownload: vi.fn(),
   noticeDocPreviewDownloadBlocked: vi.fn(),
   clearBrowserWebAuthnAccessHandlers: vi.fn(),
-  installBrowserWebAuthnAccessHandlers: vi.fn()
+  installBrowserWebAuthnAccessHandlers: vi.fn(),
+  isRemoteCliDrivenGuest: vi.fn((_webContentsId?: number) => false),
+  requestExternalAppLaunch: vi.fn(),
+  notifyPermissionDenied: vi.fn()
 }))
 
 type WillDownloadListener = (
@@ -66,12 +69,16 @@ vi.mock('electron', () => ({
     }
   }
 }))
+vi.mock('./desktop-browser-bridge/remote-cli-driven-workspaces', () => ({
+  isRemoteCliDrivenGuest: mocks.isRemoteCliDrivenGuest
+}))
 vi.mock('./browser-manager', () => ({
   browserManager: {
     handleGuestWillDownload: mocks.handleGuestWillDownload,
     installCertificateRequestGuard: vi.fn(),
     removeCertificateRequestGuard: vi.fn(),
-    notifyPermissionDenied: vi.fn()
+    notifyPermissionDenied: mocks.notifyPermissionDenied,
+    requestExternalAppLaunch: mocks.requestExternalAppLaunch
   }
 }))
 vi.mock('./doc-preview-download-block-notice', () => ({
@@ -193,6 +200,85 @@ describe('partition permission policy', () => {
       sessionsByPartition.get('persist:browsing-1')
     )
     expect(mocks.clearBrowserWebAuthnAccessHandlers).not.toHaveBeenCalled()
+  })
+
+  it('denies clipboard reads only to pages an SSH host has driven (#29145)', async () => {
+    mocks.isRemoteCliDrivenGuest.mockImplementation((id?: number) => id === 7)
+    const install = await loadInstaller()
+    install(profileFor('persist:browsing-2'))
+    const sess = sessionsByPartition.get('persist:browsing-2')
+    if (!sess) {
+      throw new Error('Expected the browsing session')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+    const requestHandler = sess.setPermissionRequestHandler.mock.calls[0]?.[0] as (
+      webContents: { id: number; getURL: () => string },
+      permission: string,
+      callback: (allowed: boolean) => void
+    ) => void
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+    const checkHandler = sess.setPermissionCheckHandler.mock.calls[0]?.[0] as (
+      webContents: { id: number },
+      permission: string
+    ) => boolean
+    const guest = (id: number) => ({ id, getURL: () => 'https://a.test/' })
+
+    const decisions: boolean[] = []
+    requestHandler(guest(7), 'clipboard-read', (allowed) => decisions.push(allowed))
+    requestHandler(guest(8), 'clipboard-read', (allowed) => decisions.push(allowed))
+    requestHandler(guest(7), 'clipboard-sanitized-write', (allowed) => decisions.push(allowed))
+
+    expect(decisions).toEqual([false, true, true])
+    expect(checkHandler({ id: 7 }, 'clipboard-read')).toBe(false)
+    expect(checkHandler({ id: 8 }, 'clipboard-read')).toBe(true)
+  })
+
+  it('hands a link to another app to the open-app prompt instead of denying it', async () => {
+    const install = await loadInstaller()
+    install(profileFor('persist:browsing-4'))
+    const sess = sessionsByPartition.get('persist:browsing-4')
+    if (!sess) {
+      throw new Error('Expected the browsing session')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+    const requestHandler = sess.setPermissionRequestHandler.mock.calls[0]?.[0] as (
+      webContents: { id: number; getURL: () => string },
+      permission: string,
+      callback: (allowed: boolean) => void,
+      details: { externalURL?: string; requestingUrl?: string }
+    ) => void
+    const guest = { id: 9, getURL: () => 'https://acme.okta.com/signin' }
+    const details = {
+      externalURL: 'com-okta-authenticator:/deviceChallenge',
+      requestingUrl: 'https://login.acme.okta.com/frame'
+    }
+    const decisions: boolean[] = []
+
+    mocks.requestExternalAppLaunch.mockReturnValueOnce(true)
+    requestHandler(guest, 'openExternal', (allowed) => decisions.push(allowed), details)
+    const [launchGuest, launchUrl, requestingUrl] = mocks.requestExternalAppLaunch.mock.calls[0]
+    expect([launchGuest, launchUrl]).toEqual([guest, 'com-okta-authenticator:/deviceChallenge'])
+    // The frame that asked, not the top page.
+    expect(requestingUrl()).toBe('https://login.acme.okta.com/frame')
+    expect(mocks.notifyPermissionDenied).not.toHaveBeenCalled()
+
+    // A link Orca refuses to ask about keeps the denial notice.
+    mocks.requestExternalAppLaunch.mockReturnValueOnce(false)
+    requestHandler(guest, 'openExternal', (allowed) => decisions.push(allowed), details)
+    expect(mocks.notifyPermissionDenied).toHaveBeenCalledWith(
+      expect.objectContaining({ guestWebContentsId: 9, permission: 'openExternal' })
+    )
+    // Chromium's own launch stays denied either way; Orca opens the app after the user says yes.
+    expect(decisions).toEqual([false, false])
+  })
+
+  it('cancels a download from a page an SSH host drives (#29145)', async () => {
+    mocks.isRemoteCliDrivenGuest.mockImplementation((id?: number) => id === 42)
+    const install = await loadInstaller()
+    install(profileFor('persist:browsing-3'))
+
+    expect(fireWillDownload('persist:browsing-3')).toEqual({ cancelled: true })
+    expect(mocks.handleGuestWillDownload).not.toHaveBeenCalled()
   })
 
   it('denies every request and check on a strict partition without WebAuthn handlers', async () => {

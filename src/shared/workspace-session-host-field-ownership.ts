@@ -25,6 +25,7 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   // Why global: keyed by runtime environment rather than by worktree, and it is this client's
   // record of what it owes those environments — the same reason SSH connection state stays local.
   clientHostedBrowserCloseIntentsByEnvironment: 'global',
+  pairedTerminalTabCloseIntentsByEnvironment: 'global',
   tabsByWorktree: 'worktreeKeyed',
   openFilesByWorktree: 'worktreeKeyed',
   activeFileIdByWorktree: 'worktreeKeyed',
@@ -67,6 +68,15 @@ type MissingOwnership = Exclude<
 >
 const exhaustive: [MissingOwnership] extends [never] ? true : never = true
 void exhaustive
+
+/** The global fields that name what the client is focused on. */
+export const SESSION_FOCUS_FIELDS = [
+  'activeRepoId',
+  'activeWorktreeId',
+  'activeWorkspaceKey',
+  'activeWorkspaceExecutionHostId',
+  'activeTabId'
+] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
 export const GLOBAL_WORKSPACE_SESSION_FIELDS = (
   Object.keys(WORKSPACE_SESSION_FIELD_OWNERSHIP) as (keyof WorkspaceSessionState)[]

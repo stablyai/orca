@@ -1,9 +1,14 @@
 import { defaultSchema } from 'rehype-sanitize'
 import { normalizeDetailsOpeningTag } from './details-markdown-html'
-import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
+import {
+  getRichMarkdownPassthroughOutput,
+  getRichMarkdownRoundTripOutput
+} from './markdown-round-trip'
 import { extractFrontMatter } from './markdown-frontmatter'
 import { canRenderMarkdownAtSize } from './markdown-rich-size-limit'
 import { translate } from '@/i18n/i18n'
+import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
+import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 
 export type MarkdownRichModeUnsupportedReason =
   | 'html-or-jsx'
@@ -101,12 +106,7 @@ export function getMarkdownRichModeUnsupportedReason(
 
   const contentWithoutCode = stripMarkdownCode(body)
 
-  // Why: run cheap regex checks first. If no unsupported syntax is detected,
-  // rich mode is safe — no need for the expensive round-trip check. The
-  // round-trip (which synchronously creates a throwaway TipTap editor, parses
-  // the full document, and serializes it back) is only needed as a second
-  // opinion when HTML is detected, to verify the HTML survives the round-trip
-  // before blocking the user from rich mode.
+  // Only documents containing embedded HTML need a preservation proof.
   const htmlMatcher = UNSUPPORTED_PATTERNS.find((m) => m.reason === 'html-or-jsx')
   const hasHtml = htmlMatcher && hasHtmlOrJsx(contentWithoutCode, htmlMatcher.pattern)
 
@@ -120,10 +120,10 @@ export function getMarkdownRichModeUnsupportedReason(
   }
 
   if (hasHtml) {
-    // Why: the round-trip check creates a throwaway TipTap Editor synchronously
-    // on the main thread. For large files this blocks for seconds, so we skip it and conservatively block rich mode for HTML files
-    // above this threshold.
-    const roundTripOutput = body.length <= 50_000 ? getRichMarkdownRoundTripOutput(body) : null
+    const roundTripOutput =
+      body.length > 50_000
+        ? getLargeMarkdownRoundTripOutput(body, htmlMatcher!.pattern)
+        : getRichMarkdownRoundTripOutput(body)
     if (roundTripOutput && preservesEmbeddedHtml(contentWithoutCode, roundTripOutput)) {
       return null
     }
@@ -131,6 +131,22 @@ export function getMarkdownRichModeUnsupportedReason(
   }
 
   return null
+}
+
+function getLargeMarkdownRoundTripOutput(body: string, htmlPattern: RegExp): string | null {
+  try {
+    const codec = createRichMarkdownEditorCodec()
+    const encoded = encodeRawMarkdownHtmlForRichEditor(body, codec, {
+      htmlSuperscriptLinks: true
+    })
+    // Remaining HTML needs DOM parsing; keep large editable toggles on the bounded fallback.
+    if (hasHtmlOrJsx(stripMarkdownCode(encoded), htmlPattern)) {
+      return null
+    }
+    return getRichMarkdownPassthroughOutput(encoded, codec)
+  } catch {
+    return null
+  }
 }
 
 export function getMarkdownRichModeEligibilityDecision({

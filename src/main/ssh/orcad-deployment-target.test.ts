@@ -1,16 +1,25 @@
+import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   parseGlibcVersion,
   parseOrcadLinuxLibc,
-  resolveOrcadDeploymentTarget,
   resolveOrcadDeploymentTargetFacts
 } from './orcad-deployment-target'
-import { SshConnection } from './ssh-connection'
-import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { SshConnection } from './connection/ssh-connection'
+import { createCallbacks, createTarget } from './connection/ssh-connection-test-fixtures'
+import { execCommand } from './remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
-vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn() }))
+vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
+  ...(await importOriginal<typeof ExecCommandModule>()),
+  execCommand: vi.fn()
+}))
+
+async function resolveOrcadDeploymentTarget(
+  options: Parameters<typeof resolveOrcadDeploymentTargetFacts>[0]
+): Promise<string> {
+  return (await resolveOrcadDeploymentTargetFacts(options)).target
+}
 beforeEach(() => vi.mocked(execCommand).mockReset())
 
 describe('deployment C library selection', () => {

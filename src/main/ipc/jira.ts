@@ -1,7 +1,19 @@
+import { JiraIssueListFiltersParam } from '../../shared/rpc-contract/jira-quick-filter-params'
+import { JiraFavouriteFilterParams } from '../../shared/rpc-contract/jira-favourite-filter-params'
 import { ipcMain } from 'electron'
+import type { JiraMediaFormat } from '../../shared/jira-attachment-image'
 import { connect, disconnect, getStatus, selectSite, testConnection } from '../jira/client'
-import { _resetPreflightCache } from './preflight'
+import { listFavouriteFilters } from '../jira/favourite-filters'
+import { _resetPreflightCache } from '../preflight/agent-detection'
 import { JiraCancellableRequests } from './jira-cancellable-requests'
+import { registerJiraUserSearchHandlers } from './jira-user-search'
+import { registerJiraProjectMetadataHandlers } from './jira-project-metadata'
+import {
+  clampJiraIssueLimit,
+  normalizeJiraIssueUpdate,
+  normalizeJiraSiteId,
+  normalizeJiraSiteSelection
+} from './jira-ipc-params'
 import {
   addIssueComment,
   createIssue,
@@ -9,21 +21,16 @@ import {
   getIssueSummary,
   getIssueComments,
   getProjectStatusOrder,
-  listAssignableUsers,
-  listCreateFields,
-  listIssueTypes,
   listIssues,
-  listPriorities,
-  listProjects,
   listTransitions,
   searchIssues,
-  searchUsers,
   updateIssue
 } from '../jira/issues'
 import type {
   JiraConnectArgs,
   JiraCreateIssueArgs,
   JiraIssueFilter,
+  JiraIssueListFilters,
   JiraIssueUpdate,
   JiraSiteSelection
 } from '../../shared/jira-types'
@@ -31,59 +38,6 @@ import type {
 const VALID_FILTERS = new Set<JiraIssueFilter>(['assigned', 'reported', 'all', 'done'])
 const issueSummaryRequests = new JiraCancellableRequests()
 const searchRequests = new JiraCancellableRequests()
-
-function normalizeSiteId(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined
-}
-
-function normalizeSiteSelection(value: unknown): JiraSiteSelection | undefined {
-  const siteId = normalizeSiteId(value)
-  return siteId as JiraSiteSelection | undefined
-}
-
-function clampLimit(value: unknown, fallback = 30): number {
-  const limit = typeof value === 'number' && Number.isFinite(value) ? value : fallback
-  return Math.min(Math.max(1, limit), 100)
-}
-
-function normalizeStringArray(value: unknown): string[] | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-  return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : undefined
-}
-
-/** Narrows an untrusted IPC payload to the issue-update fields the host accepts. */
-function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-  const input = value as JiraIssueUpdate
-  if (input.title !== undefined && typeof input.title !== 'string') {
-    return null
-  }
-  if (input.labels !== undefined && normalizeStringArray(input.labels) === undefined) {
-    return null
-  }
-  if (
-    input.assigneeAccountId !== undefined &&
-    input.assigneeAccountId !== null &&
-    typeof input.assigneeAccountId !== 'string'
-  ) {
-    return null
-  }
-  if (
-    input.priorityId !== undefined &&
-    input.priorityId !== null &&
-    typeof input.priorityId !== 'string'
-  ) {
-    return null
-  }
-  if (input.transitionId !== undefined && typeof input.transitionId !== 'string') {
-    return null
-  }
-  return input
-}
 
 /** Registers every `jira:*` IPC handler on the main process. */
 export function registerJiraHandlers(): void {
@@ -108,28 +62,24 @@ export function registerJiraHandlers(): void {
   })
 
   ipcMain.handle('jira:disconnect', async (_event, args?: { siteId?: string }) => {
-    disconnect(normalizeSiteId(args?.siteId))
+    disconnect(normalizeJiraSiteId(args?.siteId))
     _resetPreflightCache()
   })
 
   ipcMain.handle('jira:selectSite', async (_event, args: { siteId: JiraSiteSelection }) => {
-    const siteId = normalizeSiteSelection(args?.siteId)
+    const siteId = normalizeJiraSiteSelection(args?.siteId)
     if (!siteId) {
       return getStatus()
     }
     return selectSite(siteId)
   })
 
-  ipcMain.handle('jira:status', async () => {
-    return getStatus()
-  })
+  ipcMain.handle('jira:status', async () => getStatus())
 
-  ipcMain.handle('jira:readStatus', async () => {
-    return getStatus()
-  })
+  ipcMain.handle('jira:readStatus', async () => getStatus())
 
   ipcMain.handle('jira:testConnection', async (_event, args?: { siteId?: string }) => {
-    return testConnection(normalizeSiteId(args?.siteId))
+    return testConnection(normalizeJiraSiteId(args?.siteId))
   })
 
   ipcMain.handle(
@@ -142,7 +92,12 @@ export function registerJiraHandlers(): void {
         return []
       }
       return searchRequests.run(args.requestId, (signal) =>
-        searchIssues(args.jql, clampLimit(args.limit), normalizeSiteSelection(args.siteId), signal)
+        searchIssues(
+          args.jql,
+          clampJiraIssueLimit(args.limit),
+          normalizeJiraSiteSelection(args.siteId),
+          signal
+        )
       )
     }
   )
@@ -155,21 +110,40 @@ export function registerJiraHandlers(): void {
     'jira:listIssues',
     async (
       _event,
-      args?: { filter?: JiraIssueFilter; limit?: number; siteId?: JiraSiteSelection }
+      args?: {
+        filter?: JiraIssueFilter
+        limit?: number
+        siteId?: JiraSiteSelection
+        filters?: JiraIssueListFilters
+      }
     ) => {
       const filter = VALID_FILTERS.has(args?.filter as JiraIssueFilter)
         ? (args!.filter as JiraIssueFilter)
         : undefined
-      return listIssues(filter, clampLimit(args?.limit), normalizeSiteSelection(args?.siteId))
+      return listIssues(
+        filter,
+        clampJiraIssueLimit(args?.limit),
+        normalizeJiraSiteSelection(args?.siteId),
+        false,
+        args?.filters ? JiraIssueListFiltersParam.parse(args.filters) : undefined
+      )
     }
   )
 
-  ipcMain.handle('jira:getIssue', async (_event, args: { key: string; siteId?: string }) => {
-    if (typeof args?.key !== 'string' || !args.key.trim()) {
-      return null
+  ipcMain.handle(
+    'jira:getIssue',
+    async (_event, args: { key: string; siteId?: string; mediaFormat?: JiraMediaFormat }) => {
+      if (typeof args?.key !== 'string' || !args.key.trim()) {
+        return null
+      }
+      return getIssue(
+        args.key.trim(),
+        normalizeJiraSiteId(args.siteId),
+        false,
+        args.mediaFormat === 'reference' ? 'reference' : undefined
+      )
     }
-    return getIssue(args.key.trim(), normalizeSiteId(args.siteId))
-  })
+  )
 
   ipcMain.handle(
     'jira:lookupIssueSummary',
@@ -203,7 +177,7 @@ export function registerJiraHandlers(): void {
       return { ok: false, error: 'Title is required.' }
     }
     return createIssue({
-      siteId: normalizeSiteId(args.siteId),
+      siteId: normalizeJiraSiteId(args.siteId),
       projectId: args.projectId.trim(),
       issueTypeId: args.issueTypeId.trim(),
       title: args.title.trim(),
@@ -222,11 +196,11 @@ export function registerJiraHandlers(): void {
       if (typeof args?.key !== 'string' || !args.key.trim()) {
         return { ok: false, error: 'Issue key is required.' }
       }
-      const updates = normalizeIssueUpdate(args.updates)
+      const updates = normalizeJiraIssueUpdate(args.updates)
       if (!updates) {
         return { ok: false, error: 'Updates object is required.' }
       }
-      return updateIssue(args.key.trim(), updates, normalizeSiteId(args.siteId))
+      return updateIssue(args.key.trim(), updates, normalizeJiraSiteId(args.siteId))
     }
   )
 
@@ -239,79 +213,46 @@ export function registerJiraHandlers(): void {
       if (typeof args?.body !== 'string' || !args.body.trim()) {
         return { ok: false, error: 'Comment body is required.' }
       }
-      return addIssueComment(args.key.trim(), args.body.trim(), normalizeSiteId(args.siteId))
-    }
-  )
-
-  ipcMain.handle('jira:issueComments', async (_event, args: { key: string; siteId?: string }) => {
-    if (typeof args?.key !== 'string' || !args.key.trim()) {
-      return []
-    }
-    return getIssueComments(args.key.trim(), normalizeSiteId(args.siteId))
-  })
-
-  ipcMain.handle('jira:listProjects', async (_event, args?: { siteId?: JiraSiteSelection }) => {
-    return listProjects(normalizeSiteSelection(args?.siteId))
-  })
-
-  ipcMain.handle(
-    'jira:listIssueTypes',
-    async (_event, args: { projectIdOrKey: string; siteId?: string }) => {
-      if (typeof args?.projectIdOrKey !== 'string' || !args.projectIdOrKey.trim()) {
-        return []
-      }
-      return listIssueTypes(args.projectIdOrKey.trim(), normalizeSiteId(args.siteId))
+      return addIssueComment(args.key.trim(), args.body.trim(), normalizeJiraSiteId(args.siteId))
     }
   )
 
   ipcMain.handle(
-    'jira:listCreateFields',
-    async (_event, args: { projectIdOrKey: string; issueTypeId: string; siteId?: string }) => {
-      if (typeof args?.projectIdOrKey !== 'string' || !args.projectIdOrKey.trim()) {
-        return []
-      }
-      if (typeof args?.issueTypeId !== 'string' || !args.issueTypeId.trim()) {
-        return []
-      }
-      return listCreateFields(
-        args.projectIdOrKey.trim(),
-        args.issueTypeId.trim(),
-        normalizeSiteId(args.siteId)
-      )
-    }
-  )
-
-  ipcMain.handle('jira:listPriorities', async (_event, args?: { siteId?: string }) => {
-    return listPriorities(normalizeSiteId(args?.siteId))
-  })
-
-  ipcMain.handle(
-    'jira:listAssignableUsers',
-    async (_event, args: { key: string; query?: string; siteId?: string }) => {
+    'jira:issueComments',
+    async (_event, args: { key: string; siteId?: string; mediaFormat?: JiraMediaFormat }) => {
       if (typeof args?.key !== 'string' || !args.key.trim()) {
         return []
       }
-      return listAssignableUsers(
+      return getIssueComments(
         args.key.trim(),
-        typeof args.query === 'string' ? args.query : undefined,
-        normalizeSiteId(args.siteId)
+        normalizeJiraSiteId(args.siteId),
+        false,
+        args.mediaFormat === 'reference' ? 'reference' : undefined
       )
     }
   )
 
-  ipcMain.handle('jira:searchUsers', async (_event, args?: { query?: string; siteId?: string }) => {
-    return searchUsers(
-      typeof args?.query === 'string' ? args.query : undefined,
-      normalizeSiteId(args?.siteId)
-    )
+  registerJiraProjectMetadataHandlers(normalizeJiraSiteId)
+
+  ipcMain.handle('jira:listFavouriteFilters', async (_event, args: unknown) => {
+    return listFavouriteFilters(JiraFavouriteFilterParams.parse(args).siteId)
   })
 
-  ipcMain.handle('jira:listTransitions', async (_event, args: { key: string; siteId?: string }) => {
-    if (typeof args?.key !== 'string' || !args.key.trim()) {
-      return []
+  registerJiraUserSearchHandlers()
+
+  ipcMain.handle(
+    'jira:listTransitions',
+    async (_event, args: { key: string; siteId?: string; strict?: boolean }) => {
+      if (typeof args?.key !== 'string' || !args.key.trim()) {
+        return []
+      }
+      return listTransitions(
+        args.key.trim(),
+        normalizeJiraSiteId(args.siteId),
+        args.strict === true
+      )
     }
-    return listTransitions(args.key.trim(), normalizeSiteId(args.siteId))
-  })
+  )
 
   ipcMain.handle(
     'jira:getProjectStatusOrder',
@@ -319,7 +260,7 @@ export function registerJiraHandlers(): void {
       if (typeof args?.projectKey !== 'string' || !args.projectKey.trim()) {
         return { statusIdsByColumn: [] }
       }
-      return getProjectStatusOrder(args.projectKey.trim(), normalizeSiteId(args.siteId))
+      return getProjectStatusOrder(args.projectKey.trim(), normalizeJiraSiteId(args.siteId))
     }
   )
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace-tab-palette-search'
-import type { TabPaneInputSources } from '@/components/sidebar/smart-attention'
+import type { TabPaneInputSources } from '../../../shared/sidebar-list/smart-attention'
 import type { AgentJournalTurnOutcome } from '../../../shared/agent-turn-outcome'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { shouldIncludeOpenTabInRecentSection } from './worktree-jump-palette-recent-inclusion'

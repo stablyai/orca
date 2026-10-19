@@ -5,15 +5,21 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as nativeChatAgentProfiles from '../../../../shared/native-chat-agent-profiles'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
+const actions = vi.hoisted((): { sendDisabled: boolean | null } => ({ sendDisabled: null }))
+
 vi.mock('./NativeChatComposerActions', () => ({
-  NativeChatComposerActions: () => <div data-testid="composer-actions" />
+  NativeChatComposerActions: (props: { sendDisabled: boolean }) => {
+    actions.sendDisabled = props.sendDisabled
+    return <div data-testid="composer-actions" />
+  }
 }))
 vi.mock('./NativeChatAutocompleteMenus', () => ({
-  NativeChatMentionHint: () => null,
+  NativeChatMentionMenu: () => null,
   NativeChatPickerMenu: () => null
 }))
 vi.mock('../../store', () => {
@@ -30,11 +36,11 @@ vi.mock('../../store', () => {
   return { useAppStore }
 })
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  isRemoteRuntimePtyId: () => false,
   sendRuntimePtyInput: vi.fn()
 }))
-vi.mock('@/lib/agent-paste-draft', () => ({
-  getSettingsForAgentTabRuntimeOwner: () => ({})
+vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => false
 }))
 vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatMessage: vi.fn(),
@@ -112,9 +118,9 @@ function pressEnter(input: HTMLTextAreaElement): void {
 
 let paneCounter = 0
 
-function renderComposer(structuredTransport: NativeChatStructuredComposerTransport): void {
+function renderComposer(structuredTransport: NativeChatStructuredComposerTransport) {
   paneCounter += 1
-  render(
+  return render(
     <NativeChatComposer
       terminalTabId={`tab-${paneCounter}`}
       paneKey={`tab-${paneCounter}:structured`}
@@ -130,8 +136,7 @@ beforeEach(() => {
     configurable: true,
     value: {
       git: { discoverCommitMessageModels: vi.fn().mockResolvedValue({ success: false }) },
-      pty: { getMainBufferSnapshot: vi.fn().mockResolvedValue(null) },
-      ui: { onFileDrop: () => vi.fn() }
+      pty: { getMainBufferSnapshot: vi.fn().mockResolvedValue(null) }
     }
   })
 })
@@ -236,7 +241,7 @@ describe('structured send racing the next IME composition', () => {
     changePrompt(input, '/model')
     await act(async () => pressEnter(input))
 
-    expect(structured.onError).toHaveBeenCalledWith('nope')
+    expect(structured.onError).toHaveBeenCalledWith('nope', undefined)
     expect(structured.send).not.toHaveBeenCalled()
     expect(promptValue(input)).toBe('/model')
   })
@@ -302,5 +307,31 @@ describe('a withdrawn message put back during an IME composition', () => {
 
     expect(promptValue(input)).toBe('하\n\nwithdrawn')
     expect(readNativeChatDraftCache(pane)).toBe('하\n\nwithdrawn')
+  })
+})
+
+// One send per chat, as the common pattern: while it is out, Send is off and Enter keeps the text.
+describe('a structured send while the chat has one out', () => {
+  it('keeps the text in the box and Send disabled until the send settles', async () => {
+    const structured = transport({ send: vi.fn(() => false), sendOut: true })
+    const view = renderComposer(structured)
+    const input = textarea()
+    changePrompt(input, 'next one')
+    expect(actions.sendDisabled).toBe(true)
+
+    await act(async () => pressEnter(input))
+    expect(structured.send).toHaveBeenCalledWith('next one', [])
+    expect(promptValue(input)).toBe('next one')
+
+    view.rerender(
+      <NativeChatComposer
+        terminalTabId={`tab-${paneCounter}`}
+        paneKey={`tab-${paneCounter}:structured`}
+        targetPtyId={null}
+        agent="codex"
+        structuredTransport={{ ...structured, sendOut: false }}
+      />
+    )
+    expect(actions.sendDisabled).toBe(false)
   })
 })

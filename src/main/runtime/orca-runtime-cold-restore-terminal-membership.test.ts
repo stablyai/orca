@@ -521,6 +521,7 @@ async function runtimeWithUnpublishedPhoneCreate(): Promise<OrcaRuntimeService> 
   const webContents = {
     isDestroyed: () => false,
     setBackgroundThrottling: () => {},
+    capturePage: async () => null,
     send: (channel: string, payload: { requestId: string }) => {
       if (channel !== 'terminal:requestTabCreate') {
         return

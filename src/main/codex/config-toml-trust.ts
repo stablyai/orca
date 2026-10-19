@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { parse as parseToml } from 'smol-toml'
 import {
   codexTrustSourcePathsEqual,
   computeCodexTrustedHash,
@@ -11,9 +12,13 @@ import {
   parseCodexTrustKey
 } from './codex-trust-identity'
 import { writeTomlConfigAtomically } from './config-toml-atomic-write'
+import { findAllHookTrustBlocks } from './config-toml-hook-trust-blocks'
 import {
+  getTrustKeyWriteVariants,
   moveHookTrustContent,
+  readHookTrustBlockTexts,
   removeHookTrustContent,
+  restoreHookTrustBlockContent,
   upsertHookTrustContent
 } from './config-toml-hook-trust-edit'
 import { CodexHookTrustEntryMap, readHookTrustContent } from './config-toml-hook-trust-read'
@@ -103,7 +108,11 @@ export function parseTrustKey(key: string): {
   return parseCodexTrustKey(key)
 }
 
-// Why: trust edits preserve unrelated bytes instead of reserializing the user's config.
+/**
+ * Upserts hook approvals, preserving unrelated bytes instead of reserializing
+ * the user's config. Throws CodexConfigTomlRefusedError, writing nothing, when
+ * Codex could not load the result; see writeLoadableHookTrustConfig.
+ */
 export function upsertHookTrustEntries(
   configPath: string,
   entries: readonly CodexTrustEntry[]
@@ -111,7 +120,83 @@ export function upsertHookTrustEntries(
   const existing = readTomlForMutation(configPath)
   const updated = upsertHookTrustEntriesInContent(existing, entries)
   if (updated !== existing) {
-    writeConfigAtomically(configPath, updated)
+    writeLoadableHookTrustConfig(configPath, existing, updated)
+  }
+}
+
+/** Thrown instead of writing a config.toml that Codex could no longer load. */
+export class CodexConfigTomlRefusedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CodexConfigTomlRefusedError'
+  }
+}
+
+export function isCodexConfigTomlRefusedError(
+  error: unknown
+): error is CodexConfigTomlRefusedError {
+  return error instanceof Error && error.name === 'CodexConfigTomlRefusedError'
+}
+
+/**
+ * Every hooks.state write goes through here. A user's inline
+ * `hooks.state = {...}` or dotted `hooks.state."k".trusted_hash` key cannot take
+ * an appended `[hooks.state."k"]` table, and Codex refuses to start with a
+ * config.toml it cannot load, so a write that would break a loadable file is
+ * refused instead. One that is already broken may still be repaired.
+ */
+export function writeLoadableHookTrustConfig(
+  configPath: string,
+  previous: string,
+  contents: string
+): void {
+  assertLoadableHookTrustConfig(configPath, previous, contents)
+  writeConfigAtomically(configPath, contents)
+}
+
+/** Throws CodexConfigTomlRefusedError when `contents` would break a `previous` Codex could load. */
+export function assertLoadableHookTrustConfig(
+  configPath: string,
+  previous: string,
+  contents: string
+): void {
+  if (isLoadableToml(previous) && !isLoadableToml(contents)) {
+    throw new CodexConfigTomlRefusedError(
+      `${configPath} defines hook approvals in a form Orca cannot add to without breaking it`
+    )
+  }
+}
+
+/** Each key's trust tables as written, to restore verbatim later; see restoreHookTrustBlocks. */
+export function readHookTrustBlocks(
+  configPath: string,
+  keys: readonly string[]
+): Map<string, string[]> {
+  const content = existsSync(configPath) ? readTomlFile(configPath) : ''
+  return new Map(keys.map((key) => [key, readHookTrustBlockTexts(content, key)]))
+}
+
+/** Puts each key's trust tables back as read by readHookTrustBlocks; no tables removes the key. */
+export function restoreHookTrustBlocks(
+  configPath: string,
+  restores: readonly { key: string; blocks: readonly string[] }[]
+): void {
+  if (restores.length === 0 || !existsSync(configPath)) {
+    return
+  }
+  const existing = readTomlFile(configPath)
+  const updated = restoreHookTrustBlockContent(existing, restores)
+  if (updated !== existing) {
+    writeLoadableHookTrustConfig(configPath, existing, updated)
+  }
+}
+
+function isLoadableToml(content: string): boolean {
+  try {
+    parseToml(stripLeadingBom(content))
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -126,7 +211,7 @@ export function moveHookTrustEntries(
   const existing = readTomlForMutation(configPath)
   const updated = moveHookTrustContent(existing, moves)
   if (updated !== existing) {
-    writeConfigAtomically(configPath, updated)
+    writeLoadableHookTrustConfig(configPath, existing, updated)
   }
 }
 
@@ -181,7 +266,7 @@ export function removeHookTrustEntries(configPath: string, keys: readonly string
   const existing = readTomlFile(configPath)
   const updated = removeHookTrustEntriesFromContent(existing, keys)
   if (updated !== existing) {
-    writeConfigAtomically(configPath, updated)
+    writeLoadableHookTrustConfig(configPath, existing, updated)
   }
 }
 
@@ -198,6 +283,20 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
     : new CodexHookTrustEntryMap()
 }
 
+/**
+ * Whether config.toml holds an approval key under every spelling Orca writes,
+ * as written: Codex on Windows reads only the backslash one, so a lookup that
+ * folds separators would count a forward-slash table alone as approved.
+ */
+export function readHookTrustKeySpellings(configPath: string): (key: string) => boolean {
+  const written = new Set(
+    existsSync(configPath)
+      ? findAllHookTrustBlocks(readTomlFile(configPath)).map(({ key }) => key)
+      : []
+  )
+  return (key) => getTrustKeyWriteVariants(key).every((spelling) => written.has(spelling))
+}
+
 export function readHookTrustEntriesFromContent(content: string): Map<string, CodexHookTrustState> {
   return readHookTrustContent(content)
 }
@@ -212,6 +311,9 @@ function readTomlForMutation(configPath: string): string {
 }
 
 function readTomlFile(configPath: string): string {
-  const raw = readFileSync(configPath, 'utf-8')
-  return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw
+  return stripLeadingBom(readFileSync(configPath, 'utf-8'))
+}
+
+function stripLeadingBom(content: string): string {
+  return content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
 }

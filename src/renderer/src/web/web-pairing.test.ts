@@ -49,6 +49,17 @@ describe('web pairing input', () => {
     expect(parseWebPairingInput(encodeOffer({ endpoint }))).toMatchObject({ endpoint: expected })
   })
 
+  it('keeps a readable host descriptor and drops an unreadable one without refusing', () => {
+    const hostDescriptor = { installationId: '11111111-1111-4111-8111-111111111111' }
+    expect(parseWebPairingInput(encodeOffer({ hostDescriptor }))).toEqual({
+      ...offer,
+      hostDescriptor
+    })
+    expect(parseWebPairingInput(encodeOffer({ hostDescriptor: { installationId: 7 } }))).toEqual(
+      offer
+    )
+  })
+
   it('treats invalid device scope metadata as unknown', () => {
     expect(parseWebPairingInput(`orca://pair?code=${encodeOffer({ scope: 'admin' })}`)).toEqual(
       offer

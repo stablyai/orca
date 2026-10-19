@@ -14,7 +14,7 @@ function hasForbiddenRefChar(ref: string): boolean {
 }
 
 export function isSafeGitRefName(ref: string): boolean {
-  if (!ref.startsWith(REF_PREFIX) || ref.endsWith('/')) {
+  if (!ref.startsWith(REF_PREFIX) || ref.endsWith('/') || ref.endsWith('.')) {
     return false
   }
   if (ref.includes('..') || ref.includes('@{') || hasForbiddenRefChar(ref)) {
@@ -29,7 +29,6 @@ export function isSafeGitRefName(ref: string): boolean {
         part !== '.' &&
         part !== '..' &&
         !part.startsWith('.') &&
-        !part.endsWith('.') &&
         !part.endsWith('.lock')
     )
   )

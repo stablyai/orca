@@ -1,11 +1,8 @@
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
-import {
-  callRuntimeRpc,
-  getActiveRuntimeTarget,
-  unwrapRuntimeRpcResult
-} from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 type RuntimeFileWatchEvent =
@@ -46,7 +43,7 @@ export async function subscribeRuntimeFileChanges(
   onPayload: (payload: FsChangedPayload) => void,
   onError?: (error: Error) => void
 ): Promise<() => void> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind !== 'environment' || !context.worktreeId || !context.worktreePath) {
     return window.api.fs.onFsChanged(onPayload)
   }
@@ -105,7 +102,8 @@ function createSharedRuntimeFileWatch(
       {
         selector: target.environmentId,
         method: 'files.watch',
-        params: { worktree: toRuntimeWorktreeSelector(worktreeId) },
+        // Why: this client coalesces watcher reads, so it can take the faster host cadence.
+        params: { worktree: toRuntimeWorktreeSelector(worktreeId), batchCadence: 'interval' },
         timeoutMs: 15_000
       },
       {

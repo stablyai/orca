@@ -8,7 +8,7 @@ import {
   isWebTerminalSurfaceTabId,
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
-} from './web-terminal-surface-id'
+} from '../../../shared/terminal-surface-id'
 
 /** Snapshots key mirrored terminals by the parent tab, so an unknown `parent::leaf` anchor resolves to its parent. */
 function anchorUnifiedTabId(worktreeId: string, afterTabId: string): string {

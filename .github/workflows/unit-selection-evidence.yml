@@ -22,16 +22,22 @@ jobs:
           sparse-checkout: config/scripts/ci-unit-selection-review.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
       - uses: actions/download-artifact@v8
         with:
           pattern: unit-shard-node-*-attempt-${{ github.run_attempt }}
           path: unit-evidence/
       - name: Compare selection with full results
         continue-on-error: true
-        run: node config/scripts/ci-unit-selection-review.mjs unit-evidence
+        uses: actions/github-script@v8
+        with:
+          github-token: unused
+          script: |
+            const env = { ...process.env }
+            delete env['INPUT_GITHUB-TOKEN']
+            await exec.exec(process.execPath, [
+              'config/scripts/ci-unit-selection-review.mjs',
+              'unit-evidence'
+            ], { env })
       - uses: actions/upload-artifact@v7
         if: always()
         continue-on-error: true

@@ -1,9 +1,13 @@
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
-import type { DiffSource, EditorOpenTargetOptions, OpenFile } from '../types/open-file'
+import type { EditorOpenTargetOptions, OpenFile } from '../types/open-file'
+import type { DiffSource } from '../../../../../../shared/editor-tab-view-types'
+import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
 import { areLocalWindowsWslPathAliases } from '../../../../../../shared/cross-platform-path'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
 export function runtimeOwnerKey(runtimeEnvironmentId: string | null | undefined): string | null {
   return runtimeEnvironmentId?.trim() || null
@@ -18,6 +22,25 @@ export function isSameEditorOwner(
     file.worktreeId === worktreeId &&
     runtimeOwnerKey(file.runtimeEnvironmentId) === runtimeOwnerKey(runtimeEnvironmentId)
   )
+}
+
+export function mayShareEditorBackingFile(candidate: OpenFile, file: OpenFile): boolean {
+  if (
+    candidate.filePath !== file.filePath ||
+    runtimeOwnerKey(candidate.runtimeEnvironmentId) !== runtimeOwnerKey(file.runtimeEnvironmentId)
+  ) {
+    return false
+  }
+  const candidateHost =
+    candidate.operationProvenance?.generation.route.executionHostId ??
+    (candidate.externalSshTargetId
+      ? toSshExecutionHostId(candidate.externalSshTargetId)
+      : undefined)
+  const fileHost =
+    file.operationProvenance?.generation.route.executionHostId ??
+    (file.externalSshTargetId ? toSshExecutionHostId(file.externalSshTargetId) : undefined)
+  // Missing provenance cannot prove that a retained view uses a different backing file.
+  return !candidateHost || !fileHost || candidateHost === fileHost
 }
 
 export function canReuseLocalWslAlias(
@@ -121,6 +144,10 @@ export function resolveEditorFileIdForOwner(
   )
   if (existing) {
     return existing.id
+  }
+  // Why: every frame restores floating files under their owned id; minting it here keeps main's tab on the same id.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId)
   }
   // Why: preview-only markdown tabs reserve their source id too; treat it like an open editor id so same-path owners don't collapse.
   return state.openFiles.some((file) =>

@@ -12,7 +12,7 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { NativeChatBackgroundTasksStatus } from '@/components/native-chat/NativeChatBackgroundTasksStatus'
-import { buildBackgroundTaskGroupsFromViews } from '@/components/native-chat/background-task-roster'
+import { buildBackgroundTaskGroupsFromViews } from '../../../shared/background-task-roster'
 import { CompactAgentRow } from '@/components/sidebar/worktree-card-compact-agent-row'
 import { buildSubagentChildRows } from '@/components/sidebar/worktree-subagent-child-rows'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -153,7 +153,7 @@ function stripRows(
         childViews={sent}
         childRowContext={childRowContext}
         supportsTaskStop
-        supportsStopAll
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         indicatorActive
@@ -583,7 +583,7 @@ describe('the chat strip from views', () => {
           settledTasks={[]}
           childViews={children}
           supportsTaskStop
-          supportsStopAll
+          offersStopAll={false}
           stoppingTaskIds={new Set(['task-shell'])}
           stoppingAll={false}
           indicatorActive

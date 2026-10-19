@@ -1,3 +1,7 @@
+import {
+  parsePtyProcessCeilingState,
+  type PtyProcessCeilingState
+} from '../../shared/pty-process-ceiling-state'
 export type ParsedDaemonPid = {
   pid: number
   startedAtMs: number | null
@@ -10,6 +14,8 @@ export type ParsedDaemonPid = {
   /** Self-detected systemd scope unit (see daemon-cgroup-scope.ts); null when the daemon ran
    *  unscoped or predates this field. */
   cgroupUnit: string | null
+  /** Null when the daemon predates the ceiling report. */
+  processCeiling?: PtyProcessCeilingState | null
 }
 
 /**
@@ -53,7 +59,8 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
         linuxStartTicks: typeof parsed.linuxStartTicks === 'string' ? parsed.linuxStartTicks : null,
         bootId: typeof parsed.bootId === 'string' ? parsed.bootId : null,
         spawnerExecPath: typeof parsed.spawnerExecPath === 'string' ? parsed.spawnerExecPath : null,
-        cgroupUnit: typeof parsed.cgroupUnit === 'string' ? parsed.cgroupUnit : null
+        cgroupUnit: typeof parsed.cgroupUnit === 'string' ? parsed.cgroupUnit : null,
+        processCeiling: parsePtyProcessCeilingState(parsed.processCeiling)
       }
     }
   } catch {
@@ -71,7 +78,8 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
         linuxStartTicks: null,
         bootId: null,
         spawnerExecPath: null,
-        cgroupUnit: null
+        cgroupUnit: null,
+        processCeiling: null
       }
     : null
 }

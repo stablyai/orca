@@ -96,7 +96,9 @@ function loadRegistryAndSchemas(modules) {
       format: 'cjs',
       outfile,
       logLevel: 'error',
-      packages: 'external'
+      packages: 'external',
+      // Why: the catalog types every method a build can register, every dark switch's included.
+      define: { ORCA_LAYOUT_OWNER: '"main"', ORCA_SIDEBAR_INPUTS: '"main"' }
     })
     const loaded = createRequire(import.meta.url)(outfile)
     return { methods: loaded.ALL_RPC_METHODS, schemaModules: loaded.SCHEMA_MODULES }

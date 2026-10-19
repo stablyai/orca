@@ -33,6 +33,7 @@ import {
   isKnownRemoteStartFailure
 } from './federated-worker-start-receipts'
 import { parseTaskDeps } from '../worker/task-deps-argument'
+import { releaseRetriedWorkerTerminal } from '../worker/retried-worker-terminal-release'
 
 export async function startFederatedWorker(args: {
   params: WorkerStartInput
@@ -156,6 +157,8 @@ export async function startFederatedWorker(args: {
       protocolVersion: federationProtocolVersion
     }
   })
+  // A remote retry can replace a failed local attempt whose terminal is still live here.
+  releaseRetriedWorkerTerminal(runtime, db, { retryOf: params.retryOf })
   const createdTask = started.task
   const taskForRemote = task ?? createdTask
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })

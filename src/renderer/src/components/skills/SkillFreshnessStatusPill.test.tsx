@@ -31,7 +31,7 @@ function pillText(container: HTMLDivElement): string {
 }
 
 function inventory(
-  entries: { name: string; status: 'current' | 'outdated' | 'unrecognized' }[],
+  entries: { name: string; status: 'current' | 'outdated' | 'inaccessible' }[],
   eligibleUpdateNames: string[]
 ): SkillFreshnessInventory {
   return {
@@ -48,12 +48,8 @@ function inventory(
       physicalIdentity: `physical-${entry.name}-${index}`,
       topology: 'canonical-copy',
       status: entry.status,
-      installedReleaseRevision: 1,
-      installedAppVersion: '1.0.0',
-      currentReleaseRevision: 2,
       currentPackageDigest: 'current',
-      currentAppVersion: '2.0.0',
-      observedPackageDigest: 'old',
+      lockSource: 'stablyai/orca',
       errorCategory: null
     })),
     eligibleUpdateNames,
@@ -114,7 +110,7 @@ describe('SkillFreshnessStatusPill', () => {
     mocks.inventory = inventory(
       [
         { name: 'orca-cli', status: 'outdated' },
-        { name: 'orca-cli', status: 'unrecognized' }
+        { name: 'orca-cli', status: 'inaccessible' }
       ],
       []
     )

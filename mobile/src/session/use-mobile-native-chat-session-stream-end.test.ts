@@ -131,9 +131,8 @@ function directRig(): TransportRig {
   let nextId = 0
   const registry = new RpcClientStreamRegistry({
     nextId: () => `rpc-${++nextId}`,
-    deviceToken: 'device-token',
     getState: () => 'connected',
-    sendEncrypted: (request) => {
+    sendFrame: (request) => {
       sent.push(readSentRequest(request))
       return true
     }

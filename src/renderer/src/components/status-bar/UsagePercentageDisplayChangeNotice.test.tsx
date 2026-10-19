@@ -71,9 +71,8 @@ describe('UsagePercentageDisplayChangeNotice', () => {
     document.body.appendChild(container)
     // Why: fixed positioning reads getBoundingClientRect; happy-dom needs a
     // non-zero layout box so the portal card is measured and mounted.
-    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
-      configurable: true,
-      value: () =>
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      () =>
         ({
           x: 24,
           y: 700,
@@ -85,7 +84,7 @@ describe('UsagePercentageDisplayChangeNotice', () => {
           height: 24,
           toJSON: () => ({})
         }) satisfies DOMRect
-    })
+    )
     root = createRoot(container)
   })
 
@@ -96,6 +95,7 @@ describe('UsagePercentageDisplayChangeNotice', () => {
     container.remove()
     document.querySelectorAll('.status-bar-change-notice-card').forEach((node) => node.remove())
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('portals the callout above the usage-meter anchor after a short delay', () => {

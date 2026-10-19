@@ -13,6 +13,7 @@ import type { TerminalEditorCloseQueueController } from './use-terminal-editor-c
 export type TerminalEditorCloseDialogActionsInput = Pick<
   TerminalEditorCloseQueueController,
   | 'advanceEditorCloseQueue'
+  | 'closedReactionsRef'
   | 'inFlightSaveFileIdRef'
   | 'isClosingRef'
   | 'pendingEditorCloseQueueRef'
@@ -20,6 +21,7 @@ export type TerminalEditorCloseDialogActionsInput = Pick<
   | 'releaseCloseDialogGuardAfterDebounce'
   | 'saveDialogFileId'
   | 'setSaveDialogFileId'
+  | 'settleQueuedClose'
   | 'waitForFileClosed'
   | 'windowCloseAfterDirtyRef'
 >
@@ -29,6 +31,7 @@ export function useTerminalEditorCloseDialogActions(
 ) {
   const {
     advanceEditorCloseQueue,
+    closedReactionsRef,
     inFlightSaveFileIdRef,
     isClosingRef,
     pendingEditorCloseQueueRef,
@@ -36,6 +39,7 @@ export function useTerminalEditorCloseDialogActions(
     releaseCloseDialogGuardAfterDebounce,
     saveDialogFileId,
     setSaveDialogFileId,
+    settleQueuedClose,
     waitForFileClosed,
     windowCloseAfterDirtyRef
   } = controller
@@ -47,9 +51,7 @@ export function useTerminalEditorCloseDialogActions(
     const fileId = saveDialogFileId
     const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === fileId)
     if (!file) {
-      pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
-        (id) => id !== fileId
-      )
+      settleQueuedClose(fileId)
       advanceEditorCloseQueue()
       releaseCloseDialogGuardAfterDebounce()
       return
@@ -68,9 +70,7 @@ export function useTerminalEditorCloseDialogActions(
     }
     if (!closed) {
       if (!useAppStore.getState().openFiles.some((candidate) => candidate.id === fileId)) {
-        pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
-          (id) => id !== fileId
-        )
+        settleQueuedClose(fileId)
         advanceEditorCloseQueue()
         releaseCloseDialogGuardAfterDebounce()
         return
@@ -85,9 +85,7 @@ export function useTerminalEditorCloseDialogActions(
       isClosingRef.current = false
       return
     }
-    pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
-      (id) => id !== fileId
-    )
+    settleQueuedClose(fileId)
     advanceEditorCloseQueue()
     releaseCloseDialogGuardAfterDebounce()
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
@@ -106,9 +104,7 @@ export function useTerminalEditorCloseDialogActions(
     const fileId = saveDialogFileId
     setSaveDialogFileId(null)
     await discardEditorFileChangesAndClose(fileId)
-    pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
-      (id) => id !== fileId
-    )
+    settleQueuedClose(fileId)
     advanceEditorCloseQueue()
     releaseCloseDialogGuardAfterDebounce()
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
@@ -120,6 +116,7 @@ export function useTerminalEditorCloseDialogActions(
     }
     isClosingRef.current = true
     pendingEditorCloseQueueRef.current = []
+    closedReactionsRef.current.clear()
     windowCloseAfterDirtyRef.current = null
     setSaveDialogFileId(null)
     releaseCloseDialogGuardAfterDebounce()
@@ -133,6 +130,10 @@ export function useTerminalEditorCloseDialogActions(
       if (!fileId) {
         return
       }
+      const onClosed = customEvent.detail?.onClosed
+      if (onClosed) {
+        closedReactionsRef.current.set(fileId, onClosed)
+      }
       queueEditorCloseRequests([fileId])
     }
     window.addEventListener(
@@ -144,7 +145,7 @@ export function useTerminalEditorCloseDialogActions(
         ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
         onRequestEditorClose as EventListener
       )
-  }, [queueEditorCloseRequests])
+  }, [closedReactionsRef, queueEditorCloseRequests])
 
   return { handleSaveDialogSave, handleSaveDialogDiscard, handleSaveDialogCancel }
 }

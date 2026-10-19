@@ -7,6 +7,10 @@
 import { ghExecFileAsync } from '../git/runner'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import type { GhMultiAccountCapability } from '../../shared/github/auth-types'
+import {
+  createGhLogicalLifetime,
+  type GhCaptureLifetimeHooks
+} from '../git/command-runner/gh-capture-lifetime'
 
 export type GhCapabilityTarget = {
   cwd?: string
@@ -23,7 +27,11 @@ type CachedCapability = {
 }
 
 const capabilityByExecutionHost = new Map<string, CachedCapability>()
-const probesByExecutionHost = new Map<string, Promise<GhMultiAccountCapability>>()
+type CapabilityProbe = {
+  result: Promise<GhMultiAccountCapability>
+  lifetime: ReturnType<typeof createGhLogicalLifetime>
+}
+const probesByExecutionHost = new Map<string, CapabilityProbe>()
 /** Bumped on invalidate so in-flight probes cannot commit stale results. */
 const generationByExecutionHost = new Map<string, number>()
 
@@ -58,19 +66,24 @@ function isNarrowMultiAccountUnsupported(error: unknown): boolean {
 }
 
 async function probeMultiAccountCapability(
-  target: GhCapabilityTarget
+  target: GhCapabilityTarget,
+  hooks?: GhCaptureLifetimeHooks
 ): Promise<GhMultiAccountCapability> {
   const normalized = normalizeGhCapabilityTarget(target)
   try {
-    const { stdout, stderr } = await ghExecFileAsync(['auth', 'token', '--help'], {
-      cwd: normalized.cwd,
-      wslDistro: normalized.wslDistro,
-      timeout: CAPABILITY_PROBE_TIMEOUT_MS,
-      env: {
-        ...process.env,
-        GH_PROMPT_DISABLED: process.env.GH_PROMPT_DISABLED ?? '1'
-      }
-    })
+    const { stdout, stderr } = await ghExecFileAsync(
+      ['auth', 'token', '--help'],
+      {
+        cwd: normalized.cwd,
+        wslDistro: normalized.wslDistro,
+        timeout: CAPABILITY_PROBE_TIMEOUT_MS,
+        env: {
+          ...process.env,
+          GH_PROMPT_DISABLED: process.env.GH_PROMPT_DISABLED ?? '1'
+        }
+      },
+      hooks
+    )
     const help = `${stdout}\n${stderr}`
     return help.includes('--user') ? 'supported' : 'unsupported'
   } catch (error) {
@@ -84,7 +97,8 @@ async function probeMultiAccountCapability(
 /** Probes `gh auth token --user` support; 'unknown' means the probe itself failed and must not be cached as unsupported. */
 export async function getGhMultiAccountCapability(
   target: GhCapabilityTarget = {},
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  hooks?: GhCaptureLifetimeHooks
 ): Promise<GhMultiAccountCapability> {
   const normalized = normalizeGhCapabilityTarget(target)
   const key = getGhExecutionHostKey(normalized)
@@ -98,11 +112,19 @@ export async function getGhMultiAccountCapability(
 
   const inFlight = probesByExecutionHost.get(key)
   if (inFlight) {
-    return inFlight
+    hooks?.onTerminationPending(inFlight.lifetime.terminated)
+    const result = await inFlight.result
+    if (hooks) {
+      await inFlight.lifetime.waitPending()
+    }
+    return result
   }
 
   const generation = generationByExecutionHost.get(key) ?? 0
-  const probe = probeMultiAccountCapability(normalized).then((value) => {
+  const lifetime = createGhLogicalLifetime()
+  hooks?.onTerminationPending(lifetime.terminated)
+  const probe = probeMultiAccountCapability(normalized, lifetime.hooks).then((value) => {
+    lifetime.seal()
     if ((generationByExecutionHost.get(key) ?? 0) !== generation) {
       return value
     }
@@ -119,11 +141,17 @@ export async function getGhMultiAccountCapability(
     })
     return value
   })
-  probesByExecutionHost.set(key, probe)
+  const holder = { result: probe, lifetime }
+  probesByExecutionHost.set(key, holder)
   try {
-    return await probe
+    const result = await probe
+    if (hooks) {
+      await lifetime.waitPending()
+    }
+    return result
   } finally {
-    if (probesByExecutionHost.get(key) === probe) {
+    lifetime.seal()
+    if (probesByExecutionHost.get(key) === holder) {
       probesByExecutionHost.delete(key)
     }
   }

@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { type Mock, vi } from 'vitest'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 export type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -9,7 +10,11 @@ type StoreMock = Mock<(...args: unknown[]) => unknown>
 /** Store lookups tests re-implement per id, so the first arg stays narrowed. */
 type KeyedStoreMock = Mock<(id: string, ...rest: unknown[]) => unknown>
 /** Store writers tests re-implement by merging the patch they receive. */
-type KeyedStoreWriteMock = Mock<(id: string, patch: Partial<WorktreeMeta>) => unknown>
+type KeyedStoreWriteMock = Mock<
+  (target: HostWorktreeTarget, patch: Partial<WorktreeMeta>) => unknown
+>
+/** Host-qualified store removals. */
+type TargetStoreMock = Mock<(target: HostWorktreeTarget) => unknown>
 
 export type TestMainWindow = {
   isDestroyed: () => boolean
@@ -28,13 +33,12 @@ export type TestStore = {
   getAllWorktreeMeta: StoreMock
   captureNativeLocalWorktreeMetadataScanExpectation: StoreMock
   setWorktreeMeta: KeyedStoreWriteMock
-  setWorktreeMetaForHost: StoreMock
   getProjectHostSetups: StoreMock
-  removeWorktreeMeta: KeyedStoreMock
+  removeWorktreeMeta: TargetStoreMock
   pruneSessionlessMissingLocalWorktreeMetadataForRepo: StoreMock
   removeWorkspaceSessionStateForWorktree: KeyedStoreMock
   getAllWorktreeLineage: StoreMock
-  removeWorktreeLineage: KeyedStoreMock
+  removeWorktreeLineage: TargetStoreMock
   getAllWorkspaceLineage: StoreMock
   getFolderWorkspaces: StoreMock
   getProjectGroups: StoreMock
@@ -64,7 +68,6 @@ export const store: TestStore = {
   getAllWorktreeMeta: vi.fn(),
   captureNativeLocalWorktreeMetadataScanExpectation: vi.fn(),
   setWorktreeMeta: vi.fn(),
-  setWorktreeMetaForHost: vi.fn(),
   getProjectHostSetups: vi.fn(),
   removeWorktreeMeta: vi.fn(),
   pruneSessionlessMissingLocalWorktreeMetadataForRepo: vi.fn(),

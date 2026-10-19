@@ -6,46 +6,15 @@ import type { AppState } from '@/store/types'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import { isCodexTerminalServerIsolationEnabled } from '../../../../shared/codex-terminal-server-isolation'
+import { whenCodexTerminalAppears } from './codex-terminal-presence'
 
-type CodexNoticeState = Pick<
-  AppState,
-  | 'persistedUIReady'
-  | 'codexTerminalServerIsolationNoticeSeen'
-  | 'settings'
-  | 'tabsByWorktree'
-  | 'agentStatusByPaneKey'
-  | 'paneForegroundAgentByPaneKey'
->
-
-// Why three sources: Orca-launched tabs, hook-reported agents (SSH too), and a typed `codex` seen locally.
-function hasCodexTerminal(state: CodexNoticeState): boolean {
+// Why no hydration check: the seen flag defaults to true until the persisted value arrives.
+function isNoticeDue(state: AppState): boolean {
   return (
-    Object.values(state.tabsByWorktree).some((tabs) =>
-      tabs.some((tab) => tab.launchAgent === 'codex')
-    ) ||
-    Object.values(state.agentStatusByPaneKey).some((entry) => entry.agentType === 'codex') ||
-    Object.values(state.paneForegroundAgentByPaneKey).some((entry) => entry.agent === 'codex')
-  )
-}
-
-export function shouldShowCodexTerminalServerIsolationNotice(state: CodexNoticeState): boolean {
-  return (
-    state.persistedUIReady &&
     !state.codexTerminalServerIsolationNoticeSeen &&
     state.settings !== null &&
     // Why: a user who already opted out needs no announcement of the default.
-    isCodexTerminalServerIsolationEnabled(state.settings) &&
-    hasCodexTerminal(state)
-  )
-}
-
-function didNoticeInputsChange(state: CodexNoticeState, previous: CodexNoticeState): boolean {
-  return (
-    state.persistedUIReady !== previous.persistedUIReady ||
-    state.settings !== previous.settings ||
-    state.tabsByWorktree !== previous.tabsByWorktree ||
-    state.agentStatusByPaneKey !== previous.agentStatusByPaneKey ||
-    state.paneForegroundAgentByPaneKey !== previous.paneForegroundAgentByPaneKey
+    isCodexTerminalServerIsolationEnabled(state.settings)
   )
 }
 
@@ -93,27 +62,13 @@ function showCodexTerminalServerIsolationNotice(): void {
 }
 
 export function useCodexTerminalServerIsolationNotice(): void {
-  const seen = useAppStore((s) => s.codexTerminalServerIsolationNoticeSeen)
+  const due = useAppStore(isNoticeDue)
 
   useEffect(() => {
     // Why: a paired web client's terminals follow the host's setting, not this window's.
-    if (seen || isPairedWebClientWindow()) {
+    if (!due || isPairedWebClientWindow()) {
       return
     }
-    if (shouldShowCodexTerminalServerIsolationNotice(useAppStore.getState())) {
-      showCodexTerminalServerIsolationNotice()
-      return
-    }
-    // Why a filtered subscription: a selector would rescan every tab on each store write.
-    const unsubscribe = useAppStore.subscribe((state, previous) => {
-      if (
-        didNoticeInputsChange(state, previous) &&
-        shouldShowCodexTerminalServerIsolationNotice(state)
-      ) {
-        unsubscribe()
-        showCodexTerminalServerIsolationNotice()
-      }
-    })
-    return unsubscribe
-  }, [seen])
+    return whenCodexTerminalAppears(showCodexTerminalServerIsolationNotice)
+  }, [due])
 }

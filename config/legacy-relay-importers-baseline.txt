@@ -1,0 +1,15 @@
+# Files outside src/main/ssh/legacy-relay/ that import it. RATCHET: may only SHRINK.
+# The relay retirement (2027-01-15) deletes the folder and edits exactly these files.
+# Prune: pnpm check:legacy-relay-fence-ratchet --prune
+src/main/ipc/runtime-environments/orcad-delta-move-handlers.ts
+src/main/ipc/pty/runtime/kill-legacy-relay-bridged.test.ts
+src/main/ipc/pty/runtime/kill.ts
+src/main/ipc/ssh/ssh-connect-decision-cancellation.test.ts
+src/main/ipc/ssh/ssh-connect-flow.ts
+src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
+src/main/ipc/ssh/ssh-session-teardown.ts
+src/main/ipc/ssh/ssh.ts
+src/main/ssh/orcad-migration-terminal-gate-host-wide.test.ts
+src/main/managed-server/lifecycle/orcad-runtime-conversion-wiring.ts
+tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts
+tests/e2e/helpers/legacy-relay-docker-host.ts

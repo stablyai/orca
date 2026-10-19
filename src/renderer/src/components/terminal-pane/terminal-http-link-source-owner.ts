@@ -1,10 +1,11 @@
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import {
-  getRemoteRuntimePtyEnvironmentId,
-  parseRemoteRuntimePtyId
-} from '@/runtime/runtime-terminal-stream'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { PtyTransport } from './pty-transport-types'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import { legacyRelayBridgedPane } from './legacy-relay-bridge-panes'
 
 type OwnerTransport = Pick<PtyTransport, 'getPtyId' | 'getRuntimeEnvironmentId' | 'getConnectionId'>
 
@@ -43,4 +44,30 @@ export function resolveTerminalHttpLinkSourceOwner(
     return { kind: 'unknown' }
   }
   return { kind: 'local' }
+}
+
+/** The pane's terminal handle on its paired server; null for a pane no server runs. */
+export function resolveTerminalRuntimeHandle(
+  transport: Pick<PtyTransport, 'getPtyId'> | null | undefined
+): string | null {
+  const ptyId = transport?.getPtyId() ?? null
+  return (ptyId ? parseRemoteRuntimePtyId(ptyId)?.handle : null) || null
+}
+
+/** The paired server holding the files a pane prints, or `null` for this app's own lookup. */
+export function resolveTerminalLinkRuntimeEnvironmentId(
+  transport: OwnerTransport | null | undefined,
+  state: WorktreeOperationRouteState,
+  worktreeId: string
+): string | null {
+  const owner = resolveTerminalHttpLinkSourceOwner(transport)
+  if (owner.kind === 'runtime') {
+    return owner.runtimeEnvironmentId
+  }
+  const ptyId = transport?.getPtyId() ?? null
+  // Why: the legacy relay bridge reports no server for a relay-era pane, yet the pane runs on the
+  // host whose server now owns its workspace, so its paths exist there and not on this computer.
+  return ptyId && legacyRelayBridgedPane(ptyId)
+    ? runtimeEnvironmentIdUnlessTwin(state, worktreeId)
+    : null
 }

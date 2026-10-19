@@ -3,15 +3,18 @@ import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
+import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalSideEffectFact } from '../../shared/terminal-side-effect-facts'
 import type { TerminalTitleTracker } from '../../shared/terminal-output-side-effects'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalAgent } from '../../shared/terminal-agent'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
-import type { PtyProviderBufferSnapshot } from '../providers/types'
+import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contract'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 import type { TerminalTailWaitState } from './terminal-wait-tail-state'
 import type { TerminalCommandPaint } from './terminal-command-paint'
+import type { CliWriterConversation } from './structured-agent-cli-writers'
 import type { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
@@ -66,7 +69,12 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchIncarnationId: PtyIncarnationId | null
   launchAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
-  foregroundAgent: TuiAgent | null
+  /** Conversations the `incarnationId` execution reported; a later row can't hide them. In memory only. */
+  cliConversations?: {
+    incarnationId: PtyIncarnationId | null
+    byKey: Map<string, CliWriterConversation>
+  }
+  foregroundAgent: TerminalAgent | null
   connected: boolean
   disconnectedAt: number | null
   lastExitCode: number | null
@@ -81,6 +89,9 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
     updatedAt: number
     /** A `done` row that marks a new session owning the pane, not the end of a turn. */
     sessionBoundary?: boolean
+    /** OSC 7501 `done`: the program itself says it is at rest awaiting input, which a hook
+     *  `done` (possibly mid-turn) cannot claim. */
+    programAtRest?: boolean
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
@@ -119,6 +130,10 @@ export type RuntimePtyTitleTrackerEntry = {
   /** Run once this chunk's facts are emitted: status that readers must see after them. */
   afterFacts: (() => void)[]
   commandCodeDetector: { observe: (data: string) => boolean } | null
+  /** The program's OSC 7501 activity; while set it, not the title glyph, is the PTY's status. */
+  programActivity: AgentStatus | null
+  /** The last observed title, so a program's activity change can re-classify it. */
+  lastTitle: { raw: string; normalized: string } | null
 }
 
 export type RuntimeHeadlessTerminal = {
@@ -132,6 +147,7 @@ export type RuntimeHeadlessTerminal = {
 
 export type RuntimeVisibleTerminalState = {
   lines: string[]
+  tailRows?: RuntimeTerminalRowMetadata[]
   draft?: string
   isAlternateScreen: boolean
   sequence: number

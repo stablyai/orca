@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { RunningStructuredSession } from './orchestration/structured-session-lineage'
 import { OrchestrationDb } from './orchestration/db'
 
 const hostRef: { current: unknown } = { current: null }
@@ -14,7 +15,7 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 
 const { observeStructuredWorker, resolveStructuredWorkerAuthority, structuredSessionCloseSettled } =
   await import('./structured-worker-authority')
-const { structuredWorkerOwesWork, structuredWorkerOwned } =
+const { structuredWorkerOpenTaskTitle, structuredWorkerOwesWork, structuredWorkerOwned } =
   await import('./structured-worker-custody')
 const {
   mintStructuredWorkerHandle,
@@ -45,6 +46,11 @@ function record(lease: Partial<AgentSessionRecord['lease']>): AgentSessionRecord
     },
     lease: { claimStatus: 'live', deathEvidence: null, runtimeFence: 3, ...lease }
   } as AgentSessionRecord
+}
+
+/** The installed session as the resolved running session the custody reads take. */
+function running(current: AgentSessionRecord): RunningStructuredSession {
+  return { sessionId: SESSION, record: current, lineage: [SESSION] }
 }
 
 function installHost(current: AgentSessionRecord | null, tabs: string[]) {
@@ -121,6 +127,24 @@ describe('an open dispatch keeps its worker running (P2-19 i)', () => {
     expect(structuredWorkerOwesWork(db, record({}))).toBe(true)
     db.settleWorkerStop(dispatch.id)
     expect(structuredWorkerOwesWork(db, record({}))).toBe(false)
+  })
+
+  it('names the worker after the task it still owes, and nothing once that settles', () => {
+    const dispatch = dispatchWorker()
+    expect(structuredWorkerOpenTaskTitle(db, record({}))).toEqual({ title: 'structured work' })
+    db.markWorkerDispatchReady(dispatch.id)
+    db.beginWorkerStop(dispatch.id, 'epoch_home')
+    db.settleWorkerStop(dispatch.id)
+    expect(structuredWorkerOpenTaskTitle(db, record({}))).toBeNull()
+    expect(structuredWorkerOpenTaskTitle(null, record({}))).toBeNull()
+  })
+
+  it('derives the title of an owned open worker task with a legacy null title', () => {
+    const dispatch = dispatchWorker()
+    db.db.prepare('UPDATE tasks SET task_title = NULL WHERE id = ?').run(dispatch.task_id)
+    expect(structuredWorkerOpenTaskTitle(db, record({}))).toEqual({ title: 'structured work' })
+    db.db.prepare("UPDATE tasks SET spec = '' WHERE id = ?").run(dispatch.task_id)
+    expect(structuredWorkerOpenTaskTitle(db, record({}))).toEqual({ title: '' })
   })
 
   // Custody is the list state coordinators see: `active` owes work, `reclaimable` does not.
@@ -221,37 +245,37 @@ describe('an open dispatch keeps its worker running (P2-19 i)', () => {
 describe('ownership, not liveness (P2-19 ii-iv, P2-26)', () => {
   it('owns a worker at rest while its tab is listed, and routes mail to it', () => {
     const handle = registerWorker()
-    installHost(
-      record({
-        claimStatus: 'released',
-        deathEvidence: { kind: 'exit-observed', detail: 'stopped', observedAt: 1 }
-      }),
-      [SESSION]
-    )
+    const current = record({
+      claimStatus: 'released',
+      deathEvidence: { kind: 'exit-observed', detail: 'stopped', observedAt: 1 }
+    })
+    installHost(current, [SESSION])
 
-    expect(structuredWorkerOwned(SESSION)).toBe(true)
+    expect(structuredWorkerOwned(running(current))).toBe(true)
     expect(observeStructuredWorker({ sessionId: SESSION }).status).toBe('exited')
     expect(resolveStructuredWorkerAuthority(handle, null)?.identity.paneKey).toBe(paneKey)
   })
 
   it('retires a released worker whose tab is gone', () => {
     const handle = registerWorker()
-    installHost(record({ claimStatus: 'released' }), [])
+    const current = record({ claimStatus: 'released' })
+    installHost(current, [])
 
-    expect(structuredWorkerOwned(SESSION)).toBe(false)
+    expect(structuredWorkerOwned(running(current))).toBe(false)
     expect(resolveStructuredWorkerAuthority(handle, null)).toBeNull()
   })
 
   it('keeps authority for a live session that has no tab', () => {
     const handle = registerWorker()
-    installHost(record({ claimStatus: 'live' }), [])
+    const current = record({ claimStatus: 'live' })
+    installHost(current, [])
 
-    expect(structuredWorkerOwned(SESSION)).toBe(true)
+    expect(structuredWorkerOwned(running(current))).toBe(true)
     expect(resolveStructuredWorkerAuthority(handle, null)).not.toBeNull()
   })
 
   it('cannot answer without a host', () => {
-    expect(structuredWorkerOwned(SESSION)).toBeNull()
+    expect(structuredWorkerOwned(running(record({})))).toBeNull()
   })
 })
 

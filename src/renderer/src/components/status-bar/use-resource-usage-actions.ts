@@ -143,6 +143,9 @@ export function useResourceUsageActions({
 
   const handleKillSession = useCallback(
     (session: UnifiedSessionRow): void => {
+      if (session.readOnly) {
+        return
+      }
       if (!requiresKillConfirmation(session)) {
         removeSession(session.sessionId)
         // Why: await the kill before refreshing, else the refresh re-reads the daemon list before the kill lands and re-adds the row.

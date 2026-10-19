@@ -1,3 +1,4 @@
+import { SecuritySurface } from '@/components/ui/security-surface'
 import { useEffect, useRef, useState } from 'react'
 import { Copy, ExternalLink, Globe, Loader2, RefreshCw, ShieldAlert } from 'lucide-react'
 
@@ -261,107 +262,114 @@ export function BrowserLoadFailureOverlay({
     ) : null
 
   return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center bg-background px-6">
-      <div aria-live="polite" className="flex max-w-lg flex-col items-center px-8 py-8 text-center">
-        <div className="mb-4 rounded-full border border-border bg-muted p-3 text-muted-foreground">
-          {certificateError ? <ShieldAlert className="size-5" /> : <Globe className="size-5" />}
-        </div>
-        <h2 className="text-base font-semibold text-foreground">
-          {certificateError
-            ? translate('browser.loadFailure.connectionNotSecure', "Connection isn't secure")
-            : guestRecoveryError
-              ? translate('browser.guestRecovery.title', 'Browser page stopped')
-              : meta.host
-                ? translate('browser.loadFailure.cantReachHost', "Can't reach {{value0}}", {
-                    value0: meta.host
-                  })
-                : translate('browser.loadFailure.cantLoadPage', "Can't load this page")}
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {formatLoadFailureDescription(presentationLoadError, meta)}
-        </p>
-        {certificateError && meta.isLocalhostLike ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            {translate(
-              'browser.loadFailure.trustedCertificateGuidance',
-              'For local development, use a trusted local certificate when possible.'
-            )}
+    <SecuritySurface>
+      <div className="absolute inset-0 z-20 flex items-center justify-center bg-background px-6">
+        <div
+          aria-live="polite"
+          className="flex max-w-lg flex-col items-center px-8 py-8 text-center"
+        >
+          <div className="mb-4 rounded-full border border-border bg-muted p-3 text-muted-foreground">
+            {certificateError ? <ShieldAlert className="size-5" /> : <Globe className="size-5" />}
+          </div>
+          <h2 className="text-base font-semibold text-foreground">
+            {certificateError
+              ? translate('browser.loadFailure.connectionNotSecure', "Connection isn't secure")
+              : guestRecoveryError
+                ? translate('browser.guestRecovery.title', 'Browser page stopped')
+                : meta.host
+                  ? translate('browser.loadFailure.cantReachHost', "Can't reach {{value0}}", {
+                      value0: meta.host
+                    })
+                  : translate('browser.loadFailure.cantLoadPage', "Can't load this page")}
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {formatLoadFailureDescription(presentationLoadError, meta)}
           </p>
-        ) : null}
-        {recoveryHint ? <p className="mt-2 text-xs text-muted-foreground">{recoveryHint}</p> : null}
-        {sshRoutedHint ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            {translate(
-              'browser.loadFailure.sshRoutedHint',
-              "This page browses through the workspace's SSH host — the host may be disconnected or unable to reach this site."
-            )}
-            {onRecheckSshRoute ? (
+          {certificateError && meta.isLocalhostLike ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {translate(
+                'browser.loadFailure.trustedCertificateGuidance',
+                'For local development, use a trusted local certificate when possible.'
+              )}
+            </p>
+          ) : null}
+          {recoveryHint ? (
+            <p className="mt-2 text-xs text-muted-foreground">{recoveryHint}</p>
+          ) : null}
+          {sshRoutedHint ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {translate(
+                'browser.loadFailure.sshRoutedHint',
+                "This page browses through the workspace's SSH host — the host may be disconnected or unable to reach this site."
+              )}
+              {onRecheckSshRoute ? (
+                <>
+                  {' '}
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="xs"
+                    className="h-auto px-0 align-baseline"
+                    data-testid="browser-load-failure-recheck-ssh-route"
+                    onClick={onRecheckSshRoute}
+                  >
+                    {translate('browser.loadFailure.recheckSshRoute', 'Run connection check')}
+                  </Button>
+                </>
+              ) : null}
+            </p>
+          ) : null}
+          {activeProceedAttempt?.state === 'failed' && activeProceedAttempt.reason ? (
+            <p role="alert" className="mt-3 text-xs text-destructive">
+              {formatCertificateProceedFailure(activeProceedAttempt.reason)}
+            </p>
+          ) : null}
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            {certificateError ? (
               <>
-                {' '}
-                <Button
-                  type="button"
-                  variant="link"
-                  size="xs"
-                  className="h-auto px-0 align-baseline"
-                  data-testid="browser-load-failure-recheck-ssh-route"
-                  onClick={onRecheckSshRoute}
-                >
-                  {translate('browser.loadFailure.recheckSshRoute', 'Run connection check')}
-                </Button>
+                {externalButton}
+                {retryButton}
+                {copyButton}
+                {matchingCertificateFailure ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 w-48 gap-2 px-3"
+                    disabled={actionsDisabled}
+                    onClick={proceedCertificate}
+                  >
+                    {activeProceedAttempt?.state === 'submitting' &&
+                    activeProceedAttempt.showConnecting ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" />
+                        {translate('browser.loadFailure.connecting', 'Connecting…')}
+                      </>
+                    ) : (
+                      translate('browser.loadFailure.proceedUnsafe', 'Proceed Anyway (Unsafe)')
+                    )}
+                  </Button>
+                ) : null}
               </>
-            ) : null}
-          </p>
-        ) : null}
-        {activeProceedAttempt?.state === 'failed' && activeProceedAttempt.reason ? (
-          <p role="alert" className="mt-3 text-xs text-destructive">
-            {formatCertificateProceedFailure(activeProceedAttempt.reason)}
-          </p>
-        ) : null}
-        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-          {certificateError ? (
-            <>
-              {externalButton}
-              {retryButton}
-              {copyButton}
-              {matchingCertificateFailure ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-9 w-48 gap-2 px-3"
-                  disabled={actionsDisabled}
-                  onClick={proceedCertificate}
-                >
-                  {activeProceedAttempt?.state === 'submitting' &&
-                  activeProceedAttempt.showConnecting ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin" />
-                      {translate('browser.loadFailure.connecting', 'Connecting…')}
-                    </>
-                  ) : (
-                    translate('browser.loadFailure.proceedUnsafe', 'Proceed Anyway (Unsafe)')
-                  )}
-                </Button>
-              ) : null}
-            </>
-          ) : (
-            <>
-              {httpsRecoveryUrl && !guestRecoveryError ? (
-                <Button
-                  size="sm"
-                  className="h-9 gap-2 px-3"
-                  disabled={actionsDisabled}
-                  onClick={() => onTryHttps(httpsRecoveryUrl)}
-                >
-                  {translate('browser.loadFailure.tryHttps', 'Try HTTPS')}
-                </Button>
-              ) : null}
-              {retryButton}
-              {copyButton}
-              {externalButton}
-            </>
-          )}
+            ) : (
+              <>
+                {httpsRecoveryUrl && !guestRecoveryError ? (
+                  <Button
+                    size="sm"
+                    className="h-9 gap-2 px-3"
+                    disabled={actionsDisabled}
+                    onClick={() => onTryHttps(httpsRecoveryUrl)}
+                  >
+                    {translate('browser.loadFailure.tryHttps', 'Try HTTPS')}
+                  </Button>
+                ) : null}
+                {retryButton}
+                {copyButton}
+                {externalButton}
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </SecuritySurface>
   )
 }

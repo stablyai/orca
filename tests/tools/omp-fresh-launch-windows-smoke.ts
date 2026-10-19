@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { withFreshOmpLaunch } from '../../src/shared/omp-fresh-launch'
 if (process.platform !== 'win32') {
   throw new Error('Run this smoke on a Windows host')
@@ -33,13 +33,12 @@ try {
         delete env.ORCA_OMP_FRESH_CONFIG
       }
       const command = withFreshOmpLaunch('omp', shell, ' "task with spaces"')
-      const runner = join(root, 'run.cmd')
-      writeFileSync(runner, `@echo off\r\n${command}\r\n`)
+      // Typed like a pane: a batch file would need the guard's `%!` written as `%%!`.
       const result = await runProcess({
-        program: shell === 'cmd' ? runner : 'powershell.exe',
+        program: shell === 'cmd' ? 'cmd.exe' : 'powershell.exe',
         args:
           shell === 'cmd'
-            ? []
+            ? ['/d']
             : [
                 '-NoProfile',
                 '-NonInteractive',
@@ -48,6 +47,7 @@ try {
                   command
                 }; exit $global:LASTEXITCODE`
               ],
+        input: shell === 'cmd' ? `${command}\r\nexit %errorlevel%\r\n` : undefined,
         cwd: root,
         env
       })

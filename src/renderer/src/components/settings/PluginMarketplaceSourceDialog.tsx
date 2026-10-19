@@ -121,7 +121,9 @@ export function PluginMarketplaceSourceDialog({
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !busyAction && onOpenChange(nextOpen)}>
       <DialogContent
-        className="plugin-security-chrome max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek sm:max-w-xl"
+        surface="security"
+        scrollable
+        className="sm:max-w-xl"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           urlRef.current?.focus()

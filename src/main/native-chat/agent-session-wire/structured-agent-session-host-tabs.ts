@@ -19,6 +19,7 @@ export function setStructuredAgentSessionTabVisibility(
           tabId?: string
         ) => Promise<void>
       }
+      onSessionTabHidden?: (sessionId: string) => void
     }
     restartResume: { dismiss: (sessionIds: readonly string[]) => Promise<number> }
   },
@@ -70,29 +71,68 @@ export function createStructuredAgentSessionTabSurface(
     deps: {
       store: Pick<
         AgentSessionRecordStore,
-        'getVisibleSessionTabIndex' | 'getSessionTabId' | 'showSessionTabs'
+        'getVisibleSessionTabIndex' | 'getSessionTabId' | 'showSessionTabs' | 'getRecord'
       >
     }
   },
   sessions: TabSessions,
   forgetStatus: (sessionId: string) => void
 ) {
+  // Restored chats that could not be opened. Each keeps its tab, whose read says why.
+  const unopened = new Set<string>()
   return {
-    listSessionTabs: () => listStructuredAgentSessionTabs(sessions),
+    listSessionTabs: (): StructuredAgentSessionTab[] => [
+      ...listStructuredAgentSessionTabs(sessions),
+      ...[...unopened].flatMap((sessionId) => {
+        const record = sessions.has(sessionId) ? null : host.deps.store.getRecord(sessionId)
+        return record
+          ? [{ sessionId, workspaceId: record.location.workspaceId, agent: record.provider }]
+          : []
+      })
+    ],
+    /** A restore target with a record whose open failed. */
+    markUnopened: (sessionId: string): void => {
+      unopened.add(sessionId)
+    },
     getPersistedVisibleSessionTabIndex: () => host.deps.store.getVisibleSessionTabIndex(),
     getSessionTabId: (sessionId: string): string | null =>
       host.deps.store.getSessionTabId(sessionId),
     showSessionTabs: (sessionIds: readonly string[]) => host.deps.store.showSessionTabs(sessionIds),
+    notifySessionTabHidden: (sessionId: string): void => notifyTabHidden(host, sessionId),
     setSessionTabVisibility: async (
       sessionId: string,
       visible: boolean,
-      tabId?: string
+      tabId?: string,
+      /** A close that may still put the tab back sends the hidden notice once it settles. */
+      options?: { deferHiddenNotice?: boolean }
     ): Promise<void> => {
       await setStructuredAgentSessionTabVisibility(host, sessionId, visible, tabId)
+      if (!visible) {
+        unopened.delete(sessionId)
+        if (!options?.deferHiddenNotice) {
+          notifyTabHidden(host, sessionId)
+        }
+      }
       // The tab edge of the row's lifetime; the handle close is the other.
       if (!visible && !sessions.get(sessionId)?.child) {
         forgetStatus(sessionId)
       }
     }
+  }
+}
+
+function notifyTabHidden(
+  host: Parameters<typeof setStructuredAgentSessionTabVisibility>[0],
+  sessionId: string
+): void {
+  try {
+    host.deps.onSessionTabHidden?.(sessionId)
+  } catch (error) {
+    // Bookkeeping never gates closing a chat.
+    host.deps.logger.warn('a chat tab close listener failed', {
+      scope: 'tab-hidden-listener',
+      sessionId,
+      error
+    })
   }
 }

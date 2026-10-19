@@ -66,6 +66,28 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  // A pane drag waits out a spawn whose result would bind the leaf to its old tab.
+  it('reports a connect as pending only until its PTY id arrives', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    let resolveSpawn!: (value: { id: string }) => void
+    vi.mocked(window.api.pty.spawn).mockReturnValue(
+      new Promise((resolve) => {
+        resolveSpawn = resolve
+      })
+    )
+    const transport = createIpcPtyTransport({})
+    expect(transport.isConnectPending?.()).toBe(false)
+
+    const connecting = transport.connect({ url: '', callbacks: {} })
+    expect(transport.isConnectPending?.()).toBe(true)
+    resolveSpawn({ id: 'pty-late' })
+    await connecting
+
+    expect(transport.getPtyId()).toBe('pty-late')
+    expect(transport.isConnectPending?.()).toBe(false)
+    transport.disconnect()
+  })
+
   it('does not create a PTY when the pane generation is stale', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -76,6 +98,31 @@ describe('createIpcPtyTransport', () => {
     ).resolves.toBeUndefined()
 
     expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it("carries an AI button's launch in its pane's spawn, and says whether the agent started", async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { awaitAgentLaunchPaneStart } = await import('@/lib/agent-launch-pane-start')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const agentLaunch = { launch: { agent: 'claude' } }
+    const pane = { worktreeId: 'wt', tabId: 'tab-launch', leafId: 'leaf-launch' }
+
+    const started = awaitAgentLaunchPaneStart(pane.tabId, pane.leafId)
+    spawn.mockResolvedValueOnce({ id: 'pty-launch' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the transport forwards the request untouched; main validates it.
+    await createIpcPtyTransport({ ...pane, agentLaunch } as never).connect({
+      url: '',
+      callbacks: {}
+    })
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'tab-launch', agentLaunch })
+    )
+    await expect(started).resolves.toBe('pty-launch')
+
+    spawn.mockRejectedValueOnce(new Error('agent_launch_pane_refused'))
+    const refused = awaitAgentLaunchPaneStart(pane.tabId, pane.leafId)
+    await createIpcPtyTransport(pane).connect({ url: '', callbacks: { onError: vi.fn() } })
+    await expect(refused).resolves.toBeNull()
   })
 
   it('keeps the recovery hint and raw diagnostic from a wrapped spawn error', async () => {
@@ -254,6 +301,26 @@ describe('createIpcPtyTransport', () => {
 
     expect(spawn).toHaveBeenCalledWith(expect.not.objectContaining({ cwdFallback: 'worktree' }))
     transport.disconnect()
+  })
+
+  it('sends placement on a fresh spawn but not on a session reattach', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const placement = {
+      kind: 'split',
+      parentLeafId: '11111111-1111-4111-8111-111111111111',
+      direction: 'horizontal'
+    } as const
+
+    const fresh = createIpcPtyTransport({ placement })
+    await fresh.connect({ url: '', callbacks: {} })
+    expect(spawn).toHaveBeenLastCalledWith(expect.objectContaining({ placement }))
+    fresh.disconnect()
+
+    const reattach = createIpcPtyTransport({ placement })
+    await reattach.connect({ url: '', callbacks: {}, sessionId: 'session-1' })
+    expect(spawn).toHaveBeenLastCalledWith(expect.not.objectContaining({ placement }))
+    reattach.disconnect()
   })
 
   it('returns startup cwd fallback metadata to the connection layer', async () => {

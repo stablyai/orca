@@ -36,7 +36,6 @@ export type ChecksPanelCheckAndReviewActionsInput = Pick<
     | 'repo'
     | 'repoConnectionId'
     | 'runtimeEnvironmentId'
-    | 'settings'
     | 'setChecks'
     | 'setChecksLoading'
     | 'setComments'

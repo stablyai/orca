@@ -6,7 +6,7 @@ import {
   cloneForegroundProcessEvidence,
   isForegroundProcessEvidence
 } from '../../shared/foreground-process-evidence'
-import type { PtyProcessInfo } from './types'
+import type { PtyProcessInfo } from './pty-provider-contract'
 
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES = 4096
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_BYTES = 32 * 1024 * 1024
@@ -126,6 +126,7 @@ export class PtyProcessListAdmission {
       ...(value.worktreeId !== undefined ? { worktreeId: value.worktreeId } : {}),
       ...(value.terminalHandle !== undefined ? { terminalHandle: value.terminalHandle } : {}),
       ...(value.wslDistro !== undefined ? { wslDistro: value.wslDistro } : {}),
+      ...(value.exiting === true ? { exiting: true as const } : {}),
       ...(value.foregroundProcessEvidence !== undefined
         ? {
             foregroundProcessEvidence: cloneForegroundProcessEvidence(

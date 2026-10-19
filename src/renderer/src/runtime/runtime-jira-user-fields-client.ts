@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type {
   JiraCreateIssueArgs,
   JiraCreateIssueResult,
@@ -39,14 +40,43 @@ export async function jiraListAssignableUsers(
   query?: string,
   siteId?: string | null
 ): Promise<JiraUser[]> {
+  return jiraListAssignableUsersForTarget(getJiraRuntimeTarget(settings), key, query, siteId)
+}
+
+export async function jiraListAssignableUsersForTarget(
+  target: RuntimeClientTarget,
+  key: string,
+  query?: string,
+  siteId?: string | null
+): Promise<JiraUser[]> {
   if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
     return []
   }
-  const target = getJiraRuntimeTarget(settings)
   const args = { key, query, siteId: siteId ?? undefined }
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraUser[]>(target, 'jira.listAssignableUsers', args, { timeoutMs: 30_000 })
     : window.api.jira.listAssignableUsers(args)
+}
+
+// Remote hosts lack project search; use their capability-gated site search.
+export async function jiraListAssignableUsersForProject(
+  settings: RuntimeJiraSettings,
+  projectIdOrKey: string,
+  query?: string,
+  siteId?: string | null
+): Promise<JiraUser[]> {
+  if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
+    return []
+  }
+  const target = getJiraRuntimeTarget(settings)
+  if (target.kind === 'environment') {
+    return jiraSearchUsers(settings, query, siteId)
+  }
+  return window.api.jira.listAssignableUsersForProject({
+    projectIdOrKey,
+    query,
+    siteId: siteId ?? undefined
+  })
 }
 
 export async function jiraSearchUsers(

@@ -1,4 +1,4 @@
-import type { PtySpawnResult } from './types'
+import type { PtySpawnResult } from './pty-provider-contract'
 import {
   pendingLocalPtySpawns,
   ptyIncarnations,

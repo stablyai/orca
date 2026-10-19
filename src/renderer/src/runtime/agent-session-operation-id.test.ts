@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAgentSessionOperationId } from './agent-session-operation-id'
 import { createAgentSessionCreateOperation } from './agent-session-create-operation'
-import { RuntimeRpcCallError } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 
 describe('createAgentSessionOperationId', () => {
   it('combines the request time with a cryptographically generated nonce', () => {

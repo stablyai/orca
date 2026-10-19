@@ -12,8 +12,9 @@ import {
   getRecentSelfWrite,
   type RecentSelfWrite
 } from '@/components/editor/editor-self-write-registry'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 
 export type EditorExternalWatchNotification = {
   worktreeId: string
@@ -27,27 +28,59 @@ export type EditorExternalWatchNotification = {
 }
 
 // Why: atomic writes burst same-path events; one reload dispatch each fans out into N EditorPanel rebuilds that can wedge the renderer (issue #826), so debounce per owner+path.
+// Never push an armed dispatch back: same-path events under sustained writes would starve it.
 const EXTERNAL_RELOAD_DEBOUNCE_MS = 75
-const pendingExternalReloadTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const pendingExternalReloads = new Map<string, EditorExternalWatchNotification>()
 
 export function scheduleDebouncedEditorExternalReload(
   notification: EditorExternalWatchNotification
 ): void {
   const key = `${notification.worktreeId}::${notification.runtimeEnvironmentId ?? 'client'}::${notification.relativePath}`
-  const existing = pendingExternalReloadTimers.get(key)
-  if (existing !== undefined) {
-    globalThis.clearTimeout(existing)
+  const armed = pendingExternalReloads.has(key)
+  pendingExternalReloads.set(key, notification)
+  if (armed) {
+    return
   }
-  const handle = globalThis.setTimeout(() => {
-    pendingExternalReloadTimers.delete(key)
-    notifyEditorExternalFileChange(notification)
+  globalThis.setTimeout(() => {
+    const latest = pendingExternalReloads.get(key)
+    pendingExternalReloads.delete(key)
+    if (latest) {
+      notifyEditorExternalFileChange(latest)
+    }
   }, EXTERNAL_RELOAD_DEBOUNCE_MS)
-  pendingExternalReloadTimers.set(key, handle)
 }
 
-const inFlightEchoVerificationReads = new Map<string, ReturnType<typeof readRuntimeFileContent>>()
+type EchoVerificationRead = ReturnType<typeof readRuntimeFileContent>
+type EchoVerificationSlot = {
+  current: EchoVerificationRead
+  /** Payloads in the task that issued `current` were emitted before the read reached disk. */
+  joinable: boolean
+  next: EchoVerificationRead | null
+}
+const echoVerificationReads = new Map<string, EchoVerificationSlot>()
+
+function beginEchoVerificationRead(
+  key: string,
+  read: () => EchoVerificationRead
+): EchoVerificationRead {
+  const current = read()
+  const slot: EchoVerificationSlot = { current, joinable: true, next: null }
+  echoVerificationReads.set(key, slot)
+  queueMicrotask(() => {
+    slot.joinable = false
+  })
+  const release = (): void => {
+    if (echoVerificationReads.get(key) === slot && !slot.next) {
+      echoVerificationReads.delete(key)
+    }
+  }
+  current.then(release, release)
+  return current
+}
 
 // Why: one save echo can arrive as a burst of payloads; share the in-flight full-file read so concurrent payloads for the same file don't stack duplicate reads.
+// A payload from a later task may describe a write the in-flight read already missed, so it never
+// joins that read; it shares exactly one fresh read issued once the current one settles.
 function readFileForEchoVerification(args: {
   runtimeEnvironmentId: string | null | undefined
   filePath: string
@@ -55,34 +88,34 @@ function readFileForEchoVerification(args: {
   worktreeId: string | null | undefined
   connectionId: string | undefined
   expectedExternalSshTargetId?: string
-}): ReturnType<typeof readRuntimeFileContent> {
+}): EchoVerificationRead {
   const key = [
     args.runtimeEnvironmentId ?? '',
     args.connectionId ?? '',
     args.expectedExternalSshTargetId ?? '',
     args.filePath
   ].join('::')
-  let pending = inFlightEchoVerificationReads.get(key)
-  if (!pending) {
-    pending = readRuntimeFileContent({
-      settings: args.runtimeEnvironmentId
-        ? { activeRuntimeEnvironmentId: args.runtimeEnvironmentId }
-        : null,
+  const read = (): EchoVerificationRead =>
+    readRuntimeFileContent({
+      target: runtimeTargetForOwnerEnvironment(args.runtimeEnvironmentId ?? null),
       filePath: args.filePath,
       relativePath: args.relativePath,
       worktreeId: args.worktreeId ?? undefined,
       connectionId: args.connectionId,
       expectedExternalSshTargetId: args.expectedExternalSshTargetId
     })
-    inFlightEchoVerificationReads.set(key, pending)
-    const release = (): void => {
-      if (inFlightEchoVerificationReads.get(key) === pending) {
-        inFlightEchoVerificationReads.delete(key)
-      }
-    }
-    pending.then(release, release)
+  const slot = echoVerificationReads.get(key)
+  if (!slot) {
+    return beginEchoVerificationRead(key, read)
   }
-  return pending
+  if (slot.joinable) {
+    return slot.current
+  }
+  slot.next ??= slot.current.then(
+    () => beginEchoVerificationRead(key, read),
+    () => beginEchoVerificationRead(key, read)
+  )
+  return slot.next
 }
 
 function markTabsChangedOnDisk(fileIds: string[], connectionId: string | undefined): void {

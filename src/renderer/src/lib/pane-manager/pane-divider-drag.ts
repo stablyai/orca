@@ -4,6 +4,8 @@ export type DividerCallbacks = {
   refitPanesUnder: (el: HTMLElement) => void
   onLayoutChanged?: () => void
   onDragActiveChange?: (active: boolean) => void
+  /** A user's divider drag or reset ended; runs after `onLayoutChanged`. */
+  onDividerRatiosCommitted?: () => void
 }
 
 type DividerFlexFrameScheduler = {
@@ -176,6 +178,7 @@ export function attachDividerDrag(
 
     if (didMove && commitLayout) {
       callbacks.onLayoutChanged?.()
+      callbacks.onDividerRatiosCommitted?.()
     }
     didMove = false
   }
@@ -272,6 +275,7 @@ export function attachDividerDrag(
     callbacks.refitPanesUnder(prev)
     callbacks.refitPanesUnder(next)
     callbacks.onLayoutChanged?.()
+    callbacks.onDividerRatiosCommitted?.()
   }
 
   const onPointerCancel = (e: PointerEvent): void => {

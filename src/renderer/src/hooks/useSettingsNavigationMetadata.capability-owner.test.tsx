@@ -9,6 +9,7 @@ import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-types'
 import type { Repo } from '../../../shared/repo-types'
 import { resetWindowsTerminalCapabilitiesForTests } from '@/lib/windows-terminal-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
 const testState = vi.hoisted(() => ({
   settings: null as GlobalSettings | null,
@@ -61,6 +62,7 @@ describe('settings navigation capability ownership', () => {
   let root: Root
 
   beforeEach(() => {
+    setLocalRuntimeCapabilitiesForTests([])
     testState.settings = {
       ...getDefaultSettings('/tmp'),
       activeRuntimeEnvironmentId: null
@@ -74,6 +76,7 @@ describe('settings navigation capability ownership', () => {
 
   afterEach(() => {
     act(() => root.unmount())
+    setLocalRuntimeCapabilitiesForTests(null)
     resetWindowsTerminalCapabilitiesForTests()
     document.body.replaceChildren()
     vi.unstubAllGlobals()

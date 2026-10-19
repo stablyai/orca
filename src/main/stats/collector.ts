@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { StatsSummary } from '../../shared/process-stats-types'
 import type { StatsEvent, StatsAggregates } from './types'
 import { loadStatsFile, STATS_SCHEMA_VERSION } from './stats-file-loader'
-import { StatsSnapshotWriter } from './stats-snapshot-writer'
+import { AtomicSnapshotWriter } from '../persistence/atomic-snapshot-writer'
 
 const MAX_EVENTS = 10_000
 // Why: countedPRs is a deduplication registry that grows with every PR created
@@ -37,7 +37,7 @@ export class StatsCollector {
   private aggregates: StatsAggregates
   private liveAgents = new Map<string, number>() // sessionKey → startTimestamp
   private writeTimer: ReturnType<typeof setTimeout> | null = null
-  private readonly snapshotWriter = new StatsSnapshotWriter(getStatsFile)
+  private readonly snapshotWriter = new AtomicSnapshotWriter(getStatsFile)
   /** Set by flushAsync so the quit flush is the final write; see scheduleSave. */
   private quitFlushStarted = false
   private quitFlushPromise: Promise<void> | null = null

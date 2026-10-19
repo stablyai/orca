@@ -196,6 +196,8 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     let configuration = WKWebViewConfiguration()
+    configuration.allowsInlineMediaPlayback = true
+    configuration.mediaTypesRequiringUserActionForPlayback = .all
     // DOM storage and databases cannot be switched off on WebKit. A non-persistent store plus a
     // per-session origin plus destruction on unmount is the whole mitigation, and no isolation
     // claim here rests on them being absent.
@@ -477,7 +479,6 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     let verdict = MobileWebShellNavigationPolicy.verdict(
       url: navigationAction.request.url?.absoluteString,
       isMainFrame: navigationAction.targetFrame?.isMainFrame == true,
-      isFromSubframe: !navigationAction.sourceFrame.isMainFrame,
       isDocumentUrl: isDocumentUrl(navigationAction.request.url),
       isShellLoad: loadState.isShellLoad,
       hasGesture: navigationAction.navigationType == .linkActivated,

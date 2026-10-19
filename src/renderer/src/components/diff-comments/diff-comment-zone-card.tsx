@@ -39,7 +39,8 @@ function getSingleCommentSendScopes(
         'This note'
       ),
       notes: comment.sentAt ? [] : [comment],
-      prompt: formatCommentPrompt ? formatCommentPrompt(comment) : formatDiffComments([comment])
+      formatPrompt: () =>
+        formatCommentPrompt ? formatCommentPrompt(comment) : formatDiffComments([comment])
     }
   ]
 }

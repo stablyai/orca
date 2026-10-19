@@ -74,7 +74,7 @@ describe('useChecksPanelManualRefresh ordering', () => {
       linkedGiteaPR: null,
       linkedGitLabMR: null,
       linkedPR: null,
-      ownerSettings: null,
+      ownerTarget: { kind: 'local' },
       panelContextKey: 'repo-1::worktree-1::main',
       panelContextKeyRef: { current: 'repo-1::worktree-1::main' },
       pollIntervalRef: { current: 30_000 },

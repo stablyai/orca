@@ -16,6 +16,8 @@ class LockOrderDatabase implements RelayDatabase {
   ) {}
 
   async query(sql: string): Promise<SqlRow[]> {
+    // No cell is in reserve mode.
+    if (sql.includes('FROM relay_cell_admit_modes')) return []
     if (sql.includes('SELECT user_id, relay_host_id, activity_id')) {
       return this.cleanupCandidate
         ? [
@@ -149,7 +151,8 @@ class ReassignmentLockOrderDatabase implements RelayDatabase {
 class AggregateCleanupDatabase implements RelayDatabase {
   failIfUnavailable: boolean | null = null
 
-  async query(): Promise<SqlRow[]> {
+  async query(sql: string): Promise<SqlRow[]> {
+    if (sql.includes('FROM relay_cell_admit_modes')) return []
     return [{ changes: 1 }]
   }
 

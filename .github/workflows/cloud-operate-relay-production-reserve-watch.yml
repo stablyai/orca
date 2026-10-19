@@ -1,0 +1,339 @@
+name: Operate Relay Production Reserve Watch
+
+# Watches one cell already switched to reserve mode and flips it back to db on the first stop
+# rule it trips (step 5 design §9). Manual only. dry-run evaluates and logs, writes nothing.
+# An operator watches the run. A refused watch or a flip back that did not land raises an ::error::
+# annotation, as the clock-skew monitor does, and in write mode logs the line the reserve-watch
+# alert pages on. Refuses to start while a rollout holds the Cloud SQL rollout lease.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: dry-run logs what a trip would write; write flips the cell back on a trip
+        required: true
+        default: dry-run
+        type: choice
+        options: [dry-run, write]
+      cell-id:
+        description: Exact cell id already in reserve mode, e.g. production-gce-c26
+        required: true
+        type: string
+      duration-minutes:
+        description: How long to watch, 5 to 300
+        required: true
+        default: '120'
+        type: string
+      flipped-at:
+        description: >-
+          When the reserve (or phonePath=memory) write applied, ISO with a zone, e.g.
+          2026-10-14T12:00:00Z. The non-drain 503 background and the phone rules' background are
+          the 10 minutes before it
+        required: false
+        default: ''
+        type: string
+      background-503-per-minute:
+        description: >-
+          Director non-drain 503s per minute before the flip (all 503s less drain-return deferrals
+          and a host's own early or duplicate re-dials, from the director's runtime metrics);
+          overrides the one measured before flipped-at. One of the two is required
+        required: false
+        default: ''
+        type: string
+      unverifiable-limit:
+        description: Consecutive samples with any unreadable signal that count as a trip
+        required: true
+        default: '3'
+        type: string
+      confirmation:
+        description: Required for write, exactly "WRITE_RELAY_CELL_FLAGS <cell-id>"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+# One watch per cell; why not the flag workflow's group: cloud/docs/relay-workflows.md.
+concurrency:
+  group: relay-production-reserve-watch-${{ inputs.cell-id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    # Explicit bash runs with pipefail, so the script's exit code survives the tee.
+    shell: bash
+    working-directory: cloud
+
+env:
+  MODE: ${{ inputs.mode }}
+  CELL_ID: ${{ inputs.cell-id }}
+  CONFIRMATION: ${{ inputs.confirmation }}
+  GCP_PROJECT_ID: onorca-cloud
+
+jobs:
+  watch:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    # Six 55-minute segments cover the longest watch; under the 360-minute job limit.
+    timeout-minutes: 350
+    environment: production
+    outputs:
+      state: ${{ steps.outcome.outputs.state }}
+      verdict: ${{ steps.outcome.outputs.verdict }}
+      # phonePath when a step-6 phone rule tripped; anything else flips the cell back whole.
+      flip: ${{ steps.outcome.outputs.flip }}
+    env:
+      DURATION_MINUTES: ${{ inputs.duration-minutes }}
+      FLIPPED_AT: ${{ inputs.flipped-at }}
+      BACKGROUND_503_PER_MINUTE: ${{ inputs.background-503-per-minute }}
+      UNVERIFIABLE_LIMIT: ${{ inputs.unverifiable-limit }}
+      # One segment, after the auth step before it: fixed text, the inputs arrive as env vars.
+      WATCH_SEGMENT: |
+        set -euo pipefail
+        [[ "${CELL_ID}" =~ ^production-gce-c[0-9]{1,3}$ ]]
+        node -e "if (!/^[^.]+[.][^.]+[.][^.]+$/.test(process.env.ORCA_RELAY_ADMIN_ID_TOKEN ?? '')) process.exit(1)"
+        # A phone-rule trip writes phonePath=db mid-watch, through the flag tool.
+        ORCA_RELAY_CONTROL_ACCESS_TOKEN="$(gcloud auth print-access-token)"
+        echo "::add-mask::${ORCA_RELAY_CONTROL_ACCESS_TOKEN}"
+        export ORCA_RELAY_CONTROL_ACCESS_TOKEN
+        node dev/scripts/watch-relay-reserve-cell.mjs watch \
+          --mode "${MODE}" --cell-id "${CELL_ID}" \
+          --cell-origin "https://${CELL_ID#production-gce-}.relay.onorca.dev" \
+          --project-id "${GCP_PROJECT_ID}" --director-origin "https://relay.onorca.dev" \
+          --director-service orca-cloud-relay --confirmation "${CONFIRMATION}" \
+          --duration-minutes "${DURATION_MINUTES}" --segment-minutes 55 \
+          --flipped-at "${FLIPPED_AT}" --background-503-per-minute "${BACKGROUND_503_PER_MINUTE}" \
+          --unverifiable-limit "${UNVERIFIABLE_LIMIT}" \
+          --state-file "${RUNNER_TEMP}/relay-reserve-watch.json" --github-output "${GITHUB_OUTPUT}" \
+          | tee -a "${RUNNER_TEMP}/relay-reserve-watch.jsonl"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - id: google-auth-1
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          skip_install: true
+
+      - id: watch-1
+        name: Watch segment 1 of 6
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth-1.outputs.id_token }}
+        run: bash -c "${WATCH_SEGMENT}"
+
+      - id: google-auth-2
+        if: ${{ steps.watch-1.outputs.state == 'watching' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - id: watch-2
+        name: Watch segment 2 of 6
+        if: ${{ steps.watch-1.outputs.state == 'watching' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth-2.outputs.id_token }}
+        run: bash -c "${WATCH_SEGMENT}"
+
+      - id: google-auth-3
+        if: ${{ steps.watch-2.outputs.state == 'watching' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - id: watch-3
+        name: Watch segment 3 of 6
+        if: ${{ steps.watch-2.outputs.state == 'watching' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth-3.outputs.id_token }}
+        run: bash -c "${WATCH_SEGMENT}"
+
+      - id: google-auth-4
+        if: ${{ steps.watch-3.outputs.state == 'watching' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - id: watch-4
+        name: Watch segment 4 of 6
+        if: ${{ steps.watch-3.outputs.state == 'watching' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth-4.outputs.id_token }}
+        run: bash -c "${WATCH_SEGMENT}"
+
+      - id: google-auth-5
+        if: ${{ steps.watch-4.outputs.state == 'watching' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - id: watch-5
+        name: Watch segment 5 of 6
+        if: ${{ steps.watch-4.outputs.state == 'watching' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth-5.outputs.id_token }}
+        run: bash -c "${WATCH_SEGMENT}"
+
+      - id: google-auth-6
+        if: ${{ steps.watch-5.outputs.state == 'watching' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - id: watch-6
+        name: Watch segment 6 of 6
+        if: ${{ steps.watch-5.outputs.state == 'watching' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth-6.outputs.id_token }}
+        run: bash -c "${WATCH_SEGMENT}"
+
+      - id: outcome
+        name: Record the watch outcome
+        if: ${{ always() }}
+        run: |
+          node dev/scripts/watch-relay-reserve-cell.mjs outcome \
+            --state-file "${RUNNER_TEMP}/relay-reserve-watch.json" --github-output "${GITHUB_OUTPUT}"
+
+      # The documented flow writes reserve before dispatching, so a refusal can leave it unwatched.
+      - name: Alarm on a refused watch
+        if: ${{ always() && steps.outcome.outputs.state == 'refused' }}
+        env:
+          WATCH_VERDICT: ${{ steps.outcome.outputs.verdict }}
+        run: |
+          node dev/scripts/watch-relay-reserve-cell.mjs alarm --kind refused \
+            --mode "${MODE}" --cell-id "${CELL_ID}" --project-id "${GCP_PROJECT_ID}" --verdict "${WATCH_VERDICT}"
+
+      - name: Audit summary
+        if: ${{ always() }}
+        env:
+          WATCH_STATE: ${{ steps.outcome.outputs.state }}
+          WATCH_VERDICT: ${{ steps.outcome.outputs.verdict }}
+        run: |
+          {
+            echo "### Relay reserve watch: ${MODE} ${CELL_ID}"
+            echo "Triggered by: ${GITHUB_TRIGGERING_ACTOR}, run ${GITHUB_RUN_ID} attempt ${GITHUB_RUN_ATTEMPT}"
+            echo "Outcome: ${WATCH_STATE}: ${WATCH_VERDICT}"
+            echo '```json'
+            tail -n 20 "${RUNNER_TEMP}/relay-reserve-watch.jsonl" 2>/dev/null || echo '(no output)'
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  flip-back:
+    needs: watch
+    # Missing data is never healthy: a watch that crashed, timed out or was cancelled (by an
+    # operator too) flips back like a trip. In dry-run this only plans the write.
+    if: ${{ always() && vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && needs.watch.result != 'skipped' && !contains(fromJSON('["completed","stopped","refused"]'), needs.watch.outputs.state) }}
+    runs-on: ubuntu-latest
+    # A flip back waits for the cell to lease every control: 8-50 minutes, scaled to its controls.
+    timeout-minutes: 60
+    environment: production
+    # Only the run's per-cell group above, which a running run never yields (cancel-in-progress off).
+    # Every step runs on always() too, so an ordinary cancel cannot skip the switch-file write; a force-cancel
+    # can, and leaves the cell in reserve for the operator to flip back by hand. A cancel during the
+    # lease wait can still kill the process before Postgres records db: the file says db, Postgres reserve.
+    env:
+      VERDICT: ${{ needs.watch.outputs.verdict || format('the watch ended {0} without a verdict', needs.watch.result) }}
+      FLIP: ${{ needs.watch.outputs.flip || 'admitMode' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ always() }}
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        if: ${{ always() }}
+        with:
+          node-version: 24
+
+      - id: google-auth
+        if: ${{ always() }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+        if: ${{ always() }}
+        with:
+          skip_install: true
+
+      - name: Flip the cell back to db, or preview it
+        if: ${{ always() }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          [[ "${CELL_ID}" =~ ^production-gce-c[0-9]{1,3}$ ]]
+          ORCA_RELAY_CONTROL_ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::${ORCA_RELAY_CONTROL_ACCESS_TOKEN}"
+          export ORCA_RELAY_CONTROL_ACCESS_TOKEN
+          node dev/scripts/watch-relay-reserve-cell.mjs flip-back \
+            --mode "${MODE}" --cell-id "${CELL_ID}" \
+            --cell-origin "https://${CELL_ID#production-gce-}.relay.onorca.dev" \
+            --project-id "${GCP_PROJECT_ID}" --director-origin "https://relay.onorca.dev" \
+            --confirmation "${CONFIRMATION}" --verdict "${VERDICT}" --flip "${FLIP}" \
+            | tee "${RUNNER_TEMP}/relay-reserve-flip-back.jsonl"
+
+      # The flip-back line is logged only once the write (or its dry-run plan) finished; without
+      # it a missing token, a failed login or a silent cell left the cell in reserve, unwatched.
+      - name: Alarm when the flip back did not land
+        if: ${{ always() }}
+        run: |
+          if grep -qs '"event":"orca_relay_reserve_watch_flip_back"' "${RUNNER_TEMP}/relay-reserve-flip-back.jsonl"; then
+            exit 0
+          fi
+          if [[ "${FLIP}" == phonePath ]]; then
+            echo "## FLIP BACK FAILED: ${CELL_ID} may still have phonePath=memory" >> "${GITHUB_STEP_SUMMARY}"
+            echo "Set phonePath=default by hand with Operate Relay Production Cell Flags." >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "## FLIP BACK FAILED: ${CELL_ID} may still be in reserve mode" >> "${GITHUB_STEP_SUMMARY}"
+            echo "Flip it to db by hand with Operate Relay Production Cell Flags." >> "${GITHUB_STEP_SUMMARY}"
+          fi
+          node dev/scripts/watch-relay-reserve-cell.mjs alarm --kind flip-back-failed \
+            --mode "${MODE}" --cell-id "${CELL_ID}" --project-id "${GCP_PROJECT_ID}" --verdict "${VERDICT}" --flip "${FLIP}"
+
+      - name: Audit summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "### Relay reserve watch flip back: ${MODE} ${CELL_ID}"
+            echo "Triggered by: ${GITHUB_TRIGGERING_ACTOR}, run ${GITHUB_RUN_ID} attempt ${GITHUB_RUN_ATTEMPT}"
+            echo "Verdict: ${VERDICT}"
+            echo '```json'
+            cat "${RUNNER_TEMP}/relay-reserve-flip-back.jsonl" 2>/dev/null || echo '(no output)'
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"

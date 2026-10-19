@@ -9,11 +9,13 @@ import {
 export const GITHUB_ISSUE_METHODS = [
   defineMethod({
     name: 'github.issue',
+    permission: 'workspace',
     params: Issue,
     handler: async (params, { runtime }) => runtime.getRepoIssue(params.repo, params.number)
   }),
   defineMethod({
     name: 'github.createIssue',
+    permission: 'workspace',
     params: CreateIssue,
     handler: async (params, { runtime }) => {
       const fields =
@@ -27,14 +29,29 @@ export const GITHUB_ISSUE_METHODS = [
   }),
   defineMethod({
     name: 'github.updateIssue',
+    permission: 'workspace',
     params: UpdateIssue,
     handler: async (params, { runtime }) =>
       runtime.updateRepoIssue(params.repo, params.number, params.updates)
   }),
   defineMethod({
     name: 'github.addIssueComment',
+    permission: 'workspace',
     params: IssueComment,
     handler: async (params, { runtime }) =>
-      runtime.addRepoIssueComment(params.repo, params.number, params.body, params.prRepo ?? null)
+      params.type
+        ? runtime.addRepoIssueComment(
+            params.repo,
+            params.number,
+            params.body,
+            params.prRepo ?? null,
+            params.type
+          )
+        : runtime.addRepoIssueComment(
+            params.repo,
+            params.number,
+            params.body,
+            params.prRepo ?? null
+          )
   })
 ]

@@ -52,9 +52,9 @@ export type GitUncommittedEntry = {
 
 export type GitStatusEntry = GitUncommittedEntry
 
-// `mergeBase(base, HEAD) → working tree`, deduplicated, so committing doesn't move it.
+// Merge base → working tree, deduplicated, so committing doesn't move it.
 // Matches the per-file rows rather than git: binary and >2MB untracked count zero.
-// `mergeBase` is echoed so a renderer can drop a moved fork point.
+// `mergeBase` echoes the common ancestor OID to reject stale totals.
 export type GitBranchLineTotal = {
   added: number
   removed: number
@@ -83,8 +83,11 @@ export type GitStatusResult = {
   didHitLimit?: boolean
   statusLength?: number
   // Only computed when the request carried a merge-base OID (the renderer's
-  // visibility gate), and omitted — never zeroed — whenever it cannot be trusted.
+  // visibility gate). Omission means deferred, skipped, or an older host.
   branchLineTotal?: GitBranchLineTotal
+  // Explicitly invalidates a previously published total for this merge-base OID.
+  // Kept separate so older hosts/clients remain compatible with omitted totals.
+  branchLineTotalUnavailable?: string
 }
 
 // Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a

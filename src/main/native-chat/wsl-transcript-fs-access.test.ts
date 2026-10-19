@@ -43,8 +43,8 @@ import {
   openTranscriptReadStream,
   readTranscriptSlice,
   wslGatedLstat,
-  wslGatedOpen,
-  wslGatedRead,
+  openTranscriptFile,
+  readTranscriptFile,
   wslGatedReaddir,
   wslGatedReadFile,
   wslGatedStat,
@@ -93,8 +93,8 @@ describe('transcript filesystem accessor off WSL UNC', () => {
     await wslGatedLstat(path, 'scan')
     await wslGatedReaddir(path, 'scan')
     await wslGatedReadFile(path, 'utf-8', 'scan')
-    const opened = await wslGatedOpen(path, 'exact')
-    await wslGatedRead(opened, path, Buffer.alloc(1), 0, 1, 0, 'exact')
+    const opened = await openTranscriptFile(path, 'exact')
+    await readTranscriptFile(opened, path, Buffer.alloc(1), 0, 1, 0, 'exact')
     const stream = openTranscriptReadStream(path, { encoding: 'utf-8' }, 'scan')
 
     expect(mocks.runTask).not.toHaveBeenCalled()
@@ -151,8 +151,8 @@ describe('transcript filesystem accessor on WSL UNC', () => {
     handle.read.mockResolvedValue({ bytesRead: 1, buffer: Buffer.alloc(1) })
     mocks.open.mockResolvedValue(handle)
 
-    const opened = await wslGatedOpen(UNC_PATH, 'exact')
-    await wslGatedRead(opened, UNC_PATH, Buffer.alloc(1), 0, 1, 0, 'exact')
+    const opened = await openTranscriptFile(UNC_PATH, 'exact')
+    await readTranscriptFile(opened, UNC_PATH, Buffer.alloc(1), 0, 1, 0, 'exact')
 
     for (const call of mocks.runTask.mock.calls) {
       expect(call[0]).toMatchObject({ dedupe: false })
@@ -268,7 +268,7 @@ describe('transcript filesystem accessor on WSL UNC', () => {
     )
     try {
       const handle = fakeHandle()
-      const refused = wslGatedOpen(UNC_PATH, 'exact').catch((error: unknown) => error)
+      const refused = openTranscriptFile(UNC_PATH, 'exact').catch((error: unknown) => error)
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS + 1)
       await expect(refused).resolves.toBeInstanceOf(WslTranscriptFsError)
 

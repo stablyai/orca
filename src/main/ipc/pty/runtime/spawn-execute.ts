@@ -1,8 +1,9 @@
-import type { PtySpawnResult } from '../../../providers/types'
-import { ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
-import { ptySizes } from '../delivery/visibility-state'
-import { tryGetProviderForAgentSessionOwner } from '../provider/registry'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import { ptyIncarnationById } from '../provider/ownership-state'
+import { tryGetProviderForPty } from '../provider/registry'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
+import { noteWslDistrosRunning } from '../../../wsl-background-distro-gate'
 import {
   agentSessionOwners,
   assertSpawnReplyWasLive,
@@ -10,12 +11,8 @@ import {
 } from '../pane/agent-session-owners'
 import { spawnForStablePane, resolveStablePaneOwner } from '../pane/stable-owner'
 import { clearProviderPtyState } from '../provider/state-cleanup'
-import { isProviderAgentSessionOwnerLive, normalizeNodePtySpawnError } from '../provider/liveness'
-import {
-  SSH_SESSION_EXPIRED_ERROR,
-  isSshPtyAbsentFromRelayError,
-  isSshPtyIdentityMismatchError
-} from '../../../providers/ssh-pty-errors'
+import { isProviderAgentSessionOwnerLive } from '../provider/liveness'
+import { failPtySpawnExecute } from '../spawn-execute-failure'
 import type { RuntimePtySpawnState } from './spawn-state'
 import { markRuntimeSpawnHiddenBeforeSpawn } from './spawn-hidden-delivery'
 
@@ -24,8 +21,13 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
   const runtime = ctx.deps.runtime
   const acquireWorktreeSpawn = runtime?.acquireWorktreeTerminalSpawn
   ctx.releaseWorktreeSpawn = acquireWorktreeSpawn
-    ? await acquireWorktreeSpawn.call(runtime, args.worktreeId)
+    ? await acquireWorktreeSpawn.call(
+        runtime,
+        spawnWorktreeTarget(args.worktreeId, args.connectionId),
+        { refuseSleptWorktree: args.refuseSleptWorktree }
+      )
     : undefined
+  let awaitingAnotherStart = false
   try {
     if (args.preAllocatedHandle) {
       ctx.deps.trustedTerminalHandleEnv.add(args.preAllocatedHandle)
@@ -112,15 +114,18 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
           }
         },
         isLive: async (owner) => {
-          const ownerProvider = tryGetProviderForAgentSessionOwner(owner.ptyId)
+          const ownerProvider = tryGetProviderForPty(owner.ptyId)
           if (!ownerProvider) {
-            // Why: a disconnected relay may keep its PTY alive during the
-            // grace window; missing transport is unknown, never absence.
+            // Why: an owner on a host this process cannot reach is unknown, never absent.
             throw new Error('execution_owner_unavailable')
           }
           return await isProviderAgentSessionOwnerLive(ownerProvider, owner)
+        },
+        onJoin: () => {
+          awaitingAnotherStart = true
         }
       })
+      awaitingAnotherStart = false
       ctx.result = providerResult ?? {
         id: ensured.owner.ptyId,
         isReattach: true,
@@ -190,88 +195,21 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
         ctx.snapshotKittyFlagsCoverReconciledSeq = false
       }
     }
-    ensureWslHookRelayForReattach(ctx.result, args.connectionId)
-    ctx.deps.runtime?.preparePtyExecutionContext?.(
-      ctx.result.id,
-      args.connectionId
-        ? null
-        : ctx.result.wslDistro === undefined
-          ? ctx.expectedWslDistro
-          : ctx.result.wslDistro
-    )
+    ensureWslHookRelayForReattach(ctx.result)
+    const spawnedWslDistro =
+      ctx.result.wslDistro === undefined ? ctx.expectedWslDistro : ctx.result.wslDistro
+    if (spawnedWslDistro && !args.connectionId) {
+      // A local WSL terminal is user-initiated, so background work held for this distro may run.
+      noteWslDistrosRunning([spawnedWslDistro])
+    }
+    ctx.deps.runtime?.preparePtyExecutionContext?.(ctx.result.id, spawnedWslDistro)
   } catch (err) {
-    if (
-      (ctx.isNewDaemonSession || ctx.preparedProvisionalExecutionContext) &&
-      ctx.effectiveSessionAppId
-    ) {
-      ctx.deps.runtime?.preparePtyExecutionContext?.(ctx.effectiveSessionAppId, null, {
-        resetIncarnation: true
-      })
-    }
-    const rawMessage = err instanceof Error ? err.message : String(err)
-    if (rawMessage === 'agent_session_exited_during_start' && ctx.rejectedRegistrationCandidate) {
-      ctx.deps.runtime?.releaseRejectedPtyRegistrationFence?.(
-        ctx.rejectedRegistrationCandidate.id,
-        ctx.rejectedRegistrationCandidate.incarnationId
-      )
-    }
-    if (ctx.pendingRegistrationPtyId) {
-      ctx.deps.runtime?.cancelPendingPtyRegistration?.(
-        ctx.pendingRegistrationPtyId,
-        ctx.rejectedRegistrationCandidate?.incarnationId
-      )
-      ctx.pendingRegistrationPtyId = null
-    }
-    const spawnError = normalizeNodePtySpawnError(err)
-    const isIdentityMismatch =
-      isSshPtyIdentityMismatchError(spawnError) || isSshPtyIdentityMismatchError(rawMessage)
-    const isExpiredSshSession =
-      Boolean(args.connectionId) &&
-      (spawnError.message.includes(SSH_SESSION_EXPIRED_ERROR) ||
-        rawMessage.includes(SSH_SESSION_EXPIRED_ERROR))
-    // The message alone cannot carry this decision. All three reattach refusals are minted with the
-    // same `SSH_SESSION_EXPIRED` text, and only one of them observed the process: `restoreRequired`
-    // means the PTY is LIVE and only its source stream needs rebuilding, which
-    // `ssh-pty-errors.ts` states outright. Expiring its lease and deleting its ownership erases
-    // this client's last record of a running remote process, and #9819's sweep reads a PTY it has
-    // no record of as one it may SIGKILL on the next connect. Only positive host-reported absence
-    // may reach that bookkeeping; being too strict here merely leaves a dead lease for the next
-    // reattach to retire on real host evidence.
-    const relayReportedSessionAbsent = isExpiredSshSession && isSshPtyAbsentFromRelayError(err)
-    const exitedBeforeSpawnReply =
-      ctx.rejectedRegistrationCandidate?.exitedBeforeSpawnReply === true
-    if (ctx.effectiveSessionAppId !== undefined) {
-      if (
-        ctx.hadSessionSizeBeforeAttach &&
-        ctx.sessionSizeBeforeAttach &&
-        (isIdentityMismatch || (!isExpiredSshSession && !exitedBeforeSpawnReply))
-      ) {
-        ptySizes.set(ctx.effectiveSessionAppId, ctx.sessionSizeBeforeAttach)
-      } else {
-        ptySizes.delete(ctx.effectiveSessionAppId)
-      }
-    }
-    if (
-      args.connectionId &&
-      ctx.effectiveSessionRelayId !== undefined &&
-      relayReportedSessionAbsent
-    ) {
-      if (ctx.effectiveSessionAppId !== undefined && !isIdentityMismatch) {
-        clearProviderPtyState(ctx.effectiveSessionAppId)
-        deletePtyOwnership(ctx.effectiveSessionAppId)
-      }
-      if (!isIdentityMismatch) {
-        ctx.deps.store?.markSshRemotePtyLease(
-          args.connectionId,
-          ctx.effectiveSessionRelayId,
-          'expired'
-        )
-      }
-    }
-    if (ctx.isNewDaemonSession && ctx.sessionId !== undefined) {
-      clearProviderPtyState(ctx.sessionId)
-    }
-    throw spawnError
+    throw failPtySpawnExecute(ctx, err, {
+      sessionId: ctx.sessionId,
+      ownsNewSession: ctx.isNewDaemonSession,
+      telemetry: args.telemetry,
+      joinedAnotherStart: awaitingAnotherStart
+    })
   } finally {
     if (args.preAllocatedHandle) {
       ctx.deps.trustedTerminalHandleEnv.delete(args.preAllocatedHandle)

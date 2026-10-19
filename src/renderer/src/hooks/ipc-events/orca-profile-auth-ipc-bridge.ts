@@ -1,14 +1,33 @@
 import { useAppStore } from '../../store'
 
-/** Re-reads auth status when main clears a revoked cloud session behind the renderer's back. */
+/** Keeps auth status and the in-flight sign-in in step with main. */
 export function registerOrcaProfileAuthIpcBridge(unsubs: (() => void)[]): void {
-  const subscribe = window.api.orcaProfiles?.onAuthStatusChanged
-  if (typeof subscribe !== 'function') {
-    return
+  const api = window.api.orcaProfiles
+  if (typeof api?.onAuthStatusChanged === 'function') {
+    unsubs.push(
+      api.onAuthStatusChanged(() => {
+        void useAppStore.getState().fetchOrcaProfileAuthStatus()
+      })
+    )
   }
-  unsubs.push(
-    subscribe(() => {
-      void useAppStore.getState().fetchOrcaProfileAuthStatus()
+  if (typeof api?.onSignInProgressChanged === 'function') {
+    // Why: a sign-in can already be in flight when this window loads; a later event or teardown wins.
+    let ignoreSnapshot = false
+    const unsubscribe = api.onSignInProgressChanged((progress) => {
+      ignoreSnapshot = true
+      useAppStore.setState({ orcaProfileSignInProgress: progress })
     })
-  )
+    unsubs.push(() => {
+      ignoreSnapshot = true
+      unsubscribe()
+    })
+    void Promise.resolve()
+      .then(() => api.signInProgress())
+      .then((progress) => {
+        if (!ignoreSnapshot) {
+          useAppStore.setState({ orcaProfileSignInProgress: progress ?? null })
+        }
+      })
+      .catch(() => {})
+  }
 }

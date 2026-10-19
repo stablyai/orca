@@ -1,20 +1,18 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { terminalLayoutEqual, terminalLayoutNodeEqual } from '@/lib/terminal-layout-equality'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
+import { terminalLayoutEqual } from '../../../../shared/terminal-layout-equality'
 import {
   normalizeTerminalLayoutPtyOwnership,
   resolveTerminalLayoutPtyOwnershipTransfers
-} from '@/components/terminal-pane/terminal-layout-pty-ownership'
-import { transferDirectSshPaneDetachLedger } from '../slices/direct-ssh-terminal-authority-ledger'
+} from '../../../../shared/terminal-layout-pty-ownership'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
-  isCurrentDirectSshAuthority,
   resolvePrimaryLayoutPtyId,
   uniquePtyIds,
   withTerminalTabPtyId
 } from './terminal-pty-identities'
 import { transferNormalizedTerminalLayoutPtyOwnership } from './workspace-terminal-hydration-patch'
+import { recordChatPaneInLayoutOwner } from './terminal-chat-pane-layout-owner'
 
 export function createTerminalLayoutActions(
   set: TerminalStoreSet,
@@ -25,7 +23,6 @@ export function createTerminalLayoutActions(
   | 'setTabPaneExpanded'
   | 'setTabCanExpandPane'
   | 'setTabLayout'
-  | 'acknowledgeDirectSshLayoutEdits'
   | 'setTabLocalOnlyScrollback'
   | 'syncPaneDetachPtyOwnership'
 > {
@@ -78,21 +75,9 @@ export function createTerminalLayoutActions(
           : { canExpandPaneByTabId: { ...s.canExpandPaneByTabId, [tabId]: canExpand } }
       )
     },
-    acknowledgeDirectSshLayoutEdits: (uploaded) => {
-      set((s) => {
-        const acknowledged = Object.keys(uploaded).filter((tabId) => {
-          const pending = s.pendingDirectSshLayoutEditsByTabId[tabId]
-          const candidate = uploaded[tabId]
-          return pending === candidate
-        })
-        const pending = omitRecordKeys(s.pendingDirectSshLayoutEditsByTabId, acknowledged)
-        return pending === s.pendingDirectSshLayoutEditsByTabId
-          ? s
-          : { pendingDirectSshLayoutEditsByTabId: pending }
-      })
-    },
     setTabLayout: (tabId, layout) => {
       let ownershipTransfers: ReturnType<typeof resolveTerminalLayoutPtyOwnershipTransfers> = []
+      const before = ORCA_LAYOUT_OWNER_IS_MAIN ? get().terminalLayoutsByTabId[tabId] : undefined
       set((s) => {
         if (!layout) {
           if (!(tabId in s.terminalLayoutsByTabId)) {
@@ -100,13 +85,7 @@ export function createTerminalLayoutActions(
           }
           const next = { ...s.terminalLayoutsByTabId }
           delete next[tabId]
-          return {
-            terminalLayoutsByTabId: next,
-            pendingDirectSshLayoutEditsByTabId: omitRecordKeys(
-              s.pendingDirectSshLayoutEditsByTabId,
-              [tabId]
-            )
-          }
+          return { terminalLayoutsByTabId: next }
         }
         const normalized = normalizeTerminalLayoutPtyOwnership(layout)
         // Resolved before the bailout: normalization can transfer pane ownership even when the stored snapshot is untouched.
@@ -121,26 +100,15 @@ export function createTerminalLayoutActions(
         if (existing && terminalLayoutEqual(existing, normalized.snapshot)) {
           return s
         }
-        const structuralEdit = !terminalLayoutNodeEqual(existing?.root, normalized.snapshot.root)
-        const workspaceId = structuralEdit
-          ? Object.keys(s.tabsByWorktree).find((id) =>
-              s.tabsByWorktree[id].some((tab) => tab.id === tabId)
-            )
-          : undefined
-        const tracksRemoteEdit = workspaceId && getConnectionIdFromState(s, workspaceId)
         return {
-          terminalLayoutsByTabId: { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot },
-          ...(tracksRemoteEdit
-            ? {
-                pendingDirectSshLayoutEditsByTabId: {
-                  ...s.pendingDirectSshLayoutEditsByTabId,
-                  [tabId]: { targetId: tracksRemoteEdit, root: normalized.snapshot.root }
-                }
-              }
-            : {})
+          terminalLayoutsByTabId: { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot }
         }
       })
       transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)
+      // Switch point: the chat pane the window picks reaches main as a command, not by its save.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && layout) {
+        recordChatPaneInLayoutOwner(get(), tabId, before, get().terminalLayoutsByTabId[tabId])
+      }
     },
     syncPaneDetachPtyOwnership: ({
       detachedLeafId,
@@ -188,17 +156,9 @@ export function createTerminalLayoutActions(
         const nextTabsByWorktree = detachedPtyId
           ? withTerminalTabPtyId(sourceTabsByWorktree, targetTabId, detachedPtyId)
           : sourceTabsByWorktree
-        const directSshLedger = transferDirectSshPaneDetachLedger(s, {
-          detachedPtyId,
-          sourcePtyId: sourcePrimaryPtyId,
-          sourceTabId,
-          targetTabId,
-          isAuthorityCurrent: (authority) => isCurrentDirectSshAuthority(s, authority)
-        })
         return {
           ptyIdsByTabId: nextPtyIdsByTabId,
           lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,
-          ...directSshLedger,
           ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {})
         }
       })

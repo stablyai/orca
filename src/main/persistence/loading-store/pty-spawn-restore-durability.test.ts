@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fixture } from './profile-state-delayed-authority-fixture'
+import { fixture, admitRuntimeSpawnPane } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { commitPtyIpcSpawn } from '../../ipc/pty/ipc/spawn-commit'
 import { createPtyIpcSpawnState } from '../../ipc/pty/ipc/spawn-state'
-import type { PtySpawnResult } from '../../providers/types'
+import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 import { commitRuntimePtySpawn } from '../../ipc/pty/runtime/spawn-commit'
 import { createRuntimePtySpawnState } from '../../ipc/pty/runtime/spawn-state'
 import { createPtySpawnCommitDependencies } from './pty-spawn-commit-dependencies-fixture'
@@ -12,7 +12,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -56,6 +56,7 @@ describe.each(['ipc', 'runtime'])('%s restored scrollback', (controller) => {
         const ctx = createRuntimePtySpawnState(deps, { ...binding, cols: 80, rows: 24 })
         ctx.result = result
         ctx.metadataLeafId = binding.leafId
+        await admitRuntimeSpawnPane(store, binding)
         ctx.hostSessionBinding = { store, ...binding }
         commit = () => commitRuntimePtySpawn(ctx)
       }

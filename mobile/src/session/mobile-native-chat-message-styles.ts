@@ -2,6 +2,13 @@ import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export const TEXT_SIZE = 17
+/** Chat prose reads larger than the Markdown renderer's compact base. */
+export const CHAT_PROSE_SCALE = 1.25
+
+/** Pinch-zoomed type keeps its leading, so zoomed lines never overlap. */
+export function scaledType(size: number, fontScale: number, leading = 6) {
+  return { fontSize: size * fontScale, lineHeight: (size + leading) * fontScale }
+}
 export const MONO_SIZE = 12
 
 export const styles = StyleSheet.create({
@@ -23,100 +30,55 @@ export const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
   },
-  userText: {
-    color: colors.bgBase,
-    fontSize: TEXT_SIZE,
-    lineHeight: TEXT_SIZE + 6,
-    fontWeight: '500'
+  hostNotice: {
+    color: colors.textMuted
   },
   reasoning: {
-    opacity: 0.7
+    opacity: 0.7,
+    // Starts under the headline, past the 15 pt brain and its gap.
+    paddingLeft: 15 + spacing.sm
   },
-  toolRun: {
-    marginTop: spacing.xs
-  },
-  toolRunHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  toolRunToggle: {
-    flex: 1,
+  reasoningToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: 3
+    // With the toggle's 6 pt hitSlop above and below, a 44 pt touch target.
+    minHeight: 32
   },
-  toolRunCount: {
-    color: colors.statusGreen,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE,
-    fontWeight: '700'
+  reasoningPressed: {
+    opacity: 0.6
   },
-  toolRunLabel: {
-    flex: 1,
+  reasoningHeadline: {
     color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE
+    fontSize: typography.bodySize,
+    flexShrink: 1
   },
-  toolRunActive: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 3
+  reasoningCaretOpen: {
+    transform: [{ rotate: '90deg' }]
   },
-  toolRunActiveLabel: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
+  reasoningBody: {
+    // The common cap for an open reasoning block (about ten lines).
+    maxHeight: 240
   },
-  toolRunBody: {
-    paddingLeft: spacing.sm,
+  agentMessage: {
+    paddingLeft: spacing.md,
     borderLeftWidth: 2,
-    borderLeftColor: colors.borderSubtle,
-    marginTop: spacing.xs
+    borderLeftColor: colors.borderSubtle
   },
-  toolLine: {
+  agentAttribution: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize
+  },
+  meta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 3
-  },
-  toolName: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE + 1,
-    fontWeight: '600'
-  },
-  toolPreview: {
-    flex: 1,
-    color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE
-  },
-  toolPreviewLink: {
-    color: colors.accentBlue,
-    textDecorationLine: 'underline'
-  },
-  toolDetail: {
-    paddingLeft: spacing.lg,
-    paddingBottom: spacing.xs,
     gap: spacing.xs
   },
-  mono: {
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE,
-    lineHeight: MONO_SIZE + 5
-  },
-  toolResult: {
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel,
-    padding: spacing.md
-  },
-  toolResultError: {
-    backgroundColor: colors.diffDeletedBg
+  unsentNotice: {
+    maxWidth: '88%',
+    marginTop: spacing.xs,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
   },
   imageRef: {
     color: colors.textSecondary,
@@ -129,29 +91,5 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
-  },
-  diff: {
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel,
-    paddingVertical: spacing.xs,
-    overflow: 'hidden'
-  },
-  diffLine: {
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE,
-    lineHeight: MONO_SIZE + 5,
-    paddingHorizontal: spacing.sm
-  },
-  diffAdd: {
-    color: colors.gitDecorationAdded,
-    backgroundColor: colors.diffAddedBg
-  },
-  diffDel: {
-    color: colors.gitDecorationDeleted,
-    backgroundColor: colors.diffDeletedBg
-  },
-  diffMeta: {
-    color: colors.textMuted
   }
 })

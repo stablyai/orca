@@ -1,13 +1,18 @@
 import { useMemo } from 'react'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { Tab } from '../../../../shared/tab-types'
+import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
+import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 
 type WorkspaceActivityMaps = {
   tabsByWorktree: Record<string, { id: string }[]>
   ptyIdsByTabId: Record<string, string[]>
   browserTabsByWorktree: Record<string, { id: string }[]>
+  unifiedTabsByWorktree: Record<string, Tab[]>
+  agentStatusByPaneKey: Record<string, { structuredHostOwned?: true }>
 }
 
 export type WorkspaceLineageMenuActions = {
@@ -18,12 +23,19 @@ export type WorkspaceLineageMenuActions = {
 
 export function hasSleepableWorkspaceActivity(
   worktreeId: string,
-  { tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree }: WorkspaceActivityMaps
+  activity: WorkspaceActivityMaps
 ): boolean {
-  const tabs = tabsByWorktree[worktreeId] ?? []
+  const tabs = activity.tabsByWorktree[worktreeId] ?? []
   return (
-    tabs.some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id)) ||
-    (browserTabsByWorktree[worktreeId] ?? []).length > 0
+    tabs.some((tab) => tabHasLivePty(activity.ptyIdsByTabId, tab.id)) ||
+    (activity.browserTabsByWorktree[worktreeId] ?? []).length > 0 ||
+    // A chat counts only while its host holds its process; a stopped one has nothing to sleep.
+    (activity.unifiedTabsByWorktree[worktreeId] ?? []).some(
+      (tab) =>
+        isStructuredTab(tab) &&
+        activity.agentStatusByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)]
+          ?.structuredHostOwned === true
+    )
   )
 }
 
@@ -54,7 +66,13 @@ export function useWorkspaceLineageMenuActions(
   args: Parameters<typeof getWorkspaceLineageMenuActions>[0] & { enabled: boolean }
 ): WorkspaceLineageMenuActions {
   const { enabled, parent, worktrees, lineageById, activity } = args
-  const { tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree } = activity
+  const {
+    tabsByWorktree,
+    ptyIdsByTabId,
+    browserTabsByWorktree,
+    unifiedTabsByWorktree,
+    agentStatusByPaneKey
+  } = activity
   return useMemo(
     () =>
       enabled
@@ -62,9 +80,25 @@ export function useWorkspaceLineageMenuActions(
             parent,
             worktrees,
             lineageById,
-            activity: { tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree }
+            activity: {
+              tabsByWorktree,
+              ptyIdsByTabId,
+              browserTabsByWorktree,
+              unifiedTabsByWorktree,
+              agentStatusByPaneKey
+            }
           })
         : EMPTY_LINEAGE_MENU_ACTIONS,
-    [browserTabsByWorktree, enabled, lineageById, parent, ptyIdsByTabId, tabsByWorktree, worktrees]
+    [
+      agentStatusByPaneKey,
+      browserTabsByWorktree,
+      enabled,
+      lineageById,
+      parent,
+      ptyIdsByTabId,
+      tabsByWorktree,
+      unifiedTabsByWorktree,
+      worktrees
+    ]
   )
 }

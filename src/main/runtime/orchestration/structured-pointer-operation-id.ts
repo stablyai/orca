@@ -82,10 +82,17 @@ export function mintAgentSessionOperationId(now: number): string {
 /** Batch identity, and the only thing reuse may be keyed on. */
 export function structuredPointerBatchFingerprint(
   sessionId: string,
-  messageIds: readonly string[]
+  messageIds: readonly string[],
+  contextClearOperationId?: string
 ): string {
   return createHash('sha256')
-    .update(JSON.stringify([sessionId, messageIds]))
+    .update(
+      JSON.stringify(
+        contextClearOperationId
+          ? [sessionId, messageIds, contextClearOperationId]
+          : [sessionId, messageIds]
+      )
+    )
     .digest('base64url')
 }
 
@@ -100,13 +107,18 @@ export function resolveStructuredPointerOperation(args: {
   sessionId: string
   /** The rows this nudge stands for; batch identity, not the body, decides reuse. */
   messageIds: readonly string[]
+  contextClearOperationId?: string
   submissions: readonly StructuredPointerSubmission[]
   /** The operation id this process last sent for this mailbox, if any. */
   sentByThisProcess: string | undefined
   now?: number
 }): StructuredPointerOperation {
   const now = args.now ?? Date.now()
-  const batchFingerprint = structuredPointerBatchFingerprint(args.sessionId, args.messageIds)
+  const batchFingerprint = structuredPointerBatchFingerprint(
+    args.sessionId,
+    args.messageIds,
+    args.contextClearOperationId
+  )
   const stored = args.db.getStructuredPointerOperation(args.mailboxHandle)
   const attempt = decideStructuredPointerAttempt({
     row: stored,

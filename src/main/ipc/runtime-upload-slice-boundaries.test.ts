@@ -16,7 +16,6 @@ import type { StagedRuntimeUploadFileIdentity } from '../../shared/runtime-uploa
 
 // Why: real limits, real host write flags ('wx' then 'a') and the real chunk
 // schema — the slice loop is exercised exactly at the boundaries it must respect.
-vi.mock('./filesystem-auth', () => ({ authorizeExternalPath: () => {} }))
 
 type ChunkParams = { relativePath: string; contentBase64: string; append: boolean }
 type CallOptions = { expectedEnvironmentRuntimeId?: string; signal?: AbortSignal }
@@ -36,7 +35,7 @@ const callRuntimeEnvironment = vi.fn<(...args: CallArgs) => Promise<unknown>>()
 // base64 in mock.calls and masquerade as a leak. Big tests swap in a plain fn.
 let transportImpl: (...args: CallArgs) => Promise<unknown> = (...args) =>
   callRuntimeEnvironment(...args)
-vi.mock('./runtime-environment-transport-routing', () => ({
+vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: (...args: CallArgs) => transportImpl(...args)
 }))
 

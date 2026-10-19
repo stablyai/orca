@@ -29,11 +29,10 @@ import type { PageClosurePins } from './page-closure'
  * domain adds. C5's closure pins those same 20 and no family C2 reaches beyond them, so a golden
  * pinned twice is pinned once here.
  *
- * **What 257 certified does not say.** Six of the 68 families have no byte-identical golden at all
- * — `tasks.item-checks-files`, `tasks.project-row-files-merge`, `tasks.provider-load`,
- * `tasks.item-metadata-gitlab-mr`, `tasks.task-list-gitlab-items`, and C1's own
- * `host-worktree-refresh` — so for their 27 goldens the pin proves that the divergence kept its
- * name, and nothing more.
+ * **What 257 certified does not say.** Five of the 68 families have no byte-identical golden at all
+ * — `tasks.item-checks-files`, `tasks.project-row-files-merge`, `tasks.item-metadata-gitlab-mr`,
+ * `tasks.task-list-gitlab-items`, and C1's own `host-worktree-refresh` — so for their 21 goldens
+ * the pin proves that the divergence kept its name, and nothing more.
  */
 export const C2_PAGE_CLOSURE: PageClosurePins = {
   ...C1_PAGE_CLOSURE,

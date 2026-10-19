@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, matchesGlob, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { shouldRunMobileReleaseChecks } from './mobile-release-check-scope.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -76,29 +76,41 @@ it('gates Ruby independently and retains mobile static validation', () => {
   expect(steps.indexOf(detector)).toBeGreaterThan(
     steps.findIndex((step) => step.uses === './.github/actions/install-node-dependencies')
   )
+  expect(steps.find((step) => step.name === 'Setup Bun for tests').if).toBe(
+    steps.find((step) => step.name === 'Test').if
+  )
   const gated = steps.filter(
     (step) =>
       step.if !== undefined &&
       step.name !== 'Test' &&
+      step.name !== 'Setup Bun for tests' &&
       step.name !== 'Summarize RPC recording changes'
   )
   expect(gated.map((step) => step.name)).toEqual([
     'Setup Ruby and fastlane',
     'Test iOS release version resolution',
     'Test TestFlight lane arguments',
-    'Smoke-check the Fastfile'
+    'Smoke-check the Fastfile',
+    'Smoke-check CocoaPods'
   ])
   for (const step of gated) {
     expect(step.if).toBe("steps.ruby-scope.outputs.should_run != 'false'")
   }
-  for (const name of ['Typecheck', 'Typecheck tests (ratchet)', 'Lint', 'Check formatting']) {
+  for (const name of [
+    'Lint mobile imports with mobile dependencies installed',
+    'Typecheck',
+    'Typecheck tests (ratchet)',
+    'Lint',
+    'Check formatting'
+  ]) {
     expect(steps.find((step) => step.name === name)?.if).toBeUndefined()
     expect(steps.some((step) => step.name === name)).toBe(true)
   }
   for (const file of [
     'config/scripts/mobile-release-check-scope.mjs',
     'config/scripts/mobile-release-check-scope.test.mjs',
-    'config/scripts/pr-code-change-scope.mjs'
+    'config/scripts/pr-code-change-scope.mjs',
+    'config/scripts/pr-package-test-paths.mjs'
   ]) {
     expect(workflow.on.pull_request.paths.some((pattern) => matchesGlob(file, pattern))).toBe(true)
   }
@@ -133,6 +145,8 @@ function fixture(detectorStep = detector) {
   for (const file of [
     'package.json',
     'config/scripts/pr-code-change-scope.mjs',
+    'config/scripts/pr-package-test-paths.mjs',
+    'config/scripts/pr-layout-oracle-route.mjs',
     'config/scripts/mobile-release-check-scope.mjs',
     'config/scripts/mobile-test-change-scope.mjs'
   ]) {
@@ -172,6 +186,17 @@ describe.skipIf(process.platform === 'win32')('the Linux workflow detector comma
     repo.write('mobile/src/view.tsx', 'export const view = 2\n')
     repo.commit()
     expect(repo.detect()).toBe('should_run=false\n')
+  })
+
+  it('skips reliability metadata alone and retains mixed Fastfile changes', () => {
+    const repo = fixture()
+    repo.write('config/reliability-gates.jsonc', '{"gates": []}\n')
+    repo.commit()
+    expect(repo.detect()).toBe('should_run=false\n')
+    repo.write('config/reliability-gates.jsonc', '{"gates": [1]}\n')
+    repo.write('mobile/fastlane/Fastfile', 'default_platform(:android)\n')
+    repo.commit()
+    expect(repo.detect()).toBe('should_run=false\nshould_run=true\n')
   })
 
   it('keeps a deleted release input when a rename moves it into an excluded directory', () => {

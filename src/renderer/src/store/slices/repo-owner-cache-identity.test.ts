@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getGitHubPRCacheKey } from './github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 
 const focusedRuntime = { activeRuntimeEnvironmentId: 'env-focused' }

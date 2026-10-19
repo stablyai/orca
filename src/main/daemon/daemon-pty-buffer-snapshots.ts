@@ -4,7 +4,7 @@ import { boundSnapshot } from './daemon-durable-history-snapshot'
 import { DaemonPtySessionControl } from './daemon-pty-session-control'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from './daemon-session-scrollback-window'
 import type { GetSnapshotResult } from './types'
-import type { PtyProviderBufferSnapshot } from '../providers/types'
+import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contract'
 
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 

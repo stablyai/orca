@@ -4,11 +4,11 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/runtime-
 import type { WorkspaceSessionState } from '../../src/shared/workspace-session-state-types'
 import {
   acceptReplayedWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  shouldApplyWebSessionTabsSnapshot,
-  type WebSessionTabsSyncState
-} from '../../src/renderer/src/runtime/web-session-tabs-sync'
+  resetWebSessionTabsSnapshotFreshnessForTests
+} from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-lifecycle'
+import { applyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
+import { shouldApplyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-decisions'
+import type { WebSessionTabsSyncState } from '../../src/renderer/src/runtime/web-session-tabs-sync/state'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { withDurableRuntimeStore } from '../../src/main/runtime/runtime-durable-store-fixture'
 

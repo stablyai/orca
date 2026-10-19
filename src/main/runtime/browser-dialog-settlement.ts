@@ -1,4 +1,4 @@
-import type { ActiveBrowserScreencastPage } from './runtime-browser-commands-browser-command-target-params'
+import type { ActiveBrowserScreencastPage } from './browser/browser-screencast-contracts'
 
 /**
  * What `browser.dialogAccept` and `browser.dialogDismiss` answer, on either path.

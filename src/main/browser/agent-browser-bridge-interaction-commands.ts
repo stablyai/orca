@@ -14,6 +14,8 @@ import { BrowserError } from './cdp-bridge'
 import { WAIT_PROCESS_TIMEOUT_GRACE_MS } from './agent-browser-bridge-types'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { parseCdpKeyEvent, imeFallbackKeyEvent } from './cdp-keyboard-us-layout'
+import { dispatchPageKeyEvent, type GuestCdpSender } from './guest-direct-key-input'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 import { AgentBrowserBridgeCaptureCommands } from './agent-browser-bridge-capture-commands'
 
 export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowserBridgeCaptureCommands {
@@ -202,19 +204,33 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
         let releaseDebugger = (): void => {}
         try {
           releaseDebugger = acquireElectronDebugger(wc).release
-          await wc.debugger.sendCommand('Input.dispatchKeyEvent', {
-            // Why: rawKeyDown is the no-character form; sending keyDown without text
-            // makes Blink synthesize an empty input for editing keys.
-            type: parsed.text === null ? 'rawKeyDown' : 'keyDown',
-            ...event,
-            ...(parsed.text === null ? {} : { text: parsed.text, unmodifiedText: parsed.text })
-          })
-          await wc.debugger.sendCommand('Input.dispatchKeyEvent', {
-            type: 'keyUp',
-            ...event,
-            // Why: the self bit is keydown-only -- Blink reports shiftKey false on the Shift keyup.
-            modifiers: parsed.modifiers & ~parsed.selfModifier
-          })
+          const send: GuestCdpSender = (method, params, sessionId) =>
+            sendGuestCdpCommand(wc, method, params, sessionId)
+          const guardFocus = (): Promise<() => void> =>
+            this.browserManager.guardUserFocusForAgentInput(target.webContentsId)
+          await dispatchPageKeyEvent(
+            wc,
+            {
+              // Why: rawKeyDown is the no-character form; sending keyDown without text
+              // makes Blink synthesize an empty input for editing keys.
+              type: parsed.text === null ? 'rawKeyDown' : 'keyDown',
+              ...event,
+              ...(parsed.text === null ? {} : { text: parsed.text, unmodifiedText: parsed.text })
+            },
+            send,
+            guardFocus
+          )
+          await dispatchPageKeyEvent(
+            wc,
+            {
+              type: 'keyUp',
+              ...event,
+              // Why: the self bit is keydown-only -- Blink reports shiftKey false on the Shift keyup.
+              modifiers: parsed.modifiers & ~parsed.selfModifier
+            },
+            send,
+            guardFocus
+          )
           return { pressed: key }
         } catch (error) {
           // Why: attach/dispatch reject with plain Errors, which the RPC layer would report as
@@ -234,7 +250,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           releaseDebugger()
         }
       },
-      { ensureSession: false }
+      { ensureSession: false, requireScopedTarget: true }
     )
   }
 

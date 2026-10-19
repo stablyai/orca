@@ -263,6 +263,66 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
     await expectNothingCommitted(context)
   })
 
+  // A placement that reserves on the target between the candidate read and the target-row
+  // statement: modelled by raising the target's enforced units right before that statement.
+  async function fillTargetBefore(
+    context: Awaited<ReturnType<typeof fixture>>,
+    freeSeats: number
+  ): Promise<void> {
+    control.beforeTrip = async (sql) => {
+      if (!sql.includes('WITH target AS')) return
+      const foreign = await observer.query(
+        `SELECT COUNT(*) AS count FROM relay_control_connection_reservations
+         WHERE cell_id = ? AND state IN ('reserved', 'late-arrival-debt', 'claimed')
+           AND user_id <> ?`,
+        [context.target.id, context.identity.userId]
+      )
+      // Headroom: enforced + outstanding + unobserved < hard cap - reserved host controls.
+      const enforced = 1_000 - 100 - 60 - Number(foreign[0]!.count) - freeSeats
+      await observer.query(
+        `UPDATE relay_cell_connection_snapshots SET enforced_connection_units = ? WHERE cell_id = ?`,
+        [enforced, context.target.id]
+      )
+    }
+  }
+
+  it('defers when a placement takes the target last connection seat after selection', async () => {
+    const context = await fixture()
+    const request = await context.select()
+    await fillTargetBefore(context, 0)
+    control.enabled = true
+
+    const result = await context.delayedStore.commitIdleRegionalRehome(request, context.safety())
+    control.enabled = false
+
+    expect(result).toEqual({ outcome: 'deferred', reason: 'candidate-ineligible' })
+    await expectNothingCommitted(context)
+  })
+
+  it('admits into the last connection seat, not counting its own reservation', async () => {
+    const context = await fixture()
+    const request = await context.select()
+    await fillTargetBefore(context, 1)
+    control.enabled = true
+
+    const result = await context.delayedStore.commitIdleRegionalRehome(request, context.safety())
+    control.enabled = false
+
+    expect(result).toEqual({ outcome: 'committed' })
+  })
+
+  it('admits a target with no connection limits row', async () => {
+    const context = await fixture()
+    const request = await context.select()
+    await primary.query(`DELETE FROM relay_cell_connection_limits WHERE cell_id = ?`, [
+      context.target.id
+    ])
+
+    const result = await context.delayedStore.commitIdleRegionalRehome(request, context.safety())
+
+    expect(result).toEqual({ outcome: 'committed' })
+  })
+
   async function expectNothingCommitted(context: Awaited<ReturnType<typeof fixture>>) {
     expect(await commitCounts(context.identity.userId)).toEqual({ attempts: 0, migrations: 0 })
     expect(await reservedRequests(context.target.id)).toBe(context.targetReservedBefore)

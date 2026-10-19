@@ -5,7 +5,8 @@ import type {
   SetupAgentStartupPolicy,
   SetupRunPolicy
 } from '../../../../shared/orca-yaml-hook-types'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 import { matchesSettingsSearch } from './settings-search'
 import { SettingsSwitch } from './SettingsFormControls'
 import { RepositoryHooksYamlStatus } from './RepositoryHooksYamlStatus'
@@ -262,17 +263,14 @@ export function RepositoryHookCommandSourceSetting({
               )}
             </p>
             <p className="text-[11px] text-muted-foreground">
-              {translate('auto.components.settings.RepositoryHooksSection.ac9038d2cc', 'When both')}{' '}
-              <code className="rounded bg-muted px-1 py-0.5">
-                {translate(
-                  'auto.components.settings.RepositoryHooksSection.39da2ae12f',
-                  'orca.yaml'
+              <Trans
+                i18n={i18n}
+                defaults={translate(
+                  'auto.components.settings.RepositoryHooksSection.commandSourceDescription',
+                  'When both <yaml>orca.yaml</yaml> and local commands exist, choose which run.'
                 )}
-              </code>{' '}
-              {translate(
-                'auto.components.settings.RepositoryHooksSection.3397879bee',
-                'and local commands exist, choose which run.'
-              )}
+                components={{ yaml: <code className="rounded bg-muted px-1 py-0.5" /> }}
+              />
             </p>
           </div>
           <div className="grid gap-2 md:grid-cols-3">

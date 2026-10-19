@@ -10,10 +10,18 @@ import {
  *  filling a part the window lacks. A host without that answer leaves the window's alone. */
 export function useStructuredAgentSessionContextUsage(
   journalItems: readonly AgentJournalRenderItem[],
-  support: AgentSessionOptionsResult['contextUsage']
+  support: AgentSessionOptionsResult['contextUsage'],
+  journalEpoch?: string | null
 ): StructuredAgentContextUsage | null {
   return useMemo(
-    () => selectStructuredAgentContextUsage(journalItems, support?.current),
-    [journalItems, support]
+    () =>
+      selectStructuredAgentContextUsage(
+        journalItems,
+        support?.current,
+        support?.contextFloor && (!journalEpoch || support.contextFloor.epoch === journalEpoch)
+          ? support.contextFloor.sequence
+          : 0
+      ),
+    [journalItems, support, journalEpoch]
   )
 }

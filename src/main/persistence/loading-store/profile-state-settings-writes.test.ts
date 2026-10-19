@@ -15,7 +15,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -227,29 +227,17 @@ describe('selective SQLite settings persistence', () => {
   })
 
   it.each(['unavailable', 'encryption'] as const)(
-    'retries deferred UI and SSH secrets on a settings save after %s recovers',
+    'retries a deferred UI secret on a settings save after %s recovers',
     async (mode) => {
       const state = fixture()
-      const recovery = {
-        targetId: 'ssh-test',
-        clientInstanceId: 'client-test',
-        serverBuildId: 'build-test',
-        clientGeneration: 1,
-        ownerGeneration: 1,
-        ownerLease: 'original-lease'
-      }
       state.store.updateUI({ browserKagiSessionLink: 'original-link' })
-      await state.store.upsertSshPtyConsumerRecovery(recovery)
+      await state.store.flushPendingOrThrowAsync()
       const before = state.read().state
 
       failure = mode
       state.store.updateUI({ browserKagiSessionLink: 'pending-link' })
       await state.store.flushPendingOrThrowAsync()
-      await state.store.upsertSshPtyConsumerRecovery({ ...recovery, ownerLease: 'pending-lease' })
-      expect(state.read().state).toMatchObject({
-        ui: before.ui,
-        sshPtyConsumerRecoveries: before.sshPtyConsumerRecoveries
-      })
+      expect(state.read().state).toMatchObject({ ui: before.ui })
 
       failure = 'none'
       const wholeWrite = vi.spyOn(state.authority, 'writeCompleteSerializedDomains')
@@ -258,17 +246,13 @@ describe('selective SQLite settings persistence', () => {
       })
       state.store.updateSettings({ terminalFontSize: 25 })
       await expect(state.store.flushPendingOrThrowAsync()).rejects.toThrow('recovery commit failed')
-      expect(state.read().state).toMatchObject({
-        ui: before.ui,
-        sshPtyConsumerRecoveries: before.sshPtyConsumerRecoveries
-      })
+      expect(state.read().state).toMatchObject({ ui: before.ui })
       state.store.updateSettings({ terminalFontSize: 26 })
       await state.store.flushPendingOrThrowAsync()
       expect(wholeWrite).toHaveBeenCalledTimes(2)
       const reopened = state.reopen()
       expect(reopened.getUI().browserKagiSessionLink).toBe('pending-link')
-      expect(reopened.getSshPtyConsumerRecovery('ssh-test')?.ownerLease).toBe('pending-lease')
-      expect(JSON.stringify(state.read().state)).not.toMatch(/pending-link|pending-lease/)
+      expect(JSON.stringify(state.read().state)).not.toMatch(/pending-link/)
 
       state.store.updateSettings({ terminalFontSize: 27 })
       await state.store.flushPendingOrThrowAsync()

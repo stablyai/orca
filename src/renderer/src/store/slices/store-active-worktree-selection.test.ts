@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { installAttentionScreen } from './workspace-attention/workspace-unread-characterization-fixture'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { buildWorktreeComparator } from '@/components/sidebar/smart-sort'
+import { buildWorktreeComparator } from '../../../../shared/sidebar-list/smart-sort'
 import {
   createTestStore,
   makeOpenFile,
@@ -72,7 +73,7 @@ describe('setActiveWorktree', () => {
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
-  it('clears unread on selection without manufacturing smart-sort activity', () => {
+  it('reads the flag of a selected workspace on screen without manufacturing smart-sort activity', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
     const lastActivityAt = 123456
@@ -92,6 +93,7 @@ describe('setActiveWorktree', () => {
       refreshGitHubForWorktreeIfStale: vi.fn()
     })
 
+    installAttentionScreen(store, true)
     store.getState().setActiveWorktree(worktreeId)
 
     const worktree = store.getState().worktreesByRepo.repo1[0]

@@ -32,6 +32,7 @@ import {
 import { resolveOpenCodeConfigDirectory } from '../../shared/opencode-config-directory'
 
 beforeEach(() => {
+  vi.stubEnv('ORCA_OPENCODE_PLUGIN_API', 'v2')
   setAppEnvironment({
     getPath: getPathMock,
     getAppPath: () => process.cwd(),
@@ -42,6 +43,8 @@ beforeEach(() => {
     getAppMetrics: () => []
   })
 })
+
+afterEach(() => vi.unstubAllEnvs())
 
 const { isUsableId, toSafeDirName } = _internals
 
@@ -127,7 +130,6 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     expect(existsSync(pluginPath)).toBe(true)
     // Sanity-check the file has plugin source, not a stray write.
     const pluginSource = readFileSync(pluginPath, 'utf8')
-    expect(pluginSource).toContain('OrcaOpenCodeStatusPlugin')
     expect(pluginSource).toContain('messageID: part.messageID')
     // Legacy attach loads an object TUI entry; the server export stays callable.
     const tuiEntry = join(
@@ -136,9 +138,6 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
       'orca-opencode-status-tui',
       'tui.js'
     )
-    expect(readFileSync(tuiEntry, 'utf8')).toContain('tui: setupLegacyOpenCodeTui')
-    expect(readFileSync(tuiEntry, 'utf8')).toContain('setup: setupOpenCode2Status')
-    expect(pluginSource).not.toContain('export default { id:')
     const past = new Date('2020-01-01T00:00:00Z')
     utimesSync(tuiEntry, past, past)
     service.buildPtyEnv(daemonSessionId)

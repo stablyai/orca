@@ -6,7 +6,11 @@ import type {
   RemoteBrowserPageHandle
 } from './browser-slice-contract'
 import { findPage, findWorkspace } from '../browser-page-records'
-import { sanitizeBrowserPageAnnotation } from './browser-page-annotation'
+import {
+  retainBrowserAnnotationMarkerIds,
+  sanitizeBrowserPageAnnotation
+} from './browser-page-annotation'
+import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 
 export function createBrowserPageMetadataActions(
   set: BrowserSliceSet,
@@ -20,6 +24,7 @@ export function createBrowserPageMetadataActions(
   | 'updateBrowserPageAnnotation'
   | 'deleteBrowserPageAnnotation'
   | 'clearBrowserPageAnnotations'
+  | 'invalidateBrowserPageAnnotationGeometry'
   | 'removeDeliveredBrowserPageAnnotations'
 > {
   return {
@@ -81,7 +86,13 @@ export function createBrowserPageMetadataActions(
           browserAnnotationsByPageId: {
             ...s.browserAnnotationsByPageId,
             [annotation.browserPageId]: next
-          }
+          },
+          browserAnnotationMarkerIdsByPageId: retainBrowserAnnotationMarkerIds(
+            s.browserAnnotationMarkerIdsByPageId,
+            annotation.browserPageId,
+            next,
+            annotation.id
+          )
         }
       }),
 
@@ -116,17 +127,35 @@ export function createBrowserPageMetadataActions(
         } else {
           delete nextByPageId[pageId]
         }
-        return { browserAnnotationsByPageId: nextByPageId }
+        return {
+          browserAnnotationsByPageId: nextByPageId,
+          browserAnnotationMarkerIdsByPageId: retainBrowserAnnotationMarkerIds(
+            s.browserAnnotationMarkerIdsByPageId,
+            pageId,
+            next
+          )
+        }
       }),
 
     clearBrowserPageAnnotations: (pageId) =>
       set((s) => {
-        if (!s.browserAnnotationsByPageId[pageId]?.length) {
+        const notes = omitRecordKeys(s.browserAnnotationsByPageId, [pageId])
+        const markers = omitRecordKeys(s.browserAnnotationMarkerIdsByPageId, [pageId])
+        if (
+          notes === s.browserAnnotationsByPageId &&
+          markers === s.browserAnnotationMarkerIdsByPageId
+        ) {
           return s
         }
-        const nextByPageId = { ...s.browserAnnotationsByPageId }
-        delete nextByPageId[pageId]
-        return { browserAnnotationsByPageId: nextByPageId }
+        return { browserAnnotationsByPageId: notes, browserAnnotationMarkerIdsByPageId: markers }
+      }),
+
+    invalidateBrowserPageAnnotationGeometry: (pageId) =>
+      set((s) => {
+        const markers = omitRecordKeys(s.browserAnnotationMarkerIdsByPageId, [pageId])
+        return markers === s.browserAnnotationMarkerIdsByPageId
+          ? s
+          : { browserAnnotationMarkerIdsByPageId: markers }
       }),
 
     // Identity matching preserves edits and additions made during delivery.
@@ -144,7 +173,14 @@ export function createBrowserPageMetadataActions(
         } else {
           delete nextByPageId[pageId]
         }
-        return { browserAnnotationsByPageId: nextByPageId }
+        return {
+          browserAnnotationsByPageId: nextByPageId,
+          browserAnnotationMarkerIdsByPageId: retainBrowserAnnotationMarkerIds(
+            s.browserAnnotationMarkerIdsByPageId,
+            pageId,
+            remaining
+          )
+        }
       })
   }
 }

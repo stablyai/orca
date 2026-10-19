@@ -1,8 +1,10 @@
 import type { SessionSearchScanRoots } from '../ai-vault-search/session-search-scan-roots'
 import type { ChildProcess } from 'node:child_process'
 import { createAiVaultScanCancelledError } from './ai-vault-scan-cancellation'
+import type { AiVaultServiceScanListener } from './session-scanner-service-request-deadline'
 import {
   AI_VAULT_SERVICE_PROTOCOL_VERSION,
+  aiVaultServiceLane,
   type AiVaultServiceInit,
   type AiVaultServiceLane,
   type AiVaultServiceRequest,
@@ -10,8 +12,6 @@ import {
 } from './session-scanner-service-protocol'
 
 export const AI_VAULT_SERVICE_READY_TIMEOUT_MS = 5_000
-export const AI_VAULT_SERVICE_SCAN_TIMEOUT_MS = 130_000
-export const AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS = 15_000
 export const AI_VAULT_SERVICE_MAX_CALLS = 16
 export const AI_VAULT_SERVICE_IDLE_TIMEOUT_MS = 10 * 60_000
 export const AI_VAULT_SERVICE_SHUTDOWN_TIMEOUT_MS = 2_000
@@ -122,6 +122,49 @@ export function retireAiVaultServiceChild(child: ChildProcess): void {
   child.once('exit', () => clearTimeout(killTimer))
   child.send({ type: 'shutdown' }, () => undefined)
   child.unref()
+}
+
+/**
+ * `retire`: a request deadline sends the shutdown frame and allows the usual
+ * grace to abort and save the parse cache. A broken channel or protocol is
+ * killed at once.
+ */
+export function stopAiVaultServiceChild(child: ChildProcess, retire: boolean): void {
+  if (retire) {
+    retireAiVaultServiceChild(child)
+    return
+  }
+  child.removeAllListeners()
+  child.kill()
+}
+
+/** A queued call, already listening for its caller's abort. */
+export function createAiVaultServicePendingCall(
+  request: AiVaultServiceRequest,
+  signal: AbortSignal | undefined,
+  resolve: (value: unknown) => void,
+  reject: (error: Error) => void,
+  cancel: (call: AiVaultServicePendingCall) => void,
+  scanListener?: AiVaultServiceScanListener
+): AiVaultServicePendingCall {
+  const call: AiVaultServicePendingCall = {
+    request,
+    scanListener,
+    lane: aiVaultServiceLane(request.operation),
+    signal,
+    resolve,
+    reject,
+    timer: null,
+    onAbort: null,
+    cancelled: false,
+    sent: false,
+    startRetried: false
+  }
+  if (signal) {
+    call.onAbort = () => cancel(call)
+    signal.addEventListener('abort', call.onAbort, { once: true })
+  }
+  return call
 }
 
 function armAiVaultServiceCancellationTimeout(
@@ -249,6 +292,7 @@ export type AiVaultServicePendingCall = {
   /** Whether the child received the request; an unsent call gets no reply. */
   sent: boolean
   startRetried: boolean
+  scanListener?: AiVaultServiceScanListener
 }
 
 export type AiVaultServiceReadyWaiter = {
@@ -305,26 +349,4 @@ export class AiVaultServiceSessionSearchHold {
     child?.send({ type: 'sessionSearch', init })
     return this.enabled
   }
-}
-
-/** Starts the request deadline only once the child is ready to receive it. */
-export function sendAiVaultServiceCall(
-  child: ChildProcess,
-  call: AiVaultServicePendingCall,
-  isActive: () => boolean,
-  onFault: (error: Error) => void
-): void {
-  if (call.cancelled || !isActive()) {
-    return
-  }
-  const timeoutMs =
-    call.request.operation === 'scan'
-      ? AI_VAULT_SERVICE_SCAN_TIMEOUT_MS
-      : AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS
-  call.timer = setTimeout(() => {
-    onFault(new Error(`AI Vault service timed out after ${timeoutMs}ms.`))
-  }, timeoutMs)
-  call.timer.unref?.()
-  call.sent = true
-  child.send(call.request)
 }

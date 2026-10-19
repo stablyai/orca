@@ -1,6 +1,8 @@
 import {
   closeTestStores,
   createSqliteTestStore,
+  createStore as createFreshStore,
+  testState,
   readPersistedStateJson,
   writePersistedStateJson
 } from './persistence-test-harness'
@@ -27,8 +29,9 @@ import { AUTOMATION_OWNER_CONFLICT_CODES } from '../shared/automation-owner-conf
 import { getDefaultPersistedState } from '../shared/constants'
 import { folderWorkspaceKey } from '../shared/workspace-scope'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
+import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -118,6 +121,10 @@ async function createStoreFromState(state: Record<string, unknown>) {
     JSON.stringify({ ...getDefaultPersistedState(testState.dir), ...state }),
     'utf-8'
   )
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('./persistence')
@@ -161,6 +168,8 @@ function createPinnedAutomation(store: {
 }
 
 beforeEach(() => {
+  hasCreatedStoreInCase = false
+  resetRetirementCollisionKeyCacheForTests()
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-pinned-fence-'))
 })
 

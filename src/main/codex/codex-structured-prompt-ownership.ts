@@ -12,7 +12,7 @@ import {
 } from './codex-structured-prompt-replies'
 import { requireLiveCodexSession, type CodexSession } from './codex-structured-session-state'
 import { interruptCodexTurn } from './codex-structured-turn-cancellation'
-import { codexRunningOrOpeningTurn } from './codex-structured-turn-open-wait'
+import { codexStopTarget, interruptOpeningCodexTurn } from './codex-structured-turn-open-wait'
 
 type CancelInput = Parameters<StructuredAgentSessionAdapter['cancelTurn']>[0]
 type AnswerInput = Parameters<StructuredAgentSessionAdapter['answerPrompt']>[0]
@@ -22,10 +22,25 @@ function providerTurnId(session: CodexSession, turnId: string): string | undefin
   return session.translator ? session.translator.commandProviderTurnId(turnId) : turnId
 }
 
+/** A send whose answer this child lost: Codex may still open a turn for it that no Stop can name.
+ *  A pending one Codex answered is not: its turn is the one the Stop interrupts. */
+function sendInDoubt(dispatchStatus: CancelInput['dispatchStatus']): boolean {
+  return dispatchStatus?.state === 'unknown' && !dispatchStatus.recovered
+}
+
+/** The Stop's own answer, naming the journal turn it stopped when it took. */
+function stoppedTurn(
+  outcome: AgentSessionCancelOutcome,
+  turnId: string
+): AgentSessionCancelOutcome {
+  return outcome.cancelled ? { ...outcome, turnId } : outcome
+}
+
 /**
  * A Stop that names no turn: interrupt the turn the journal shows, or else the one Codex reported
  * started and not yet ended, which the journal can trail by a publish, or else the one Codex
- * answered a send into, once it opens.
+ * answered a send into, at once (`interruptOpeningCodexTurn`). A turn that may still open but
+ * cannot be reached, or a send whose answer was lost, answers refused, and the host ends the child.
  */
 async function cancelCodexConversation(
   input: Parameters<typeof cancelCodexStructuredTurn>[0],
@@ -34,20 +49,32 @@ async function cancelCodexConversation(
   const { request, sessions, requestTimeoutMs } = input
   const liveTurnId = request.resolveLiveTurnId?.() ?? null
   // A turn the journal shows that Codex has not started yet (a compaction's) has nothing to stop.
-  const turnId =
-    liveTurnId === null
-      ? await codexRunningOrOpeningTurn(session)
-      : providerTurnId(session, liveTurnId)
-  // The wait for the turn to open can outlive the session it began on.
-  if (
-    !turnId ||
-    sessions.get(request.sessionId) !== session ||
-    session.ended ||
-    session.fence !== request.fence
-  ) {
+  const target = liveTurnId === null ? codexStopTarget(session) : { turnId: liveTurnId }
+  // Read again after any wait for the turn to open, which can outlive the session it began on.
+  const current = (): boolean =>
+    sessions.get(request.sessionId) === session && !session.ended && session.fence === request.fence
+  if (!current()) {
     return { cancelled: false }
   }
-  return interruptCodexTurn({ session, threadId: session.threadId, turnId, requestTimeoutMs })
+  if (target === null) {
+    return sendInDoubt(request.dispatchStatus)
+      ? { cancelled: false, refusal: { turnMayOpen: true } }
+      : { cancelled: false }
+  }
+  const journalTurnId = 'opening' in target ? target.opening : target.turnId
+  const turnId = liveTurnId === null ? journalTurnId : providerTurnId(session, liveTurnId)
+  if (!turnId) {
+    return { cancelled: false }
+  }
+  const interrupt = () =>
+    interruptCodexTurn({ session, threadId: session.threadId, turnId, requestTimeoutMs })
+  if (!('opening' in target)) {
+    return stoppedTurn(await interrupt(), journalTurnId)
+  }
+  return stoppedTurn(
+    await interruptOpeningCodexTurn(session, turnId, interrupt, current),
+    journalTurnId
+  )
 }
 
 export async function cancelCodexStructuredTurn(input: {
@@ -67,7 +94,10 @@ export async function cancelCodexStructuredTurn(input: {
     return { cancelled: false }
   }
   if (!prompt) {
-    return interruptCodexTurn({ session, threadId: session.threadId, turnId, requestTimeoutMs })
+    return stoppedTurn(
+      await interruptCodexTurn({ session, threadId: session.threadId, turnId, requestTimeoutMs }),
+      requestedTurnId
+    )
   }
   if (session.fence !== request.fence) {
     return { cancelled: false }

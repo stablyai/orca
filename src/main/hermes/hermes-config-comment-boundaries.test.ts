@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { parseDocument } from 'yaml'
-import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem'
+import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem.test-fixture'
 import { disablePlugin, enablePlugin, updateConfigContent } from './hermes-config-yaml'
 import { HermesHookService } from './hook-service'
 

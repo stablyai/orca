@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { stripNoiseMessages } from '../../shared/native-chat-noise'
+import { mergeNativeChatMessages } from '../../shared/native-chat-merge'
 import { foldToolMessages, pairToolBlocks } from '../../shared/native-chat-tool-fold'
 import { isToolCallBlock, isToolResultBlock } from '../../shared/native-chat-types'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
@@ -34,7 +35,9 @@ function toolTurn(n: number): unknown[] {
       timestamp: `2026-08-20T10:00:${String(n).padStart(2, '0')}.000Z`,
       message: {
         role: 'assistant',
-        content: [{ type: 'tool_use', name: 'Bash', input: { command: `echo ${n}` } }]
+        content: [
+          { type: 'tool_use', id: `toolu_${n}`, name: 'Bash', input: { command: `echo ${n}` } }
+        ]
       }
     },
     {
@@ -49,8 +52,7 @@ function toolTurn(n: number): unknown[] {
   ]
 }
 
-/** The rendered defect: a tool row with output but no call to attribute it to.
- *  Mirrors what both chat views build from a folded message's tool blocks. */
+/** Both chat views expose a result-only pair when no loaded call owns it. */
 function unattributedResults(messages: readonly NativeChatMessage[]): string[] {
   const stray: string[] = []
   for (const message of messages) {
@@ -76,24 +78,24 @@ async function renderedMessages(filePath: string, limit: number): Promise<Native
     decodeClaudeTranscriptLine,
     true
   )
-  return stripNoiseMessages(foldToolMessages(page.messages))
+  return stripNoiseMessages(foldToolMessages(mergeNativeChatMessages([], page.messages)))
 }
 
 describe('windowed transcript tool attribution', () => {
-  it('drops a tool result whose call falls outside the read window', async () => {
+  it('shows a tool result whose call falls outside the read window without guessing its owner', async () => {
     const filePath = await writeTranscript([...toolTurn(1), ...toolTurn(2), ...toolTurn(3)])
 
     // A 3-message window cuts turn 2 in half: its result is the oldest record in
     // the window, its `tool_use` is not.
     const windowed = await renderedMessages(filePath, 3)
 
-    expect(unattributedResults(windowed)).toEqual([])
-    // The turn that survives whole still renders its output.
+    expect(unattributedResults(windowed)).toEqual(['output 2'])
+    expect(windowed[0]).toMatchObject({ id: 'result-2', role: 'tool' })
     expect(
       windowed.flatMap((message) =>
         message.blocks.filter(isToolResultBlock).map((block) => block.output)
       )
-    ).toEqual(['output 3'])
+    ).toEqual(['output 2', 'output 3'])
   })
 
   it('keeps every result when the window contains its call', async () => {
@@ -150,7 +152,46 @@ describe('windowed transcript tool attribution', () => {
 
     const messages = await renderedMessages(filePath, 100)
 
-    expect(unattributedResults(messages)).toEqual([])
-    expect(messages.map((message) => message.id)).toEqual(['call-1'])
+    expect(unattributedResults(messages)).toEqual(['output 2'])
+    expect(messages.map((message) => message.id)).toEqual(['call-1', 'result-2'])
+    expect(pairToolBlocks(messages[0]!.blocks)[0]?.result).toBeUndefined()
+    expect(messages[1]?.role).toBe('tool')
+  })
+
+  it('uses provider paging cursors unchanged while an older page restores the exact call', async () => {
+    const filePath = await writeTranscript([...toolTurn(1), ...toolTurn(2), ...toolTurn(3)])
+    const page = await readNativeChatTranscriptTailFile(
+      filePath,
+      3,
+      decodeClaudeTranscriptLine,
+      true
+    )
+    const cursor = page.beforeOffset
+    const consumed = page.consumedTo
+    const windowed = foldToolMessages(page.messages)
+    const older = await readNativeChatTranscriptTailFile(
+      filePath,
+      100,
+      decodeClaudeTranscriptLine,
+      true,
+      cursor
+    )
+    expect(page.beforeOffset).toBe(cursor)
+    expect(page.consumedTo).toBe(consumed)
+    expect(page.hasMore).toBe(true)
+    expect(windowed[0]).toMatchObject({ id: 'result-2', role: 'tool' })
+    expect(older.messages.at(-1)?.id).toBe('call-2')
+    expect(older.consumedTo).toBe(cursor)
+    const whole = foldToolMessages(mergeNativeChatMessages(older.messages, page.messages))
+    expect(unattributedResults(whole)).toEqual([])
+    expect(
+      whole
+        .flatMap((message) => pairToolBlocks(message.blocks))
+        .map((pair) => [pair.call?.callId, pair.result?.output])
+    ).toEqual([
+      ['toolu_1', 'output 1'],
+      ['toolu_2', 'output 2'],
+      ['toolu_3', 'output 3']
+    ])
   })
 })

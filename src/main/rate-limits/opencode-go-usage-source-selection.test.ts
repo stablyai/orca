@@ -66,6 +66,9 @@ describe('fetchOpenCodeGoUsage', () => {
     expect(result.status).toBe('ok')
     expect(result.session).toEqual(WINDOWS.session)
     expect(result.usageMetadata?.credentialSource).toBe('environment')
+    expect(result.extraUsage).toEqual(
+      expect.objectContaining({ balance: null, enabled: false, disabledReason: 'api-key-source' })
+    )
   })
 
   it('passes the settings override down as the highest-precedence tier', async () => {
@@ -165,6 +168,19 @@ describe('fetchOpenCodeGoUsage', () => {
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('server')
     expect(result.error).toBe('OpenCode Go usage request failed (503)')
+  })
+
+  it('carries a network failure kind from the key request', async () => {
+    resolveApiKeyMock.mockResolvedValue({ status: 'found', key: API_KEY, tier: 'settings' })
+    fetchWithApiKeyMock.mockResolvedValue({
+      kind: 'failed',
+      message: 'OpenCode Go usage request failed (TypeError)',
+      failureKind: 'network'
+    })
+
+    const result = await fetchOpenCodeGoUsage({ cookie: '' })
+
+    expect(result.usageMetadata?.failureKind).toBe('network')
   })
 
   it('falls back to the cookie path when no key exists anywhere', async () => {

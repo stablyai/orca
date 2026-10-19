@@ -1,3 +1,5 @@
+import type { AgentSessionCurrentRequestsRead } from '../../../shared/agent-session-current-requests-wire'
+import { readCurrentRequestsPiece } from './agent-session-current-requests'
 import type {
   AgentSessionBackgroundTaskState,
   AgentSessionHistoryRequest,
@@ -7,7 +9,7 @@ import type { AgentChildWorkView } from '../../../shared/agent-status-child-work
 import { structuredChildWorkLegacyTasks } from '../../../shared/structured-agent-session-child-work-legacy'
 import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
 import { readStructuredAgentSessionHistoryResult } from './structured-agent-session-history-result'
-import { tryReadQueuePublication } from './structured-agent-session-queued-publication'
+import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import type { AgentSessionHistoryScope } from './agent-session-history-page'
 import type {
   AgentSessionSubscribers,
@@ -22,10 +24,9 @@ import { structuredAgentSessionConversationFence } from './structured-agent-sess
 
 /** The chat strip's roster: the host's running child records for one session, the same selection
  *  the session list carries, with the legacy task rows an older client reads derived from them. No
- *  running child is `null`, and the strip hides. */
+ *  running child, and none the host failed to record, is `null`, and the strip hides. Each
+ *  subscriber's frames carry it; see `agent-session-subscriber-frame-fields`. */
 export class StructuredAgentSessionBackgroundTaskChannel {
-  private readonly published = new Map<string, string>()
-
   constructor(
     private readonly deps: StructuredAgentSessionHostDeps,
     private readonly sessions: StructuredAgentSessionConversations,
@@ -34,11 +35,9 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     private readonly conversation: (
       sessionId: string
     ) => Promise<StructuredAgentSessionHostSession>,
-    private readonly readChildWork: (sessionId: string) => AgentChildWorkView[] | undefined
-  ) {
-    // A closed conversation's last roster is not kept for the host's lifetime.
-    sessions.observeClose((sessionId) => this.published.delete(sessionId))
-  }
+    private readonly readChildWork: (sessionId: string) => AgentChildWorkView[] | undefined,
+    private readonly childWorkIncomplete: (sessionId: string) => boolean = () => false
+  ) {}
 
   /** `scope` is for in-process readers; a wire request reads every agent's rows. */
   async history(
@@ -46,14 +45,19 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     scope?: AgentSessionHistoryScope
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
+    const work = hostStructuredAgentSessionCurrentWork(
+      { store: this.deps.store, sessions: this.sessions },
+      request.sessionId
+    )
     const result = readStructuredAgentSessionHistoryResult({
       journal,
       record: this.deps.store.getRecord(request.sessionId),
       request,
-      scope
+      scope,
+      ...(work ? { work } : {})
     })
-    const backgroundTasks = this.state(request.sessionId)
-    const queue = tryReadQueuePublication(journal)
+    const backgroundTasks = this.read(request.sessionId)
+    const queue = this.subscribers.readQueuePublication(request.sessionId)
     const hostNow = this.deps.now?.() ?? Date.now()
     return {
       ...result,
@@ -63,61 +67,60 @@ export class StructuredAgentSessionBackgroundTaskChannel {
         // A stale history answer never replaces newer live subscription state;
         // the client's reducer keeps live-over-history precedence.
         ...(queue !== undefined
-          ? { queuedMessages: queue.queuedMessages, queuePause: queue.queuePause }
+          ? {
+              queuedMessages: queue.queuedMessages,
+              queuePause: queue.queuePause,
+              nextQueuedMessageId: queue.nextQueuedMessageId
+            }
           : {}),
-        ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
+        backgroundTasks
       }
     }
+  }
+
+  async currentRequests(request: AgentSessionCurrentRequestsRead) {
+    await this.conversation(request.sessionId)
+    const work = hostStructuredAgentSessionCurrentWork(
+      { store: this.deps.store, sessions: this.sessions },
+      request.sessionId
+    )
+    if (!work) {
+      throw new Error('Current requests unavailable')
+    }
+    return readCurrentRequestsPiece(work.requestProjection(request.sessionId), request)
   }
 
   /** Resolves once the conversation is open and the subscriber holds its opening frame. */
   async subscribe(input: AgentSessionSubscribeInput): Promise<() => void> {
     const session = await this.conversation(input.sessionId)
-    const backgroundTasks = this.state(input.sessionId)
     return this.subscribers.open({
       ...input,
       journal: session.journal,
-      fence: structuredAgentSessionConversationFence(this.deps.store, input.sessionId),
-      ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
+      fence: structuredAgentSessionConversationFence(this.deps.store, input.sessionId)
     })
   }
 
-  /** Re-read after the session's child records changed; an unchanged roster sends nothing. */
+  /** The session's child records changed; subscribers whose roster differs get the new one. */
   publish(sessionId: string): void {
-    const session = this.sessions.get(sessionId)
-    // Explicit null once a roster was sent, not silence: a reader keeps its last roster on
-    // `undefined`, and a closing provider stops answering before its records are gone.
-    const read = this.state(sessionId)
-    const state = read === undefined && this.published.has(sessionId) ? null : read
-    if (!session || state === undefined) {
-      return
+    if (this.sessions.get(sessionId)) {
+      this.subscribers.republishBackgroundTasks(
+        sessionId,
+        structuredAgentSessionConversationFence(this.deps.store, sessionId)
+      )
     }
-    const fingerprint = JSON.stringify(state)
-    if (this.published.get(sessionId) === fingerprint) {
-      return
-    }
-    // "None" is remembered too, so a session with no children sends it once, not on every change;
-    // the entry goes when the conversation closes.
-    this.published.set(sessionId, fingerprint)
-    this.subscribers.backgroundTasks(
-      sessionId,
-      state,
-      structuredAgentSessionConversationFence(this.deps.store, sessionId)
-    )
   }
 
-  private state(sessionId: string): AgentSessionBackgroundTaskState | null | undefined {
+  /** Always an answer, never "unknown": the child records are the roster whether or not a provider
+   *  holds the session, and a parent row the store lacks has no children in it. */
+  read(sessionId: string): AgentSessionBackgroundTaskState | null {
     const session = this.sessions.get(sessionId)
-    const stored = session ? this.readChildWork(sessionId) : undefined
-    if (!session || stored === undefined) {
-      return undefined
+    const views = structuredRunningChildWork((session && this.readChildWork(sessionId)) ?? [])
+    // Untracked work keeps the strip, and its Stop, even with nothing listed.
+    const incomplete = this.childWorkIncomplete(sessionId)
+    if (!session || (views.length === 0 && !incomplete)) {
+      return null
     }
-    const views = structuredRunningChildWork(stored)
     const stops = this.deps.adapter.backgroundTaskStops?.(sessionId)
-    if (views.length === 0) {
-      // As before: a session no live provider holds says nothing, a live one says "none".
-      return stops === undefined ? undefined : null
-    }
     const { tasks, settledTasks } = structuredChildWorkLegacyTasks(views, session.params.provider)
     return {
       state: 'monitoring',
@@ -126,7 +129,8 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       ...(stops?.supportsTaskStop ? { supportsTaskStop: true } : {}),
       // A session no live provider holds has nothing a stop could reach.
       ...(stops?.supportsStopAll ? {} : { supportsStopAll: false }),
-      children: views
+      children: views,
+      ...(incomplete ? { incomplete: true } : {})
     }
   }
 }

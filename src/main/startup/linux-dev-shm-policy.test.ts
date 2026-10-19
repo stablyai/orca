@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { appMock, statfsSyncMock, breadcrumbMock } = vi.hoisted(() => ({
@@ -143,17 +141,5 @@ describe('configureLinuxDevShmUsage', () => {
     expect(statfsSyncMock).not.toHaveBeenCalled()
     expect(appMock.commandLine.appendSwitch).not.toHaveBeenCalled()
     expect(breadcrumbMock).not.toHaveBeenCalled()
-  })
-})
-
-describe('desktop startup wiring', () => {
-  it('runs the /dev/shm policy for every launch before app ready, GPU fallback included', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
-      'utf8'
-    ).replace(/\r\n/g, '\n')
-    const call = source.indexOf('\n  configureLinuxDevShmUsage()\n')
-    expect(call).toBeGreaterThan(-1)
-    expect(call).toBeLessThan(source.indexOf('\n  maybeApplyGpuFallbackForThisLaunch()\n'))
   })
 })

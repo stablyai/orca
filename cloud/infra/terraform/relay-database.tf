@@ -39,6 +39,40 @@ resource "google_secret_manager_secret_version" "relay_database_url" {
   )
 }
 
+# The director's URL when it reaches Cloud SQL through its proxy sidecar. Cells keep the socket URL.
+resource "google_secret_manager_secret" "relay_director_database_url" {
+  count = var.relay_director_cloud_sql_proxy_sidecar ? 1 : 0
+
+  project   = var.project_id
+  secret_id = "orca-cloud-relay-director-database-url"
+  labels    = local.relay_shared_labels
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "relay_director_database_url" {
+  count = var.relay_director_cloud_sql_proxy_sidecar ? 1 : 0
+
+  secret = google_secret_manager_secret.relay_director_database_url[0].id
+  secret_data = format(
+    "postgresql://%s:%s@127.0.0.1:5432/%s",
+    google_sql_user.relay.name,
+    random_password.relay_database.result,
+    google_sql_database.relay.name
+  )
+}
+
+resource "google_secret_manager_secret_iam_member" "relay_director_database_url_accessor" {
+  count = var.relay_director_cloud_sql_proxy_sidecar ? 1 : 0
+
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.relay_director_database_url[0].secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = google_service_account.relay_director_runtime.member
+}
+
 resource "google_secret_manager_secret_iam_member" "relay_database_url_accessor" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.relay_database_url.secret_id

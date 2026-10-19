@@ -9,7 +9,7 @@ export function MetaIconBadge({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground/70 hover:text-foreground [&>svg]:size-3.5">
+    <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground/70 [&>svg]:size-3.5">
       {children}
       <span className="sr-only">{label}</span>
     </span>

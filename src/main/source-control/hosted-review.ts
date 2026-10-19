@@ -47,6 +47,7 @@ export async function getHostedReviewForBranch(
      * one branch cheap enough to re-check per minute (#11532).
      */
     active?: boolean
+    force?: boolean
   } & HostedReviewExecutionOptions
 ): Promise<HostedReviewInfo | null> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
@@ -69,7 +70,11 @@ export async function getHostedReviewForBranch(
   // host's per-user API quota, so the cache has to sit above the provider call.
   return withHostedReviewBranchCache(
     { ...input, branch: branchName },
-    { headOid, ...(input.active === true ? { active: true } : {}) },
+    {
+      headOid,
+      ...(input.active === true ? { active: true } : {}),
+      ...(input.force === true ? { force: true } : {})
+    },
     async () => {
       const provider = await getForgeProviderForRepository({
         repoPath: input.repoPath,

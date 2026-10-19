@@ -1,10 +1,71 @@
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
+import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
+import type { DeveloperPermissionStatus } from '../../shared/developer-permissions-types'
+import {
+  AUTOMATIC_WORK_RESUME_UNSUPPORTED,
+  type AutomaticWorkResumeOutcome,
+  type AutomaticWorkResumeResult,
+  type AutomaticWorkStatus
+} from '../../shared/host-spawn-admission'
+import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
+import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'
+import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
+  constructor(opts: DaemonPtyAdapterOptions) {
+    super(opts)
+    // Registered after the base listener, which marks the sessions awaiting recovery first.
+    this.client.onDisconnected(() => this.recoverAfterEndpointLoss())
+  }
+
+  async getAsyncIoHealth(): Promise<DaemonAsyncIoStatus> {
+    if (!this.client.isConnected()) {
+      return { state: 'unverifiable' }
+    }
+    try {
+      const health = await this.client.request<unknown>('asyncIoHealth', undefined, 7_000)
+      if (
+        health &&
+        typeof health === 'object' &&
+        'state' in health &&
+        (health.state === 'healthy' || health.state === 'stalled') &&
+        'pendingMs' in health &&
+        typeof health.pendingMs === 'number' &&
+        Number.isFinite(health.pendingMs) &&
+        health.pendingMs >= 0
+      ) {
+        return { state: health.state, pendingMs: health.pendingMs }
+      }
+    } catch (error) {
+      if (isUnknownRequestTypeError(error)) {
+        return { state: 'unsupported' }
+      }
+    }
+    return { state: 'unverifiable' }
+  }
+
+  async getFullDiskAccessStatus(): Promise<DeveloperPermissionStatus> {
+    if (!this.client.isConnected()) {
+      return 'unknown'
+    }
+    try {
+      const result = await this.client.request<unknown>('fullDiskAccessStatus', undefined, 3000)
+      if (result && typeof result === 'object' && 'status' in result) {
+        const { status } = result
+        if (status === 'granted' || status === 'denied' || status === 'unsupported') {
+          return status
+        }
+      }
+    } catch {
+      // Older daemons and lost host contact cannot establish a permission verdict.
+    }
+    return 'unknown'
+  }
+
   /** Identity of the daemon behind this adapter; null until hello completes or after a disconnect. */
   getDaemonIdentity(): DaemonEndpointIdentity | null {
     return this.client.getDaemonIdentity()
@@ -108,6 +169,30 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         )
       }
     })
+  }
+
+  async getAutomaticWorkStatus(): Promise<AutomaticWorkStatus | null> {
+    const status = await this.requestAutomaticWork<AutomaticWorkStatus>('automaticWorkStatus')
+    return status === AUTOMATIC_WORK_RESUME_UNSUPPORTED ? null : status
+  }
+
+  resumeAutomaticWork(): Promise<AutomaticWorkResumeOutcome> {
+    return this.requestAutomaticWork<AutomaticWorkResumeResult>('resumeAutomaticWork')
+  }
+
+  private async requestAutomaticWork<T>(
+    type: AutomaticWorkRequestType
+  ): Promise<T | typeof AUTOMATIC_WORK_RESUME_UNSUPPORTED> {
+    await this.ensureConnected()
+    try {
+      return await this.client.request<T>(type, undefined)
+    } catch (error) {
+      // Why not "no gate": a daemon from before these requests may still hold a recorded pause.
+      if (isUnknownRequestTypeError(error)) {
+        return AUTOMATIC_WORK_RESUME_UNSUPPORTED
+      }
+      throw error
+    }
   }
 
   async closeStartupQueryAuthority(id: string): Promise<number> {

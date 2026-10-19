@@ -16,6 +16,8 @@ import type { BrowserWindow, IpcMainEvent } from 'electron'
  */
 
 export type RuntimeDesktopSurface = {
+  /** Headless hosts retain the formatter's English defaults. */
+  translateNotification?(key: string, fallback: string): string
   /** Show a native notification. Returns false when the host cannot, so callers can say so. */
   isAwayForMobileNotifications?(): boolean | undefined
   showNotification(input: { title: string; body: string }): boolean
@@ -23,6 +25,10 @@ export type RuntimeDesktopSurface = {
   findWindowById(id: number): BrowserWindow | null
   onIpc(channel: string, listener: (event: IpcMainEvent, ...args: never[]) => void): void
   removeIpcListener(channel: string, listener: (...args: never[]) => void): void
+  /** Re-encodes as a PNG fitting `maxEdge`; null if undecodable. Absent on Node hosts. */
+  encodeRepoIconPng?(bytes: Uint8Array, maxEdge: number): Uint8Array | null
+  /** A GET answering redirects with the 3xx, without proxy login; absent where fetch already does. */
+  fetchRepoIcon?(url: string, init: RequestInit): Promise<Response>
 }
 
 const inertDesktopSurface: RuntimeDesktopSurface = {

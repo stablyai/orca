@@ -58,8 +58,8 @@ describe('writeStartupCommandWhenShellReady', () => {
     Object.defineProperty(process, 'platform', { value: origPlatform })
   })
 
-  it('appends LF on POSIX so bash/zsh submit the line', async () => {
-    Object.defineProperty(process, 'platform', { value: 'darwin' })
+  it.each(['darwin', 'linux', 'win32'])('submits with CR on %s', async (platform) => {
+    Object.defineProperty(process, 'platform', { value: platform })
     const proc = createMockProc()
     const ready = Promise.resolve()
     writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {})
@@ -69,39 +69,23 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual(['claude\n'])
+    expect(proc._writes).toEqual(['claude\r'])
   })
 
-  it('appends CR on Windows so PowerShell/cmd.exe submit the line', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
+  it('replaces a caller-supplied LF terminator with CR', async () => {
     const proc = createMockProc()
     const ready = Promise.resolve()
-    writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {})
+    writeStartupCommandWhenShellReady(ready, proc, 'claude\n', () => {})
 
     await ready
-    proc._emitData('\r\nPS> ')
+    proc._emitData('\r\nuser@host % ')
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
     expect(proc._writes).toEqual(['claude\r'])
   })
 
-  it('does not re-append a submit byte if the command already ends in CR or LF', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    const proc = createMockProc()
-    const ready = Promise.resolve()
-    writeStartupCommandWhenShellReady(ready, proc, 'claude\n', () => {})
-
-    await ready
-    proc._emitData('\r\nPS> ')
-    vi.advanceTimersByTime(30)
-    await Promise.resolve()
-
-    expect(proc._writes).toEqual(['claude\n'])
-  })
-
   it('keeps the no-prompt fallback conservative to avoid duplicate shell echo', async () => {
-    Object.defineProperty(process, 'platform', { value: 'darwin' })
     const proc = createMockProc()
     const ready = Promise.resolve()
     writeStartupCommandWhenShellReady(ready, proc, 'codex', () => {})
@@ -115,11 +99,10 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(150)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual(['codex\n'])
+    expect(proc._writes).toEqual(['codex\r'])
   })
 
   it('uses the short settle delay when marker scan already observed post-marker bytes', async () => {
-    Object.defineProperty(process, 'platform', { value: 'darwin' })
     const proc = createMockProc()
     const ready = Promise.resolve({ postMarkerBytesObserved: true })
     writeStartupCommandWhenShellReady(ready, proc, 'codex', () => {})
@@ -131,12 +114,11 @@ describe('writeStartupCommandWhenShellReady', () => {
 
     vi.advanceTimersByTime(1)
     await Promise.resolve()
-    expect(proc._writes).toEqual(['codex\n'])
+    expect(proc._writes).toEqual(['codex\r'])
   })
 
   // Why: multiline startup commands must be bracketed-paste wrapped (ESC[200~ … ESC[201~) so shells insert them literally instead of treating each LF as Enter.
   it('wraps a multiline startup command in bracketed paste when the shell supports it', async () => {
-    Object.defineProperty(process, 'platform', { value: 'darwin' })
     const proc = createMockProc()
     const ready = Promise.resolve()
     const command = "claude '--dangerously-skip-permissions' 'line one\nline two'"
@@ -149,11 +131,10 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual([`\x1b[200~${command}\x1b[201~\n`])
+    expect(proc._writes).toEqual([`\x1b[200~${command}\x1b[201~\r`])
   })
 
   it('leaves a single-line command on the raw submit path even when bracketed paste is safe', async () => {
-    Object.defineProperty(process, 'platform', { value: 'darwin' })
     const proc = createMockProc()
     const ready = Promise.resolve()
     writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {}, {
@@ -165,14 +146,14 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual(['claude\n'])
+    expect(proc._writes).toEqual(['claude\r'])
   })
 
   it('does not bracket-wrap a multiline command when the shell lacks bracketed paste', async () => {
-    Object.defineProperty(process, 'platform', { value: 'darwin' })
     const proc = createMockProc()
     const ready = Promise.resolve()
     const command = 'echo one\necho two'
+    // Why CR between the lines: without bracketed paste each break submits its own line.
     // Why: bracketedPasteSafe defaults false, so keep the raw path to avoid echoing ESC[200~ on shells without bracketed paste.
     writeStartupCommandWhenShellReady(ready, proc, command, () => {})
 
@@ -181,6 +162,6 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual([`${command}\n`])
+    expect(proc._writes).toEqual(['echo one\recho two\r'])
   })
 })

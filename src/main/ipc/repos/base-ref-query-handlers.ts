@@ -8,20 +8,7 @@ import {
 } from '../../../shared/repo-search-limits'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import {
-  getBaseRefDefault,
-  getRemoteCount,
-  normalizeRefSearchQuery,
-  parseAndFilterSearchRefDetails,
-  parseRemoteCount,
-  resolveDefaultBaseRefViaExec,
-  buildSearchBaseRefsArgv,
-  isForEachRefExcludeUnsupportedError,
-  mergeBaseRefSearchResultGroups,
-  searchBaseRefDetails
-} from '../../git/repo'
-import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
-import { getSshGitCapabilityCache } from '../../git/git-capability-state'
+import { getBaseRefDefault, getRemoteCount, searchBaseRefDetails } from '../../git/repo'
 
 export function registerBaseRefQueryHandlers(store: Store): void {
   ipcMain.handle(
@@ -35,48 +22,9 @@ export function registerBaseRefQueryHandlers(store: Store): void {
         // Why: folder repos have no git state for a base ref; return null + 0 so the renderer skips a fabricated default.
         return { defaultBaseRef: null, remoteCount: 0 }
       }
-      // Why: remote repos need the relay to resolve symbolic-ref where the git data lives.
+      // Why: an SSH repo's git data lives on a host this process does not serve.
       if (repo.connectionId) {
-        const provider = getSshGitProvider(repo.connectionId)
-        if (!provider) {
-          return { defaultBaseRef: null, remoteCount: 0 }
-        }
-        // Why: delegate to shared resolveDefaultBaseRefViaExec; log symbolic-ref failures here to keep the SSH transport diagnostic it otherwise swallows.
-        const resolveDefault = async (): Promise<string | null> => {
-          return resolveDefaultBaseRefViaExec(async (argv) => {
-            try {
-              return await provider.exec(argv, repo.path)
-            } catch (err) {
-              if (argv[0] === 'symbolic-ref') {
-                console.warn('[repos:getBaseRefDefault] SSH symbolic-ref failed', {
-                  path: repo.path,
-                  err
-                })
-              }
-              throw err
-            }
-          })
-        }
-
-        const resolveRemoteCount = async (): Promise<number> => {
-          try {
-            const remotesResult = await provider.exec(['remote'], repo.path)
-            return parseRemoteCount(remotesResult.stdout)
-          } catch (err) {
-            // Why: 0 = unknown sentinel that suppresses the multi-remote hint.
-            console.warn('[repos:getBaseRefDefault] SSH git remote count failed', {
-              path: repo.path,
-              err
-            })
-            return 0
-          }
-        }
-
-        const [defaultBaseRef, remoteCount] = await Promise.all([
-          resolveDefault(),
-          resolveRemoteCount()
-        ])
-        return { defaultBaseRef, remoteCount }
+        return { defaultBaseRef: null, remoteCount: 0 }
       }
       // Why: run in parallel; a remote-count failure must not break default detection.
       const [defaultBaseRef, remoteCount] = await Promise.all([
@@ -123,66 +71,8 @@ async function searchBaseRefDetailsForRepo(
   // Keep the public IPC shape forgiving while bounding Git and retained results
   // for callers that request an unusually large page.
   const limit = clampRepoSearchRefsLimit(requestedLimit)
-  // Why: remote repos need the relay to list branches on the remote host.
   if (repo.connectionId) {
-    const provider = getSshGitProvider(repo.connectionId)
-    if (!provider) {
-      return []
-    }
-    // Why: strip glob metacharacters to prevent glob injection (mirrors local normalizeRefSearchQuery).
-    const normalizedQuery = normalizeRefSearchQuery(args.query)
-    try {
-      // Why: argv lives in buildSearchBaseRefsArgv so SSH and local paths cannot drift.
-      const remotesResult = await provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      const remotes = remotesResult.stdout
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-      const capabilities = getSshGitCapabilityCache(provider)
-      const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
-        return capabilities.runWithFallback(
-          'for-each-ref-exclude',
-          async () =>
-            (
-              await provider.exec(
-                buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                  remoteNames: remotes,
-                  patternGroup
-                }),
-                repo.path
-              )
-            ).stdout,
-          async () =>
-            (
-              await provider.exec(
-                buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                  excludeRemoteHead: false,
-                  remoteNames: remotes,
-                  patternGroup
-                }),
-                repo.path
-              )
-            ).stdout,
-          isForEachRefExcludeUnsupportedError
-        )
-      }
-      // Why: delegate the parse/filter/dedup/limit pipeline to the shared helper so SSH and local paths cannot diverge.
-      const searchTokens = normalizedQuery.split('/').filter((token) => token.length > 0)
-      if (searchTokens.length > 1) {
-        const results = await Promise.all([runSearch('segmented'), runSearch('branchRoot')])
-        return mergeBaseRefSearchResultGroups(
-          results.map((stdout) => parseAndFilterSearchRefDetails(stdout, limit, remotes)),
-          limit
-        )
-      }
-      return parseAndFilterSearchRefDetails(await runSearch(), limit, remotes)
-    } catch (err) {
-      console.warn('[repos:searchBaseRefs] SSH for-each-ref failed', {
-        path: repo.path,
-        err
-      })
-      return []
-    }
+    return []
   }
   return searchBaseRefDetails(repo.path, args.query, limit)
 }

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import { setTimeout as delay } from 'node:timers/promises'
 import { RelayLoadControlPeer } from './relay-load-control-peer.mjs'
-import { requestGitHubSmokeTokens } from './github-smoke-token.mjs'
+import { RELAY_ASIA_LOAD_PRINCIPAL_SHARDS, requestGitHubSmokeTokens } from './github-smoke-token.mjs'
 import { relayLoadFailureReason } from './relay-load-connection-failure.mjs'
 import {
   assertRelayLoadDirectorCapacityToken,
@@ -20,6 +20,7 @@ import {
   waitForRelayLoadRebindGate
 } from './relay-load-rebind-boundary.mjs'
 import { proveRelayLoadRegionBehavior } from './relay-load-region-behavior.mjs'
+import { proveRelayLoadDuplicateAssign } from './relay-load-duplicate-assign.mjs'
 import {
   openRelayLoadInviteOffers,
   proveRelayLoadRequestUnitBoundary
@@ -30,10 +31,17 @@ import {
   runRelayLoadWithShutdown
 } from './relay-load-run-lifecycle.mjs'
 import { createRelayLoadReaderEvidence } from './relay-load-reader-evidence.mjs'
+import { holdRelayLoadSplice, relayLoadSpliceReopenSummary } from './relay-load-splice-retry.mjs'
+import {
+  installRelayLoadResumeDevice,
+  relayLoadResumeSummary,
+  resumeRelayLoadPhoneOnce
+} from './relay-load-resume-phone.mjs'
 import {
   parseRelayLoadArguments,
   relayLoadPrincipalIndex,
   relayLoadReaderEvidenceError,
+  relayLoadResumePhoneIndexes,
   relayLoadSpliceIndexes,
   relayLoadSpliceProfile,
   relayLoadSpliceStartDelayMs
@@ -95,6 +103,7 @@ function report(state, final = false) {
     regionalFallbacksProved: state.regionalFallbacksProved,
     oldClientUsFirstProved: state.oldClientUsFirstProved,
     stickyAssignmentProved: state.stickyAssignmentProved,
+    duplicateAssign: state.duplicateAssign,
     requestUnitInvitesOpened: state.requestUnitInvitesOpened,
     requestUnitPrincipalCount: state.requestUnitPrincipalCount,
     relayAsiaLoadPrincipalCount: state.relayAsiaLoadPrincipalCount,
@@ -105,6 +114,9 @@ function report(state, final = false) {
     peakActiveSplices: state.peakActiveSplices,
     completedSplices: state.completedSplices,
     failedSplices: state.failedSplices,
+    spliceRetries: state.spliceRetries,
+    spliceFailuresByReason: state.spliceFailuresByReason,
+    spliceReopen: relayLoadSpliceReopenSummary(state.spliceReopenGapsMs, state.spliceFailedAt.size),
     slowReaderSplicesCompleted: state.slowReaderSplicesCompleted,
     wedgedReaderSplicesClosed: state.wedgedReaderSplicesClosed,
     readerQueueEvidence,
@@ -113,6 +125,7 @@ function report(state, final = false) {
       ...readerQueueEvidence.map(({ increaseBytes }) => increaseBytes)
     ),
     readerClosesByCode: state.readerClosesByCode,
+    resumePhones: relayLoadResumeSummary(state.resumeAttempts),
     // Every cell a control connected to, so a canary can prove its load reached the target.
     assignedCellOrigins: [...state.assignedCellOrigins].sort(),
     controlHeadroom: Math.max(0, state.controls - state.active.size),
@@ -158,7 +171,9 @@ if (!accessToken && !key.signingKey && process.env.ACTIONS_ID_TOKEN_REQUEST_URL 
   const loadOptions = config.relayAsiaLoadPrincipalCount > 0
     ? {
         relayAsiaLoad: {
-          shardIndex: config.shardIndex,
+          // Staging auth mints principal sets for shards 0-3 only; shards past that (a second
+          // hosted runner) reuse a set, and their hosts stay distinct by peer index.
+          shardIndex: config.shardIndex % RELAY_ASIA_LOAD_PRINCIPAL_SHARDS,
           principalCount: config.relayAsiaLoadPrincipalCount
         }
       }
@@ -231,6 +246,7 @@ const state = {
   regionalFallbacksProved: 0,
   oldClientUsFirstProved: 0,
   stickyAssignmentProved: 0,
+  duplicateAssign: null,
   requestUnitInvitesOpened: 0,
   requestUnitOverflowReason: null,
   requestUnitCleanupProved: 0,
@@ -239,6 +255,11 @@ const state = {
   peakActiveSplices: 0,
   completedSplices: 0,
   failedSplices: 0,
+  spliceRetries: 0,
+  spliceFailuresByReason: {},
+  spliceFailedAt: new Map(),
+  resumeAttempts: [],
+  spliceReopenGapsMs: [],
   slowReaderSplicesCompleted: 0,
   wedgedReaderSplicesClosed: 0,
   readerEvidence: null,
@@ -255,6 +276,8 @@ const state = {
 }
 const peers = new Map()
 const reconnectTimers = new Set()
+// Duplicate-assign probe hosts: outside `peers`, so they never count toward the run's controls.
+const probePeers = []
 
 async function readRuntimeQueuedBytes(origin) {
   const response = await fetch(`${origin}/v1/admin/runtime-status`, {
@@ -324,6 +347,11 @@ function observe(type, detail) {
   else if (type === 'protocolError') state.protocolErrors++
   else if (type === 'socketError') state.socketErrors++
   else if (type === 'spliceOpened') {
+    const failedAt = state.spliceFailedAt.get(detail.index)
+    if (failedAt !== undefined) {
+      state.spliceReopenGapsMs.push(Date.now() - failedAt)
+      state.spliceFailedAt.delete(detail.index)
+    }
     state.activeSplices++
     state.peakActiveSplices = Math.max(state.peakActiveSplices, state.activeSplices)
   } else if (type === 'spliceCompleted') {
@@ -391,11 +419,88 @@ for (let localIndex = 0; localIndex < config.controls; localIndex++) {
   const offset = config.rampStartDelayMs + rampOffset
   initialConnections.push(delay(offset).then(() => connect(peer)))
 }
+function recordResumeAttempt(peer, attempt) {
+  state.resumeAttempts.push(attempt)
+  console.log(JSON.stringify({ event: 'relay_load_resume_attempt', index: peer.index, ...attempt }))
+}
+// A paired phone that reconnects every interval until the run stops; every attempt is a line.
+async function runResumePhone(peer, localIndex, endsAt) {
+  const relayDeviceId = `load-resume-device-${peer.index}`
+  // Spread the phones across one interval.
+  await delay(Math.floor((localIndex / Math.max(1, config.resumePhones)) * config.resumeIntervalMs))
+  let token
+  while (!state.stopping && Date.now() < endsAt) {
+    const startedAt = Date.now()
+    if (!token) {
+      try {
+        token = await installRelayLoadResumeDevice(peer, relayDeviceId)
+      } catch (error) {
+        recordResumeAttempt(peer, {
+          at: startedAt,
+          ok: false,
+          failure: 'install',
+          error: String(error.message).slice(0, 160)
+        })
+      }
+    } else {
+      recordResumeAttempt(peer, await resumeRelayLoadPhoneOnce(peer, { token, relayDeviceId }, {
+        holdMs: config.resumeHoldMs,
+        stopping: () => state.stopping,
+        delay
+      }))
+    }
+    await delay(Math.min(
+      Math.max(1_000, config.resumeIntervalMs - (Date.now() - startedAt)),
+      Math.max(0, endsAt - Date.now())
+    ))
+  }
+}
 const progressTimer = setInterval(() => report(state), 10_000)
 progressTimer.unref()
 await runRelayLoadWithShutdown(async () => {
   await Promise.all(initialConnections)
   assertRelayLoadRampAccepted(state.rampConnectionFailures, config.maxRampConnectionFailures)
+  if (config.duplicateAssignProbes > 0) {
+    const reconnects = { closes: 0, closesByCode: {}, reconnectFailures: 0 }
+    // A probe host closed by a demotion re-assigns through the director, as a desktop would.
+    const observeProbe = (peer) => (type, detail) => {
+      if (type !== 'closed' || detail.stopped) return
+      reconnects.closes++
+      const code = String(detail.code)
+      reconnects.closesByCode[code] = (reconnects.closesByCode[code] ?? 0) + 1
+      if (state.stopping) return
+      const timeout = setTimeout(() => {
+        reconnectTimers.delete(timeout)
+        void peer.connect().catch(() => {
+          reconnects.reconnectFailures++
+        })
+      }, 1_000 + Math.floor(Math.random() * 5_000))
+      reconnectTimers.add(timeout)
+    }
+    const base = config.controls * config.shardCount + 20_000
+    const pairs = Array.from({ length: config.duplicateAssignProbes }, (_, probe) => {
+      const index = base + probe * config.shardCount + config.shardIndex
+      const primary = new RelayLoadControlPeer(index, peerOptions(index), (type, detail) =>
+        observeProbe(primary)(type, detail)
+      )
+      const twin = new RelayLoadControlPeer(
+        index,
+        peerOptions(index, { keys: primary.keys }),
+        () => undefined
+      )
+      probePeers.push(primary, twin)
+      return { primary, twin }
+    })
+    state.duplicateAssign = {
+      ...(await proveRelayLoadDuplicateAssign({
+        pairs,
+        holdMs: config.duplicateAssignHoldMs,
+        delay,
+        failureReason: relayLoadFailureReason
+      })),
+      probeReconnects: reconnects
+    }
+  }
   if (
     config.rebindProbes > 0 || config.placementOverflowProbes > 0 ||
     config.regionalFallbackProbes > 0
@@ -513,21 +618,36 @@ await runRelayLoadWithShutdown(async () => {
   }
   const splicePromises = spliceIndexes.map((index, spliceIndex) =>
     delay(relayLoadSpliceStartDelayMs(config, spliceIndex)).then(() =>
-      peers.get(index).openSplice({
-        payloadBytes: config.splicePayloadBytes,
-        ...relayLoadSpliceProfile(config, spliceIndex),
-        observeReaderPressure,
-        holdMs: config.spliceHoldMs
+      holdRelayLoadSplice({
+        open: () =>
+          peers.get(index).openSplice({
+            payloadBytes: config.splicePayloadBytes,
+            ...relayLoadSpliceProfile(config, spliceIndex),
+            observeReaderPressure,
+            holdMs: config.spliceHoldMs
+          }),
+        retryMaxMs: config.spliceRetryMaxMs,
+        stopping: () => state.stopping,
+        onFailure: (reason) => {
+          state.spliceRetries++
+          state.spliceFailuresByReason[reason] = (state.spliceFailuresByReason[reason] ?? 0) + 1
+          if (!state.spliceFailedAt.has(index)) state.spliceFailedAt.set(index, Date.now())
+        },
+        delay
       })
     )
   )
-  await Promise.all([...splicePromises, delay(config.durationMs)])
+  const resumeEndsAt = Date.now() + config.durationMs
+  const resumePromises = relayLoadResumePhoneIndexes(config).map((index, localIndex) =>
+    runResumePhone(peers.get(index), localIndex, resumeEndsAt)
+  )
+  await Promise.all([...splicePromises, ...resumePromises, delay(config.durationMs)])
 }, async () => {
   state.stopping = true
   clearInterval(progressTimer)
   for (const timeout of reconnectTimers) clearTimeout(timeout)
   reconnectTimers.clear()
-  await Promise.all([...peers.values()].map((peer) => peer.shutdown()))
+  await Promise.all([...peers.values(), ...probePeers].map((peer) => peer.shutdown()))
   eventLoopDelay.disable()
   state.shutdownEvidence = {
     peerShutdowns: state.peerShutdowns,

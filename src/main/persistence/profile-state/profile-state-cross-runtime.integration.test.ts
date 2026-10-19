@@ -1,5 +1,5 @@
 /**
- * Design D4 Phase 1 gate: a profile database Bun 1.4.2 wrote, WAL included after an unclean
+ * Design D4 Phase 1 gate: a profile database the pinned Bun wrote, WAL included after an unclean
  * exit, opens and backs up under the pinned Node, and the reverse — the rollback direction.
  * Today's source reaches Bun's own SQLite through its node:sqlite; the Bun adapter is gone.
  */
@@ -8,7 +8,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runProcess } from '../../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   buildProfileStateCutoverFixture,
   canonicalProfileStateJson
@@ -96,11 +96,11 @@ async function run(
 }
 
 const skip = skipForMissingInputs('cross-runtime', [
-  ...(bun ? [] : ['Bun 1.4.2 (BUN_EXECUTABLE or bun on PATH)']),
+  ...(bun ? [] : ['the pinned Bun (BUN_EXECUTABLE or bun on PATH)']),
   ...(node ? [] : ['the pinned Node (ORCA_PINNED_NODE or out/runtimes)'])
 ])
 
-describe.skipIf(skip)('profile database across Bun 1.4.2 and the pinned Node', () => {
+describe.skipIf(skip)('profile database across the pinned Bun and the pinned Node', () => {
   it.each([
     ['Bun', 'Node'],
     ['Node', 'Bun']

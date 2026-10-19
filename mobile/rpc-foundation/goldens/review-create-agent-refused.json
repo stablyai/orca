@@ -9,6 +9,11 @@
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
+    "2398eeb5ec74": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\",\"params\":{\"worktreeId\":\"workspace-1\"}}"
+    },
     "5ee9e7b49320": {
       "name": "agent.launchReplay#1",
       "ordinal": 8,
@@ -91,6 +96,38 @@
         }
       }
     },
+    "bca41ddb4705": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktreeId": "workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": ["claude"]
+        }
+      }
+    },
     "bcb5111e6012": {
       "name": "agent.launchReplay#1",
       "ordinal": 7,
@@ -149,11 +186,6 @@
         "$rpc": "undefined"
       }
     },
-    "f49d184679d1": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
-    },
     "fc1691a7deca": {
       "actionError": "Workspace not found",
       "busyAction": {
@@ -186,38 +218,6 @@
       "sendSheet": {
         "$rpc": "null"
       }
-    },
-    "fc3974e714de": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": ["claude"]
-        }
-      }
     }
   },
   "recording": {
@@ -226,8 +226,8 @@
       {
         "id": "refused",
         "observation": {
-          "sender": ["9239a4f232b8", "96a9a954e28f", "fc3974e714de", "bcb5111e6012"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "5ee9e7b49320"],
+          "sender": ["9239a4f232b8", "96a9a954e28f", "bca41ddb4705", "bcb5111e6012"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "2398eeb5ec74", "5ee9e7b49320"],
           "settlements": {
             "create-and-send": "eb79a9b3682a"
           },

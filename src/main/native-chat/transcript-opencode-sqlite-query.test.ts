@@ -115,7 +115,11 @@ describe('readOpenCodeTranscriptPage', () => {
       const page = readOpenCodeTranscriptPage(args)
       expect(page?.items.map((item) => item.message.id)).toEqual(['msg-2', 'msg-3'])
       expect(page?.items[0]?.message.blocks).toEqual([
-        { type: 'text', text: AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'] }
+        {
+          type: 'text',
+          text: AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'],
+          presentation: 'history-item-too-large'
+        }
       ])
       expect(page?.items[0]?.rowid).toBe(messageRowid(db, 'msg-2'))
       expect(readOpenCodeTranscriptPage(args)?.items[0]?.fingerprint).toBe(
@@ -152,13 +156,17 @@ describe('readOpenCodeTranscriptPage', () => {
       time: 1,
       data: { type: 'file', mime: 'image/png', url: '😀'.repeat(600_000) }
     })
-    expect(
-      readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 1 })?.items[0]?.message
-        .blocks
-    ).toEqual([
-      { type: 'text', text: 'see this' },
-      { type: 'text', text: AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'] }
+    const page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 1 })
+    expect(page?.items.map((item) => item.message)).toMatchObject([
+      { id: 'msg', role: 'user', blocks: [{ type: 'text', text: 'see this' }] },
+      {
+        id: 'msg:omission',
+        role: 'system',
+        blocks: [{ type: 'text', presentation: 'history-item-too-large' }]
+      }
     ])
+    expect(page?.items[0]?.rowid).toBe(page?.items[1]?.rowid)
+    expect(page?.items[0]?.message.transcriptOffset).toBe(page?.items[1]?.message.transcriptOffset)
   })
 
   it('returns null when the session row does not exist', () => {
@@ -495,8 +503,12 @@ describe('readOpenCodeTranscriptSignal', () => {
     insertPart(db, { id: 'prt-1', messageId: 'msg-1', time: 10, data: { type: 'text', text: 'a' } })
     insertPart(db, { id: 'prt-2', messageId: 'msg-2', time: 20, data: { type: 'text', text: 'b' } })
 
+    db.exec(
+      "ALTER TABLE session ADD COLUMN directory TEXT; UPDATE session SET directory = '/folder'"
+    )
     const signal = readOpenCodeTranscriptSignal(path, 'ses-1')
     expect(signal).toEqual({
+      cwd: '/folder',
       messageCount: 2,
       partCount: 2,
       maxMessageRowId: 2,

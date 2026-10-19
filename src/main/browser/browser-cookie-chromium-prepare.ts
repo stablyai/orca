@@ -142,185 +142,198 @@ export async function prepareChromiumCookieImport(
     }
   }
 
-  // Why: Chromium timestamps (µs since 1601) can exceed Number.MAX_SAFE_INTEGER; readBigInts avoids precision loss.
-  sourceDb = new DatabaseSync(sourceSnapshot.databasePath, { readOnly: true, readBigInts: true })
-  let targetColumnInfo: ChromiumCookieColumnInfo[] | null = null
-  let colList: string | null = null
-  let placeholders: string | null = null
-  if (stagingAvailable) {
-    // Why: the staged file is Orca's own partition DB, also named "Cookies", so the same
-    // transient AV handle can make opening it throw — degrade instead of killing the import.
-    try {
-      stagingDb = new DatabaseSync(stagingCookiesPath)
-      // Why (STA-4797): a new-format stage must be one self-contained file. Otherwise a lost WAL
-      // can erase its scope marker and make cold-start replay mistake it for a legacy whole-image
-      // import, restoring the unrelated-cookie data loss this format is meant to prevent.
-      stagingDb.exec('PRAGMA journal_mode = DELETE')
-      targetColumnInfo = stagingDb
-        .prepare('PRAGMA table_info(cookies)')
-        .all() as ChromiumCookieColumnInfo[]
-      const targetCols = targetColumnInfo.map((row) => row.name)
-      colList = targetCols.join(', ')
-      placeholders = targetCols.map(() => '?').join(', ')
-    } catch (err) {
-      diag(`  staging database unusable, restart fallback disabled: ${String(err)}`)
-      stagingAvailable = false
-      targetColumnInfo = null
-      colList = null
-      placeholders = null
-      closeStagingDb()
-      // Why: the copy holds real partition cookies; discard it now rather than at the exit branches.
-      discardStagingFile()
-    }
-  }
-
-  // Why (STA-4300): the partition columns drift across Chromium versions, so read the source
-  // schema rather than assuming a row's missing column means "unpartitioned".
-  const sourceColumns = new Set(
-    (sourceDb.prepare('PRAGMA table_info(cookies)').all() as ChromiumCookieColumnInfo[]).map(
-      (column) => column.name
-    )
-  )
-  const sourceRows = sourceDb.prepare('SELECT * FROM cookies ORDER BY rowid').all() as Record<
-    string,
-    unknown
-  >[]
-  sourceDb.close()
-  sourceDb = null
-  diag(`  source has ${sourceRows.length} cookies`)
-  if (sourceRows.length === 0) {
-    closeStagingDb()
-    discardStagingFile()
-    return { result: { ok: false, reason: `No cookies found in ${browser.label}.` } }
-  }
-
-  // Why (STA-4300): partition fidelity is a property of the source row, even when its value
-  // cannot be decrypted. Plan first so decryption failure cannot discard a family's skip.
-  const partitionCandidates = sourceRows.flatMap((sourceRow) => {
-    const domain = sourceRow.host_key as string
-    const name = sourceRow.name as string
-    return isGoogleSourceBoundCookie(name, domain) || isNonTransplantableCookieDomain(domain)
-      ? []
-      : [{ sourceRow, domain, partition: readChromiumRowPartition(sourceRow, sourceColumns) }]
-  })
-  const nativePlan = planImportWrites(partitionCandidates)
-  const plannedSourceRows = new Set(nativePlan.writes.map((candidate) => candidate.sourceRow))
-  const partitionBySourceRow = new Map(
-    partitionCandidates.map((candidate) => [candidate.sourceRow, candidate.partition])
-  )
-  // Why (§4.3c): a family we cannot name is one we cannot exclude from the clear, and clearing a
-  // family we cannot protect is the P0. Refuse before the jar is touched.
-  if (nativePlan.hasUnrepresentableSkip) {
-    closeStagingDb()
-    discardStagingFile()
-    return {
-      result: {
-        ok: false,
-        reason:
-          'Could not import: a cookie with an unreadable site partition has no registrable domain, so its existing session cannot be protected.'
+  let ownershipTransferred = false
+  try {
+    // Why: Chromium timestamps (µs since 1601) can exceed Number.MAX_SAFE_INTEGER; readBigInts avoids precision loss.
+    sourceDb = new DatabaseSync(sourceSnapshot.databasePath, { readOnly: true, readBigInts: true })
+    let targetColumnInfo: ChromiumCookieColumnInfo[] | null = null
+    let colList: string | null = null
+    let placeholders: string | null = null
+    if (stagingAvailable) {
+      // Why: the staged file is Orca's own partition DB, also named "Cookies", so the same
+      // transient AV handle can make opening it throw — degrade instead of killing the import.
+      try {
+        stagingDb = new DatabaseSync(stagingCookiesPath)
+        // Why (STA-4797): a new-format stage must be one self-contained file. Otherwise a lost WAL
+        // can erase its scope marker and make cold-start replay mistake it for a legacy whole-image
+        // import, restoring the unrelated-cookie data loss this format is meant to prevent.
+        stagingDb.exec('PRAGMA journal_mode = DELETE')
+        targetColumnInfo = stagingDb
+          .prepare('PRAGMA table_info(cookies)')
+          .all() as ChromiumCookieColumnInfo[]
+        const targetCols = targetColumnInfo.map((row) => row.name)
+        colList = targetCols.join(', ')
+        placeholders = targetCols.map(() => '?').join(', ')
+      } catch (err) {
+        diag(`  staging database unusable, restart fallback disabled: ${String(err)}`)
+        stagingAvailable = false
+        targetColumnInfo = null
+        colList = null
+        placeholders = null
+        closeStagingDb()
+        // Why: the copy holds real partition cookies; discard it now rather than at the exit branches.
+        discardStagingFile()
       }
     }
-  }
 
-  const needsSourceKey = sourceRows.some((sourceRow) => {
-    const encrypted = sourceRow.encrypted_value
-    if (!(encrypted instanceof Uint8Array) || encrypted.length === 0) {
-      return false
-    }
-    return (
-      !isGoogleSourceBoundCookie(sourceRow.name as string, sourceRow.host_key as string) &&
-      !isNonTransplantableCookieDomain(sourceRow.host_key as string)
-    )
-  })
-  const sourceKey = needsSourceKey
-    ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
-    : null
-  if (needsSourceKey && !sourceKey) {
-    closeStagingDb()
-    // Why: key denial happens after staging, so clean up the target DB copy or retries pile up.
-    discardStagingFile()
-    return {
-      result: {
-        ok: false,
-        reason: `Could not access ${browser.label} encryption key. The OS may have denied access.`
-      }
-    }
-  }
-
-  // Why: staging only backs the cold-restart replay, so any failure writing it disables that
-  // fallback instead of aborting an import whose in-memory half still works.
-  let insertStmt: ChromiumImportContext['insertStmt'] = null
-  const context: ChromiumImportContext = {
-    browser,
-    targetPartition,
-    options,
-    targetSession,
-    stagingCookiesPath,
-    stagingAvailable,
-    sourceSnapshot,
-    sourceDb,
-    stagingDb,
-    targetColumnInfo,
-    colList,
-    placeholders,
-    sourceColumns,
-    sourceRows,
-    nativePlan,
-    plannedSourceRows,
-    partitionBySourceRow,
-    sourceKey,
-    imported: 0,
-    skipped: 0,
-    decryptFailed: 0,
-    appBoundFailed: 0,
-    keyringUnavailableFailed: 0,
-    integritySkipped: 0,
-    nonTransplantableSkipped: 0,
-    partitionSkipped: nativePlan.skips.length,
-    googleCookiesSkipped: 0,
-    memoryLoaded: 0,
-    memoryFailed: 0,
-    domainSet: new Set<string>(),
-    decryptedCookies: [],
-    // Why: the staging insert needs the RAW source row, so each scanned candidate carries it.
-    // A plan record holding only the derived fields compiles fine and then cannot stage.
-    scanned: [],
-    sourceDomainValidity: new Map<string, boolean>(),
-    insertStmt,
-    importScope: {
-      exact: new Set<string>(),
-      ancestors: new Set<string>(),
-      descendantRoots: new Set<string>()
-    },
-    closeStagingDb,
-    discardStagingFile,
-    disableStaging: (reason: string): void => {
-      diag(`  staging disabled, restart fallback unavailable: ${reason}`)
-      context.stagingAvailable = false
-      context.insertStmt = null
-      context.closeStagingDb()
-      context.discardStagingFile()
-    }
-  } satisfies ChromiumImportContext
-
-  if (context.stagingDb && context.colList && context.placeholders) {
-    try {
-      context.insertStmt = context.stagingDb.prepare(
-        `INSERT OR REPLACE INTO cookies (${context.colList}) VALUES (${context.placeholders})`
+    // Why (STA-4300): the partition columns drift across Chromium versions, so read the source
+    // schema rather than assuming a row's missing column means "unpartitioned".
+    const sourceColumns = new Set(
+      (sourceDb.prepare('PRAGMA table_info(cookies)').all() as ChromiumCookieColumnInfo[]).map(
+        (column) => column.name
       )
-      context.stagingDb.exec('BEGIN TRANSACTION')
-    } catch (err) {
-      context.disableStaging(String(err))
-    }
-  } else if (context.stagingAvailable) {
-    context.disableStaging('staged database exposed no cookies columns')
-  }
-  // Why: keep the existing conservative fallback boundary for family-level omissions. Expanding
-  // partial-import restart behavior is separate from narrowing what a staged replay may replace.
-  if (context.nativePlan.skippedFamilies.size > 0) {
-    context.disableStaging(
-      `${context.nativePlan.skippedFamilies.size} preserved cookie families cannot be represented in a staged image`
     )
+    const sourceRows = sourceDb.prepare('SELECT * FROM cookies ORDER BY rowid').all() as Record<
+      string,
+      unknown
+    >[]
+    sourceDb.close()
+    sourceDb = null
+    diag(`  source has ${sourceRows.length} cookies`)
+    if (sourceRows.length === 0) {
+      return { result: { ok: false, reason: `No cookies found in ${browser.label}.` } }
+    }
+
+    // Why (STA-4300): partition fidelity is a property of the source row, even when its value
+    // cannot be decrypted. Plan first so decryption failure cannot discard a family's skip.
+    const partitionCandidates = sourceRows.flatMap((sourceRow) => {
+      const domain = sourceRow.host_key as string
+      const name = sourceRow.name as string
+      return isGoogleSourceBoundCookie(name, domain) || isNonTransplantableCookieDomain(domain)
+        ? []
+        : [{ sourceRow, domain, partition: readChromiumRowPartition(sourceRow, sourceColumns) }]
+    })
+    const nativePlan = planImportWrites(partitionCandidates)
+    const plannedSourceRows = new Set(nativePlan.writes.map((candidate) => candidate.sourceRow))
+    const partitionBySourceRow = new Map(
+      partitionCandidates.map((candidate) => [candidate.sourceRow, candidate.partition])
+    )
+    // Why (§4.3c): a family we cannot name is one we cannot exclude from the clear, and clearing a
+    // family we cannot protect is the P0. Refuse before the jar is touched.
+    if (nativePlan.hasUnrepresentableSkip) {
+      return {
+        result: {
+          ok: false,
+          reason:
+            'Could not import: a cookie with an unreadable site partition has no registrable domain, so its existing session cannot be protected.'
+        }
+      }
+    }
+
+    const needsSourceKey = sourceRows.some((sourceRow) => {
+      const encrypted = sourceRow.encrypted_value
+      if (!(encrypted instanceof Uint8Array) || encrypted.length === 0) {
+        return false
+      }
+      return (
+        !isGoogleSourceBoundCookie(sourceRow.name as string, sourceRow.host_key as string) &&
+        !isNonTransplantableCookieDomain(sourceRow.host_key as string)
+      )
+    })
+    const sourceKey = needsSourceKey
+      ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
+      : null
+    if (needsSourceKey && !sourceKey) {
+      return {
+        result: {
+          ok: false,
+          reason: `Could not access ${browser.label} encryption key. The OS may have denied access.`
+        }
+      }
+    }
+
+    // Why: staging only backs the cold-restart replay, so any failure writing it disables that
+    // fallback instead of aborting an import whose in-memory half still works.
+    let insertStmt: ChromiumImportContext['insertStmt'] = null
+    const context: ChromiumImportContext = {
+      browser,
+      targetPartition,
+      options,
+      targetSession,
+      stagingCookiesPath,
+      stagingAvailable,
+      sourceSnapshot,
+      sourceDb,
+      stagingDb,
+      targetColumnInfo,
+      colList,
+      placeholders,
+      sourceColumns,
+      sourceRows,
+      nativePlan,
+      plannedSourceRows,
+      partitionBySourceRow,
+      sourceKey,
+      imported: 0,
+      skipped: 0,
+      decryptFailed: 0,
+      appBoundFailed: 0,
+      keyringUnavailableFailed: 0,
+      integritySkipped: 0,
+      nonTransplantableSkipped: 0,
+      partitionSkipped: nativePlan.skips.length,
+      googleCookiesSkipped: 0,
+      memoryLoaded: 0,
+      memoryFailed: 0,
+      domainSet: new Set<string>(),
+      decryptedCookies: [],
+      // Why: the staging insert needs the RAW source row, so each scanned candidate carries it.
+      // A plan record holding only the derived fields compiles fine and then cannot stage.
+      scanned: [],
+      sourceDomainValidity: new Map<string, boolean>(),
+      insertStmt,
+      importScope: {
+        exact: new Set<string>(),
+        ancestors: new Set<string>(),
+        descendantRoots: new Set<string>()
+      },
+      closeStagingDb,
+      discardStagingFile,
+      disableStaging: (reason: string): void => {
+        diag(`  staging disabled, restart fallback unavailable: ${reason}`)
+        context.stagingAvailable = false
+        context.insertStmt = null
+        context.closeStagingDb()
+        context.discardStagingFile()
+      }
+    } satisfies ChromiumImportContext
+
+    if (context.stagingDb && context.colList && context.placeholders) {
+      try {
+        context.insertStmt = context.stagingDb.prepare(
+          `INSERT OR REPLACE INTO cookies (${context.colList}) VALUES (${context.placeholders})`
+        )
+        context.stagingDb.exec('BEGIN TRANSACTION')
+      } catch (err) {
+        context.disableStaging(String(err))
+      }
+    } else if (context.stagingAvailable) {
+      context.disableStaging('staged database exposed no cookies columns')
+    }
+    // Why: keep the existing conservative fallback boundary for family-level omissions. Expanding
+    // partial-import restart behavior is separate from narrowing what a staged replay may replace.
+    if (context.nativePlan.skippedFamilies.size > 0) {
+      context.disableStaging(
+        `${context.nativePlan.skippedFamilies.size} preserved cookie families cannot be represented in a staged image`
+      )
+    }
+    // Why: the importer owns successful preparation, including any restart fallback.
+    ownershipTransferred = true
+    return { context }
+  } finally {
+    if (!ownershipTransferred) {
+      try {
+        sourceDb?.close()
+      } catch {
+        /* best-effort */
+      }
+      closeStagingDb()
+      discardStagingFile()
+      try {
+        sourceSnapshot.cleanup()
+      } catch (err) {
+        diag(`  Chromium snapshot cleanup failed: ${String(err)}`)
+      }
+    }
   }
-  return { context }
 }

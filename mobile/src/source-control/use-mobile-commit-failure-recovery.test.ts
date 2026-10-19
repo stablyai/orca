@@ -6,7 +6,7 @@ import type { RpcResponse } from '../transport/types'
 import type { MobileCommitFailureRecovery } from './mobile-commit-failure-recovery'
 
 vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerSuccess: vi.fn() }))
-vi.mock('../components/HostProtocolGate', () => ({
+vi.mock('../components/host-protocol-gates-context', () => ({
   useHostProtocolGates: () => ({
     hostCapabilities: [
       'agent.launch.v2',

@@ -31,6 +31,7 @@ export type AgentLaunchFingerprintInput = {
   target:
     | { kind: 'existing'; worktree: string }
     | { kind: 'create-worktree'; create: Readonly<Record<string, unknown>> }
+    | { kind: 'create-folder-workspace'; create: Readonly<Record<string, unknown>> }
   prompt?: { text: string; delivery: string }
   sessionOptions?: Readonly<Record<string, string>>
   reuseTerminal?: { handle: string }
@@ -38,8 +39,8 @@ export type AgentLaunchFingerprintInput = {
    *  that changed them must conflict rather than replay the first answer. `null` is a value here,
    *  not an absence — "explicitly no arguments" differs from "use the settings default". */
   agentArgs?: string | null
-  /** In: it decides both where the agent runs and, through `tui_launch_command`, which surface it
-   *  gets. Two launches differing only in `cwd` are genuinely two operations. */
+  /** In: it decides both where the agent runs and, through the `tui_launch_command` downgrade,
+   *  which surface it gets. Two launches differing only in `cwd` are genuinely two operations. */
   cwd?: string
   /** In: it is baked into the pane's PTY env and names the tab the caller placed, so a retry that
    *  reserved another pane must conflict rather than replay a key its placement cannot find. */
@@ -54,6 +55,9 @@ export type AgentLaunchFingerprintInput = {
    * its own original. That is the rule the mutable host settings above are excluded under — the
    * digest covers what the call DOES — and the cost of leaving it out is only that a replay reports
    * the first attempt's attribution, which is the truthful answer: one launch happened.
+   *
+   * `placement` and `presentation` are absent by the same rule: they say where the tab sits and whose
+   * view moves, not what runs, so a retry that moved them replays the first answer.
    */
 }
 

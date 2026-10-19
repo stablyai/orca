@@ -19,7 +19,10 @@ export const NATIVE_CHAT_TOOL_ACTIVITY_COPY = {
    *  detail. Count-agnostic wording so one entry serves any number. */
   failedCount: '{{value0}} failed',
   /** Spoken form of the same mark — `1 failed` alone does not say failed what. */
-  failedCallsLabel: 'Failed tool calls: {{value0}}'
+  failedCallsLabel: 'Failed tool calls: {{value0}}',
+  /** Calls a stop cut short, counted apart from failures in the same quiet mark. */
+  interruptedCount: '{{value0}} interrupted',
+  interruptedCallsLabel: 'Interrupted tool calls: {{value0}}'
 } as const
 
 /** Tools whose call is a shell command, so the row reads as terminal activity

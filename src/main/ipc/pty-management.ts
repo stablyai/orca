@@ -1,13 +1,18 @@
 import { ipcMain } from 'electron'
-import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
 import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import {
   getCurrentDaemonMacTccAttributionHealth,
-  getDaemonProvider,
-  restartDaemon
-} from '../daemon/daemon-init'
-import { getCurrentDaemonAdapter } from '../daemon/daemon-provider-routing'
+  getDaemonProvider
+} from '../daemon/daemon-provider-state'
+import { restartDaemon } from '../daemon/daemon-provider-restart'
+import {
+  readSeveredDaemonStatus,
+  restartSeveredDaemon,
+  type SeveredDaemonIncarnation,
+  type SeveredDaemonRestartResult
+} from '../daemon/daemon-host-image-state'
+import { getAllDaemonAdapters, getCurrentDaemonAdapter } from '../daemon/daemon-provider-routing'
 import {
   getDaemonFolderAccessMismatch,
   refreshDaemonFolderAccessProbe,
@@ -20,6 +25,7 @@ import {
 import type { MacDaemonTccAttributionHealth } from '../daemon/daemon-tcc-attribution'
 import type { DaemonEndpointIdentity } from '../daemon/daemon-hello-protocol'
 import type { DaemonSessionInfo } from '../daemon/types'
+import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
 
 // Why: poll past the daemon's 5s SIGTERM→SIGKILL ladder (KILL_TIMEOUT_MS in session.ts), else slow-exiting shells falsely look "refused".
 const MAX_POLL_ATTEMPTS = 65
@@ -31,13 +37,7 @@ function sleep(ms: number): Promise<void> {
 
 function getDaemonAdapters(): DaemonPtyAdapter[] {
   const provider = getDaemonProvider()
-  if (!provider) {
-    return []
-  }
-  if (provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider) {
-    return [...provider.getAllAdapters()]
-  }
-  return [provider]
+  return provider ? [...getAllDaemonAdapters(provider)] : []
 }
 
 // Why: surface degraded mode (daemon alive but cannot spawn fresh PTYs) so the UI can warn new terminals lack persistence.
@@ -76,6 +76,39 @@ export function registerDaemonManagementHandlers(): void {
   ipcMain.removeHandler('pty:management:restart')
   ipcMain.removeHandler('pty:management:macTccAttribution')
   ipcMain.removeHandler('pty:management:resetFolderAccess')
+  ipcMain.removeHandler('pty:management:severedDaemon')
+  ipcMain.removeHandler('pty:management:restartSeveredDaemon')
+  ipcMain.removeHandler('pty:management:asyncIoHealth')
+
+  ipcMain.handle('pty:management:asyncIoHealth', async (): Promise<DaemonAsyncIoStatus> => {
+    const provider = getDaemonProvider()
+    if (!provider) {
+      return { state: 'unverifiable' }
+    }
+    const adapter = getCurrentDaemonAdapter(provider)
+    const identity = adapter.getDaemonIdentity()
+    const health = await adapter.getAsyncIoHealth()
+    // A result from a replaced endpoint cannot diagnose its successor.
+    return identity && adapter.getDaemonIdentity() === identity && getDaemonProvider() === provider
+      ? health
+      : { state: 'unverifiable' }
+  })
+
+  // Why: a Linux AppImage daemon kept for its live terminals after its files vanished; the
+  // banner polls this and offers the verified restart below.
+  ipcMain.handle('pty:management:severedDaemon', async () => ({
+    severed: await readSeveredDaemonStatus().catch(() => null)
+  }))
+  ipcMain.handle(
+    'pty:management:restartSeveredDaemon',
+    async (_event, args: unknown): Promise<SeveredDaemonRestartResult> => {
+      const expected = parseSeveredDaemonIncarnation(args)
+      if (!expected) {
+        return { status: 'refused', reason: 'unverifiable' }
+      }
+      return restartSeveredDaemon(expected)
+    }
+  )
 
   // Why: lets Settings warn that macOS privacy grants no longer reach daemon terminals (STA-3491),
   // and carries the folder-access evidence the notice needs (STA-7948) on the same focus-time poll.
@@ -212,4 +245,24 @@ export function registerDaemonManagementHandlers(): void {
       return { success: false }
     }
   })
+}
+
+function parseSeveredDaemonIncarnation(args: unknown): SeveredDaemonIncarnation | null {
+  if (
+    typeof args !== 'object' ||
+    args === null ||
+    !('pid' in args) ||
+    !('linuxStartTicks' in args) ||
+    !('bootId' in args)
+  ) {
+    return null
+  }
+  const { pid, linuxStartTicks, bootId } = args
+  return typeof pid === 'number' &&
+    Number.isSafeInteger(pid) &&
+    pid > 0 &&
+    typeof linuxStartTicks === 'string' &&
+    typeof bootId === 'string'
+    ? { pid, linuxStartTicks, bootId }
+    : null
 }

@@ -17,6 +17,9 @@ export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
 /** Strategy for the prefix prepended to worktree branch names. */
 export type BranchPrefixStrategy = 'git-username' | 'custom' | 'none'
 
+/** Casing of the Jira issue key inside generated Jira-linked workspace and branch names. */
+export type JiraIssueKeyCasing = 'lowercase' | 'preserve'
+
 export type FloatingTerminalCwdRequest = {
   path?: string
   requireTrusted?: boolean

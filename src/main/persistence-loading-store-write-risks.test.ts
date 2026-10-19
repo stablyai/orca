@@ -4,7 +4,7 @@ import {
   maintenanceBarrier
 } from './persistence/loading-store/profile-state-maintenance-fixture'
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
@@ -46,37 +46,5 @@ describe('loading Store write-risk characterization', () => {
     store.updateUI({ sidebarWidth: 999 })
     await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('finalized')
     expect(readState().ui.sidebarWidth).toBe(712)
-  })
-
-  it('keeps a rejected durable mutation in memory for a later unrelated flush', async () => {
-    const { store, authority, readState } = await createWorkerMaintenanceFixture()
-    const before = readState().sshPtyConsumerRecoveries
-    const writeDomains = authority.writeCompleteSerializedDomains.bind(authority)
-    const rejectedWrite = vi
-      .spyOn(authority, 'writeCompleteSerializedDomains')
-      .mockImplementationOnce(() =>
-        writeDomains([{ domain: 'sshPtyConsumerRecoveries', payload: '{' }])
-      )
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    await expect(
-      store.upsertSshPtyConsumerRecovery({
-        targetId: 'ssh-1',
-        clientInstanceId: 'client-1',
-        serverBuildId: 'relay-build-1',
-        clientGeneration: 3,
-        ownerGeneration: 5,
-        ownerLease: 'secret-owner-lease'
-      })
-    ).rejects.toMatchObject({ outcome: 'known-failure' })
-    expect(readState().sshPtyConsumerRecoveries).toEqual(before)
-    expect(store.getSshPtyConsumerRecovery('ssh-1')?.clientInstanceId).toBe('client-1')
-
-    rejectedWrite.mockRestore()
-    store.updateUI({ sidebarWidth: 713 })
-    await store.flushPendingOrThrowAsync()
-    expect(readState()).toMatchObject({
-      ui: { sidebarWidth: 713 },
-      sshPtyConsumerRecoveries: [expect.objectContaining({ clientInstanceId: 'client-1' })]
-    })
   })
 })

@@ -27,7 +27,7 @@ import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import { getShellLaunchConfig } from './local-pty-shell-ready'
 import { finalizeWindowsLocalPtySpawnEnvironment } from './local-pty-windows-spawn-environment'
-import type { PtySpawnOptions } from './types'
+import type { PtySpawnOptions } from './pty-provider-contract'
 
 export function finalizeLocalPtySpawnEnvironment(args: {
   spawn: PtySpawnOptions

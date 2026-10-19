@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import {
-  getFolderPathStatusRouteOptionsForRows,
   getFolderWorkspaceExecutionHostIdForRows,
-  getProjectGroupExecutionHostIdForRows,
+  getProjectGroupExecutionHostIdForRows
+} from '../../../../../../shared/sidebar-list/host-filtering'
+import {
+  getFolderPathStatusRouteOptionsForRows,
   getRuntimeEnvironmentIdForFolderPathStatusHost
-} from './host-filtering'
+} from './folder-path-status-routing'
 
 function group(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
   return {

@@ -8,11 +8,9 @@ import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
 import { formatWorktreeIncludeCopyWarning } from '../ipc/worktree-include-copy-budget'
-import {
-  getWorktreeCreationLayout,
-  mergeWorktree,
-  resolveWorktreeCreateDisplayNameMeta
-} from '../ipc/worktree-logic'
+import { getWorktreeCreationLayout } from '../ipc/worktree-logic'
+import { mergeWorktree } from '../ipc/worktree-metadata-merge'
+import { resolveWorktreeCreateDisplayNameMeta } from '../ipc/worktree-display-name'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
@@ -22,7 +20,9 @@ import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directo
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeStore } from './runtime-store-contract'
+import { attributedSparsePresetId } from '../ipc/sparse-preset-attribution'
 import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
+import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktree-meta'
 
 export async function materializeRuntimeLocalWorktree<T>(args: {
   request: RuntimeManagedWorktreeCreateArgs
@@ -75,7 +75,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
     { requestedName: effectiveRequestedName, sanitizedName: effectiveSanitizedName }
   )
   const meta = timing.timeSync('persist_metadata', () =>
-    store.setWorktreeMeta(worktreeId, {
+    store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
       instanceId: randomUUID(),
       ...getProjectHostSetupWorktreeMeta(store.getProjectHostSetups?.() ?? [], repo),
       lastActivityAt: now,
@@ -91,7 +91,12 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
         ? {
             sparseDirectories,
             sparseBaseRef: metadataBaseRef,
-            sparsePresetId: request.sparseCheckout?.presetId
+            sparsePresetId: attributedSparsePresetId(
+              () => store.getSparsePresets?.(repo.id) ?? [],
+              repo.id,
+              request.sparseCheckout?.presetId,
+              sparseDirectories
+            )
           }
         : {}),
       ...(request.linkedIssue !== undefined ? { linkedIssue: request.linkedIssue } : {}),
@@ -117,6 +122,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
         : {}),
       ...(request.linkedGiteaPR !== undefined ? { linkedGiteaPR: request.linkedGiteaPR } : {}),
       ...(request.linkedWorkItem !== undefined ? { linkedWorkItem: request.linkedWorkItem } : {}),
+      ...(request.linkedItems !== undefined ? { linkedItems: request.linkedItems } : {}),
       ...(request.linkedTaskSourceContext !== undefined
         ? { linkedTaskSourceContext: request.linkedTaskSourceContext }
         : {}),

@@ -18,12 +18,8 @@ function makeSurface(overrides: Partial<AgentAttentionSurface> = {}): AgentAtten
     isSurfaceViewed: () => false,
     isWorkspaceViewed: () => false,
     isWorkspaceActive: () => false,
+    isWorkspaceMuted: () => false,
     resolveViewedSubjectKey: () => null,
-    collectWorkspaceAttentionRemainder: () => ({
-      hasSurfaces: true,
-      unreadSubjectKeys: [],
-      unreadGroupIds: []
-    }),
     ...overrides
   }
 }
@@ -34,7 +30,6 @@ function completion(overrides: Partial<AgentAttentionRequest> = {}): AgentAttent
     reason: 'agent-completion',
     settlesTurn: true,
     hasFreshActivityEvidence: false,
-    groupAttentionEnabled: false,
     ...overrides
   }
 }
@@ -43,17 +38,28 @@ function makeSink(): AgentAttentionSink & { calls: string[] } {
   const calls: string[] = []
   return {
     calls,
-    unread: {
-      markWorkspaceUnread: (workspaceId) => calls.push(`workspace:${workspaceId}`),
-      markSubjectUnread: (key, reason) => calls.push(`subject:${key}:${reason}`),
-      markGroupUnread: (key, reason) => calls.push(`group:${key}:${reason}`),
-      markSurfaceUnread: (key, reason) => calls.push(`surface:${key}:${reason}`)
-    },
+    unread: (write) =>
+      calls.push(
+        `unread:${write.workspaceId}:${write.subjectKey}:${write.groupId}:${write.reason}`
+      ),
     requestDelivery: (request) => calls.push(`deliver:${request.workspaceId}:${request.subjectKey}`)
   }
 }
 
 describe('resolveAgentAttention', () => {
+  it('rejects a muted workspace before any other gate, so it earns no unread or delivery', () => {
+    const hasLiveSession = vi.fn(() => true)
+    const decision = resolveAgentAttention(
+      completion(),
+      makeSurface({ isWorkspaceMuted: () => true, hasLiveSession })
+    )
+    expect(decision).toEqual({ admitted: false, cause: 'muted-workspace' })
+    expect(hasLiveSession).not.toHaveBeenCalled()
+    const sink = makeSink()
+    applyAgentAttention(decision, sink)
+    expect(sink.calls).toEqual([])
+  })
+
   it('rejects a subject with no live session and no fresh activity evidence', () => {
     const decision = resolveAgentAttention(
       completion(),
@@ -108,28 +114,11 @@ describe('resolveAgentAttention', () => {
     expect(sink.calls).toEqual([`deliver:${WORKSPACE}:${SUBJECT}`])
   })
 
-  it('carries the unread reason into every store write', () => {
-    const decision = resolveAgentAttention(
-      completion({ groupAttentionEnabled: true }),
-      makeSurface()
-    )
-    const sink = makeSink()
-    applyAgentAttention(decision, sink)
-    expect(sink.calls).toEqual([
-      `workspace:${WORKSPACE}`,
-      `subject:${SUBJECT}:agent-completion`,
-      `group:${GROUP}:agent-completion`,
-      `surface:${SUBJECT}:agent-completion`,
-      `deliver:${WORKSPACE}:${SUBJECT}`
-    ])
-  })
-
-  it('keeps container attention behind its presentation flag', () => {
+  it('hands the unread write, with its admitted group and reason, to the sink', () => {
     const sink = makeSink()
     applyAgentAttention(resolveAgentAttention(completion(), makeSurface()), sink)
     expect(sink.calls).toEqual([
-      `workspace:${WORKSPACE}`,
-      `subject:${SUBJECT}:agent-completion`,
+      `unread:${WORKSPACE}:${SUBJECT}:${GROUP}:agent-completion`,
       `deliver:${WORKSPACE}:${SUBJECT}`
     ])
   })
@@ -174,8 +163,8 @@ describe('resolveAgentAttention', () => {
   it('writes unread before requesting delivery so a suppressed banner still leaves a marker', () => {
     const sink = makeSink()
     applyAgentAttention(resolveAgentAttention(completion(), makeSurface()), sink)
-    expect(sink.calls.indexOf(`workspace:${WORKSPACE}`)).toBeLessThan(
-      sink.calls.indexOf(`deliver:${WORKSPACE}:${SUBJECT}`)
-    )
+    expect(
+      sink.calls.indexOf(`unread:${WORKSPACE}:${SUBJECT}:${GROUP}:agent-completion`)
+    ).toBeLessThan(sink.calls.indexOf(`deliver:${WORKSPACE}:${SUBJECT}`))
   })
 })

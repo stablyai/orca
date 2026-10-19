@@ -64,7 +64,11 @@ export const AiVaultSearchHitSchema = z
     score: z.number(),
     source: AiVaultSearchSourceSchema,
     evidence: AiVaultSearchEvidenceSchema.nullable(),
-    resumeCommand: z.string().optional()
+    resumeCommand: z.string().optional(),
+    /** The native chat owning this transcript, from the indexing host; older hosts omit it. */
+    structuredSession: z
+      .object({ sessionId: z.string().min(1).max(512), workspaceId: z.string().min(1).max(512) })
+      .optional()
   })
   .refine((hit) => hit.source.presence === 'present' || hit.resumeCommand === undefined, {
     message: 'Only present sources may have a resume command'

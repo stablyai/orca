@@ -10,8 +10,6 @@ export function createTerminalStartupQueueActions(
   | 'queueTabInitialCwd'
   | 'consumeTabInitialCwd'
   | 'consumeTabStartupCommand'
-  | 'queueTabSetupSplit'
-  | 'consumeTabSetupSplit'
   | 'queueTabIssueCommandSplit'
   | 'consumeTabIssueCommandSplit'
   | 'consumePendingSnapshot'
@@ -67,26 +65,6 @@ export function createTerminalStartupQueueActions(
         const next = { ...s.pendingStartupByTabId }
         delete next[tabId]
         return { pendingStartupByTabId: next }
-      })
-      return pending
-    },
-    queueTabSetupSplit: (tabId, startup) => {
-      set((s) => ({
-        pendingSetupSplitByTabId: {
-          ...s.pendingSetupSplitByTabId,
-          [tabId]: startup
-        }
-      }))
-    },
-    consumeTabSetupSplit: (tabId) => {
-      const pending = get().pendingSetupSplitByTabId[tabId]
-      if (!pending) {
-        return null
-      }
-      set((s) => {
-        const next = { ...s.pendingSetupSplitByTabId }
-        delete next[tabId]
-        return { pendingSetupSplitByTabId: next }
       })
       return pending
     },

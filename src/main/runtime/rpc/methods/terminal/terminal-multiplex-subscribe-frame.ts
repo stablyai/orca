@@ -1,19 +1,13 @@
 import { decodeTerminalStreamJson } from '../../../../../shared/terminal-stream-protocol'
 import { TerminalMultiplexSubscribeFrame } from './stream-schemas'
-import type {
-  TerminalMultiplexConnection,
-  TerminalMultiplexSlotFramesStage
-} from './terminal-multiplex-connection'
+import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import { resolveMultiplexSubscribePty } from './terminal-multiplex-subscribe-resolution'
 import { initializeMultiplexStream } from './terminal-multiplex-stream-initialization'
 import { publishMultiplexInitialSnapshot } from './terminal-multiplex-initial-snapshot'
 import { activateMultiplexStream } from './terminal-multiplex-live-stream'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 
-export function installMultiplexSubscribeFrame(
-  build: TerminalMultiplexSlotFramesStage
-): asserts build is TerminalMultiplexConnection {
-  const state = build as TerminalMultiplexConnection
+export function installMultiplexSubscribeFrame(state: TerminalMultiplexConnection): void {
   state.handleSubscribeFrame = async (payload) => {
     const raw = decodeTerminalStreamJson<unknown>(payload)
     const parsed = TerminalMultiplexSubscribeFrame.safeParse(raw)

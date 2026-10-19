@@ -72,6 +72,19 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.on('browser:capturePaintHold', listener)
     return () => ipcRenderer.removeListener('browser:capturePaintHold', listener)
   },
+  onAgentInputFocusGuard: (
+    callback: (data: { browserPageId: string; token: string; active: boolean }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { browserPageId: string; token: string; active: boolean }
+    ) => callback(data)
+    ipcRenderer.on('browser:agentInputFocusGuard', listener)
+    return () => ipcRenderer.removeListener('browser:agentInputFocusGuard', listener)
+  },
+  agentInputFocusGuardReady: (token: string, composing: boolean): void => {
+    ipcRenderer.send('browser:agentInputFocusGuardReady', { token, composing })
+  },
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ): (() => void) => {
@@ -130,6 +143,7 @@ export const browserPageInteractionAndSessionsApi = {
   sessionListProfiles: () => ipcRenderer.invoke('browser:session:listProfiles'),
   prepareSshWorkspacePartition: (args: {
     targetId: string
+    expectedSshTargetGeneration?: number
     browserProfileId?: string
     skipProbe?: boolean
   }): Promise<{ partition: string }> =>

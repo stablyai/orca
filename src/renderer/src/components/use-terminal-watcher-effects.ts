@@ -13,11 +13,12 @@ import { useAppStore } from '@/store'
 import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../shared/closed-terminal-tab-tombstones'
 import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
-import { getStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
+import { hasStructuredAgentLaunchInWorktree } from '@/lib/structured-agent-session-launch'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
-import { AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS } from '../../../shared/agent-session-provider-handle'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
 import { selectParkedEquivalentMountTabIds } from './terminal/startup-terminal-tab-hold'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { createInitialTerminalThroughLayoutOwner } from '@/store/terminals/terminal-tab-create-through-layout-owner'
 
 // Why shared: surfaces without watchable live tabs need no per-pass allocation.
 const NO_PARKED_TAB_IDS: ReadonlySet<string> = new Set()
@@ -236,11 +237,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
         return
       }
       // A pending or unanswered chat create owns the surface even before its tab is published.
-      if (
-        AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS.some(
-          (agent) => getStructuredAgentLaunchStatus(activeWorktreeId, agent) !== 'idle'
-        )
-      ) {
+      if (hasStructuredAgentLaunchInWorktree(activeWorktreeId)) {
         return
       }
       // Why: the activation gate reconciles durable/live agent state first; only an actually empty, never-visited workspace receives a default shell.
@@ -252,6 +249,15 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
         activeWorktreeId
       )
       if (shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
+        // Switch point: main decides whether the workspace gets its first tab.
+        if (
+          ORCA_LAYOUT_OWNER_IS_MAIN &&
+          createInitialTerminalThroughLayoutOwner(useAppStore.getState, activeWorktreeId, () =>
+            createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
+          )
+        ) {
+          return
+        }
         // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
         createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
       }

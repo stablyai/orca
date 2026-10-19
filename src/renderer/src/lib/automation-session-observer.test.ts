@@ -36,10 +36,7 @@ vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: mockSubscribeToPtyData
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mockCallRuntimeRpc,
-  getActiveRuntimeTarget: vi.fn(() => ({ kind: 'local' }))
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mockCallRuntimeRpc }))
 
 vi.mock('@/runtime/remote-runtime-terminal-multiplexer', () => ({
   getRemoteRuntimeTerminalMultiplexer: () => ({ subscribeTerminal: mockSubscribeTerminal })

@@ -4008,11 +4008,11 @@ private final class SocketListener: @unchecked Sendable {
         }
         let authorizedPeer = peerProcessId(fd).map(isAuthorizedAgentPeer) == true
         let decoder = JSONDecoder()
-        while let line = readLine(from: fd) {
+        AgentConnectionRequestLoop.run(readLine: { readLine(from: fd) }) { line in
             guard let data = line.data(using: .utf8),
                   let request = try? decoder.decode(Request.self, from: data)
             else {
-                continue
+                return true
             }
             if !registeredSession && isAuthenticatedAgentSession(
                 expectedToken: token,
@@ -4029,7 +4029,7 @@ private final class SocketListener: @unchecked Sendable {
                     )
                 } catch {
                     fputs("computer-use owner monitor failed: \(error)\n", stderr)
-                    return
+                    return false
                 }
                 sessionLock.lock()
                 let registration = sessionOwnership.registerConnection(
@@ -4039,7 +4039,7 @@ private final class SocketListener: @unchecked Sendable {
                 sessionLock.unlock()
                 guard registration != .rejected else {
                     monitor.cancel()
-                    return
+                    return false
                 }
                 registeredSession = true
                 hangupMonitor = monitor
@@ -4056,6 +4056,7 @@ private final class SocketListener: @unchecked Sendable {
                 authorizedPeer: authorizedPeer
             )
             writeJSON(response, to: fd)
+            return true
         }
     }
 

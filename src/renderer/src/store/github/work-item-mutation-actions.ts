@@ -3,10 +3,12 @@ import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import { toast } from 'sonner'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
+import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import type { CacheEntry } from './cache-model'
 import { evictRepoCacheEntries, repoCacheKeyPrefixes } from './cache-identity'
 import { ERROR_TOAST_DURATION } from './cache-policy'
@@ -24,6 +26,7 @@ export const createWorkItemMutationActions = (
         options?.sourceContext?.provider === 'github'
           ? getTaskSourceCacheScope(options.sourceContext)
           : null
+      const repositoryKey = options?.ownerRepo ? githubRepoIdentityKey(options.ownerRepo) : null
       for (const key of Object.keys(nextCache)) {
         // Why: don't patch another host/account's visually identical issue/PR cache entry.
         if (sourceScope && key !== sourceScope && !key.startsWith(`${sourceScope}::`)) {
@@ -34,9 +37,18 @@ export const createWorkItemMutationActions = (
           continue
         }
         // Why: issue/PR ids are only unique within a repo; cross-repo views can share `pr:42`.
-        const idx = entry.data.findIndex(
-          (item) => item.id === itemId && (!repoId || item.repoId === repoId)
-        )
+        const idx = entry.data.findIndex((item) => {
+          if (item.id !== itemId || (repoId && item.repoId !== repoId)) {
+            return false
+          }
+          if (!repositoryKey) {
+            return true
+          }
+          const itemRepository = parseGitHubIssueOrPRLink(item.url)?.slug
+          return (
+            itemRepository !== undefined && githubRepoIdentityKey(itemRepository) === repositoryKey
+          )
+        })
         if (idx === -1) {
           continue
         }
@@ -66,7 +78,10 @@ export const createWorkItemMutationActions = (
       // Why: map 'auto' to undefined so persistence drops the key entirely (see main/persistence.ts#updateRepo).
       const updates = { issueSourcePreference: preference === 'auto' ? undefined : preference }
       // Why: route to the repo's owner host (like updateRepo) so the write lands where the repo lives, not the focused runtime.
-      const target = getActiveRuntimeTarget(getSettingsForRepoRuntimeOwner(get(), repoId))
+      const target = runtimeTargetForRepoOwner(get(), repoId)
+      if (!target) {
+        throw new Error(`No single host owns project ${repoId}.`)
+      }
       await (target.kind === 'local'
         ? window.api.repos.update({ repoId, updates })
         : callRuntimeRpc(target, 'repo.update', { repo: repoId, updates }, { timeoutMs: 15_000 }))
@@ -80,7 +95,7 @@ export const createWorkItemMutationActions = (
         }
       )
       // Why: the optimistic patch may now disagree with disk; resync rather than leave a lie on screen.
-      void get().fetchRepos()
+      void get().fetchReposForAllHosts()
     }
     // Why: clear inflight dedupe BEFORE bumping the nonce so the re-triggered fetch can't collapse onto a pre-flip in-flight entry.
     clearInflightWorkItemsForRepo(repoId, repoPath)

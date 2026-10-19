@@ -1,16 +1,16 @@
 import { useMemo } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
-import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
+import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
-import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { selectReviewCacheData, selectReviewCacheEntry } from '../../review-cache-entry-selection'
 
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
@@ -106,22 +106,21 @@ export function useSourceControlWorktreeContext() {
   )
   const hostedReviewEntryData = hostedReviewEntry?.data ?? null
   const activePrFromQueue = useAppStore((s) => selectReviewCacheData(s.prCache, activePrCacheKey))
-  // Why: git/file mutations and repo metadata belong to the repo OWNER host, not the currently focused sidebar host.
-  const activeRepoSettings = useMemo(
+  // Why: git calls and repo metadata go to the repo's OWNER host; `null` (no repo row) runs nothing.
+  const activeRepoTarget = useMemo(
     () =>
-      getRepoOwnerRoutedSettings(
-        settings,
-        activeRepoId
-          ? {
-              id: activeRepoId,
+      activeRepoId
+        ? ipcOrRuntimeTargetForHostId(
+            getRepoExecutionHostId({
               connectionId: activeRepoConnectionId,
               executionHostId: activeRepoExecutionHostId
-            }
-          : null
-      ),
-    [activeRepoConnectionId, activeRepoExecutionHostId, activeRepoId, settings]
+            })
+          )
+        : null,
+    [activeRepoConnectionId, activeRepoExecutionHostId, activeRepoId]
   )
-  const activeRepoRuntimeEnvironmentId = activeRepoSettings?.activeRuntimeEnvironmentId ?? null
+  const activeRepoRuntimeEnvironmentId =
+    activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
 
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
@@ -129,13 +128,11 @@ export function useSourceControlWorktreeContext() {
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? activeRepoConnectionId)
     : null
-  const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
-    connectionId: activeConnectionId,
-    worktreePath,
-    projectRuntime: activeConnectionId
-      ? undefined
-      : getLocalProjectExecutionRuntimeContext(useAppStore.getState(), activeWorktreeId)
-  })
+  // Why: agents run on the workspace's execution host, so its OS decides quoting (#27971).
+  const activeSourceControlLaunchPlatform =
+    activeWorktree && activeRepo
+      ? resolveRepoWorktreeLaunchPlatform(useAppStore.getState(), activeRepo, activeWorktree)
+      : undefined
   // Why: the sidebar stays mounted when closed, so gate polling on tab AND open or branchCompare/PR fetch would run with no visible consumer.
   const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen
   const hasUncommittedEntries = entries.length > 0
@@ -152,7 +149,7 @@ export function useSourceControlWorktreeContext() {
     activeRepoId,
     activeRepoPath,
     activeRepoRuntimeEnvironmentId,
-    activeRepoSettings,
+    activeRepoTarget,
     activeSourceControlLaunchPlatform,
     activeWorktree,
     activeWorktreeId,

@@ -37,16 +37,6 @@ export function createWorktreePurgeOmitters(
   }
   const omitByTabId = <T>(obj: Record<string, T>): Record<string, T> =>
     omitRecordKeys(obj, doomedTabIds)
-  const survivingTabIds = new Set(
-    Object.entries(s.tabsByWorktree)
-      .filter(([worktreeId]) => !worktreeIdSet.has(worktreeId))
-      .flatMap(([, tabs]) => tabs.map((tab) => tab.id))
-  )
-  const omitRetiredDirectSshLedgerByTabId = <T>(obj: Record<string, T>): Record<string, T> =>
-    omitRecordKeys(
-      obj,
-      [...doomedTabIds].filter((tabId) => !survivingTabIds.has(tabId))
-    )
   const omitByPtyId = <T>(obj: Record<string, T>): Record<string, T> =>
     omitRecordKeys(obj, doomedPtyIds)
   // Pane-scoped maps are keyed `${tabId}:${leafId}`; tabId never contains ":", so the prefix before the first ":" is the owning tab.
@@ -75,7 +65,6 @@ export function createWorktreePurgeOmitters(
     omitWorkspaceLineageByWorktree,
     pruneRightSidebarTabByWorktree,
     omitByTabId,
-    omitRetiredDirectSshLedgerByTabId,
     omitByPtyId,
     omitByPaneKeyTabPrefix,
     omitByBrowserWorkspaceId,

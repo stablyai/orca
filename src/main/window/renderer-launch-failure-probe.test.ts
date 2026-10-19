@@ -4,7 +4,7 @@ const { runProcessMock, recordDurableCrashBreadcrumbMock } = vi.hoisted(() => ({
   runProcessMock: vi.fn(),
   recordDurableCrashBreadcrumbMock: vi.fn()
 }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 vi.mock('../crash-reporting/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
 }))

@@ -134,6 +134,18 @@ const GOLDEN_LOCK_TAKING: SchemaLockTarget[] = [
     table: 'relay_assignment_activity_leases',
     name: 'fillfactor=70',
     skipWhen: 'present'
+  },
+  {
+    kind: 'reloption',
+    table: 'relay_control_connection_reservations',
+    name: 'autovacuum_vacuum_cost_delay=20',
+    skipWhen: 'present'
+  },
+  {
+    kind: 'reloption',
+    table: 'relay_control_connection_reservations',
+    name: 'autovacuum_vacuum_cost_limit=200',
+    skipWhen: 'present'
   }
 ]
 
@@ -240,7 +252,7 @@ describe('relay boot-time lock targets', () => {
     }
   })
 
-  it('marks the out-of-band sweep indexes and the activity-lease migrations deferrable, and nothing else', () => {
+  it('marks the out-of-band sweep indexes, the activity-lease migrations and the reservation vacuum throttle deferrable, and nothing else', () => {
     // The statements a lock timeout must not turn into a crash loop, and the only ones: every
     // other statement still fails the boot loudly, which is what keeps the marker meaningful.
     const deferrable = relayPostgresSchemaStatements().filter(schemaDeferrable)
@@ -250,7 +262,9 @@ describe('relay boot-time lock targets', () => {
       'CREATE INDEX IF NOT EXISTS relay_direct_authorizations_pending_deadline ON relay_direct_authorizations(deadline) WHERE consumed_at IS NULL',
       'CREATE INDEX IF NOT EXISTS relay_rate_windows_started ON relay_rate_windows(window_started_at)',
       'DROP INDEX IF EXISTS relay_assignment_activity_expiry',
-      'ALTER TABLE relay_assignment_activity_leases SET (fillfactor = 70)'
+      'ALTER TABLE relay_assignment_activity_leases SET (fillfactor = 70)',
+      'ALTER TABLE relay_control_connection_reservations SET (autovacuum_vacuum_cost_delay = 20)',
+      'ALTER TABLE relay_control_connection_reservations SET (autovacuum_vacuum_cost_limit = 200)'
     ])
   })
 

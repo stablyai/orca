@@ -17,7 +17,8 @@ export function getMacAppBundlePath(executable: string): string | null {
 export async function waitForMacBundleVersion(
   executable: string,
   targetVersion: string,
-  timeoutMs = MAC_BUNDLE_UPDATE_TIMEOUT_MS
+  timeoutMs = MAC_BUNDLE_UPDATE_TIMEOUT_MS,
+  signal?: AbortSignal
 ): Promise<boolean> {
   const appBundlePath = getMacAppBundlePath(executable)
   if (!appBundlePath) {
@@ -61,6 +62,11 @@ export async function waitForMacBundleVersion(
         })
     }
     const timeout = setTimeout(() => finish(false), timeoutMs)
+    if (signal?.aborted) {
+      finish(false)
+      return
+    }
+    signal?.addEventListener('abort', () => finish(false), { once: true })
     poll = setInterval(check, 250)
     try {
       // Why: ShipIt replaces the whole .app, so watch its stable parent rather than an inode inside the old bundle.

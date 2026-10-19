@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
@@ -13,27 +13,24 @@ const ORIGIN: MobileNativeChatSendOrigin = {
   normalizedText: 'command',
   baselineOccurrences: 0,
   baselineTailMessageId: null,
-  baselineResolved: true
+  baselineResolved: true,
+  sentAt: 0
 }
 
 describe('useMobileStructuredNativeChatSendBridge', () => {
   let renderer: ReactTestRenderer | null = null
   let sendWithOutcome: (text: string) => Promise<MobileNativeChatSendOutcome>
-  const acceptSend = vi.fn()
   const captureSendOrigin = vi.fn(() => ORIGIN)
   const clearDraftForSend = vi.fn()
-  const holdUnconfirmedSend = vi.fn()
   const onSendError = vi.fn()
   const restoreRejectedDraft = vi.fn()
   const sendStructured = vi.fn()
 
-  function Harness({ agent }: { agent: AgentSessionHandleProvider }): null {
+  function Harness({ agent }: { agent: StructuredAgentId }): null {
     sendWithOutcome = useMobileStructuredNativeChatSendBridge({
       agent,
-      acceptSend,
       captureSendOrigin,
       clearDraftForSend,
-      holdUnconfirmedSend,
       onSendError,
       restoreRejectedDraft,
       sendStructured
@@ -41,7 +38,7 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     return null
   }
 
-  function mount(agent: AgentSessionHandleProvider): void {
+  function mount(agent: StructuredAgentId): void {
     act(() => {
       renderer = create(createElement(Harness, { agent }))
     })
@@ -56,38 +53,19 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     renderer = null
   })
 
-  it('optimistically echoes accepted commands owned by the active agent', async () => {
-    sendStructured.mockResolvedValue('accepted')
-    mount('claude')
+  // The structured session draws, or holds, what the host took; the composer stays cleared.
+  it.each(['accepted', 'unknown', 'queued'] as const)(
+    'leaves a %s send of a command the active agent owns to the structured session',
+    async (outcome) => {
+      sendStructured.mockResolvedValue(outcome)
+      mount('claude')
 
-    await expect(sendWithOutcome('/init')).resolves.toBe('accepted')
+      await expect(sendWithOutcome('/review')).resolves.toBe(outcome)
 
-    expect(acceptSend).toHaveBeenCalledWith(ORIGIN, '/init', undefined)
-    expect(restoreRejectedDraft).not.toHaveBeenCalled()
-  })
-
-  it('holds unknown delivery for commands owned by the active agent', async () => {
-    sendStructured.mockResolvedValue('unknown')
-    mount('claude')
-
-    await expect(sendWithOutcome('/review')).resolves.toBe('unknown')
-
-    expect(holdUnconfirmedSend).toHaveBeenCalledWith(ORIGIN, '/review', expect.any(Function))
-    expect(restoreRejectedDraft).not.toHaveBeenCalled()
-  })
-
-  it('never echoes a queued send as an optimistic transcript bubble', async () => {
-    // The host holds the draft and publishes it as a card above the composer;
-    // a `pending-N` bubble here would show the message twice and retire never.
-    sendStructured.mockResolvedValue('queued')
-    mount('claude')
-
-    await expect(sendWithOutcome('queue me')).resolves.toBe('queued')
-
-    expect(acceptSend).not.toHaveBeenCalled()
-    expect(holdUnconfirmedSend).not.toHaveBeenCalled()
-    expect(restoreRejectedDraft).not.toHaveBeenCalled()
-  })
+      expect(sendStructured).toHaveBeenCalledWith('/review')
+      expect(restoreRejectedDraft).not.toHaveBeenCalled()
+    }
+  )
 
   it('keeps host-command reconciliation for Codex', async () => {
     sendStructured.mockResolvedValue('unknown')
@@ -96,6 +74,23 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     await expect(sendWithOutcome('/review')).resolves.toBe('unknown')
 
     expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, '/review')
-    expect(holdUnconfirmedSend).not.toHaveBeenCalled()
+  })
+
+  it("reads another agent's sends by that agent's commands, never Codex's", async () => {
+    sendStructured.mockResolvedValue('unknown')
+    mount('grok')
+
+    await expect(sendWithOutcome('/review')).resolves.toBe('unknown')
+
+    expect(restoreRejectedDraft).not.toHaveBeenCalled()
+  })
+
+  it('puts a refused send back in the composer', async () => {
+    sendStructured.mockResolvedValue('rejected')
+    mount('claude')
+
+    await expect(sendWithOutcome('hello')).resolves.toBe('rejected')
+
+    expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, 'hello')
   })
 })

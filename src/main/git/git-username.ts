@@ -1,4 +1,3 @@
-import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { extractExecError, ghExecFileAsync, gitExecFileAsync } from './runner'
 import { parseHostedRemote } from './hosted-remote-url'
 import { resolveDefaultBaseRefViaExec } from './repo'
@@ -81,26 +80,6 @@ function normalizeConfiguredLogin(value: string): string {
  * persisted username; authoritative '' should clear one.
  */
 export type ResolvedGitUsername = { username: string; authoritative: boolean }
-
-export async function getSshGitUsername(
-  provider: SshGitProvider,
-  repoPath: string
-): Promise<string> {
-  // Why: SSH targets cannot rely on the local `gh` account, and git email/name
-  // are author identity rather than hosted-account usernames.
-  for (const key of EXPLICIT_USERNAME_CONFIG_KEYS) {
-    try {
-      const { stdout } = await provider.exec(['config', '--get', key], repoPath)
-      const username = normalizeConfiguredLogin(stdout)
-      if (username) {
-        return username
-      }
-    } catch {
-      // Missing config keys are expected; try the next explicit username key.
-    }
-  }
-  return ''
-}
 
 type GhLoginProbeResult = { stdout: string; stderr: string; timedOut: boolean }
 type GhLoginOutcome = { login: string; timedOut: boolean }
@@ -326,7 +305,14 @@ export async function resolveLocalGitUsernameDetailed(
   }
   if (await localRepoHasEffectiveGitHubRemote(repoPath)) {
     const outcome = await getGhLoginOutcome()
-    return { username: outcome.login, authoritative: !outcome.timedOut }
+    if (outcome.login || outcome.timedOut) {
+      return { username: outcome.login, authoritative: !outcome.timedOut }
+    }
+  }
+  // Author names become prefixes only when they already form a safe branch component.
+  const authorName = (await readGitStdout(repoPath, ['config', '--get', 'user.name'])).trim()
+  if (isBranchSafeHostedLogin(authorName)) {
+    return { username: authorName, authoritative: true }
   }
   return { username: '', authoritative: true }
 }

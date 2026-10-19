@@ -40,10 +40,13 @@ export type RuntimeRepositoryCommandSurface = {
   createProjectHostSetup: RuntimeProjectHostSetupController['createSetup']
   setupProjectExistingFolder: RuntimeProjectHostSetupController['setupExistingFolder']
   setupProjectClone: RuntimeProjectHostSetupController['setupClone']
+  addSshRepo: RuntimeProjectHostSetupController['addSshRepo']
   updateProjectHostSetup: RuntimeProjectHostSetupController['updateSetup']
   deleteProjectHostSetup: RuntimeProjectHostSetupController['deleteSetup']
   listProjectGroups: RuntimeProjectGroupController['listGroups']
   listFolderWorkspaces: RuntimeProjectGroupController['listFolderWorkspaces']
+  listVisibleProjectGroups: RuntimeProjectGroupController['listVisibleGroups']
+  listVisibleFolderWorkspaces: RuntimeProjectGroupController['listVisibleFolderWorkspaces']
   createProjectGroup: RuntimeProjectGroupController['createGroup']
   updateProjectGroup: RuntimeProjectGroupController['updateGroup']
   deleteProjectGroup: RuntimeProjectGroupController['deleteGroup']
@@ -115,10 +118,13 @@ export function installRuntimeRepositoryCommandSurface(
     createProjectHostSetup: host.createSetup.bind(host),
     setupProjectExistingFolder: host.setupExistingFolder.bind(host),
     setupProjectClone: host.setupClone.bind(host),
+    addSshRepo: host.addSshRepo.bind(host),
     updateProjectHostSetup: host.updateSetup.bind(host),
     deleteProjectHostSetup: host.deleteSetup.bind(host),
     listProjectGroups: groups.listGroups.bind(groups),
     listFolderWorkspaces: groups.listFolderWorkspaces.bind(groups),
+    listVisibleProjectGroups: groups.listVisibleGroups.bind(groups),
+    listVisibleFolderWorkspaces: groups.listVisibleFolderWorkspaces.bind(groups),
     createProjectGroup: groups.createGroup.bind(groups),
     updateProjectGroup: groups.updateGroup.bind(groups),
     deleteProjectGroup: groups.deleteGroup.bind(groups),

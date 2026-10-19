@@ -899,7 +899,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(builderItem).toBeTruthy()
     act(() => builderItem?.click())
 
-    expect(hostChanges).toEqual(['setup-builder'])
+    expect(hostChanges).toEqual(['["setup-builder","ssh:builder"]'])
     expect(recipeChanges).toEqual([null])
   })
 })

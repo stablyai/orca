@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   createWebRuntimeSessionBrowserTab: vi.fn(async (_args: Record<string, unknown>) => true)
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: mocks.createWebRuntimeSessionBrowserTab
 }))
 

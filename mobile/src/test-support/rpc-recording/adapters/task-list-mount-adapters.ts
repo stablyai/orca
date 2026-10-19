@@ -3,6 +3,7 @@ import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import { mountFixture } from '../recorder-fixture-shape'
+import type { RuntimeHydrationModel } from '../../../tasks/use-mobile-tasks-runtime-hydration'
 
 const REPO_ID = 'repo-1'
 
@@ -75,11 +76,13 @@ export function taskListMountAdapters(
       'use-mobile-tasks-provider-load-actions.tsx'
     ).useMobileTasksProviderLoadActions
     return mountModelHook(context, {
-      useHook: (model) => useActions(model),
+      useHook: (model) => useActions<RuntimeHydrationModel>(model),
       fixture: {
         appliedQuery: 'bug',
+        clientRef: { current: context.client },
         connState: 'connected',
         defaultLinearTeamSelectionRef: { current: null },
+        jiraStatusRequestIdRef: { current: 0 },
         githubKind: 'issues',
         taskUiReady: true,
         tasksSupported: true,
@@ -101,7 +104,7 @@ export function taskListMountAdapters(
         'github-page': () =>
           actions().fetchGitHubItemsPage(context.client, mountFixture([HOSTED_REPO])),
         'github-count': () =>
-          actions().countGitHubItems(context.client, mountFixture([HOSTED_REPO]))
+          actions().countGitHubItemPages(context.client, mountFixture([HOSTED_REPO]))
       }),
       state: (model) => ({
         connected: model.linearConnected,
@@ -124,7 +127,7 @@ export function taskListMountAdapters(
           appliedQuery: '',
           clientRef: { current: context.client },
           connState: 'connected',
-          countGitHubItems: async () => 0,
+          countGitHubItemPages: async () => 0,
           fetchGitHubItemsPage: async () => ({
             items: [],
             failedCount: 0,
@@ -135,6 +138,8 @@ export function taskListMountAdapters(
           githubMode: 'items',
           gitlabFilter: 'opened',
           gitlabView: 'project',
+          jiraConnection: { connected: false, sites: [], selection: null, credentialError: null },
+          jiraFilter: 'assigned',
           linearConnected: true,
           linearFilter: 'all',
           linearOrderBy: 'priority',
@@ -144,7 +149,8 @@ export function taskListMountAdapters(
           resetGitHubItemsState: () => {},
           selectedLinearTeamIds: new Set<string>(),
           selectedLinearWorkspaceId: 'linear-workspace',
-          selectedRepoIds: new Set<string>(),
+          effectiveRepoIds: new Set<string>(),
+          serverRepoList: [],
           taskStateHydrated: true,
           tasksSupported: true,
           items: [],
@@ -178,14 +184,16 @@ export function taskListMountAdapters(
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
       fixture: {
+        clientRef: { current: context.client },
         connState: 'connected',
         fetchGitHubItemsPage: async () => ({ items: [], failedCount: 0 }),
         githubCurrentPage: 0,
         githubPages: [[]],
         githubPaginationLoading: false,
-        githubTotalCount: null,
+        githubCountedTotalPages: null,
         linearApiKeyDraft: 'lin_api_key',
         linearConnectState: 'idle',
+        loadGenerationRef: { current: 0 },
         loadLinearContext: async () => {},
         loadTasks: async () => {},
         selectedHostedRepos: [HOSTED_REPO],

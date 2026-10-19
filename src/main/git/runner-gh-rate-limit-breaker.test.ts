@@ -12,7 +12,7 @@ vi.mock('child_process', () => ({
   spawn: spawnMock
 }))
 
-import { fakeSpawnReturning } from '../../shared/child-process/__fixtures__/fake-spawned-child'
+import { fakeSpawnReturning } from '../../shared/__fixtures__/fake-spawned-child'
 import { ghExecFileAsync } from './runner'
 import {
   _resetGhRateLimitBreaker,

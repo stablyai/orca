@@ -1,5 +1,4 @@
 import type { LocalGitExecOptions } from './github-repository-identity'
-import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 
 export function githubApiRepositoryProbeCacheKey(
   repoPath: string,
@@ -9,7 +8,7 @@ export function githubApiRepositoryProbeCacheKey(
   requireVerifiedSshProbe: boolean
 ): string {
   const runtimeKey = connectionId
-    ? `ssh:${connectionId}:${getSshGitProviderGeneration(connectionId)}`
+    ? `ssh:${connectionId}`
     : `local:${localGitOptions.wslDistro ?? 'host'}`
   return `${runtimeKey}\0${repoPath}\0${remoteName}\0${requireVerifiedSshProbe ? 'verified' : 'tolerant'}`
 }

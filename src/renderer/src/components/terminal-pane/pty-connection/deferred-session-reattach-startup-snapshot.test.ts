@@ -4,7 +4,6 @@ import { startDeferredSessionReattach } from './deferred-session-reattach-connec
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 vi.mock('../terminal-lifecycle-diagnostics', () => ({ warnTerminalLifecycleAnomaly: vi.fn() }))
-vi.mock('./direct-ssh-reattach-recovery', () => ({ recoverUnverifiableDirectSshReattach: vi.fn() }))
 vi.mock('./paired-parked-terminal-restore', () => ({ isRemoteRuntimePtyId: () => false }))
 vi.mock('./pty-connect-limits', () => ({
   recordPtyConnectDiagnostic: vi.fn(),
@@ -25,15 +24,12 @@ function createSession() {
     transportStreamGeneration: 1,
     deps: { paneTransportsRef: { current: new Map([[1, transport]]) } },
     buildColdRestoreAgentResumeStartup: () => startup,
-    prepaintParkedSshSnapshot: vi.fn(),
     captureTransportOutputCallbacks: () => ({ generation: 1, callbacks: {} }),
     beginReattachLiveDataDeferral: vi.fn(),
     finishReattachLiveDataDeferral: vi.fn(),
     shouldDeclareHiddenAtSpawn: () => true,
     handleReattachResult: vi.fn().mockResolvedValue(true),
-    armDirectSshPaneRetryTimeout: vi.fn(),
     reportError: vi.fn(),
-    isCapturedDirectSshReattachCurrent: () => true,
     cols: 80,
     rows: 24,
     cacheKey: 'tab:leaf'

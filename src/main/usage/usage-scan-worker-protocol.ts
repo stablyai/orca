@@ -1,24 +1,13 @@
-import type {
-  ClaudeUsageDailyAggregate,
-  ClaudeUsagePersistedFile,
-  ClaudeUsageSession
-} from '../claude-usage/types'
-import type {
-  CodexUsageDailyAggregate,
-  CodexUsagePersistedFile,
-  CodexUsageSession
-} from '../codex-usage/types'
-import type {
-  OpenCodeUsageDailyAggregate,
-  OpenCodeUsagePersistedDatabase,
-  OpenCodeUsageSession
-} from '../opencode-usage/types'
-import type {
-  MuseUsageDailyAggregate,
-  MuseUsagePersistedFile,
-  MuseUsageSession
-} from '../muse-usage/types'
+import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../claude-usage/types'
+import type { CodexUsageDailyAggregate, CodexUsageSession } from '../codex-usage/types'
+import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../opencode-usage/types'
+import type { MuseUsageDailyAggregate, MuseUsageSession } from '../muse-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
+import type {
+  UsageCacheSplitRequest,
+  UsageCacheSplitResult,
+  UsageSourceCacheRef
+} from './usage-source-cache-file'
 
 // Why (#20940): the first-party usage scans walk whole rollout/transcript
 // corpora and read SQLite synchronously, all on the Electron main process. They
@@ -33,53 +22,73 @@ import type { UsageScanWorktreeRef } from './usage-provider-contract'
  */
 export type UsageScanWorkerProviderId = 'claude' | 'codex' | 'opencode' | 'muse'
 
-/** Request body per provider; `previous` is that provider's own per-source cache. */
-export type UsageScanWorkerRequestBody =
+/**
+ * Scan body per provider. The worker reads that provider's per-source cache from
+ * `sourceCache` and writes the new one back, so those records never cross to main.
+ */
+export type UsageScanWorkerScanBody =
   | {
+      operation: 'scan'
       providerId: 'claude'
+      profileDirs?: string[]
       worktrees: UsageScanWorktreeRef[]
-      previous: ClaudeUsagePersistedFile[]
+      sourceCache: UsageSourceCacheRef
     }
-  | { providerId: 'codex'; worktrees: UsageScanWorktreeRef[]; previous: CodexUsagePersistedFile[] }
   | {
+      operation: 'scan'
+      providerId: 'codex'
+      worktrees: UsageScanWorktreeRef[]
+      sourceCache: UsageSourceCacheRef
+    }
+  | {
+      operation: 'scan'
       providerId: 'opencode'
       worktrees: UsageScanWorktreeRef[]
-      previous: OpenCodeUsagePersistedDatabase[]
+      sourceCache: UsageSourceCacheRef
     }
-  | { providerId: 'muse'; worktrees: UsageScanWorktreeRef[]; previous: MuseUsagePersistedFile[] }
+  | {
+      operation: 'scan'
+      providerId: 'muse'
+      worktrees: UsageScanWorktreeRef[]
+      sourceCache: UsageSourceCacheRef
+    }
+
+export type UsageScanWorkerRequestBody =
+  | UsageScanWorkerScanBody
+  | ({ operation: 'splitCacheFile' } & UsageCacheSplitRequest)
 
 export type UsageScanWorkerRequest = UsageScanWorkerRequestBody & { id: number }
 
-/**
- * Scan result per provider. `source` is the provider's per-source cache under a
- * uniform name: the persisted key (`processedFiles` / `processedDatabases`) is a
- * disk-format concern and each route renames it back on the main thread.
- */
-export type UsageScanWorkerValue =
+/** Scan result per provider: only the projections main reports from. */
+export type UsageScanWorkerScanValue =
   | {
+      operation: 'scan'
       providerId: 'claude'
-      source: ClaudeUsagePersistedFile[]
       sessions: ClaudeUsageSession[]
       dailyAggregates: ClaudeUsageDailyAggregate[]
     }
   | {
+      operation: 'scan'
       providerId: 'codex'
-      source: CodexUsagePersistedFile[]
       sessions: CodexUsageSession[]
       dailyAggregates: CodexUsageDailyAggregate[]
     }
   | {
+      operation: 'scan'
       providerId: 'opencode'
-      source: OpenCodeUsagePersistedDatabase[]
       sessions: OpenCodeUsageSession[]
       dailyAggregates: OpenCodeUsageDailyAggregate[]
     }
   | {
+      operation: 'scan'
       providerId: 'muse'
-      source: MuseUsagePersistedFile[]
       sessions: MuseUsageSession[]
       dailyAggregates: MuseUsageDailyAggregate[]
     }
+
+export type UsageScanWorkerValue =
+  | UsageScanWorkerScanValue
+  | ({ operation: 'splitCacheFile' } & UsageCacheSplitResult)
 
 export type UsageScanWorkerResponse =
   | { id: number; ok: true; value: UsageScanWorkerValue }

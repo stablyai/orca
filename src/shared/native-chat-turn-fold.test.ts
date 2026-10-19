@@ -10,9 +10,10 @@ function row(overrides: Partial<NativeChatTurnFoldRow> = {}): NativeChatTurnFold
     turnKey: 'turn-1',
     role: 'assistant',
     rendersProse: true,
+    draws: true,
     outlivesTurn: false,
     reportsFailure: false,
-    reportsCompaction: false,
+    explainsTurn: false,
     ...overrides
   }
 }
@@ -80,6 +81,21 @@ describe('nativeChatTurnFold', () => {
       expandedTurnKeys: NONE
     })
     expect(foldedRows.has(0)).toBe(false)
+  })
+
+  // A stored-only provider event draws nothing: a disclosure over it would open onto nothing.
+  it('offers no disclosure for a turn whose only other row draws nothing', () => {
+    const { foldedRows, foldableTurnKeys } = nativeChatTurnFold({
+      rows: [
+        row({ role: 'user' }),
+        row({ role: 'system', rendersProse: false, draws: false }),
+        row()
+      ],
+      settledTurnKeys: SETTLED,
+      expandedTurnKeys: NONE
+    })
+    expect(foldedRows.size).toBe(0)
+    expect(foldableTurnKeys.size).toBe(0)
   })
 
   it('folds nothing while the turn is still running', () => {
@@ -198,9 +214,9 @@ describe('nativeChatTurnFold', () => {
     const rows = [
       row({ role: 'user' }),
       row(),
-      row({ role: 'system', reportsCompaction: true }),
+      row({ role: 'system', explainsTurn: true }),
       row(),
-      row({ role: 'system', reportsCompaction: true })
+      row({ role: 'system', explainsTurn: true })
     ]
     const { foldedRows } = nativeChatTurnFold({
       rows,

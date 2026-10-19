@@ -4,7 +4,7 @@
 import { z } from 'zod'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import type { E2EEKeypair } from '../e2ee-keypair'
-import { deriveRelayHostId } from '../relay/relay-http-client'
+import { deriveRelayHostId } from '../mobile-cloud-relay/relay-http-client'
 import { answerPushHostChallenge } from './push-host-proof'
 import {
   postPushGatewayJson,

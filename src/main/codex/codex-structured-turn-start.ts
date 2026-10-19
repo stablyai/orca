@@ -1,5 +1,9 @@
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalTurnJoin
+} from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
@@ -14,10 +18,10 @@ import {
   type CodexTurnOpenWaits
 } from './codex-structured-turn-open-wait'
 import {
+  codexAnsweredTurn,
   codexDispatchRejection,
   codexTurnEndRejection
 } from './codex-structured-turn-end-settlement'
-import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
 // Writing a Codex turn and learning which message landed where, which are not
 // the same event. The answer proves admission and nothing about identity, which
@@ -30,30 +34,33 @@ import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured
 // the turn to open and steers it.
 
 /** Keys Codex accepts as per-turn overrides. An unlisted key would otherwise
- *  become an arbitrary client-controlled `turn/start` parameter. Permission posture is owned by
- *  Agent Permissions and applied when the thread opens. */
-const CODEX_TURN_OPTION_KEYS = new Set([
-  'model',
-  'effort',
-  'approvalsReviewer',
-  'personality',
-  'serviceTier',
-  'fastMode'
-])
+ *  become an arbitrary client-controlled `turn/start` parameter. Permission posture is the chat's
+ *  permission mode, stated when the thread opens: a saved reviewer here would override it. */
+const CODEX_TURN_OPTION_KEYS = new Set(['model', 'effort', 'personality', 'serviceTier'])
 
 export function isCodexTurnOptionKey(key: string): boolean {
   return CODEX_TURN_OPTION_KEYS.has(key)
 }
 
+function checkDispatchAuthority(host: CodexTurnHost, id: string, signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    host.dispatchEchoes.disarm(id)
+    signal.throwIfAborted()
+  }
+}
+
 /** The session state one turn needs. */
 export type CodexTurnHost = {
+  account?: AgentSessionAccountKind
   connection: Pick<CodexAppServerConnection, 'request'>
   threadId: string
   options: Map<string, string>
+  appliedTurnOptions?: Readonly<Record<string, string>>
   reportedOptions?: { model?: string }
-  fastModeTierByModel: ReadonlyMap<string, string>
   dispatchEchoes: CodexDispatchEchoes
   activeTurnIds?: ReadonlySet<string>
+  /** Running turns whose interrupt Codex already answered: aborted, so never steered. */
+  abortedTurnIds?: ReadonlySet<string>
   turnOpenWaits: Pick<CodexTurnOpenWaits, 'wait'>
 }
 
@@ -71,33 +78,6 @@ function turnInputFor(body: AgentJournalMessageItem): Record<string, unknown>[] 
   return input
 }
 
-function codexTurnOptions(host: CodexTurnHost): Record<string, string> {
-  const options = Object.fromEntries(
-    [...host.options].filter(([key]) => key !== 'fastMode' && key !== 'serviceTier')
-  )
-  const encodedFastMode = host.options.get('fastMode')
-  if (encodedFastMode === undefined) {
-    return options
-  }
-  const fastMode = decodeStructuredAgentSessionOptionValue('fastMode', encodedFastMode)
-  if (typeof fastMode !== 'boolean') {
-    throw new Error('codex fast mode must be encoded as true or false')
-  }
-  if (!fastMode) {
-    return { ...options, serviceTier: 'default' }
-  }
-  const model = host.options.get('model') ?? host.reportedOptions?.model
-  const tierId = model ? host.fastModeTierByModel.get(model) : undefined
-  // Fast is on but nothing has named the tier for this model yet, so there is no
-  // value to route to. Deliberately Standard rather than an omission: the tier
-  // persists on the thread, so omitting would silently keep routing a paid tier we
-  // cannot currently name, and discovery recovers the exact tier on a later turn.
-  if (!tierId) {
-    return { ...options, serviceTier: 'default' }
-  }
-  return { ...options, serviceTier: tierId }
-}
-
 /**
  * Steers a send into the turn Codex last reported running. Null when Codex refused the steer,
  * which it does before taking any input: that turn ended or changed, it cannot be steered, or
@@ -106,9 +86,16 @@ function codexTurnOptions(host: CodexTurnHost): Record<string, string> {
 async function steerCodexTurn(
   host: CodexTurnHost,
   expectedTurnId: string,
-  input: { clientMessageId: string; body: AgentJournalMessageItem; timeoutMs?: number }
-): Promise<{ turnId: string } | null> {
+  input: {
+    clientMessageId: string
+    body: AgentJournalMessageItem
+    timeoutMs?: number
+    signal?: AbortSignal
+    onReply?: () => void
+  }
+): Promise<{ turnId: string; via: 'steer' } | null> {
   try {
+    checkDispatchAuthority(host, input.clientMessageId, input.signal)
     const answer = await host.connection.request(
       'turn/steer',
       {
@@ -117,9 +104,9 @@ async function steerCodexTurn(
         clientUserMessageId: input.clientMessageId,
         input: turnInputFor(input.body)
       },
-      { timeoutMs: input.timeoutMs }
+      { timeoutMs: input.timeoutMs, onReply: input.onReply }
     )
-    return { turnId: readCodexTurnId(answer) ?? expectedTurnId }
+    return { turnId: readCodexTurnId(answer) ?? expectedTurnId, via: 'steer' }
   } catch (error) {
     if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
       return null
@@ -140,34 +127,74 @@ export async function startCodexTurn(
     body: AgentJournalMessageItem
     requestedAt?: number
     timeoutMs?: number
+    turnOptions?: Readonly<Record<string, string>>
+    signal?: AbortSignal
+    /** Stamped as each reply is read (`CodexDispatchEchoes.tick`); the last is this send's. */
+    onReply?: () => void
   }
-): Promise<{ turnId: string | null } | false> {
+): Promise<{ turnId: string | null; via: AgentJournalTurnJoin } | false> {
   // Armed before the write: the echo and `turn/started` can both land while the
   // response is in flight, and the start must snapshot this send in its frontier.
   if (!host.dispatchEchoes.arm(input.clientMessageId, input.requestedAt)) {
     return false
   }
-  const runningTurnId = await codexRunningOrOpeningTurn(host)
-  let steered = runningTurnId ? await steerCodexTurn(host, runningTurnId, input) : null
+  // A turn whose interrupt Codex answered has aborted, though its end may still be on the wire:
+  // the send opens its own turn.
+  const steerable = (turnId: string | null | undefined): turnId is string =>
+    typeof turnId === 'string' && turnId !== '' && !host.abortedTurnIds?.has(turnId)
+  let runningTurnId: string | null
+  try {
+    runningTurnId = await codexRunningOrOpeningTurn(host, input.signal)
+  } catch (error) {
+    host.dispatchEchoes.disarm(input.clientMessageId)
+    throw error
+  }
+  let steered = steerable(runningTurnId) ? await steerCodexTurn(host, runningTurnId, input) : null
   // Refused because a turn Orca heard of meanwhile is running: steer that one, once.
   const runningSince = steered ? undefined : [...(host.activeTurnIds ?? [])].at(-1)
-  if (runningSince && runningSince !== runningTurnId) {
+  if (steerable(runningSince) && runningSince !== runningTurnId) {
     steered = await steerCodexTurn(host, runningSince, input)
   }
   if (steered) {
     return steered
   }
-  const answer = await host.connection.request(
-    'turn/start',
-    {
-      threadId: host.threadId,
-      clientUserMessageId: input.clientMessageId,
-      input: turnInputFor(input.body),
-      ...codexTurnOptions(host)
-    },
-    { timeoutMs: input.timeoutMs }
-  )
-  return { turnId: readCodexTurnId(answer) }
+  checkDispatchAuthority(host, input.clientMessageId, input.signal)
+  const previousApplied = host.appliedTurnOptions
+  const previousOptions = input.turnOptions ? new Map(host.options) : null
+  if (input.turnOptions) {
+    host.options.clear()
+    for (const [key, value] of Object.entries(input.turnOptions)) {
+      host.options.set(key, value)
+    }
+  }
+  host.appliedTurnOptions = input.turnOptions ?? Object.fromEntries(host.options)
+  let answer: unknown
+  try {
+    answer = await host.connection.request(
+      'turn/start',
+      {
+        threadId: host.threadId,
+        clientUserMessageId: input.clientMessageId,
+        input: turnInputFor(input.body),
+        // Codex omits a tier the model does not list.
+        ...(input.turnOptions ?? Object.fromEntries(host.options))
+      },
+      { timeoutMs: input.timeoutMs, onReply: input.onReply }
+    )
+  } catch (error) {
+    if (
+      previousOptions &&
+      (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error))
+    ) {
+      host.appliedTurnOptions = previousApplied
+      host.options.clear()
+      for (const [key, value] of previousOptions) {
+        host.options.set(key, value)
+      }
+    }
+    throw error
+  }
+  return { turnId: readCodexTurnId(answer), via: 'start' }
 }
 
 /**
@@ -178,35 +205,73 @@ export async function startCodexTurn(
  */
 export async function dispatchCodexTurn(
   session: CodexTurnHost,
-  input: { clientMessageId: string; body: AgentJournalMessageItem; requestedAt?: number },
+  input: {
+    sessionId: string
+    clientMessageId: string
+    body: AgentJournalMessageItem
+    requestedAt?: number
+    turnOptions?: Readonly<Record<string, string>>
+    signal?: AbortSignal
+  },
   timeoutMs: number | undefined
 ): Promise<AgentSessionDispatchOutcome> {
-  let answer: { turnId: string | null } | false
+  let answer: { turnId: string | null; via: AgentJournalTurnJoin } | false
+  // Where the answer was read among Codex's notifications, not when this continuation runs.
+  let answeredAt: number | undefined
+  const onReply = (): void => {
+    answeredAt = session.dispatchEchoes.tick()
+  }
   try {
-    answer = await startCodexTurn(session, { ...input, timeoutMs })
+    answer = await startCodexTurn(session, { ...input, timeoutMs, onReply })
   } catch (error) {
     if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
       // Codex answered and declined, so no echo for this write can arrive.
       session.dispatchEchoes.disarm(input.clientMessageId)
-      // Codex's own words, when it gave any, are the one part of the error a person can use.
+      // Codex's own words, when it gave any, are the one part of the error a person can use. A
+      // declined request recorded nothing, so stopped messages it carried are owed again.
       return {
         state: 'rejected',
         ...codexDispatchRejection(
-          agentSessionFailureFact('providerRejected', { detail: providerDiagnosticOf(error) })
+          agentSessionFailureFact('providerRejected', {
+            detail: providerDiagnosticOf(error),
+            neverReachedAgent: true
+          })
         )
       }
     }
     // A timeout or transport failure can happen after the frame was written.
     // Keep the correlation armed so a later echo can prove delivery.
+    session.dispatchEchoes.answered(
+      input.clientMessageId,
+      answeredAt ?? session.dispatchEchoes.tick()
+    )
     throw error
   }
   if (!answer) {
     return { state: 'rejected', ...codexDispatchRejection(agentSessionFailureFact('queueFull')) }
   }
   // An answer read after the turn it names already ended is settled by that end.
+  if (!answer.turnId) {
+    session.dispatchEchoes.answered(
+      input.clientMessageId,
+      answeredAt ?? session.dispatchEchoes.tick()
+    )
+  }
   const endedFirst = answer.turnId
-    ? session.dispatchEchoes.bindTurn(input.clientMessageId, session.threadId, answer.turnId)
+    ? session.dispatchEchoes.bindTurn(
+        input.clientMessageId,
+        session.threadId,
+        answer.turnId,
+        answer.via,
+        answeredAt
+      )
     : null
-  const rejection = endedFirst ? codexTurnEndRejection(endedFirst) : null
-  return rejection ? { state: 'rejected', ...rejection } : { state: 'admitted' }
+  const rejection = endedFirst ? codexTurnEndRejection(endedFirst, session.account) : null
+  return rejection && answer.turnId
+    ? {
+        state: 'rejected',
+        ...codexAnsweredTurn(session, input.sessionId, answer.turnId, answer.via),
+        ...rejection
+      }
+    : { state: 'admitted' }
 }

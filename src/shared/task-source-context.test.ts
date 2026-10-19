@@ -117,6 +117,21 @@ describe('task source context', () => {
     expect(local).not.toBe(enterpriseRepo)
   })
 
+  it('separates named task accounts without changing legacy anonymous cache scopes', () => {
+    const source = { provider: 'linear', projectId: 'project', hostId: 'runtime:owner' } as const
+    const legacy = getTaskSourceCacheScope(source)
+    expect(getTaskSourceCacheScope({ ...source, accountLabel: null })).toBe(legacy)
+    expect(getTaskSourceCacheScope({ ...source, accountLabel: ' account-a ' })).toBe(
+      getTaskSourceCacheScope({ ...source, accountLabel: 'account-a' })
+    )
+    const account = getTaskSourceCacheScope({ ...source, accountLabel: 'account-a' })
+    expect(account).not.toBe(legacy)
+    expect(account).not.toBe(getTaskSourceCacheScope({ ...source, accountLabel: 'account-b' }))
+    expect(account).not.toBe(
+      getTaskSourceCacheScope({ ...source, hostId: 'local', accountLabel: 'account-a' })
+    )
+  })
+
   it('serializes provider identities for GitLab, Linear, and Jira cache scopes', () => {
     const base = {
       projectId: 'project-1',

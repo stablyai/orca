@@ -8,7 +8,11 @@ import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
 import { withBoundedCacheEntry } from './cache-policy'
 import { hasUsableCommentPayload, mergePRCommentIntoList } from './pr-comment-cache'
-import { getGitHubRepoSourceSettings, getGitHubWorkItemRequestContext } from './work-item-routing'
+import {
+  getGitHubRepoSourceSettings,
+  getGitHubSourceTarget,
+  getGitHubWorkItemRequestContext
+} from './work-item-routing'
 
 export const createCommentMutationActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -19,11 +23,7 @@ export const createCommentMutationActions = (
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
     const repoId = options?.repoId ?? repo?.id
-    const requestSettings = getGitHubRepoSourceSettings(
-      get().settings,
-      repo,
-      options?.sourceContext
-    )
+    const requestSettings = getGitHubRepoSourceSettings(get(), repo, options?.sourceContext)
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
@@ -36,7 +36,7 @@ export const createCommentMutationActions = (
     )
     const requestContext = getGitHubWorkItemRequestContext(
       get(),
-      requestSettings,
+      getGitHubSourceTarget(get(), repo, options?.sourceContext),
       repoId ?? repoPath,
       repoPath,
       options?.sourceContext
@@ -117,11 +117,7 @@ export const createCommentMutationActions = (
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
     const repoId = options?.repoId ?? repo?.id
-    const requestSettings = getGitHubRepoSourceSettings(
-      get().settings,
-      repo,
-      options?.sourceContext
-    )
+    const requestSettings = getGitHubRepoSourceSettings(get(), repo, options?.sourceContext)
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
@@ -156,7 +152,7 @@ export const createCommentMutationActions = (
 
     const requestContext = getGitHubWorkItemRequestContext(
       get(),
-      requestSettings,
+      getGitHubSourceTarget(get(), repo, options?.sourceContext),
       repoId ?? repoPath,
       repoPath,
       options?.sourceContext

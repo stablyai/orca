@@ -3,12 +3,10 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { CommitMessageAgentRuntimeTarget } from '../../text-generation/commit-message-agent-environment'
 import {
   discoverCommitMessageModelsLocal,
-  discoverCommitMessageModelsRemote,
   type DiscoverCommitMessageModelsResult
 } from '../../text-generation/commit-message-text-generation'
 import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/commit-message-agent-environment'
 import { parseWslPath } from '../../wsl'
-import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
 import {
   resolveModelDiscoveryLocalPath,
   getLocalAgentRuntimeTarget
@@ -32,19 +30,10 @@ export function registerFilesystemGitModelDiscoveryHandlers(
         if (!args.worktreePath) {
           return { success: false, error: 'Missing worktree path for remote model discovery.' }
         }
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          return {
-            success: false,
-            error: `No git provider for connection "${args.connectionId}"`
-          }
+        return {
+          success: false,
+          error: `No git provider for connection "${args.connectionId}"`
         }
-        return discoverCommitMessageModelsRemote(
-          agentId as TuiAgent,
-          args.worktreePath,
-          (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
-          agentCommandOverride
-        )
       }
       let localRuntimeTarget: CommitMessageAgentRuntimeTarget = { runtime: 'host' }
       let localDiscoveryOptions: Parameters<typeof discoverCommitMessageModelsLocal>[3]

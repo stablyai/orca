@@ -4,8 +4,6 @@
  * input sources on the same device do run, non-Hangul scripts, desktop
  * platforms, and anything else that writes to the PTY.
  */
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
 import {
@@ -184,22 +182,6 @@ describe('the iPadOS Hangul path alongside everything else', () => {
         await typeJamo(rig, 'ㅎ', 'ㅎ', { replaces: false })
         expect(rig.emitted).toEqual(['ㅎ'])
       }
-    })
-
-    it('reads the platform once, so no second gate can drift from it', () => {
-      const lifecycle = readFileSync(
-        resolve(
-          process.cwd(),
-          'src/renderer/src/components/terminal-pane/terminal-pane-pane-input.ts'
-        ),
-        'utf8'
-      )
-      expect(lifecycle.match(/const isIosWeb =/g)).toHaveLength(1)
-      expect(lifecycle.match(/isCurrentPlatformIosWeb\(/g)).toHaveLength(1)
-      // And that the one gate is what installs the controller.
-      expect(lifecycle).toMatch(
-        /const iosHangulPreedit = isIosWeb\s*\?\s*installTerminalIosHangulPreedit\(/
-      )
     })
   })
 

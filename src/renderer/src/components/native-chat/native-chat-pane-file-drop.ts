@@ -3,7 +3,7 @@ import { hasNativeFileDragTypes } from '../../../../shared/native-file-drop'
 
 /** What a drag hovering the chat pane is carrying.
  *  `workspace`: an in-app file drag, attached by the composer's own handlers.
- *  `os`: a Finder/Explorer drag, delivered by the preload drop route instead. */
+ *  `os`: a Finder/Explorer drag, handled by the pane's OS file owner. */
 export type NativeChatPaneDragKind = 'os' | 'workspace'
 
 export type NativeChatPaneDragEvent = {
@@ -14,8 +14,8 @@ export type NativeChatPaneDragEvent = {
 
 /** The composer's drop claim, published while a composer is mounted in the pane. */
 export type NativeChatPaneDropClaim = {
-  /** Composer identity the preload drop route addresses (`data-composer-scope-key`). */
-  scopeKey: string
+  destinationKey: string
+  captureExternalDrop: () => (paths: string[]) => Promise<void>
   /** A guarded composer refuses the drop, so the pane must not invite one. */
   disabled: boolean
   onDragOverCapture: (event: React.DragEvent<HTMLDivElement>) => void
@@ -41,12 +41,7 @@ export function movedWithinDropSurface(event: NativeChatPaneDragEvent): boolean 
   return enteredNode instanceof Node && event.currentTarget.contains(enteredNode)
 }
 
-/**
- * Decides what the pane does with a drag, given what the mounted composer will
- * accept. Only a workspace drag is claimed here: an OS drag reaches the composer
- * through the preload route, which already consumed the drop event by the time
- * React would see it, so the pane's part of that route is the overlay alone.
- */
+/** Workspace files keep their provenance-checked lane; OS files use the native owner. */
 export function makeNativeChatPaneFileDropHandlers(host: {
   getClaim: () => NativeChatPaneDropClaim | null
   setDragActive: (active: boolean) => void
@@ -62,8 +57,6 @@ export function makeNativeChatPaneFileDropHandlers(host: {
       return false
     }
     const claim = host.getClaim()
-    // No composer (a question card owns the input region) means no attachment
-    // target, so the drag stays the terminal's the way it is today.
     return claim !== null && !claim.disabled
   }
 

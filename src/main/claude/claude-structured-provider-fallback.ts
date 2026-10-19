@@ -34,6 +34,19 @@ export function claudeProviderFrameKind(message: Record<string, unknown>): strin
   return ['message', type, subtype ?? eventType].filter(Boolean).join(':')
 }
 
+// Telemetry the translator never journals: the token tally Claude sends after every thinking delta,
+// stream deltas no stream registry carries (signatures, tool input), and keep-alive pings.
+const PROGRESS_FRAME_KINDS: ReadonlySet<string> = new Set([
+  'message:system:thinking_tokens',
+  'message:stream_event:content_block_delta',
+  'message:stream_event:ping'
+])
+
+/** A frame that writes no row, so nothing streamed has to be journaled ahead of it. */
+export function isClaudeProgressFrame(message: Record<string, unknown>): boolean {
+  return PROGRESS_FRAME_KINDS.has(claudeProviderFrameKind(message))
+}
+
 const SETTLED_RESULT_KINDS: ReadonlySet<string> = new Set(
   CLAUDE_STREAM_JSON_FRAME_KINDS.filter((kind) => kind.startsWith('message:result:'))
 )

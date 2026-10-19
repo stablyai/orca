@@ -1,15 +1,11 @@
-import type { StateCreator, StoreApi } from 'zustand'
+import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import type {
-  HostQualifiedDetectedWorktreeResult,
   HostQualifiedKnownWorktreeResult,
-  ProviderRequestId,
   SshExecutionHostId
 } from '../../../../../../shared/detected-worktree-provider-contract'
-import type { DirectSshAuthority } from '../../../../../../shared/ssh-types'
-import type { DetectedWorktreeRefreshLease } from '../../detected-worktree-refresh-leases'
 import { areDetectedWorktreeResultsEqual, areWorktreesEqual } from './worktree-catalog-visibility'
 import {
   getProjectHostSetupForRepoHost,
@@ -19,22 +15,10 @@ import {
   worktreeHostMatchOptions,
   worktreeMatchesHost
 } from './worktree-host-ownership'
-import { settingsForRepoOwner } from './worktree-owner-settings'
 import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
-import {
-  acquireDetectedWorktreeRefreshLeaseForRepo,
-  normalizeNotAdmittedProviderResult,
-  qualifiedProviderResultIsAdmitted
-} from './detected-worktree-refresh'
 import { isDetectedWorktreeListResult } from './detected-worktree-provider-request'
-import { staleDetectedWorktreeProviderResult } from './detected-worktree-refresh-admission'
-import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { getAuthoritativelyRemovedWorktreeIds } from './authoritative-worktree-removal-memory'
-import type {
-  AdmittedDetectedWorktreeRefresh,
-  DetectedWorktreeRefreshOptions,
-  WorktreeHostMatchOptions
-} from './worktree-slice-types'
+import type { WorktreeHostMatchOptions } from './worktree-slice-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 export function appendMissingWorktreesForHost<
@@ -181,106 +165,4 @@ export async function runKnownSshWorktreeFetch(
     }
   })
   return admitted ? known : null
-}
-
-export type DirectSshDetectedWorktreeRefresh = {
-  waiterLeaseId: DetectedWorktreeRefreshLease['waiterLeaseId']
-  providerRequestId: ProviderRequestId
-  result: Promise<HostQualifiedDetectedWorktreeResult>
-  release: DetectedWorktreeRefreshLease['release']
-  merge(result: HostQualifiedDetectedWorktreeResult): HostQualifiedDetectedWorktreeResult
-}
-
-export function acquireDirectSshDetectedWorktreeRefresh(
-  store: Pick<StoreApi<AppState>, 'getState' | 'setState'>,
-  request: {
-    repoId: string
-    executionHostId: SshExecutionHostId
-    authority: DirectSshAuthority
-    requireAuthoritative?: boolean
-  }
-): DirectSshDetectedWorktreeRefresh {
-  const requestStartedState = store.getState()
-  const requestStartedWorktrees = requestStartedState.worktreesByRepo[request.repoId]
-  const ownerWasMissingAtStart = !requestStartedState.repos.some(
-    (repo) => repo.id === request.repoId
-  )
-  const setup = getProjectHostSetupForRepoHost(
-    requestStartedState,
-    request.repoId,
-    request.executionHostId
-  )
-  const settings = settingsForRepoOwner(
-    requestStartedState,
-    request.repoId,
-    request.executionHostId
-  )
-  const options: DetectedWorktreeRefreshOptions = {
-    executionHostId: request.executionHostId,
-    directSshAuthority: request.authority,
-    requireAuthoritative: request.requireAuthoritative
-  }
-  const lease = acquireDetectedWorktreeRefreshLeaseForRepo(settings, request.repoId, options)
-  let mergedResult: HostQualifiedDetectedWorktreeResult | undefined
-
-  return {
-    waiterLeaseId: lease.waiterLeaseId,
-    providerRequestId: lease.providerRequestId,
-    result: lease.result,
-    release: lease.release,
-    merge: (providerResult) => {
-      if (mergedResult) {
-        return mergedResult
-      }
-      if (
-        !qualifiedProviderResultIsAdmitted(
-          providerResult,
-          lease.providerRequestId,
-          request.repoId,
-          options
-        )
-      ) {
-        mergedResult = normalizeNotAdmittedProviderResult(
-          providerResult,
-          lease.providerRequestId,
-          request.executionHostId
-        )
-        return mergedResult
-      }
-      if (request.requireAuthoritative && providerResult.status !== 'complete') {
-        mergedResult = providerResult
-        return mergedResult
-      }
-      const refresh: AdmittedDetectedWorktreeRefresh = {
-        status: 'admitted',
-        result: providerResult.result,
-        providerResult,
-        executionHostId: request.executionHostId,
-        directSshAuthority: request.authority
-      }
-      const outcome = mergeFetchedWorktrees(
-        store.setState as Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
-        {
-          repoId: request.repoId,
-          hostId: request.executionHostId,
-          ownerWasMissingAtStart,
-          requestStartedWorktrees,
-          setup,
-          refresh
-        }
-      )
-      // Why 'superseded' is current: a newer catalog is already applied for this host. 'stale' would
-      // end a reconnect preparation, and nothing retries it while the connection holds.
-      switch (outcome) {
-        case 'applied':
-        case 'superseded':
-          mergedResult = providerResult
-          break
-        case 'not-current':
-          mergedResult = staleDetectedWorktreeProviderResult(refresh) ?? providerResult
-          break
-      }
-      return mergedResult
-    }
-  }
 }

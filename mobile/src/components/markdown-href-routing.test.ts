@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { routeMarkdownHref } from './markdown-href-routing'
+import { createNativeChatFileHref } from '../../../src/shared/native-chat-href-routing'
 
 describe('routeMarkdownHref', () => {
   it('routes web and mail links to the system handler', () => {
@@ -29,6 +30,13 @@ describe('routeMarkdownHref', () => {
     expect(routeMarkdownHref('docs/plan.md#usage')).toEqual({
       kind: 'file',
       pathText: 'docs/plan.md'
+    })
+  })
+
+  it('preserves the existing wrapped reply-location contract', () => {
+    expect(routeMarkdownHref(createNativeChatFileHref(' docs/report.md:12:4 '))).toEqual({
+      kind: 'file',
+      pathText: 'docs/report.md:12:4'
     })
   })
 

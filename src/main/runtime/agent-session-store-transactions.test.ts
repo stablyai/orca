@@ -16,6 +16,7 @@ import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from './agent-session-record-store-test-harness'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 
@@ -76,7 +77,7 @@ async function liveChat(
     fence,
     link: {
       linkId: `link-${counter}`,
-      handle: { provider: 'claude', sessionId: `provider-${counter}`, leafUuid: null },
+      handle: claudeProviderHandle(`provider-${counter}`, null),
       origin: 'created',
       mintedAtFence: fence,
       observedAt: NOW
@@ -137,6 +138,57 @@ describe('writing a transaction', () => {
     expect((await readPersistedTestAgentSessionStore(root)).records['chat-a-0001']).toMatchObject({
       conversationName: 'renamed'
     })
+  })
+})
+
+describe('a receipt', () => {
+  const operationId = `${NOW}-${'7'.repeat(32)}`
+  const outcome = { status: 'succeeded' as const, sessionId: 'chat-a-0001' }
+
+  async function pendingOperation(): Promise<AgentSessionRecordStore> {
+    const store = await openTestAgentSessionRecordStore(root)
+    await liveChat(store, 'chat-a-0001')
+    await store.admitOperation({ callerKey: 'client-1', operationId, fingerprint: 'fp', now: NOW })
+    return store
+  }
+
+  async function persistedStatus(): Promise<string | undefined> {
+    const reopened = await openTestAgentSessionRecordStore(root)
+    return reopened.getOperationRow('client-1', operationId)?.outcome.status
+  }
+
+  // Written inside the caller's journal transaction, so it commits or rolls back with that write.
+  it('shows its rows in memory only once committed is called after the commit', async () => {
+    const store = await pendingOperation()
+    const receipt = store.operationOutcomeReceipt({ callerKey: 'client-1', operationId, outcome })
+
+    openTestJournalHostDatabase(root).transaction((db) => {
+      receipt.write(db)
+      expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
+    })
+    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
+    expect(await persistedStatus()).toBe('succeeded')
+
+    receipt.committed()
+    expect(store.getOperationRow('client-1', operationId)?.outcome).toEqual(outcome)
+  })
+
+  it('leaves memory and rows as they were when the transaction rolls back', async () => {
+    const store = await pendingOperation()
+    const receipt = store.operationOutcomeReceipt({ callerKey: 'client-1', operationId, outcome })
+
+    expect(() =>
+      openTestJournalHostDatabase(root).transaction((db) => {
+        receipt.write(db)
+        throw new Error('the journal row was refused')
+      })
+    ).toThrow('the journal row was refused')
+
+    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
+    expect(await persistedStatus()).toBe('pending')
+    // The next store transaction diffs from what committed, not from the discarded draft.
+    await store.setConversationName('chat-a-0001', 'after')
+    expect(await persistedStatus()).toBe('pending')
   })
 })
 

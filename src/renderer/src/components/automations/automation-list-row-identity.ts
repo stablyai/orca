@@ -19,11 +19,15 @@ import type { AutomationUsageSummary } from '../../../../shared/automation-usage
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
 import type { StableAutomationCatalogRef } from '../../../../shared/automation-owner-ref'
 import {
+  getConnectionExecutionHostId,
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
 } from '../../../../shared/execution-host'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getFolderWorkspaceWorktree } from '../../store/slices/worktrees/listing/detected-worktree-meta'
 
 export type AutomationListRow = {
   /** Authority-qualified and incarnation-free; see the module note. */
@@ -80,15 +84,41 @@ export function automationRepoForRow(
   if (!authority) {
     return fallback.get(repoId)
   }
-  return repos.find((repo) => {
-    const host = getRepoExecutionHostId(repo)
-    return (
-      repo.id === repoId &&
-      (authority.kind === 'runtime'
-        ? host === `runtime:${encodeURIComponent(authority.environmentId)}`
-        : !host.startsWith('runtime:'))
-    )
-  })
+  return repos.find(
+    (repo) => repo.id === repoId && authorityOwnsHost(authority, getRepoExecutionHostId(repo))
+  )
+}
+
+function authorityOwnsHost(
+  authority: StableAutomationCatalogRef['authority'],
+  hostId: string
+): boolean {
+  return authority.kind === 'runtime'
+    ? hostId === `runtime:${encodeURIComponent(authority.environmentId)}`
+    : !hostId.startsWith('runtime:')
+}
+
+/** Folder workspaces are not in `worktreesByRepo`; dispatch resolves `folder:<id>` the same way. */
+export function automationFolderWorktreeForRow(
+  row: AutomationListRow,
+  folderWorkspaces: readonly FolderWorkspace[],
+  workspaceId: string | null | undefined = row.automation.workspaceId
+): Worktree | undefined {
+  const scope = workspaceId ? parseWorkspaceKey(workspaceId) : null
+  if (scope?.type !== 'folder') {
+    return undefined
+  }
+  const authority = row.catalogRef?.authority
+  const matches = folderWorkspaces.filter(
+    (workspace) =>
+      workspace.id === scope.folderWorkspaceId &&
+      (!authority ||
+        authorityOwnsHost(
+          authority,
+          workspace.executionHostId ?? getConnectionExecutionHostId(workspace.connectionId)
+        ))
+  )
+  return matches.length === 1 ? getFolderWorkspaceWorktree(matches[0]) : undefined
 }
 
 export function automationWorktreeForRow(

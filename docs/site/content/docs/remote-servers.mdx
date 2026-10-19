@@ -94,7 +94,7 @@ On the computer you want to use as the client:
   caption="Share an Orca desktop runtime with another client over a private network."
 />
 
-Adding a server saves it without forcing every new project onto it. Open **Advanced → Active Server** only when you want server-routed projects, terminals, provider checks, and browser or mobile handoff to use that server by default.
+Adding a server saves it without forcing every new project onto it. Open **Advanced → Default host for new projects** only when you want server-routed projects, terminals, provider checks, and browser or mobile handoff to use that server by default.
 
 ## Use the remote server
 
@@ -166,6 +166,25 @@ orca-ide serve --port 6768 --pairing-address 100.64.1.20
 ```
 
 Use only one host mode at a time. If the Orca desktop app is already sharing that computer, do not start a second `orca serve` process for the same setup.
+
+`orca serve` runs on Orca's own Node server (orcad) by default. If orcad can't serve on this computer, it uses the desktop app's server instead and prints one line saying why. On a packaged macOS app it currently always uses the desktop app's server, so paired clients can still update it. To always use the desktop app's server, set `ORCA_SERVE_RUNTIME=electron`.
+
+### Limit terminal memory on a Linux server
+
+By default, nothing caps how much memory a terminal's processes use, so one runaway job can push the whole server into the kernel's out-of-memory killer. On Linux you can cap each terminal by setting these variables in the environment that starts `orca serve` (or in its service unit):
+
+```bash
+export ORCA_TERMINAL_MEMORY_MAX=16G      # memory per terminal, 256M or more
+export ORCA_TERMINAL_MEMORY_SWAP_MAX=0   # swap per terminal; 0 means no swap
+orca-ide serve --pairing-address 100.64.1.20
+```
+
+- Each terminal already runs in its own systemd user scope. The limits become that scope's `MemoryMax` and `MemorySwapMax`.
+- When a terminal goes over its limit, the kernel kills its largest process. Typically that is the job, and the shell keeps running. The server and every other terminal keep running.
+- The limits are off by default because Orca can't know what a sensible limit is for your workloads.
+- They need systemd with cgroup v2 and a user manager that outlives logout (`loginctl enable-linger <user>`). If the host can't enforce a limit, Orca skips it, logs `terminal-memory-limits` in the terminal host log, and starts terminals without it.
+- Orca reads them only when its terminal host process starts. That process keeps running when `orca serve` restarts, so terminals keep their old limits until it restarts too, for example after the server reboots.
+- They have no effect on macOS or Windows.
 
 ### Mobile from a headless server
 

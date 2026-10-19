@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -9,6 +10,26 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('gitlab RPC methods', () => {
+  it("lists a repo's assignable users on the server that owns the repo", async () => {
+    const users = [
+      { id: 7, username: 'ana', name: 'Ana', avatarUrl: 'https://gitlab.example.com/ana.png' }
+    ]
+    const listGitLabRepoAssignableUsers = vi.fn().mockResolvedValue(users)
+    const runtime = { getRuntimeId: () => 'test-runtime', listGitLabRepoAssignableUsers }
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods dispatch only listGitLabRepoAssignableUsers.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: GITLAB_METHODS
+    })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('gitlab.listAssignableUsers', { repo: 'id:repo-1' })
+    )
+
+    expect(listGitLabRepoAssignableUsers).toHaveBeenCalledWith('id:repo-1')
+    expect(response).toMatchObject({ ok: true, result: users })
+  })
+
   it('routes GitLab task queries and mutations to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

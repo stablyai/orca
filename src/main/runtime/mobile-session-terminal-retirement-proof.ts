@@ -8,11 +8,6 @@ import {
   retirementProofKey
 } from '../../shared/terminal-retirement-proof-ledger'
 
-export {
-  appendRetiredTerminalSurfaceProofs,
-  dropRetirementProofsForLiveSurfaces
-} from '../../shared/terminal-retirement-proof-ledger'
-
 /**
  * Renderer snapshots omit the host's durable close acknowledgements; carry them forward.
  *

@@ -6,7 +6,8 @@ import {
   BRACKETED_PASTE_START,
   wrapTerminalBracketedPasteText
 } from './terminal-bracketed-paste'
-import { executeTerminalPastePlan, planTerminalPaste } from './terminal-paste-coordinator'
+import { executeTerminalPastePlan } from './terminal-paste-executor'
+import { planTerminalPaste } from './terminal-paste-coordinator'
 import { runTerminalPtyInputTransaction } from './terminal-pty-input-transaction'
 
 function chunkedWindowsPaste() {
@@ -55,7 +56,6 @@ describe('terminal paste operation ordering', () => {
       writePty,
       yieldToEventLoop: async () => {
         startupDraft ??= sendAgentDraftPasteContent(
-          null,
           'pty-1',
           'GENERATED_CONTEXT',
           'launch',
@@ -83,7 +83,6 @@ describe('terminal paste operation ordering', () => {
       startupOpened = resolve
     })
     const startup = sendAgentDraftPasteContent(
-      null,
       'pty-1',
       'G'.repeat(64 * 1024 + 1),
       'launch',

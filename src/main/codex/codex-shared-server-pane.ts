@@ -71,13 +71,10 @@ export function resolveCodexPaneHome(ptyId: string): string | null {
   if (record?.selectionKey !== 'host') {
     return null
   }
-  const customHome =
-    record.environmentHomeOverride?.codexHome ?? record.shellStartupHomeOverride?.codexHome
   switch (record.homeRoute) {
+    // Why: a custom CODEX_HOME routes a pane to Orca's mirror, so real-home is always ~/.codex.
     case 'real-home':
-      return customHome ?? getSystemCodexHomePath()
-    case 'custom-home':
-      return customHome ?? null
+      return getSystemCodexHomePath()
     // Why: an unnamed home (managed account, WSL, pre-route record) skips the
     // warning rather than probing the wrong server. Orca's mirror (shared-home)
     // gets none either, as macOS and Linux already did: it is a fallback lane

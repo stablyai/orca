@@ -33,7 +33,7 @@ for (const mode of ['scalar', 'batch'] as const) {
       error: { code: 'not_found', message: 'Worktree not found: id:folder-1' }
     })
     const context = {
-      settings: { activeRuntimeEnvironmentId: 'owner' },
+      target: { kind: 'environment' as const, environmentId: 'owner' },
       worktreeId: 'folder-1',
       worktreePath: '/folder'
     }
@@ -67,7 +67,7 @@ for (const stage of ['status', 'operation'] as const) {
     )
     runtimeEnvironmentCall.mockImplementation(async () => failure())
     const context = {
-      settings: { activeRuntimeEnvironmentId: 'owner' },
+      target: { kind: 'environment' as const, environmentId: 'owner' },
       worktreeId: 'folder-1',
       worktreePath: '/folder'
     }

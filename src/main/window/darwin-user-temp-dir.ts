@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os'
 import { isAbsolute } from 'node:path'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 const GETCONF_TIMEOUT_MS = 5_000
 

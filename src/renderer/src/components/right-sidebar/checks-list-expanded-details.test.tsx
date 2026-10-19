@@ -88,6 +88,7 @@ function renderChecksList(
     detailsStickySurface: 'sidebar' | 'card'
     checkDetailsContextKey: string
     checks: PRCheckDetail[]
+    checksError: string
     onLoadCheckDetails: (check: PRCheckDetail) => Promise<PRCheckRunDetails | null>
   }> = {}
 ): void {
@@ -96,6 +97,7 @@ function renderChecksList(
       <TooltipProvider>
         <ChecksList
           checks={props.checks ?? [failingCheck]}
+          checksError={props.checksError}
           checksLoading={false}
           checkDetailsContextKey={props.checkDetailsContextKey ?? 'repo:42'}
           worktreeId={props.worktreeId}
@@ -114,6 +116,51 @@ function renderChecksList(
 }
 
 describe('ChecksList expanded check details', () => {
+  it.each([undefined, 'error'] as const)(
+    'opens cached partial outcome %s without another details request',
+    async (logState) => {
+      const partial = {
+        ...checkDetails,
+        jobs: [{ ...checkDetails.jobs[0], logTail: null, ...(logState ? { logState } : {}) }]
+      }
+      const onLoadCheckDetails = vi.fn(async () => partial)
+      renderChecksList({ worktreeId: 'folder-workspace', onLoadCheckDetails })
+      await act(async () => {
+        await Promise.resolve()
+      })
+      const button = [...container.querySelectorAll('button')].find((candidate) =>
+        candidate.textContent?.includes('View full details')
+      )
+      if (!button) {
+        throw new Error('Missing full-details action')
+      }
+      act(() => {
+        button.click()
+      })
+      expect(onLoadCheckDetails).toHaveBeenCalledTimes(1)
+      expect(openCheckRunDetails).toHaveBeenCalledWith(
+        'folder-workspace',
+        'repo:42',
+        failingCheck,
+        expect.objectContaining({
+          details: partial,
+          loading: false,
+          error: null,
+          requestId: expect.any(Number)
+        })
+      )
+      renderChecksList({ worktreeId: 'folder-workspace', onLoadCheckDetails })
+      expect(onLoadCheckDetails).toHaveBeenCalledTimes(1)
+    }
+  )
+  it('shows a failed read as an error instead of "No checks configured"', () => {
+    renderChecksList({ checks: [], checksError: 'Could not load from Build box: 401' })
+
+    expect(container.textContent).toContain('Could not load from Build box: 401')
+    expect(container.textContent).not.toContain('No checks configured')
+    expect(container.querySelector('[role="alert"]')).not.toBeNull()
+  })
+
   it('pins a contextual full-details action with the correct sticky surface', async () => {
     renderChecksList({ worktreeId: 'wt-child-1', detailsStickySurface: 'card' })
 
@@ -125,21 +172,37 @@ describe('ChecksList expanded check details', () => {
     expect(stickyBar).not.toBeNull()
     expect(stickyBar?.className).toContain('bg-card/95')
     expect(stickyBar?.textContent).toContain('verify')
-    expect(stickyBar?.textContent).toContain('View full logs')
+    expect(stickyBar?.textContent).toContain('View full details')
     expect(container.innerHTML).toContain('lucide-panel-right')
     expect(container.innerHTML).toContain('data-variant="outline"')
   })
 
-  it('uses the sidebar sticky surface by default in the hosted checks panel', async () => {
-    activeWorktreeState.current = { id: 'wt-active-1' }
-    renderChecksList()
+  it('keeps every failure outcome together before output in inline details', async () => {
+    renderChecksList({
+      onLoadCheckDetails: async () => ({
+        ...checkDetails,
+        conclusion: 'startup_failure',
+        jobs: [
+          checkDetails.jobs[0]!,
+          {
+            ...checkDetails.jobs[0]!,
+            id: 2,
+            name: 'startup',
+            conclusion: 'startup_failure',
+            logTail: null
+          }
+        ]
+      })
+    })
 
     await act(async () => {
       await Promise.resolve()
     })
 
-    const stickyBar = container.querySelector('.sticky.top-0')
-    expect(stickyBar?.className).toContain('bg-sidebar/95')
+    const text = container.textContent ?? ''
+    expect(text).toContain('Failed jobs')
+    expect(text).toContain('startup')
+    expect(text.indexOf('Failed jobs')).toBeLessThan(text.indexOf('Verify failed'))
   })
 
   it('falls back to the active worktree when no worktree override is provided', async () => {
@@ -151,7 +214,7 @@ describe('ChecksList expanded check details', () => {
     })
 
     const button = [...container.querySelectorAll('button')].find((candidate) =>
-      candidate.textContent?.includes('View full logs')
+      candidate.textContent?.includes('View full details')
     )
     expect(button).toBeDefined()
 
@@ -180,7 +243,7 @@ describe('ChecksList expanded check details', () => {
     })
 
     const button = [...container.querySelectorAll('button')].find((candidate) =>
-      candidate.textContent?.includes('View full logs')
+      candidate.textContent?.includes('View full details')
     )
     expect(button).toBeDefined()
 
@@ -415,7 +478,7 @@ describe('ChecksList expanded check details', () => {
     expect(onLoadCheckDetails).toHaveBeenCalledWith(gitLabCheck)
     expect(container.textContent).toContain('ERROR: Job failed: exit code 1')
     expect(container.textContent).not.toContain('No inline details are available')
-    expect(container.querySelector('.sticky.top-0')?.textContent).toContain('View full logs')
+    expect(container.querySelector('.sticky.top-0')?.textContent).toContain('View full details')
   })
 
   // GitLab trace fetches fail for reasons GitHub's never do (auth, 404, self-hosted

@@ -3,7 +3,7 @@ import { CaseSensitive, GitBranch, Github, Gitlab, Sparkles } from 'lucide-react
 
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { translate } from '@/i18n/i18n'
-import type { SmartNameMode } from './smart-workspace-source-results'
+import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
 
 export type MrStateFilter = 'opened' | 'merged' | 'closed' | 'all'
 

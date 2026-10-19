@@ -13,8 +13,6 @@ export type PendingPtyData = {
   /** Latch state across bytes the renderer never received, so a drop that swallowed
    *  a closing \x1b[?2026l can still release xterm's render hold. */
   droppedSynchronizedOutputState?: SynchronizedOutputLatchState
-  projectionAdmissionIds?: readonly string[]
-  projectionAdmissionsTransferred?: true
 }
 
 export type PtyPendingDataDrainDisposition = 'active' | 'background' | 'blocked'

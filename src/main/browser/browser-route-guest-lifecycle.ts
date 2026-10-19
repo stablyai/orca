@@ -56,14 +56,16 @@ export function createBrowserRouteGuestState(
 
 export function installBrowserRouteGuestQuarantine(
   state: BrowserRouteGuestState,
-  dependencies: BrowserRouteGuestPopupDependencies
+  dependencies: BrowserRouteGuestPopupDependencies & {
+    isPopupNavigationAllowed: (url: string) => boolean
+  }
 ): void {
   // Gesture-gated, same-partition popups: OAuth needs a real child window, and denying every
   // window.open is what stranded those flows. Everything else about the envelope still applies.
   const popups = createBrowserRouteGuestPopupController({
     opener: state.guest,
     partition: state.partition,
-    isNavigationAllowed: (url) => state.isNavigationAllowed(url),
+    isNavigationAllowed: dependencies.isPopupNavigationAllowed,
     dependencies
   })
   state.popups = popups
@@ -77,12 +79,13 @@ export function installBrowserRouteGuestQuarantine(
 export function isBrowserRouteGuestNavigationAllowed(
   state: BrowserRouteGuestState,
   rawUrl: string,
-  isCurrent: () => boolean
+  isCurrent: () => boolean,
+  allowUnregisteredBlank = true
 ): boolean {
   try {
     const normalized = normalizeBrowserNavigationUrl(rawUrl)
     return (
-      normalized === ORCA_BROWSER_BLANK_URL ||
+      (allowUnregisteredBlank && normalized === ORCA_BROWSER_BLANK_URL) ||
       Boolean(
         normalized &&
         !normalized.startsWith('file:') &&

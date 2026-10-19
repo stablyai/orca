@@ -66,7 +66,21 @@ describe('runtime window file-open notifications', () => {
     })
     for (const [, payload] of send.mock.calls) {
       expect(payload).not.toHaveProperty('navigation')
+      expect(payload).not.toHaveProperty('position')
     }
+  })
+
+  it('adds position only when requested', () => {
+    const { notifier, send } = attachNotifier()
+    notifier.openFile?.('wt-1', '/repo/a.ts', 'a.ts', 'host-1', 'caller', { line: 12, column: 5 })
+    expect(send).toHaveBeenCalledWith('ui:openFileFromMobile', {
+      worktreeId: 'wt-1',
+      filePath: '/repo/a.ts',
+      relativePath: 'a.ts',
+      runtimeEnvironmentId: 'host-1',
+      navigation: 'caller',
+      position: { line: 12, column: 5 }
+    })
   })
 
   it('forwards an explicit navigation target to the renderer', () => {

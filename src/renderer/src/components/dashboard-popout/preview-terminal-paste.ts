@@ -1,13 +1,12 @@
 import type { Terminal } from '@xterm/xterm'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import {
-  executeTerminalPastePlan,
-  planTerminalPasteWithYield
-} from '@/components/terminal-pane/terminal-paste-coordinator'
+import { executeTerminalPastePlan } from '@/components/terminal-pane/terminal-paste-executor'
+import { planTerminalPasteWithYield } from '@/components/terminal-pane/terminal-paste-coordinator'
 import { resolveTerminalPasteRuntime } from '@/components/terminal-pane/terminal-paste-runtime'
 import { TERMINAL_PASTE_MAX_BYTES } from '@/components/terminal-pane/terminal-paste-limits'
 import { pasteTerminalText } from '@/components/terminal-pane/terminal-bracketed-paste'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
+import { terminalPreviewApiFor } from './terminal-preview-api'
 
 export type PreviewTerminalPasteSource = 'keyboard' | 'app-menu' | 'right-click'
 
@@ -62,7 +61,7 @@ export function createPreviewClipboardPaster(deps: {
     await executeTerminalPastePlan(plan, {
       // Why: stream large pastes so the renderer never emits one huge IPC payload.
       pasteText: (text, options) => pasteTerminalText(pasteTerminal, text, options),
-      writePty: (data) => window.api.terminalPreview.input(deps.ptyId, data),
+      writePty: (data) => terminalPreviewApiFor(deps.ptyId).input(deps.ptyId, data),
       isTargetCurrent: targetIsCurrent,
       // Why: if focus changes mid-bracketed paste, the closing marker must still reach the live PTY.
       canContinue: () => true

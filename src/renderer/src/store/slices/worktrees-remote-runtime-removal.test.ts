@@ -188,6 +188,13 @@ describe('worktree remote runtime mutations', () => {
       runtimeOwnerEnvironmentId: 'owner-hub'
     })
     runtimeEnvironmentCall
+      // Why: the archive-hook check runs on the HUB too; this app cannot reach its SSH target.
+      .mockResolvedValueOnce({
+        id: 'rpc-hooks-check',
+        ok: true,
+        result: { hasHooks: false, hooks: null, mayNeedUpdate: false },
+        _meta: { runtimeId: 'runtime-owner-hub' }
+      })
       .mockResolvedValueOnce({
         id: 'rpc-rm-nested',
         ok: true,
@@ -220,6 +227,12 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'owner-hub',
+      method: 'repo.hooksCheck',
+      params: { repo: 'repo-ssh' },
+      timeoutMs: 15_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'owner-hub',
       method: 'worktree.rm',
       params: {
         worktree: `id:${wt.id}`,
@@ -239,7 +252,7 @@ describe('worktree remote runtime mutations', () => {
       .forceDeletePreservedBranch(wt.id, 'feature/nested', 'saved-head')
 
     expect(forceResult).toEqual({ ok: true, deleted: true })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {
       selector: 'owner-hub',
       method: 'worktree.forceDeleteBranch',
       params: {

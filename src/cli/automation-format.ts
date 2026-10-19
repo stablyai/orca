@@ -76,6 +76,7 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
     `id: ${automation.id}`,
     `name: ${automation.name}`,
     `provider: ${automation.agentId}`,
+    ...(automation.extraAgentArgs ? [`extraAgentArgs: ${automation.extraAgentArgs}`] : []),
     `enabled: ${automation.enabled}`,
     `schedule: ${formatAutomationSchedule(automation.rrule)}`,
     `rrule: ${automation.rrule}`,
@@ -131,6 +132,14 @@ function formatAutomationRunPrecheck(run: AutomationRun): string {
       : `exit ${result.exitCode ?? 'unknown'}`
   const output = result.stderr.trim() || result.stdout.trim()
   return output ? `${outcome}; ${output}` : outcome
+}
+
+export function formatAutomationRunsPage(result: {
+  runs: AutomationRun[]
+  nextCursor: string | null
+}): string {
+  const runs = formatAutomationRuns(result)
+  return result.nextCursor ? `${runs}\n\nNext page: --cursor ${result.nextCursor}` : runs
 }
 
 export function formatAutomationRuns(result: { runs: AutomationRun[] }): string {

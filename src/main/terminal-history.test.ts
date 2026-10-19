@@ -108,6 +108,7 @@ describe('terminal-history', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mkdirSyncMock.mockReset()
     // Why: clearAllMocks keeps implementations, so a throwing rename from one test would leak forward.
     renameSyncMock.mockReset()
     readFileSyncMock.mockReset()
@@ -442,11 +443,6 @@ describe('terminal-history', () => {
   })
 
   describe('injectWslFishHistoryEnv', () => {
-    // clearAllMocks keeps implementations: drop the throwing mkdir left by the degrade test.
-    beforeEach(() => {
-      mkdirSyncMock.mockReset()
-    })
-
     it('replaces an inherited Orca fish_history with this worktree session', () => {
       const env: Record<string, string> = {
         fish_history: fishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))

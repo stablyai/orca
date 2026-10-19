@@ -27,6 +27,7 @@ export function SearchFilters({
         <input
           ref={includeInputRef}
           type="text"
+          data-file-search-input="true"
           className="bg-input/50 border border-border rounded-sm px-2 py-1 text-xs outline-none focus:border-ring text-foreground placeholder:text-muted-foreground/50"
           placeholder={translate(
             'auto.components.right.sidebar.SearchFilters.8a77efcbd1',
@@ -44,6 +45,7 @@ export function SearchFilters({
         <input
           ref={excludeInputRef}
           type="text"
+          data-file-search-input="true"
           className="bg-input/50 border border-border rounded-sm px-2 py-1 text-xs outline-none focus:border-ring text-foreground placeholder:text-muted-foreground/50"
           placeholder={translate(
             'auto.components.right.sidebar.SearchFilters.01e4671ccf',

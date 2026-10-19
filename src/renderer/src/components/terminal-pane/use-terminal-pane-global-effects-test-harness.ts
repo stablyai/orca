@@ -17,9 +17,7 @@ export function installGlobalEffectsTestWindow(): void {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
     api: {
-      ui: {
-        onFileDrop: vi.fn(() => vi.fn())
-      },
+      ui: {},
       pty: {
         setActiveRendererPty: vi.fn()
       }

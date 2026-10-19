@@ -1,9 +1,12 @@
-import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
+import { once } from 'node:events'
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import { spawnProcess } from '@orca/process-host'
 import { describe, expect, it } from 'vitest'
 import {
   parseDarwinExecutablePath,
+  readShellProcessReadiness,
   resolveInstalledShellExecutablePaths,
   resolveShellExecutablePath
 } from './shell-process-readiness'
@@ -14,6 +17,32 @@ describe('shell process readiness', () => {
       '/bin/zsh'
     )
   })
+
+  it.runIf(process.platform === 'darwin')(
+    'reads a child process executable path from real lsof on macOS',
+    async () => {
+      const executable = process.execPath
+      const child = spawnProcess({
+        program: executable,
+        args: ['-e', 'setTimeout(() => {}, 10_000)'],
+        stdio: 'ignore'
+      })
+      try {
+        await once(child, 'spawn', { signal: AbortSignal.timeout(5_000) })
+        if (child.pid === undefined) {
+          throw new Error('Fixture process has no PID')
+        }
+        const readiness = await readShellProcessReadiness(child.pid)
+        expect(readiness?.executablePath).toBe(await realpath(executable))
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) {
+          const closed = once(child, 'close', { signal: AbortSignal.timeout(5_000) })
+          child.kill()
+          await closed
+        }
+      }
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'resolves bare shell commands through the spawn PATH',

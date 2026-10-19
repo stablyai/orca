@@ -32,6 +32,16 @@ const DEFAULT_ZUSTAND_PUBLICATION_INTERVAL_MS = 100
 const ONBOARDING_FINAL_STEP = 3
 const ONBOARDING_FLOW_VERSION = 2
 
+function forceKillProcessTree(pid) {
+  try {
+    if (process.platform === 'win32') {
+      execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
+    } else {
+      process.kill(-pid, 'SIGKILL')
+    }
+  } catch {}
+}
+
 function parseArgs(argv) {
   const options = {
     warmupMs: DEFAULT_WARMUP_MS,
@@ -159,11 +169,17 @@ function buildAppIfNeeded(root, skipBuild) {
     throw new Error(`--skip-build requested, but ${mainPath} does not exist`)
   }
   console.log('[idle-cpu] building Electron app with electron-vite --mode e2e')
-  run('npx', ['electron-vite', 'build', '--mode', 'e2e'], {
-    cwd: root,
-    stdio: 'inherit',
-    env: { ...process.env, VITE_EXPOSE_STORE: 'true' }
-  })
+  // Why through the wrapper: `npx` only resolves to an executable on POSIX; on Windows it is
+  // `npx.cmd`, which execFileSync cannot run, and the wrapper also verifies the boot graph.
+  run(
+    process.execPath,
+    [path.join(root, 'config', 'scripts', 'run-electron-vite-build.mjs'), '--mode', 'e2e'],
+    {
+      cwd: root,
+      stdio: 'inherit',
+      env: { ...process.env, VITE_EXPOSE_STORE: 'true' }
+    }
+  )
   return mainPath
 }
 
@@ -348,7 +364,7 @@ async function main() {
         return { error: added.error }
       }
       const store = window.__store
-      await store?.getState().fetchRepos()
+      await store?.getState().fetchRepos({ runtimeEnvironmentId: null })
       const repo = store?.getState().repos.find((candidate) => candidate.id === added.repo.id)
       if (repo) {
         const detected = await store
@@ -475,9 +491,18 @@ async function main() {
       )
     )
   } finally {
-    const launchedProcesses = descendantsOf(readProcessRows(), rootPid).filter(
-      (proc) => proc.pid !== rootPid
-    )
+    let launchedProcesses = []
+    try {
+      launchedProcesses = descendantsOf(readProcessRows(), rootPid).filter(
+        (proc) => proc.pid !== rootPid
+      )
+    } catch (error) {
+      // A failed or timed-out read must not skip the app close and fixture cleanup below.
+      console.error('idle CPU benchmark: could not list launched processes', error)
+      // Without the list, kill the tree while its root still anchors it; app.close() alone
+      // leaves detached descendants running over the fixtures removed below.
+      forceKillProcessTree(rootPid)
+    }
     await app.close().catch(() => undefined)
     await sleep(250)
     terminateProcesses(launchedProcesses)

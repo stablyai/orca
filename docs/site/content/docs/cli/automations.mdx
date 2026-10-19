@@ -66,10 +66,12 @@ orca automations create \
   --prompt "Triage open issues" \
   --provider claude \
   --project <projectId> \
-  --host <hostId> \
+  --host <host> \
   --disabled \
   --json
 ```
+
+`--project` takes the project id or the display name from `orca project list`. `--host` takes `local`, `ssh:<target-id>`, `runtime:<environment-id>`, or the bare name from `orca host list`, and it can be omitted entirely when the project is set up on only one host — Orca uses that one. When the project is set up on several, the error names each host and the flag to select it.
 
 Use `--project-host-setup <id>` when you already have a setup id. Optional `--source-context '<json>'` pins task/provider data to a host/account (pass `null` on edit to clear).
 
@@ -102,6 +104,25 @@ orca automations create \
 
 Use `orca automations edit <automationId> --fresh-session --json` to switch the automation back to a fresh terminal per run.
 
+## Extra agent arguments
+
+Add arguments to the agent command for one automation, for example a different model:
+
+```bash
+orca automations create \
+  --name "Docs pass" \
+  --trigger daily \
+  --prompt "Tidy the docs" \
+  --provider claude \
+  --extra-agent-args="--model opus --add-dir docs"
+```
+
+On each fresh run, Orca starts from the host's default Arguments for that agent and appends the extras. A model or effort option in the extras replaces the one in the defaults. Pass the value with `=` because it starts with `--`.
+
+Saved extras use the same quoting on every host, including Windows: wrap values containing spaces in single or double quotes, and use single quotes to preserve backslashes in paths, such as `--add-dir 'C:\work\my docs'`. Orca passes these as literal arguments; shell commands and expansions are not supported.
+
+Extras accept only model and effort options, plus Claude's `--add-dir`, for Claude, Codex, CodeBuddy, Cursor, Grok, and OMP. Permission, config, prompt, and session options are rejected. Extras require a fresh session for every run, so they can't be combined with `--reuse-session`. Use `orca automations edit <automationId> --extra-agent-args=` to clear them.
+
 ## Review and enable
 
 List and inspect automations before enabling them:
@@ -112,7 +133,7 @@ orca automations show <automationId> --json
 orca automations edit <automationId> --enabled --json
 ```
 
-In the desktop automations list, use the search field to filter by **name**, **project**, or **prompt** text when you have many schedules. External automations that live on an SSH host still appear as jobs you can manage (including delete) when that host is disconnected — you do not need an active SSH session just to remove a schedule.
+In the desktop automations list, use the search field to filter by **name**, **project**, or **prompt** text when you have many schedules.
 
 Use **Filters** to narrow the list by **Host**, **Enabled** or **Paused** state, last-run outcome (**Failed**, **Succeeded**, or **Never ran**), or one or more **Agents**. Search inside the agent submenu when the list is long; active filters appear as removable pills above the table. The table shows the host, last-run result, and relative time for each automation. Click the **Name** or **Last run** column to sort; name sorts alphabetically, while last run defaults to newest first.
 

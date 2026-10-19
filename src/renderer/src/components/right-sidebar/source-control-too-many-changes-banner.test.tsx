@@ -2,7 +2,8 @@
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TooManyChangesBanner } from './SourceControl'
+import { SourceControlContentStatus } from './source-control/listing/content-status'
+import { TooManyChangesBanner } from './source-control/listing/too-many-changes-banner'
 
 const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
 
@@ -58,5 +59,49 @@ describe('TooManyChangesBanner', () => {
 
     expect((retryButton as HTMLButtonElement).disabled).toBe(false)
     expect(toastErrorMock).toHaveBeenCalledWith('Could not refresh Source Control. Try again.')
+  })
+
+  it('offers a whole-worktree Stage All while the listing is capped', () => {
+    // Why: once the capped prefix is all staged, no section or primary Stage All can reach the rest.
+    const onStageAllChanges = vi.fn().mockResolvedValue(undefined)
+    const props = {
+      unresolvedConflictCount: 0,
+      conflictOperation: 'unknown' as const,
+      sourceControlAiActionsVisible: false,
+      isAbortingOperation: false,
+      onAbortOperation: vi.fn(),
+      onResolveWithAi: vi.fn(),
+      onReviewConflicts: vi.fn(),
+      worktreeId: 'wt-1',
+      onRetryStatus: vi.fn().mockResolvedValue(undefined),
+      onStageAllChanges,
+      showGenericEmptyState: false,
+      normalizedFilter: '',
+      branchBaseRef: null,
+      filterTooLarge: false,
+      hasFilteredUncommittedEntries: true,
+      hasFilteredBranchEntries: false,
+      filterQuery: ''
+    }
+    const view = render(
+      <SourceControlContentStatus
+        {...props}
+        repositoryHuge={{ limit: 1_000 }}
+        isExecutingBulk={false}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stage All' }))
+    expect(onStageAllChanges).toHaveBeenCalledTimes(1)
+
+    view.rerender(
+      <SourceControlContentStatus {...props} repositoryHuge={{ limit: 1_000 }} isExecutingBulk />
+    )
+    expect(screen.getByRole('button', { name: 'Stage All' }).hasAttribute('disabled')).toBe(true)
+
+    view.rerender(
+      <SourceControlContentStatus {...props} repositoryHuge={undefined} isExecutingBulk={false} />
+    )
+    expect(screen.queryByRole('button', { name: 'Stage All' })).toBeNull()
   })
 })

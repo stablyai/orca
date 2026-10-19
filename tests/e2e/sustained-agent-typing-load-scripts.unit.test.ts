@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { expect, it } from 'vitest'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { writeSustainedAgentLoadScript } from './sustained-agent-typing-load-scripts'
 
 it('paces the generated Unicode stream in bytes without splitting UTF-8 characters', async () => {

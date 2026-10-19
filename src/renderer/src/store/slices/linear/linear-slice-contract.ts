@@ -29,7 +29,11 @@ export type LinearIssueReadArgs =
   | { kind: 'search'; query: string; limit?: number }
   | LinearIssueListReadArgs
 
-export type LinearFetchOptions = { force?: boolean; sourceContext?: TaskSourceContext | null }
+export type LinearFetchOptions = {
+  force?: boolean
+  sourceContext?: TaskSourceContext | null
+  workspaceId?: LinearWorkspaceSelection | null
+}
 export type LinearPatchOptions = { sourceContext?: TaskSourceContext | null }
 
 export type LinearSlice = {
@@ -73,7 +77,7 @@ export type LinearSlice = {
   ) => Promise<LinearIssue | null>
   getCachedLinearIssues: (
     args: LinearIssueReadArgs,
-    options?: Pick<LinearFetchOptions, 'sourceContext'>
+    options?: Pick<LinearFetchOptions, 'sourceContext' | 'workspaceId'>
   ) => LinearIssue[] | LinearCollectionResult<LinearIssue> | null
   prefetchLinearIssues: (args: LinearIssueReadArgs, options?: LinearFetchOptions) => void
   searchLinearIssues: (

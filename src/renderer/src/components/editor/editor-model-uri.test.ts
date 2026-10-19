@@ -37,4 +37,16 @@ describe('toEditorModelUri', () => {
   it('keeps distinct POSIX paths distinct', () => {
     expect(toEditorModelUri('/repo/a b.ts')).not.toBe(toEditorModelUri('/repo/a%20b.ts'))
   })
+
+  it.each(paths)('isolates owners while preserving the filesystem path for %s', (path) => {
+    const local = URI.parse(toEditorModelUri(path))
+    const remoteUri = toEditorModelUri(path, '["hub-a","ssh:target#1"]')
+    const remote = URI.parse(remoteUri)
+    expect(remote.scheme).toBe('file')
+    expect(remote.fsPath).toBe(local.fsPath)
+    expect(remote.toString()).not.toBe(local.toString())
+    expect(remote.toString()).toBe(remoteUri)
+    expect(toEditorModelUri(remoteUri)).toBe(remoteUri)
+    expect(toEditorModelUri(path, '["hub-b","ssh:target#1"]')).not.toBe(remoteUri)
+  })
 })

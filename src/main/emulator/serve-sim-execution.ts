@@ -1,4 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { app } from 'electron'
 import { platform, tmpdir } from 'node:os'
@@ -121,6 +121,11 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
   }
 
   return { command: 'serve-sim', baseArgs: [], usesElectronAsNode: false }
+}
+
+// Why: `--kill [device]` has an optional value; a detached udid is dropped and serve-sim kills every stream.
+export function serveSimKillArgs(udid: string): string[] {
+  return [`--kill=${udid}`, '-q']
 }
 
 export function parseServeSimCommandArgs(input: string): string[] {

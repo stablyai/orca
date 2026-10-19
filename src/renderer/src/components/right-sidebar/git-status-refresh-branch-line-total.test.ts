@@ -52,6 +52,7 @@ describe('branch line total request gate on git status refreshes', () => {
     const gitStatus = stubGitStatus()
 
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
       worktreeId: 'wt-hidden',
       worktreePath: '/repo',
       connectionId: 'ssh-1',
@@ -73,6 +74,7 @@ describe('branch line total request gate on git status refreshes', () => {
     setBranchLineTotalMergeBase('wt-1', null)
 
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       deps: makeDeps()
@@ -90,6 +92,7 @@ describe('branch line total request gate on git status refreshes', () => {
     setBranchLineTotalMergeBase('wt-visible', MERGE_BASE)
 
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
       worktreeId: 'wt-background',
       worktreePath: '/other-repo',
       deps: makeDeps()
@@ -109,6 +112,7 @@ describe('branch line total request gate on git status refreshes', () => {
     // Why: this path used to build no options object at all, so the gate was
     // silently dropped on the most common (fs-watcher) refresh.
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       connectionId: 'ssh-1',
@@ -128,6 +132,7 @@ describe('branch line total request gate on git status refreshes', () => {
     setBranchLineTotalMergeBase('wt-1', MERGE_BASE)
 
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       deps: makeDeps(),
@@ -149,6 +154,7 @@ describe('branch line total request gate on git status refreshes', () => {
     const controller = new AbortController()
 
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       deps: makeDeps(),
@@ -168,12 +174,14 @@ describe('branch line total request gate on git status refreshes', () => {
     setBranchLineTotalMergeBase('wt-1', MERGE_BASE)
 
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       deps: makeDeps()
     })
     setBranchLineTotalMergeBase('wt-1', 'rebased-merge-base')
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       deps: makeDeps()
@@ -197,6 +205,7 @@ describe('branch line total request gate on git status refreshes', () => {
     const gitStatus = stubGitStatus()
 
     await refreshGitStatusForWorktreeStrict({
+      target: { kind: 'local' },
       worktreeId: 'wt-strict',
       worktreePath: '/repo',
       deps: { ...makeDeps(), fetchUpstreamStatus: undefined }
@@ -217,6 +226,7 @@ describe('branch line total request gate on git status refreshes', () => {
     setBranchLineTotalMergeBase('wt-strict', MERGE_BASE)
 
     await refreshGitStatusForWorktreeStrict({
+      target: { kind: 'local' },
       worktreeId: 'wt-strict',
       worktreePath: '/repo',
       deps: { ...makeDeps(), fetchUpstreamStatus: undefined }

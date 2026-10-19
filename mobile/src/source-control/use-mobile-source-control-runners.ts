@@ -1,4 +1,4 @@
-import { useCallback, type MutableRefObject } from 'react'
+import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { RouteHandoff } from '../navigation/route-handoff'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
@@ -6,6 +6,7 @@ import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-ge
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'
 import { useMobileCreatePrRunner } from './use-mobile-create-pr-runner'
+import { useMobileStageAllRunner } from './use-mobile-stage-all-runner'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
@@ -37,7 +38,7 @@ type Params = {
   busyActionRef: MutableRefObject<string | null>
   setBusyAction: (next: string | null) => void
   setActionError: (next: string | null) => void
-  setCommitMessage: (next: string) => void
+  setCommitMessage: Dispatch<SetStateAction<string>>
   setGeneratingMessage: (next: boolean) => void
   setShowActionSheet: (next: boolean) => void
   setLocalBranches: (next: RuntimeGitLocalBranches | null) => void
@@ -164,12 +165,12 @@ export function useMobileSourceControlRunners(params: Params) {
     [runGitSyncSteps, runGitWorkflow]
   )
 
-  const stageAll = useCallback(async () => {
-    if (stageablePaths.length === 0) {
-      return
-    }
-    await runGitAction('stage-all', 'git.bulkStage', { filePaths: stageablePaths })
-  }, [runGitAction, stageablePaths])
+  const stageAll = useMobileStageAllRunner({
+    status,
+    stageablePaths,
+    runGitWorkflow,
+    sendGitRequest
+  })
 
   const unstageAll = useCallback(async () => {
     if (unstageablePaths.length === 0) {
@@ -177,22 +178,6 @@ export function useMobileSourceControlRunners(params: Params) {
     }
     await runGitAction('unstage-all', 'git.bulkUnstage', { filePaths: unstageablePaths })
   }, [runGitAction, unstageablePaths])
-
-  const { commit, runCommitSequence, runCommitSyncSequence } = useMobileSourceControlCommitRunners({
-    commitMessage,
-    stagedEntries,
-    sendGitRequest,
-    sendCommitRequest,
-    runGitSyncSteps,
-    runGitWorkflow,
-    loadStatus,
-    mountedRef,
-    busyActionRef,
-    setBusyAction,
-    setActionError,
-    setCommitMessage,
-    recordCommitFailure
-  })
 
   const { generateCommitMessage, cancelGenerateCommitMessage } = useMobileCommitMessageGeneration({
     client,
@@ -205,6 +190,23 @@ export function useMobileSourceControlRunners(params: Params) {
     setActionError
   })
 
+  const { commit, runCommitSequence, runCommitSyncSequence } = useMobileSourceControlCommitRunners({
+    commitMessage,
+    stagedEntries,
+    sendGitRequest,
+    sendCommitRequest,
+    cancelGenerateCommitMessage,
+    runGitSyncSteps,
+    runGitWorkflow,
+    loadStatus,
+    mountedRef,
+    busyActionRef,
+    setBusyAction,
+    setActionError,
+    setCommitMessage,
+    recordCommitFailure
+  })
+
   const createPr = useMobileCreatePrRunner({
     client,
     worktreeId,
@@ -215,6 +217,7 @@ export function useMobileSourceControlRunners(params: Params) {
     mountedRef,
     runGitWorkflow,
     loadStatus,
+    cancelGenerateCommitMessage,
     setActionError,
     setCommitMessage,
     setShowActionSheet,

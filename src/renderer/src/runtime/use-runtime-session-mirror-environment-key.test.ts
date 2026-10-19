@@ -7,7 +7,7 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type * as RuntimeSessionMirrorTargetsModule from '@/lib/runtime-session-mirror-targets'
-import { makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 
 const { getMirrorTargets } = vi.hoisted(() => ({ getMirrorTargets: vi.fn() }))
 
@@ -24,7 +24,7 @@ import {
   selectRuntimeSessionMirrorTargetInputs,
   useRuntimeSessionMirrorEnvironmentKeys
 } from './use-runtime-session-mirror-environment-key'
-import { useWebSessionTabsSync } from './web-session-tabs-sync'
+import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 
 const initialState = useAppStore.getInitialState()
 

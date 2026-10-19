@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildWorkspaceSessionPayload } from './workspace-session'
+import { buildSanitizedTabsByWorktree, buildWorkspaceSessionPayload } from './workspace-session'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { AppState } from '../store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
@@ -506,5 +507,32 @@ describe('buildWorkspaceSessionPayload', () => {
 
     expect(payload.activeFileIdByWorktree).toEqual({})
     expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-2': 'terminal' })
+  })
+})
+
+describe('a launch pane in the saved session', () => {
+  const tab = (agentLaunchPane: TerminalTab['agentLaunchPane']): TerminalTab => ({
+    id: 'tab-1',
+    ptyId: null,
+    worktreeId: 'wt-1',
+    title: 'claude',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1,
+    agentLaunchPane
+  })
+
+  // A launch's outcome is this session's notice, so a reload spawns the pane as a restart does;
+  // a pending launch stays, so its verdict still lands after the reload.
+  it('keeps a pending launch and drops an outcome', () => {
+    const pending = { leafId: 'leaf-1', operationId: 'op-1' }
+    const saved = buildSanitizedTabsByWorktree({
+      'wt-1': [tab({ ...pending, outcome: { kind: 'not-started', code: 'boom' } })]
+    })
+    expect(saved['wt-1'][0].agentLaunchPane).toEqual(pending)
+    expect(
+      buildSanitizedTabsByWorktree({ 'wt-1': [tab(pending)] })['wt-1'][0].agentLaunchPane
+    ).toEqual(pending)
   })
 })

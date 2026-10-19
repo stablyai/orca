@@ -12,7 +12,9 @@ const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
   subscribe: vi.fn()
 }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({ focusRuntimeTerminalSurface: mocks.focus }))
+vi.mock('@/runtime/mounted-terminal-tab-registry', () => ({
+  focusRuntimeTerminalSurface: mocks.focus
+}))
 vi.mock('@/store', () => ({
   useAppStore: { getState: mocks.getState, subscribe: mocks.subscribe }
 }))

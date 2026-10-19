@@ -1,6 +1,6 @@
 import { shouldPreserveEditableFocus } from '@/components/terminal-pane/pane-helpers'
 import { useAppStore } from '@/store'
-import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
+import { focusRuntimeTerminalSurface } from '@/runtime/mounted-terminal-tab-registry'
 import type { ActivateAndRevealResult } from '@/lib/worktree-activation'
 
 let cancelPendingFocus: (() => void) | null = null

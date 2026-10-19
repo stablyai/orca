@@ -9,6 +9,7 @@ import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type * as NodeCryptoModule from 'node:crypto'
 import type * as OwnershipModule from '../../../../shared/worktree/ownership'
+import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 
 const { toDetectedWorktreeSpy } = vi.hoisted(() => ({ toDetectedWorktreeSpy: vi.fn() }))
 
@@ -31,7 +32,7 @@ vi.mock('node:crypto', async (importOriginal) => ({
 const { buildDetectedGitWorktrees } = await import('./ssh-worktree-fallback')
 const { getProjectHostSetupWorktreeMeta } =
   await import('../../../../shared/project-host-setup-lookup')
-const { mergeWorktree } = await import('../../worktree-logic')
+const { mergeWorktree } = await import('../../worktree-metadata-merge')
 const { resolveWorktreeMetaWithDiscoveryBackfill } = await import('./worktree-discovery-metadata')
 const ownership = await import('../../../../shared/worktree/ownership')
 const { projectResolvedWorktreeLineage } =
@@ -40,7 +41,7 @@ const { createWorktreeVisibilitySourceMatcher, resolveCustomWorktreeVisibilitySo
   await import('../../../../shared/worktree/visibility-sources')
 const { resolveConfiguredWorktreeBasePaths } =
   await import('../../../../shared/worktree/configured-worktree-base-path')
-const { dedupeWorktreesByPath } = await import('../../worktree-path-comparison')
+const { dedupeWorktreesByPath } = await import('../../../git/worktree-path-comparison')
 const { readWorktreeMetaForHost } =
   await import('../../../persistence/host-qualified-worktree-meta')
 const { getRepoOwnedWorktreeMeta } = await import('../../../worktree-metadata-ownership')
@@ -79,6 +80,7 @@ function settledMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
 
 function createStore(meta: Record<string, WorktreeMeta>, repos: Repo[] = [repo]) {
   const rows = { ...meta }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
   return {
     getRepos: () => repos,
     getSettings: () => ({ workspaceDir: '/workspace', nestWorkspaces: true }),
@@ -89,11 +91,7 @@ function createStore(meta: Record<string, WorktreeMeta>, repos: Repo[] = [repo])
     getWorktreeMetaForHost: (id: string, hostId: string) =>
       rows[id]?.hostId === hostId ? rows[id] : undefined,
     getAllWorktreeMetaForHost: () => rows,
-    setWorktreeMeta: (id: string, patch: Partial<WorktreeMeta>) => {
-      rows[id] = { ...rows[id], ...patch } as WorktreeMeta
-      return rows[id]
-    },
-    setWorktreeMetaForHost: (id: string, hostId: string, patch: Partial<WorktreeMeta>) => {
+    setWorktreeMeta: ({ id, hostId }: HostWorktreeTarget, patch: Partial<WorktreeMeta>) => {
       rows[id] = { ...rows[id], ...patch, hostId } as WorktreeMeta
       return rows[id]
     }

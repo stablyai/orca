@@ -3,18 +3,25 @@ import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardA
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
+import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
-import { agentNoUpdateLabel } from '@/lib/agent-row-decay-state'
+import { agentNoUpdateLabel } from '../../../../shared/agent-row-decay-state'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
+import { agentRowStoppingLabel } from '@/lib/agent-row-stopping-label'
+import { getCompactAgentLineOrder } from './worktree-card-compact-agent-line-order'
+import {
+  programStatusAttentionLine,
+  type ProgramStatusPresentation
+} from '../../../../shared/program-status/presentation'
+import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -27,8 +34,13 @@ function getCompactAgentPrimary(
 export function getCompactAgentSecondary(
   agent: DashboardAgentRowData,
   now: number,
-  lastAssistantMessageOverride?: string
+  lastAssistantMessageOverride?: string,
+  presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation
 ): string {
+  // Why first: a block the program reports (sign-in) is the one thing on this row that needs the user.
+  if (presentation.attention) {
+    return programStatusAttentionLine(presentation.attention)
+  }
   const verdictLine = agentVerdictStatusLine(agent.entry)
   if (verdictLine) {
     return verdictLine
@@ -38,6 +50,10 @@ export function getCompactAgentSecondary(
   if (agent.state === 'unverifiable') {
     return agentNoUpdateLabel(agent.entry, now)
   }
+  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state)
+  if (stoppingLabel) {
+    return stoppingLabel
+  }
   // Why: the lead turn is over in monitoring, so its last tool line is stale; name the state instead.
   if (agent.state === 'working' && agent.entry.workingMode === 'monitoring') {
     return agentStateLabel('monitoring')
@@ -45,6 +61,9 @@ export function getCompactAgentSecondary(
   const toolPreview = formatAgentToolPreview(agent.entry, agent.state)
   if (toolPreview) {
     return toolPreview
+  }
+  if (presentation.message) {
+    return presentation.message
   }
   const lastAssistantMessage =
     lastAssistantMessageOverride ?? agent.entry.lastAssistantMessage?.trim()
@@ -104,11 +123,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
     typeof onToggleChildAgents === 'function'
-  // Why: subagent child rows carry the child's NAME (e.g. "pr-reviewer") in
-  // agentType, which is not an iconable agent and would render the unknown
-  // "?" glyph. Nesting under the parent already conveys identity.
+  // Why: subagent child rows carry the child's NAME (e.g. "pr-reviewer") in agentType, which
+  // AgentTypeIcon would draw as a misleading letter. Nesting under the parent conveys identity.
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
-  const dotState = getAgentDotState(agent)
+  const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
+  const dotState = dotStateOverride ?? getAgentDotState(agent)
   const conversationName = useAgentRowConversationName(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
@@ -131,11 +150,13 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const held = heldMessageRef.current
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
-  const secondary = getCompactAgentSecondary(agent, now, stableMessage)
-  // Why: sidebar truncation must preserve the passive-vs-active distinction.
-  const leadingText = dotState === 'monitoring' ? secondary : primary
-  const trailingText =
-    dotState === 'monitoring' ? (primary === secondary ? '' : primary) : secondary
+  const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation)
+  const { leadingText, trailingText } = getCompactAgentLineOrder(
+    agent,
+    dotState,
+    primary,
+    secondary
+  )
   const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
@@ -210,10 +231,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             size="sm"
             title={sendTargetDisabledReason ? null : undefined}
             tooltipSide="right"
+            progress={presentation.progress}
           />
           {!hideIcon && (
             <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
-              <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
+              <AgentTypeIcon agentType={agent.agentType} size={13} />
             </span>
           )}
           <span

@@ -12,17 +12,40 @@ import {
 const MANAGED_SCRIPT_BASE_NAME = /^[A-Za-z0-9_-]+$/
 const WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE = '*\\&*|*\\^*|*\\(*|*\\)*|*\\;*|*,*|*=*|*%*|*\\!*'
 
+function assertManagedScriptBaseName(scriptBaseName: string): void {
+  if (!MANAGED_SCRIPT_BASE_NAME.test(scriptBaseName)) {
+    throw new Error(`Invalid managed script base name: ${scriptBaseName}`)
+  }
+}
+
+function buildPosixBranch(
+  scriptBaseName: string,
+  missingScriptFallback: string,
+  options: { requireHome?: boolean } = {}
+): string {
+  const posixScript = `"\${HOME-}/.orca/agent-hooks/${scriptBaseName}.sh"`
+  const homeGuard = options.requireHome ? '[ -n "${HOME-}" ] && ' : ''
+  const parentCapture =
+    scriptBaseName === 'claude-hook' || scriptBaseName === 'openclaude-hook'
+      ? CLAUDE_HOOK_PARENT_CAPTURE
+      : ''
+  return `if ${homeGuard}[ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then ${parentCapture}/bin/sh ${posixScript}; else ${missingScriptFallback}; fi`
+}
+
+/** The POSIX branch of wrapRuntimeHomeHookCommand alone, for hosts known to be POSIX. */
+export function wrapRuntimeHomePosixHookCommand(scriptBaseName: string): string {
+  assertManagedScriptBaseName(scriptBaseName)
+  return buildPosixBranch(scriptBaseName, POSIX_HOOK_STDIN_DRAIN_COMMAND, { requireHome: true })
+}
+
 export function wrapRuntimeHomeHookCommand(
   scriptBaseName: string,
   options: { neutralJsonWhenMissing?: boolean } = {}
 ): string {
-  if (!MANAGED_SCRIPT_BASE_NAME.test(scriptBaseName)) {
-    throw new Error(`Invalid managed script base name: ${scriptBaseName}`)
-  }
+  assertManagedScriptBaseName(scriptBaseName)
   // Why: default-form every var — a static hook precheck (Grok) rejects the whole command on a bare
   // reference it cannot resolve, even in a branch that platform never takes.
   const windowsScript = `"\${HOME-}/.orca/agent-hooks/${scriptBaseName}.cmd"`
-  const posixScript = `"\${HOME-}/.orca/agent-hooks/${scriptBaseName}.sh"`
   const drain = POSIX_HOOK_STDIN_DRAIN_COMMAND
   const neutralJson = options.neutralJsonWhenMissing ? `printf '{}\\n'` : ''
   // Why two forms: the missing-script fallback owns stdin, so it follows the rule of the host
@@ -47,7 +70,7 @@ export function wrapRuntimeHomeHookCommand(
   const powershellInvocation = `${powershell} ${WINDOWS_POWERSHELL_HOOK_SWITCHES} -EncodedCommand ${encodedCommand}`
   const encodedWindowsBranch = `if [ -f ${powershell} ]; then ${powershellInvocation}; else ${windowsMissingScriptFallback}; fi`
   const windowsBranch = `if [ -f ${windowsScript} ]; then case "\${HOME-}" in ${WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE}) ${encodedWindowsBranch} ;; *) ${windowsScript} ;; esac; else ${windowsMissingScriptFallback}; fi`
-  const posixBranch = `if [ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then ${scriptBaseName === 'claude-hook' || scriptBaseName === 'openclaude-hook' ? CLAUDE_HOOK_PARENT_CAPTURE : ''}/bin/sh ${posixScript}; else ${posixMissingScriptFallback}; fi`
+  const posixBranch = buildPosixBranch(scriptBaseName, posixMissingScriptFallback)
   // Why: OSTYPE is shell-owned, so platform selection adds no process to every hook invocation.
   return `if [ -z "\${HOME-}" ]; then ${missingScriptFallback}; else case "\${OSTYPE-}" in msys*|cygwin*|win32*) ${windowsBranch} ;; *) ${posixBranch} ;; esac; fi`
 }

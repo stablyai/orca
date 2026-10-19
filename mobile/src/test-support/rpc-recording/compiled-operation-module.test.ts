@@ -13,6 +13,7 @@ describe('compiled operation code', () => {
       original
     )
     expect(compiledOperationModule('different.ts', source, '')).not.toBe(original)
+    expect(compiledOperationModule('original.ts', source, '')).toBe(original)
   })
 
   it('bounds retained code and still evaluates an evicted module correctly', () => {
@@ -22,6 +23,19 @@ describe('compiled operation code', () => {
       compiledOperationModule(`bounded-${index}.ts`, 'export {}', '')
     }
     const recompiled = compiledOperationModule('evicted.ts', source, '')
+    expect(recompiled).not.toBe(original)
+    const exports = {}
+    recompiled(() => undefined, exports)
+    expect(exports).toEqual({ value: 42 })
+  })
+
+  it('bounds retained variants of one file, not only the number of filenames', () => {
+    const source = 'export const value = 42'
+    const original = compiledOperationModule('variants.ts', source, '')
+    for (let index = 0; index < 512; index++) {
+      compiledOperationModule('variants.ts', `${source}; export const variant = ${index}`, '')
+    }
+    const recompiled = compiledOperationModule('variants.ts', source, '')
     expect(recompiled).not.toBe(original)
     const exports = {}
     recompiled(() => undefined, exports)

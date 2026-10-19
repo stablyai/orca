@@ -6,6 +6,7 @@ import {
   type FileExplorerDirectoryListing
 } from './file-explorer-directory-listing'
 import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { describeFileExplorerReadError } from './file-explorer-read-error'
 import {
   clearFileExplorerDirsLoading,
   markFileExplorerDirsLoading,
@@ -168,7 +169,7 @@ export async function refreshFileExplorerExpandedDirs({
         }
       } catch (error) {
         if (dirLoadTracker.isCurrent(loadToken)) {
-          cache = { children: [], error: error instanceof Error ? error.message : String(error) }
+          cache = { children: [], error: describeFileExplorerReadError(error) }
         }
       }
       settleRead(cache ? { dirPath, cache } : undefined)

@@ -76,17 +76,6 @@ export function advanceWebSessionOpenFilesIndex(
   index.source = nextOpenFiles
 }
 
-/** Mirrors `openFiles.find()` first-wins lookup, which duplicate ids make observable. */
-export function firstOpenFileByIdForWorktree(files: readonly OpenFile[]): Map<string, OpenFile> {
-  const byId = new Map<string, OpenFile>()
-  for (const file of files) {
-    if (!byId.has(file.id)) {
-      byId.set(file.id, file)
-    }
-  }
-  return byId
-}
-
 export function tabEqual(a: Tab, b: Tab): boolean {
   return (
     a.id === b.id &&

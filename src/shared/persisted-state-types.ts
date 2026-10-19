@@ -9,6 +9,7 @@ import type { Automation, AutomationRun } from './automations-types'
 import type { MigrationUnsupportedPtyEntry } from './agent-status-types'
 import type { FeatureInteractionTelemetryBucketState } from './feature-interactions'
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
+import type { NativeChatUpgradeTipAudience } from './native-chat-upgrade-tip-audience'
 import type { DiffComment } from './diff-comment-types'
 import type { FolderWorkspace, WorkspaceKey } from './folder-workspace-types'
 import type { GlobalSettings } from './global-settings-types'
@@ -16,6 +17,7 @@ import type { IssueInfo, PRInfo } from './github/pull-request-types'
 import type { OnboardingState } from './onboarding-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { ProjectGroup } from './project-group-types'
+import type { RemoteLayoutSnapshot } from './remote-layout-snapshot'
 import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
 import type { SparsePreset } from './worktree/create-types'
@@ -23,6 +25,11 @@ import type { RetiredNameRegistry } from './worktree/retired-name-registry'
 import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
 import type { WorktreeMeta } from './worktree/meta-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
+import type { OrcadMigrationEvictedReceipt } from './orcad-migration/orcad-migration-evicted-receipts'
+import type {
+  OrcadMigrationImportReceipt,
+  OrcadMigrationStagedCatalog
+} from './orcad-migration/orcad-migration-manifest'
 
 export type LegacyPaneKeyAliasEntry = {
   ptyId: string
@@ -93,6 +100,10 @@ export type PersistedState = {
   workspaceSession: WorkspaceSessionState
   /** Per-execution-host session partitions for non-'local' hosts (ssh:/runtime:); 'local' stays in workspaceSession so pre-partition builds keep working. */
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
+  /** Display-only snapshot of each paired server's last layout, keyed by environment id. Written
+   *  only by the remote layout snapshot recorder; a separate domain because older builds write
+   *  the `runtime:<env>` partitions. */
+  remoteLayoutSnapshots?: Record<string, RemoteLayoutSnapshot>
   sshTargets: SshTarget[]
   /** Highest SSH target registration generation issued; prevents identity reuse after rollback. */
   sshTargetGenerationCounter?: number
@@ -103,15 +114,21 @@ export type PersistedState = {
   sshRemotePtyLeases: SshRemotePtyLease[]
   /** Main-owned authenticated relay recovery records; never expose through renderer settings APIs. */
   sshPtyConsumerRecoveries?: SshPtyConsumerRecovery[]
-  /** Live local Claude daemon session ids; seeds the live-PTY gate so early OAuth refresh can't rotate the single-use refresh token out from under a running daemon. */
-  claudeLivePtySessionIds?: string[]
   migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
   automations: Automation[]
   automationRuns: AutomationRun[]
+  /** Catalogs an orcad imported, so a retried commit returns the same receipt. */
+  orcadMigrationImportReceipts?: OrcadMigrationImportReceipt[]
+  /** Commits whose full receipt aged out of the list above; still answered as committed. */
+  orcadMigrationEvictedReceipts?: OrcadMigrationEvictedReceipt[]
+  /** Catalogs staged on an orcad and not yet committed or aborted. */
+  orcadMigrationStagedCatalogs?: OrcadMigrationStagedCatalog[]
   onboarding: OnboardingState
   /** Main-owned telemetry de-dupe marker; never exposed through PersistedUIState. */
   featureInteractionTelemetryBuckets?: FeatureInteractionTelemetryBucketState
   /** Main-owned reset mutation journal. Never expose this through renderer settings APIs. */
   codexResetCreditAttemptLedger?: CodexResetCreditAttemptLedger
+  /** Main-owned, decided once on the first load of the upgrade; never derived from live settings. */
+  nativeChatUpgradeTipAudience?: NativeChatUpgradeTipAudience
 }

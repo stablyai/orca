@@ -69,8 +69,7 @@ export class ManagedDataAccountService {
     if (!existsSync(path)) {
       return { accounts: [], activeAccountId: null }
     }
-    this.assertOwned(path)
-    return stateSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
+    return this.readState(path)
   }
 
   add(
@@ -98,7 +97,24 @@ export class ManagedDataAccountService {
           activeAccountId: id
         })
       } catch (error) {
-        rmSync(directory, { recursive: true, force: true })
+        let registered = true
+        try {
+          registered = this.readState(join(this.root, provider, 'accounts.json')).accounts.some(
+            (account) => account.id.toLowerCase() === id.toLowerCase()
+          )
+        } catch (metadataError) {
+          if (
+            metadataError instanceof Error &&
+            'code' in metadataError &&
+            metadataError.code === 'ENOENT'
+          ) {
+            registered = false
+          }
+          // Unreadable metadata cannot prove that this profile is unregistered.
+        }
+        if (!registered) {
+          rmSync(directory, { recursive: true, force: true })
+        }
         throw error
       }
     })
@@ -110,10 +126,9 @@ export class ManagedDataAccountService {
   ): Promise<ManagedDataAccountsState> {
     return this.mutate(async () => {
       const state = this.list(provider)
-      if (accountId !== null) {
-        this.requireAccount(provider, accountId)
-      }
-      return this.persist(provider, { ...state, activeAccountId: accountId })
+      const activeAccountId =
+        accountId === null ? null : this.requireAccount(provider, accountId).id
+      return this.persist(provider, { ...state, activeAccountId })
     })
   }
 
@@ -137,14 +152,16 @@ export class ManagedDataAccountService {
     if (!state.activeAccountId) {
       return {}
     }
-    return this.profileEnvironment(provider, state.activeAccountId)
+    return this.environmentForAccount(provider, state.activeAccountId)
   }
 
   transcriptEnvironments(provider: ManagedDataAccountProvider): Record<string, string>[] {
     const state = this.list(provider)
     const selected = state.accounts.filter((account) => account.id === state.activeAccountId)
     const others = state.accounts.filter((account) => account.id !== state.activeAccountId)
-    return [...selected, ...others].map((account) => this.profileEnvironment(provider, account.id))
+    return [...selected, ...others].map((account) =>
+      this.environmentForAccount(provider, account.id)
+    )
   }
 
   captureOriginalEnvironment(
@@ -202,11 +219,11 @@ export class ManagedDataAccountService {
     this.inlineAuthBaselines.clear()
   }
 
-  private profileEnvironment(
+  environmentForAccount(
     provider: ManagedDataAccountProvider,
     accountId: string
   ): Record<string, string> {
-    const directory = this.requireAccount(provider, accountId)
+    const { directory } = this.requireAccount(provider, accountId)
     return {
       XDG_DATA_HOME: join(directory, 'data'),
       XDG_STATE_HOME: join(directory, 'state'),
@@ -219,13 +236,19 @@ export class ManagedDataAccountService {
     return () => this.listeners.delete(listener)
   }
 
-  private requireAccount(provider: ManagedDataAccountProvider, id: string): string {
-    if (!this.list(provider).accounts.some((account) => account.id === id)) {
+  private requireAccount(
+    provider: ManagedDataAccountProvider,
+    id: string
+  ): { id: string; directory: string } {
+    const account = this.list(provider).accounts.find(
+      (registered) => registered.id.toLowerCase() === id.toLowerCase()
+    )
+    if (!account) {
       throw new Error('Managed account not found.')
     }
-    const directory = join(this.root, provider, id)
+    const directory = join(this.root, provider, account.id.toLowerCase())
     this.assertOwned(directory)
-    return directory
+    return { id: account.id, directory }
   }
 
   private persist(
@@ -235,6 +258,11 @@ export class ManagedDataAccountService {
     const checked = this.writeState(provider, state)
     this.notifyChanged()
     return checked
+  }
+
+  private readState(path: string): ManagedDataAccountsState {
+    this.assertOwned(path)
+    return stateSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
   }
 
   private writeState(
@@ -254,7 +282,11 @@ export class ManagedDataAccountService {
 
   private notifyChanged(): void {
     for (const listener of this.listeners) {
-      listener()
+      try {
+        listener()
+      } catch {
+        console.warn('[managed-data-accounts] Account change listener failed.')
+      }
     }
   }
 

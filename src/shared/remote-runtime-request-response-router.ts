@@ -1,9 +1,5 @@
-import { decrypt, encrypt } from './e2ee-crypto'
-import {
-  classifyRemoteRuntimeReadyFrame,
-  parseRemoteRuntimeAuthenticatedFrame,
-  type RemoteRuntimeHandshakeState
-} from './remote-runtime-client-handshake'
+import type { PairedE2EEClientHandshake } from './paired-e2ee-client-handshake'
+import type { RemoteRuntimeHandshakeState } from './remote-runtime-client-handshake'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import {
   isKeepaliveFrame,
@@ -14,8 +10,9 @@ import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
 import type { RuntimeStatus } from './runtime-types'
 
 type RequestResponseRouterOptions<TResult> = {
-  sharedKey: Uint8Array
-  serializedAuth: string
+  handshake: PairedE2EEClientHandshake
+  sealAuth: () => Promise<string>
+  isSettled: () => boolean
   serializedStatusRequest: string | null
   requestId: string
   statusRequestId: string | null
@@ -50,7 +47,7 @@ export class RemoteRuntimeRequestResponseRouter<TResult> {
       this.handleReadyFrame(frame)
       return
     }
-    const plaintext = decrypt(frame, this.options.sharedKey)
+    const plaintext = this.options.handshake.channel.openText(frame)
     if (plaintext === null) {
       this.options.finishError(
         new RemoteRuntimeClientError(
@@ -72,8 +69,8 @@ export class RemoteRuntimeRequestResponseRouter<TResult> {
   }
 
   private handleReadyFrame(frame: string): void {
-    const readyFrame = classifyRemoteRuntimeReadyFrame(frame)
-    if (readyFrame !== 'ready') {
+    const readyFrame = this.options.handshake.acceptReadyText(frame)
+    if (readyFrame !== 'accepted') {
       this.options.finishError(
         new RemoteRuntimeClientError(
           'invalid_runtime_response',
@@ -86,11 +83,28 @@ export class RemoteRuntimeRequestResponseRouter<TResult> {
       return
     }
     this.state = 'awaiting_authenticated'
-    this.options.send(encrypt(this.options.serializedAuth, this.options.sharedKey))
+    void this.sendAuth()
+  }
+
+  private async sendAuth(): Promise<void> {
+    let frame: string
+    try {
+      frame = await this.options.sealAuth()
+    } catch (error) {
+      this.options.finishError(
+        error instanceof Error
+          ? error
+          : new RemoteRuntimeClientError('runtime_error', String(error))
+      )
+      return
+    }
+    if (!this.options.isSettled()) {
+      this.options.send(frame)
+    }
   }
 
   private handleAuthenticatedFrame(plaintext: string): void {
-    const authenticated = parseRemoteRuntimeAuthenticatedFrame(plaintext)
+    const authenticated = this.options.handshake.classifyAuthReply(plaintext)
     if (authenticated.kind === 'invalid') {
       this.options.finishError(
         new RemoteRuntimeClientError(
@@ -102,7 +116,8 @@ export class RemoteRuntimeRequestResponseRouter<TResult> {
       return
     }
     if (authenticated.kind !== 'authenticated') {
-      const code = authenticated.unauthorized ? 'unauthorized' : 'invalid_runtime_response'
+      const code =
+        authenticated.errorCode === 'unauthorized' ? 'unauthorized' : 'invalid_runtime_response'
       this.options.finishError(
         new RemoteRuntimeClientError(code, 'Remote Orca runtime rejected the pairing token.', {
           pairingStage: code === 'unauthorized' ? 'access-grant' : 'host-identity'
@@ -112,7 +127,9 @@ export class RemoteRuntimeRequestResponseRouter<TResult> {
     }
     this.state = 'ready'
     if (this.options.serializedStatusRequest) {
-      this.options.send(encrypt(this.options.serializedStatusRequest, this.options.sharedKey))
+      this.options.send(
+        this.options.handshake.channel.sealText(this.options.serializedStatusRequest)
+      )
       return
     }
     this.options.sendRequestedRpc()

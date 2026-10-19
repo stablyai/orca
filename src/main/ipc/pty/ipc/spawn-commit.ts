@@ -1,8 +1,7 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { agentHookServer } from '../../../agent-hooks/server'
-import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
 import { registerPty } from '../../../memory/pty-registry'
-import type { PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../../agent-hooks/migration-unsupported-pty-state'
 import { recordPtySpawnTelemetry } from '../pane/spawn-telemetry'
 import {
@@ -12,20 +11,26 @@ import {
 import { rememberPaneKeyForPty } from '../pane/key-state'
 import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
+import { seedResumeLaunchIdentityFromSpawn } from '../pane/resume-launch-identity'
 import {
   admitProviderReattachLaunchIdentity,
   admitRendererAgentLaunchAuthority
 } from '../pane/launch-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { persistPtyIpcSpawnCommit, publishPtyIpcSpawnCommit } from './spawn-commit-persist'
-import { admitPtyReattachOwnership, registerPersistedPtySpawn } from '../pane/spawn-registration'
+import { admitPtySpawnOwnership, registerPersistedPtySpawn } from '../pane/spawn-registration'
 import { reflowHeadlessTerminalToCommittedGrid } from '../delivery/attached-pty-size'
 import { seedHeadlessTerminalFromSpawnResult } from '../pane/terminal-spawn-restore'
 import { markNativeWindowsConptyPty } from '../../../runtime/terminal-model-query-authority'
+import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
+  return commitPtyWithOpenCodePromptIntent(ctx, () => commitReservedPtyIpcSpawn(ctx))
+}
+
+async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
-  admitPtyReattachOwnership(ctx.deps.runtime, ctx.result, args.connectionId)
+  admitPtySpawnOwnership(ctx.deps.runtime, ctx.result)
   if (ctx.nativeWindowsConptySpawn) {
     markNativeWindowsConptyPty(ctx.result.id)
   }
@@ -57,7 +62,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       ctx.deps.store,
       ctx.result.id,
       args.worktreeId,
-      args.connectionId ?? null,
+      null,
       // Why: pass validated pane identity so a throttled mobile create publishes its surface main-side instead of destroying the live PTY (#7587); bound the untrusted tabId.
       typeof args.tabId === 'string' &&
         isValidTerminalTabId(args.tabId) &&
@@ -72,9 +77,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
             ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
           }
         : undefined,
-      !args.connectionId
-        ? shouldSkipCodexHomeEnvForWindowsShell(ctx.effectiveShellOverride, ctx.cwd)
-        : undefined
+      shouldSkipCodexHomeEnvForWindowsShell(ctx.effectiveShellOverride, ctx.cwd)
     )
     if (rejectedRegistration) {
       await rejectedRegistration.catch((error: unknown) => {
@@ -84,6 +87,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       })
       ctx.deps.runtime?.cancelPendingPtyRegistration?.(ctx.result.id, ctx.result.incarnationId)
       ctx.pendingRegistrationPtyId = null
+      ctx.exitedBeforeRegistration = true
       // The renderer drains this incarnation's buffered output and exit without publishing it live.
       return resolvePaneSpawnReservation(
         ctx.paneSpawnReservationKey,
@@ -100,6 +104,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     ctx.pendingRegistrationPtyId = null
   }
   publishPtyIpcSpawnCommit(ctx, committedSize)
+
   // Admission must precede reflow: a replaced spawn cannot resize its successor's model.
   reflowHeadlessTerminalToCommittedGrid({
     result: ctx.result,
@@ -118,9 +123,6 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       ctx.result.id,
       typeof ctx.launchCommand === 'string' ? ctx.launchCommand : null
     )
-  }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
-    markClaudePtySpawned(ctx.result.id)
   }
   // Why: record the paneKey mapping so clearProviderPtyState can clear the agent-hooks server's per-paneKey caches on exit.
   // Why: args.env is untrusted IPC JSON (type unenforced); bound the paneKey so malformed/oversized values can't pollute ptyPaneKey or clearPaneState.
@@ -150,32 +152,40 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       clearMigrationUnsupportedPtysForPaneKey(ctx.validatedPaneKey)
     }
   }
-  // Why: register only local PTYs with the memory collector — SSH PTYs run remotely and their process tree is invisible to our local `ps`.
-  if (!args.connectionId) {
-    // Why: record the spawn-result pid once here so the memory module needn't reach back into ipc/pty on a hot path (works for in-process and daemon-hosted PTYs).
-    const spawnedPid = ctx.result.pid ?? null
-    // Why: args.worktreeId/sessionId arrive as untrusted IPC strings (type unenforced at the boundary); bound them so malformed/oversized values can't pollute registerPty's maps.
-    registerPty({
-      ptyId: ctx.result.id,
-      worktreeId:
-        typeof args.worktreeId === 'string' &&
-        args.worktreeId.length > 0 &&
-        args.worktreeId.length <= 512
-          ? args.worktreeId
-          : null,
-      sessionId:
-        typeof args.sessionId === 'string' &&
-        args.sessionId.length > 0 &&
-        args.sessionId.length <= 256
-          ? args.sessionId
-          : null,
-      paneKey: rememberedPaneKey,
-      pid:
-        typeof spawnedPid === 'number' && Number.isFinite(spawnedPid) && spawnedPid > 0
-          ? spawnedPid
-          : null
-    })
-  }
+  // Why after commit: a spawn rejected above must not leave a published identity behind.
+  seedResumeLaunchIdentityFromSpawn({
+    paneKey: ctx.validatedPaneKey,
+    launchAgent: args.launchAgent,
+    resumeProviderSession: args.resumeProviderSession,
+    connectionId: args.connectionId,
+    worktreeId: args.worktreeId,
+    launchedAt: ctx.codexHomeLaunchStartedAt,
+    resumeArgvDropped: ctx.codexResumeLaunch.droppedResumeArgv,
+    result: ctx.result
+  })
+  // Why: record the spawn-result pid once here so the memory module needn't reach back into ipc/pty on a hot path (works for in-process and daemon-hosted PTYs).
+  const spawnedPid = ctx.result.pid ?? null
+  // Why: args.worktreeId/sessionId arrive as untrusted IPC strings (type unenforced at the boundary); bound them so malformed/oversized values can't pollute registerPty's maps.
+  registerPty({
+    ptyId: ctx.result.id,
+    worktreeId:
+      typeof args.worktreeId === 'string' &&
+      args.worktreeId.length > 0 &&
+      args.worktreeId.length <= 512
+        ? args.worktreeId
+        : null,
+    sessionId:
+      typeof args.sessionId === 'string' &&
+      args.sessionId.length > 0 &&
+      args.sessionId.length <= 256
+        ? args.sessionId
+        : null,
+    paneKey: rememberedPaneKey,
+    pid:
+      typeof spawnedPid === 'number' && Number.isFinite(spawnedPid) && spawnedPid > 0
+        ? spawnedPid
+        : null
+  })
   // Why: telemetry-plan.md§Agent launch semantics — fire agent_started only after spawn resolved; safeParse each field so a spoofed IPC payload can't poison the event (missing required field skips it).
   if (args.telemetry && !ctx.stablePaneOwner) {
     recordPtySpawnTelemetry(args.telemetry)
@@ -204,24 +214,22 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
   }
   // Why: renderer tab state cannot reliably infer background and reattached PTYs in the daemon inventory.
   ctx.deps.sendPtySpawnedToRenderer(ctx.result.id)
-  if (!args.connectionId) {
-    ctx.deps.options?.onCodexHomePtySpawned?.({
-      id: ctx.result.id,
-      codexHomePath: ctx.selectedCodexHomePath,
-      startedAt: ctx.codexHomeLaunchStartedAt,
-      startedSequence: ctx.codexHomeLaunchStartedSequence,
-      ...codexReattachedHomeRouteField(
-        ctx.reattachedCodexHomeRoutes,
-        ctx.result.id,
-        ctx.result.isReattach === true
-      ),
-      ...(ctx.result.isReattach === true
-        ? { reattached: true }
-        : ctx.baseEnv
-          ? { launchEnv: ctx.baseEnv }
-          : {})
-    })
-  }
+  ctx.deps.options?.onCodexHomePtySpawned?.({
+    id: ctx.result.id,
+    codexHomePath: ctx.selectedCodexHomePath,
+    startedAt: ctx.codexHomeLaunchStartedAt,
+    startedSequence: ctx.codexHomeLaunchStartedSequence,
+    ...codexReattachedHomeRouteField(
+      ctx.reattachedCodexHomeRoutes,
+      ctx.result.id,
+      ctx.result.isReattach === true
+    ),
+    ...(ctx.result.isReattach === true
+      ? { reattached: true }
+      : ctx.baseEnv
+        ? { launchEnv: ctx.baseEnv }
+        : {})
+  })
   return resolvePaneSpawnReservation(
     ctx.paneSpawnReservationKey,
     ctx.paneSpawnReservation,

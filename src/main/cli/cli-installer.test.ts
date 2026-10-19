@@ -11,7 +11,7 @@ import {
   writeFile
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, sep } from 'node:path'
+import { basename, dirname, join, relative, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const execFileMock = vi.hoisted(() => vi.fn())
@@ -252,9 +252,11 @@ describe('CliInstaller', () => {
       expect(second.state).toBe('installed')
       expect(second.launcherPath).toBe(first.launcherPath)
       await expect(readlink(installPath)).resolves.toBe(second.launcherPath)
-      // Only the live payload survives the upgrade.
+      // Only the live payload survives the upgrade, beside the record of which AppImage it is.
       const liveRoot = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!.rootPath
-      await expect(readdir(dirname(liveRoot))).resolves.toHaveLength(1)
+      expect((await readdir(dirname(liveRoot))).sort()).toEqual(
+        [basename(liveRoot), 'source-appimage'].sort()
+      )
     }
   )
 

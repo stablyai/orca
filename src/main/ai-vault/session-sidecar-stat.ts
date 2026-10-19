@@ -47,3 +47,23 @@ export function sidecarUnchanged(
     entry.sizeBytes === observed.sizeBytes
   )
 }
+
+// Why: added after SCHEMA_VERSION 2 shipped, so a row an older build wrote has
+// no such field. Absent (or unreadable) means unknown, which costs one re-parse
+// of the rows that have a sibling and nothing at all for the rest.
+export function parsePersistedSidecar(value: unknown): SessionSidecarObservation | undefined {
+  if (value === 'none' || value === 'unknown') {
+    return value
+  }
+  if (!isRecord(value)) {
+    return undefined
+  }
+  const { path, mtimeMs, sizeBytes } = value
+  return typeof path === 'string' && typeof mtimeMs === 'number' && typeof sizeBytes === 'number'
+    ? { path, mtimeMs, sizeBytes }
+    : undefined
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}

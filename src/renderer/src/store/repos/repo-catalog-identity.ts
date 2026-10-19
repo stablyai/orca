@@ -4,8 +4,8 @@ import { reconcileFetchedRepos } from '../slices/repo-identity-reconcile'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
-import { mergeFetchedProjectCompatibilityForHost } from '../projects/project-compatibility-host-merge'
-import { projectCompatibilityFromRepos } from '../projects/project-compatibility-core'
+import { mergeFetchedProjectCompatibilityForHost } from '../../../../shared/project-compatibility-host-merge'
+import { projectCompatibilityFromRepos } from '../../../../shared/project-compatibility-merge'
 import { mergeByIdentity } from '../catalog-identity'
 
 export function mergeFetchedReposForHost(

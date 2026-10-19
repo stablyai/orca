@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, glabExecFileAsyncMock, sshExecMock } = vi.hoisted(() => ({
+const { gitExecFileAsyncMock, glabExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
-  glabExecFileAsyncMock: vi.fn(),
-  sshExecMock: vi.fn()
+  glabExecFileAsyncMock: vi.fn()
 }))
 
 vi.mock('../git/runner', () => ({
@@ -25,6 +24,7 @@ import {
   parseGlabJsonList,
   parseGlabPaginationHeader,
   isMissingJobLogError,
+  glabHostEnvOptions,
   getProjectRef,
   getProjectRefForRemote,
   parseGlabApiResponse,
@@ -32,7 +32,6 @@ import {
   resolveIssueSource
 } from './gl-utils'
 import { GlabNonListResponseError } from './glab-api-response'
-import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
@@ -70,15 +69,12 @@ describe('gitlab project ref resolution', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
     glabExecFileAsyncMock.mockReset()
-    sshExecMock.mockReset()
-    unregisterSshGitProvider('conn-1')
     _resetProjectRefCache()
     _resetRemoteNameListingCache()
   })
 
   afterEach(() => {
     vi.useRealTimers()
-    unregisterSshGitProvider('conn-1')
   })
 
   it('keeps getProjectRef origin-based', async () => {
@@ -214,21 +210,6 @@ describe('gitlab project ref resolution', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
-  it('resolves project refs through the SSH git provider for connected repos', async () => {
-    sshExecMock.mockResolvedValueOnce({ stdout: 'git@gitlab.com:remote/orca.git\n', stderr: '' })
-    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
-
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
-      host: 'gitlab.com',
-      path: 'remote/orca'
-    })
-
-    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo', {
-      signal: expect.any(AbortSignal)
-    })
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
   it('bounds cached project refs for distinct repo paths', async () => {
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'git@gitlab.com:stablyai/orca.git\n',
@@ -240,34 +221,6 @@ describe('gitlab project ref resolution', () => {
     }
 
     expect(_getProjectRefCacheSize()).toBe(512)
-  })
-
-  it('does not cache a missing SSH provider as a permanent null project ref', async () => {
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toBeNull()
-
-    sshExecMock.mockResolvedValueOnce({
-      stdout: 'git@gitlab.com:remote/orca.git\n',
-      stderr: ''
-    })
-    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
-
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
-      host: 'gitlab.com',
-      path: 'remote/orca'
-    })
-  })
-
-  it('does not cache transient SSH exec failures as permanent null project refs', async () => {
-    sshExecMock
-      .mockRejectedValueOnce(new Error('ssh tunnel not ready'))
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:remote/orca.git\n', stderr: '' })
-    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
-
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toBeNull()
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
-      host: 'gitlab.com',
-      path: 'remote/orca'
-    })
   })
 
   it('does not cache a local probe killed on its deadline as a definitive miss', async () => {
@@ -350,28 +303,6 @@ describe('gitlab project ref resolution', () => {
       await expect(getProjectRef(repoPath)).resolves.toBeNull()
     }
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not serve a project ref resolved on a retired SSH connection', async () => {
-    sshExecMock
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:before/orca.git\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:after/orca.git\n', stderr: '' })
-    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
-
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
-      host: 'gitlab.com',
-      path: 'before/orca'
-    })
-
-    // A reconnect can swap the execution host under the same connection id.
-    unregisterSshGitProvider('conn-1')
-    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
-
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
-      host: 'gitlab.com',
-      path: 'after/orca'
-    })
-    expect(sshExecMock).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -696,5 +627,49 @@ describe('parseGlabPaginationHeader', () => {
     expect(parseGlabPaginationHeader('0', 1)).toBeUndefined()
     expect(parseGlabPaginationHeader('0', 0)).toBe(0)
     expect(parseGlabPaginationHeader('-3', 0)).toBeUndefined()
+  })
+})
+
+describe('glabHostEnvOptions', () => {
+  const projectRef = { host: 'gitlab.example.internal' }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('carries the host in GITLAB_HOST for a connection-backed workspace', () => {
+    const { env } = glabHostEnvOptions(projectRef, 'conn-1')
+
+    expect(env?.GITLAB_HOST).toBe('gitlab.example.internal')
+  })
+
+  it('returns nothing for a local workspace', () => {
+    expect(glabHostEnvOptions(projectRef, null)).toEqual({})
+    expect(glabHostEnvOptions(projectRef, undefined)).toEqual({})
+  })
+
+  it('returns nothing when the project ref carries no host', () => {
+    expect(glabHostEnvOptions(null, 'conn-1')).toEqual({})
+    expect(glabHostEnvOptions({ host: '' }, 'conn-1')).toEqual({})
+  })
+
+  // Why: spawn env stops at the wsl.exe boundary, so Windows has to name the
+  // variable in WSLENV or glab in the distro never sees the host.
+  it('forwards GITLAB_HOST through WSLENV on Windows', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+
+    const { env } = glabHostEnvOptions(projectRef, 'conn-1')
+
+    expect(env?.GITLAB_HOST).toBe('gitlab.example.internal')
+    expect(env?.WSLENV?.split(':')).toContain('GITLAB_HOST')
+  })
+
+  it('leaves WSLENV alone off Windows', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
+    const { env } = glabHostEnvOptions(projectRef, 'conn-1')
+
+    expect(env?.WSLENV).toBe(process.env.WSLENV)
   })
 })

@@ -68,6 +68,22 @@ describe('BrowserClientPageAutomationRuntime', () => {
     expect(fixture.unregisterGuest).toHaveBeenCalledWith('page-a')
   })
 
+  it('retires an old automation session without stripping the guest needed by rollback', async () => {
+    const fixture = createFixture()
+    await fixture.runtime.execute(input(), new AbortController().signal)
+    await fixture.runtime.retire({
+      browserPageId: 'page-a',
+      pageHostGeneration: 9,
+      registration,
+      keepGuestBinding: true
+    })
+    expect(fixture.onTabClosed).toHaveBeenCalledWith(42)
+    expect(fixture.unregisterGuest).not.toHaveBeenCalled()
+    await expect(fixture.runtime.execute(input(), new AbortController().signal)).resolves.toEqual({
+      clicked: true
+    })
+  })
+
   it('rejects aborts and registration failures before RPC dispatch', async () => {
     const fixture = createFixture()
     const controller = new AbortController()

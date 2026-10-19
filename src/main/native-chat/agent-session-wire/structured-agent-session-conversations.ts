@@ -18,11 +18,12 @@ export class StructuredAgentSessionConversations extends Map<
   StructuredAgentSessionHostSession
 > {
   private readonly activity = new Map<string, number>()
-  private readonly closeObservers = new Set<(sessionId: string) => void>()
 
   constructor(
     private readonly delivery: {
       deliver: (sessionId: string, journal: AgentSessionJournal) => void
+      /** A person's Stop settle opened or closed: no row, so neither a publish nor activity. */
+      deliverSettleEdge?: (sessionId: string, journal: AgentSessionJournal) => void
       logger: StructuredAgentSessionLogger
       /** A conversation became held: state that waited on it (queued drafts) re-derives. */
       onOpened?: (sessionId: string) => void
@@ -56,6 +57,22 @@ export class StructuredAgentSessionConversations extends Map<
         }
       })
     })
+    journal.stopMarks.observeSettleEdges(() => {
+      queueMicrotask(() => {
+        if (this.get(sessionId)?.journal !== journal) {
+          return
+        }
+        try {
+          this.delivery.deliverSettleEdge?.(sessionId, journal)
+        } catch (error) {
+          this.delivery.logger.warn("delivering a Stop's settle edge failed", {
+            scope: 'stop-settle-delivery',
+            sessionId,
+            error
+          })
+        }
+      })
+    })
     this.activity.set(sessionId, this.delivery.now())
     const adopted = super.set(sessionId, session)
     this.delivery.onOpened?.(sessionId)
@@ -64,18 +81,7 @@ export class StructuredAgentSessionConversations extends Map<
 
   override delete(sessionId: string): boolean {
     this.activity.delete(sessionId)
-    const deleted = super.delete(sessionId)
-    if (deleted) {
-      for (const observer of this.closeObservers) {
-        observer(sessionId)
-      }
-    }
-    return deleted
-  }
-
-  /** Told when a conversation leaves the map, so state kept per conversation dies with it. */
-  observeClose(observer: (sessionId: string) => void): void {
-    this.closeObservers.add(observer)
+    return super.delete(sessionId)
   }
 
   touch(sessionId: string): void {

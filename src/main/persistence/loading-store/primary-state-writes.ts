@@ -13,6 +13,7 @@ import { writeToDiskSync } from './primary-state-write-sync'
 import { writeProfileStateInWorker } from './primary-state-write-worker'
 import type { DurableProfileStateMutation } from './store-runtime-state'
 import { profileStateWriterFailureOutcome } from '../profile-state/profile-state-writer-errors'
+import { notifyWorkspaceSessionWritten } from './workspace-session-write-listeners'
 
 const primaryStateWriteOperationsContext = Symbol('PrimaryStateWriteOperations')
 export class PrimaryStateWriteOperations {
@@ -110,6 +111,8 @@ export class PrimaryStateWriteOperations {
       return callback()
     } finally {
       runtime.durableMutationPhase = null
+      // Durable writers may edit sessions without scheduling a save; a rollback republishes.
+      notifyWorkspaceSessionWritten(runtime)
     }
   }
 
@@ -241,13 +244,4 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
     )
   }
   return writeToDiskSync(owner[primaryStateWriteOperationsContext], { expectedGeneration: gen })
-}
-
-export function installPrimaryStateWriteOperationsContext(
-  target: PrimaryStateWriteOperations,
-  source: PrimaryStateWriteOperations
-): void {
-  Object.defineProperty(target, primaryStateWriteOperationsContext, {
-    value: source[primaryStateWriteOperationsContext]
-  })
 }

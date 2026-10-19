@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { encodeNdjson } from './ndjson'
+import { ptySpawnHealthPlatformCoverage } from './daemon-health-identity'
+import { daemonSocketDirIsTrusted } from './daemon-socket-endpoint-path'
 import {
   PROTOCOL_VERSION,
   type HelloMessage,
@@ -21,15 +23,39 @@ export const E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV = 'ORCA_E2E_FORCE_DAEMON_HE
 // also covers a live-but-wedged daemon that simply missed the RPC budget.
 export type DaemonHealth = 'healthy' | 'unreachable' | 'rejected' | 'pty-spawn-unhealthy'
 
-export function checkDaemonHealth(socketPath: string, tokenPath: string): Promise<DaemonHealth> {
+export type DaemonHealthCheck = {
+  verdict: DaemonHealth
+  coverage: 'pty-spawn' | 'handshake'
+}
+
+function readPtySpawnHealthCoverage(
+  payload: unknown,
+  fallback: DaemonHealthCheck['coverage']
+): DaemonHealthCheck['coverage'] {
+  if (typeof payload !== 'object' || payload === null) {
+    return fallback
+  }
+  const coverage = 'coverage' in payload ? payload.coverage : undefined
+  return coverage === 'pty-spawn' || coverage === 'handshake' ? coverage : fallback
+}
+
+export function checkDaemonHealthWithCoverage(
+  socketPath: string,
+  tokenPath: string
+): Promise<DaemonHealthCheck> {
   return new Promise((resolve) => {
+    // Older Windows daemons answered this RPC without spawning; an absent optional coverage
+    // field must preserve that weaker meaning during adoption.
+    const fallbackCoverage = ptySpawnHealthPlatformCoverage()
+    const resolveVerdict = (verdict: DaemonHealth): void =>
+      resolve({ verdict, coverage: fallbackCoverage })
     if (process.env[E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV] === '1') {
-      resolve('unreachable')
+      resolveVerdict('unreachable')
       return
     }
 
     if (process.platform !== 'win32' && !existsSync(socketPath)) {
-      resolve('unreachable')
+      resolveVerdict('unreachable')
       return
     }
 
@@ -37,13 +63,13 @@ export function checkDaemonHealth(socketPath: string, tokenPath: string): Promis
     try {
       token = readFileSync(tokenPath, 'utf8').trim()
     } catch {
-      resolve('unreachable')
+      resolveVerdict('unreachable')
       return
     }
 
     let settled = false
     let sock: Socket | null = null
-    const settle = (result: DaemonHealth): void => {
+    const settle = (result: DaemonHealthCheck): void => {
       if (settled) {
         return
       }
@@ -58,7 +84,7 @@ export function checkDaemonHealth(socketPath: string, tokenPath: string): Promis
       sock?.off('connect', onConnect)
       sock?.off('data', onData)
     }
-    const onError = (): void => settle('unreachable')
+    const onError = (): void => settle({ verdict: 'unreachable', coverage: fallbackCoverage })
     const onConnect = (): void => {
       const hello: HelloMessage = {
         type: 'hello',
@@ -89,13 +115,13 @@ export function checkDaemonHealth(socketPath: string, tokenPath: string): Promis
         try {
           message = JSON.parse(line) as Record<string, unknown>
         } catch {
-          settle('rejected')
+          settle({ verdict: 'rejected', coverage: fallbackCoverage })
           return
         }
 
         if (message.type === 'hello') {
           if (!(message as HelloResponse).ok) {
-            settle('rejected')
+            settle({ verdict: 'rejected', coverage: fallbackCoverage })
             return
           }
           // Why: a protocol-live daemon with a stale cwd or node-pty helper
@@ -106,13 +132,23 @@ export function checkDaemonHealth(socketPath: string, tokenPath: string): Promis
         }
 
         if (message.id === 'health-1') {
-          settle(message.ok === true ? 'healthy' : 'pty-spawn-unhealthy')
+          settle({
+            verdict: message.ok === true ? 'healthy' : 'pty-spawn-unhealthy',
+            coverage: readPtySpawnHealthCoverage(message.payload, fallbackCoverage)
+          })
           return
         }
       }
     }
-    const timer = setTimeout(() => settle('unreachable'), HEALTH_CHECK_TIMEOUT_MS)
+    const timer = setTimeout(
+      () => settle({ verdict: 'unreachable', coverage: fallbackCoverage }),
+      HEALTH_CHECK_TIMEOUT_MS
+    )
 
+    if (!daemonSocketDirIsTrusted(socketPath)) {
+      settle({ verdict: 'unreachable', coverage: fallbackCoverage })
+      return
+    }
     sock = connect({ path: socketPath })
     sock.on('error', onError)
     sock.on('connect', onConnect)
@@ -120,6 +156,13 @@ export function checkDaemonHealth(socketPath: string, tokenPath: string): Promis
     let buffer = ''
     sock.on('data', onData)
   })
+}
+
+export async function checkDaemonHealth(
+  socketPath: string,
+  tokenPath: string
+): Promise<DaemonHealth> {
+  return (await checkDaemonHealthWithCoverage(socketPath, tokenPath)).verdict
 }
 
 export async function healthCheckDaemon(socketPath: string, tokenPath: string): Promise<boolean> {
@@ -234,6 +277,10 @@ export function getMacDaemonSystemResolverHealth(
     }
     const timer = setTimeout(() => settle('unknown'), RESOLVER_HEALTH_CHECK_TIMEOUT_MS)
 
+    if (!daemonSocketDirIsTrusted(socketPath)) {
+      settle('unknown')
+      return
+    }
     sock = connect({ path: socketPath })
     sock.on('error', onError)
     sock.on('connect', onConnect)

@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
+import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 import {
   EXTERNAL_LINK_SEAM as SEAM,
   externalLinkOffenders
@@ -60,24 +61,32 @@ describeClosure(
 )
 
 /**
- * Neither files page writes a clipboard, which is why neither is granted `native.clipboard.write`.
- *
- * The control is the tasks closure: it does carry the seam, so a probe that finds nothing here is
- * one that can find something when there is something to find.
+ * The preview copies loaded Markdown through the device seam. The explorer grants it too because
+ * an in-document preview keeps the explorer's opening grants.
  */
 describeClosure(
   'the clipboard the files pages reach',
   () => {
-    it.each([EXPLORER, PREVIEW])('carries no clipboard at all: %s', async (route) => {
+    it.each([EXPLORER, PREVIEW])('never uses the page clipboard: %s', async (route) => {
       const closure = await mobileWebAppRouteClosure(route)
       expect(closure.modules.filter((file) => file.endsWith('ExpoClipboard.web.js'))).toEqual([])
-      expect(closure.local).not.toContain('src/platform/clipboard.web.ts')
     })
 
-    it('finds the clipboard seam on the route that is granted it', async () => {
-      const tasks = await mobileWebAppRouteClosure('app/h/[hostId]/tasks.tsx')
-      expect(tasks.local).toContain('src/platform/clipboard.web.ts')
+    it('reaches the device writer through the Markdown source Copy control', async () => {
+      const preview = await mobileWebAppRouteClosure(PREVIEW)
+      const explorer = await mobileWebAppRouteClosure(EXPLORER)
+      expect(preview.local).toContain('src/components/MobileSourceCopyButton.tsx')
+      expect(preview.local).toContain('src/platform/clipboard.web.ts')
+      expect(explorer.local).not.toContain('src/platform/clipboard.web.ts')
     })
+
+    it.each(['/h/[hostId]/files/[worktreeId]', '/h/[hostId]/files/preview/[worktreeId]'])(
+      'grants the device writer when the document opens on %s',
+      (pathname) => {
+        const route = MOBILE_WEB_PAGE_ROUTES.find((entry) => entry.pathname === pathname)
+        expect(route?.grants).toContain('native.clipboard.write')
+      }
+    )
   },
   240_000
 )

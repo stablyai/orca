@@ -4,6 +4,7 @@
  * are installed side by side as `~/.orca-remote/orcad-<version>/`, launched and stopped with
  * the client's own deploy commands, and share one data root.
  */
+import type * as ExecCommandModule from '../ssh/remote-exec/remote-exec-command'
 import { build } from 'esbuild'
 import {
   copyFileSync,
@@ -18,7 +19,7 @@ import {
 } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { NODE_RUNTIME_ASSETS } from '../../shared/node-runtime-pin'
 import {
   ORCAD_BUILD_TARGET_FILENAME,
@@ -28,25 +29,36 @@ import {
   orcadBunRuntimeFilename,
   orcadNodeRuntimeRelativePath
 } from '../../shared/orcad-artifacts'
-import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
-import { readDaemonPidRecord } from '../daemon/daemon-endpoint-incarnation'
+import {
+  killAndAwaitExit,
+  killProfileDaemons,
+  removeTestRoot
+} from './orcad-daemon-teardown-fixture'
 import { PROTOCOL_VERSION } from '../daemon/types'
 import type { ServeReadiness } from '../server/serve-readiness'
 import {
   getOrcaProfileIndexPath,
   getOrcaProfileStateDatabaseFile
 } from '../orca-profiles/profile-storage-paths'
-import type { SshConnection } from '../ssh/ssh-connection'
-import { emptyOrcadActivationRecord, orcadGcPinnedDirNames } from '../ssh/orcad-activation-record'
-import { gcOldOrcadVersions } from '../ssh/orcad-remote-gc'
+import type { SshConnection } from '../ssh/connection/ssh-connection'
+import {
+  emptyOrcadActivationRecord,
+  orcadGcPinnedDirNames
+} from '../managed-server/activation/orcad-activation-record'
+import { gcOldOrcadVersions } from '../managed-server/install/orcad-remote-gc'
 import {
   ORCAD_PID_FILENAME,
-  ORCAD_READINESS_FILENAME,
+  ORCAD_READINESS_FILENAME
+} from '../managed-server/install/orcad-remote-host-support'
+import {
   orcadLaunchCommand,
   parseOrcadReadinessOutput
-} from '../ssh/orcad-remote-launch'
-import { parseOrcadStopOutcome, stopOrcadCommand } from '../ssh/orcad-remote-process-control'
-import { RELAY_REMOTE_DIR } from '../ssh/relay-protocol'
+} from '../managed-server/install/orcad-remote-launch'
+import {
+  parseOrcadStopOutcome,
+  stopOrcadCommand
+} from '../managed-server/install/orcad-remote-process-control'
+import { RELAY_REMOTE_DIR } from '../ssh/remote-exec/remote-frame-protocol'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import {
   skipForMissingInputs,
@@ -56,7 +68,10 @@ import {
 
 // GC runs its real commands, against this machine instead of an SSH host.
 const { execMock } = vi.hoisted(() => ({ execMock: vi.fn() }))
-vi.mock('../ssh/ssh-relay-deploy-helpers', () => ({ execCommand: execMock }))
+vi.mock('../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
+  ...(await importOriginal<typeof ExecCommandModule>()),
+  execCommand: execMock
+}))
 
 type Runtime = 'Bun' | 'Node'
 type Slot = { runtime: Runtime; dir: string; version: string }
@@ -176,7 +191,8 @@ async function launch(slot: Slot, userDataDir: string): Promise<ServeReadiness> 
           fullVersion: slot.version,
           userDataDir,
           bindHost: '127.0.0.1',
-          port: 0
+          port: 0,
+          activationRoot: join(userDataDir, '.orcad-activation-transaction')
         })
       )
     ).trim()
@@ -256,13 +272,10 @@ async function backUpProfile(slot: Slot, runtime: string, userDataDir: string): 
   expect(JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '')).toEqual({ ok: true })
 }
 
-function killLaunched(): void {
-  for (const pid of launched) {
-    try {
-      process.kill(pid, 'SIGKILL')
-    } catch {}
-  }
+async function killLaunched(): Promise<void> {
+  const pids = [...launched]
   launched.clear()
+  await killAndAwaitExit(pids)
 }
 
 /** The protocol the Bun slot's own daemon reports, read from a throwaway launch. */
@@ -276,17 +289,9 @@ async function probeBunDaemonProtocol(): Promise<number> {
     return daemon.protocolVersion!
   } finally {
     await stop(slot).catch(() => {})
-    killLaunched()
+    await killLaunched()
     // Even after a failed launch: the daemon outlives orcad, and only its pid file names it.
-    const daemonDir = join(userDataDir, 'daemon')
-    for (const name of existsSync(daemonDir) ? readdirSync(daemonDir) : []) {
-      const pid = /^daemon-v\d+\.pid$/.test(name)
-        ? readDaemonPidRecord(join(daemonDir, name))?.pid
-        : undefined
-      if (pid && isAlive(pid)) {
-        process.kill(pid, 'SIGKILL')
-      }
-    }
+    await killProfileDaemons(userDataDir)
   }
 }
 
@@ -362,8 +367,8 @@ worker.on('error', (error) => { console.error(error); process.exitCode = 1 })
 
   afterEach(killLaunched)
 
-  afterAll(() => {
-    removeTreeSync(root)
+  afterAll(async () => {
+    await removeTestRoot(root)
   })
 
   it.for([
@@ -459,8 +464,8 @@ worker.on('error', (error) => { console.error(error); process.exitCode = 1 })
         await daemonClient('kill', userDataDir, sessionId, '')
         await vi.waitFor(() => expect(isAlive(created.pid)).toBe(false), { timeout: 10_000 })
       } finally {
-        if (daemonPid && isAlive(daemonPid)) {
-          process.kill(daemonPid, 'SIGKILL')
+        if (daemonPid) {
+          await killAndAwaitExit([daemonPid])
         }
       }
     }

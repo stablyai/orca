@@ -161,6 +161,30 @@ test('accepts the additive production C31 wave only in asia-east2-b', () => {
   )
 })
 
+test('accepts the additive production C34 spare wave only in asia-east2-c', () => {
+  const c34Config = { ...productionConfig, cells: ['production-gce-c34'] }
+  assert.deepEqual(
+    validateRelayAsiaTopologyPlan({ resource_changes: productionWavePlan('c34', 'asia-east2-c') }, c34Config),
+    { environment: 'production', cells: ['production-gce-c34'], changes: 4 }
+  )
+  assert.throws(
+    () => validateRelayAsiaTopologyPlan({ resource_changes: productionWavePlan('c34') }, c34Config),
+    /fixed-one Asia MIG shape/
+  )
+})
+
+test('accepts the additive production C35 spare wave only in asia-east2-a', () => {
+  const c35Config = { ...productionConfig, cells: ['production-gce-c35'] }
+  assert.deepEqual(
+    validateRelayAsiaTopologyPlan({ resource_changes: productionWavePlan('c35', 'asia-east2-a') }, c35Config),
+    { environment: 'production', cells: ['production-gce-c35'], changes: 4 }
+  )
+  assert.throws(
+    () => validateRelayAsiaTopologyPlan({ resource_changes: productionWavePlan('c35', 'asia-east2-c') }, c35Config),
+    /fixed-one Asia MIG shape/
+  )
+})
+
 // A US cell joins the root region: no additional-region network, no region label or line, and
 // the default pool emits no line, exactly as the startup template renders a root-region cell.
 function usCellPlan(hostname, zone) {
@@ -269,7 +293,9 @@ test('accepts only a reviewed Asia topology wave', () => {
     'production-gce-c27,production-gce-c28,production-gce-c29',
     'production-gce-c29,production-gce-c27,production-gce-c28',
     'production-gce-c30',
-    'production-gce-c31'
+    'production-gce-c31',
+    'production-gce-c34',
+    'production-gce-c35'
   ]) {
     assert.doesNotThrow(
       () => parseRelayAsiaTopologyPlanArguments(argv('production', cellIds, productionImage)),
@@ -286,7 +312,9 @@ test('accepts only a reviewed Asia topology wave', () => {
     'production-gce-c32',
     'production-gce-c33',
     'production-gce-c32,production-gce-c33,production-gce-c34',
-    'production-gce-c34'
+    'production-gce-c33,production-gce-c34',
+    'production-gce-c34,production-gce-c35',
+    'production-gce-c36'
   ]) {
     assert.throws(
       () => parseRelayAsiaTopologyPlanArguments(argv('production', cellIds, productionImage)),

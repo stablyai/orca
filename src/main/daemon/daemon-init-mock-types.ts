@@ -31,6 +31,7 @@ export type MockAdapter = {
   shutdown: Mock
   dispose: Mock
   disconnectOnly: Mock
+  hasRetiredForIdle: Mock
   onData: Mock
   onExit: Mock
   // Why: the router calls onData/onExit on each adapter; the stub returns a no-op unsubscribe so router subscription doesn't explode.
@@ -47,6 +48,7 @@ export type MockAdapterConstructor = new (opts: MockAdapter['options']) => MockA
 /** Handle the fake spawner hands back from ensureRunning/getHandle. */
 export type MockSpawnerHandle = {
   mode?: 'degraded-new-pty-fallback'
+  quarantine?: 'host-image-severed'
   adopted?: true
   releaseAdoptionLease?: () => void
   shutdown: () => Promise<void>
@@ -96,6 +98,7 @@ export type EnsureRunningOverride = () => Promise<{
   socketPath: string
   tokenPath: string
   mode?: 'degraded-new-pty-fallback'
+  quarantine?: 'host-image-severed'
   adopted?: true
 }>
 

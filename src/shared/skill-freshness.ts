@@ -10,41 +10,21 @@ export type SkillBundleFileIdentity = {
   identitySha256: string
 }
 
-export type SkillKnownSnapshot = {
-  releaseRevision: number
+export type SkillCurrentBundleEntry = {
+  name: string
+  sourcePath: string
   packageDigest: string
-  gitTreeSha: string
   files: SkillBundleFileIdentity[]
 }
 
-export type SkillCurrentBundleEntry = SkillKnownSnapshot & {
-  name: string
-  sourcePath: string
-}
-
-// Why: schema 2 removed the stamped app version so the committed artifact is a
-// pure function of skills/ content; the running build supplies its own version.
+// Why: schema 3 dropped the release revision and git tree identity with the
+// snapshot registry; freshness compares against this build's bytes only.
 export type SkillBundleManifest = {
-  schemaVersion: 2
+  schemaVersion: 3
   skills: SkillCurrentBundleEntry[]
 }
 
-export type SkillSnapshotRegistry = {
-  schemaVersion: 1
-  skills: Record<string, SkillKnownSnapshot[]>
-}
-
-export type SkillReleaseMapping = {
-  schemaVersion: 1
-  releases: { appVersion: string; skills: Record<string, number> }[]
-}
-
-export type SkillFreshnessStatus =
-  | 'current'
-  | 'outdated'
-  | 'newer-known'
-  | 'unrecognized'
-  | 'inaccessible'
+export type SkillFreshnessStatus = 'current' | 'outdated' | 'inaccessible'
 
 export type SkillInstallationTopology =
   | 'canonical-copy'
@@ -57,7 +37,7 @@ export type SkillInstallationTopology =
   | 'plugin-cache'
 
 // Why: eligibility and the explanation copy must agree on which placements the
-// validated npx rail can converge; a drifted copy would blame a phantom sibling.
+// pinned install rail rewrites; a drifted copy would blame a phantom sibling.
 export const SUPPORTED_GLOBAL_SKILL_TOPOLOGIES: ReadonlySet<SkillInstallationTopology> = new Set([
   'canonical-copy',
   'provider-alias'
@@ -75,47 +55,36 @@ export type SkillFreshnessInstallation = {
   physicalIdentity: string | null
   topology: SkillInstallationTopology
   status: SkillFreshnessStatus
-  installedReleaseRevision: number | null
-  installedAppVersion: string | null
-  currentReleaseRevision: number
   currentPackageDigest: string
-  currentAppVersion: string
-  observedPackageDigest: string | null
-  /** Git tree sha of the observed bytes; lets the post-run verdict match disk against the updater's lock. */
-  observedGitTreeSha?: string | null
-  /**
-   * The same hash over only the files the current bundle lists. Carried beside the
-   * whole-folder hash, not in place of it, so a folder holding an agent CLI's sidecar
-   * can still match the lock without blinding the check to an upstream revision that
-   * added a file. Absent from hosts older than this field.
-   */
-  observedOfficialGitTreeSha?: string | null
+  /** The skills.sh global lock's `source` for this name; null when it has no entry. */
+  lockSource: string | null
   errorCategory: string | null
 }
 
-// A scope whose contents belong to someone other than the user: a project's own checkout,
-// or a plugin's bundled copy. Orca's global update never writes here, so the owner's
-// content is not the user's drift — which is why ownership outranks byte status when
-// labelling a location.
-const OWNER_MANAGED_SKILL_SCOPES: ReadonlySet<SkillInstallationTopology> = new Set([
-  'repo-scope',
-  'plugin-cache'
-])
+const ORCA_SKILL_LOCK_SOURCE = 'stablyai/orca'
 
-export function isOwnerManagedSkillScope(topology: SkillInstallationTopology): boolean {
-  return OWNER_MANAGED_SKILL_SCOPES.has(topology)
+/** Whether the skills.sh lock says this name was installed from Orca's repository. */
+export function isOrcaSkillLockSource(source: string | null): boolean {
+  if (!source) {
+    return false
+  }
+  const normalized = source
+    .trim()
+    .toLowerCase()
+    .replace(/^https:\/\/github\.com\//, '')
+    .replace(/\/+$/, '')
+    .replace(/\.git$/, '')
+  return normalized === ORCA_SKILL_LOCK_SOURCE
 }
 
-// Why: Orca's updater only ever passes --global, so a copy a project owns is not
-// something Orca can act on — it has no remedy by design. Reporting it as global drift
-// produced an amber badge no user action could clear, over a copy their own repo
-// legitimately owns. Stated by scope rather than by byte status on purpose: an outdated
-// or unreadable project copy is just as far outside the global updater's reach as an
-// unrecognized one.
+// Why: Orca's updater only ever passes --global, so a project's or a plugin's own copy is
+// not something Orca can act on. Without a list of past releases, a differing plugin copy
+// is indistinguishable from another vendor's same-named skill, so neither scope can be
+// reported as the user's drift.
 export function skillPlacementParticipatesInGlobalFreshness(
   installation: SkillFreshnessInstallation
 ): boolean {
-  return installation.topology !== 'repo-scope'
+  return installation.topology !== 'repo-scope' && installation.topology !== 'plugin-cache'
 }
 
 /**
@@ -123,20 +92,13 @@ export function skillPlacementParticipatesInGlobalFreshness(
  *
  * Shared so the badge and the review dialog cannot disagree about what counts: the
  * badge points at the dialog for the explanation, so a copy that turns the badge
- * amber must also produce a row there. An out-of-date copy the command converges is
- * ordinary work, not a problem; a plugin's own copy of a same-named skill is the vendor's
- * business rather than the user's drift, and a project's own copy is outside the reach of
- * the only update Orca runs.
+ * amber must also produce a row there. An out-of-date copy the command rewrites is
+ * ordinary work, not a problem.
  */
 export function isSkillCopyNeedingAttention(installation: SkillFreshnessInstallation): boolean {
   return (
     skillPlacementParticipatesInGlobalFreshness(installation) &&
     installation.status !== 'current' &&
-    // Why: 'newer-known' is recognized official content ahead of this build — the
-    // updater's own install or a newer release's bytes. There is nothing to fix and
-    // nothing to update to, so amber would send the user chasing a phantom edit.
-    installation.status !== 'newer-known' &&
-    !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache') &&
     !(
       SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
       installation.status === 'outdated'
@@ -199,6 +161,7 @@ export function isSkillScanIssueTruncatingScan(issue: SkillFreshnessScanIssue): 
 export type SkillFreshnessInventory = {
   schemaVersion: 1
   installations: SkillFreshnessInstallation[]
+  /** Outdated names the pinned install can safely rewrite, whoever installed them. */
   eligibleUpdateNames: string[]
   scanIssues: SkillFreshnessScanIssue[]
   scannedAt: number
@@ -206,7 +169,7 @@ export type SkillFreshnessInventory = {
 
 export function canonicalizeSkillUpdateNames(names: readonly string[]): string[] | null {
   const canonicalNames = [...new Set(names)].sort((left, right) => left.localeCompare(right, 'en'))
-  // Why: names reach a shell in the terminal fallback. Official manifests use
+  // Why: names reach a shell in the copied fallback command. Official manifests use
   // this restricted package-name grammar so no entry can introduce shell syntax.
   if (canonicalNames.some((name) => !/^[a-z0-9][a-z0-9._-]*$/.test(name))) {
     return null
@@ -214,14 +177,9 @@ export function canonicalizeSkillUpdateNames(names: readonly string[]): string[]
   return canonicalNames.length > 0 ? canonicalNames : null
 }
 
-export function buildTargetedSkillUpdateCommand(names: readonly string[]): string | null {
-  const canonicalNames = canonicalizeSkillUpdateNames(names)
-  return canonicalNames ? `npx skills update ${canonicalNames.join(' ')} --global` : null
-}
-
-// Why: `skills update` has no --json (that flag only exists on `list`), so the
-// run reports one indeterminate phase. Per-skill outcomes come from re-scanning
-// the inventory after exit, never from parsing stdout.
+// Why: `skills add` has no --json, so the run reports one indeterminate phase.
+// Per-skill outcomes come from re-scanning the inventory after exit, never from
+// parsing stdout.
 export type SkillUpdateRun =
   | { state: 'idle' }
   // `stopping` covers the window between Stop and the process tree actually

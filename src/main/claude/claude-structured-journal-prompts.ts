@@ -93,7 +93,8 @@ export class ClaudeJournalPrompts {
     const append = (identity: AgentJournalItemIdentity, body: ClaudeJournalPrompt['body']) => {
       const options = { ...producer, turnScope }
       if (this.deps.sink.tryAppendItem) {
-        admitted &&= this.deps.sink.tryAppendItem(identity, body, options).accepted
+        const admission = this.deps.sink.tryAppendItem(identity, body, options)
+        admitted &&= admission.accepted
       } else {
         this.deps.sink.appendItem(identity, body, options)
       }

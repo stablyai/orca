@@ -68,13 +68,16 @@ export function getMovedCodexUserHookTrust(
  * its new key, verbatim. Needs no Codex session, so no removal waits on one.
  */
 export function mutateRealHomeHooksPreservingUserTrust(args: {
-  sourcePath: string
+  /** Every spelling Codex may key this file by (as spelled, and resolved). */
+  sourcePaths: readonly string[]
   tomlPath: string
   beforeHooks: HooksByEvent
   afterHooks: HooksByEvent
   writeHooks: () => void
 }): void {
-  const moves = getMovedCodexUserHookTrust(args.sourcePath, args.beforeHooks, args.afterHooks)
+  const moves = args.sourcePaths.flatMap((sourcePath) =>
+    getMovedCodexUserHookTrust(sourcePath, args.beforeHooks, args.afterHooks)
+  )
   args.writeHooks()
   try {
     moveHookTrustEntries(args.tomlPath, moves)

@@ -72,6 +72,17 @@ export function sanitizeNativeChatRpcBlock(
       }))
     }
   }
+  if (block.type === 'subagent') {
+    return {
+      ...block,
+      id: boundSubagentEntryId(block.id),
+      label: clip(block.label, MAX_SUBAGENT_FIELD_CHARS),
+      state: clipSubagentState(block.state),
+      groupId: clip(block.groupId, MAX_SUBAGENT_FIELD_CHARS),
+      ...(block.parentId !== undefined ? { parentId: boundSubagentEntryId(block.parentId) } : {}),
+      ...(block.run !== undefined ? { run: clip(block.run, MAX_SUBAGENT_FIELD_CHARS) } : {})
+    }
+  }
   return block
 }
 

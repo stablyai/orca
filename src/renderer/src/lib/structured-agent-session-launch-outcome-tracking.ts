@@ -1,14 +1,52 @@
+import { useAppStore } from '@/store'
+import { removeStructuredLaunchSlot } from './structured-agent-session-launch-slot'
+import {
+  materializeStructuredLaunchSurface,
+  findStructuredLaunchTab
+} from './structured-agent-session-launch-surface'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
-import { settleStructuredLaunchCallers } from '@/lib/structured-agent-session-launch-callers'
+import {
+  settleStructuredLaunchCallers,
+  structuredLaunchCallersHavePendingWork
+} from '@/lib/structured-agent-session-launch-callers'
 import type { StructuredAgentLaunchReceipt } from '@/lib/structured-agent-session-launch-recovery'
 import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
 import {
+  deleteStructuredLaunchStateIfCurrent,
   notifyStructuredLaunchListeners,
   retireStructuredAgentSessionLaunchCancellationTombstone,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
 
 // How a launch's create outcome settles its callers: published, refused, failed or unknown.
+
+function cleanupLaunchState(state: StructuredLaunchState): void {
+  if (deleteStructuredLaunchStateIfCurrent(state)) {
+    notifyStructuredLaunchListeners()
+  }
+}
+
+export function maybeCleanupLaunchState(state: StructuredLaunchState): void {
+  if (
+    state.callers.outcome === 'failed' ||
+    structuredLaunchCallersHavePendingWork(state.callers) ||
+    Object.keys(state.selection.held).length > 0
+  ) {
+    return
+  }
+  cleanupLaunchState(state)
+}
+
+function cleanupUnmaterializedLaunch(state: StructuredLaunchState): void {
+  if (state.intent.surfaceAddress && !findStructuredLaunchTab(state.intent)) {
+    removeStructuredLaunchSlot(
+      useAppStore.getState(),
+      state.intent.worktreeId,
+      state.intent.sessionId
+    )
+    cleanupLaunchState(state)
+  }
+}
 
 function settleStructuredLaunchRefusal(state: StructuredLaunchState): void {
   if (state.callers.outcome !== 'pending' && state.callers.outcome !== 'unknown') {
@@ -19,6 +57,7 @@ function settleStructuredLaunchRefusal(state: StructuredLaunchState): void {
     state.intent.sessionId
   )
   settleStructuredLaunchCallers(state.callers, 'failed')
+  cleanupUnmaterializedLaunch(state)
   notifyStructuredLaunchListeners()
 }
 
@@ -31,6 +70,10 @@ export function trackLaunchSettlement(
       if (state.promise !== promise) {
         return
       }
+      if (state.cancelled) {
+        return
+      }
+      materializeStructuredLaunchSurface(state.intent)
       settleStructuredLaunchCallers(state.callers, 'published')
       notifyStructuredLaunchListeners()
     },
@@ -47,7 +90,7 @@ export function trackLaunchSettlement(
         }
         return
       }
-      // The host's message is for the log; the chat's Retry line alone says the failure.
+      // The chat's Retry line owns the failed start's guidance.
       console.warn('[native-chat] structured launch failed', error)
       const failure = structuredLaunchFailure(error)
       if (failure) {
@@ -59,9 +102,11 @@ export function trackLaunchSettlement(
         settleStructuredLaunchRefusal(state)
       } else if (!state.visibilityUnknown) {
         settleStructuredLaunchCallers(state.callers, 'failed')
+        cleanupUnmaterializedLaunch(state)
         notifyStructuredLaunchListeners()
       } else {
         state.callers.outcome = 'unknown'
+        materializeStructuredLaunchSurface(state.intent)
         notifyStructuredLaunchListeners()
       }
     }

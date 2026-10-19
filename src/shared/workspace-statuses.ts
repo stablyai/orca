@@ -259,6 +259,13 @@ export function getDefaultWorkspaceStatusId(
     : (statuses[0]?.id ?? DEFAULT_WORKSPACE_STATUS_ID)
 }
 
+/** The statuses to group by: a payload with none (a partially hydrated store) keeps the defaults. */
+export function withDefaultWorkspaceStatuses(
+  statuses: readonly WorkspaceStatusDefinition[]
+): readonly WorkspaceStatusDefinition[] {
+  return statuses.length > 0 ? statuses : DEFAULT_WORKSPACE_STATUSES
+}
+
 export function getWorkspaceStatus(
   worktree: Pick<Worktree, 'workspaceStatus'>,
   statuses: readonly WorkspaceStatusDefinition[]

@@ -10,8 +10,10 @@ import { createUIStore } from './ui-slice-test-harness'
 
 const mocks = vi.hoisted(() => ({
   sendNotesToActiveAgentSession: vi.fn(),
-  appendStructuredAgentSessionOutboxMessage: vi.fn(),
-  relaunchFailedStructuredAgentSessionForMessage: vi.fn(),
+  sendStructuredAgentSessionMessage: vi.fn(),
+  relaunchFailedStructuredAgentSessionWithMessage: vi.fn(
+    (): Promise<{ delivered: boolean }> | null => null
+  ),
   track: vi.fn(),
   toastMessage: vi.fn(),
   toastSuccess: vi.fn(),
@@ -26,13 +28,26 @@ vi.mock('@/lib/active-agent-note-send', () => ({
   sendNotesToActiveAgentSession: mocks.sendNotesToActiveAgentSession
 }))
 
-vi.mock('@/components/native-chat/structured-agent-session-outbox-storage', () => ({
-  appendStructuredAgentSessionOutboxMessage: mocks.appendStructuredAgentSessionOutboxMessage
+vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({
+  sendStructuredAgentSessionMessage: mocks.sendStructuredAgentSessionMessage
+}))
+// The chat's tab names its host; the send only needs to find one.
+vi.mock('@/store', () => ({
+  useAppStore: {
+    getState: () => ({
+      unifiedTabsByWorktree: {
+        'wt-1': [{ contentType: 'agent-session', entityId: 'claude_1', worktreeId: 'wt-1' }]
+      }
+    })
+  }
+}))
+vi.mock('@/runtime/structured-agent-session-owner', () => ({
+  structuredAgentSessionTargetForTab: () => ({ kind: 'local' })
 }))
 
-vi.mock('@/lib/structured-agent-session-launch', () => ({
-  relaunchFailedStructuredAgentSessionForMessage:
-    mocks.relaunchFailedStructuredAgentSessionForMessage
+vi.mock('@/lib/structured-agent-session-launch-message', () => ({
+  relaunchFailedStructuredAgentSessionWithMessage:
+    mocks.relaunchFailedStructuredAgentSessionWithMessage
 }))
 
 vi.mock('@/lib/telemetry', () => ({
@@ -55,9 +70,12 @@ afterEach(() => {
 beforeEach(() => {
   mocks.sendNotesToActiveAgentSession.mockReset()
   mocks.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'sent' })
-  mocks.appendStructuredAgentSessionOutboxMessage.mockReset()
-  mocks.appendStructuredAgentSessionOutboxMessage.mockReturnValue({ clientMessageId: 'queued' })
-  mocks.relaunchFailedStructuredAgentSessionForMessage.mockReset()
+  mocks.sendStructuredAgentSessionMessage.mockReset()
+  mocks.sendStructuredAgentSessionMessage.mockReturnValue({
+    clientMessageId: 'sent',
+    outcome: Promise.resolve('recorded')
+  })
+  mocks.relaunchFailedStructuredAgentSessionWithMessage.mockClear()
   mocks.track.mockReset()
   mocks.toastMessage.mockReset()
   mocks.toastSuccess.mockReset()
@@ -197,6 +215,24 @@ describe('createUISlice agent send target mode', () => {
     })
   })
 
+  it('switches out of the activity view because send targets render on workspace cards', () => {
+    const store = createAgentSendStore()
+    seedAgentSendState(store)
+    store.getState().setSidebarBody('agents')
+
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+
+    expect(store.getState().sidebarBody).toBe('workspaces')
+    expect(store.getState().pendingRevealWorktree).toMatchObject({ worktreeId })
+  })
+
   it('disables sidebar target rows that need permission', async () => {
     const store = createAgentSendStore()
     seedAgentSendState(store)
@@ -282,6 +318,7 @@ describe('createUISlice agent send target mode', () => {
   it('sends to the live leaf PTY, runs delivery callback, tracks followup, and closes', async () => {
     const store = createAgentSendStore()
     const onPromptDelivered = vi.fn()
+    const onPromptHandedOff = vi.fn()
     seedAgentSendState(store)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
@@ -290,10 +327,15 @@ describe('createUISlice agent send target mode', () => {
       prompt: 'Review this',
       label: 'All unsent notes',
       launchSource: 'notes_send',
-      onPromptDelivered
+      onPromptDelivered,
+      onPromptHandedOff
     })
 
     await expect(store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)).resolves.toBe(true)
+
+    // The notes leave the next send for exactly this send's lifetime.
+    expect(onPromptHandedOff).toHaveBeenCalledOnce()
+    await expect(onPromptHandedOff.mock.calls[0][0]).resolves.toMatchObject({ status: 'sent' })
 
     expect(mocks.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
       worktreeId,
@@ -387,17 +429,41 @@ describe('createUISlice agent send target mode', () => {
 
     await expect(store.getState().sendPromptToSidebarAgentTarget(chatPaneKey)).resolves.toBe(true)
 
-    expect(mocks.appendStructuredAgentSessionOutboxMessage).toHaveBeenCalledWith(
-      'claude_1',
-      'Review this'
-    )
-    expect(mocks.relaunchFailedStructuredAgentSessionForMessage).toHaveBeenCalledWith(
+    expect(mocks.sendStructuredAgentSessionMessage).toHaveBeenCalledWith({
+      sessionId: 'claude_1',
+      target: { kind: 'local' },
+      text: 'Review this',
+      callerKeepsText: true
+    })
+    expect(mocks.relaunchFailedStructuredAgentSessionWithMessage).toHaveBeenCalledWith(
       worktreeId,
-      'claude_1'
+      'claude_1',
+      'Review this',
+      { callerKeepsText: true }
     )
     expect(mocks.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
     expect(onPromptDelivered).toHaveBeenCalledTimes(1)
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Sent to Claude')
+  })
+
+  it('sends nothing to a sidebar agent when every note is already on its way', async () => {
+    const store = createAgentSendStore()
+    const onPromptHandedOff = vi.fn()
+    seedAgentSendState(store)
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: '',
+      label: 'All unsent notes',
+      launchSource: 'notes_send',
+      onPromptHandedOff
+    })
+
+    await expect(store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)).resolves.toBe(false)
+
+    expect(mocks.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
+    expect(onPromptHandedOff).not.toHaveBeenCalled()
   })
 
   it('keeps target mode open and does not run delivery callback when send fails', async () => {

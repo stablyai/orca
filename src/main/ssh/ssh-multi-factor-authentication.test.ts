@@ -1,26 +1,74 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import type * as Os from 'node:os'
 import { join } from 'node:path'
 import {
+  BaseAgent,
   Client,
   Server as Ssh2Server,
   utils,
   type AuthContext,
   type Connection,
+  type IdentityCallback,
   type KeyboardAuthContext,
-  type PasswordAuthContext
+  type ParsedKey,
+  type PasswordAuthContext,
+  type SignCallback,
+  type SigningRequestOptions
 } from 'ssh2'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { SshResolvedConfig } from './ssh-config-parser'
-import { buildConnectConfig } from './ssh-connection-utils'
+import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
+import { buildConnectConfig, type BuildConnectConfigOptions } from './connection/ssh-connect-config'
+
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof Os>()
+  return { ...actual, homedir: vi.fn(() => actual.tmpdir()) }
+})
 
 // OpenSSH's default; a host that burns it disconnects before the MFA stage is reached.
 const MAX_AUTH_TRIES = 6
 const PASSWORD = 'stage-one-password'
 const PASSCODE = '123456'
 
-type AuthStage = 'password' | 'keyboard-interactive'
+type AuthStage = 'password' | 'keyboard-interactive' | 'publickey'
+
+function generatePrivateKey(): string {
+  return utils.generateKeyPairSync('ecdsa', { bits: 256 }).private
+}
+
+function parseFixtureKey(privateKey: string): ParsedKey {
+  const key = utils.parseKey(privateKey)
+  if (key instanceof Error || Array.isArray(key)) {
+    throw new Error('fixture key did not parse to a single key')
+  }
+  return key
+}
+
+/** An ssh-agent stand-in holding one key, so the agent rung can satisfy a publickey stage. */
+class SingleKeyAgent extends BaseAgent<ParsedKey> {
+  private readonly key = parseFixtureKey(generatePrivateKey())
+
+  getIdentities(callback: IdentityCallback<ParsedKey>): void {
+    callback(undefined, [this.key])
+  }
+
+  sign(
+    _pubKey: ParsedKey,
+    data: Buffer,
+    optionsOrCallback?: SigningRequestOptions | SignCallback,
+    callback?: SignCallback
+  ): void {
+    const options = typeof optionsOrCallback === 'function' ? {} : optionsOrCallback
+    const done = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
+    const signature = this.key.sign(data, options?.hash)
+    if (signature instanceof Error) {
+      done?.(signature)
+      return
+    }
+    done?.(undefined, signature)
+  }
+}
 
 type MfaServer = {
   port: number
@@ -28,8 +76,14 @@ type MfaServer = {
   close: () => Promise<void>
 }
 
-/** An OpenSSH-style `AuthenticationMethods a,b` host: each stage partial-succeeds into the next. */
-async function startMultiFactorServer(stages: AuthStage[]): Promise<MfaServer> {
+/**
+ * An OpenSSH-style `AuthenticationMethods a,b` host: each stage partial-succeeds into the next.
+ * A stage given as a list accepts any of its methods; `authorizedKey` limits publickey to one key.
+ */
+async function startMultiFactorServer(
+  stages: (AuthStage | AuthStage[])[],
+  authorizedKey?: ParsedKey
+): Promise<MfaServer> {
   const attempts: string[] = []
   const connections = new Set<Connection>()
   // Ed25519 keygen can produce an invalid 31-byte key; ECDSA points always start with 0x04.
@@ -40,7 +94,7 @@ async function startMultiFactorServer(stages: AuthStage[]): Promise<MfaServer> {
     connection.on('close', () => connections.delete(connection))
     let stage = 0
     let failures = 0
-    const remaining = (): AuthStage[] => [stages[stage]!]
+    const remaining = (): AuthStage[] => [stages[stage]!].flat()
     const fail = (context: AuthContext): void => {
       failures += 1
       if (failures >= MAX_AUTH_TRIES) {
@@ -55,13 +109,31 @@ async function startMultiFactorServer(stages: AuthStage[]): Promise<MfaServer> {
         context.reject(remaining(), false)
         return
       }
-      if (context.method !== stages[stage]) {
+      if (!remaining().some((method) => method === context.method)) {
         fail(context)
         return
       }
       if (context.method === 'password') {
         if ((context as PasswordAuthContext).password !== PASSWORD) {
           fail(context)
+          return
+        }
+        stage += 1
+        if (stage === stages.length) {
+          context.accept()
+          return
+        }
+        context.reject(remaining(), true)
+        return
+      }
+      if (context.method === 'publickey') {
+        if (authorizedKey && !authorizedKey.getPublicSSH().equals(context.key.data)) {
+          fail(context)
+          return
+        }
+        // Query phase: claim the key is acceptable so the client sends the signature.
+        if (!context.signature) {
+          context.accept()
           return
         }
         stage += 1
@@ -153,13 +225,15 @@ function connectWithOrcaConfig(
   target: SshTarget,
   resolved: SshResolvedConfig | null,
   password: string | undefined,
-  answers: string[]
+  answers: string[],
+  buildOptions: BuildConnectConfigOptions = { includeAgent: false, includePrivateKey: true },
+  agent?: BaseAgent
 ): { ready: Promise<void>; prompts: string[] } {
   const prompts: string[] = []
-  const config = buildConnectConfig(target, resolved, {
-    includeAgent: false,
-    includePrivateKey: true
-  })
+  const config = buildConnectConfig(target, resolved, buildOptions)
+  if (agent) {
+    config.agent = agent
+  }
   if (password != null) {
     config.password = password
   }
@@ -186,19 +260,11 @@ function connectWithOrcaConfig(
 describe('multi-stage SSH authentication', () => {
   let tempDir: string
   let keyPaths: string[]
-  let homeEnv: { HOME?: string; USERPROFILE?: string }
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-mfa-'))
-    // Why: the cases below pass `resolved: null`, so `resolvePrivateKeys` falls through to
-    // `findDefaultKeyFile`, which reads `~/.ssh/id_*` through `homedir()`. On a developer
-    // machine that picks up a real key, and an encrypted one makes ssh2 reject with
-    // "Cannot parse privateKey" before authentication is exercised at all. Hosted CI has no
-    // key, so this only ever failed locally. Pointing home at the fixture directory keeps
-    // default-key discovery inside the test's control on every machine.
-    homeEnv = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE }
-    process.env.HOME = tempDir
-    process.env.USERPROFILE = tempDir
+    // Default-key discovery must never read the developer's SSH credentials.
+    vi.mocked(homedir).mockReturnValue(tempDir)
     keyPaths = ['id_a', 'id_b'].map((name) => {
       const path = join(tempDir, name)
       writeFileSync(path, utils.generateKeyPairSync('ecdsa', { bits: 256 }).private)
@@ -207,14 +273,7 @@ describe('multi-stage SSH authentication', () => {
   })
 
   afterEach(() => {
-    for (const key of ['HOME', 'USERPROFILE'] as const) {
-      const previous = homeEnv[key]
-      if (previous === undefined) {
-        delete process.env[key]
-      } else {
-        process.env[key] = previous
-      }
-    }
+    vi.mocked(homedir).mockReturnValue(tmpdir())
     rmSync(tempDir, { recursive: true, force: true })
   })
 
@@ -265,5 +324,122 @@ describe('multi-stage SSH authentication', () => {
     } finally {
       await server.close()
     }
+  })
+
+  it('keeps the challenge on the agent-first attempt when the waiting ~/.ssh key is encrypted', async () => {
+    // Deferring here would only trade the password dialog for a passphrase one on the key retry.
+    mkdirSync(join(tempDir, '.ssh'))
+    writeFileSync(
+      join(tempDir, '.ssh', 'id_ed25519'),
+      utils.generateKeyPairSync('ecdsa', {
+        bits: 256,
+        passphrase: 'fixture-passphrase',
+        cipher: 'aes256-ctr',
+        rounds: 1
+      }).private
+    )
+    const server = await startMultiFactorServer(
+      [['publickey', 'keyboard-interactive']],
+      parseFixtureKey(generatePrivateKey())
+    )
+    try {
+      const { ready, prompts } = connectWithOrcaConfig(
+        makeTarget(server.port, { identityAgent: join(tempDir, 'agent.sock') }),
+        null,
+        undefined,
+        [PASSCODE],
+        { includeAgent: true },
+        new SingleKeyAgent()
+      )
+
+      await expect(ready).resolves.toBeUndefined()
+      expect(prompts).toEqual(['Duo passcode:'])
+    } finally {
+      await server.close()
+    }
+  })
+
+  describe('on the agent-first attempt, which defers ~/.ssh/id_ed25519 to the key retry', () => {
+    let deferredKey: ParsedKey
+
+    beforeEach(() => {
+      const privateKey = generatePrivateKey()
+      deferredKey = parseFixtureKey(privateKey)
+      mkdirSync(join(tempDir, '.ssh'))
+      writeFileSync(join(tempDir, '.ssh', 'id_ed25519'), privateKey)
+    })
+
+    it('holds a first-factor challenge back until the attempt that carries the deferred key', async () => {
+      // A host taking either a key or a keyboard-interactive password, where only the deferred key
+      // is authorized: a challenge on the agent-first attempt is a dialog the key makes unnecessary.
+      const server = await startMultiFactorServer(
+        [['publickey', 'keyboard-interactive']],
+        deferredKey
+      )
+      try {
+        const target = makeTarget(server.port, { identityAgent: join(tempDir, 'agent.sock') })
+        const agentFirst = connectWithOrcaConfig(
+          target,
+          null,
+          undefined,
+          [PASSCODE],
+          { includeAgent: true },
+          new SingleKeyAgent()
+        )
+        await expect(agentFirst.ready).rejects.toThrow(
+          'All configured authentication methods failed'
+        )
+        expect(agentFirst.prompts).toEqual([])
+
+        const keyRetry = connectWithOrcaConfig(target, null, undefined, [PASSCODE])
+        await expect(keyRetry.ready).resolves.toBeUndefined()
+        expect(keyRetry.prompts).toEqual([])
+      } finally {
+        await server.close()
+      }
+    })
+
+    it('answers the second factor after the agent key partially succeeds', async () => {
+      const server = await startMultiFactorServer(['publickey', 'keyboard-interactive'])
+      try {
+        const { ready, prompts } = connectWithOrcaConfig(
+          makeTarget(server.port, { identityAgent: join(tempDir, 'agent.sock') }),
+          null,
+          undefined,
+          [PASSCODE],
+          { includeAgent: true },
+          new SingleKeyAgent()
+        )
+
+        await expect(ready).resolves.toBeUndefined()
+        expect(prompts).toEqual(['Duo passcode:'])
+      } finally {
+        await server.close()
+      }
+    })
+
+    it('answers the second factor when the host first offered both a key and the challenge', async () => {
+      // ssh2 keeps the pre-agent list (publickey and keyboard-interactive) after the agent key
+      // partially succeeds, so only the agent's signature shows this challenge is a second factor.
+      const server = await startMultiFactorServer([
+        ['publickey', 'keyboard-interactive'],
+        'keyboard-interactive'
+      ])
+      try {
+        const { ready, prompts } = connectWithOrcaConfig(
+          makeTarget(server.port, { identityAgent: join(tempDir, 'agent.sock') }),
+          null,
+          undefined,
+          [PASSCODE],
+          { includeAgent: true },
+          new SingleKeyAgent()
+        )
+
+        await expect(ready).resolves.toBeUndefined()
+        expect(prompts).toEqual(['Duo passcode:'])
+      } finally {
+        await server.close()
+      }
+    })
   })
 })

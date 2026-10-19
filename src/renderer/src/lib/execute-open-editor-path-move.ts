@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
-import { renameRuntimePath, type RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { renameRuntimePath } from '@/runtime/runtime-file-mutation-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import {
   beginEditorPathMove,
@@ -13,8 +14,9 @@ import { verifyLatchedMoveDestinations } from '@/hooks/useEditorExternalWatch'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import {
   getExecutionHostIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin
 } from '@/lib/worktree-runtime-owner'
+import { documentFolderAccess } from '@/lib/local-file-access'
 
 let moveOperationCounter = 0
 
@@ -31,6 +33,8 @@ export async function executeOpenEditorPathMove(args: {
   toPath: string
   worktreeId: string
   worktreePath: string
+  /** The moved file is a user-named document: main allows any destination, and the move back. */
+  documentScoped?: boolean
 }): Promise<void> {
   const { context, fromPath, toPath, worktreeId, worktreePath } = args
   const operationId = `editor-move-${(moveOperationCounter += 1)}`
@@ -53,7 +57,7 @@ export async function executeOpenEditorPathMove(args: {
   const addScope = (wtId: string, owner: string | null): void => {
     scopes.set(`${wtId}::${owner ?? 'local'}`, { worktreeId: wtId, owner })
   }
-  addScope(worktreeId, getRuntimeEnvironmentIdForWorktree(moveState, worktreeId))
+  addScope(worktreeId, runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(moveState, worktreeId))
   for (const f of affected) {
     addScope(f.worktreeId, f.runtimeEnvironmentId?.trim() || null)
   }
@@ -73,7 +77,12 @@ export async function executeOpenEditorPathMove(args: {
   await Promise.all(affected.map((f) => requestEditorSaveQuiesce({ fileId: f.id })))
 
   try {
-    await renameRuntimePath(context, fromPath, toPath)
+    await renameRuntimePath(
+      context,
+      fromPath,
+      toPath,
+      args.documentScoped ? documentFolderAccess(fromPath) : undefined
+    )
   } catch (err) {
     // Rename never landed — release the source suppression immediately.
     for (const subOperationId of ownerSubOps) {
@@ -107,7 +116,12 @@ export async function executeOpenEditorPathMove(args: {
       // still-open source session isn't stranded pointing at a vanished path.
       let rollbackError: unknown
       try {
-        await renameRuntimePath(context, toPath, fromPath)
+        await renameRuntimePath(
+          context,
+          toPath,
+          fromPath,
+          args.documentScoped ? documentFolderAccess(toPath) : undefined
+        )
       } catch (err) {
         rollbackError = err
       }

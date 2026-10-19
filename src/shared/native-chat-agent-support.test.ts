@@ -15,6 +15,9 @@ describe('resolveNativeChatTranscriptAgent', () => {
   it('passes codex, grok and omp through and rejects everything else', () => {
     expect(resolveNativeChatTranscriptAgent('opencode')).toBe('opencode')
     expect(resolveNativeChatTranscriptAgent('opencode2')).toBe('opencode')
+    // ZCode keeps an OpenCode-v1-shaped history in its own SQLite DB, so its
+    // transcripts read through the OpenCode SQLite reader.
+    expect(resolveNativeChatTranscriptAgent('zcode')).toBe('opencode')
     expect(resolveNativeChatTranscriptAgent('codex')).toBe('codex')
     expect(resolveNativeChatTranscriptAgent('grok')).toBe('grok')
     expect(resolveNativeChatTranscriptAgent('omp')).toBe('omp')
@@ -28,6 +31,7 @@ describe('isNativeChatSupportedAgent', () => {
   it('recognizes the parseable agents and rejects unknown / nullish input', () => {
     expect(isNativeChatSupportedAgent('opencode')).toBe(true)
     expect(isNativeChatSupportedAgent('opencode2')).toBe(true)
+    expect(isNativeChatSupportedAgent('zcode')).toBe(true)
     expect(isNativeChatSupportedAgent('claude')).toBe(true)
     expect(isNativeChatSupportedAgent('openclaude')).toBe(true)
     expect(isNativeChatSupportedAgent('omp')).toBe(true)
@@ -43,6 +47,7 @@ describe('nativeChatRequiresLocalTranscript', () => {
     // native chat has to find their file on a disk this process can read.
     expect(nativeChatRequiresLocalTranscript('opencode')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('opencode2')).toBe(true)
+    expect(nativeChatRequiresLocalTranscript('zcode')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('grok')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('omp')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('claude')).toBe(false)

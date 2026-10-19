@@ -1,8 +1,26 @@
 import type { Duplex } from 'node:stream'
 import type { BrowserNetworkExecutionRouteResolver } from './browser-network-execution-route'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
+import type { SshTargetSummary } from '../../shared/ssh-types'
 import { openExecutionRouteSocketAsDuplex } from './execution-route-socket-duplex'
 import { RemoteBrowserSocksServer } from './remote-browser-socks-server'
+
+export function requireLocalSshBrowserRouteTarget(
+  targets: readonly Pick<SshTargetSummary, 'id' | 'generation'>[] | undefined,
+  targetId: string,
+  expectedGeneration?: unknown
+): void {
+  const target = targets?.find((entry) => entry.id === targetId)
+  if (!target) {
+    throw new Error('browser_local_route_target_invalid')
+  }
+  if (
+    expectedGeneration !== undefined &&
+    (typeof expectedGeneration !== 'number' || target.generation !== expectedGeneration)
+  ) {
+    throw new Error('browser_local_route_target_stale')
+  }
+}
 
 export type LocalSshBrowserRouteDependencies = {
   resolveExecutionRoute: BrowserNetworkExecutionRouteResolver

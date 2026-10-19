@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 /**
  * The pane a caller reserves for the terminal `agent.launch` creates.
  *
@@ -13,17 +14,17 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 import { RpcDispatcher } from '../dispatcher'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
 import {
   CAPABLE_CLIENT,
   STRUCTURED_PREFERENCE,
   methodNamed,
   rpcContext,
   runtimeStub,
+  setAgentLaunchRecordStore,
   type AgentLaunchRuntimeStub as RuntimeStub
 } from './agent-launch.test-fixture'
 
@@ -74,6 +75,19 @@ describe('a launch into an existing workspace', () => {
       leafId: LEAF_ID,
       requireFreshPane: true
     })
+  })
+
+  // An AI button's click names no operation: the host writes no record for it, so a record store
+  // that cannot open never stops it.
+  it('starts a reserved pane with no operation id even when the launch record cannot open', async () => {
+    setAgentLaunchRecordStore(null)
+    const runtime = runtimeStub({ settings: TERMINAL_ONLY })
+
+    const result = await launch({ ...EXISTING_LAUNCH, paneKey: PANE_KEY }, runtime)
+
+    expect(result.outcome.kind).toBe('terminal')
+    expect(terminalOptions(runtime)).toMatchObject({ tabId: TAB_ID, leafId: LEAF_ID })
+    expect(runtime.openAgentSessionRecordStore).not.toHaveBeenCalled()
   })
 
   it('leaves the pane to the runtime when the caller reserved none', async () => {
@@ -222,12 +236,11 @@ describe('a live-pane refusal under a named operation', () => {
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'orca-agent-launch-pane-'))
     store = await openTestAgentSessionRecordStore(directory)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `deps.store` is the only member `agent.launch` reads, and a member it omits throws on call.
-    setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
+    setAgentLaunchRecordStore(store)
   })
 
   afterEach(async () => {
-    setStructuredAgentSessionHost(null)
+    setAgentLaunchRecordStore(null)
     await rm(directory, { recursive: true, force: true })
   })
 
@@ -257,6 +270,15 @@ describe('a live-pane refusal under a named operation', () => {
     const retry = runtimeStub({ settings: TERMINAL_ONLY })
     await expect(launch(params, retry)).rejects.toThrow('agent_launch_pane_already_live')
     expect(retry.createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('repeats a coded refusal in its own words on a retry', async () => {
+    const params = { ...EXISTING_LAUNCH, operationId: OPERATION_ID }
+    const words = 'No agent was started. WSL is not available.'
+    const first = runtimeStub({ settings: TERMINAL_ONLY })
+    first.createTerminal.mockRejectedValue(new OrchestrationError('repair_required', words))
+    await expect(launch(params, first)).rejects.toThrow(words)
+    await expect(launch(params, runtimeStub({ settings: TERMINAL_ONLY }))).rejects.toThrow(words)
   })
 
   it('answers agent.launchReplay with the refusal code, not operation_unknown', async () => {
@@ -291,11 +313,21 @@ describe('a live-pane refusal under a named operation', () => {
 
     const response = await dispatch(runtime, 'agent.launchReplay', params)
 
-    expect(runtime.createTerminal).toHaveBeenCalledTimes(1)
+    expect(runtime.createTerminal).toHaveBeenNthCalledWith(
+      1,
+      'id:wt-new',
+      expect.objectContaining({ startupAgent: 'claude' })
+    )
+    expect(runtime.createTerminal).toHaveBeenNthCalledWith(2, 'id:wt-new', {
+      surfaceOwner: false
+    })
     expect(response).toMatchObject({
       ok: false,
       error: { code: 'agent_session_operation_unknown' }
     })
     expect(outcomeOf(OPERATION_ID)?.status).toBe('unknown')
+    expect(await dispatch(runtime, 'agent.launchReplay', params)).toMatchObject(response)
+    expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
+    expect(runtime.createTerminal).toHaveBeenCalledTimes(2)
   })
 })

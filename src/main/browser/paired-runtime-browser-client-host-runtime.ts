@@ -1,12 +1,13 @@
+import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../shared/browser-client-profile-switch-protocol'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { app } from 'electron'
 import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../shared/browser-client-automation-protocol'
 import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../shared/browser-client-file-channel-protocol'
 import type { BrowserClientHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
-import type { PairingOffer } from '../../shared/pairing'
+import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import {
-  getPreferredPairingOffer,
+  getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
 import { BrowserClientNetworkRouteRegistry } from './browser-client-network-route-registry'
@@ -51,7 +52,7 @@ export type ClientHostRouteIdentity = {
 }
 
 type ProductionBrowserClientHostStart = PairedRuntimeBrowserClientHostStart & {
-  pairing: PairingOffer
+  connection: PairedRuntimeConnection
   orcaProfileId: string
   authorityConnectionIdentity: string
   legacyAuthorityConnectionIdentity: string
@@ -87,7 +88,7 @@ const browserClientHosts =
         onClosing: routes.release,
         initialInput: input,
         createRoutes: (next, authority) =>
-          createNetworkRoutes(next.pairing, authority, next.storageScope, input.environmentId),
+          createNetworkRoutes(next.connection, authority, next.storageScope, input.environmentId),
         createExecutor: (next, { retainNetworkRoute, onPageUnavailable }) => {
           executor = new BrowserClientPageCommandExecutor({
             orcaProfileId: next.orcaProfileId,
@@ -112,11 +113,12 @@ const browserClientHosts =
           { handler, getPageInventory, onAuthority, onTransportLost, onReconnected, onError }
         ) => {
           const host = new PairedRuntimeBrowserClientHost({
-            pairing: next.pairing,
+            connection: next.connection,
             authorityRuntimeId: next.authorityRuntimeId,
             browserHostClientId: getBrowserClientHostId(),
             hostCapabilities: [
               'webview',
+              BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY,
               BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
               BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY
             ],
@@ -156,7 +158,7 @@ export async function startPairedRuntimeBrowserClientHost(options: {
     throw new Error('paired_runtime_browser_client_host_profile_unavailable')
   }
   const pairingRevision = options.environment.pairingRevision ?? options.environment.createdAt
-  const pairing = getPreferredPairingOffer(options.environment)
+  const connection = getPreferredPairedRuntimeConnection(options.environment)
   const storageScope = deriveBrowserRoutePartitionStorageScope({
     orcaProfileId,
     environmentId: options.environment.id
@@ -168,7 +170,7 @@ export async function startPairedRuntimeBrowserClientHost(options: {
       orcaProfileId,
       options.environment.id,
       pairingRevision,
-      pairing
+      connection
     ),
     // Why: settings-level operations target the server's own machine, not a nested SSH/WSL host.
     executionHostIdentity: browserAuthorityExecutionHostStorageIdentity(storageScope),
@@ -177,7 +179,7 @@ export async function startPairedRuntimeBrowserClientHost(options: {
       options.environment.id,
       pairingRevision,
       options.authorityRuntimeId,
-      pairing
+      connection
     ),
     legacyExecutionHostIdentity: legacyBrowserNativeExecutionHostStorageIdentity(
       options.authorityRuntimeId
@@ -187,7 +189,7 @@ export async function startPairedRuntimeBrowserClientHost(options: {
     environmentId: options.environment.id,
     pairingRevision,
     authorityRuntimeId: options.authorityRuntimeId,
-    pairing,
+    connection,
     orcaProfileId,
     storageScope: routeIdentity.storageScope,
     environmentLabel: options.environment.name,
@@ -207,6 +209,14 @@ export function getPairedRuntimeBrowserClientRouteIdentity(
   environmentId: string
 ): ClientHostRouteIdentity | null {
   return clientHostRouteIdentities.get(environmentId) ?? null
+}
+
+/** Whether this desktop renders `browserPageId` for `environmentId` as a client-placed page. */
+export function pairedRuntimeBrowserClientHostsPage(
+  environmentId: string,
+  browserPageId: string
+): boolean {
+  return browserClientHosts.hostsPage(environmentId, browserPageId)
 }
 
 export function closePairedRuntimeBrowserClientHostEnvironment(
@@ -235,7 +245,7 @@ export function shutdownPairedRuntimeBrowserClientHosts(): Promise<void> {
 }
 
 function createNetworkRoutes(
-  pairing: PairingOffer,
+  connection: PairedRuntimeConnection,
   authority: BrowserClientHostLeaseAuthority,
   authorityStorageKey: string,
   environmentId: string
@@ -245,7 +255,7 @@ function createNetworkRoutes(
     authorityStorageKey,
     createRoute: (executionHost) =>
       new PairedRuntimeBrowserNetworkRoute({
-        pairing,
+        connection,
         lease: authority,
         executionHost,
         executionHostRevision: executionHost.kind === 'native' ? executionHost.revision : 0,
@@ -269,15 +279,15 @@ function authorityConnectionIdentity(
   orcaProfileId: string,
   environmentId: string,
   pairingRevision: number,
-  pairing: PairingOffer
+  connection: PairedRuntimeConnection
 ): string {
   return connectionIdentityDigest([
     'paired-runtime-browser',
     orcaProfileId,
     environmentId,
     pairingRevision,
-    pairing.publicKeyB64,
-    pairing.pairedDeviceId ?? null
+    connection.hostPublicKeyB64,
+    connection.pairedDeviceId ?? null
   ])
 }
 
@@ -287,7 +297,7 @@ function legacyAuthorityConnectionIdentity(
   environmentId: string,
   pairingRevision: number,
   authorityRuntimeId: string,
-  pairing: PairingOffer
+  connection: PairedRuntimeConnection
 ): string {
   return connectionIdentityDigest([
     'paired-runtime-browser',
@@ -295,8 +305,8 @@ function legacyAuthorityConnectionIdentity(
     environmentId,
     pairingRevision,
     authorityRuntimeId,
-    pairing.publicKeyB64,
-    pairing.pairedDeviceId ?? null
+    connection.hostPublicKeyB64,
+    connection.pairedDeviceId ?? null
   ])
 }
 

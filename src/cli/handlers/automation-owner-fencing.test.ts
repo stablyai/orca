@@ -11,7 +11,7 @@ function clientAnsweringShow(owner: unknown): { call: ReturnType<typeof vi.fn> }
   const call = vi.fn(async (method: string) =>
     method === 'automation.show'
       ? ok(owner === undefined ? { automation: { id: 'a1' } } : { automation: { id: 'a1' }, owner })
-      : ok({ automation: { id: 'a1' }, removed: true, id: 'a1', run: { id: 'r1' } })
+      : ok({ automation: { id: 'a1' }, removed: true, id: 'a1', run: { id: 'r1' }, runs: [] })
   )
   return { call }
 }
@@ -88,6 +88,6 @@ describe('CLI automation mutations carry the owner they read', () => {
     })
 
     expect(call).toHaveBeenCalledTimes(1)
-    expect(call).toHaveBeenCalledWith('automation.runs', { automationId: 'a1' })
+    expect(call).toHaveBeenCalledWith('automation.runs', { automationId: 'a1', limit: 25 })
   })
 })

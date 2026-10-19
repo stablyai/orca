@@ -23,7 +23,6 @@ describe('agent completion coordinator process-exit turn boundary', () => {
       paneKey,
       statusLane: 'pty',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(async () => result),
       dispatchCompletion: ptyDispatch,
       isLive: () => true
@@ -48,7 +47,6 @@ describe('agent completion coordinator process-exit turn boundary', () => {
       paneKey,
       statusLane: 'hook',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(async () => processResult(null)),
       dispatchCompletion,
       isLive: () => true

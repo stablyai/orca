@@ -7,7 +7,6 @@ import {
 } from '../../../../shared/terminal-stream-protocol'
 import { sendSnapshotFrames } from './terminal/terminal-snapshot-publication'
 import { publishMultiplexInitialSnapshot } from './terminal/terminal-multiplex-initial-snapshot'
-import { TerminalSourceRangeRegistry } from '../terminal-source-range-registry'
 import { initializeMultiplexStream } from './terminal/terminal-multiplex-stream-initialization'
 import type { TerminalMultiplexConnection } from './terminal/terminal-multiplex-connection'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -115,7 +114,6 @@ describe('terminal stream extraction characterization', () => {
       terminal: 'terminal',
       ptyId: 'pty',
       isMobile: false,
-      ackOutputSourceRanges: false,
       supportsOutputPause: false,
       pendingOutput: [{ data: 'lost-live', bytes: 9 }],
       pendingOutputBytes: 9,
@@ -178,14 +176,11 @@ describe('terminal stream extraction characterization', () => {
 
   it('lets a slot-handler registration throw escape before per-stream catch ownership begins', async () => {
     const streams = new Map()
-    const runtime = {
-      attachRemoteTerminalSourceRangeConsumer: vi.fn(() => false)
-    } as unknown as OrcaRuntimeService
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration throws before initialization reads any other connection member.
     const state = {
-      runtime,
+      runtime: {},
       connectionId: 'connection',
       streams,
-      sourceRangeRegistry: new TerminalSourceRangeRegistry(),
       registerBinaryStreamHandler: vi.fn(() => {
         throw new Error('registrar-failed')
       }),

@@ -2,19 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import type * as NodeFs from 'node:fs'
+import type * as NodeFsPromises from 'node:fs/promises'
+import type * as JsonlLineOffsets from '../usage/jsonl-line-offsets'
 import { join } from 'node:path'
 
-const { getPathMock, homedirMock, streamReads, onStreamOpen } = vi.hoisted(() => {
-  const streamReads: { path: string; bytes: number; start: number; bounded: boolean }[] = []
+const { getPathMock, homedirMock, streamReads, onStreamOpen, parsingPaths } = vi.hoisted(() => {
+  const streamReads: { path: string; bytes: number; start: number; digest: boolean }[] = []
   // Seam for mutating the tree mid-scan, between two files' parse reads.
-  const onStreamOpen: { current: ((path: string, bounded: boolean) => void) | null } = {
+  const onStreamOpen: { current: ((path: string, digest: boolean) => void) | null } = {
     current: null
   }
   return {
     getPathMock: vi.fn<(name: string) => string>(),
     homedirMock: vi.fn<() => string>(),
     streamReads,
-    onStreamOpen
+    onStreamOpen,
+    parsingPaths: new Set<string>()
   }
 })
 
@@ -44,25 +47,101 @@ vi.mock('node:fs', async () => {
       const filePath = String(path)
       const range = typeof options === 'object' && options !== null ? options : {}
       const start = range.start ?? 0
-      const size = actual.statSync(filePath).size
-      const stop = range.end === undefined ? size : Math.min(size, range.end + 1)
-      streamReads.push({
-        path: filePath,
-        bytes: Math.max(0, stop - start),
-        start,
-        bounded: range.end !== undefined
+      const read = { path: filePath, bytes: 0, start, digest: !parsingPaths.has(filePath) }
+      streamReads.push(read)
+      onStreamOpen.current?.(filePath, read.digest)
+      const stream = actual.createReadStream(path, options)
+      stream.on('data', (chunk: string | Buffer) => {
+        read.bytes += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length
       })
-      onStreamOpen.current?.(filePath, range.end !== undefined)
-      return actual.createReadStream(path, options)
+      return stream
     }
   }
 })
 
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync, appendFileSync } from 'node:fs'
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof NodeFsPromises>('node:fs/promises')
+  return {
+    ...actual,
+    open: async (...args: Parameters<typeof actual.open>) => {
+      const handle = await actual.open(...args)
+      const createStream = handle.createReadStream.bind(handle)
+      const readWindow = handle.read.bind(handle)
+      let streamActive = false
+      vi.spyOn(handle, 'read').mockImplementation(async (...readArgs) => {
+        if (streamActive) {
+          return readWindow(...readArgs)
+        }
+        const filePath = String(args[0])
+        const digest = !parsingPaths.has(filePath)
+        onStreamOpen.current?.(filePath, digest)
+        const result = await readWindow(...readArgs)
+        const position = readArgs.at(-1)
+        streamReads.push({
+          path: filePath,
+          bytes: result.bytesRead,
+          start: typeof position === 'number' ? position : 0,
+          digest
+        })
+        return result
+      })
+      vi.spyOn(handle, 'createReadStream').mockImplementation((options) => {
+        const filePath = String(args[0])
+        const read = {
+          path: filePath,
+          bytes: 0,
+          start: options?.start ?? 0,
+          digest: !parsingPaths.has(filePath)
+        }
+        streamReads.push(read)
+        onStreamOpen.current?.(filePath, read.digest)
+        streamActive = true
+        const stream = createStream(options)
+        const finish = (): void => {
+          streamActive = false
+        }
+        stream.once('end', finish)
+        stream.once('close', finish)
+        stream.on('data', (chunk: string | Buffer) => {
+          read.bytes += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length
+        })
+        return stream
+      })
+      return handle
+    }
+  }
+})
+
+vi.mock('../usage/jsonl-line-offsets', async () => {
+  const actual = await vi.importActual<typeof JsonlLineOffsets>('../usage/jsonl-line-offsets')
+  return {
+    ...actual,
+    readJsonlLinesFromOffset: async function* (
+      ...args: Parameters<typeof actual.readJsonlLinesFromOffset>
+    ) {
+      parsingPaths.add(args[0])
+      try {
+        yield* actual.readJsonlLinesFromOffset(...args)
+      } finally {
+        parsingPaths.delete(args[0])
+      }
+    }
+  }
+})
+
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+  appendFileSync
+} from 'node:fs'
 import { scanCodexUsageFiles } from './scanner'
 import type { CodexUsagePersistedFile } from './types'
 
-/** Mirrors BOUNDARY_WINDOW_BYTES in codex-rollout-resume-state.ts. */
+/** Mirrors the checkpoint window in jsonl-file-checkpoint.ts. */
 const BOUNDARY_WINDOW_BYTES = 4096
 
 /** Enough records (~377 B each) to put a prefix past MIN_RESUMABLE_PREFIX_BYTES.
@@ -148,12 +227,10 @@ function bytesReadFor(filePath: string): number {
     .reduce((total, entry) => total + entry.bytes, 0)
 }
 
-/** Offsets at which this file's parse reads opened, in order. Bounded reads are
- *  digest windows; an unbounded one at 0 is a full reparse and at the recorded
- *  offset is a resume, so this says exactly which path a scan took. */
+/** Digest and parse streams both have end bounds; the iterator marks parse reads. */
 function parseReadOffsets(filePath: string): number[] {
   return streamReads
-    .filter((entry) => entry.path === filePath && !entry.bounded)
+    .filter((entry) => entry.path === filePath && !entry.digest)
     .map((entry) => entry.start)
 }
 
@@ -195,6 +272,7 @@ beforeEach(() => {
   mkdirSync(sessionsDir, { recursive: true })
   streamReads.length = 0
   onStreamOpen.current = null
+  parsingPaths.clear()
 })
 
 afterEach(() => {
@@ -231,14 +309,13 @@ describe('scanCodexUsageFiles incremental append', () => {
     expect(totalTokens(second.dailyAggregates)).toBe(202)
     expect(second.sessions[0]?.eventCount).toBe(202)
 
-    // The defect: the scanner restarts at byte 0 and re-reads the whole file.
-    // The fix reads the appended bytes plus five bounded windows: a head and a
-    // boundary window to plan the resume, both again at the point of use so a
-    // rollout replaced in between cannot be stitched onto, then the moved
-    // boundary to record the new resume point.
+    // Eleven windows prove the planned prefix, opened snapshot and final checkpoint.
     expect(reparsedFromStart(rolloutPath)).toBe(false)
     expect(bytesReadFor(rolloutPath)).toBeLessThan(sizeBeforeAppend)
-    expect(bytesReadFor(rolloutPath)).toBeLessThanOrEqual(appendedBytes + 5 * BOUNDARY_WINDOW_BYTES)
+    expect(bytesReadFor(rolloutPath)).toBeGreaterThan(appendedBytes)
+    expect(bytesReadFor(rolloutPath)).toBeLessThanOrEqual(
+      appendedBytes + 11 * BOUNDARY_WINDOW_BYTES
+    )
   })
 
   it('carries cumulative token totals across the resume boundary', async () => {
@@ -379,10 +456,8 @@ describe('scanCodexUsageFiles incremental append', () => {
 
     appendFileSync(rolloutPath, usageRecordRange(RESUMABLE_RECORDS, RESUMABLE_RECORDS + 2), 'utf-8')
     const truncated = `${sessionMeta('session-shrinker')}${usageRecordRange(0, 5)}`
-    onStreamOpen.current = (path, bounded) => {
-      // Bounded reads are the digest windows; the unbounded one is the parse
-      // read, which opens after every check this scan is going to make.
-      if (path === rolloutPath && !bounded) {
+    onStreamOpen.current = (path, digest) => {
+      if (path === rolloutPath && !digest) {
         onStreamOpen.current = null
         writeFileSync(path, truncated, 'utf-8')
       }
@@ -429,10 +504,10 @@ describe('scanCodexUsageFiles incremental append', () => {
     const replacement = `${sessionMeta('session-other')}${usageRecordRange(200, 260)}`
     // Past the recorded offset, so every digest window still reads its full size.
     expect(Buffer.byteLength(replacement)).toBeGreaterThan(resumeOffset)
-    onStreamOpen.current = (path, bounded) => {
+    onStreamOpen.current = (path, digest) => {
       // Lands while the earlier-sorted rollout is being parsed, which is after
       // the scanner's discovery loop verified every file's prefix.
-      if (path === driverPath && !bounded) {
+      if (path === driverPath && !digest) {
         onStreamOpen.current = null
         writeFileSync(targetPath, replacement, 'utf-8')
       }
@@ -459,6 +534,8 @@ describe('scanCodexUsageFiles incremental append', () => {
     const original = `${sessionMeta('session-a')}${usageRecordRange(0, RESUMABLE_RECORDS)}`
     writeFileSync(rolloutPath, original, 'utf-8')
 
+    // Keep the rewrite observable on filesystems whose clock has not ticked yet.
+    utimesSync(rolloutPath, 1, 1)
     const first = await scanCodexUsageFiles([], [])
     expect(totalTokens(first.dailyAggregates)).toBe(RESUMABLE_RECORDS)
     expect(recordedResumeOffset(first.processedFiles, rolloutPath)).toBeGreaterThan(0)
@@ -469,6 +546,7 @@ describe('scanCodexUsageFiles incremental append', () => {
     writeFileSync(rolloutPath, replacement, 'utf-8')
     expect(statSync(rolloutPath).size).toBe(original.length)
 
+    expect(statSync(rolloutPath).mtimeMs).not.toBe(first.processedFiles[0]?.mtimeMs)
     const second = await scanCodexUsageFiles([], first.processedFiles)
     const fromScratch = await scanCodexUsageFiles([], [])
     expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)
@@ -541,12 +619,15 @@ describe('scanCodexUsageFiles incremental append', () => {
     expect(original.length - sharedHead.length).toBeLessThan(BOUNDARY_WINDOW_BYTES)
     writeFileSync(rolloutPath, original, 'utf-8')
 
+    // Keep the rewrite observable on filesystems whose clock has not ticked yet.
+    utimesSync(rolloutPath, 1, 1)
     const first = await scanCodexUsageFiles([], [])
     expect(totalTokens(first.dailyAggregates)).toBe(swappedTo)
     expect(recordedResumeOffset(first.processedFiles, rolloutPath)).toBeGreaterThan(0)
 
     writeFileSync(rolloutPath, replacement, 'utf-8')
 
+    expect(statSync(rolloutPath).mtimeMs).not.toBe(first.processedFiles[0]?.mtimeMs)
     const second = await scanCodexUsageFiles([], first.processedFiles)
     const fromScratch = await scanCodexUsageFiles([], [])
     expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)
@@ -561,12 +642,15 @@ describe('scanCodexUsageFiles incremental append', () => {
     const { original, replacement } = prefixSwapPair('session-prefix-rotated')
     writeFileSync(rolloutPath, original, 'utf-8')
 
+    // Keep the rewrite observable on filesystems whose clock has not ticked yet.
+    utimesSync(rolloutPath, 1, 1)
     const first = await scanCodexUsageFiles([], [])
     expect(totalTokens(first.dailyAggregates)).toBe(40)
 
     rmSync(rolloutPath)
     writeFileSync(rolloutPath, replacement, 'utf-8')
 
+    expect(statSync(rolloutPath).mtimeMs).not.toBe(first.processedFiles[0]?.mtimeMs)
     const second = await scanCodexUsageFiles([], first.processedFiles)
     const fromScratch = await scanCodexUsageFiles([], [])
     expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)
@@ -581,6 +665,8 @@ describe('scanCodexUsageFiles incremental append', () => {
     const { original, replacement } = prefixSwapPair('session-prefix-in-place')
     writeFileSync(rolloutPath, original, 'utf-8')
 
+    // Keep the rewrite observable on filesystems whose clock has not ticked yet.
+    utimesSync(rolloutPath, 1, 1)
     const first = await scanCodexUsageFiles([], [])
     expect(totalTokens(first.dailyAggregates)).toBe(40)
 
@@ -589,6 +675,7 @@ describe('scanCodexUsageFiles incremental append', () => {
     // Pins why this test is not a duplicate of the rotation case above.
     expect(statSync(rolloutPath).ino).toBe(inodeBefore)
 
+    expect(statSync(rolloutPath).mtimeMs).not.toBe(first.processedFiles[0]?.mtimeMs)
     const second = await scanCodexUsageFiles([], first.processedFiles)
     const fromScratch = await scanCodexUsageFiles([], [])
     expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)

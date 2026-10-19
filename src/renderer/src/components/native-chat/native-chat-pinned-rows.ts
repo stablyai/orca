@@ -14,6 +14,9 @@ export type NativeChatPinnedRowsInput = {
   /** Row holding a diff the transcript was asked to reveal; it has to be mounted
    *  for its card to expand and report where to scroll. */
   revealIndex?: number | null
+  /** Row drawing the "New" marker: mounted wherever the window sits, so it can bring itself
+   *  into view when the reader returns and hear them start to answer. */
+  newRowsMarkerIndex?: number | null
 }
 
 /** Indexes that stay mounted outside the window.
@@ -24,15 +27,18 @@ export type NativeChatPinnedRowsInput = {
  *  a turn streams. */
 export function nativeChatPinnedRowIndexes({
   count,
-  revealIndex
+  revealIndex,
+  newRowsMarkerIndex
 }: NativeChatPinnedRowsInput): ReadonlySet<number> {
   const pinned = new Set<number>()
   if (count <= 0) {
     return pinned
   }
   pinned.add(count - 1)
-  if (revealIndex != null && revealIndex >= 0 && revealIndex < count) {
-    pinned.add(revealIndex)
+  for (const index of [revealIndex, newRowsMarkerIndex]) {
+    if (index != null && index >= 0 && index < count) {
+      pinned.add(index)
+    }
   }
   return pinned
 }

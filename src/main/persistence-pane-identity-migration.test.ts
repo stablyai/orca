@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
+import { agentHookServer } from './agent-hooks/server'
 
 import {
   TEST_LEAF_1,
@@ -24,7 +25,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -67,6 +68,7 @@ describe('Store', () => {
   })
 
   afterEach(async () => {
+    agentHookServer.stop()
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })

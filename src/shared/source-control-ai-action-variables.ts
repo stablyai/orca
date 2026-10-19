@@ -1,14 +1,11 @@
-import type { SourceControlActionId } from './source-control-ai-actions'
+import type { AiActionId } from './source-control-ai-actions'
 
 /**
  * Registering a variable a hover card cannot describe is a compile error: the
  * element type is keyed off `SOURCE_CONTROL_ACTION_VARIABLE_INFO`, so chips can
  * never index a missing entry.
  */
-export const SOURCE_CONTROL_ACTION_VARIABLES: Record<
-  SourceControlActionId,
-  SourceControlActionVariable[]
-> = {
+export const SOURCE_CONTROL_ACTION_VARIABLES: Record<AiActionId, SourceControlActionVariable[]> = {
   commitMessage: ['basePrompt', 'branch', 'stagedFiles', 'stagedPatch', 'linkedIssue'],
   pullRequest: [
     'basePrompt',
@@ -22,6 +19,7 @@ export const SOURCE_CONTROL_ACTION_VARIABLES: Record<
     'linkedIssue'
   ],
   branchName: ['basePrompt', 'firstPrompt', 'assistantMessage'],
+  conversationName: ['basePrompt', 'firstPrompt'],
   fixCommitFailure: ['basePrompt'],
   fixPushFailure: ['basePrompt'],
   fixChecks: ['basePrompt'],
@@ -79,7 +77,7 @@ export const SOURCE_CONTROL_ACTION_VARIABLE_INFO = {
     example: 'diff --git a/src/app.ts b/src/app.ts\n+renderSourceControlActionCommandTemplate()'
   },
   firstPrompt: {
-    description: 'The first user request that created the Orca workspace.',
+    description: 'The first user request for this workspace or chat.',
     example: 'Fix CI and commit the result'
   },
   assistantMessage: {

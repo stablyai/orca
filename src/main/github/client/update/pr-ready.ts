@@ -1,3 +1,4 @@
+import { invalidateReviewLookupsAfterPRMutation } from '../../pr-mutation-review-invalidation'
 import {
   acquire,
   classifyPullRequestUpdateError,
@@ -30,6 +31,7 @@ export async function markPRReadyForReview(
       ['pr', 'ready', String(prNumber), '--repo', `${ownerRepo.owner}/${ownerRepo.repo}`],
       ghOptions
     )
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =

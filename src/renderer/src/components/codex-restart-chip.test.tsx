@@ -75,30 +75,6 @@ describe('CodexRestartChip pane ownership', () => {
     expect(container.textContent).not.toContain('old-one@example.com')
   })
 
-  it('uses configuration wording for a home-route restart', async () => {
-    useAppStore.setState({
-      codexRestartNoticeByPtyId: {
-        [PTY_ONE]: {
-          previousAccountLabel: 'System default',
-          nextAccountLabel: 'System default',
-          previousAccountId: null,
-          nextAccountId: null,
-          homeRouteChanged: true
-        }
-      }
-    })
-
-    await act(async () => {
-      root.render(<CodexRestartChip ptyId={PTY_ONE} />)
-    })
-
-    expect(container.textContent).toContain('Codex setup changed')
-    expect(container.textContent).toContain('This Codex session is using an outdated configuration')
-    expect(container.textContent).toContain(
-      'Restart this session to load your current Codex configuration.'
-    )
-  })
-
   it('restarts only the pane whose action was clicked', async () => {
     useAppStore.setState({
       codexRestartNoticeByPtyId: {
@@ -128,7 +104,7 @@ describe('CodexRestartChip pane ownership', () => {
 
     expect(returnFocus).toHaveBeenCalledOnce()
     const state = useAppStore.getState()
-    expect(state.pendingCodexPaneRestartIds).toEqual({ [PTY_ONE]: true })
+    expect(state.pendingPaneAccountRestarts).toEqual({ [PTY_ONE]: 'codex' })
     expect(state.codexRestartNoticeByPtyId[PTY_ONE]?.restartRequested).toBe(true)
     expect(state.codexRestartNoticeByPtyId[PTY_TWO]).toEqual(
       notice('old-two@example.com', 'new-two@example.com')
@@ -194,8 +170,8 @@ describe('CodexRestartChip pane ownership', () => {
       button(container, 'Restart').click()
     })
 
-    expect(useAppStore.getState().pendingCodexPaneRestartIds).toEqual({ [PTY_TWO]: true })
-    expect(useAppStore.getState().pendingCodexPaneRestartIds[PTY_ONE]).toBeUndefined()
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ [PTY_TWO]: 'codex' })
+    expect(useAppStore.getState().pendingPaneAccountRestarts[PTY_ONE]).toBeUndefined()
   })
 
   it('stays hidden after this pane answers while a sibling remains unanswered', async () => {
@@ -252,7 +228,7 @@ describe('CodexRestartChip pane ownership', () => {
       )
     })
 
-    expect(useAppStore.getState().pendingCodexPaneRestartIds).toEqual({})
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
     expect(useAppStore.getState().codexRestartNoticeByPtyId[PTY_ONE]).toEqual(
       notice('old@example.com', 'new@example.com')
     )
@@ -303,7 +279,7 @@ describe('CodexRestartChip pane focus', () => {
       expect(returnFocus).toHaveBeenCalledOnce()
       if (action !== 'restart') {
         expect(forgetStalePanes).toHaveBeenCalledExactlyOnceWith({ ptyIds: [PTY_ONE] })
-        expect(useAppStore.getState().pendingCodexPaneRestartIds).toEqual({})
+        expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
       }
     }
   )

@@ -8,7 +8,7 @@ let userDataDir: string
 
 const { removeHostTreeMock, deleteWslFishHistoryFileMock } = vi.hoisted(() => ({
   removeHostTreeMock: vi.fn<(dir: string) => Promise<void>>(),
-  deleteWslFishHistoryFileMock: vi.fn<(distro: string, session: string) => Promise<void>>()
+  deleteWslFishHistoryFileMock: vi.fn<(distro: string, session: string) => Promise<string | void>>()
 }))
 
 vi.mock('./host-tree-removal', () => ({
@@ -29,6 +29,10 @@ import {
   HISTORY_TREE_REMOVAL_RETRY_DELAYS_MS,
   schedulePendingHistoryTreeRemovals
 } from './terminal-history-deletion'
+import {
+  _resetWslBackgroundDistroGateForTests,
+  noteWslDistrosRunning
+} from './wsl-background-distro-gate'
 
 // Captured before any fake clock replaces the global: refilling the removal queue reads the
 // tombstone directory for real, and only a turn of the actual event loop can land that read.
@@ -57,6 +61,7 @@ describe('tombstoned history removal retries', () => {
 
   afterEach(() => {
     cancelPendingHistoryTreeRemovalRetries()
+    _resetWslBackgroundDistroGateForTests()
     vi.useRealTimers()
     rmSync(userDataDir, { recursive: true, force: true })
   })
@@ -136,6 +141,7 @@ describe('tombstoned history removal retries', () => {
 
     for (let pass = 0; removeHostTreeMock.mock.calls.length < 1_000; pass++) {
       expect(pass).toBeLessThan(200)
+      await vi.waitFor(() => expect(releases.length).toBeGreaterThan(0))
       releases.splice(0).forEach((release) => release())
       await vi.advanceTimersByTimeAsync(0)
       await settleTombstoneDirectoryReads()
@@ -212,6 +218,36 @@ describe('tombstoned history removal retries', () => {
 
     expect(deleteWslFishHistoryFileMock).toHaveBeenCalled()
     expect(removeHostTreeMock).toHaveBeenCalled()
+    expect(readdirSync(join(distroRoot, '.pending-delete'))).toHaveLength(0)
+  })
+
+  it('keeps the tombstone while its distro is stopped and finishes once the distro runs', async () => {
+    const distroRoot = join(userDataDir, 'terminal-history-wsl', 'Ubuntu')
+    mkdirSync(distroRoot, { recursive: true })
+    deleteWslFishHistoryFileMock.mockResolvedValueOnce('distro-stopped')
+    const worktreeId = 'repo-1::/path/stopped-distro'
+    const dir = join(distroRoot, hashWorktreeId(worktreeId))
+    mkdirSync(dir, { recursive: true })
+    const fishSession = fishHistorySessionName(hashWorktreeId(worktreeId))
+    writeFileSync(join(dir, 'meta.json'), JSON.stringify({ worktreeId, fishSession }))
+
+    deleteWorktreeHistoryDir(worktreeId)
+    await flushPendingWorktreeHistoryDeletions()
+
+    expect(removeHostTreeMock).not.toHaveBeenCalled()
+    expect(readdirSync(join(distroRoot, '.pending-delete'))).toHaveLength(1)
+
+    // A rescan must not re-probe a tombstone that already waits for its distro.
+    await schedulePendingHistoryTreeRemovals(distroRoot)
+    await settleTombstoneDirectoryReads()
+    expect(deleteWslFishHistoryFileMock).toHaveBeenCalledTimes(1)
+
+    deleteWslFishHistoryFileMock.mockResolvedValue('deleted')
+    noteWslDistrosRunning(['ubuntu'])
+    await flushPendingWorktreeHistoryDeletions()
+
+    expect(deleteWslFishHistoryFileMock).toHaveBeenLastCalledWith('Ubuntu', fishSession)
+    expect(removeHostTreeMock).toHaveBeenCalledTimes(1)
     expect(readdirSync(join(distroRoot, '.pending-delete'))).toHaveLength(0)
   })
 })

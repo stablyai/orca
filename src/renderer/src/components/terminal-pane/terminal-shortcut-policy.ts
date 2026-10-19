@@ -69,6 +69,19 @@ export type TerminalShortcutAction =
   | { type: 'switchInputSource' }
 
 /**
+ * `ESC CR` is both Orca's legacy Shift+Enter and xterm's Alt+Enter, and pi reads it as
+ * one or the other depending on whether ITS kitty query was answered, which the pane
+ * cannot observe (STA-7701, pi-0-74-*-esc-cr fixtures). An app that armed
+ * modifyOtherKeys decodes xterm's `CSI 27 ; mod ; 13 ~` the same way in both states.
+ */
+function encodeModifyOtherKeysEnter(
+  getModifyOtherKeys: (() => number) | undefined,
+  modifier: 2 | 3
+): string | null {
+  return (getModifyOtherKeys?.() ?? 0) > 0 ? `\x1b[27;${modifier};13~` : null
+}
+
+/**
  * Resolves terminal keyboard events before xterm receives them, centralizing
  * Orca shortcuts and terminal byte fallbacks in one platform-aware policy.
  */
@@ -92,7 +105,9 @@ export function resolveTerminalShortcutAction(
   // Why: terminal-first yields editing and TUI chords before xterm encodes them.
   terminalShortcutPolicy: TerminalShortcutPolicy = 'orca-first',
   // Why: query-only Droid/Grok consumers need CSI-u even when the live kitty flags remain inactive.
-  hasCtrlEnterCsiUAuthority?: () => boolean
+  hasCtrlEnterCsiUAuthority?: () => boolean,
+  // Why: pi arms modifyOtherKeys when its kitty query goes unanswered; see encodeModifyOtherKeysEnter.
+  getModifyOtherKeysActivePane?: () => number
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
   const matchOptions: KeybindingMatchOptions = { context: 'terminal', terminalShortcutPolicy }
@@ -174,7 +189,28 @@ export function resolveTerminalShortcutAction(
     const hasTrustedWindowsCsiU = windowsHost && getWindowsShiftEnterEncoding?.() === 'csi-u'
     // Why: CSI-u is application input, not universal; without trusted Windows evidence, require active KKP negotiation.
     const canSendCsiU = hasTrustedWindowsCsiU || (getKittyKeyboardFlagsActivePane?.() ?? 0) > 0
-    return { type: 'sendInput', data: canSendCsiU ? '\x1b[13;2u' : '\x1b\r' }
+    if (canSendCsiU) {
+      return { type: 'sendInput', data: '\x1b[13;2u' }
+    }
+    return {
+      type: 'sendInput',
+      data: encodeModifyOtherKeysEnter(getModifyOtherKeysActivePane, 2) ?? '\x1b\r'
+    }
+  }
+
+  if (
+    !event.metaKey &&
+    !event.ctrlKey &&
+    event.altKey &&
+    !event.shiftKey &&
+    event.key === 'Enter' &&
+    (getKittyKeyboardFlagsActivePane?.() ?? 0) === 0
+  ) {
+    // Why: without modifyOtherKeys, xterm's own `ESC CR` stays the Alt+Enter encoding.
+    const data = encodeModifyOtherKeysEnter(getModifyOtherKeysActivePane, 3)
+    if (data) {
+      return { type: 'sendInput', data }
+    }
   }
 
   if (

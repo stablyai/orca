@@ -1,5 +1,6 @@
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
-import type { useAppStore } from '@/store'
+import { useAppStore } from '@/store'
+import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { OpenFile } from '@/store/slices/editor'
 import {
   getOpenFilesForExternalFileChange,
@@ -10,6 +11,9 @@ import {
 } from './editor-autosave'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { isReloadableSingleFileDiffTab } from './editor-panel-diff-reload'
+import { createEditorWatcherReloadCoalescer } from './editor-watcher-reload-coalescer'
+import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
+import { hasRecentSelfWrite } from './editor-self-write-registry'
 
 type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewMode']
 
@@ -63,6 +67,45 @@ export function useEditorPanelExternalContentEvents({
   setDiffContents
 }: UseEditorPanelExternalContentEventsParams): void {
   useEffect(() => {
+    const reloads = createEditorWatcherReloadCoalescer()
+    // Why: a coalesced follow-up starts later; re-check the tab. A closed tab is skipped; one that
+    // left the screen is marked stale so its queued change reloads on reveal; one edited meanwhile
+    // keeps its draft but records that disk moved, so autosave can't silently overwrite it.
+    const resolveReloadTarget = (fileId: string): OpenFile | 'stale' | null => {
+      const file = openFilesRef.current.find((candidate) => candidate.id === fileId)
+      if (!file) {
+        return null
+      }
+      if (file.isDirty) {
+        if (!hasRecentSelfWrite(file.filePath, file.runtimeEnvironmentId)) {
+          markFileChangedOnDisk(useAppStore.getState(), file, {
+            connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
+            origin: 'live'
+          })
+        }
+        return 'stale'
+      }
+      return isVisibleRef.current && file.id === activeContentFileIdRef.current ? file : 'stale'
+    }
+    const runContentReload = async (fileId: string, eventGeneration: number): Promise<void> => {
+      const target = resolveReloadTarget(fileId)
+      if (target === 'stale') {
+        invalidateContent([fileId])
+      } else if (target) {
+        await loadFileContent(target.filePath, target.id, target.worktreeId, target.relativePath, {
+          force: true,
+          externalEventGeneration: eventGeneration
+        })
+      }
+    }
+    const runDiffReload = async (fileId: string, eventGeneration: number): Promise<void> => {
+      const target = resolveReloadTarget(fileId)
+      if (target === 'stale') {
+        invalidateDiffContent([fileId])
+      } else if (target) {
+        await loadDiffContent(target, { force: true, externalEventGeneration: eventGeneration })
+      }
+    }
     const handler = (event: Event): void => {
       const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
       if (!detail) {
@@ -85,23 +128,14 @@ export function useEditorPanelExternalContentEvents({
         if (file.mode === 'edit' || file.mode === 'markdown-preview') {
           // Why: external writes must replace any in-flight pre-change read so
           // the tab shows the new on-disk content, not a stale dedupe result.
-          void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath, {
-            force: true,
-            externalEventGeneration: eventGeneration
-          })
+          reloads.run(`content:${file.id}`, () => runContentReload(file.id, eventGeneration))
           if (editorViewModeRef.current[file.id] === 'changes') {
-            void loadDiffContent(file, {
-              force: true,
-              externalEventGeneration: eventGeneration
-            })
+            reloads.run(`diff:${file.id}`, () => runDiffReload(file.id, eventGeneration))
           } else {
             invalidatedDiffFileIds.push(file.id)
           }
         } else if (isReloadableSingleFileDiffTab(file)) {
-          void loadDiffContent(file, {
-            force: true,
-            externalEventGeneration: eventGeneration
-          })
+          reloads.run(`diff:${file.id}`, () => runDiffReload(file.id, eventGeneration))
         }
       }
       if (invalidatedFileIds.length > 0) {
@@ -112,8 +146,10 @@ export function useEditorPanelExternalContentEvents({
       }
     }
     window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
-    return () =>
+    return () => {
+      reloads.dispose()
       window.removeEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
+    }
   }, [
     activeContentFileIdRef,
     editorViewModeRef,

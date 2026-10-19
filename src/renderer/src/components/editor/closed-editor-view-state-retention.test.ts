@@ -42,7 +42,10 @@ function open(path: string, text = 'original') {
     'plaintext',
     monaco.Uri.parse(toEditorModelUri(path))
   )
-  const store = createStore(() => ({ openFiles: [file] }))
+  const store = createStore(() => ({
+    openFiles: [file],
+    worktreesByRepo: { fixture: [{ id: 'fixture', repoId: 'fixture', hostId: 'local' as const }] }
+  }))
   const bridge = createEditorModelRegistry()
   disposeOwners.push(bridge.register(monaco), attachClosedEditorTabCleanup(store, bridge))
   return {

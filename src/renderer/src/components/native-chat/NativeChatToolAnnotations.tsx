@@ -20,7 +20,7 @@ export function NativeChatToolName({
   return identity ? (
     <span title={name} className="inline-flex min-w-0 items-center gap-1.5">
       <span className="truncate">{identity.server}</span>
-      <span className="font-normal text-muted-foreground">/</span>
+      <span className="font-normal text-chat-foreground-faint">/</span>
       <span className="truncate font-normal">{identity.tool}</span>
     </span>
   ) : (
@@ -41,7 +41,7 @@ export function NativeChatCommandMetadata({
     return null
   }
   return (
-    <span className="flex shrink-0 gap-1.5 font-mono text-[11px] text-muted-foreground">
+    <span className="ml-auto flex shrink-0 gap-1.5 font-sans text-xs tabular-nums text-chat-foreground-faint">
       {exitCode !== undefined ? (
         <span className={cn(exitCode !== 0 && 'text-destructive')}>
           {translate('components.native-chat.tool.exitCode', 'exit {{value0}}', {
@@ -66,7 +66,7 @@ export function NativeChatSearchResults({
     return null
   }
   return (
-    <ul className="ml-5 space-y-0.5 text-xs">
+    <ul className="space-y-0.5 rounded-lg border border-chat-code-border bg-chat-code-surface p-2 font-mono text-xs text-chat-foreground">
       {hits.map((hit) => (
         <li key={hit.url} className="min-w-0">
           <a
@@ -74,7 +74,7 @@ export function NativeChatSearchResults({
             target="_blank"
             rel="noreferrer"
             title={hit.url}
-            className="block truncate text-foreground/80 underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="block truncate text-chat-foreground underline underline-offset-2 hover:text-chat-foreground-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={(event) => {
               event.stopPropagation()
               onLinkClick?.(event, hit.url)
@@ -88,7 +88,7 @@ export function NativeChatSearchResults({
           >
             {hit.title}
             {hit.title !== hit.url ? (
-              <span className="ml-1.5 text-[11px] text-muted-foreground">{hit.url}</span>
+              <span className="ml-1.5 text-xs text-chat-foreground-faint">{hit.url}</span>
             ) : null}
           </a>
         </li>

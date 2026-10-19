@@ -7,8 +7,9 @@ import { pipeline } from 'node:stream/promises'
 import { createGunzip } from 'node:zlib'
 import { SKILL_PACKAGE_MAX_COMPRESSED_BYTES } from '../../shared/skill-package-manifest'
 import { createDeterministicGzipStore } from './skill-package-deterministic-gzip'
+import { buildUstarEntryHeader, USTAR_BLOCK_BYTES, ustarPaddingBytes } from '../ustar-entry-header'
 
-const TAR_BLOCK_BYTES = 512
+const TAR_BLOCK_BYTES = USTAR_BLOCK_BYTES
 const TAR_EXPANDED_LIMIT = 40 * 1024 * 1024
 
 export type SkillTarWriteEntry = {
@@ -25,54 +26,11 @@ export type SkillTarReadEntry = {
   executable: boolean
 }
 
-function writeField(header: Buffer, offset: number, length: number, value: string): void {
-  const bytes = Buffer.from(value, 'utf8')
-  if (bytes.length > length) {
-    throw new Error('skill-package-tar-path-limit')
-  }
-  bytes.copy(header, offset)
-}
-
-function writeOctal(header: Buffer, offset: number, length: number, value: number): void {
-  const encoded = value.toString(8).padStart(length - 1, '0')
-  if (encoded.length > length - 1) {
-    throw new Error('skill-package-tar-number-limit')
-  }
-  writeField(header, offset, length, `${encoded}\0`)
-}
-
-function splitTarPath(path: string): { name: string; prefix: string } {
-  if (Buffer.byteLength(path, 'utf8') <= 100) {
-    return { name: path, prefix: '' }
-  }
-  for (let index = path.lastIndexOf('/'); index > 0; index = path.lastIndexOf('/', index - 1)) {
-    const prefix = path.slice(0, index)
-    const name = path.slice(index + 1)
-    if (Buffer.byteLength(prefix, 'utf8') <= 155 && Buffer.byteLength(name, 'utf8') <= 100) {
-      return { name, prefix }
-    }
-  }
-  throw new Error('skill-package-tar-path-limit')
-}
-
 function tarHeader(entry: SkillTarWriteEntry): Buffer {
-  const header = Buffer.alloc(TAR_BLOCK_BYTES)
-  const { name, prefix } = splitTarPath(entry.path)
-  writeField(header, 0, 100, name)
-  writeOctal(header, 100, 8, entry.executable ? 0o755 : 0o644)
-  writeOctal(header, 108, 8, 0)
-  writeOctal(header, 116, 8, 0)
-  writeOctal(header, 124, 12, entry.size)
-  writeOctal(header, 136, 12, 0)
-  header.fill(0x20, 148, 156)
-  header[156] = '0'.charCodeAt(0)
-  writeField(header, 257, 6, 'ustar')
-  writeField(header, 263, 2, '00')
-  writeField(header, 345, 155, prefix)
-  const checksum = header.reduce((sum, byte) => sum + byte, 0)
-  const checksumText = checksum.toString(8).padStart(6, '0')
-  writeField(header, 148, 8, `${checksumText}\0 `)
-  return header
+  return buildUstarEntryHeader(
+    { path: entry.path, size: entry.size, mode: entry.executable ? 0o755 : 0o644, type: 'file' },
+    'skill-package'
+  )
 }
 
 async function writeWithBackpressure(stream: Writable, bytes: Buffer): Promise<void> {
@@ -127,7 +85,7 @@ export async function writeSkillTarGzip(
       } else {
         throw new Error('skill-package-source-required')
       }
-      const padding = (TAR_BLOCK_BYTES - (entry.size % TAR_BLOCK_BYTES)) % TAR_BLOCK_BYTES
+      const padding = ustarPaddingBytes(entry.size)
       if (padding > 0) {
         await writeWithBackpressure(gzip, Buffer.alloc(padding))
       }
@@ -262,6 +220,8 @@ export async function openSkillTarGzip(archivePath: string): Promise<{
     }
   })
   const gunzip = createGunzip()
+  // Observe late aborts before the archive reader starts.
+  gunzip.on('error', () => undefined)
   const completion = pipeline(source, verifier, gunzip)
   const archiveIdentity = completion.then(() => ({
     archiveSha256: archiveHash.digest('hex'),

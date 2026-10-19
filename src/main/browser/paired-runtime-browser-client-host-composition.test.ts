@@ -518,6 +518,7 @@ function createRig(
       return true
     }),
     hasUnresolvedPage: vi.fn(() => false),
+    hostsPage: vi.fn(() => false),
     beginAuthorityTransition: vi.fn(() => {
       order.push('fence-authority-transition')
     }),

@@ -3,14 +3,17 @@ import type { EditorSlice } from '../types/editor-slice'
 import type { EditorTabSelection, OpenFile } from '../types/open-file'
 import { resolveEditorOpenTargetGroupId } from './editor-open-target-group'
 import { areEditorPreviewTabsEnabled } from './editor-preview-tab-setting'
-import { isEditorTabContentType } from './editor-tab-content-type'
+import { isEditorTabContentType, type EditorTabContentType } from './editor-tab-content-type'
+import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { recordOpenedEditorTabInLayoutOwner } from './editor-tab-layout-owner'
 
 export function openWorkspaceEditorItem(
   state: AppState,
   fileId: string,
   worktreeId: string,
   label: string,
-  contentType: 'editor' | 'diff' | 'conflict-review' | 'check-details',
+  contentType: EditorTabContentType,
   isPreview?: boolean,
   targetGroupId?: string,
   selection: EditorTabSelection = 'focus'
@@ -34,14 +37,24 @@ export function openWorkspaceEditorItem(
       return existing.id
     }
   }
+  const file =
+    contentType === 'editor'
+      ? state.openFiles.find((entry) => entry.id === fileId && entry.worktreeId === worktreeId)
+      : undefined
   const created = state.createUnifiedTab?.(worktreeId, contentType, {
     entityId: fileId,
     label,
     isPreview,
+    // The tab follows the captured file owner even when another host has UI focus.
+    ...(file ? { executionHostId: getOpenFileExecutionHostId(file) } : {}),
     ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {}),
     ...(selection === 'none' ? { activate: false } : {}),
     ...(selection === 'background' ? { recordFocus: false } : {})
   })
+  // Switch point: main records the tab the window just drew, under its ids.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && created) {
+    recordOpenedEditorTabInLayoutOwner(state, created)
+  }
   return created?.id ?? fileId
 }
 export function getReplaceablePreviewFileId(

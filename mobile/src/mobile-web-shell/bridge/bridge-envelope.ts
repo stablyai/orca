@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../../src/shared/zod-salvage'
 import { NODE_PLATFORM_NAMES } from '../../transport/mobile-runtime-host-platform'
+import { RpcEnvelopeFieldsSchema } from '../../transport/rpc-envelope-fields'
 import { isRpcResponse } from '../../transport/rpc-response-shape'
 import type { RpcResponse } from '../../transport/types'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
@@ -18,7 +19,8 @@ export {
   BRIDGE_FOREGROUND_NUDGE_REASONS,
   BRIDGE_ID_PATTERN,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
-  BRIDGE_PROTOCOL_VERSION
+  BRIDGE_PROTOCOL_VERSION,
+  BRIDGE_RPC_ENVELOPE_GRANT
 } from './bridge-frame-fields'
 import {
   isPageStorageKey,
@@ -121,7 +123,7 @@ export const BridgeInitStorageSchema = z
   )
   .refine((entries) => Object.keys(entries).length <= PAGE_STORAGE_MAX_ENTRIES)
 
-/** Pinned against `SendRequestOptions` in this module's test. */
+/** Pinned against `SendRequestOptions` in this module's test; its `envelope` is a frame field. */
 export const BridgeSendRequestOptionsSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
   budgetSpansConnect: z.boolean().optional(),
@@ -179,7 +181,9 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
     // Absent stays absent: `sendRequest(method)` and `sendRequest(method, undefined)` are different
     // calls to the recorder, so the host replays the arity the page used.
     params: z.unknown().optional(),
-    options: BridgeSendRequestOptionsSchema.optional()
+    options: BridgeSendRequestOptionsSchema.optional(),
+    // Verbatim like a reply's `payload`, bounded by the frame caps `params` already has.
+    envelope: RpcEnvelopeFieldsSchema.optional()
   }),
   z.object({
     v: versionSchema,
@@ -187,7 +191,8 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
     id: idSchema,
     method: methodSchema,
     params: z.unknown(),
-    wantsBinary: z.boolean().optional()
+    wantsBinary: z.boolean().optional(),
+    envelope: RpcEnvelopeFieldsSchema.optional()
   }),
   z.object({
     v: versionSchema,
@@ -313,7 +318,9 @@ const BridgeHostMessageSchema = z.union([
      * behaviour, an older page ignores it. The grant grammar is the manifest's own, so a name the
      * bundle could not have declared cannot arrive here either.
      */
-    pageRouteGrants: BridgePageRouteGrantsSchema.optional()
+    pageRouteGrants: BridgePageRouteGrantsSchema.optional(),
+    /** The page owns the wide host area and draws the sidebar; absent, it never does. Additive. */
+    ownsHostArea: salvagedOptional('ownsHostArea', z.boolean()).optional()
   })
 ])
 

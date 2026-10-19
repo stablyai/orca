@@ -4,6 +4,7 @@
 import {
   agentSessionFailureFact,
   providerDiagnosticOf,
+  type AgentSessionArgumentProblem,
   type SubmissionRejectionFact,
   type AgentSessionFailureKind,
   type ProviderDiagnostic
@@ -19,14 +20,24 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire-refusals'
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
+import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
+import { argumentProblemOf } from '../structured-agent-arguments-error'
+import { codexInstallationProblemOf } from '../../codex/codex-cli-installation-error'
 
 /** Start refusals whose situation is itself what the person reads, with its own next step. */
 const TYPED_START_REFUSALS = [
   'notSignedIn',
+  'cliMissing',
   'historyTooLarge',
   'managedAccountEnvOverride',
   'accountSwitchInProgress',
-  'managedAccountUnsupported'
+  'managedAccountUnsupported',
+  'launchFolderMissing',
+  'historyInOtherAccount',
+  'claudeAccountFolderMissing',
+  'claudeAccountSetupFailed',
+  'agentCommandNotRunnable',
+  'runtimeNotInstalled'
 ] as const satisfies readonly (AgentSessionFailureKind &
   AgentSessionRefusalReason<'agent_session_operation_invalid'>)[]
 
@@ -63,15 +74,30 @@ export function providerExitObserved(error: unknown, depth = 0): boolean {
  *  adapter observed says the provider stopped; anything else blames no one — it may be Orca's, or
  *  a spawn that failed. Either keeps the provider's diagnostic when the error carried one. */
 export function providerStartupFailureFact(cause?: unknown): SubmissionRejectionFact {
+  const codexInstallation = codexInstallationProblemOf(cause)
+  if (codexInstallation) {
+    return agentSessionFailureFact('startFailed', {
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'attachFailed', codexInstallation }
+      }
+    })
+  }
   const typed = typedStartRefusal(
     cause instanceof AgentSessionAcquisitionRefusal ? cause.reason : undefined
   )
   if (typed) {
-    return agentSessionFailureFact(typed)
+    return agentSessionFailureFact(typed, {
+      ...(cause instanceof AgentSessionAcquisitionRefusal ? { account: cause.account } : {}),
+      detail: providerDiagnosticOf(cause)
+    })
+  }
+  if (providerExecutableMissing(cause)) {
+    return agentSessionFailureFact('cliMissing')
   }
   return agentSessionFailureFact(
     providerExitObserved(cause) ? 'providerStartFailed' : 'startFailed',
-    { detail: providerDiagnosticOf(cause) }
+    { detail: providerDiagnosticOf(cause), argumentProblem: argumentProblemOf(cause) }
   )
 }
 
@@ -92,17 +118,23 @@ function startupFailureFromExit(
 function refusedStartFailureFact(
   cause: Extract<StructuredAgentSessionStartFailureCause, { refusal: unknown }>
 ): SubmissionRejectionFact {
-  const { refusal, diagnostic } = cause
+  const { refusal, diagnostic, argumentProblem } = cause
   const reason = refusal.details?.reason
   const typed = typedStartRefusal(reason)
   if (typed) {
-    return agentSessionFailureFact(typed)
+    return agentSessionFailureFact(typed, {
+      ...(refusal.code === 'agent_session_operation_invalid'
+        ? { account: refusal.details?.account }
+        : {}),
+      detail: diagnostic
+    })
   }
   if (reason === 'providerStartFailed') {
     return agentSessionFailureFact('providerStartFailed', { detail: diagnostic })
   }
   return agentSessionFailureFact(cause.newSession ? 'startFailed' : 'restartFailed', {
     detail: diagnostic,
+    argumentProblem,
     refusal: agentSessionRefusalReference(refusal)
   })
 }
@@ -111,7 +143,12 @@ function refusedStartFailureFact(
 export type StructuredAgentSessionStartFailureCause =
   /** The session could not be made ready; the provider's words, if any, are kept host-side, off
    *  the refusal. `newSession`: one that never ran, so it failed to start rather than restart. */
-  | { refusal: AgentSessionWireRefusal; diagnostic?: ProviderDiagnostic; newSession?: true }
+  | {
+      refusal: AgentSessionWireRefusal
+      diagnostic?: ProviderDiagnostic
+      argumentProblem?: AgentSessionArgumentProblem
+      newSession?: true
+    }
   /** A start that threw, or an adapter's own startup failure; any diagnostic it carries. */
   | { error: unknown }
   /** The child ended before it proved its start, as its ended event told it. */
@@ -158,6 +195,7 @@ export function structuredAgentSessionStartFailure(
 ): StructuredAgentSessionStartFailureWords {
   return agentSessionFailureWords(structuredAgentSessionStartFailureFact(cause), {
     ...context,
+    ...('refusal' in cause && cause.newSession ? { messageSubmitted: false } : {}),
     surface: 'rejection'
   })
 }

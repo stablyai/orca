@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
@@ -42,8 +43,8 @@ function AgentDashboardDrawerBody({
 
   // In-window ack/reveal act on the local store directly — the pop-out's IPC
   // relay is gated to the pop-out renderer and would reject calls from here.
-  const handleAckAgent = useCallback((paneKey: string) => {
-    useAppStore.getState().acknowledgeAgents([paneKey])
+  const handleAckAgent = useCallback((paneKey: string, intent: AgentSubjectReadIntent) => {
+    useAppStore.getState().acknowledgeAgents([paneKey], undefined, intent)
   }, [])
   const handleRevealAgent = useCallback(
     (args: AgentRevealArgs) => {

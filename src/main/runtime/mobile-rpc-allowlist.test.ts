@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ALL_RPC_METHODS } from './rpc/methods'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-method-allowlist'
 
 const MOBILE_DYNAMIC_RPC_METHODS = [
   // Why: computed sendRequest method names do not appear as literals in the
@@ -43,6 +44,13 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   'agentSession.history',
   'agentSession.hold',
   'agentSession.release'
+]
+
+// Why: only a page built with ORCA_SIDEBAR_INPUTS=main calls these, and only such a host serves them.
+const MOBILE_SIDEBAR_INPUTS_RPC_METHODS = [
+  'sidebarInputs.read',
+  'sidebarInputs.repoIcons',
+  'ui.setCollapsed'
 ]
 
 const MOBILE_STREAMING_CLEANUP_RPC_METHODS = [
@@ -97,19 +105,13 @@ function mobileLiteralRpcMethods(): string[] {
 }
 
 function mobileRpcMethods(): string[] {
-  return [...new Set([...mobileLiteralRpcMethods(), ...MOBILE_DYNAMIC_RPC_METHODS])].sort()
+  return [...new Set([...mobileLiteralRpcMethods(), ...MOBILE_DYNAMIC_RPC_METHODS])]
+    .filter((method) => !MOBILE_SIDEBAR_INPUTS_RPC_METHODS.includes(method))
+    .sort()
 }
 
-function mobileRpcAllowlist(): Set<string> {
-  const source = readFileSync(
-    join(process.cwd(), 'src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-allowlist.ts'),
-    'utf8'
-  )
-  const allowlist = source.match(/const MOBILE_RPC_METHOD_ALLOWLIST = new Set\(\[([\s\S]*?)\]\)/)
-  if (!allowlist) {
-    throw new Error('MOBILE_RPC_METHOD_ALLOWLIST not found')
-  }
-  return new Set([...allowlist[1]!.matchAll(/'([^']+)'/g)].map((match) => match[1]!))
+function mobileRpcAllowlist(): ReadonlySet<string> {
+  return MOBILE_RPC_METHOD_ALLOWLIST
 }
 
 function registeredRuntimeMethods(): Set<string> {
@@ -117,6 +119,29 @@ function registeredRuntimeMethods(): Set<string> {
 }
 
 describe('mobile RPC allowlist', () => {
+  it('grants Jira reads while keeping credentials, writes, and desktop site selection private', () => {
+    const allowed = mobileRpcAllowlist()
+    for (const method of [
+      'jira.status',
+      'jira.listIssues',
+      'jira.searchIssues',
+      'jira.getIssue',
+      'jira.issueComments'
+    ]) {
+      expect(allowed.has(method), method).toBe(true)
+    }
+    for (const method of [
+      'jira.connect',
+      'jira.disconnect',
+      'jira.selectSite',
+      'jira.createIssue',
+      'jira.updateIssue',
+      'jira.addIssueComment'
+    ]) {
+      expect(allowed.has(method), method).toBe(false)
+    }
+  })
+
   it('allows every RPC method used by the mobile app', () => {
     // Why: mobile-scoped runtime tokens are checked before dispatch. A mobile
     // feature can compile and still fail at runtime if its method is missing here.
@@ -133,6 +158,30 @@ describe('mobile RPC allowlist', () => {
     const missing = mobileRpcMethods().filter((method) => !registered.has(method))
 
     expect(missing).toEqual([])
+  })
+
+  it('allows and registers the sidebar feed the phone reads only in a switched-on build', async () => {
+    expect(mobileLiteralRpcMethods()).toEqual(
+      expect.arrayContaining(MOBILE_SIDEBAR_INPUTS_RPC_METHODS)
+    )
+    for (const method of MOBILE_SIDEBAR_INPUTS_RPC_METHODS) {
+      expect(mobileRpcAllowlist().has(method)).toBe(false)
+    }
+    vi.resetModules()
+    vi.doMock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
+    try {
+      const { MOBILE_RPC_METHOD_ALLOWLIST: switchedOn } =
+        await import('./runtime-rpc/runtime-rpc-mobile-method-allowlist')
+      const { ALL_RPC_METHODS: switchedOnMethods } = await import('./rpc/methods')
+      const registered = new Set<string>(switchedOnMethods.map((method) => method.name))
+      for (const method of MOBILE_SIDEBAR_INPUTS_RPC_METHODS) {
+        expect(switchedOn.has(method)).toBe(true)
+        expect(registered.has(method)).toBe(true)
+      }
+    } finally {
+      vi.doUnmock('../../shared/sidebar-inputs-switch')
+      vi.resetModules()
+    }
   })
 
   it('allows every cleanup RPC for mobile streaming subscriptions', () => {
@@ -163,6 +212,8 @@ describe('mobile RPC allowlist', () => {
       'agentSession.cancel',
       'agentSession.queuedMessageSend',
       'agentSession.queuedMessageDelete',
+      'agentSession.queuedMessageUpdate',
+      'agentSession.queuedMessageEditHold',
       'agentSession.queuedMessagesResume',
       'agentSession.close',
       'agentSession.respondToApproval',
@@ -174,11 +225,25 @@ describe('mobile RPC allowlist', () => {
       'agentSession.conversationCommand',
       'agentSession.commands',
       'agentSession.history',
+      'agentSession.currentRequests',
       'agentSession.subscribe',
       'agentSession.unsubscribe',
+      'agentSession.subscribeStatus',
+      'agentSession.readVisual',
       'agentSession.hold',
       'agentSession.release'
     ])
     expect(mobileRpcAllowlist().has('agentSession.attach')).toBe(false)
+  })
+
+  it('lets a phone upload chat attachments but not read the store back', () => {
+    expect(
+      [...mobileRpcAllowlist()].filter((method) => method.startsWith('agentSessionAttachment.'))
+    ).toEqual([
+      'agentSessionAttachment.uploadStart',
+      'agentSessionAttachment.uploadAppend',
+      'agentSessionAttachment.uploadCommit',
+      'agentSessionAttachment.uploadAbort'
+    ])
   })
 })

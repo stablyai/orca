@@ -293,7 +293,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const statPath = vi.fn(async () => ({ mtimeMs: 20_000 }))
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      { kind: 'ssh', hostId: 'ssh:ssh-1', connectionId: 'ssh-1', provider: null },
+      { kind: 'ssh', hostId: 'ssh:ssh-1', connectionId: 'ssh-1' },
       makeWorktree({ createdAt: 10_000 }),
       statPath
     )

@@ -4,12 +4,14 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 import { Separator } from '../ui/separator'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { useNotificationSourceOptions } from './use-notification-source-options'
+import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution-host'
 import { translate } from '@/i18n/i18n'
 
 type NotificationHostTogglesProps = {
   mutedNotificationSourceIds: readonly NotificationSourceId[]
   disabled: boolean
-  onChange: (hostId: NotificationSourceId, muted: boolean) => void
+  /** Every id the toggled machine stands for: an SSH host and its managed server mute together. */
+  onChange: (hostIds: readonly NotificationSourceId[], muted: boolean) => void
 }
 
 export function NotificationHostToggles({
@@ -17,9 +19,11 @@ export function NotificationHostToggles({
   disabled,
   onChange
 }: NotificationHostTogglesProps): React.JSX.Element | null {
-  const hostOptions = useNotificationSourceOptions()
+  const hostOptions = pickerExecutionHosts(useNotificationSourceOptions())
   const mutedSourceIds = new Set(mutedNotificationSourceIds)
-  const mutedCount = hostOptions.filter((host) => mutedSourceIds.has(host.id)).length
+  const isMuted = (host: (typeof hostOptions)[number]): boolean =>
+    [host.id, ...(host.aliasHostIds ?? [])].some((id) => mutedSourceIds.has(id))
+  const mutedCount = hostOptions.filter(isMuted).length
   // Keep an effective mute reachable after the last remote machine is removed.
   if (hostOptions.length <= 1 && mutedCount === 0) {
     return null
@@ -63,9 +67,9 @@ export function NotificationHostToggles({
                 key={host.id}
                 label={host.label}
                 description={host.detail}
-                checked={!mutedSourceIds.has(host.id)}
+                checked={!isMuted(host)}
                 disabled={disabled}
-                onToggle={() => onChange(host.id, !mutedSourceIds.has(host.id))}
+                onToggle={() => onChange([host.id, ...(host.aliasHostIds ?? [])], !isMuted(host))}
               />
             ))}
           </div>

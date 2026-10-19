@@ -1,9 +1,16 @@
+import { createRuntimeFilePositionQueue } from './runtime-file-position'
 import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed-terminal-leaf-notice'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { detectLanguage } from '@/lib/language-detect'
-import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
+import {
+  runSleepWorktree,
+  sleepWorktreesReportingFailures
+} from '@/components/sidebar/sleep-worktree-flow'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
+import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
+import { selectFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import type { EditorTabSelection } from '../../store/slices/editor/types/open-file'
@@ -22,28 +29,29 @@ function openRuntimeEditorTab(
 ): void {
   const store = useAppStore.getState()
   if (navigation !== undefined && !navigationTargetsHost(navigation)) {
-    open(store, worktreeId === store.activeWorktreeId ? 'none' : 'background')
+    const isViewed =
+      worktreeId === store.activeWorktreeId ||
+      (isFloatingWorkspaceId(worktreeId) && selectFloatingWorkspacePanelVisible(store))
+    open(store, isViewed ? 'none' : 'background')
     return
   }
-  store.setActiveWorktree(worktreeId)
-  store.markWorktreeVisited(worktreeId)
-  store.setActiveView('terminal')
+  revealWorkspaceSurface(store, worktreeId)
   open(store, 'focus')
   store.setActiveTabType('editor', worktreeId)
-  store.revealWorktreeInSidebar(worktreeId)
 }
 
 export function registerMobileAndTerminalCloseIpcBridge(
   unsubs: (() => void)[],
   requestSleepingAgentWake: (worktreeId: string) => void
 ): void {
+  const positionFile = createRuntimeFilePositionQueue(unsubs)
   unsubs.push(
     window.api.ui.onOpenFileFromMobile(
-      ({ worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation }) => {
+      ({ worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation, position }) => {
         const basename = relativePath.split(/[\\/]/).pop() || relativePath
-        openRuntimeEditorTab(worktreeId, navigation, (store, selection) =>
+        openRuntimeEditorTab(worktreeId, navigation, (store, selection) => {
           // Why: renderer owns tab creation so grouped order and markdown bridges share the desktop File Explorer's store path.
-          store.openFile(
+          const fileId = store.openFile(
             {
               filePath,
               relativePath,
@@ -54,7 +62,8 @@ export function registerMobileAndTerminalCloseIpcBridge(
             },
             { selection }
           )
-        )
+          positionFile(fileId, position, selection === 'focus')
+        })
       }
     )
   )
@@ -126,6 +135,30 @@ export function registerMobileAndTerminalCloseIpcBridge(
       void runSleepWorktree(worktreeId)
     })
   )
+
+  // Why optional: an older preload lingering through an in-place reload lacks the channel.
+  if (window.api.ui.onWorktreeSleepRequest) {
+    unsubs.push(
+      window.api.ui.onWorktreeSleepRequest(({ requestId, worktreeIds }) => {
+        void (async () => {
+          const { failedWorktreeIds } = await sleepWorktreesReportingFailures(worktreeIds)
+          // Main waits on the ack, so the slept state must be durable before it.
+          const state = useAppStore.getState()
+          await persistWorkspaceSessionByHost(
+            window.api.session,
+            buildWorkspaceSessionPayload(state),
+            state
+          )
+          window.api.ui.respondWorktreeSleep({ requestId, failedWorktreeIds })
+        })().catch((error: unknown) => {
+          window.api.ui.respondWorktreeSleep({
+            requestId,
+            error: error instanceof Error ? error.message : 'worktree_sleep_failed'
+          })
+        })
+      })
+    )
+  }
 
   unsubs.push(
     window.api.ui.onResumeSleepingAgents(({ worktreeId }) => {

@@ -15,9 +15,11 @@ import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mo
 import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
 import {
+  normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
   normalizeExecutionHostOrder
 } from '../../../shared/execution-host'
+import { workspaceHostScopeForVisibleHosts } from '../../../shared/workspace-view/workspace-host-visibility'
 import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
 import { normalizeBrowserPageZoomLevel } from '../../../shared/browser-page-zoom'
 import { normalizeFeatureTipIds } from '../../../shared/feature-tips'
@@ -39,6 +41,7 @@ import {
 } from './ui-selection-normalization'
 import {
   mergeContextualTourSeenIds,
+  mergeFeatureTipSeenIds,
   mergeFeatureInteractions,
   stripMainOwnedTelemetryMarkerFromUI
 } from './ui-interaction-merge'
@@ -99,6 +102,11 @@ export function updatePersistedUI(
             operations.state.ui?.rightSidebarExplorerView,
             nextRightSidebarTab
           )
+  const nextVisibleWorkspaceHostIds = normalizeVisibleExecutionHostIds(
+    sanitizedUpdates.visibleWorkspaceHostIds !== undefined
+      ? sanitizedUpdates.visibleWorkspaceHostIds
+      : operations.state.ui?.visibleWorkspaceHostIds
+  )
   const nextUI = {
     ...currentUI,
     ...durableUpdates,
@@ -152,10 +160,17 @@ export function updatePersistedUI(
     combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
       sanitizedUpdates.combinedDiffFileTreeWidth ?? operations.state.ui?.combinedDiffFileTreeWidth
     ),
-    visibleWorkspaceHostIds:
-      sanitizedUpdates.visibleWorkspaceHostIds !== undefined
-        ? normalizeVisibleExecutionHostIds(sanitizedUpdates.visibleWorkspaceHostIds)
-        : normalizeVisibleExecutionHostIds(operations.state.ui?.visibleWorkspaceHostIds),
+    visibleWorkspaceHostIds: nextVisibleWorkspaceHostIds,
+    // A paired client writes only the list; the scope must follow, or "all hosts" revives it.
+    ...(sanitizedUpdates.visibleWorkspaceHostIds !== undefined &&
+    sanitizedUpdates.workspaceHostScope === undefined
+      ? {
+          workspaceHostScope: workspaceHostScopeForVisibleHosts(
+            nextVisibleWorkspaceHostIds,
+            normalizeExecutionHostScope(currentUI.workspaceHostScope)
+          )
+        }
+      : {}),
     agentsVisibleHostIds:
       sanitizedUpdates.agentsVisibleHostIds !== undefined
         ? normalizeVisibleExecutionHostIds(sanitizedUpdates.agentsVisibleHostIds)
@@ -181,9 +196,13 @@ export function updatePersistedUI(
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)
         : normalizeShowDotfilesByWorktree(operations.state.ui?.showDotfilesByWorktree),
+    // Why: a stale renderer or paired client must not erase a dismissal, or a one-time tip replays.
     featureTipsSeenIds:
       sanitizedUpdates.featureTipsSeenIds !== undefined
-        ? normalizeFeatureTipIds(sanitizedUpdates.featureTipsSeenIds)
+        ? mergeFeatureTipSeenIds(
+            operations.state.ui?.featureTipsSeenIds,
+            sanitizedUpdates.featureTipsSeenIds
+          )
         : normalizeFeatureTipIds(operations.state.ui?.featureTipsSeenIds),
     // Why: renderer and paired clients can mark different tours seen from stale snapshots; union so completed tours stay suppressed.
     contextualToursSeenIds:

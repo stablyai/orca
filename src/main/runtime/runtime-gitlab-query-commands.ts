@@ -4,6 +4,7 @@ import {
   diagnoseAuth,
   getRateLimit,
   getWorkItemByProjectRef,
+  listAssignableUsers,
   listIssues,
   listLabels,
   listMergeRequests,
@@ -134,6 +135,18 @@ export class RuntimeGitLabQueryCommands {
   ): Promise<Awaited<ReturnType<typeof listLabels>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return listLabels(
+      repo.path,
+      repo.issueSourcePreference,
+      repo.connectionId ?? null,
+      ...this.deps.getLocalGitArgs(repo)
+    )
+  }
+
+  async listGitLabRepoAssignableUsers(
+    repoSelector: string
+  ): Promise<Awaited<ReturnType<typeof listAssignableUsers>>> {
+    const repo = await this.deps.resolveRepo(repoSelector)
+    return listAssignableUsers(
       repo.path,
       repo.issueSourcePreference,
       repo.connectionId ?? null,

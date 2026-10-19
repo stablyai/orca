@@ -22,15 +22,14 @@ import { selectStructuredAgentSettledTurns } from '../../../shared/structured-ag
 import { AgentHookServer, _internals } from '../../agent-hooks/server'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  settleStaleStructuredAgentSessionState,
-  settleStructuredAgentSessionDeadGeneration
-} from './structured-agent-session-dead-generation-settlement'
+import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
+import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
 import type { StructuredAgentSessionTurnVerdict } from './structured-agent-session-stale-turn-verdict'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { StructuredAgentSessionTurnCompletionFeed } from './structured-agent-session-turn-completion-feed'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'recovered-turn-session'
 const THREAD = 'thread-1'
@@ -60,7 +59,7 @@ async function sessionWithRunningTurn() {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: THREAD }
+      providerHandle: codexProviderHandle(THREAD)
     },
     now: () => clock,
     stateDirectory: join(root, SESSION)
@@ -101,7 +100,7 @@ async function sessionWithRunningTurn() {
   const completions = new StructuredAgentSessionTurnCompletionFeed({
     sessions,
     now: () => clock,
-    readStatusState: (sessionId, source) => feed.statusState(sessionId, source)
+    readStatusState: (sessionId, source) => feed.journalProjection(sessionId, source)?.state ?? null
   })
   const completionEvents: AgentSessionTurnCompletionEvent[] = []
   completions.subscribe({ id: 'dot-1', emit: (event) => completionEvents.push(event) })
@@ -127,8 +126,8 @@ async function sessionWithRunningTurn() {
 function settleDeadGeneration(
   journal: AgentSessionJournal,
   verdict: StructuredAgentSessionTurnVerdict
-): ReturnType<typeof settleStructuredAgentSessionDeadGeneration> {
-  return settleStructuredAgentSessionDeadGeneration({
+): ReturnType<typeof settleObservedExitForTest> {
+  return settleObservedExitForTest({
     journal,
     sessionId: SESSION,
     fence: 2,
@@ -158,7 +157,7 @@ describe('a turn recovery settled after its host went away', () => {
     async (_label, verdict, outcome, mark) => {
       const session = await sessionWithRunningTurn()
       session.recoverAt(RECOVERED)
-      expect(await settleDeadGeneration(session.journal, verdict)).toEqual({ ok: true })
+      expect(await settleDeadGeneration(session.journal, verdict)).toMatchObject({ ok: true })
       session.publish()
 
       expect(session.summaries.at(-1)).toMatchObject({
@@ -183,8 +182,8 @@ describe('a turn recovery settled after its host went away', () => {
     }
   )
 
-  // The chat's turn bar and the tab's mark read one verdict: a turn nobody stopped failed, and
-  // must never show the done tick of a finished turn.
+  // The tab's mark reads a turn nobody stopped as failed; the chat's turn bar reads it like a
+  // finished turn, since the chat's notice row says why it stopped.
   it.each([
     [
       'a restart',
@@ -208,7 +207,7 @@ describe('a turn recovery settled after its host went away', () => {
         )
     ]
   ] as const)(
-    'reads Failed after N, marked failed, for a turn cut off by %s',
+    'reads Worked for N, marked failed, for a turn cut off by %s',
     async (_label, cut) => {
       const session = await sessionWithRunningTurn()
       session.recoverAt(RECOVERED)
@@ -221,7 +220,7 @@ describe('a turn recovery settled after its host went away', () => {
         ...selectStructuredAgentSettledTurns(session.journal.snapshot().items).values()
       ]
       expect(settled && formatNativeChatTurnStatusLabel({ elapsedSeconds: 0, ...settled })).toBe(
-        'Failed after 1s'
+        'Worked for 1s'
       )
     }
   )

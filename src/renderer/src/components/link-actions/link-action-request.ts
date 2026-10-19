@@ -12,6 +12,8 @@ export type LinkActionRequest = {
   kind: LinkActionKind
   primary: LinkAction
   alternate?: LinkAction
+  /** Rows after primary/alternate that have no click shortcut. */
+  secondaryActions?: readonly LinkAction[]
   /** Hands focus back to the surface that owned the click (terminal, chat transcript). */
   restoreFocus: () => void
 }

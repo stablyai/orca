@@ -36,6 +36,10 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
       })),
     openSpacePage: () => {
       get().recordFeatureInteraction?.('workspace-cleanup')
+      if (typeof window !== 'undefined' && window.api?.workspaceSpace?.openWindow) {
+        void window.api.workspaceSpace.openWindow()
+        return
+      }
       set((state) => ({
         activeView: 'space',
         previousViewBeforeSpace:

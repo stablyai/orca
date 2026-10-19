@@ -1,6 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type DragEventHandler } from 'react'
 import { useAppStore } from '@/store'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   getWorkspaceFileDragRejectionMessage,
   hasWorkspaceFileDragType,
@@ -10,15 +9,16 @@ import {
 } from '@/lib/workspace-file-drag'
 import {
   resolveNativeChatAttachmentOwnerForWorktree,
+  resolveNativeChatAttachmentHost,
   nativeChatWorktreeNotReadyNotice
 } from './native-chat-attachment-upload'
 import { findTerminalTabWorktreeId } from './native-chat-file-link'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   nativeChatAttachmentOwnerUnchanged,
   nativeChatWorkspaceAttachmentMismatchNotice,
   type NativeChatResolvedPathOptions
 } from './native-chat-resolved-path-ownership'
-import { useNativeChatPaneFileDropClaim } from './NativeChatPaneFileDropSurface'
 
 type WorkspaceFileDropHandlers = {
   onDragOverCapture: DragEventHandler<HTMLDivElement>
@@ -32,9 +32,6 @@ type Args = {
     options?: NativeChatResolvedPathOptions
   ) => void
   disabled: boolean
-  /** Composer identity the preload drop route addresses; published to the pane
-   *  so an OS drop anywhere in it resolves to this composer. */
-  paneKey: string
   setNotice: (notice: string | null) => void
   structuredWorktreeId?: string
   terminalTabId: string
@@ -67,7 +64,6 @@ function setDropEffect(dataTransfer: DataTransfer, effect: 'copy' | 'none'): voi
 export function useNativeChatWorkspaceFileDrop({
   attachResolvedPaths,
   disabled,
-  paneKey,
   setNotice,
   structuredWorktreeId,
   terminalTabId
@@ -122,17 +118,14 @@ export function useNativeChatWorkspaceFileDrop({
         setNotice(nativeChatWorkspaceAttachmentMismatchNotice())
         return
       }
-      const owner = resolveNativeChatAttachmentOwnerForWorktree(
-        state,
-        workspaceId,
-        structuredWorktreeId ? undefined : terminalTabId
-      )
+      const owner = resolveNativeChatAttachmentOwnerForWorktree(state, workspaceId)
       if (owner.kind === 'not-ready') {
         setNotice(nativeChatWorktreeNotReadyNotice())
         return
       }
-      const targetExecutionHostId = getExecutionHostIdForWorktree(state, workspaceId)
+      const targetExecutionHostId = resolveNativeChatAttachmentHost(state, workspaceId)
       if (
+        !targetExecutionHostId ||
         !isResolvedWorkspaceFileDragExecutionHost(targetExecutionHostId) ||
         source.executionHostId !== targetExecutionHostId
       ) {
@@ -148,34 +141,28 @@ export function useNativeChatWorkspaceFileDrop({
         if (currentWorkspaceId !== source.workspaceId) {
           return false
         }
-        const currentHostId = getExecutionHostIdForWorktree(currentState, currentWorkspaceId)
+        const currentHostId = resolveNativeChatAttachmentHost(currentState, currentWorkspaceId)
         const currentOwner = resolveNativeChatAttachmentOwnerForWorktree(
           currentState,
-          currentWorkspaceId,
-          structuredWorktreeIdRef.current ? undefined : terminalTabId
+          currentWorkspaceId
         )
         return (
+          currentHostId !== null &&
           isResolvedWorkspaceFileDragExecutionHost(currentHostId) &&
           currentHostId === source.executionHostId &&
           nativeChatAttachmentOwnerUnchanged(owner, currentOwner)
         )
       }
 
-      attachResolvedPaths(dragPaths.paths, owner.kind === 'ssh' ? owner.connectionId : undefined, {
-        targetOwnerIsCurrent
-      })
+      const targetHost = parseExecutionHostId(targetExecutionHostId)
+      attachResolvedPaths(
+        dragPaths.paths,
+        targetHost?.kind === 'ssh' ? targetHost.targetId : undefined,
+        { targetOwnerIsCurrent }
+      )
     },
     [attachResolvedPaths, disabled, setNotice, structuredWorktreeId, terminalTabId]
   )
-
-  // The pane around the composer is the drop surface; these handlers run from
-  // there so the whole chat, not just the input box, accepts a file.
-  useNativeChatPaneFileDropClaim({
-    scopeKey: paneKey,
-    disabled,
-    onDragOverCapture,
-    onDropCapture
-  })
 
   return { onDragOverCapture, onDropCapture }
 }

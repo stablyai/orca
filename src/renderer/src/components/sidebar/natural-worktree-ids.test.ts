@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PINNED_GROUP_KEY } from './worktree-list/grouping/group-keys'
+import { PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
 import { getNaturalWorktreeIds } from './natural-worktree-ids'
 
 const item = (id: string, sectionKey: string) => ({

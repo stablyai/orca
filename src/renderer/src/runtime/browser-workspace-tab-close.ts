@@ -12,7 +12,8 @@ import {
   planBrowserWorkspaceTabClose,
   type BrowserWorkspaceTabClosePlan
 } from './browser-workspace-tab-close-plan'
-import { closeWebRuntimeSessionTab, isWebRuntimeSessionActive } from './web-runtime-session'
+import { closeWebRuntimeSessionTab } from './web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 
 /**
  * The one place a browser workspace's tab is closed on the runtimes that own it. Every close entry

@@ -11,8 +11,11 @@ import { gitExecFileAsync } from './runner'
 
 export {
   isGitRepo,
+  isGitRepoAsync,
   inspectGitRepoForRegistration,
+  inspectGitRepoForRegistrationAsync,
   getGitRepoRoot,
+  getGitRepoRootAsync,
   getLinkedWorktreeMainRepoRoot,
   normalizeGitRepoRootForInputPath
 } from './repo-detection'
@@ -107,7 +110,7 @@ export async function getRecentDriftSubjects(
 }
 
 /** Parse `git remote` stdout into a remote count. */
-export function parseRemoteCount(stdout: string): number {
+function parseRemoteCount(stdout: string): number {
   return stdout.split('\n').filter((line) => line.trim().length > 0).length
 }
 

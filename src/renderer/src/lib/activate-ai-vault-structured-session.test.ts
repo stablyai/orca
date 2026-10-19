@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import { activateAiVaultStructuredSession } from './activate-ai-vault-structured-session'
 
 const structuredSession = {
   structuredSession: { sessionId: 'session-1', workspaceId: 'workspace-1' }
-} as AiVaultSession
+}
 
 function deps(overrides: Partial<Parameters<typeof activateAiVaultStructuredSession>[1]> = {}) {
   return {
@@ -159,8 +158,45 @@ describe('activateAiVaultStructuredSession', () => {
   it('ignores a row that is not a structured chat', async () => {
     const parts = deps()
 
-    await expect(activateAiVaultStructuredSession({} as AiVaultSession, parts)).resolves.toBe(false)
+    await expect(activateAiVaultStructuredSession({}, parts)).resolves.toBe(false)
 
     expect(parts.reveal).not.toHaveBeenCalled()
+  })
+
+  it('carries an explicit recipient host through refresh, reveal and activation', async () => {
+    const target = { kind: 'environment', environmentId: 'remote-2' } as const
+    const parts = deps({
+      activate: vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValue(true)
+    })
+    await expect(activateAiVaultStructuredSession(structuredSession, parts, target)).resolves.toBe(
+      true
+    )
+    expect(parts.refresh).toHaveBeenCalledWith('workspace-1', target)
+    expect(parts.reveal).toHaveBeenCalledWith({
+      worktreeId: 'workspace-1',
+      sessionId: 'session-1',
+      target
+    })
+    expect(parts.activate).toHaveBeenLastCalledWith({
+      worktreeId: 'workspace-1',
+      sessionId: 'session-1',
+      target
+    })
+  })
+
+  it('does not coalesce equal session IDs from two hosts while each activation is pending', async () => {
+    let release!: (outcome: 'gone') => void
+    const pending = new Promise<'gone'>((resolve) => {
+      release = resolve
+    })
+    const parts = deps({ activate: vi.fn(() => false), reveal: vi.fn(() => pending) })
+    const local = activateAiVaultStructuredSession(structuredSession, parts, { kind: 'local' })
+    const remote = activateAiVaultStructuredSession(structuredSession, parts, {
+      kind: 'environment',
+      environmentId: 'remote-2'
+    })
+    await vi.waitFor(() => expect(parts.reveal).toHaveBeenCalledTimes(2))
+    release('gone')
+    await Promise.all([local, remote])
   })
 })

@@ -90,6 +90,7 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
   getResumeExpiresAt = () => Date.now() + 30 * 24 * 3_600_000
   getResumeConfirmation = () => null
   getFailure = () => this.failure
+  readonly probeAfterBackground = vi.fn()
 }
 
 class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {

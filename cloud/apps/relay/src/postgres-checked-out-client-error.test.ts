@@ -50,7 +50,7 @@ describe('checked-out PostgreSQL client failure handling', () => {
     expect(listenersWhileCheckedOut).toBe(1)
     expect(client.listenerCount('error')).toBe(0)
     expect(client.released).toEqual([terminated])
-    expect(client.statements).toEqual(['BEGIN', 'SELECT 1', 'ROLLBACK'])
+    expect(client.statements).toEqual(['BEGIN', 'SELECT 1'])
     expect(warning).toHaveBeenCalledWith(
       '[orca-relay] checked-out PostgreSQL client failed: 57P01 Connection terminated unexpectedly'
     )

@@ -33,7 +33,10 @@ export function useEditorContentChangeHandler({
 
   return useCallback(
     (file: OpenFile | null, content: string) => {
-      if (!file) {
+      if (
+        !file ||
+        !useAppStore.getState().openFiles.some((candidate) => candidate.id === file.id)
+      ) {
         return
       }
       setEditorDraft(file.id, content)

@@ -2,6 +2,7 @@
 // Why: status comes from hooks (Claude, Codex, etc.) — never inferred from terminal titles;
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
+import type { ProgramStatusFacet } from './program-status/facet'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { AgentStateHistoryEntry } from './agent-state-history'
@@ -9,7 +10,7 @@ import { isAgentTurnOutcome } from './agent-turn-outcome'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
-import type { TuiAgent } from './tui-agent'
+import type { TerminalAgent } from './terminal-agent'
 import {
   AGENT_MODEL_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
@@ -34,7 +35,6 @@ export {
   AGENT_TYPE_MAX_LENGTH
 } from './agent-status-field-normalization'
 export {
-  AGENT_STATUS_MAX_SUBAGENTS,
   agentSubagentsEqual,
   type AgentSubagentSnapshot,
   type AgentSubagentState
@@ -53,9 +53,9 @@ export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 export type AgentWorkingMode = 'monitoring'
 
 // Why: agent types aren't a fixed set (custom agents exist); any non-empty string is
-// accepted — the well-known names are the launchable TuiAgent ids plus the 'unknown'
+// accepted — the well-known names are the recognized TerminalAgent ids plus the 'unknown'
 // sentinel (no agent identified yet), a convenience union for pattern-matching.
-export type WellKnownAgentType = TuiAgent | 'unknown'
+export type WellKnownAgentType = TerminalAgent | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
 
 export type AgentStatusOrchestrationContext = {
@@ -159,6 +159,10 @@ export type AgentStatusEntry = {
   terminalResumeEligible?: false
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** The program's own OSC 7501 report (progress, message, blocks like sign-in), beside whichever
+   *  producer owns `state`. Never decides `state`; readers resolve it through
+   *  resolveProgramStatusPresentation. Live-only. */
+  programStatus?: ProgramStatusFacet
   /** True for a nonterminal state hydrated from last-status.json with no live hook since:
    *  the transition may have been missed while no receiver was up, so freshness gates
    *  treat the row as stale immediately. Cleared by any accepted live event. */
@@ -199,6 +203,8 @@ export type AgentStatusPayload = {
   /** The main agent's own state and last-turn verdict. See AgentMainAgentStatus. Producers publish it
    *  beside the combined `state`; a reader that predates it keeps reading `state`. */
   mainAgent?: AgentMainAgentStatus
+  /** The execution host awaits a launched Claude task’s wake-up or its finishing turn. */
+  claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
 }
 
 /**
@@ -237,7 +243,10 @@ export function pickParsedAgentStatusPayload(
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
     ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
     ...(row.subagents !== undefined ? { subagents: row.subagents } : {}),
-    ...(row.mainAgent !== undefined ? { mainAgent: row.mainAgent } : {})
+    ...(row.mainAgent !== undefined ? { mainAgent: row.mainAgent } : {}),
+    ...(row.claudeTaskWakeupPending !== undefined
+      ? { claudeTaskWakeupPending: row.claudeTaskWakeupPending }
+      : {})
   }
 }
 
@@ -256,6 +265,7 @@ export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
 // Re-exported here because every consumer reaches for the entry type and its freshness gate
 // together; the clock rules themselves live in agent-status-freshness.ts.
 export {
+  AGENT_STATUS_HYDRATE_MAX_AGE_MS,
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusAuthorityObservedAt,
   agentStatusEvidenceObservedAt,
@@ -292,6 +302,7 @@ export function normalizeMainAgentStatusField(value: unknown): AgentMainAgentSta
     state,
     // Why: a verdict belongs to a finished turn; anything riding on a live state is stale.
     ...(state === 'done' && isAgentTurnOutcome(obj.outcome) ? { outcome: obj.outcome } : {}),
+    ...(state === 'working' && obj.stopping === true ? { stopping: true as const } : {}),
     stateStartedAt: obj.stateStartedAt
   }
 }
@@ -344,7 +355,13 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
     turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
     subagents: normalizeAgentSubagentsField(obj.subagents),
-    mainAgent: normalizeMainAgentStatusField(obj.mainAgent)
+    mainAgent: normalizeMainAgentStatusField(obj.mainAgent),
+    ...(obj.agentType === 'claude' &&
+    state !== 'done' &&
+    (obj.claudeTaskWakeupPending === 'notification' ||
+      obj.claudeTaskWakeupPending === 'finishing-turn')
+      ? { claudeTaskWakeupPending: obj.claudeTaskWakeupPending }
+      : {})
   }
 }
 

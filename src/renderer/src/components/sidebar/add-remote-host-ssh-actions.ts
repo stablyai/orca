@@ -4,14 +4,9 @@ import {
   getEditingTargetFromSshConfigHost,
   getSshTargetDraftConnectionFields,
   hasAdvancedConnectionValues,
-  isRelayGracePeriodValid,
-  parseRelayGracePeriodSeconds,
   type EditingTarget
 } from '../settings/ssh-target-draft'
-import {
-  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  SSH_CONFIG_HOST_RESULT_LIMIT
-} from '../../../../shared/ssh-types'
+import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../../shared/ssh-types'
 import type {
   SshConfigHostSummary,
   SshConfigHostListArgs,
@@ -35,7 +30,10 @@ type SshApi = {
   }>
 }
 
-export async function saveNewSshHostFromForm({
+type SavedSshHost = Pick<SshTarget, 'configHost' | 'label' | 'host'>
+
+/** `ssh` is this client's own API or a paired server's (whose hosts never touch local metadata). */
+export async function saveNewSshHostFromForm<T extends SavedSshHost>({
   form,
   ssh,
   recordSshRepoReadoptions,
@@ -43,9 +41,14 @@ export async function saveNewSshHostFromForm({
   recordFeatureInteraction
 }: {
   form: EditingTarget
-  ssh: SshApi
+  ssh: {
+    listTargets: () => Promise<T[]>
+    addTarget: (args: {
+      target: SshTargetCreateInput
+    }) => Promise<{ repoReadoptions: SshRepoReadoption[] }>
+  }
   recordSshRepoReadoptions: (readoptions: readonly SshRepoReadoption[]) => void
-  setSshTargetsMetadata: (targets: SshTarget[]) => void
+  setSshTargetsMetadata: (targets: T[]) => void
   recordFeatureInteraction: (feature: 'ssh') => void
 }): Promise<'saved' | 'validation-failed' | 'failed'> {
   const { host, configHost, username, port } = getSshTargetDraftConnectionFields(form)
@@ -67,23 +70,10 @@ export async function saveNewSshHostFromForm({
     )
     return 'validation-failed'
   }
-  const graceSeconds = parseRelayGracePeriodSeconds(form)
-  if (!isRelayGracePeriodValid(form, graceSeconds)) {
-    toast.error(
-      translate(
-        'auto.components.sidebar.AddRemoteHostDialog.sshRelayGraceInvalid',
-        'Terminal timeout must be between 60 and {{value0}} seconds.',
-        { value0: MAX_SSH_RELAY_GRACE_PERIOD_SECONDS }
-      )
-    )
-    return 'validation-failed'
-  }
-
   const identityFile = form.identityFile.trim() || undefined
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
-  const remoteRuntime = form.remoteRuntime === 'auto' ? undefined : form.remoteRuntime
   const target = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost || host),
     configHost,
@@ -91,12 +81,12 @@ export async function saveNewSshHostFromForm({
     port,
     username,
     ...(form.gssapiAuthentication ? { gssapiAuthentication: true } : {}),
-    relayGracePeriodSeconds: graceSeconds,
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
-    ...(remoteRuntime ? { remoteRuntime } : {})
+    // Why explicit both ways: absent means on here, and off on a server from before the default flip.
+    allowRemoteCliControl: form.allowRemoteCliControl
   }
 
   try {

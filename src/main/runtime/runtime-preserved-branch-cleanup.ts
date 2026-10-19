@@ -8,13 +8,11 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../shared/executi
 import { isFolderRepo } from '../../shared/repo-kind'
 import { forceDeleteLocalBranch } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
-import {
-  cleanupUnusedWorktreePushTargetRemote,
-  cleanupUnusedWorktreePushTargetRemoteSsh
-} from '../ipc/worktree-remote'
+import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
-import type { Store } from '../persistence'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
+import type { RuntimeStore } from './runtime-store-contract'
+import { assertWslMoveRepoWritable } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { resolveWorktreeRemovalRepoOwner } from '../worktree-removal-repo-owner'
 import { parseExactWorktreeIdSelector } from './runtime-worktree-selection'
 
@@ -29,7 +27,7 @@ type PreservedBranchCleanupTarget = {
 export class RuntimePreservedBranchCleanup {
   private readonly targets = new Map<string, PreservedBranchCleanupTarget>()
 
-  constructor(private readonly getStore: () => Store | null) {}
+  constructor(private readonly getStore: () => RuntimeStore | null) {}
 
   remember(
     worktreeId: string,
@@ -88,7 +86,10 @@ export class RuntimePreservedBranchCleanup {
     const normalizedHostId = parseExecutionHostId(hostId)?.id
     const exactTarget = removalTarget
       ? this.targets.get(
-          preservedBranchCleanupScopeKey({ worktreeId: removalTarget.id, hostId: normalizedHostId })
+          preservedBranchCleanupScopeKey({
+            worktreeId: removalTarget.id,
+            hostId: normalizedHostId
+          })
         )
       : undefined
     const legacyMatches =
@@ -119,39 +120,31 @@ export class RuntimePreservedBranchCleanup {
     if (!repo) {
       throw new Error('repo_not_found')
     }
+    assertWslMoveRepoWritable(store, repo)
     if (isFolderRepo(repo)) {
       throw new Error('Folder workspaces do not have local Git branches.')
     }
 
     if (repo.connectionId) {
-      const provider = requireSshGitProvider(repo.connectionId)
-      await provider.forceDeletePreservedBranch(repo.path, target.branchName, target.head)
-      await cleanupUnusedWorktreePushTargetRemoteSsh(
-        provider,
-        repo.path,
-        removalTarget.id,
-        target.pushTarget,
-        store
-      )
-    } else {
-      const options = getLocalProjectWorktreeGitOptions(store, repo)
-      await (Object.keys(options).length > 0
-        ? forceDeleteLocalBranch(
-            repo.path,
-            target.branchName,
-            target.head,
-            (argv, cwd) => gitExecFileAsync(argv, { cwd, ...options }),
-            options
-          )
-        : forceDeleteLocalBranch(repo.path, target.branchName, target.head))
-      await cleanupUnusedWorktreePushTargetRemote(
-        repo.path,
-        removalTarget.id,
-        target.pushTarget,
-        store,
-        options
-      )
+      throw new SshHostNotServedError(repo.connectionId)
     }
+    const options = getLocalProjectWorktreeGitOptions(store, repo)
+    await (Object.keys(options).length > 0
+      ? forceDeleteLocalBranch(
+          repo.path,
+          target.branchName,
+          target.head,
+          (argv, cwd) => gitExecFileAsync(argv, { cwd, ...options }),
+          options
+        )
+      : forceDeleteLocalBranch(repo.path, target.branchName, target.head))
+    await cleanupUnusedWorktreePushTargetRemote(
+      repo.path,
+      removalTarget.id,
+      target.pushTarget,
+      store,
+      options
+    )
     this.delete(removalTarget.id, target.hostId)
     return { deleted: true }
   }

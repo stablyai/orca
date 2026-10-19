@@ -1,9 +1,10 @@
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AgentSessionWorkspaceKind } from '../../../shared/agent-session-record'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { projectGroupIdFromRepoId } from '../../../shared/folder-workspace-worktree'
 import type { RepoIcon } from '../../../shared/repo-icon'
 import type { AgentSessionRestartActivity } from '../../../shared/agent-session-restart-activity'
+import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 
 /**
  * The offered chats, arranged the way the sidebar arranges workspaces: project/repo, then workspace,
@@ -16,7 +17,9 @@ import type { AgentSessionRestartActivity } from '../../../shared/agent-session-
 export type ResumeCandidate = {
   sessionId: string
   workspaceId: string
-  agent: 'claude' | 'codex'
+  /** Any agent the host registered; a client without the registered-agents capability gets
+   *  only Claude's and Codex's offers. */
+  agent: StructuredAgentId
   trigger: 'quit' | 'update'
   latestPrompt: string
   recordedAt: number
@@ -33,7 +36,8 @@ export type ResumeCandidate = {
 export type ResumeFailure = ResumeCandidate & {
   failedAt: number
   outcome: 'refused' | 'unconfirmed'
-  /** The host's or provider's refusal code, verbatim. */
+  /** The host's or provider's refusal code, verbatim; or, for a resume request lost before the
+   *  host reserved anything, this side's own `agent_session_restart_request_failed`. */
   reason: string
   /** Whether a retry would run at all; an older host omits it and the reason decides alone. */
   retryable?: boolean
@@ -69,6 +73,28 @@ export function resumeWorkspaceKind(candidate: ResumeCandidate): AgentSessionWor
     candidate.workspaceKind ??
     (isFolderWorkspaceId(candidate.workspaceId) ? 'folder' : 'git-worktree')
   )
+}
+
+export type ResumeMachineGroup = {
+  hostId: ExecutionHostId
+  candidates: ResumeCandidate[]
+}
+
+/** Groups by the machine each chat runs on, in first-seen order; no host id means this machine. */
+export function groupResumeCandidatesByHost(
+  candidates: readonly ResumeCandidate[]
+): ResumeMachineGroup[] {
+  const groups = new Map<ExecutionHostId, ResumeCandidate[]>()
+  for (const candidate of candidates) {
+    const hostId = candidate.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+    const existing = groups.get(hostId)
+    if (existing) {
+      existing.push(candidate)
+    } else {
+      groups.set(hostId, [candidate])
+    }
+  }
+  return [...groups].map(([hostId, entries]) => ({ hostId, candidates: entries }))
 }
 
 /** Groups by workspace, preserving the order the host offered them so the list is stable. */
@@ -109,6 +135,94 @@ export function groupResumeWorkspacesByRepo(
     }
   }
   return [...groups.values()]
+}
+
+export type ResumeWorkspaceNode = {
+  group: ResumeWorkspaceGroup
+  children: ResumeWorkspaceNode[]
+}
+
+/**
+ * Nests each workspace under its nearest LISTED ancestor, as the sidebar nests child workspaces.
+ *
+ * `ancestorsOf` is nearest-first; an ancestor with nothing to resume is skipped, so its listed
+ * descendants attach to the next listed one up, or stay at the top. Offer order is kept.
+ */
+export function nestResumeWorkspaces(
+  workspaces: readonly ResumeWorkspaceGroup[],
+  ancestorsOf: (workspaceId: string) => readonly string[]
+): ResumeWorkspaceNode[] {
+  const nodes = new Map<string, ResumeWorkspaceNode>(
+    workspaces.map((group) => [group.workspaceId, { group, children: [] }])
+  )
+  const parentOf = new Map<ResumeWorkspaceNode, ResumeWorkspaceNode>()
+  for (const node of nodes.values()) {
+    const parentId = ancestorsOf(node.group.workspaceId).find(
+      (id) => id !== node.group.workspaceId && nodes.has(id)
+    )
+    const parent = parentId === undefined ? undefined : nodes.get(parentId)
+    if (parent) {
+      parentOf.set(node, parent)
+    }
+  }
+  // Why: a loop in the parent chain would leave its members under no root, and a ticked chat that
+  // renders nowhere would still be resumed; the loop is cut where the walk first comes back.
+  for (const node of nodes.values()) {
+    const seen = new Set([node])
+    let up = parentOf.get(node)
+    while (up && !seen.has(up)) {
+      seen.add(up)
+      up = parentOf.get(up)
+    }
+    if (up) {
+      parentOf.delete(up)
+    }
+  }
+  const roots: ResumeWorkspaceNode[] = []
+  for (const node of nodes.values()) {
+    const parent = parentOf.get(node)
+    if (parent) {
+      parent.children.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+  return roots
+}
+
+/** A workspace's chats followed by those of every workspace nested under it, in list order. */
+export function resumeWorkspaceCandidates(node: ResumeWorkspaceNode): ResumeCandidate[] {
+  return [...node.group.candidates, ...node.children.flatMap(resumeWorkspaceCandidates)]
+}
+
+export type ResumeSelectionState = {
+  checked: boolean | 'indeterminate'
+  selectedCount: number
+  total: number
+}
+
+/** A group checkbox's state over the selectable chats it covers. */
+export function resumeSelectionState(
+  sessionIds: readonly string[],
+  selected: ReadonlySet<string>
+): ResumeSelectionState {
+  const selectedCount = sessionIds.filter((sessionId) => selected.has(sessionId)).length
+  const total = sessionIds.length
+  const checked =
+    total > 0 && selectedCount === total ? true : selectedCount > 0 ? 'indeterminate' : false
+  return { checked, selectedCount, total }
+}
+
+/** Ticks every chat a group covers unless all already are, then unticks them. */
+export function toggleResumeSelection(
+  sessionIds: readonly string[],
+  state: ResumeSelectionState,
+  onToggle: (sessionId: string, checked: boolean) => void
+): void {
+  const next = state.selectedCount < state.total
+  for (const sessionId of sessionIds) {
+    onToggle(sessionId, next)
+  }
 }
 
 export type ResumeGroupHeader =

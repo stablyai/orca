@@ -317,6 +317,12 @@ describe('the shell policy this page is tested under', () => {
     ])
   })
 
+  it('admits only cached Blob URLs for media', () => {
+    expect(cspHeader.split('; ').filter((entry) => entry.startsWith('media-src'))).toEqual([
+      'media-src blob:'
+    ])
+  })
+
   it('still refuses inline script, which is the directive that matters', () => {
     expect(cspHeader).toContain("script-src 'self';")
     expect(cspHeader).not.toContain("script-src 'self' 'unsafe-inline'")
@@ -324,10 +330,10 @@ describe('the shell policy this page is tested under', () => {
 
   it('admits data: and https: for images and for nothing else', () => {
     expect(cspHeader.split('; ').filter((entry) => entry.includes('data:'))).toEqual([
-      "img-src 'self' data: https:"
+      "img-src 'self' data: blob: https:"
     ])
     expect(cspHeader.split('; ').filter((entry) => entry.includes('https:'))).toEqual([
-      "img-src 'self' data: https:"
+      "img-src 'self' data: blob: https:"
     ])
     // `http:` is not a substring of `https:`, so this still refuses a cleartext source.
     expect(cspHeader).not.toContain('http:')

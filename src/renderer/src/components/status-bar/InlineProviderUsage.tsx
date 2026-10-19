@@ -89,18 +89,22 @@ export function InlineUsageSignInAction({
   isSigningIn,
   disabled,
   onSignInPointerDown,
-  onSignIn
+  onSignIn,
+  reason
 }: {
   isFetching: boolean
   isSigningIn: boolean
   disabled: boolean
   onSignInPointerDown?: () => void
   onSignIn: () => void
+  /** Why it needs a sign-in; defaults to the usage it would show. */
+  reason?: string
 }): React.JSX.Element {
   return (
     <div className={`flex w-full items-center gap-2 ${isFetching ? 'animate-pulse' : ''}`}>
       <span className="min-w-0 flex-1 text-[10px] text-muted-foreground">
-        {translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')}
+        {reason ??
+          translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')}
       </span>
       <Button
         type="button"

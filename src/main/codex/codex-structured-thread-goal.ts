@@ -1,4 +1,5 @@
-import type { AgentSessionThreadGoalChange } from '../../shared/agent-session-wire'
+import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
+import type { AgentSessionThreadGoalChange } from '../../shared/agent-session-thread-goal-wire'
 import { isCodexAppServerRequestError } from './codex-app-server-connection'
 import type { CodexSession } from './codex-structured-session-state'
 
@@ -36,10 +37,12 @@ export async function changeCodexThreadGoal(
   session: Pick<CodexSession, 'connection' | 'threadId'>,
   change: AgentSessionThreadGoalChange,
   replacesGoal: boolean,
-  timeoutMs: number | undefined
+  timeoutMs: number | undefined,
+  signal?: AbortSignal
 ): Promise<{ ok: true } | { ok: false; rejected: string }> {
   try {
     for (const request of codexThreadGoalRequests(session.threadId, change, replacesGoal)) {
+      throwIfSignalAborted(signal)
       await session.connection.request(request.method, request.params, { timeoutMs })
     }
     return { ok: true }

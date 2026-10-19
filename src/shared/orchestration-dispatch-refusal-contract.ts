@@ -32,6 +32,8 @@ export type TaskNotStartableDetail = {
   status: string
   unmetDependencies: string[]
   retryOf?: string
+  /** Set when the Task's circuit breaker tripped; an older client ignores it. */
+  failureCount?: number
 }
 
 export function taskNotStartableRefusal(
@@ -46,6 +48,12 @@ export function taskNotStartableRefusal(
 }
 
 function taskNotStartableNextSteps(detail: TaskNotStartableDetail): string[] {
+  if (detail.retryOf && detail.failureCount !== undefined) {
+    return [
+      `Do not retry this Task or start a replacement for it: it failed ${detail.failureCount} times. Report the failure to the user.`,
+      `Read what the last attempt showed with orca orchestration worker-read --dispatch ${detail.retryOf} --json. If its terminal is still open, it stays for the user until orca orchestration worker-release --dispatch ${detail.retryOf} --json.`
+    ]
+  }
   if (detail.retryOf) {
     return [
       `--retry-of must name the latest settled Dispatch of a failed or blocked Task; check orca orchestration dispatch-show --task ${detail.taskId} --json and orca orchestration worker-show --dispatch ${detail.retryOf} --json.`

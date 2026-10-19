@@ -3,8 +3,9 @@ import type {
   PtyProcessInfo,
   PtySpawnOptions,
   PtySpawnResult
-} from '../providers/types'
+} from '../providers/pty-provider-contract'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
+import { chooseSessionOwner } from './daemon-session-owner-choice'
 
 export type DaemonSessionOwnerResolution<T extends IPtyProvider> =
   | { kind: 'owner'; provider: T }
@@ -36,22 +37,47 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
   private readonly routeIncarnations = new Map<string, string | undefined>()
   private epoch = 0
 
-  constructor(
-    private readonly providers: readonly T[],
-    private readonly routes: Map<string, IPtyProvider>
-  ) {}
+  private readonly providers: T[]
 
-  invalidateProvider(provider: T): void {
-    this.epoch += 1
-    this.inventoryInFlight = null
-    this.cachedInventory = null
-    this.failedProviderCooldowns.clear()
+  constructor(
+    providers: readonly T[],
+    private readonly routes: Map<string, IPtyProvider>,
+    private readonly isProviderProvenGone?: (provider: T, error: unknown) => boolean
+  ) {
+    this.providers = [...providers]
+  }
+
+  /** Removes a provider that can no longer be contacted, including from later inventories. */
+  dropProvider(provider: T): void {
+    this.forgetProvider(provider)
+    this.invalidateProvider(provider)
+  }
+
+  // Why no epoch bump on its own: a proven-gone provider lists nothing, so in-flight inventories stay valid.
+  private forgetProvider(provider: T): void {
+    const index = this.providers.indexOf(provider)
+    if (index !== -1) {
+      this.providers.splice(index, 1)
+    }
+    this.failedProviderCooldowns.delete(provider)
+    this.forgetRoutesOf(provider)
+  }
+
+  private forgetRoutesOf(provider: T): void {
     for (const [sessionId, routed] of this.routes) {
       if (routed === provider) {
         this.routes.delete(sessionId)
         this.routeIncarnations.delete(sessionId)
       }
     }
+  }
+
+  invalidateProvider(provider: T): void {
+    this.epoch += 1
+    this.inventoryInFlight = null
+    this.cachedInventory = null
+    this.forgetRoutesOf(provider)
+    this.failedProviderCooldowns.clear()
     // Another resolver may already have removed this provider's shared routes.
     for (const sessionId of this.routeIncarnations.keys()) {
       if (!this.routes.has(sessionId)) {
@@ -208,28 +234,17 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     expectedIncarnationIsAuthoritative = false
   ): DaemonSessionOwnerResolution<T> {
     const candidates = inventory.candidatesBySessionId.get(sessionId) ?? []
-    const providers = new Set(candidates.map(({ provider }) => provider))
-    const exactProviders = new Set(
-      candidates
-        .filter(({ process }) => process.incarnationId === expectedIncarnationId)
-        .map(({ provider }) => provider)
-    )
-    const exactProvider =
-      expectedIncarnationId && exactProviders.size === 1
-        ? exactProviders.values().next().value
-        : undefined
-    const soleProvider = providers.size === 1 ? providers.values().next().value : undefined
-    const provider =
-      (exactProvider && (inventory.complete || expectedIncarnationIsAuthoritative)
-        ? exactProvider
-        : undefined) ??
-      (!expectedIncarnationIsAuthoritative && inventory.complete ? soleProvider : undefined)
-    if (provider) {
-      const process = candidates.find((candidate) => candidate.provider === provider)?.process
-      this.recordRoute(sessionId, provider, process?.incarnationId)
-      return { kind: 'owner', provider }
+    const owner = chooseSessionOwner({
+      candidates,
+      inventoryComplete: inventory.complete,
+      expectedIncarnationId,
+      expectedIncarnationIsAuthoritative
+    })
+    if (owner) {
+      this.recordRoute(sessionId, owner.provider, owner.process.incarnationId)
+      return { kind: 'owner', provider: owner.provider }
     }
-    if (inventory.complete && providers.size === 0 && this.providers.length > 0) {
+    if (inventory.complete && candidates.length === 0 && this.providers.length > 0) {
       return { kind: 'absent' }
     }
     return { kind: 'unknown' }
@@ -257,7 +272,12 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
         this.failedProviderCooldowns.delete(provider)
         try {
           return { provider, processes: await provider.listProcesses({ deadlineMs }) }
-        } catch {
+        } catch (error) {
+          // A provider proven gone owns nothing; leaving it would keep every attach unverifiable.
+          if (this.isProviderProvenGone?.(provider, error)) {
+            this.forgetProvider(provider)
+            return { provider, processes: [] }
+          }
           if (epoch === this.epoch) {
             this.failedProviderCooldowns.set(provider, Date.now() + FAILED_PROVIDER_COOLDOWN_MS)
           }

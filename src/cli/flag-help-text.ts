@@ -13,6 +13,10 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   direction:
     '--direction <dir>      Direction: up|down|left|right for scroll, horizontal|vertical for split',
   'display-name': '--display-name <name>  Override the Orca display name',
+  environment:
+    '--environment <selector> Run against a saved paired Orca server (id or name); terminal handles belong to the server that issued them',
+  'pairing-code':
+    '--pairing-code <code>  Run against a remote Orca server using an orca://pair?... code',
   'element-index': '--element-index <n>   Element index from get-app-state',
   title: '--title <text>         Custom title for the terminal tab (omit to reset)',
   enter: '--enter                Append Enter after sending text',
@@ -100,6 +104,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'reuse-session':
     '--reuse-session        Reuse the previous live session for existing-workspace runs',
   'fresh-session': '--fresh-session        Disable session reuse for future runs',
+  'extra-agent-args':
+    '--extra-agent-args=<args> Extra agent arguments for fresh runs; empty clears',
   'workspace-mode': '--workspace-mode <mode> existing or new-per-run',
   'missed-run-grace-minutes': '--missed-run-grace-minutes <n> Missed-run grace window',
   'value-stdin': '--value-stdin         Read set-value payload from stdin',

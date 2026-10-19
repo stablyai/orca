@@ -449,13 +449,12 @@ describe('CommitMessageAiPane', () => {
   })
 
   it('keeps local active worktree discovery scoped to local, not unknown', () => {
-    expect(getCommitMessageSettingsPaneDiscoveryHostKey(buildSettings(), null, true)).toBe('local')
-    expect(getCommitMessageSettingsPaneDiscoveryHostKey(buildSettings(), undefined, true)).toBe(
-      'unknown'
-    )
+    const local = { kind: 'local' } as const
+    expect(getCommitMessageSettingsPaneDiscoveryHostKey(local, null, true)).toBe('local')
+    expect(getCommitMessageSettingsPaneDiscoveryHostKey(local, undefined, true)).toBe('unknown')
     expect(
       getCommitMessageSettingsPaneDiscoveryHostKey(
-        buildSettings({ activeRuntimeEnvironmentId: 'env-1' }),
+        { kind: 'environment', environmentId: 'env-1' },
         null,
         true
       )

@@ -18,6 +18,7 @@ import {
   getLinearStateMarkerStyle
 } from '@/components/linear-state-pill-style'
 import { LoaderCircle, ChevronDown } from 'lucide-react'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 export type LinearProjectTab = 'overview' | 'issues'
 export type LinearGroupSection = {
   key: string
@@ -84,7 +85,7 @@ export function LinearStateCell({
   sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const providerSettings = sourceContext ?? settings
+  const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const states = useTeamStates(issue.team.id, providerSettings, issue.workspaceId)
   const [open, setOpen] = useState(false)

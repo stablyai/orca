@@ -35,7 +35,7 @@ describe('SessionRowTrailingActions', () => {
     const markup = renderActions(vi.fn())
 
     expect(markup).toContain('data-testid="ai-vault-session-continue-in-new-session"')
-    expect(markup).toContain('aria-label="Continue in New Session…"')
+    expect(markup).toContain('aria-label="Hand Off to Another Agent"')
     // Why: edge-usage action lives in the hover group; the gating class is what
     // keeps it click-proof while the row is unhovered.
     const buttonMarkup = markup.split('data-testid="ai-vault-session-continue-in-new-session"')[0]

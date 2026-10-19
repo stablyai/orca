@@ -2,7 +2,10 @@ import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
 import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
 
-type DeferredSocketSource = Duplex & { setNoDelay?: (noDelay?: boolean) => unknown }
+type DeferredSocketSource = Duplex & {
+  setNoDelay?: (noDelay?: boolean) => unknown
+  settleRead?: (bytes: number) => void
+}
 
 export class BrowserNetworkDeferredSocket
   extends EventEmitter
@@ -21,7 +24,12 @@ export class BrowserNetworkDeferredSocket
     }
     this.source = source
     source.setNoDelay?.(this.noDelay)
-    source.on('data', (bytes) => this.emit('data', bytes))
+    source.on('data', (bytes: Buffer) => {
+      this.emit('data', bytes)
+      // Why: tunnel-socket listeners own emitted bytes and push back via pause(), but a
+      // credit-accounted source re-grants its peer window only for settled bytes.
+      source.settleRead?.(bytes.byteLength)
+    })
     source.on('end', () => this.emit('end'))
     source.on('close', () => {
       this.destroyed = true

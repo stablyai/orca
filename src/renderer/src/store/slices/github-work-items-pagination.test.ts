@@ -5,7 +5,7 @@ import {
   resetRemoteRuntimeMocks,
   runtimeEnvironmentCall
 } from './github-slice-test-harness'
-import type { AppState } from '../types'
+import { runtimeOwnedRepoState } from './store-test-helpers'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
 import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from './github-work-items-query-bounds'
@@ -158,10 +158,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
     const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
-      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
-    } as unknown as Partial<AppState>)
+    store.setState(runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/repo'))
 
     const result = await store
       .getState()
@@ -213,10 +210,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
     const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
-      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
-    } as unknown as Partial<AppState>)
+    store.setState(runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/repo'))
 
     const result = await store
       .getState()
@@ -246,10 +240,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
     const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
-      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
-    } as unknown as Partial<AppState>)
+    store.setState(runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/repo'))
 
     const result = await store
       .getState()
@@ -277,10 +268,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
     const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
-      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
-    } as unknown as Partial<AppState>)
+    store.setState(runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/repo'))
 
     const result = await store
       .getState()
@@ -299,10 +287,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
     const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
-      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
-    } as unknown as Partial<AppState>)
+    store.setState(runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/repo'))
 
     const result = await store
       .getState()

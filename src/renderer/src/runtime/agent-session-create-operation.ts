@@ -1,6 +1,6 @@
 import type { RuntimeCreateAgentSessionRequest } from '../../../shared/agent-session-host-authority'
 import { createAgentSessionOperationId } from './agent-session-operation-id'
-import { RuntimeRpcCallError } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 
 const MAX_AMBIGUOUS_CREATE_ATTEMPTS = 2
 

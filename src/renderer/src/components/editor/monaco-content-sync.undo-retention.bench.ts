@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { bench, expect } from 'vitest'
+import { test, expect } from 'vitest'
 import * as monaco from 'monaco-editor'
 import { syncContentUpdate, type MonacoContentSyncMode } from './monaco-content-sync'
 
@@ -59,9 +59,8 @@ async function measureUndoRetention(mode: MonacoContentSyncMode): Promise<{
   return { arrayBufferDelta, canUndo, undoBytes }
 }
 
-bench(
-  '50 MiB read-only live-tail undo retention',
-  async () => {
+test('50 MiB read-only live-tail undo retention', async ({ bench }) => {
+  await bench('50 MiB read-only live-tail undo retention', async () => {
     const undoable = await measureUndoRetention('undoable')
     const readOnlyLiveTail = await measureUndoRetention('read-only-live-tail')
     console.log(
@@ -73,6 +72,5 @@ bench(
     expect(readOnlyLiveTail.canUndo).toBe(false)
     expect(readOnlyLiveTail.undoBytes).toBe(0)
     expect(readOnlyLiveTail.arrayBufferDelta).toBe(0)
-  },
-  { iterations: 1, time: 1, warmupIterations: 0, warmupTime: 0 }
-)
+  }).run({ iterations: 1, time: 1, warmupIterations: 0, warmupTime: 0 })
+})

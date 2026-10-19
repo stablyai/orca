@@ -66,7 +66,8 @@ function healthySample(at = startedAt): IncidentSample {
           'director.memory': signal(0.3, at),
           'director.concurrency': signal(5, at),
           'director.errors': signal(0, at),
-          'auth.errors': signal(0, at)
+          'auth.errors': signal(0, at),
+          'auth.requests': signal(58_000, at)
         }
       },
       'relay-logs': {
@@ -287,13 +288,40 @@ describe('incident monitor evaluator', () => {
     expect(evaluateIncidentSample(excess, startedAt).failures).toContainEqual(
       expect.objectContaining({ signal: 'director.errors', observed: 16, threshold: 15 })
     )
-    const auth = healthySample()
-    auth.sources['cloud-monitoring']!.signals['auth.errors'] = signal(1)
-    expect(evaluateIncidentSample(auth, startedAt).status).toBe('freeze')
     const pressure = healthySample()
     pressure.sources['cloud-monitoring']!.signals['director.errors'] = signal(1)
     pressure.sources['cloud-monitoring']!.signals['cloud_sql.cpu'] = signal(0.81)
     expect(evaluateIncidentSample(pressure, startedAt).status).toBe('freeze')
+  })
+
+  it('tolerates isolated auth errors but freezes on a burst or a high error ratio', () => {
+    const isolated = healthySample()
+    isolated.sources['cloud-monitoring']!.signals['auth.errors'] = signal(1)
+    expect(evaluateIncidentSample(isolated, startedAt).status).toBe('green')
+    isolated.sources['cloud-monitoring']!.signals['auth.errors'] = signal(2)
+    expect(evaluateIncidentSample(isolated, startedAt).status).toBe('green')
+
+    const burst = healthySample()
+    burst.sources['cloud-monitoring']!.signals['auth.errors'] = signal(3)
+    expect(evaluateIncidentSample(burst, startedAt).failures).toEqual([
+      expect.objectContaining({ signal: 'auth.errors', observed: 3, threshold: 2 })
+    ])
+
+    const ratio = healthySample()
+    ratio.sources['cloud-monitoring']!.signals['auth.errors'] = signal(2)
+    ratio.sources['cloud-monitoring']!.signals['auth.requests'] = signal(1_000)
+    expect(evaluateIncidentSample(ratio, startedAt).failures).toEqual([
+      expect.objectContaining({ signal: 'auth.error_ratio', observed: 0.002, threshold: 0.001 })
+    ])
+    ratio.sources['cloud-monitoring']!.signals['auth.requests'] = signal(0)
+    expect(evaluateIncidentSample(ratio, startedAt).status).toBe('freeze')
+
+    const unmeasured = healthySample()
+    unmeasured.sources['cloud-monitoring']!.signals['auth.errors'] = signal(1)
+    delete unmeasured.sources['cloud-monitoring']!.signals['auth.requests']
+    expect(evaluateIncidentSample(unmeasured, startedAt).failures).toEqual([
+      expect.objectContaining({ code: 'signal_missing', signal: 'auth.requests' })
+    ])
   })
 
   it('freezes on SQL, director, relay pool, heartbeat, and migration breaches', () => {
@@ -613,6 +641,71 @@ describe('incident monitor evaluator', () => {
     }
     expect(evaluateIncidentSample(membership, startedAt).failures).toContainEqual(
       expect.objectContaining({ code: 'selector_mismatch' })
+    )
+  })
+
+  // Why: the director refuses cell-status and migration reads on a reserve cell (2026-10-19, c7).
+  it('judges a reserve cell on probes, logs and selector, without its refused reads', () => {
+    const reserveSample = (): IncidentSample => {
+      const sample = healthySample()
+      sample.cells[0] = { ...sample.cells[0]!, reserve: true }
+      const admin = sample.sources['director-admin']!.signals
+      delete admin['cell.production-gce-c1.heartbeat_fresh']
+      delete admin['cell.production-gce-c1.heartbeat_age_ms']
+      delete admin['cell.production-gce-c1.migration_blocked']
+      delete admin['cell.production-gce-c1.migration_target_inactive']
+      return sample
+    }
+    expect(evaluateIncidentSample(reserveSample(), startedAt)).toMatchObject({
+      status: 'green',
+      failures: []
+    })
+
+    const crowded = reserveSample()
+    crowded.sources['relay-logs']!.signals['cell.production-gce-c1.queued_bytes'] = signal(
+      INCIDENT_MONITOR_THRESHOLDS.cellQueuedBytes + 1
+    )
+    expect(evaluateIncidentSample(crowded, startedAt).failures).toContainEqual(
+      expect.objectContaining({ signal: 'cell.production-gce-c1.queued_bytes' })
+    )
+
+    // The connections ceiling is never skipped: the collector's configured cap, else the default.
+    const busy = reserveSample()
+    busy.sources['relay-logs']!.signals['cell.production-gce-c1.connections'] = signal(731)
+    expect(evaluateIncidentSample(busy, startedAt).failures).toContainEqual(
+      expect.objectContaining({ signal: 'cell.production-gce-c1.connections', threshold: 500 })
+    )
+    busy.sources['director-admin']!.signals['cell.production-gce-c1.connection_hard_cap'] =
+      signal(1_000)
+    expect(evaluateIncidentSample(busy, startedAt).status).toBe('green')
+    busy.sources['relay-logs']!.signals['cell.production-gce-c1.connections'] = signal(1_000)
+    expect(evaluateIncidentSample(busy, startedAt).failures).toContainEqual(
+      expect.objectContaining({ signal: 'cell.production-gce-c1.connections', threshold: 999 })
+    )
+
+    const unready = reserveSample()
+    unready.sources['active-probe']!.signals['cell.production-gce-c1.ready'] = signal(0)
+    expect(evaluateIncidentSample(unready, startedAt).failures).toContainEqual(
+      expect.objectContaining({ signal: 'cell.production-gce-c1.ready' })
+    )
+
+    const unknownAdmission = reserveSample()
+    delete unknownAdmission.sources['director-admin']!.signals[
+      'cell.production-gce-c1.admission_state'
+    ]
+    expect(evaluateIncidentSample(unknownAdmission, startedAt).failures).toContainEqual({
+      code: 'signal_missing',
+      source: 'director-admin',
+      signal: 'cell.production-gce-c1.admission_state'
+    })
+
+    const notReserve = reserveSample()
+    notReserve.cells[0] = { ...notReserve.cells[0]!, reserve: false }
+    expect(evaluateIncidentSample(notReserve, startedAt).failures).toContainEqual(
+      expect.objectContaining({
+        code: 'signal_missing',
+        signal: 'cell.production-gce-c1.heartbeat_fresh'
+      })
     )
   })
 })

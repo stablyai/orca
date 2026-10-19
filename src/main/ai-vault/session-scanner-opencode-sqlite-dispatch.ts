@@ -25,7 +25,7 @@ export async function handleOpenCodeSqliteRequest(
     if (request.kind === 'native-page' || request.kind === 'native-signal') {
       const value =
         request.kind === 'native-signal'
-          ? readOpenCodeTranscriptSignal(request.dbPath, request.sessionId)
+          ? readOpenCodeTranscriptSignal(request.dbPath, request.sessionId, request.agent)
           : readOpenCodeTranscriptPage({ ...request, limit: request.limit ?? 50 })
       return { id: request.id, ok: true, value }
     }
@@ -36,13 +36,15 @@ export async function handleOpenCodeSqliteRequest(
           ? await listOpenCode2SqliteSessions({
               dbPaths: request.dbPaths,
               limit: request.limit ?? Infinity,
-              issues
+              issues,
+              scopePaths: request.scopePaths
             })
           : await listOpenCodeSqliteSessions({
               dbPaths: request.dbPaths,
               limit: request.limit ?? Infinity,
               issues,
-              agent: request.agent === 'zcode' ? 'zcode' : 'opencode'
+              agent: request.agent === 'zcode' ? 'zcode' : 'opencode',
+              scopePaths: request.scopePaths
             })
       return { id: request.id, ok: true, value: { candidates, issues } }
     }

@@ -8,7 +8,6 @@ import {
 } from './floating-terminal-panel-bounds'
 import { persistFloatingTerminalPanelMaximized } from './floating-terminal-panel-view-state'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
-import type { FloatingTerminalPanelStoreState } from './use-floating-terminal-panel-store-state'
 
 type FloatingTerminalPanelMaximizeInput = Pick<
   FloatingTerminalPanelLocalState,
@@ -20,9 +19,7 @@ type FloatingTerminalPanelMaximizeInput = Pick<
   | 'committedBoundsRef'
   | 'boundsSourceRef'
   | 'stagedBoundsRef'
-  | 'terminalPaneRegistry'
-> &
-  Pick<FloatingTerminalPanelStoreState, 'tabs'> & { open: boolean }
+> & { open: boolean }
 
 export function useFloatingTerminalPanelMaximize({
   bounds,
@@ -33,8 +30,6 @@ export function useFloatingTerminalPanelMaximize({
   committedBoundsRef,
   boundsSourceRef,
   stagedBoundsRef,
-  terminalPaneRegistry,
-  tabs,
   open
 }: FloatingTerminalPanelMaximizeInput) {
   const toggleMaximized = useCallback(() => {
@@ -105,10 +100,6 @@ export function useFloatingTerminalPanelMaximize({
       maximizePanel()
     }
   }, [open, maximizePanel])
-
-  useEffect(() => {
-    terminalPaneRegistry.retainOnly(tabs.map((tab) => tab.id))
-  }, [tabs, terminalPaneRegistry])
 
   return { toggleMaximized }
 }

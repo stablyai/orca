@@ -47,7 +47,6 @@ type GuestFake = {
   setBackgroundThrottling: (value: boolean) => void
   setWebRTCIPHandlingPolicy: (policy: string) => void
   setWindowOpenHandler: (handler: (details: { url: string; frameName: string }) => unknown) => void
-  executeJavaScriptInIsolatedWorld: ReturnType<typeof vi.fn>
   debugger: {
     isAttached: () => boolean
     attach: ReturnType<typeof vi.fn>
@@ -79,7 +78,6 @@ function createGuest(id: number, url: string): GuestFake {
     setWindowOpenHandler: (handler) => {
       guest.windowOpenHandler = handler
     },
-    executeJavaScriptInIsolatedWorld: vi.fn(async () => undefined),
     debugger: {
       isAttached: () => true,
       attach: vi.fn(),
@@ -147,13 +145,12 @@ describe('guest policy profiles', () => {
   // The presence half of every absence below: a browsing guest observably takes all of it through
   // the same method, so a profile that fenced nothing — or an attach path that stopped installing
   // anything at all — cannot pass these by being uniformly empty.
-  it('gives a browsing guest link routing, popups and auth-identity detach tracking', () => {
+  it('gives a browsing guest popups, link gestures and auth-identity detach tracking', () => {
     const guest = createGuest(300, 'https://example.com/')
 
     browserManager.attachGuestPolicies(guest as never)
 
-    expect(listenerCount(guest, 'dom-ready')).toBe(1)
-    expect(listenerCount(guest, 'frame-created')).toBe(1)
+    expect(listenerCount(guest, 'input-event')).toBe(1)
     expect(listenerCount(guest, 'did-create-window')).toBe(1)
     expect(guest.debugger.on).toHaveBeenCalledWith('detach', expect.any(Function))
     // Why: a plain browsing tab must never attach a debugger; Cloudflare treats CDP as a bot signal.
@@ -165,12 +162,10 @@ describe('guest policy profiles', () => {
   it('gives a workspace-document guest none of it', () => {
     const { guest } = attachPreviewGuest()
 
-    expect(listenerCount(guest, 'dom-ready')).toBe(0)
-    expect(listenerCount(guest, 'frame-created')).toBe(0)
+    expect(listenerCount(guest, 'input-event')).toBe(0)
     expect(listenerCount(guest, 'did-create-window')).toBe(0)
     expect(guest.debugger.on).not.toHaveBeenCalled()
     expect(guest.debugger.sendCommand).not.toHaveBeenCalled()
-    expect(guest.executeJavaScriptInIsolatedWorld).not.toHaveBeenCalled()
   })
 
   it('holds a workspace-document guest inside the grant it is showing', () => {
@@ -204,7 +199,7 @@ describe('guest policy profiles', () => {
     // The manager's own bookkeeping was reached too: a second attach is refused while the id is
     // still marked policy-attached, and accepted once its teardown has run.
     browserManager.attachGuestPolicies(guest as never)
-    expect(listenerCount(guest, 'dom-ready')).toBe(1)
+    expect(listenerCount(guest, 'did-create-window')).toBe(1)
   })
 
   // The seam the whole split rests on: one public door answers for both halves, and each page id
@@ -252,7 +247,7 @@ describe('guest policy profiles', () => {
 
     browserManager.attachGuestPolicies(guest as never)
 
-    expect(listenerCount(guest, 'dom-ready')).toBe(0)
+    expect(listenerCount(guest, 'did-create-window')).toBe(0)
     expect(listenerCount(guest, 'will-navigate')).toBe(1)
   })
 })

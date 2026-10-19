@@ -9,7 +9,7 @@ import {
   getGitHubPRCacheKey,
   getGitHubRepoCacheKey,
   getLegacyGitHubPRCacheKey
-} from '@/store/slices/github-cache-key'
+} from '../../../../shared/github/github-cache-key'
 import { prChecksCacheSuffix } from '@/store/github/cache-identity'
 import {
   buildParentPrChecksProjection,

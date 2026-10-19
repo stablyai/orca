@@ -3,10 +3,11 @@ import { isQoderHeadlessCommand } from './qoder-headless-command'
 import { isAnteHeadlessOneShotCommand } from './ante-headless-command'
 import { isDshNonInteractiveCommand } from './dsh-launch-command'
 import { isMuseHeadlessOneShotCommand } from './muse-headless-command'
+import { isDsbHeadlessOneShotCommand } from './dsb-headless-command'
 import { isZCodeHeadlessOneShotCommand } from './zcode-headless-command'
 import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-command'
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
-import type { TuiAgent } from './tui-agent'
+import type { TerminalAgent } from './terminal-agent'
 
 // Why: a table (not an if-chain) so adding an agent is one entry; Claude and Trae share
 // the same `--print` one-shot contract, Ante's `--prompt` form, Prime Agent's
@@ -15,7 +16,7 @@ import type { TuiAgent } from './tui-agent'
 // and JSON-RPC stdio profiles, and none of those can answer a prompt in the pane either,
 // which is what this table gates.
 const HEADLESS_ONE_SHOT_MATCHERS: Partial<
-  Record<TuiAgent, (tokens: readonly string[]) => boolean>
+  Record<TerminalAgent, (tokens: readonly string[]) => boolean>
 > = {
   qoder: isQoderHeadlessCommand,
   'qoder-cn': isQoderHeadlessCommand,
@@ -26,14 +27,18 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   ante: isAnteHeadlessOneShotCommand,
   muse: isMuseHeadlessOneShotCommand,
   zcode: isZCodeHeadlessOneShotCommand,
-  dsh: isDshNonInteractiveCommand
+  dsh: isDshNonInteractiveCommand,
+  dsb: isDsbHeadlessOneShotCommand
 }
 
-export function isHeadlessOneShotAgentCommand(agent: TuiAgent, tokens: readonly string[]): boolean {
+export function isHeadlessOneShotAgentCommand(
+  agent: TerminalAgent,
+  tokens: readonly string[]
+): boolean {
   return HEADLESS_ONE_SHOT_MATCHERS[agent]?.(tokens) ?? false
 }
 
-type AgentCommandRecognition = { agent: TuiAgent } | null
+type AgentCommandRecognition = { agent: TerminalAgent } | null
 
 export function filterHeadlessOneShotAgentCommand<T extends AgentCommandRecognition>(
   recognition: T,

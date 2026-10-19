@@ -23,7 +23,7 @@ import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import { makeTab } from '@/store/slices/store-test-helpers'
+import { makeTab } from '../../store/slices/store-session-test-harness'
 import {
   createTestStore,
   mockApi,

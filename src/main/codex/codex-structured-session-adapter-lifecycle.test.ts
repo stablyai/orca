@@ -1,3 +1,4 @@
+import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type {
@@ -16,6 +17,7 @@ import {
   type CodexStructuredLaunch,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'
 
@@ -25,7 +27,7 @@ function identityFor(sessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'ws-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD_ID }
+    providerHandle: codexProviderHandle(THREAD_ID)
   }
 }
 
@@ -124,7 +126,11 @@ async function acquired(
   events: CodexStructuredSessionEvent[] = []
 ): Promise<CodexStructuredSessionAdapter> {
   const adapter = adapterFor(codex, launch, events)
-  await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+  await acquireReadyCodexForTest(adapter, {
+    identity: identityFor('session-1'),
+    fence: 7,
+    spawnToken: 'spawn-9'
+  })
   return adapter
 }
 
@@ -132,8 +138,16 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
   it('keeps sessions isolated and closes each child once', async () => {
     const codex = fakeCodex()
     const adapter = adapterFor(codex)
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 1, spawnToken: 'spawn-a' })
-    await adapter.acquire({ identity: identityFor('session-2'), fence: 1, spawnToken: 'spawn-b' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 1,
+      spawnToken: 'spawn-a'
+    })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-2'),
+      fence: 1,
+      spawnToken: 'spawn-b'
+    })
 
     codex.connections[0].handlers.onServerRequest?.({
       id: 21,
@@ -188,9 +202,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
         fence: 7
       })
     ).rejects.toThrow('no live codex app-server')
-    expect(await adapter.historyFilePath({ identity: identityFor('session-1') })).toBe(
-      '/rollouts/abc.jsonl'
-    )
+    expect(adapter.backgroundTaskStops('session-1')).toBeDefined()
     await expect(adapter.closeSession('session-1')).resolves.toBe(false)
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
   })
@@ -199,15 +211,40 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     const adapter = await acquired(codex, {}, events)
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 8, spawnToken: 'spawn-10' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 8,
+      spawnToken: 'spawn-10'
+    })
     const endedBeforeStaleExit = events.filter((event) => event.type === 'ended').length
 
     codex.connections[0].handlers.onExit?.(new Error('the superseded child died'))
 
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(endedBeforeStaleExit)
-    expect(await adapter.historyFilePath({ identity: identityFor('session-1') })).toBe(
-      '/rollouts/abc.jsonl'
+    expect(adapter.backgroundTaskStops('session-1')).toBeDefined()
+  })
+
+  it('times turn and item boundaries at receipt, and nothing else', async () => {
+    const codex = fakeCodex()
+    const events: CodexStructuredSessionEvent[] = []
+    await acquired(codex, {}, events)
+    const connection = codex.connections[0]
+    const item = { type: 'reasoning', id: 'r-1', summary: [], content: [] }
+    connection.handlers.onNotification?.('item/started', { threadId: THREAD_ID, item })
+    connection.handlers.onNotification?.('item/reasoning/summaryTextDelta', {
+      threadId: THREAD_ID,
+      itemId: 'r-1',
+      delta: 'Planning'
+    })
+    connection.handlers.onNotification?.('item/completed', { threadId: THREAD_ID, item })
+    const timed = events.flatMap((event) =>
+      event.type === 'notification' ? [[event.method, event.observedAt]] : []
     )
+    expect(timed).toEqual([
+      ['item/started', 1_700_000_000_500],
+      ['item/reasoning/summaryTextDelta', undefined],
+      ['item/completed', 1_700_000_000_500]
+    ])
   })
 
   it('ignores Codex traffic that arrives after the session is gone', async () => {
@@ -245,7 +282,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
       publish: () => {}
     }
     const adapter = adapterFor(codex)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',

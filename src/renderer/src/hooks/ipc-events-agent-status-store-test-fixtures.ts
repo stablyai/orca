@@ -77,6 +77,19 @@ export function applyMockAgentStatusUpdate(
     | undefined
   >
   const existing = statuses[update.paneKey]
+  if (update.kind === 'programStatus') {
+    if (!existing) {
+      return false
+    }
+    const { programStatus: _previous, ...rest } = existing
+    state.agentStatusByPaneKey = {
+      ...statuses,
+      [update.paneKey]: update.programStatus
+        ? { ...rest, programStatus: update.programStatus }
+        : rest
+    }
+    return true
+  }
   const updatedAt = update.timing?.updatedAt
   if (
     existing?.updatedAt !== undefined &&
@@ -170,11 +183,11 @@ export function buildStoreState(overrides: StoreLike): StoreLike {
     terminalLayoutsByTabId: {},
     ptyIdsByTabId: {},
     suppressedPtyExitIds: {},
-    markWorktreeUnread: vi.fn(),
-    markAgentCompletionPaneUnread: vi.fn(),
+    markAgentAttentionUnread: vi.fn(),
     agentStatusByPaneKey: {},
     setAgentStatuses: vi.fn(() => []),
     recordAgentProviderSession: vi.fn(),
+    setAgentProgramStatus: vi.fn(() => true),
     clearTransientAgentStatuses: vi.fn(),
     recentlyClosedAgentStatusTabIds: {},
     repos: [],
@@ -207,6 +220,11 @@ export function buildStoreState(overrides: StoreLike): StoreLike {
             update.routing,
             update.metadata
           )
+        } else if (update.kind === 'programStatus') {
+          const setProgramStatus = state.setAgentProgramStatus
+          if (typeof setProgramStatus === 'function') {
+            setProgramStatus(update.paneKey, update.programStatus)
+          }
         } else {
           const setStatus = state.setAgentStatus as AppState['setAgentStatus']
           setStatus(

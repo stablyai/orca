@@ -22,7 +22,7 @@ import {
 } from './appimage-stable-launcher'
 import { getBundledLauncherPath } from './bundled-cli-launcher-path'
 import { buildBareOrcaCliScript } from './linux-bare-orca-dispatcher'
-import { quoteShell } from './cli-install-path-format'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
 
 const SHIM_DIR_NAME = 'linux-orca-cli-shim'
 
@@ -175,12 +175,12 @@ function buildAppImageLiveLauncherScript(
   launcherPath: string,
   fence: AppImageRuntimeFence
 ): string {
-  const runtimePid = quoteShell(String(fence.pid))
-  const runtimeStartTime = quoteShell(fence.startTime)
-  const runtimeRoot = quoteShell(fence.runtimeRoot)
-  const expectedRuntimeIdentity = quoteShell(fence.runtimeIdentity)
-  const expectedLauncherIdentity = quoteShell(fence.launcherIdentity)
-  const quotedLauncherPath = quoteShell(launcherPath)
+  const runtimePid = quotePosixShellDoubleQuotedApostrophe(String(fence.pid))
+  const runtimeStartTime = quotePosixShellDoubleQuotedApostrophe(fence.startTime)
+  const runtimeRoot = quotePosixShellDoubleQuotedApostrophe(fence.runtimeRoot)
+  const expectedRuntimeIdentity = quotePosixShellDoubleQuotedApostrophe(fence.runtimeIdentity)
+  const expectedLauncherIdentity = quotePosixShellDoubleQuotedApostrophe(fence.launcherIdentity)
+  const quotedLauncherPath = quotePosixShellDoubleQuotedApostrophe(launcherPath)
   return `#!/usr/bin/env bash
 runtime_pid=${runtimePid}
 runtime_start_time=${runtimeStartTime}

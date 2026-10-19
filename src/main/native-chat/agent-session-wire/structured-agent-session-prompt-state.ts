@@ -8,6 +8,7 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 type PendingPromptBody = Extract<AgentJournalItemBody, { kind: 'approval' | 'question' }>
 
@@ -90,4 +91,13 @@ export function validatePendingPrompt(
     }
   }
   return { ok: true, item, prompt }
+}
+
+/** A pending prompt an ended generation raised (`StructuredAgentSessionCurrentWork.isCurrentItem`):
+ *  no live provider holds it, so a Cancel of it reaches no provider. */
+export function isEndedGenerationPrompt(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
+  pending: Extract<PendingPromptValidation, { ok: true }>
+): boolean {
+  return !contextStructuredAgentSessionCurrentWork(ctx).isCurrentItem(pending.item.itemId)
 }

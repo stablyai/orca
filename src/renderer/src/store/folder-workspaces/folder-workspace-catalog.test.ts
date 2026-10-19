@@ -3,9 +3,9 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import {
   getFolderWorkspaceCatalogReplacementIdentities,
-  getFolderWorkspaceHostId,
   mergeFetchedFolderWorkspaceCatalog
 } from './folder-workspace-catalog'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
 
 function makeProjectGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
   return {

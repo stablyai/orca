@@ -16,8 +16,6 @@ export type UnconfirmedSend = {
   text: string
   normalizedText: string
   baselineTailMessageId: string | null
-  /** Queued-draft cards on screen at send time; see `findQueuedUnconfirmedSends`. */
-  baselineQueuedMessageIds?: readonly string[]
   deadline: ReturnType<typeof setTimeout> | null
 }
 
@@ -65,22 +63,24 @@ export type PendingImagePreviewEcho = {
   baselineTailMessageId: string | null
 }
 
-export type LandedImagePreviewEcho = {
-  pendingId: string
+/** This phone's photos for the row they were sent in. */
+export type SentImagePreview = {
   messageId: string
   images: string[]
 }
 
+export type LandedImagePreviewEcho = SentImagePreview & { pendingId: string }
+
 const SENT_IMAGE_PREVIEW_LIMIT = 32
 const SENT_IMAGE_PREVIEW_SESSION_LIMIT = 8
 
-export function mergeLandedImagePreviewEchoes(
+export function mergeSentImagePreviews(
   previous: Record<string, Record<string, string[]>>,
   sessionKey: string,
-  landed: readonly LandedImagePreviewEcho[]
+  previews: readonly SentImagePreview[]
 ): Record<string, Record<string, string[]>> {
   const entries = Object.entries(previous[sessionKey] ?? {})
-  for (const preview of landed) {
+  for (const preview of previews) {
     const existingIndex = entries.findIndex(([messageId]) => messageId === preview.messageId)
     if (existingIndex !== -1) {
       entries.splice(existingIndex, 1)
@@ -219,33 +219,6 @@ export function findLandedImagePreviewEchoes(
     landed.push({ pendingId: entry.id, messageId: candidate.id, images: entry.images })
   }
   return landed
-}
-
-/** Holds the host already took as queued-draft cards: a card not on screen at
- *  send time with the send's text. It will reach the transcript only when it
- *  drains, which can be long past the unconfirmed deadline. */
-export function findQueuedUnconfirmedSends(
-  cards: readonly { messageId: string; text: string }[],
-  entries: readonly UnconfirmedSend[]
-): UnconfirmedSend[] {
-  if (cards.length === 0) {
-    return []
-  }
-  const claimed = new Set<string>()
-  const held: UnconfirmedSend[] = []
-  for (const entry of entries) {
-    const card = cards.find(
-      (candidate) =>
-        !claimed.has(candidate.messageId) &&
-        !(entry.baselineQueuedMessageIds ?? []).includes(candidate.messageId) &&
-        normalizeNativeChatUserText(candidate.text) === entry.normalizedText
-    )
-    if (card) {
-      claimed.add(card.messageId)
-      held.push(entry)
-    }
-  }
-  return held
 }
 
 export function findLandedUnconfirmedSends(

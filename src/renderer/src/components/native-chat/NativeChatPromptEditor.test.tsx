@@ -1,7 +1,7 @@
 import { readNativeChatDraftDocument } from './native-chat-draft-cache'
 // @vitest-environment happy-dom
 import { createRef } from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import {
@@ -28,7 +28,7 @@ function setup(value = '') {
   return {
     ...view,
     input: inputRef.current!,
-    editor: promptEditor(screen.getByRole('textbox')),
+    editor: promptEditor(within(view.container).getByRole('textbox')),
     onChange
   }
 }
@@ -48,6 +48,27 @@ describe('native chat skill editor', () => {
     })
     expect(container.querySelectorAll('[data-native-chat-skill]')).toHaveLength(1)
     expect(input.value).toBe('Please $review $review typed manually')
+  })
+
+  it('shows attached files as filename pills that serialize to the reference the agent reads', async () => {
+    const { input, container, onChange } = setup('See  please')
+    act(() => input.setSelectionRange(4, 4))
+    await act(async () =>
+      input.insertFileReferences!(['/Users/abc/Downloads/test (1).csv', 'C:\\docs\\letter.pdf'])
+    )
+    const pills = [...container.querySelectorAll('[data-native-chat-file-reference]')]
+    expect(pills.map((pill) => pill.textContent)).toEqual(['test (1).csv', 'letter.pdf'])
+    expect(pills[0].getAttribute('title')).toBe('/Users/abc/Downloads/test (1).csv')
+    const references = '@"/Users/abc/Downloads/test (1).csv" @C:\\docs\\letter.pdf '
+    expect(input.value).toBe(`See ${references} please`)
+    expect(input.selectionStart).toBe(4 + references.length)
+    expect(onChange).toHaveBeenCalled()
+    const edited = input.value.replace('letter.pdf', 'letter.pd')
+    act(() => {
+      input.value = edited
+    })
+    expect(container.querySelectorAll('[data-native-chat-file-reference]')).toHaveLength(1)
+    expect(input.value).toBe(edited)
   })
 
   it('keeps typed and restored invocations plain', () => {
@@ -73,6 +94,22 @@ describe('native chat skill editor', () => {
     })
     expect(input.value).toBe('$review ')
     expect(container.querySelector('[data-native-chat-skill]')).not.toBeNull()
+  })
+
+  it('reads the current text and caret after edits and undo, separately per editor', async () => {
+    const first = setup('one')
+    const second = setup('second')
+    act(() => first.input.setSelectionRange(3, 3))
+    act(() => first.input.insertText!('!'))
+    expect(first.input.value).toBe('one!')
+    expect(first.input.selectionStart).toBe(4)
+    expect(second.input.value).toBe('second')
+    await act(async () => {
+      first.editor.commands.undo()
+    })
+    expect(first.input.value).toBe('one')
+    expect(first.input.selectionStart).toBe(3)
+    expect(second.input.value).toBe('second')
   })
 
   it('preserves multiple selected skills through multiline edits and clears them on send', async () => {

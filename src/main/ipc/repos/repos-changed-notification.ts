@@ -12,9 +12,9 @@ export function setRepoRemoteClientNotifier(notifier: RepoRemoteClientNotifier):
   repoRemoteClientNotifier = notifier
 }
 
-export function notifyReposChanged(mainWindow: BrowserWindow): void {
+export function notifyReposChanged(mainWindow: BrowserWindow | null): void {
   wakeFolderRepoGitUpgradeWatch()
-  if (!mainWindow.isDestroyed()) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('repos:changed')
   }
   // Why: paired clients only refetch a remote catalog on this event; without it a

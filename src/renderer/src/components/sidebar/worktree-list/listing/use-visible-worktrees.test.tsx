@@ -8,6 +8,8 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import { makeRepo, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
 import { useVisibleSidebarWorktrees } from './use-visible-worktrees'
 import type * as visibleWorktreesModule from '../../visible-worktrees'
+import { computeVisibleWorktreeIds, computeVisibleWorktrees } from '../../compute-visible-worktrees'
+import { sidebarHasActiveFilters } from '../../sidebar-filter-actions'
 
 const computeVisibleWorktreesCalls = { count: 0 }
 vi.mock('../../visible-worktrees', async (importOriginal) => {
@@ -33,6 +35,13 @@ describe('useVisibleSidebarWorktrees', () => {
   afterEach(() => {
     cleanup()
     useAppStore.setState(initialState, true)
+  })
+
+  it('keeps the pure filtering functions available through the sidebar module', async () => {
+    const facade = await vi.importActual<typeof visibleWorktreesModule>('../../visible-worktrees')
+    expect(facade.computeVisibleWorktreeIds).toBe(computeVisibleWorktreeIds)
+    expect(facade.computeVisibleWorktrees).toBe(computeVisibleWorktrees)
+    expect(facade.sidebarHasActiveFilters).toBe(sidebarHasActiveFilters)
   })
 
   it('projects both host rows through the primary sidebar pipeline', () => {

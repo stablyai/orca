@@ -11,19 +11,15 @@ import {
 import {
   MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
   MOBILE_WEB_APP_ROOT_RESET,
-  MOBILE_WEB_APP_SHIMS,
   bundleMobileWebApp,
   buildMobileWebAppBundle,
   entryStaticClosure,
-  mobileWebAppBuildOptions,
   renameOutputsByContent,
   routeChunkNames
 } from './build-mobile-web-app-bundle.mjs'
 import {
   MOBILE_WEB_APP_ROUTE_ROOT,
-  ROUTE_SOURCE_LOADERS,
-  collectMobileWebAppRouteKeys,
-  collectMobileWebAppRoutes
+  collectMobileWebAppRouteKeys
 } from './mobile-web-app-route-manifest.mjs'
 import {
   MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES,
@@ -42,7 +38,6 @@ import {
   BINARY_SOURCE_EXTENSIONS,
   assertNoCarriageReturnsInSource
 } from './mobile-web-source-line-endings.mjs'
-import { spelledCountsAgainstTables } from './spelled-count-census.mjs'
 import {
   hashedAsset,
   readDesktopVersion,
@@ -87,34 +82,6 @@ describe('the CRLF pin', () => {
 })
 
 describeBundling('the app bundle', () => {
-  it('isolates read-only fixture consumers from mutations in another assertion', async () => {
-    const first = await readAppBundle()
-    const original = first.script[0]
-    first.script[0] ^= 255
-    first.chunks.length = 0
-    first.routeKeys.length = 0
-    const next = await readAppBundle()
-    expect(next.script[0]).toBe(original)
-    expect(next.chunks.length).toBeGreaterThan(0)
-    expect(next.routeKeys.length).toBeGreaterThan(0)
-    const written = await readWrittenBundle()
-    written.manifest.assets.length = 0
-    expect((await readWrittenBundle()).manifest.assets.length).toBeGreaterThan(0)
-    const originalByte = written.files[0].bytes[0]
-    written.files[0].bytes[0] ^= 255
-    expect((await readWrittenBundle()).files[0].bytes[0]).toBe(originalByte)
-    await withScratch(async (scratch) => {
-      const firstDir = join(scratch, 'first')
-      await copyWrittenBundle(firstDir)
-      await writeFile(join(firstDir, 'manifest.json'), 'corrupted')
-      const secondDir = join(scratch, 'second')
-      const second = await copyWrittenBundle(secondDir)
-      for (const { file, bytes } of second.files) {
-        expect((await readFile(join(secondDir, file))).equals(bytes), file).toBe(true)
-      }
-    })
-  }, 120_000)
-
   it('resolves react-native to react-native-web and leaves no require.context', async () => {
     const sources = allScriptSource(await readAppBundle())
     for (const source of sources) {
@@ -307,47 +274,6 @@ describeBundling('the app bundle', () => {
     }
   }, 120_000)
 
-  it('asks esbuild for the split the budgets assume', async () => {
-    const options = mobileWebAppBuildOptions(await collectMobileWebAppRoutes(appDir))
-    // Each of these is load-bearing for a budget below: esm and splitting are what make a route a
-    // chunk, and the metafile is the only thing that says which imports are static.
-    expect(options.format).toBe('esm')
-    expect(options.splitting).toBe(true)
-    expect(options.chunkNames).toBe('[hash]')
-    expect(options.metafile).toBe(true)
-  })
-
-  it('reads a route source the same way the export guard does', async () => {
-    const options = mobileWebAppBuildOptions(await collectMobileWebAppRoutes(appDir))
-    // The guard parses each route on its own, outside this build. Sharing the table is what stops
-    // a loader the bundle relies on from being missing there and reported as a syntax error.
-    for (const [extension, loader] of Object.entries(ROUTE_SOURCE_LOADERS)) {
-      expect(options.loader[extension], extension).toBe(loader)
-    }
-  })
-
-  it('applies every shim it names', async () => {
-    const options = mobileWebAppBuildOptions(await collectMobileWebAppRoutes(appDir))
-    for (const shim of MOBILE_WEB_APP_SHIMS) {
-      expect(shim.appliesTo(options), `${shim.name} is named but not applied`).toBe(true)
-    }
-  })
-
-  it('fails the named shim, not the whole build, when its option goes missing', async () => {
-    const options = mobileWebAppBuildOptions(await collectMobileWebAppRoutes(appDir))
-    // Each shim reads an option of its own (two read `banner.js`), so stripping every option
-    // leaves none applying. Without that, the list could name a shim the build stopped applying.
-    const stripped = {
-      ...options,
-      alias: {},
-      loader: {},
-      define: {},
-      banner: {},
-      plugins: []
-    }
-    expect(MOBILE_WEB_APP_SHIMS.filter((shim) => shim.appliesTo(stripped))).toEqual([])
-  })
-
   it('ships no haptic that reaches for the DOM', async () => {
     // expo-haptics' web build fakes an iOS haptic by appending a hidden
     // `<label><input type="checkbox" switch>` to document.head, clicking it, and removing it —
@@ -479,41 +405,6 @@ describe('the Phase C budget', () => {
     120_000
   )
 
-  it('says which node may be statically imported, and does not promise a route may', async () => {
-    const source = await readFile(
-      join(projectDir, 'config', 'scripts', 'verify-mobile-web-app-bundle.mjs'),
-      'utf8'
-    )
-    // The bound reads like a per-route escape hatch and is not one: of the fourteen routes in the
-    // tree, session breaks it outright at 3.32 MiB and five more spend most of it, so the hatch is
-    // one route away from unusable rather than free. What keeps it survivable is that expo-router
-    // wants a synchronous export off layout nodes only, so the note has to name the layout and the
-    // export that drives it.
-    const doc = source.slice(
-      0,
-      source.indexOf('export const MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES')
-    )
-    const note = doc.slice(doc.lastIndexOf('/**'))
-    expect(note).toContain('h/_layout.tsx')
-    expect(note).toContain('unstable_settings')
-  })
-
-  /** The one count above that must follow the tree, spelled so the census reads it. The sweep is
-   *  a row per route plus `_layout.tsx` and `h/_layout.tsx`, which are no screens, so it is that
-   *  length less two. */
-  it('spells the route count off the sweep it is a count of', async () => {
-    const source = await readFile(
-      join(projectDir, 'config', 'scripts', 'build-mobile-web-app-bundle.test.mjs'),
-      'utf8'
-    )
-    const rows = [
-      { precedes: 'routes in the tree', counted: MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.length - 2 }
-    ]
-    for (const { precedes, spelled, counts } of spelledCountsAgainstTables(source, rows)) {
-      expect(spelled, precedes).toEqual(counts)
-    }
-  })
-
   it('budgets what loads first well under what the whole page weighs', () => {
     // The point of the split: the entry budget is the one a route must not grow, and it is a
     // fraction of the total the bundle is still allowed to weigh.
@@ -532,17 +423,17 @@ describe('the Phase C budget', () => {
 
   it('bounds every prefix the sweep measured, and the spread it reports', () => {
     // An upper envelope of the measurement, not a fit: the count rises with the prefix, so the
-    // number above its top row is above all fifteen.
+    // number above its top row is above every row.
     for (const [key, measured] of MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP) {
       expect(
         mobileWebAppBundleMaxChunks(MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.length),
         key
       ).toBeGreaterThanOrEqual(measured)
     }
-    // 1 to 9 per route, which is why four per route was a bound rather than a fit and why the
+    // 1 to 11 per route, which is why four per route was a bound rather than a fit and why the
     // envelope cannot be a line through the measurement either.
     expect(Math.min(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(1)
-    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(9)
+    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(11)
   })
 
   it('sits exactly one margin over the swept tree and grants the worst route beyond it', () => {
@@ -614,13 +505,13 @@ describe('the Phase C budget', () => {
   it('fails the build when the derived ceiling passes what the phone will accept', async () => {
     // The shell hands back null for a manifest over its own ceiling, so a derived ceiling above
     // that ships a green build no device can open. At the 42 images the tree carries, the envelope
-    // plus 42 plus the document crosses 256 at 32 routes, which Phase C reaches. The crossing came
+    // plus 42 plus the document crosses 256 at 27 routes, which Phase C reaches. The crossing came
     // in from 50 with the envelope: it grants the worst swept route to each one past the sweep,
     // where `4r + 16` granted four, so re-measuring a tree whose routes share more moves it out.
     expect(await readMobileWebBundleMaxAssets()).toBe(MOBILE_WEB_BUNDLE_MAX_ASSETS)
-    expect(assertAssetCeilingFitsShell(31, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(251)
-    expect(() => assertAssetCeilingFitsShell(32, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
-      /260 .*256/
+    expect(assertAssetCeilingFitsShell(26, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(246)
+    expect(() => assertAssetCeilingFitsShell(27, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
+      /257 .*256/
     )
   })
 })

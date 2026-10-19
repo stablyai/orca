@@ -45,14 +45,14 @@ describe('a rejected dispatch', () => {
         clientMessageId: 'cm_1',
         state: 'rejected',
         providerItemId: null,
-        reason: 'The provider did not accept this message.',
+        reason: "The agent didn't accept this message.",
         rejection: { kind: 'providerRejected', detail: { text: 'Too long', audience: 'person' } },
         ...base(2)
       }
     ])
     expect(state.submissions.get('cm_1')).toMatchObject({
       dispatchState: 'rejected',
-      reason: 'The provider did not accept this message.',
+      reason: "The agent didn't accept this message.",
       rejection
     })
 

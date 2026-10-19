@@ -127,14 +127,11 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       const databasePath = path.join(profileDirectory, 'profile-state.db')
       expect(existsSync(databasePath)).toBe(true)
       expect(existsSync(legacyProfileState)).toBe(true)
+      const legacyBytesBeforeQuit = readFileSync(legacyProfileState)
 
       await session.close(firstApp)
       firstApp = null
-      expect(JSON.parse(readFileSync(legacyProfileState, 'utf8'))).toMatchObject({
-        automations: expect.arrayContaining([
-          expect.objectContaining({ id: automationLifecycle.automationId, name: automationName })
-        ])
-      })
+      expect(readFileSync(legacyProfileState).equals(legacyBytesBeforeQuit)).toBe(true)
       // Prove the next launch has only the SQLite authority available.
       rmSync(legacyProfileState, { force: true })
       rmSync(legacyRootState, { force: true })
@@ -292,8 +289,8 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       await waitForElectronProcessExit(secondApp)
       secondApp = null
 
-      // Clean maintenance refreshes compatibility JSON before releasing the profile.
-      expect(existsSync(targetJson)).toBe(true)
+      // Profile switching durably saves SQLite without publishing compatibility JSON.
+      expect(existsSync(targetJson)).toBe(false)
       for (const legacyPath of [targetJson, defaultJson, rootJson]) {
         rmSync(legacyPath, { force: true })
       }
@@ -449,7 +446,7 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       await waitForElectronProcessExit(secondApp)
       secondApp = null
 
-      // Switching away refreshes the target export; remove it before the SQL-only source launch.
+      // Keep the source relaunch SQL-only even if a legacy target file was seeded.
       rmSync(targetJson, { force: true })
       const sourceLaunch = await session.launch()
       thirdApp = sourceLaunch.app

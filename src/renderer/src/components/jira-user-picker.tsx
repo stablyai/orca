@@ -3,11 +3,9 @@ import { LoaderCircle } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { jiraSearchUsers } from '@/runtime/runtime-jira-client'
+import { jiraSearchUsers, type RuntimeJiraSettings } from '@/runtime/runtime-jira-client'
 import { translate } from '@/i18n/i18n'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { JiraUser } from '../../../shared/jira-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
 
 const USER_SEARCH_DEBOUNCE_MS = 250
 
@@ -43,6 +41,12 @@ export function JiraUserOptionList({
  * not the display name a plain text box would collect, since Jira rejects a bare
  * string for user fields.
  */
+export type JiraUserPickerFixedOption = {
+  key: string
+  label: string
+  onSelect: () => void
+}
+
 export function JiraUserPicker({
   providerSettings,
   siteId,
@@ -50,15 +54,21 @@ export function JiraUserPicker({
   selectedUser,
   onSelect,
   disabled,
-  label
+  label,
+  fixedOptions,
+  searchUsers
 }: {
-  providerSettings: TaskSourceContext | GlobalSettings | null
+  providerSettings: RuntimeJiraSettings
   siteId?: string | null
   value: string
   selectedUser: JiraUser | null
   onSelect: (user: JiraUser) => void
   disabled?: boolean
   label: string
+  /** Rows pinned above the search results, e.g. "Automatic" or "Assign to me". */
+  fixedOptions?: JiraUserPickerFixedOption[]
+  /** Replaces the site-wide user search, e.g. with a project-scoped assignable search. Must be referentially stable. */
+  searchUsers?: (query: string) => Promise<JiraUser[]>
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -72,7 +82,7 @@ export function JiraUserPicker({
     let cancelled = false
     setLoading(true)
     const timer = setTimeout(() => {
-      void jiraSearchUsers(providerSettings, query, siteId)
+      void (searchUsers ? searchUsers(query) : jiraSearchUsers(providerSettings, query, siteId))
         .then((found) => {
           if (!cancelled) {
             setUsers(found)
@@ -93,7 +103,7 @@ export function JiraUserPicker({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [open, providerSettings, query, siteId])
+  }, [open, providerSettings, query, searchUsers, siteId])
 
   const triggerLabel = useMemo(() => {
     if (selectedUser?.displayName) {
@@ -130,6 +140,19 @@ export function JiraUserPicker({
           className="mb-1 h-7 text-[12px]"
           autoFocus
         />
+        {fixedOptions?.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            onClick={() => {
+              option.onSelect()
+              setOpen(false)
+            }}
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
+          >
+            {option.label}
+          </button>
+        ))}
         {users.length === 0 && !loading ? (
           <p className="px-2 py-1.5 text-[12px] text-muted-foreground">
             {translate('components.jiraUserPicker.empty', 'No users found')}

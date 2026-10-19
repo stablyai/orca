@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeFileClient from '@/runtime/runtime-file-client'
+import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
@@ -10,8 +10,8 @@ import { migrateRestoredEditorFileOwner } from './migrate-restored-editor-file-o
 
 const mocks = vi.hoisted(() => ({ writeRuntimeFile: vi.fn() }))
 
-vi.mock('@/runtime/runtime-file-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeFileClient>()),
+vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeFileMutationClient>()),
   writeRuntimeFile: mocks.writeRuntimeFile
 }))
 

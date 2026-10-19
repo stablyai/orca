@@ -4,7 +4,11 @@ import type { ReactNode } from 'react'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { i18n, translate } from '@/i18n/i18n'
-import { getAgentAwakeModeLabel, getAgentAwakeTitle } from '../settings/agent-awake-copy'
+import {
+  getAgentAwakeLidNote,
+  getAgentAwakeModeLabel,
+  getAgentAwakeTitle
+} from '../settings/agent-awake-copy'
 import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
 
 const storeMocks = vi.hoisted(() => ({
@@ -197,6 +201,7 @@ describe('keep-awake copy under non-English UI languages', () => {
       name: '防止电脑休眠，智能体 · 生效中'
     })
     expect(trigger.textContent).toContain('智能体')
+    expect(screen.getByRole('tooltip').textContent).toContain(getAgentAwakeLidNote())
 
     const menu = screen.getByRole('menu')
     await waitFor(() => expect(menu.textContent).toContain('防止电脑休眠'))

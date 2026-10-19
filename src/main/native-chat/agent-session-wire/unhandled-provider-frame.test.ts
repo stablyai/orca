@@ -59,7 +59,7 @@ describe('unhandled provider frame journal fallback', () => {
     ).toBeNull()
   })
 
-  it('never creates generic rows for delta-shaped frames that report no failure', () => {
+  it('never creates generic rows for delta-shaped frames', () => {
     expect(
       unhandledProviderFrameJournalItem('codex', 'notification:item/commandExecution/outputDelta', {
         itemId: 'exec-1',
@@ -74,34 +74,14 @@ describe('unhandled provider frame journal fallback', () => {
     ).toBeNull()
   })
 
-  it('surfaces an unknown delta-shaped frame whose payload reports an error', () => {
-    const row = unhandledProviderFrameJournalItem('codex', 'notification:item/future/outputDelta', {
-      error: 'stream broke mid-item'
-    })
-
-    expect(row).not.toBeNull()
-    expect(row?.classification).toBe('error-surface')
-    expect(row?.body.providerFrame).toMatchObject({
-      provider: 'codex',
-      kind: 'notification:item/future/outputDelta'
-    })
-  })
-
-  it('renders codex systemError and Claude error result variants when no typed translator covers the frame', () => {
-    const codex = unhandledProviderFrameJournalItem('codex', 'notification:thread/status/changed', {
-      threadId: 'thread-1',
-      status: { type: 'systemError' }
-    })
+  it('renders a Claude result frame that names no success as a failure row', () => {
     const claude = unhandledProviderFrameJournalItem('claude', 'message:result', {
       subtype: 'error_during_execution',
       is_error: true,
       result: 'Provider request failed'
     })
 
-    expect(codex?.body.providerFrame).toMatchObject({
-      provider: 'codex',
-      kind: 'notification:thread/status/changed'
-    })
+    expect(claude?.classification).toBe('error-surface')
     expect(claude?.body.providerFrame).toMatchObject({
       provider: 'claude',
       kind: 'message:result'
@@ -126,27 +106,6 @@ describe('unhandled provider frame journal fallback', () => {
     })
   })
 
-  it('keeps failed startup variants visible while suppressing startup progress', () => {
-    const kind = 'notification:mcpServer/startupStatus/updated'
-
-    expect(
-      unhandledProviderFrameJournalItem('codex', kind, {
-        name: 'filesystem',
-        status: 'starting',
-        error: null,
-        failureReason: null
-      })
-    ).toBeNull()
-    expect(
-      unhandledProviderFrameJournalItem('codex', kind, {
-        name: 'filesystem',
-        status: 'failed',
-        error: 'server exited',
-        failureReason: null
-      })
-    ).not.toBeNull()
-  })
-
   it('surfaces a failed hook completion while suppressing successful hook lifecycle', () => {
     const kind = 'notification:hook/completed'
 
@@ -167,6 +126,21 @@ describe('unhandled provider frame journal fallback', () => {
       unhandledProviderFrameJournalItem('codex', 'notification:future/event', {})
     ).not.toBeNull()
     expect(unhandledProviderFrameJournalItem('claude', 'message:future/event', {})).not.toBeNull()
+  })
+
+  it("leads with a local slash command's output, which Claude sends as the frame's content", () => {
+    expect(
+      unhandledProviderFrameJournalItem('claude', 'message:system:local_command_output', {
+        type: 'system',
+        subtype: 'local_command_output',
+        content: 'Session usage: 12% of your limit'
+      })?.body.text
+    ).toBe('Session usage: 12% of your limit')
+    // Scoped to that frame: another frame's `content` is not its sentence.
+    expect(
+      unhandledProviderFrameJournalItem('claude', 'message:future/event', { content: 'raw' })?.body
+        .text
+    ).toBe('claude \u00b7 message:future/event')
   })
 
   it('leads with the provider sentence instead of naming the opcode', () => {
@@ -201,35 +175,6 @@ describe('unhandled provider frame journal fallback', () => {
       unhandledProviderFrameJournalItem('codex', 'notification:future/event', { count: 3 })?.body
         .text
     ).toBe('codex \u00b7 notification:future/event')
-  })
-})
-
-describe('a failed provider dependency', () => {
-  it('leads with the failure the provider reported, not the method name', () => {
-    const item = unhandledProviderFrameJournalItem(
-      'codex',
-      'notification:mcpServer/startupStatus/updated',
-      {
-        threadId: 'thread-1',
-        name: 'codex_apps',
-        status: 'failed',
-        error: 'MCP client for `codex_apps` failed to start: authentication token invalidated',
-        failureReason: 'reauthenticationRequired'
-      }
-    )
-    expect(item?.classification).toBe('error-surface')
-    expect(item?.body.text).toContain('failed to start')
-    expect(item?.body.text).not.toContain('notification:mcpServer')
-  })
-
-  it('stays out of the timeline while the dependency is merely starting', () => {
-    expect(
-      unhandledProviderFrameJournalItem('codex', 'notification:mcpServer/startupStatus/updated', {
-        threadId: 'thread-1',
-        name: 'codex_apps',
-        status: 'starting'
-      })
-    ).toBeNull()
   })
 })
 

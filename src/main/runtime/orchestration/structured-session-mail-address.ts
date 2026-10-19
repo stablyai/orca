@@ -13,11 +13,13 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
-import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { OrchestrationDb } from './db'
 import { OrchestrationError } from './orchestration-error'
 import { resolveOrcaSessionParty, type OrchestrationSessionParty } from './orchestration-party'
-import { lineageLiveSession, type AgentSessionRecordReader } from './structured-session-lineage'
+import {
+  resolveLineageRunningSession,
+  type AgentSessionRecordReader
+} from './structured-session-lineage'
 
 export type OrcaAgentSessionLookup =
   | { kind: 'found'; record: AgentSessionRecord }
@@ -35,11 +37,7 @@ export function lookupOrcaAgentSession(
   }
   const owner = store
     .listRecords()
-    .find((candidate) =>
-      candidate.providerHandleChain.some(({ handle }) =>
-        handle.provider === 'claude' ? handle.sessionId === id : handle.threadId === id
-      )
-    )
+    .find((candidate) => candidate.providerHandleChain.some(({ handle }) => handle.nativeId === id))
   return owner ? { kind: 'provider-id', orcaSessionId: owner.sessionId } : { kind: 'unknown' }
 }
 
@@ -47,7 +45,9 @@ export type StructuredSessionMailReach =
   /** `session` is the conversation's live session, the one its mail reaches now. */
   | { kind: 'reachable'; session: AgentSessionRecord }
   | { kind: 'other-host' }
-  | { kind: 'ended'; reason: 'closed' | 'worker-identity-lost' | 'continuation-missing' }
+  /** The lineage names a session with no record, or loops: not being able to look, not an end. */
+  | { kind: 'unverifiable'; reason: string }
+  | { kind: 'ended'; reason: 'closed' | 'worker-identity-lost' }
 
 /** Whether mail to `record`'s conversation can reach the session that runs it now. */
 export function structuredSessionMailReach(
@@ -55,13 +55,14 @@ export function structuredSessionMailReach(
   record: AgentSessionRecord,
   db: OrchestrationDb | null | undefined
 ): StructuredSessionMailReach {
-  const live = lineageLiveSession(store, record.sessionId)
-  if (!live) {
-    return { kind: 'ended', reason: 'continuation-missing' }
+  const running = resolveLineageRunningSession(store, record.sessionId)
+  if (running.kind === 'unverifiable') {
+    return { kind: 'unverifiable', reason: running.reason }
   }
-  if (!structuredWorkerHostScope(live.location)) {
+  if (running.kind === 'other-host') {
     return { kind: 'other-host' }
   }
+  const live = running.record
   if (isOrcaSessionId(live.sessionId) && !addressableSessionParty(live.sessionId, db)) {
     // Why: it can no longer act (the caller resolver refuses it), so mail to it could never be read.
     return { kind: 'ended', reason: 'worker-identity-lost' }

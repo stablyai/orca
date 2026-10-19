@@ -8,6 +8,7 @@ import {
   resolveOpaqueTerminalBackground
 } from '@/lib/terminal-theme'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
+import { agentLaunchPaneOutcomeForLeaf } from './agent-launch-pane-notice-text'
 import { mapPaneTerminalErrors, terminalErrorForPane } from './terminal-error-accumulation'
 import {
   nativeChatLaunchAgentForLeaf,
@@ -16,9 +17,11 @@ import {
 } from '../native-chat/native-chat-leaf-routing'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-actions'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
+import { canPaneOfferResumeInNewChat } from '../tab-bar/tab-session-history-switch'
 
 export function useTerminalPaneProjection(controller: TerminalPaneMobileController) {
   const {
@@ -50,7 +53,8 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     tabAgentTypeByLeaf,
     terminalError,
     terminalErrorsByPaneId,
-    terminalTab
+    terminalTab,
+    worktreeId
   } = controller
   const effectiveAppearance = settings
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
@@ -103,13 +107,9 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     terminalErrorsByPaneId,
     activePane?.id ?? null
   )
+  const visibleLaunchRefusal = agentLaunchPaneOutcomeForLeaf(terminalTab, activePane?.leafId)
   const menuPaneHasCustomTitle =
     contextMenu.menuPaneId !== null && Boolean(paneTitles[contextMenu.menuPaneId])
-  const menuAgentSessionId = useAppStore((state) =>
-    contextMenu.open && contextMenuLeafId
-      ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
-      : null
-  )
   const chatLeafStillMounted = chatLeafId
     ? managedPanes.some((pane) => pane.leafId === chatLeafId)
     : false
@@ -174,9 +174,26 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const contextMenuCanContinueInNewSession = canContinueAgentSessionInNewSession(
     resolveAgentForLeaf(contextMenuLeafId)
   )
-  // Each switcher gates on its own leaf (header=active, menu=opened-over), so mixed splits show it only where chat can render.
-  const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
+  // The menu switcher gates on the leaf it opened over, so mixed splits show it only where chat can render.
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
+  const activeLeafId = activePane?.leafId ?? null
+  // One subscription for both reads keeps the pane inside its store listener budget.
+  const { menuAgentSessionId, activePaneCanResumeInChat } = useAppStore(
+    useShallow((state) => ({
+      menuAgentSessionId:
+        contextMenu.open && contextMenuLeafId
+          ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
+          : null,
+      // Cheap stand-in for the tab menu's gate, on this pane's own conversation; the click looks it up.
+      activePaneCanResumeInChat:
+        !activePaneIsChatLeaf &&
+        activeLeafId !== null &&
+        canPaneOfferResumeInNewChat(state, {
+          worktreeId,
+          paneKey: makePaneKey(tabId, activeLeafId)
+        })
+    }))
+  )
   const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
   const handleContextMenuToggleNativeChat = useCallback(() => {
     const leafId = getContextMenuLeafId()
@@ -196,6 +213,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     activePane,
     managedPanes,
     showSshReconnectOverlay,
+    visibleLaunchRefusal,
     visibleTerminalError,
     menuPaneHasCustomTitle,
     menuAgentSessionId,
@@ -209,7 +227,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     resolveAgentForLeaf,
     activePaneCanContinueInNewSession,
     contextMenuCanContinueInNewSession,
-    activePaneCanToggleChat,
+    activePaneCanResumeInChat,
     contextMenuCanToggleChat,
     contextMenuIsChatView,
     handleContextMenuToggleNativeChat

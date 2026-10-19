@@ -39,13 +39,15 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  structuredSessionOperationId: () => 'operation-1',
-  useStructuredAgentSessionOutbox: () => ({
-    outbox: [],
+vi.mock('./structured-agent-session-operation-id', () => ({
+  structuredSessionOperationId: () => 'operation-1'
+}))
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: () => ({
+    pending: [],
     error: null,
     send: vi.fn(),
-    retry: vi.fn()
+    stopSends: vi.fn()
   })
 }))
 
@@ -184,8 +186,7 @@ describe('a conversation command whose reply lands after the fence moved', () =>
     items = [startFailureRow(NOT_SIGNED_IN)]
     const outcome = await commandAcrossFenceMove('clear', commandReply('clear', NOT_SIGNED_IN))
     expect(outcome.accepted).toBe(false)
-    expect(outcome.error).toMatch(/^Codex n'est pas connecté/)
-    expect(outcome.error).toContain('/clear')
+    expect(outcome.error).toBe('Codex n’est pas connecté. Exécutez `codex login`. Relancez /clear.')
   })
 
   it('clears the draft for a /compact that started', async () => {
@@ -231,7 +232,7 @@ describe('a conversation command whose reply lands after the fence moved', () =>
     fence = 3
     expect(await commandAcrossFenceMove('clear', commandReply('clear', NOT_SIGNED_IN))).toEqual({
       accepted: false,
-      error: expect.stringMatching(/^Codex is not signed in.*\/clear/)
+      error: "Codex isn't signed in. Run `codex login`. Run /clear again."
     })
   })
 

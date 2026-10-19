@@ -1,4 +1,4 @@
-import { hasFlag } from './agent-cli-flag-detection'
+import { removeAgentArgOption } from './agent-session-option-agent-args'
 import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog-types'
 import { parseOmpModelList } from './omp-model-list-probe'
 
@@ -18,7 +18,7 @@ export const OMP_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   models: [],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
-    agentArgsOverride: (tokens) => hasFlag(tokens, ['--model']),
+    removeAgentArgs: (tokens) => removeAgentArgOption('omp', tokens, ['--model']),
     // OMP only opens its TUI picker for /model; our extension applies the exact selector.
     midSession: { kind: 'command', build: (value) => `/orca-model ${String(value)}` }
   },

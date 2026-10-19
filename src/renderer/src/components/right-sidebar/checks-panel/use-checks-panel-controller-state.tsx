@@ -1,14 +1,15 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState, type SetStateAction } from 'react'
+import { useWorktreeGitOwnerTarget } from '../worktree-git-owner-target'
 import { useAppStore, type AppState } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { useChecksPanelTerminalWorktree } from '../use-checks-panel-terminal-worktree'
 import { getConnectionId } from '@/lib/connection-context'
+import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
-import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getWorktreeGitIdentityDisplay } from '../../../../../shared/worktree/git-identity-display'
+import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/project-execution-runtime'
 import {
   saveSourceControlActionRecipe,
@@ -84,16 +85,24 @@ export function useChecksPanelControllerState() {
   const addPRReviewCommentReply = useAppStore((s) => s.addPRReviewCommentReply)
   const setPRCommentReaction = useAppStore((s) => s.setPRCommentReaction)
   const resolveReviewThread = useAppStore((s) => s.resolveReviewThread)
-  const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
-  const remoteDetectedAgentIds = useAppStore((s) => {
-    return typeof activeConnectionId === 'string'
-      ? (s.remoteDetectedAgentIds[activeConnectionId] ?? null)
-      : null
-  })
+  const detectedAgentIds = useAppStore((s) =>
+    activeWorktreeId ? readDetectedAgentsForWorktree(s, activeWorktreeId) : s.detectedAgentIds
+  )
 
-  const [checks, setChecks] = useState<PRCheckDetail[]>([])
+  const [checks, setChecksState] = useState<PRCheckDetail[]>([])
+  // Why: a failed read keeps its own state so the list says so instead of "No checks configured".
+  const [checksError, setChecksError] = useState<string | null>(null)
+  const setChecks = useCallback((next: SetStateAction<PRCheckDetail[]>) => {
+    setChecksError(null)
+    setChecksState(next)
+  }, [])
   const [checksLoading, setChecksLoading] = useState(false)
-  const [comments, setComments] = useState<PRComment[]>([])
+  const [comments, setCommentsState] = useState<PRComment[]>([])
+  const [commentsError, setCommentsError] = useState<string | null>(null)
+  const setComments = useCallback((next: SetStateAction<PRComment[]>) => {
+    setCommentsError(null)
+    setCommentsState(next)
+  }, [])
   const [commentsLoading, setCommentsLoading] = useState(false)
   const commentsRef = useRef<PRComment[]>([])
   const [commentsSelectionClearRequest, setCommentsSelectionClearRequest] =
@@ -161,8 +170,6 @@ export function useChecksPanelControllerState() {
   // fetched against the MR's own project rather than this repo's default remote.
   const gitLabProjectRefRef = useRef<GitLabProjectRef | null>(null)
   const conflictSummaryRefreshKeyRef = useRef<string | null>(null)
-  const panelVisibleSinceRef = useRef<number | null>(null)
-  const foregroundedUnrenderedReviewKeyRef = useRef<string | null>(null)
   commentsRef.current = comments
   const prGenerationRecords = useAppStore((s) => s.pullRequestGenerationRecords)
   const allocatePullRequestGenerationRequestId = useAppStore(
@@ -210,15 +217,13 @@ export function useChecksPanelControllerState() {
   const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const activeWorktreePath = activeWorktree?.path ?? null
   const activeWorktreePushTarget = activeWorktree?.pushTarget ?? null
-  const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
-    connectionId: activeConnectionId,
-    worktreePath: activeWorktreePath,
-    projectRuntime: activeConnectionId
-      ? undefined
-      : getLocalProjectExecutionRuntimeContext(useAppStore.getState(), activeWorktreeId)
-  })
+  // Why: agents run on the workspace's execution host, so its OS decides quoting (#27971).
+  const activeSourceControlLaunchPlatform =
+    activeWorktree && repo
+      ? resolveRepoWorktreeLaunchPlatform(useAppStore.getState(), repo, activeWorktree)
+      : undefined
   const runtimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
+    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, activeWorktreeId)
   )
   const ownerSettings = useMemo<AppState['settings']>(
     () =>
@@ -229,6 +234,8 @@ export function useChecksPanelControllerState() {
           : { ...settings, activeRuntimeEnvironmentId: null },
     [runtimeEnvironmentId, settings]
   )
+  // Why: git calls route by the worktree's owner rows, never the focused server.
+  const ownerTarget = useWorktreeGitOwnerTarget(activeWorktreeId)
   const repoConnectionId = repo?.connectionId?.trim() || null
   // Local execution host variant (wsl:{distro} vs host); applies only when local — remote contexts are scoped by runtimeEnvironmentId/connectionId.
   const localExecutionScope = useMemo<string | null>(() => {
@@ -296,13 +303,16 @@ export function useChecksPanelControllerState() {
     setPRCommentReaction,
     resolveReviewThread,
     detectedAgentIds,
-    remoteDetectedAgentIds,
     checks,
     setChecks,
     checksLoading,
     setChecksLoading,
+    checksError,
+    setChecksError,
     comments,
     setComments,
+    commentsError,
+    setCommentsError,
     commentsLoading,
     setCommentsLoading,
     commentsRef,
@@ -362,8 +372,6 @@ export function useChecksPanelControllerState() {
     prevChecksRef,
     gitLabProjectRefRef,
     conflictSummaryRefreshKeyRef,
-    panelVisibleSinceRef,
-    foregroundedUnrenderedReviewKeyRef,
     prGenerationRecords,
     allocatePullRequestGenerationRequestId,
     setPullRequestGenerationRecord,
@@ -381,6 +389,7 @@ export function useChecksPanelControllerState() {
     activeSourceControlLaunchPlatform,
     runtimeEnvironmentId,
     ownerSettings,
+    ownerTarget,
     repoConnectionId,
     localExecutionScope,
     sshConnectionStatus,

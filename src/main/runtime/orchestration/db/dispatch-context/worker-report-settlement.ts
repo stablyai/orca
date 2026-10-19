@@ -97,14 +97,17 @@ export function settleWorkerReportInTransaction(
   // is first-hand evidence and must be able to correct that record instead of being thrown away.
   // Checked before the duplicate short-circuit: a `failed` report lands on the very statuses that
   // short-circuit reads as already settled, dropping the worker's real cause and result body.
+  // A stalled prompt that also tripped the breaker is the same unproven failure, so it corrects too.
   const settledByUnobservedPrompt =
-    dispatch.status === 'failed' &&
+    (dispatch.status === 'failed' || dispatch.status === 'circuit_broken') &&
     dispatch.last_failure === AGENT_PROMPT_STALLED_ERROR &&
     task.status === 'failed'
   const reportingWorker = this.getWorkerDispatch(params.dispatchId)
+  // A tripped breaker is a failed Dispatch, so a repeated failed report is still a duplicate.
+  const settledDispatchStatus = dispatch.status === 'circuit_broken' ? 'failed' : dispatch.status
   if (
     !settledByUnobservedPrompt &&
-    dispatch.status === expectedDispatchStatus &&
+    settledDispatchStatus === expectedDispatchStatus &&
     task.status === expectedTaskStatus
   ) {
     recordAcceptedReportFact(this, params)
@@ -120,7 +123,7 @@ export function settleWorkerReportInTransaction(
     task.status === 'dispatched' &&
     reportingWorker?.state === 'starting'
   const previousDispatchStatus = settledByUnobservedPrompt
-    ? 'failed'
+    ? dispatch.status
     : reconnectingWorker || reportingStart
       ? dispatch.status
       : 'dispatched'
@@ -177,8 +180,9 @@ export function settleWorkerReportInTransaction(
     const dispatchTransition = transitionLifecycleWithDb(this.db, {
       entity: 'dispatch',
       id: params.dispatchId,
-      from: 'failed',
-      to: expectedDispatchStatus,
+      from: dispatch.status,
+      // A failed report keeps a tripped breaker tripped.
+      to: params.outcome === 'succeeded' ? 'completed' : dispatch.status,
       projection: {
         completed_at: now,
         last_failure: params.outcome === 'failed' ? params.result : dispatch.last_failure,

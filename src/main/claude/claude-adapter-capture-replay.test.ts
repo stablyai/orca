@@ -16,6 +16,7 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import type {
   ClaudeLateDispatchOutcome,
@@ -24,7 +25,8 @@ import type {
 import {
   fakeClaude,
   identityFor,
-  PROVIDER_SESSION_ID
+  PROVIDER_SESSION_ID,
+  claudeStartupSettled
 } from './claude-structured-session-test-support'
 
 type CapturedEvent =
@@ -153,7 +155,7 @@ async function replayCapture(name: string): Promise<Replay> {
     if (event.kind === 'dispatch') {
       if (!startedAwaited) {
         // The proof frames have been delivered by now; startup can settle.
-        await adapter.awaitStarted('session-1')
+        await claudeStartupSettled(adapter, 'session-1')
         startedAwaited = true
       }
       const body: AgentJournalMessageItem = {
@@ -229,5 +231,21 @@ describe.each(['fold', 'early-steer', 'miss'])('adapter capture replay: %s', (na
         }
       }
     }
+  })
+})
+
+describe('adapter capture replay: slash-goal', () => {
+  it('opens the turn for the send even though Claude answers the command before echoing it', async () => {
+    const replay = await replayCapture('slash-goal')
+
+    // `/goal` answers with a local reply before its echo; that reply must not
+    // open a turn of the provider's own, beside the one the send is waiting for.
+    expect([...replay.finalTurns.values()]).toEqual([
+      expect.objectContaining({
+        userItemId: agentJournalSubmissionKey('client-A'),
+        requestedAt: 1_700_000_200_000 + 1504
+      })
+    ])
+    expect(replay.settledUuids.get('client-A')).toBe(replay.liveUuidByClient.get('client-A'))
   })
 })

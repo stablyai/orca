@@ -11,6 +11,8 @@
 // exists to remove, and a user who wants the message sent anyway rotates the id
 // — one re-typed message, and a first delivery by construction.
 
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../shared/structured-agent-session-send-evidence'
+
 /** A previous process wrote the message and died before learning its outcome. */
 export const DISPATCH_DOUBT_HOST_RESTARTED = 'host_restarted_before_acknowledgement'
 
@@ -21,7 +23,7 @@ export const DISPATCH_DOUBT_PROVIDER_EXITED = 'provider_exited_before_acknowledg
 export const DISPATCH_DOUBT_PERSISTENCE_FAILED = 'dispatch_result_persistence_failed'
 
 /** The operation tombstone survived recovery but its journal submission did not. */
-export const DISPATCH_DOUBT_SUBMISSION_MISSING = 'durable_send_submission_missing'
+export const DISPATCH_DOUBT_SUBMISSION_MISSING = STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
 
 /** The provider reported its thread not running with no turn open, so nothing is
  *  left that could still acknowledge the message. */

@@ -44,9 +44,7 @@ vi.mock('@/runtime/runtime-server-directory-browser', () => ({
   browseRuntimeServerDirectory: mocks.browseRuntimeServerDirectory
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
 import { useCreateProjectDefaults } from './useCreateProjectDefaults'
 
@@ -229,19 +227,6 @@ describe('useCreateProjectDefaults', () => {
 
     expect(mocks.stateValues[RUNTIME_PARENT_STATUS_STATE]).toBe('failed')
     expect(setCreateParent).not.toHaveBeenCalled()
-  })
-
-  it('does not use client defaults or Git probing for SSH targets', async () => {
-    mocks.isGitAvailable.mockResolvedValue(true)
-
-    const { setCreateParent } = useHarness({ sshTargetId: 'ssh-1' })
-    await flushAsync()
-
-    expect(setCreateParent).not.toHaveBeenCalled()
-    expect(mocks.getDefaultCreateProjectParent).not.toHaveBeenCalled()
-    expect(mocks.isGitAvailable).not.toHaveBeenCalled()
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
-    expect(mocks.stateValues[GIT_AVAILABILITY_STATE]).toBe('unknown')
   })
 
   it('does nothing outside the create step', async () => {

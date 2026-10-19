@@ -15,6 +15,8 @@ import { classifyConnection, verdictDisplayLabel } from './connection-health'
 // desktop that was answering the whole time. By the next foreground the client
 // had landed in 'reconnecting', where the nudge works, so it connected at once.
 
+vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
+
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({ publicKey: new Uint8Array(32), secretKey: new Uint8Array(32) }),
   deriveSharedKey: () => new Uint8Array(32),

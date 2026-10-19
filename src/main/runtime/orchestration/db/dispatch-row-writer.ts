@@ -47,8 +47,8 @@ WHERE id = ? AND status = 'ready'
 const STARTING_DISPATCH_CONTEXT_SQL = `INSERT INTO dispatch_contexts (
    id, run_id, task_id, contract_version, launch_token_hash, retry_of_dispatch_id,
    creator_dispatch_id, creator_handle, creator_pane_key, creator_orca_session_id, depth, status,
-   dispatched_at
- ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'))`
+   failure_count, dispatched_at
+ ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'))`
 
 const REMOTE_DISPATCH_ATTACHMENT_SQL = `INSERT INTO remote_dispatch_attachments (
    dispatch_id, home_run_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth
@@ -125,6 +125,7 @@ export function insertStartingDispatchContextRow(
     creatorHandle?: string | null
     creatorPaneKey?: string | null
     creatorOrcaSessionId?: OrcaSessionId | null
+    priorFailures: number
   }
 ): void {
   assertStampedDepth(params.depth)
@@ -139,7 +140,8 @@ export function insertStartingDispatchContextRow(
     params.creatorHandle ?? null,
     params.creatorPaneKey ?? null,
     params.creatorOrcaSessionId ?? null,
-    params.depth
+    params.depth,
+    params.priorFailures
   )
 }
 

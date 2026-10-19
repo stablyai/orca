@@ -42,6 +42,10 @@ export type WorkerThreadRequestQueueOptions<TRequest> = {
   awaitRetirement?: boolean
 }
 
+export type WorkerThreadRequestOwner = { readonly signal: AbortSignal }
+
+type OwnerFailures = { consecutiveDeaths: number; refused: Error | null }
+
 type PendingCall<TRequest, TResponse> = {
   request: TRequest
   timeoutMs: number
@@ -49,6 +53,7 @@ type PendingCall<TRequest, TResponse> = {
   reject: (error: Error) => void
   timer: NodeJS.Timeout | null
   signal?: AbortSignal
+  owner?: WorkerThreadRequestOwner
   cleanupAbort: () => void
 }
 
@@ -59,6 +64,7 @@ export class WorkerThreadRequestQueue<
   private active: PendingCall<TRequest, TResponse> | null = null
   private queue: PendingCall<TRequest, TResponse>[] = []
   private consecutiveDeaths = 0
+  private readonly ownerFailures = new WeakMap<WorkerThreadRequestOwner, OwnerFailures>()
   private nextId = 1
   private disposed = false
   private readonly host: LazyWorkerThreadHost<TResponse>
@@ -85,7 +91,8 @@ export class WorkerThreadRequestQueue<
   dispatch(
     buildRequest: (id: number) => TRequest,
     timeoutMs: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    owner?: WorkerThreadRequestOwner
   ): Promise<TResponse> {
     return new Promise((resolve, reject) => {
       if (this.disposed) {
@@ -94,6 +101,11 @@ export class WorkerThreadRequestQueue<
       }
       if (signal?.aborted) {
         reject(signal.reason ?? new Error('Worker request aborted'))
+        return
+      }
+      const refused = owner && this.ownerFailures.get(owner)?.refused
+      if (refused) {
+        reject(refused)
         return
       }
       // Built before the cap check so a rejection can name the dropped work;
@@ -106,7 +118,7 @@ export class WorkerThreadRequestQueue<
       }
       // A fresh burst from full idle starts new work: clear any death count
       // carried from a prior burst so the respawn cap can't drain it early.
-      if (!this.active && this.queue.length === 0) {
+      if (!owner && !this.active && this.queue.length === 0) {
         this.consecutiveDeaths = 0
       }
       const call: PendingCall<TRequest, TResponse> = {
@@ -116,6 +128,7 @@ export class WorkerThreadRequestQueue<
         reject,
         timer: null,
         signal,
+        owner,
         cleanupAbort: () => signal?.removeEventListener('abort', abort)
       }
       const abort = (): void => {
@@ -201,7 +214,11 @@ export class WorkerThreadRequestQueue<
       this.armDeadline(call)
       return
     }
-    this.consecutiveDeaths = 0
+    if (call.owner) {
+      this.failuresFor(call.owner).consecutiveDeaths = 0
+    } else {
+      this.consecutiveDeaths = 0
+    }
     this.settle(call, () => call.resolve(response))
     this.afterSettle()
   }
@@ -226,12 +243,16 @@ export class WorkerThreadRequestQueue<
   private onWorkerFault(error: Error): void {
     const failed = this.active
     this.host.destroy()
-    this.consecutiveDeaths++
-    if (failed) {
-      this.settle(failed, () => failed.reject(error))
+    if (!failed) {
+      this.pump()
+      return
     }
-    if (this.consecutiveDeaths >= this.options.maxConsecutiveDeaths) {
-      this.drainQueueAfterCrashLoop(error)
+    const deaths = failed.owner
+      ? ++this.failuresFor(failed.owner).consecutiveDeaths
+      : ++this.consecutiveDeaths
+    this.settle(failed, () => failed.reject(error))
+    if (deaths >= this.options.maxConsecutiveDeaths) {
+      this.drainQueueAfterCrashLoop(error, failed.owner)
       return
     }
     if (this.queue.length > 0) {
@@ -239,14 +260,28 @@ export class WorkerThreadRequestQueue<
     }
   }
 
-  private drainQueueAfterCrashLoop(error: Error): void {
-    const pending = this.queue
-    this.queue = []
-    this.consecutiveDeaths = 0
+  private drainQueueAfterCrashLoop(error: Error, owner?: WorkerThreadRequestOwner): void {
+    const pending = this.queue.filter((call) => call.owner === owner)
+    this.queue = this.queue.filter((call) => call.owner !== owner)
     const drainError = new Error(this.options.describeCrashLoop(error.message))
+    if (owner) {
+      this.failuresFor(owner).refused = drainError
+    } else {
+      this.consecutiveDeaths = 0
+    }
     for (const call of pending) {
       this.settle(call, () => call.reject(drainError))
     }
+    this.afterSettle()
+  }
+
+  private failuresFor(owner: WorkerThreadRequestOwner): OwnerFailures {
+    let failures = this.ownerFailures.get(owner)
+    if (!failures) {
+      failures = { consecutiveDeaths: 0, refused: null }
+      this.ownerFailures.set(owner, failures)
+    }
+    return failures
   }
 
   private failQueuedAsUnavailable(): void {

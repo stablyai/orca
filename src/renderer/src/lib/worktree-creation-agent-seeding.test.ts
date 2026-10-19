@@ -56,6 +56,17 @@ describe('executeWorktreeCreation agent seeding', () => {
     })
   })
 
+  it('treats a background blank workspace as empty instead of waiting for the host', async () => {
+    await executeWorktreeCreation('creation-1', { ...request, agent: null })
+
+    expect(mocks.ensureWebRuntimeWorktreeTerminalAfterWake).toHaveBeenCalledWith('worktree-1', {
+      startup: undefined,
+      agent: null,
+      activate: false,
+      unknownHostCountIsEmpty: true
+    })
+  })
+
   it('routes a background agent selection through host-aware surface creation', async () => {
     await executeWorktreeCreation('creation-1', request)
 
@@ -65,7 +76,8 @@ describe('executeWorktreeCreation agent seeding', () => {
     expect(mocks.ensureWebRuntimeWorktreeTerminalAfterWake).toHaveBeenCalledWith('worktree-1', {
       startup: undefined,
       agent: 'codex',
-      activate: false
+      activate: false,
+      unknownHostCountIsEmpty: true
     })
     expect(mocks.completeWorktreeCreation).toHaveBeenCalledWith(
       expect.objectContaining({ primaryTabId: null })

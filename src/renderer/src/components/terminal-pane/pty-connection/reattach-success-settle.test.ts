@@ -10,9 +10,9 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
  * deleted with no other test noticing.
  *
  * Placement is load-bearing too. Settling at the `authoritativeReattachGeneration`
- * bump instead would mark the storm's OWN failure path (`reattach returned no
- * PTY id` → recoverUnverifiableDirectSshReattach) as a success and reopen the
- * loop, so the negative case below is as important as the positive one.
+ * bump instead would mark a failure path (`reattach returned no PTY id`) as a
+ * success and reopen the loop, so the negative cases below are as important as
+ * the positive one.
  */
 const mocks = vi.hoisted(() => ({
   state: { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
@@ -52,10 +52,6 @@ function buildSession(overrides: Record<string, unknown> = {}): {
       updateTabPtyId: vi.fn(),
       restoredLeafId: null
     },
-    connectionId: null,
-    directSshRetryAttempt: undefined,
-    capturedDirectSshRetryPtyAccepted: false,
-    rejectObsoleteDirectSshReattach: () => false,
     registerEffectiveLaunchConfig: vi.fn(),
     clearExitedPanePtyLayoutBinding: vi.fn(),
     syncPanePtyLayoutBinding: vi.fn(),
@@ -105,14 +101,13 @@ describe('handleReattachResult recovery settle', () => {
 
     await driveReattach(session, { id: 'pty-1', isReattach: true })
 
-    expect(settlePaneAttachAttempt).toHaveBeenCalledWith(undefined, 'success')
+    expect(settlePaneAttachAttempt).toHaveBeenCalledWith('success')
   })
 
   it('does not report success for a reattach that returned no PTY id', async () => {
-    // The storm's own path. Settling this as success would clear the ledger the
-    // failure is about to be written to, and the chain would restart.
+    // Settling this as success would clear the ledger the cold restore is about
+    // to replace, and the chain would restart.
     const { session, settlePaneAttachAttempt } = buildSession({
-      connectionId: 'ssh-1',
       transport: {
         getPtyId: () => null,
         disconnect: vi.fn(),
@@ -123,8 +118,8 @@ describe('handleReattachResult recovery settle', () => {
 
     await driveReattach(session, undefined, null)
 
-    expect(settlePaneAttachAttempt).not.toHaveBeenCalledWith(undefined, 'success')
-    expect(settlePaneAttachAttempt).toHaveBeenCalledWith(undefined, 'failed')
+    expect(settlePaneAttachAttempt).not.toHaveBeenCalledWith('success')
+    expect(session.startFreshColdRestoreAgentResume).toHaveBeenCalledOnce()
   })
 
   it('does not report success for an expired session', async () => {
@@ -132,7 +127,7 @@ describe('handleReattachResult recovery settle', () => {
 
     await driveReattach(session, { id: 'pty-1', sessionExpired: true }, 'pty-old')
 
-    expect(settlePaneAttachAttempt).not.toHaveBeenCalledWith(undefined, 'success')
+    expect(settlePaneAttachAttempt).not.toHaveBeenCalledWith('success')
   })
 
   it('does not report success for a superseded transport', async () => {

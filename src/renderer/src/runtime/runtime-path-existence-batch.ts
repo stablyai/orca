@@ -8,11 +8,8 @@ import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import { assertLocalFilesystemFallbackAllowed, getRemoteFileArgs } from './runtime-file-routing'
 import { isMissingRuntimePathError, runtimePathExists } from './runtime-file-metadata-client'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
-import {
-  callRuntimeRpc,
-  runtimeEnvironmentSupportsCapability,
-  RuntimeRpcCallError
-} from './runtime-rpc-client'
+import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 
 export async function runtimePathsExist(
   context: RuntimeFileOperationArgs,

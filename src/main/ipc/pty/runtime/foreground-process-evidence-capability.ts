@@ -1,17 +1,17 @@
 import { getProvider, registeredPtyProviders } from '../provider/registry'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 
 /** Probe the owning provider before opting into the no-process-table inventory projection. */
 export async function supportsForegroundProcessEvidenceFromRuntimeController(
-  connectionId?: string | null
+  hostId?: ExecutionHostId
 ): Promise<boolean> {
-  if (connectionId === null) {
+  if (hostId === LOCAL_EXECUTION_HOST_ID) {
     return true
   }
-  if (connectionId === undefined) {
-    const providers = registeredPtyProviders()
+  if (hostId === undefined) {
     const supported = await Promise.all(
-      providers.map(async ({ provider, connectionId: providerConnectionId }) =>
-        providerConnectionId === null
+      registeredPtyProviders().map(async ({ provider, hostId: providerHostId }) =>
+        providerHostId === LOCAL_EXECUTION_HOST_ID
           ? true
           : ((await provider.supportsForegroundProcessEvidence?.()) ?? false)
       )
@@ -19,7 +19,7 @@ export async function supportsForegroundProcessEvidenceFromRuntimeController(
     return supported.every(Boolean)
   }
   try {
-    return (await getProvider(connectionId).supportsForegroundProcessEvidence?.()) ?? false
+    return (await getProvider(hostId).supportsForegroundProcessEvidence?.()) ?? false
   } catch {
     return false
   }

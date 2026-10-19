@@ -1,5 +1,5 @@
 import type * as Monaco from 'monaco-editor'
-import type { IRawGrammar } from 'vscode-textmate'
+import type { LanguageRegistration } from 'shiki/core'
 import { registerTextMateLanguage } from './textmate-language-registration'
 
 type MonacoModule = typeof Monaco
@@ -31,15 +31,12 @@ export const typstLanguageConfiguration: Monaco.languages.LanguageConfiguration 
   ]
 }
 
-export async function loadTypstTextMateGrammar(scopeName: string): Promise<IRawGrammar | null> {
-  if (scopeName !== TYPST_TEXTMATE_SCOPE) {
-    return null
-  }
-
+export async function loadTypstTextMateGrammar(): Promise<LanguageRegistration> {
   // Lazy upstream grammar; provenance and Apache-2.0 license are in typst-LICENSE.txt.
   const grammarModule = await import('./textmate-grammars/typst.tmLanguage.json')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: TextMate injects the $self/$base repository entries required by IRawGrammar; real tokenization tests validate this vendored JSON.
-  return grammarModule.default as unknown as IRawGrammar
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: TextMate injects the $self/$base repository entries a registration's type requires; real tokenization tests validate this vendored JSON.
+  const grammar = grammarModule.default as unknown as LanguageRegistration
+  return { ...grammar, name: TYPST_LANGUAGE_ID }
 }
 
 export function registerTypstLanguage(monaco: MonacoModule): void {
@@ -50,7 +47,6 @@ export function registerTypstLanguage(monaco: MonacoModule): void {
       aliases: ['Typst', 'typst']
     },
     configuration: typstLanguageConfiguration,
-    scopeName: TYPST_TEXTMATE_SCOPE,
     loadGrammar: loadTypstTextMateGrammar
   })
 }

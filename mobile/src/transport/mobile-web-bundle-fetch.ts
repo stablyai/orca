@@ -1,4 +1,4 @@
-import { sha256 } from '@noble/hashes/sha256'
+import { CryptoDigestAlgorithm, digest } from 'expo-crypto'
 import { mobileWebBundleManifestRead } from './mobile-web-bundle-operations'
 import type {
   MobileWebBundleAssetRead,
@@ -6,6 +6,7 @@ import type {
 } from './mobile-web-bundle-reply-schemas'
 import type { RpcClient } from './rpc-client'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
+import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { runRpcOperation } from './rpc-operation'
 import {
   mobileWebBundleWindowReader,
@@ -19,6 +20,16 @@ import {
  *  so the client never offers a fifth. The four are window reads across the whole manifest, not one
  *  asset each: paging a large asset alone would put every one of its windows on the critical path. */
 const MAX_CONCURRENT_WINDOW_READS = 4
+
+/** The fetch fails when no window reply lands for this long. Timed per fetch, not per read: each
+ *  read's reply queues behind the others in flight, so on a slow link (Tailscale through a relay) a
+ *  per-read 30s clock failed downloads that were still moving (#29697). */
+export const MOBILE_WEB_BUNDLE_WINDOW_STALL_MS = 30_000
+/** A read's reply waits behind at most the other in-flight replies, each landing within the stall
+ *  budget or the fetch fails, so a moving fetch should not reach it. Kept that tight because a
+ *  stalled fetch's pending reads hold its reassembly buffers until they settle. */
+const WINDOW_READ_BACKSTOP_MS =
+  (MAX_CONCURRENT_WINDOW_READS + 1) * MOBILE_WEB_BUNDLE_WINDOW_STALL_MS
 
 export type MobileWebBundleFetchProgress = {
   readonly completedAssets: number
@@ -36,7 +47,7 @@ export type MobileWebBundleFetchResult = {
 
 type AssetReassembly = {
   readonly entry: MobileWebBundleAssetRead
-  readonly whole: Uint8Array
+  readonly whole: Uint8Array<ArrayBuffer>
   outstandingWindows: number
 }
 
@@ -63,13 +74,37 @@ export async function fetchMobileWebBundle(args: {
   const queue = planWindowReads(manifest.assets, reader.windowBytes)
   const assets = new Map<string, Uint8Array>()
   let receivedBytes = 0
+  let stallTimer: ReturnType<typeof setTimeout> | null = null
+  let failStalled: (error: Error) => void = () => {}
+  const stalled = new Promise<never>((_, reject) => {
+    failStalled = reject
+  })
+  const armStallClock = (): void => {
+    if (stallTimer !== null) {
+      clearTimeout(stallTimer)
+    }
+    // A read that lands after the fetch settled must not leave a timer behind.
+    if (stopped.signal.aborted) {
+      return
+    }
+    stallTimer = setTimeout(() => {
+      stopped.abort()
+      failStalled(
+        markRpcDeliveryUnknown(
+          new Error(
+            `mobile web bundle fetch stalled: no window arrived in ${MOBILE_WEB_BUNDLE_WINDOW_STALL_MS}ms`
+          )
+        )
+      )
+    }, MOBILE_WEB_BUNDLE_WINDOW_STALL_MS)
+  }
 
   const readWindow = async ({ asset, offset }: WindowRead): Promise<void> => {
-    const reply = await reader.read({
-      buildId: manifest.buildId,
-      path: asset.entry.path,
-      offset
-    })
+    const reply = await reader.read(
+      { buildId: manifest.buildId, path: asset.entry.path, offset },
+      { timeoutMs: WINDOW_READ_BACKSTOP_MS }
+    )
+    armStallClock()
     // A sibling already failed the fetch; this reply is not worth checking, decoding or reporting.
     if (stopped.signal.aborted) {
       return
@@ -86,7 +121,12 @@ export async function fetchMobileWebBundle(args: {
     asset.whole.set(bytes, offset)
     asset.outstandingWindows -= 1
     if (asset.outstandingWindows === 0) {
-      assets.set(asset.entry.path, verifyReassembledAsset(asset))
+      const verified = await verifyReassembledAsset(asset)
+      // A sibling failed while this hashed; the fetch already rejected with that failure.
+      if (stopped.signal.aborted) {
+        return
+      }
+      assets.set(asset.entry.path, verified)
     }
     // Per window, not per asset: the largest asset goes first, so asset completions bunch at the end.
     receivedBytes += bytes.byteLength
@@ -117,7 +157,15 @@ export async function fetchMobileWebBundle(args: {
   }
 
   const workers = Math.min(MAX_CONCURRENT_WINDOW_READS, queue.length)
-  await Promise.all(Array.from({ length: workers }, () => worker()))
+  armStallClock()
+  try {
+    await Promise.race([Promise.all(Array.from({ length: workers }, () => worker())), stalled])
+  } finally {
+    stopped.abort()
+    if (stallTimer !== null) {
+      clearTimeout(stallTimer)
+    }
+  }
   // The final window sends nothing after its last reply, so no worker would see this abort.
   throwIfCallerAborted(args.signal)
   return { manifest, assets, totalBytes: receivedBytes, elapsedMs: Date.now() - startedAt }
@@ -191,12 +239,13 @@ function assertWindowFillsItsSlot(
 }
 
 /** Every slot was accepted exactly once, so only the hash is left to say the bytes are right. */
-function verifyReassembledAsset(asset: AssetReassembly): Uint8Array {
-  const digest = toHex(sha256(asset.whole))
-  if (digest !== asset.entry.sha256) {
+async function verifyReassembledAsset(asset: AssetReassembly): Promise<Uint8Array> {
+  // Native: hashing in JS held the JS thread for seconds, and React's progress renders waited on it.
+  const hashed = toHex(new Uint8Array(await digest(CryptoDigestAlgorithm.SHA256, asset.whole)))
+  if (hashed !== asset.entry.sha256) {
     throw new MobileWebBundleFetchError(
       'asset-checksum-mismatch',
-      `bundle asset ${asset.entry.path} hashed ${digest}, not ${asset.entry.sha256}`
+      `bundle asset ${asset.entry.path} hashed ${hashed}, not ${asset.entry.sha256}`
     )
   }
   return asset.whole

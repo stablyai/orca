@@ -46,6 +46,7 @@ vi.mock('pg', () => ({
 import {
   openRelayDatabase,
   POSTGRES_SCHEMA_MIGRATIONS,
+  relayPostgresReadTimeoutMarginMs,
   relayPostgresStatementTimeoutMs
 } from './database.js'
 import { applyPostgresSchema } from './postgres-schema-startup.js'
@@ -89,10 +90,15 @@ describe('PostgreSQL relay deadlines', () => {
         application_name: 'orca-relay/director/director',
         connectionTimeoutMillis: 2_000,
         statement_timeout: 5_000,
+        // A lost reply ends at the statement deadline plus 10 s, on this pool only.
+        query_timeout: 15_000,
         lock_timeout: 1_000,
-        idle_in_transaction_session_timeout: 5_000
+        idle_in_transaction_session_timeout: 5_000,
+        options: '-c idle_session_timeout=30000'
       })
     ])
+    expect(fakes.configs[0]).not.toHaveProperty('query_timeout')
+    expect(fakes.configs[0]).not.toHaveProperty('options')
     await database.close()
   })
 
@@ -160,7 +166,7 @@ describe('PostgreSQL relay deadlines', () => {
 
     expect(fakes.configs).toEqual([
       expect.objectContaining({ statement_timeout: 0 }),
-      expect.objectContaining({ statement_timeout: 2_500 })
+      expect.objectContaining({ statement_timeout: 2_500, query_timeout: 12_500 })
     ])
     await database.close()
   })
@@ -173,6 +179,18 @@ describe('PostgreSQL relay deadlines', () => {
       ).toThrow('invalid_statement_timeout')
     }
   )
+
+  it('takes the read timeout margin from the environment, defaulting to 10 s', () => {
+    expect(relayPostgresReadTimeoutMarginMs({})).toBe(10_000)
+    expect(
+      relayPostgresReadTimeoutMarginMs({ ORCA_RELAY_POSTGRES_READ_TIMEOUT_MARGIN_MS: '4000' })
+    ).toBe(4_000)
+    for (const value of ['0', '-1', '2.5', 'soon']) {
+      expect(() =>
+        relayPostgresReadTimeoutMarginMs({ ORCA_RELAY_POSTGRES_READ_TIMEOUT_MARGIN_MS: value })
+      ).toThrow('invalid_read_timeout_margin')
+    }
+  })
 
   it.each([undefined, ''])('defaults to 5s when the environment says %s', (value) => {
     expect(

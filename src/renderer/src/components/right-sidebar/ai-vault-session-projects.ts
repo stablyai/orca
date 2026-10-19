@@ -1,3 +1,7 @@
+import {
+  createNormalizedAiVaultScopeCwdMatcher,
+  sessionFileExecutionNamespace
+} from '../../../../shared/ai-vault-scope-cwd-match'
 import { resolveActiveProjectKey } from './ai-vault-project-key'
 import { toAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
 import {
@@ -11,10 +15,7 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import {
-  createNormalizedPathInsideOrEqualMatcher,
-  normalizeRuntimePathForComparison
-} from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import {
   folderGroupKey,
   folderLabel,
@@ -38,7 +39,7 @@ type SessionProjectCandidate = {
   projectId: string | null
   repoId: string | null
   // Precomputed so a 500-session pass doesn't re-normalize every root per session.
-  ownsNormalizedCwd: (normalizedCwd: string) => boolean
+  ownsNormalizedCwd: ReturnType<typeof createNormalizedAiVaultScopeCwdMatcher>
 }
 
 type ProjectResolverArgs = {
@@ -104,10 +105,11 @@ export function buildAiVaultSessionProjectById({
       projectsByCwd = new Map()
       projectsByHostAndCwd.set(host, projectsByCwd)
     }
-    let project = projectsByCwd.get(session.cwd)
+    const cwdKey = JSON.stringify([sessionFileExecutionNamespace(session.filePath), session.cwd])
+    let project = projectsByCwd.get(cwdKey)
     if (!project) {
       project = resolveSessionProject(session, candidates, projectLabelByKey)
-      projectsByCwd.set(session.cwd, project)
+      projectsByCwd.set(cwdKey, project)
     }
     sessionProjectById.set(session.id, { ...project })
   }
@@ -235,7 +237,7 @@ function makeProjectCandidate(
   return {
     ...rest,
     normalizedPath,
-    ownsNormalizedCwd: createNormalizedPathInsideOrEqualMatcher(normalizedPath)
+    ownsNormalizedCwd: createNormalizedAiVaultScopeCwdMatcher([path])
   }
 }
 
@@ -266,7 +268,9 @@ function resolveSessionProject(
   }
 
   const normalizedCwd = normalizeRuntimePathForComparison(cwd)
-  const matches = candidates.filter((candidate) => candidate.ownsNormalizedCwd(normalizedCwd))
+  const matches = candidates.filter((candidate) =>
+    candidate.ownsNormalizedCwd(normalizedCwd, session.filePath)
+  )
   const sessionHostId = normalizeExecutionHostId(session.executionHostId)
   const hostMatches = sessionHostId
     ? matches.filter((candidate) => candidate.hostKey === sessionHostId)

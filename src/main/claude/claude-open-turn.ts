@@ -18,14 +18,17 @@ import {
   type ClaudeCurrentTurn,
   type ClaudeTurnEnd
 } from './claude-turn-lifecycle-item'
-import { writeClaudeTurnRow } from './claude-turn-row-revision'
+import { writeAgentJournalTurnRow } from '../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
+import type { ClaudeStartedSend } from './claude-structured-session-state'
 
 export type ClaudeOpenTurnDeps = {
   sink: StructuredAgentSessionEventSink
-  /** Settles the superseded turn's children; they get no later event of their own. */
-  settleChildren: (groupKey: string | null) => void
+  /** The superseded turn's spawn calls get no announcement now. */
+  turnSuperseded: () => void
+  /** Ends what the ending turn left open, at the instant it ended; no later frame will. */
+  endOpenWork: (completedAt: number) => void
   /** A turn opening moves the conversation on. */
   onOpen?: () => void
 }
@@ -41,6 +44,8 @@ export class ClaudeOpenTurn {
    *  cycle's init (a background task finishing), so membership is read from the
    *  cycle's work, not from when the turn opened. */
   private cycleWorkObserved = false
+  /** The frame being journaled says which send the CLI is running, if any. */
+  private startedSend: ClaudeStartedSend | null = null
   private readonly opener: (
     frame: Record<string, unknown>,
     source: ClaudeTurnSource | null,
@@ -51,7 +56,13 @@ export class ClaudeOpenTurn {
     this.opener = createClaudeTurnOpener({
       isTurnOpen: () => this.isOpen,
       isSuppressed: () => this.reopenSuppressed,
-      open: (turn, observedAt) => this.open(turn, observedAt)
+      startedSend: () => this.startedSend,
+      open: (turn, observedAt) => {
+        if (this.startedSend) {
+          this.allowReopen()
+        }
+        this.open(turn, observedAt)
+      }
     })
   }
 
@@ -60,11 +71,6 @@ export class ClaudeOpenTurn {
   }
 
   /** The open turn's row, where a fact about the running turn lands. */
-  /** The submission that opened the open turn, when known (`ClaudeCurrentTurn.openedBy`). */
-  get openedBy(): string | null {
-    return this.current?.openedBy ?? null
-  }
-
   get identity(): AgentJournalItemIdentity | null {
     return this.current ? claudeCurrentTurnIdentity(this.current) : null
   }
@@ -83,8 +89,9 @@ export class ClaudeOpenTurn {
       : AGENT_JOURNAL_THREAD_SCOPE
   }
 
-  get groupKey(): string | null {
-    return this.current ? `${this.current.sessionId}:${this.current.turnId}` : null
+  /** When the open turn started, or null when none is open. */
+  get startedAt(): number | null {
+    return this.current?.startedAt ?? null
   }
 
   get isOpen(): boolean {
@@ -96,6 +103,11 @@ export class ClaudeOpenTurn {
    *  cycle's first send is its opener, never a fold. */
   get openedInLiveProviderCycle(): boolean {
     return this.current !== null && this.cycleWorkObserved
+  }
+
+  /** Set per provider frame, so it never outlives the frame that carried it. */
+  observeStartedSend(send: ClaudeStartedSend | null): void {
+    this.startedSend = send
   }
 
   /** A root init frame: the CLI is starting a new request cycle. */
@@ -115,7 +127,8 @@ export class ClaudeOpenTurn {
   open(turn: ClaudeCurrentTurn, observedAt: number): void {
     this.deps.onOpen?.()
     if (this.current) {
-      this.deps.settleChildren(this.groupKey)
+      this.deps.turnSuperseded()
+      this.deps.endOpenWork(observedAt)
       this.publish(this.current, {
         state: 'interrupted',
         completedAt: observedAt,
@@ -132,7 +145,8 @@ export class ClaudeOpenTurn {
   beginCommand(turn: ClaudeCurrentTurn): void {
     this.deps.onOpen?.()
     if (this.current) {
-      this.deps.settleChildren(this.groupKey)
+      this.deps.turnSuperseded()
+      this.deps.endOpenWork(turn.startedAt)
       this.publish(this.current, {
         state: 'interrupted',
         completedAt: turn.startedAt,
@@ -173,6 +187,8 @@ export class ClaudeOpenTurn {
   settle(end: ClaudeTurnEnd, contextUsage?: AgentSessionContextUsage): void {
     // Every settle is a provider cycle ending (result, idle, child exit).
     this.cycleWorkObserved = false
+    // Even with no turn open: work a suppressed turn produced still ends here.
+    this.deps.endOpenWork(end.completedAt)
     if (this.current) {
       this.publish(this.current, end, contextUsage)
       this.current = null
@@ -203,7 +219,7 @@ export class ClaudeOpenTurn {
     contextUsage?: AgentSessionContextUsage
   ): void {
     const item = claudeTurnLifecycleItem(turn, end)
-    writeClaudeTurnRow(
+    writeAgentJournalTurnRow(
       this.deps.sink,
       { identity: item.identity },
       { lifecycle: item.body, ...(contextUsage ? { contextUsage } : {}) },

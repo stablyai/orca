@@ -6,7 +6,7 @@ import {
   BRIDGE_MAX_ROUTE_PATHNAME_CHARS,
   BRIDGE_MAX_SUBSCRIPTIONS
 } from './bridge/bridge-caps'
-import { BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
+import { BRIDGE_FAULT_GRANT, BRIDGE_RPC_ENVELOPE_GRANT } from './bridge/bridge-envelope'
 import { routeViewOf } from './page-route-policy'
 
 describe('init and state', () => {
@@ -40,6 +40,7 @@ describe('init and state', () => {
         // What the shell will do for the page, and what makes its `navigate` frame acceptable.
         native: [
           BRIDGE_FAULT_GRANT,
+          BRIDGE_RPC_ENVELOPE_GRANT,
           'navigate',
           'storage',
           'externalLink',
@@ -51,9 +52,11 @@ describe('init and state', () => {
           'native.media.pick',
           'native.media.read',
           'native.media.release',
+          'native.media.name',
           'native.audio.start',
           'native.audio.read',
-          'native.audio.stop'
+          'native.audio.stop',
+          'native.storage.read'
         ]
       },
       route: ROUTE,
@@ -143,7 +146,11 @@ describe('init and state', () => {
     if (init.type !== 'init') {
       throw new Error('expected an init frame')
     }
-    expect(init.grants.native).toEqual([BRIDGE_FAULT_GRANT, ...view.routeGrants])
+    expect(init.grants.native).toEqual([
+      BRIDGE_FAULT_GRANT,
+      BRIDGE_RPC_ENVELOPE_GRANT,
+      ...view.routeGrants
+    ])
     const pair = (init.pageRouteGrants ?? []).find((entry) => entry.pathname === '/h/[hostId]')
     expect(pair?.grants).toEqual(view.routeGrants)
     // The optional name is in both, so the case is the lane and not two equal required lists.
@@ -354,16 +361,16 @@ describe('init and state', () => {
   })
 
   it('refuses a storage write for a key the page was never told about', () => {
-    // The whole app's preferences share one namespace, the hybrid shell flag included, so the
-    // allowlist is what stands between a page and a feature it could turn on for itself.
+    // The whole app's preferences share one namespace, paired hosts included, so the allowlist is
+    // what stands between a page and state the native app owns.
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    for (const key of ['orca:mobileWebShellEnabled', 'orca:pins:', 'orca:hosts']) {
+    for (const key of ['orca:pins:', 'orca:hosts']) {
       bridge.host.receive(clientFrame({ type: 'notify', name: 'storage', key, value: 'x' }))
     }
     expect(bridge.storageWrites).toEqual([])
     expect(bridge.diagnostics).toEqual(
-      Array.from({ length: 3 }, () => ({ kind: 'refused', refusal: 'unrecognised-message' }))
+      Array.from({ length: 2 }, () => ({ kind: 'refused', refusal: 'unrecognised-message' }))
     )
   })
 

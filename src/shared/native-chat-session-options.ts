@@ -85,6 +85,17 @@ export function sessionOptionValueMarker(
   return descriptor.valueSource === 'unknown' ? 'unreported' : null
 }
 
+/** Like Fast off, the standard tier adds nothing to a summary pill. */
+export function isDefaultServiceTier(
+  descriptor: Pick<SessionOptionDescriptor, 'id' | 'kind'>
+): boolean {
+  return (
+    descriptor.id === 'serviceTier' &&
+    descriptor.kind.type === 'select' &&
+    descriptor.kind.currentValue === 'default'
+  )
+}
+
 export type SessionOptionSetResult = {
   snapshot: SessionOptionDescriptor[]
 }
@@ -119,4 +130,15 @@ export type SessionOptionsSurface = {
   /** Invoke the value-less action exposed by the current descriptor. */
   invokeAction(id: string): Promise<SessionOptionSetResult>
   subscribe(listener: (snapshot: SessionOptionDescriptor[]) => void): () => void
+}
+
+/** An effort no list confirms, under a model the list lacks: shown as text, not a control. */
+export function isReadOnlySessionOptionValue(descriptor: SessionOptionDescriptor): boolean {
+  return (
+    descriptor.id === 'effort' &&
+    descriptor.kind.type === 'select' &&
+    !descriptor.settable &&
+    !descriptor.action &&
+    descriptor.kind.choices.length === 1
+  )
 }

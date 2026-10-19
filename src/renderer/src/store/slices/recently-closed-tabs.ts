@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import {
   isWindowsAbsolutePathLike,
   relativePathInsideRoot
@@ -127,7 +127,9 @@ export const createRecentlyClosedTabsSlice: StateCreator<
     // browser/editor. Imported directly instead of via web-runtime-session to
     // avoid a store slice ↔ store-index import cycle. Remote terminal reopen is
     // deferred (see PR notes); local + SSH worktrees are the covered surface.
-    if (getExplicitRuntimeEnvironmentIdForWorktree(get(), worktreeId)?.trim()) {
+    const owner = runtimeEnvironmentIdForWorkspaceOwner(get(), { workspaceId: worktreeId })
+    // Why: a twin's reopen would spawn a local shell for a tab that may have lived on the other host.
+    if (owner.kind === 'ambiguous' || owner.environmentId?.trim()) {
       return false
     }
     // Why: read and pop atomically inside set() to prevent a TOCTOU race where

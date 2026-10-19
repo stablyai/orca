@@ -27,9 +27,9 @@ const PTY_MODES: TerminalModes = {
  * `useBufferedTerminalDrafts`, mounted in the same tree, so the text a send clears and a refusal
  * restores is state the recording drove rather than a stand-in.
  *
- * Only the clipboard's text path is driven. Its image path decodes a raster through
- * expo-image-manipulator and stages it on expo-file-system, and neither module is substituted:
- * recording it would mean inventing image and file-system behaviour, which is not what this oracle
+ * Only the clipboard's text path is driven. Its image path decodes a raster on a canvas and stages
+ * it on expo-file-system, and neither is substituted: recording it would mean inventing image and
+ * file-system behaviour, which is not what this oracle
  * is evidence of. The send both paths reach is the same expression, and the text path reaches it.
  *
  * Mounted through `hookScreenMount` for its crash boundary: a reply partition that takes a hook's

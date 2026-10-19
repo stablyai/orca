@@ -9,9 +9,7 @@ import {
 } from './automation-host-client'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn()
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
 const mockApi = {
   automations: {

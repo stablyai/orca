@@ -1,3 +1,4 @@
+import { invalidateReviewLookupsAfterPRMutation } from '../../pr-mutation-review-invalidation'
 import {
   ghExecFileAsync,
   acquire,
@@ -35,6 +36,7 @@ export async function updatePRTitle(
     await ghExecFileAsync(args, {
       ...ghOptions
     })
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return true
   } catch (err) {
     console.warn('updatePRTitle failed:', err)
@@ -89,6 +91,7 @@ export async function updatePRDetails(
       ],
       ghOptions
     )
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =

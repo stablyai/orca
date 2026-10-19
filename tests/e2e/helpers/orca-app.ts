@@ -24,7 +24,8 @@ import {
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import { closeElectronAppForE2E } from './electron-process-shutdown'
+import { recordElectronShutdownTiming } from './electron-shutdown-timing'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
@@ -91,9 +92,11 @@ const ORCA_E2E_SLOWMO_MS = ((): number => {
 })()
 
 async function removeUserDataDirAfterShutdown(userDataDir: string): Promise<void> {
+  const started = performance.now()
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       rmSync(userDataDir, { recursive: true, force: true })
+      recordElectronShutdownTiming('profile-removal', started)
       return
     } catch (error) {
       if (attempt === 4) {
@@ -238,18 +241,9 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       // Why: ORCA_E2E_HEADLESS suppresses mainWindow.show() for CI/headless
       // runs. ORCA_E2E_HEADFUL overrides this for tests that need a visible
       // window (e.g. pointer-capture drag tests).
-      // Why: local SSH E2E deploys the relay from the dev build output. The
-      // Electron app's getAppPath() points at the compiled main bundle in E2E,
-      // so pass the repo-root relay path explicitly for this opt-in suite.
       env: {
         ...homeIsolation.env,
         NODE_ENV: 'development',
-        ...((process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
-          process.env.ORCA_E2E_SSH_DOCKER === '1' ||
-          process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1') &&
-        !cleanEnv.ORCA_RELAY_PATH
-          ? { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
-          : {}),
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
       }
     })
@@ -260,16 +254,14 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       )
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
     } catch (error) {
-      await closeElectronAppForE2E(app)
-      await cleanupE2EDaemons(userDataDir)
+      await closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
       await removeUserDataDirAfterShutdown(userDataDir)
       throw error
     }
     await provideFixture(app)
     // Why: the Playwright close promise can settle before all Electron and PTY
     // descendants are gone in CI; worker teardown then hangs on open handles.
-    await closeElectronAppForE2E(app)
-    await cleanupE2EDaemons(userDataDir)
+    await closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
     await removeUserDataDirAfterShutdown(userDataDir)
   },
 
@@ -340,7 +332,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
             if (!store) {
               return false
             }
-            await store.getState().fetchRepos()
+            await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
             const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
             if (!repo) {
               return false

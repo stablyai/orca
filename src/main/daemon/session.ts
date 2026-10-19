@@ -5,7 +5,7 @@ import { SessionProducerPause } from './session-producer-pause'
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
-import type { SubprocessHandle } from './session-subprocess-handle'
+import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -18,7 +18,6 @@ import type {
   TakePendingOutputResult,
   TerminalSnapshot
 } from './types'
-import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export class Session {
@@ -37,7 +36,8 @@ export class Session {
   private readonly producerPause: SessionProducerPause
   private readonly shellReady: SessionShellReadyBarrier
   private readonly termination: SessionTerminationController
-  private readonly startupIngress: PtyStartupIngress
+  /** Public so the creating host can print its own notice as terminal output. */
+  readonly startupIngress: PtyStartupIngress
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
 
   constructor(opts: SessionOptions) {
@@ -247,8 +247,8 @@ export class Session {
     return this.output.getCwd()
   }
 
-  inspectChildProcesses(): PtyChildProcessVerdict {
-    return this.subprocess.inspectChildProcesses?.() ?? 'unverifiable'
+  inspectChildProcesses(fresh?: boolean, ignoreDetached?: boolean): ChildProcessVerdictRead {
+    return this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached) ?? 'unverifiable'
   }
 
   getForegroundProcess(options?: { rawFallback?: boolean }): string | null {

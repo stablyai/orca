@@ -31,10 +31,10 @@ import { installPreviewTerminalRightClickPaste } from './preview-terminal-right-
 import { installTerminalNativeCopyGutterTrim } from '@/components/terminal-pane/terminal-native-copy-gutter'
 import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
+import { terminalPreviewApiFor } from './terminal-preview-api'
 
 const PREVIEW_SCROLLBACK_ROWS = 24
-// Why: main only ever serializes PREVIEW_SCROLLBACK_ROWS of history into this
-// terminal, so the pane's user-configured scrollback would only cost memory.
+// Preview snapshots bound history; pane scrollback would only cost memory.
 const PREVIEW_SCROLLBACK_BUFFER_ROWS = 1000
 const FALLBACK_COLS = 80
 const FALLBACK_ROWS = 24
@@ -117,6 +117,7 @@ export function AgentTerminalPreview({
     let disposeKeyHandler: (() => void) | null = null
     let disposeNativeCopyGutterTrim: (() => void) | null = null
     let disposeTerminalCompatibility: (() => void) | null = null
+    const previewApi = terminalPreviewApiFor(ptyId)
     // Why one read: the xterm's advertisement and its mirror must never disagree.
     const mountTerminalInput = terminalInputRef.current
     // Why: mirrors the pane's tracker — the policy needs the flags the TUI
@@ -130,7 +131,6 @@ export function AgentTerminalPreview({
     const pendingLivePayloads: Extract<TerminalPreviewDataPayload, { type: 'data' }>[] = []
 
     const boxFit = createPreviewBoxFit({ container, getTerminal: () => terminal })
-    const scheduleFit = boxFit.schedule
 
     const gridClaim = createPreviewGridClaim({
       ptyId,
@@ -142,7 +142,7 @@ export function AgentTerminalPreview({
       typeof ResizeObserver === 'undefined'
         ? null
         : new ResizeObserver(() => {
-            scheduleFit()
+            boxFit.schedule()
             gridClaim.schedule()
           })
     if (container.parentElement) {
@@ -162,7 +162,7 @@ export function AgentTerminalPreview({
       replayDepth++
       terminal?.write(chunk, () => {
         replayDepth--
-        scheduleFit()
+        boxFit.schedule()
         onDone?.()
       })
     }
@@ -176,7 +176,7 @@ export function AgentTerminalPreview({
         payload.data,
         () => {
           if (!disposed) {
-            void window.api.terminalPreview.ack(ptyId, payload.bytes)
+            void previewApi.ack(ptyId, payload.bytes)
           }
         },
         true
@@ -245,12 +245,12 @@ export function AgentTerminalPreview({
         if (userInputDisposable ? !signaledUserInput : replayDepth > 0) {
           return
         }
-        void window.api.terminalPreview.input(ptyId, data)
+        void previewApi.input(ptyId, data)
       })
     }
 
     const replayConnection = (
-      connection: Awaited<ReturnType<typeof window.api.terminalPreview.connect>>,
+      connection: Awaited<ReturnType<typeof previewApi.connect>>,
       replaceExisting: boolean,
       requestRefresh: () => void
     ): void => {
@@ -317,9 +317,27 @@ export function AgentTerminalPreview({
         // Queue behind every replay write so replacement never clears a half-parsed frame.
         writeReplayed('', requestRefresh)
       }
-      scheduleFit()
+      boxFit.schedule()
       gridClaim.schedule()
       terminal.focus()
+    }
+
+    const releaseTerminal = (): void => {
+      offData?.()
+      offData = null
+      userInputDisposable?.dispose()
+      userInputDisposable = null
+      disposeImeNativeTextBridge()
+      disposeTerminalCompatibility?.()
+      disposeTerminalCompatibility = null
+      disposeKeyHandler?.()
+      disposeKeyHandler = null
+      disposeNativeCopyGutterTrim?.()
+      disposeNativeCopyGutterTrim = null
+      terminal?.dispose()
+      terminal = null
+      terminalRef.current = null
+      void previewApi.unsubscribe(ptyId)
     }
 
     const setup = async (replaceExisting = false): Promise<void> => {
@@ -328,31 +346,17 @@ export function AgentTerminalPreview({
         return
       }
       refreshInFlight = true
-      const connection = await window.api.terminalPreview.connect(ptyId, {
-        scrollbackRows: PREVIEW_SCROLLBACK_ROWS
-      })
+      // Why: a failed or absent transport must show the unavailable message, not a blank dialog.
+      const connection = await previewApi
+        .connect(ptyId, { scrollbackRows: PREVIEW_SCROLLBACK_ROWS })
+        .catch(() => null)
       if (disposed) {
         return
       }
-      const snap = connection.snapshot
-      if (!snap) {
+      if (!connection?.snapshot) {
         refreshInFlight = false
         setPtyGone(true)
-        offData?.()
-        offData = null
-        userInputDisposable?.dispose()
-        userInputDisposable = null
-        disposeImeNativeTextBridge()
-        disposeTerminalCompatibility?.()
-        disposeTerminalCompatibility = null
-        disposeKeyHandler?.()
-        disposeKeyHandler = null
-        disposeNativeCopyGutterTrim?.()
-        disposeNativeCopyGutterTrim = null
-        terminal?.dispose()
-        terminal = null
-        terminalRef.current = null
-        void window.api.terminalPreview.unsubscribe(ptyId)
+        releaseTerminal()
         return
       }
       refreshInFlight = false
@@ -377,7 +381,7 @@ export function AgentTerminalPreview({
       pasteClipboardText: (activeElement, source) => void pasteClipboardText(activeElement, source)
     })
 
-    offData = window.api.terminalPreview.onData((payload) => {
+    offData = previewApi.onData((payload) => {
       if (payload.ptyId !== ptyId) {
         return
       }
@@ -392,6 +396,7 @@ export function AgentTerminalPreview({
 
     return () => {
       disposed = true
+      boxFit.dispose()
       if (retryTimer) {
         clearTimeout(retryTimer)
       }
@@ -399,15 +404,7 @@ export function AgentTerminalPreview({
       boxResizeObserver?.disconnect()
       disposeAppMenuClipboard()
       disposeRightClickPaste()
-      offData?.()
-      userInputDisposable?.dispose()
-      disposeImeNativeTextBridge()
-      disposeTerminalCompatibility?.()
-      disposeKeyHandler?.()
-      disposeNativeCopyGutterTrim?.()
-      void window.api.terminalPreview.unsubscribe(ptyId)
-      terminal?.dispose()
-      terminalRef.current = null
+      releaseTerminal()
     }
   }, [
     ptyId,

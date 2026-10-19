@@ -36,12 +36,14 @@ const AGENT_ROOT_ENV_ALLOWLIST = [
   // Why: Devin's Windows data root resolves under %APPDATA%, which managed
   // machines relocate away from the profile default.
   'APPDATA',
+  'CLAUDE_CONFIG_DIR',
   'CODEX_HOME',
   'CLINE_SESSION_DATA_DIR',
   'COPILOT_HOME',
   'DEVIN_HOME',
   'GROK_HOME',
   'KIMI_CODE_HOME',
+  'KIRO_HOME',
   'OMP_CODING_AGENT_DIR',
   'OMP_PROFILE',
   'OPENCLAW_STATE_DIR',
@@ -103,7 +105,7 @@ export function buildRelayAiVaultServiceEnv(
   platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
   return pickAllowedEnv(
-    [...RUNTIME_ENV_ALLOWLIST, 'XDG_DATA_HOME', 'OPENCODE_DB'],
+    [...RUNTIME_ENV_ALLOWLIST, 'XDG_DATA_HOME', 'OPENCODE_DB', 'KIRO_HOME'],
     baseEnv,
     platform
   )

@@ -13,6 +13,12 @@ import { BranchPrefixFeedback } from './BranchPrefixFeedback'
 import { matchesSettingsSearch } from './settings-search'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
 import {
+  JIRA_ISSUE_KEY_CASING_KEYWORDS,
+  JiraIssueKeyCasingSetting,
+  getJiraIssueKeyCasingDescription,
+  getJiraIssueKeyCasingTitle
+} from './JiraIssueKeyCasingSetting'
+import {
   CompareAgainstUpstreamSetting,
   compareAgainstUpstreamMatchesSearch
 } from './CompareAgainstUpstreamSetting'
@@ -21,7 +27,8 @@ import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
   getKeepLocalMainUpToDateTitle
 } from './keep-local-main-up-to-date-setting'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 
 export { getGitPaneSearchEntries }
@@ -242,6 +249,17 @@ export function GitPane({
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {
+      title: getJiraIssueKeyCasingTitle(),
+      description: getJiraIssueKeyCasingDescription(),
+      keywords: JIRA_ISSUE_KEY_CASING_KEYWORDS
+    }) ? (
+      <JiraIssueKeyCasingSetting
+        key="jira-issue-key-casing"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
       title: keepLocalMainUpToDateTitle,
       description: KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION,
       keywords: KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS
@@ -257,24 +275,18 @@ export function GitPane({
         <div className="space-y-0.5">
           <Label>{keepLocalMainUpToDateTitle}</Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.GitPane.976afc6b3e',
-              'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as'
-            )}{' '}
-            <code>{translate('auto.components.settings.GitPane.ffba483bae', 'main')}</code>{' '}
-            {translate('auto.components.settings.GitPane.5bf885be48', 'or')}{' '}
-            <code>{translate('auto.components.settings.GitPane.3ae3de8898', 'master')}</code>
-            {translate(
-              'auto.components.settings.GitPane.db3a127eb1',
-              '. This keeps commands like'
-            )}{' '}
-            <code>
-              {translate('auto.components.settings.GitPane.d072a12995', 'git diff main...HEAD')}
-            </code>{' '}
-            {translate(
-              'auto.components.settings.GitPane.36e3de3619',
-              'from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.'
-            )}
+            <Trans
+              i18n={i18n}
+              defaults={translate(
+                'auto.components.settings.GitPane.refreshLocalBaseDescription',
+                'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as <mainBranch>main</mainBranch> or <masterBranch>master</masterBranch>. This keeps commands like <diffCommand>git diff main...HEAD</diffCommand> from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.'
+              )}
+              components={{
+                mainBranch: <code />,
+                masterBranch: <code />,
+                diffCommand: <code />
+              }}
+            />
           </p>
         </div>
         <Switch

@@ -2,6 +2,12 @@
 const BASE64_BINARY_CHUNK_BYTES = 8190
 
 export function encodeBase64Bytes(bytes: Uint8Array): string {
+  if (bytes.byteLength === 0) {
+    return ''
+  }
+  if ('toBase64' in bytes && typeof bytes.toBase64 === 'function') {
+    return bytes.toBase64()
+  }
   const encoded: string[] = []
   for (let offset = 0; offset < bytes.byteLength; offset += BASE64_BINARY_CHUNK_BYTES) {
     const end = Math.min(offset + BASE64_BINARY_CHUNK_BYTES, bytes.byteLength)

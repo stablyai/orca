@@ -40,7 +40,7 @@ function createMockChild(): EventEmitter & { stdout: EventEmitter; stderr: Event
 /** Stand in for the guest shell: banner first, then the payload inside the command's fence. */
 function respondWithFencedPayload(payload: Buffer | string): void {
   execFileMock.mockImplementation((_command, args, _options, callback) => {
-    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(args.at(-1)))?.[1] ?? ''
+    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_ ([^_]+)__/.exec(String(args.at(-1)))?.[1] ?? ''
     const body = typeof payload === 'string' ? Buffer.from(payload, 'utf8') : payload
     const stdout = Buffer.concat([
       Buffer.from(BANNER, 'utf8'),
@@ -95,7 +95,7 @@ describe('WSL login-shell reads are fenced', () => {
   function respondToSshPolicyProbe(configured: string): void {
     execFileMock.mockImplementation((_command, args, _options, callback) => {
       const script = String(args.at(-1))
-      const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(script)?.[1] ?? ''
+      const nonce = /__ORCA_WSL_CAPTURE_BEGIN_ ([^_]+)__/.exec(script)?.[1] ?? ''
       const stdout = script.includes('sshcommand')
         ? `${BANNER}__ORCA_WSL_CAPTURE_BEGIN_${nonce}__${configured}__ORCA_WSL_CAPTURE_END_${nonce}__`
         : 'ok'

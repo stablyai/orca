@@ -88,16 +88,15 @@ export function SidebarHeaderActions({
 }): React.JSX.Element {
   return (
     <div className="flex shrink-0 items-center gap-1" data-sidebar-header-actions="">
-      {/* Why both hidden in the agents view: it lists activity, not projects. */}
+      {/* Why only options swap: the activity view portals its own options button into this slot
+          (SidebarHeader), and keeping Add project means no header button shifts between views. */}
       {agentsViewActive ? null : (
-        <>
-          <SidebarWorkspaceOptionsMenu
-            preserveWorkspaceBoardOpen
-            onMenuOpenChange={onWorkspaceBoardMenuOpenChange}
-          />
-          <AddProjectButton preserveWorkspaceBoardOpen />
-        </>
+        <SidebarWorkspaceOptionsMenu
+          preserveWorkspaceBoardOpen
+          onMenuOpenChange={onWorkspaceBoardMenuOpenChange}
+        />
       )}
+      <AddProjectButton preserveWorkspaceBoardOpen />
       <NewWorkspaceButton preserveWorkspaceBoardOpen />
     </div>
   )

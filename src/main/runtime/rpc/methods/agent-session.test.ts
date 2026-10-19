@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
@@ -119,7 +120,7 @@ describe('agent session RPC methods', () => {
       expect(replies[0]).toMatchObject({ ok: true })
       expect(runtime[testCase.runtimeMethod]).toHaveBeenCalledWith(
         { ...testCase.params, presentation: 'background' },
-        { clientId: `paired-${clientKind}`, clientKind }
+        { clientId: `paired-${clientKind}`, clientKind, terminalImageViewerSupported: false }
       )
     }
   })
@@ -236,7 +237,6 @@ describe('agent session RPC methods', () => {
       launchAgent: 'codex',
       title: undefined,
       focus: false,
-      rendererBacked: false,
       activate: false,
       presentation: undefined,
       tabId: undefined,
@@ -305,7 +305,11 @@ describe('agent session RPC methods', () => {
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         viewMode: 'chat'
       },
-      { clientId: 'authenticated-device', clientKind: 'runtime' }
+      {
+        clientId: 'authenticated-device',
+        clientKind: 'runtime',
+        terminalImageViewerSupported: false
+      }
     )
   })
 

@@ -1,3 +1,4 @@
+import '../../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'

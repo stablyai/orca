@@ -10,10 +10,10 @@ import { resetWebSessionReorderIntentForTests } from './web-session-reorder-inte
 import { resetWebAgentSessionHandoffsForTests } from './web-agent-session-handoff'
 import {
   applyWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshots,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+  applyWebSessionTabsSnapshots
+} from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 
 vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
 

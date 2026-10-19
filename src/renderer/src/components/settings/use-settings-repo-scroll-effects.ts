@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { getRepoHostIdentity } from '../../store/slices/repo-host-identity'
 import type { SettingsStoreModel } from './use-settings-store-model'
@@ -45,7 +45,7 @@ export function useSettingsRepoScrollEffects(
   const { neededRepos } = terminal
 
   useEffect(() => {
-    const repoHostIdentitySet = new Set(repos.map(getRepoHostIdentity))
+    const repoHostIdentitySet = new Set<string>(repos.map(getRepoHostIdentity))
     setRepoHooksMap((previous) => {
       const next = Object.fromEntries(
         Object.entries(previous).filter(([identity]) => repoHostIdentitySet.has(identity))
@@ -80,15 +80,7 @@ export function useSettingsRepoScrollEffects(
         }
         try {
           const hostId = getRepoExecutionHostId(repo)
-          const parsedHost = parseExecutionHostId(hostId)
-          const result = await checkRuntimeHooks(
-            {
-              activeRuntimeEnvironmentId:
-                parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
-            },
-            repo.id,
-            hostId
-          )
+          const result = await checkRuntimeHooks(hostId, repo.id)
           if (stale || requestSeq !== repoHooksRequestSeqRef.current) {
             return
           }

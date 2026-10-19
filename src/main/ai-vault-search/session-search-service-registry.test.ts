@@ -86,8 +86,8 @@ describe('session search service registry', () => {
             { query: 'proof', supportedAgents: ['claude'], filters: { agents: [agent] } },
             transport
           )
-        ).toEqual({ kind: 'unavailable', reason: 'unsupported-agent' })
-        expect(service.search).toHaveBeenCalledTimes(1)
+        ).toMatchObject({ kind: 'results', hits: [], page: { cursor: null, hasMore: false } })
+        expect(service.search).toHaveBeenCalledTimes(2)
         expect(service.reconcile).not.toHaveBeenCalled()
         const client = createSessionSearchClient(
           (method, request) =>
@@ -114,6 +114,24 @@ describe('session search service registry', () => {
     )
     expect((await sessionSearchServiceStatus({}, 'ipc')).supportedAgents).toEqual(AI_VAULT_AGENTS)
   })
+  it.each(['disabled', 'not-ready'] as const)(
+    'preserves %s precedence for empty negotiated host intersections',
+    async (reason) => {
+      const service = fakeSearchService()
+      service.search.mockResolvedValue({ kind: 'unavailable', reason })
+      setSessionSearchService(service)
+      expect(
+        await searchSessionService(
+          { query: 'proof', supportedAgents: [], filters: { agents: ['jcode'] } },
+          'runtime'
+        )
+      ).toEqual({ kind: 'unavailable', reason })
+      expect(service.search).toHaveBeenCalledExactlyOnceWith(
+        { query: 'proof', limit: 20, filters: { agents: ['jcode'] } },
+        { kind: 'resolved', paths: [''] }
+      )
+    }
+  )
   it('waits for reconcile before search, and clears its timeout', async () => {
     vi.useFakeTimers()
     const service = fakeSearchService()

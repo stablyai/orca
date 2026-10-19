@@ -7,7 +7,7 @@ import {
 } from './pty-ipc-daemon-provider-fixtures'
 import { delimiter, join } from 'node:path'
 import { _setWslCachesForTests } from '../wsl'
-import { registerPtyHandlers } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))

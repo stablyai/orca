@@ -17,6 +17,7 @@ vi.mock('./use-native-chat-retained-session', () => ({
 vi.mock('./NativeChatComposer', () => ({ NativeChatComposer: () => null }))
 
 const { NativeChatResolvedView } = await import('./NativeChatResolvedView')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 const { useAppStore } = await import('../../store')
 const { installNativeChatMessageListTestViewport } =
   await import('./native-chat-message-list-test-viewport')
@@ -110,17 +111,19 @@ function patchStatus(fields: Partial<AgentStatusEntry>): void {
 
 function renderPane(): void {
   render(
-    <NativeChatResolvedView
-      paneKey={paneKey}
-      agent="claude"
-      sessionId="session-state"
-      transcriptPath={null}
-      isVisible
-      isFocusedGroup={false}
-      targetPtyId="pty-state"
-      terminalTabId="tab-state"
-      ownsTabWideLaunchDraft={false}
-    />
+    <TooltipProvider>
+      <NativeChatResolvedView
+        paneKey={paneKey}
+        agent="claude"
+        sessionId="session-state"
+        transcriptPath={null}
+        isVisible
+        isFocusedGroup={false}
+        targetPtyId="pty-state"
+        terminalTabId="tab-state"
+        ownsTabWideLaunchDraft={false}
+      />
+    </TooltipProvider>
   )
 }
 

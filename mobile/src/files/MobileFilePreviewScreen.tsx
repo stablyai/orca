@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, Text, View, useWindowDimensions } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { Pressable, Text, View } from 'react-native'
+import { SafeAreaView, useSafeAreaFrame } from 'react-native-safe-area-context'
 import { ChevronLeft, Save } from 'lucide-react-native'
-import { useRouteHandoff } from '../navigation/route-handoff'
+import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { colors, spacing } from '../theme/mobile-theme'
-import { useForceReconnect, useHostClient } from '../transport/client-context'
+import { useForceReconnect } from '../transport/host-client-hooks'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import {
   loadMobileFilePreview,
@@ -35,9 +36,10 @@ type Props = {
 }
 
 export function MobileFilePreviewScreen({ route }: Props) {
-  const router = useRouteHandoff()
+  // Why: every workspace screen uses the handoff so it shares the route chunk; else the bundle overruns its asset budget.
+  const router = useWorkspaceRouteHandoff()
   const previewParams = route.ok ? route.params : null
-  const { client, state: connState } = useHostClient(previewParams?.hostId)
+  const { client, state: connState } = useWorkspaceClient(previewParams?.hostId)
   const forceReconnect = useForceReconnect()
   const [preview, setPreview] = useState<MobileFilePreviewResult>(() =>
     route.ok ? { status: 'loading', message: 'Loading preview...' } : previewError(route.message)
@@ -49,7 +51,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
   const draftContentRef = useRef(draftContent)
   const savedContentRef = useRef(savedContent)
   const draftSourceKeyRef = useRef<string | null>(null)
-  const { width, height } = useWindowDimensions()
+  const { width, height } = useSafeAreaFrame()
   const routePreviewSource = useMemo(
     () => (previewParams ? previewSourceFromRoute(previewParams) : null),
     [previewParams]
@@ -122,7 +124,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
         return
       }
       const loadedContent =
-        result.status === 'ready' && result.kind !== 'image'
+        result.status === 'ready' && result.kind !== 'image' && result.kind !== 'media'
           ? result.content
           : result.status === 'empty'
             ? ''
@@ -261,6 +263,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
       </SafeAreaView>
       <MobileFilePreviewBody
         preview={preview}
+        client={client}
         relativePath={displayPath}
         title={title || 'File'}
         editable={isEditableTerminalArtifact}

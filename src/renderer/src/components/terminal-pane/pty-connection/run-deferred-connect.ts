@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { createTerminalZeroDimensionsMessage } from '../../../../../shared/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../../shared/worktree/removal-fence-error'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
@@ -5,14 +6,12 @@ import { useAppStore } from '@/store'
 import { createCodexBackfillErrorDetector } from '../codex-backfill-error-detector'
 import { hasWorktreeSleepIntent, onWorktreeSleepIntentCleared } from '@/lib/worktree-sleep-intent'
 
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { recordPtyConnectDiagnostic } from './pty-connect-limits'
 import { findTerminalTabForPane } from './terminal-tab-id'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { bindBuildColdRestoreAgentResumeStartup } from './cold-restore-resume-startup'
 
-import { bindPrepaintParkedSshSnapshot } from './ssh-snapshot-prepaint'
 import { bindForegroundOutputRefresh } from './foreground-output-refresh'
 import { bindRegisterPaneSerializer } from './pane-serializer-register'
 import { bindHandleReattachResult } from './reattach-result-handler'
@@ -23,7 +22,7 @@ import { bindSettlePaneSerializer } from './pane-serializer-settle'
 
 import { bindDeferredColdRestoreAndSnapshot } from './deferred-cold-restore-and-snapshot'
 import { bindHiddenOutputSeqAndSkip } from './hidden-output-seq-and-skip'
-import { bindHiddenRestoreStateAndSshProbe } from './hidden-restore-state-and-ssh-probe'
+import { bindHiddenRestoreState } from './hidden-restore-state'
 import { bindParkRevealSnapshotVerdictActions } from './park-reveal-snapshot-verdict'
 
 export function installRunDeferredConnect(session: ConnectPanePtySession): void {
@@ -152,7 +151,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
         // parent/child root) is being deleted. That is expected teardown, not a
         // user-facing failure — the pane unmounts once removal completes, so never
         // surface the raw fence error. Covers the parent-removal-fences-child case
-        // that startFreshSpawn's own-worktree isDeleting skip cannot see.
+        // that startFreshSpawn's own-worktree teardown skip cannot see.
         return
       }
       session.deps.onPtyErrorRef?.current?.(session.pane.id, message)
@@ -191,9 +190,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
     bindSerializeHiddenOutputSnapshot(session)
     bindForegroundOutputRefresh(session)
     bindHiddenOutputSeqAndSkip(session)
-    bindHiddenRestoreStateAndSshProbe(session)
-
-    bindPrepaintParkedSshSnapshot(session)
+    bindHiddenRestoreState(session)
     bindParkRevealSnapshotVerdictActions(session)
     bindHandleReattachResult(session)
     runDeferredSessionAttach(session)

@@ -18,5 +18,7 @@ export const WINDOW_CONTROLS_WIDTH = hasCustomTitleBar ? '138px' : '0px'
 export const WINDOW_CONTROLS_HEIGHT = hasCustomTitleBar ? '36px' : '0px'
 
 // Why: macOS paints traffic lights on the window's top-left edge. Windows and Linux paint their
-// controls on the right, so only macOS needs a surface to keep the left edge uncovered.
-export const MAC_TRAFFIC_LIGHTS_WIDTH = isMac ? '80px' : '0px'
+// controls on the right, and a paired web client's browser tab has none, so only a macOS desktop
+// window needs a surface to keep the left edge uncovered.
+export const hasMacTrafficLights = isMac && !isPairedWebClientWindow()
+export const MAC_TRAFFIC_LIGHTS_WIDTH = hasMacTrafficLights ? '80px' : '0px'

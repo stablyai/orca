@@ -33,6 +33,7 @@ function createState(overrides: Partial<DraftTargetSyncInput> = {}): DraftTarget
     name: 'workspace-name',
     note: 'note',
     persistDraft: true,
+    pendingInitialWorkspaceTarget: null,
     repoId: '',
     selectedProjectGroup: null,
     selectedRepo: undefined,

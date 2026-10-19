@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 type RuntimeSubscriptionCallbacks = {
   onResponse: (response: unknown) => void
@@ -10,18 +11,14 @@ describe('remote runtime terminal end verdict', () => {
   beforeEach(() => {
     vi.resetModules()
     callbacks = null
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          subscribe: vi.fn(async (_args, nextCallbacks: RuntimeSubscriptionCallbacks) => {
-            callbacks = nextCallbacks
-            queueMicrotask(() => {
-              callbacks?.onResponse({ ok: true, result: { type: 'ready' } })
-            })
-            return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
-          })
-        }
-      }
+    stubRuntimeEnvironmentBridge({
+      subscribe: vi.fn(async (_args, nextCallbacks: RuntimeSubscriptionCallbacks) => {
+        callbacks = nextCallbacks
+        queueMicrotask(() => {
+          callbacks?.onResponse({ ok: true, result: { type: 'ready' } })
+        })
+        return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+      })
     })
   })
 

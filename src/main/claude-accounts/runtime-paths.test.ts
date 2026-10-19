@@ -79,12 +79,6 @@ describe('ClaudeRuntimePathResolver', () => {
     expect(paths.envPatch).toEqual({ CLAUDE_CONFIG_DIR: inherited })
   })
 
-  it('resolves credentials next to the config directory', () => {
-    const paths = new ClaudeRuntimePathResolver().getRuntimePaths()
-
-    expect(paths.credentialsPath).toBe(join(testState.fakeHomeDir, '.claude', '.credentials.json'))
-  })
-
   it('falls back to the home config file when no colocated config exists', () => {
     const paths = new ClaudeRuntimePathResolver().getRuntimePaths()
 

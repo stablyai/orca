@@ -267,6 +267,23 @@ describe('worktree agent activation gate', () => {
     )
   })
 
+  it('blocks seeding while the queried snapshot names a live launch', async () => {
+    const { deps, resume } = testDeps({})
+    const snapshot = {
+      ...runtimeSnapshot('tab', LIVE_LEAF_ID, []),
+      tabs: [],
+      initialSurfaceLaunch: { launchId: 'launch-1', agent: 'claude' as const }
+    }
+    await expect(
+      runWorktreeAgentActivationGate(WORKTREE_ID, {
+        ...deps,
+        hasStructuredSession: async () => ({ snapshot, ownerBySessionId: new Map() })
+      })
+    ).resolves.toBe('blocked')
+    expect(deps.listSessions).not.toHaveBeenCalled()
+    expect(resume).not.toHaveBeenCalled()
+  })
+
   it('blocks automatic resume when packaged restore never becomes ready', async () => {
     const { deps, createTab, resume } = testDeps({})
 
@@ -297,6 +314,31 @@ describe('worktree agent activation gate', () => {
       recordInteraction: false
     })
     expect(resume).not.toHaveBeenCalled()
+  })
+
+  it('never gives a surface to a PTY its host is killing', async () => {
+    // A pane closed just before quit is still dying when the relaunched app lists it.
+    const closingPtyId = `${WORKTREE_ID}@@closed-pane`
+    const livePtyId = `${WORKTREE_ID}@@kept-pane`
+    const { deps, createTab } = testDeps({
+      sessions: [
+        { ...listed(closingPtyId), title: 'zsh', agentOwnership: 'absent', exiting: true },
+        { ...listed(livePtyId), title: 'zsh', agentOwnership: 'absent' }
+      ],
+      surfaceOwners: new Map([
+        [closingPtyId, UNOWNED],
+        [livePtyId, UNOWNED]
+      ])
+    })
+
+    await runWorktreeAgentActivationGate(WORKTREE_ID, deps)
+
+    expect(createTab).toHaveBeenCalledOnce()
+    expect(createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, undefined, {
+      initialPtyId: livePtyId,
+      activate: false,
+      recordInteraction: false
+    })
   })
 
   it('rebinds an unowned PTY to the recorded pane this renderer still holds', async () => {

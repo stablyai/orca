@@ -1,4 +1,4 @@
-import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from './agent-status-types'
+import type { AgentSubagentSnapshot } from './agent-status-types'
 import type { ClaudeBackgroundAgentTask } from './claude-background-task-inventory'
 
 /** Mirrors the wire-normalization id cap in agent-status-types. Enforced at
@@ -88,14 +88,9 @@ export function upsertWorkingClaudeSubagent(
     // background_tasks omission must stop reaping it (teammate-shaped ids
     // never appear there). The fold re-tags its own recreations after this.
     existing.backgroundTasksAuthoritative = undefined
-    // Why: the live event proves the agent process behind the restored row is
-    // still running it, so the liveness reap must stop treating it as a claim.
+    // Why: the live event confirms the restored row, so the manual-compact reap and
+    // runtime-working checks must treat it as live child work again.
     existing.restoredFromSnapshot = undefined
-    return
-  }
-  // Why: beyond the wire cap extra rows would be invisible anyway; idle
-  // teammates are the only safe eviction — never displace a working child.
-  if (roster.size >= AGENT_STATUS_MAX_SUBAGENTS && !evictOldestIdleClaudeSubagent(roster)) {
     return
   }
   roster.set(id, {
@@ -104,22 +99,6 @@ export function upsertWorkingClaudeSubagent(
     agentType: fields.agentType,
     description: fields.description
   })
-}
-
-function evictOldestIdleClaudeSubagent(roster: ClaudeSubagentRoster): boolean {
-  let oldestId: string | null = null
-  let oldestStartedAt = Infinity
-  for (const [id, tracked] of roster) {
-    if (tracked.state === 'idle' && tracked.startedAt < oldestStartedAt) {
-      oldestId = id
-      oldestStartedAt = tracked.startedAt
-    }
-  }
-  if (oldestId === null) {
-    return false
-  }
-  roster.delete(oldestId)
-  return true
 }
 
 /** SubagentStop. A one-shot child is finished — the row leaves immediately.
@@ -174,7 +153,6 @@ export function foldClaudeBackgroundTasksIntoRoster(
     return
   }
   const listedIds = new Set<string>()
-  const pendingRunningTasks = new Map<string, ClaudeBackgroundAgentTask>()
   const hasTeammateTypedTask = tasks.some((task) => task.teammate)
   for (const task of tasks) {
     if (task.teammate) {
@@ -185,7 +163,6 @@ export function foldClaudeBackgroundTasksIntoRoster(
     if (existing) {
       if (!task.running) {
         roster.delete(task.id)
-        pendingRunningTasks.delete(task.id)
         continue
       }
       // Why: a Stop can park the row before the lead inventory confirms the
@@ -200,7 +177,6 @@ export function foldClaudeBackgroundTasksIntoRoster(
       continue
     }
     if (!task.running) {
-      pendingRunningTasks.delete(task.id)
       continue
     }
     upsertWorkingClaudeSubagent(
@@ -213,10 +189,6 @@ export function foldClaudeBackgroundTasksIntoRoster(
     if (created) {
       created.backgroundTasksAuthoritative = true
       created.listedAsSubagentTask = true
-    } else {
-      // Why: a full roster may still contain stale entries that this same
-      // inventory will reap. Retry after cleanup so a replacement stays live.
-      pendingRunningTasks.set(task.id, task)
     }
   }
   if (options?.inventoryComplete !== false) {
@@ -237,22 +209,6 @@ export function foldClaudeBackgroundTasksIntoRoster(
         continue
       }
       roster.delete(id)
-    }
-  }
-  for (const task of pendingRunningTasks.values()) {
-    if (roster.size >= AGENT_STATUS_MAX_SUBAGENTS) {
-      break
-    }
-    upsertWorkingClaudeSubagent(
-      roster,
-      task.id,
-      { agentType: task.agentType, description: task.description },
-      now
-    )
-    const created = roster.get(task.id)
-    if (created) {
-      created.backgroundTasksAuthoritative = true
-      created.listedAsSubagentTask = true
     }
   }
 }

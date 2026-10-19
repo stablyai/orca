@@ -31,8 +31,9 @@ function phoneConnection(): {
 } {
   const registry = new RuntimeSubscriptionRegistry()
   const context: RpcContext = {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test only touch these three registry-backed members.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test only touch these registry-backed members and the hook rows.
     runtime: {
+      getAgentProviderSessionRows: () => [],
       registerSubscriptionCleanup: registry.register.bind(registry),
       cleanupSubscription: registry.cleanup.bind(registry),
       cleanupSubscriptionsByPrefix: registry.cleanupByPrefix.bind(registry)

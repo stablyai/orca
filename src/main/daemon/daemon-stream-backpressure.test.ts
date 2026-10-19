@@ -188,7 +188,7 @@ describe('DaemonStreamBackpressure', () => {
   it('does not let an old refill callback flush a replacement connection', () => {
     const flush = vi.fn()
     const completions: (() => void)[] = []
-    const write = (_line: string, complete: () => void) => completions.push(complete)
+    const write = (_line: unknown, complete: () => void) => completions.push(complete)
     const refill = new DaemonStreamHeldRefill(flush)
     refill.arm('client', 'session', write)
     refill.clear('client')

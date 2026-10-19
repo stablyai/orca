@@ -9,6 +9,7 @@ import { TEST_REPO_PATH_FILE } from './global-setup'
 import { getE2ECompletedOnboardingProfile } from './helpers/e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './helpers/electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
+import { retryTransientMainEvaluate } from './helpers/electron-main-evaluate-retry'
 import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation,
@@ -138,7 +139,10 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       args: [...getOrcaElectronLaunchArgs(mainPath, false), '--serve', '--serve-no-pairing'],
       env
     })
-    const resolvedHome = await serveApp.evaluate(({ app }) => app.getPath('home'))
+    const launchedServeApp = serveApp
+    const resolvedHome = await retryTransientMainEvaluate(() =>
+      launchedServeApp.evaluate(({ app }) => app.getPath('home'))
+    )
     assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
     // Why: this spec bypasses the app fixture, so opt into its gated Electron log capture for CI failures.
     forwardElectronProcessLogs(serveApp, testInfo)

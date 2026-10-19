@@ -52,6 +52,7 @@ describe('launchAgentInNewTab main-window surface', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-1',
       agent: 'opencode',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })
@@ -73,7 +74,11 @@ describe('launchAgentInNewTab main-window surface', () => {
     const store = seedMainWindowOnEditor()
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ agent: 'opencode', worktreeId: MAIN_WORKTREE_ID })
+    const result = launchAgentInNewTab({
+      requestId: 'request-2',
+      agent: 'opencode',
+      worktreeId: MAIN_WORKTREE_ID
+    })
 
     const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : null
     expect(tabId).not.toBeNull()

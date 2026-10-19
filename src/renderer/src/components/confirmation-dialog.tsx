@@ -48,6 +48,9 @@ export function ConfirmationDialogProvider({
   // Why: Radix keeps dialog content mounted while closing; keep labels stable without a post-render Effect.
   const displayedRequest = activeRequest ?? lastDisplayedRequestRef.current
   const Icon = displayedRequest?.options.icon
+  const compact = displayedRequest?.options.compact === true
+  const buttonSize = compact ? 'sm' : 'default'
+  const guarded = displayedRequest?.options.ignoresOpeningGesture === true
 
   useEffect(() => {
     // Why: this provider's dialog is not represented by activeModal. Block
@@ -58,12 +61,30 @@ export function ConfirmationDialogProvider({
 
   const confirm = useCallback<ConfirmationDialogContextValue>((options) => {
     return new Promise((resolve) => {
+      const { signal } = options
+      if (signal?.aborted) {
+        resolve(false)
+        return
+      }
       const request: ConfirmationDialogRequest = {
         id: nextIdRef.current,
         options,
         resolve
       }
       nextIdRef.current += 1
+      signal?.addEventListener(
+        'abort',
+        () => {
+          if (activeRequestRef.current?.id === request.id) {
+            setDontAskAgain(false)
+          }
+          resolve(false)
+          setQueue((currentQueue) =>
+            currentQueue.filter((queuedRequest) => queuedRequest.id !== request.id)
+          )
+        },
+        { once: true }
+      )
       setQueue((currentQueue) => [...currentQueue, request])
     })
   }, [])
@@ -100,7 +121,13 @@ export function ConfirmationDialogProvider({
       >
         <DialogContent
           showCloseButton={false}
+          size={compact ? 'compact' : 'default'}
           className={cn('sm:max-w-md', Icon && 'gap-6')}
+          onInteractOutside={(event) => {
+            if (guarded) {
+              event.preventDefault()
+            }
+          }}
           onOpenAutoFocus={(event) => {
             if (activeRequest?.options.initialFocus === 'confirm') {
               event.preventDefault()
@@ -115,10 +142,13 @@ export function ConfirmationDialogProvider({
               </div>
             )}
             <DialogHeader className={cn(Icon && 'min-w-0 gap-2 text-left')}>
-              <DialogTitle>{displayedRequest?.options.title}</DialogTitle>
+              <DialogTitle size={compact ? 'compact' : 'default'}>
+                {displayedRequest?.options.title}
+              </DialogTitle>
               {displayedRequest?.options.description ? (
                 // Callers pass multi-line descriptions (e.g. one path per line).
                 <DialogDescription
+                  size={compact ? 'compact' : 'default'}
                   className={cn(
                     'whitespace-pre-line',
                     displayedRequest.options.descriptionClassName
@@ -153,6 +183,7 @@ export function ConfirmationDialogProvider({
             <Button
               type="button"
               variant={displayedRequest?.options.cancelVariant ?? 'outline'}
+              size={buttonSize}
               onClick={() => settleActiveRequest(false)}
             >
               {displayedRequest?.options.cancelLabel ??
@@ -162,7 +193,18 @@ export function ConfirmationDialogProvider({
               ref={confirmButtonRef}
               type="button"
               variant={displayedRequest?.options.confirmVariant ?? 'default'}
-              onClick={() => settleActiveRequest(true)}
+              size={buttonSize}
+              // Why: the gesture that opened the prompt may still be repeating or clicking.
+              onKeyDown={(event) => {
+                if (guarded && event.repeat) {
+                  event.preventDefault()
+                }
+              }}
+              onClick={(event) => {
+                if (!guarded || event.detail <= 1) {
+                  settleActiveRequest(true)
+                }
+              }}
             >
               {displayedRequest?.options.confirmLabel ??
                 translate('auto.components.confirmation.dialog.8490e5d36a', 'Confirm')}

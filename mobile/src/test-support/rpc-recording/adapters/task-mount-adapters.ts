@@ -131,8 +131,6 @@ export function taskMountAdapters(
       Object.assign(model, {
         client: context.client,
         clientRef: { current: context.client },
-        repoSelectionHydratedRef: { current: false },
-        defaultRepoSelectionRef: { current: null },
         taskUiReady: true,
         githubProjectFieldVisibilityScope: null,
         taskResumeRef: { current: {} },

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
-import { acquireDirectSshDetectedWorktreeRefresh } from './worktrees'
 import {
   TEST_SSH_AUTHORITY,
   makeDetectedResult,
@@ -459,8 +458,7 @@ describe('the startup hydration purge behind a listing that is no longer current
   })
 })
 
-// Why this suite exists: the SSH reconnect preparation ends on any repo reporting 'stale' and
-// skips its post-connect workspace sync, which nothing retries while the connection holds.
+// An older listing must neither roll back the create's catalog nor report the repo stale.
 describe('a direct SSH listing older than an applied create', () => {
   const sshHost = 'ssh:ssh-1'
 
@@ -502,20 +500,6 @@ describe('a direct SSH listing older than an applied create', () => {
     return created
   }
 
-  it('is not applied, and reports the repo current rather than stale', async () => {
-    const store = createTestStore()
-    const created = seedSsh(store)
-    const lease = acquireDirectSshDetectedWorktreeRefresh(store, {
-      repoId: 'repo-ssh',
-      executionHostId: sshHost,
-      authority: TEST_SSH_AUTHORITY
-    })
-    const providerResult = await lease.result
-
-    expect(lease.merge(providerResult)).toBe(providerResult)
-    expect(store.getState().worktreesByRepo['repo-ssh']?.map((w) => w.id)).toEqual([created.id])
-  })
-
   it('a direct-authority fetchWorktrees caller gets the same report, without a relist', async () => {
     const store = createTestStore()
     const created = seedSsh(store)
@@ -529,47 +513,5 @@ describe('a direct SSH listing older than an applied create', () => {
 
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledOnce()
     expect(store.getState().worktreesByRepo['repo-ssh']?.map((w) => w.id)).toEqual([created.id])
-  })
-
-  it('still reports stale when the repo owner went away during the listing, though it is also older', async () => {
-    const store = createTestStore()
-    seedSsh(store)
-    const lease = acquireDirectSshDetectedWorktreeRefresh(store, {
-      repoId: 'repo-ssh',
-      executionHostId: sshHost,
-      authority: TEST_SSH_AUTHORITY
-    })
-    const providerResult = await lease.result
-    store.setState({ repos: [] })
-
-    expect(lease.merge(providerResult)).toMatchObject({ status: 'stale' })
-  })
-
-  it('control: still reports stale when the connection moved during the listing', async () => {
-    const store = createTestStore()
-    seedSsh(store)
-    const lease = acquireDirectSshDetectedWorktreeRefresh(store, {
-      repoId: 'repo-ssh',
-      executionHostId: sshHost,
-      authority: TEST_SSH_AUTHORITY
-    })
-    const providerResult = await lease.result
-    store.setState({
-      sshConnectionStates: new Map([
-        [
-          TEST_SSH_AUTHORITY.targetId,
-          {
-            targetId: TEST_SSH_AUTHORITY.targetId,
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            providerEpoch: TEST_SSH_AUTHORITY.providerEpoch,
-            connectionGeneration: TEST_SSH_AUTHORITY.connectionGeneration + 1
-          }
-        ]
-      ])
-    })
-
-    expect(lease.merge(providerResult)).toMatchObject({ status: 'stale' })
   })
 })

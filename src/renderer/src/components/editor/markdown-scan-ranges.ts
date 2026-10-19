@@ -51,10 +51,6 @@ export function markdownFenceRanges(content: string): MarkdownFenceRanges {
   return ranges
 }
 
-export function isInsideRange(index: number, ranges: MarkdownFenceRanges): boolean {
-  return ranges.some(([start, end]) => index >= start && index < end)
-}
-
 function rangeEndAt(index: number, ranges: MarkdownFenceRanges): number {
   for (const [start, end] of ranges) {
     if (index >= start && index < end) {

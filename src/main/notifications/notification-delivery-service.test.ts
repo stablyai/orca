@@ -22,6 +22,7 @@ function makeSettings(overrides: Partial<NotificationSettings> = {}): Notificati
     customSoundPath: null,
     customSoundVolume: 1,
     mutedNotificationSourceIds: [],
+    notifyHiddenWorkspaces: true,
     ...overrides
   }
 }
@@ -183,6 +184,28 @@ describe('createNotificationDeliveryService', () => {
     })
   })
 
+  it('lets keyed news through the workspace window, collapsing only its own repeat', () => {
+    const harness = makeHarness(makeSettings())
+    const service = createNotificationDeliveryService(harness.deps)
+    expect(service.dispatch(makeRequest())).toEqual({ delivered: true })
+    const prompt = (attentionKey: string) => makeRequest({ agentState: 'blocked', attentionKey })
+    expect(service.dispatch(prompt('p1'))).toEqual({ delivered: true })
+    expect(service.dispatch(prompt('p2'))).toEqual({ delivered: true })
+    expect(service.dispatch(prompt('p2'))).toEqual({ delivered: false, reason: 'cooldown' })
+    expect(harness.dispatchMobileNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ attentionKey: 'p1', agentState: 'blocked' })
+    )
+  })
+
+  it('leaves the phone to the execution host when it already pushed', () => {
+    const harness = makeHarness(makeSettings())
+    const service = createNotificationDeliveryService(harness.deps)
+    expect(service.dispatch(makeRequest({ mobileDeliveredByHost: true }))).toEqual({
+      delivered: true
+    })
+    expect(harness.dispatchMobileNotification).not.toHaveBeenCalled()
+  })
+
   it('skips mobile fan-out entirely when no runtime is paired', () => {
     const harness = makeHarness(makeSettings())
     harness.deps.dispatchMobileNotification = null
@@ -252,4 +275,21 @@ it('reports a muted host before a disabled source', () => {
       makeRequest({ notificationSourceId: 'runtime:qa' })
     )
   ).toEqual({ delivered: false, reason: 'host-muted' })
+})
+
+it("tells the phone which server runs the workspace, through the gateway's push", async () => {
+  for (const executionHost of [undefined, 'runtime:qa'] as const) {
+    const push = createPushHarness({
+      devices: [{ deviceId: 'phone', pushRegistration: registration() }]
+    })
+    const harness = makeHarness(makeSettings())
+    harness.deps.dispatchMobileNotification = (event) =>
+      push.dispatcher.enqueue({ ...event, notificationSeq: 1, notificationEpoch: 'epoch' })
+    createNotificationDeliveryService(harness.deps).dispatch(
+      makeRequest({ agentState: 'done', ...(executionHost ? { executionHost } : {}) })
+    )
+    await flush()
+    expect(push.sends[0]?.notification.worktreeId).toBe('wt-1')
+    expect(push.sends[0]?.notification.executionHost).toBe(executionHost)
+  }
 })

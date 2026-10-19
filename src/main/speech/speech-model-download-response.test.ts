@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  isRetryableDownloadError,
-  parseContentRange,
-  parseRetryAfterMs
-} from './speech-model-download-response'
+import { parseContentRange, parseRetryAfterMs } from './speech-model-download-response'
+import { isRetryableDownloadError } from '../network/transient-download-error'
 
 describe('speech model download response contracts', () => {
   it('accepts only internally consistent byte ranges', () => {

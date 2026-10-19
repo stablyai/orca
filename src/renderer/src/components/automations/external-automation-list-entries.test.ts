@@ -5,9 +5,9 @@ import type { ScopedExternalAutomationManager } from './external-automation-scop
 
 function manager(overrides: Partial<ExternalAutomationManager> = {}): ExternalAutomationManager {
   return {
-    id: 'hermes:ssh:openclaw',
-    provider: 'hermes',
-    label: 'Hermes on openclaw',
+    id: 'openclaw:ssh:openclaw',
+    provider: 'openclaw',
+    label: 'OpenClaw on openclaw',
     targetLabel: 'openclaw',
     target: { type: 'ssh', connectionId: 'openclaw' },
     status: 'unavailable',
@@ -21,8 +21,8 @@ function manager(overrides: Partial<ExternalAutomationManager> = {}): ExternalAu
 function job(id = 'job-1'): ExternalAutomationManager['jobs'][number] {
   return {
     id,
-    managerId: 'hermes:ssh:openclaw',
-    provider: 'hermes',
+    managerId: 'openclaw:ssh:openclaw',
+    provider: 'openclaw',
     name: 'Nightly',
     schedule: '0 9 * * *',
     rawSchedule: '0 9 * * *',
@@ -53,7 +53,7 @@ function scoped(
             : { kind: 'runtime', environmentId, pairingRevision: 1 },
         selector: { kind: 'self' }
       },
-      provider: 'hermes'
+      provider: 'openclaw'
     },
     manager: manager(overrides)
   }
@@ -73,12 +73,12 @@ describe('buildExternalAutomationListEntries', () => {
   })
 
   it('separates identical manager and job IDs reported by two authorities', () => {
-    // `hermes:local` names no authority, so both hosts hand back the same manager
+    // `openclaw:local` names no authority, so both hosts hand back the same manager
     // ID. An unqualified key would make the two rows one, and the second would
     // shadow the first in selection, dialogs, and React's reconciliation.
     const entries = buildExternalAutomationListEntries([
-      scoped(null, { id: 'hermes:local', target: { type: 'local' }, jobs: [job()] }),
-      scoped('env-7', { id: 'hermes:local', target: { type: 'local' }, jobs: [job()] })
+      scoped(null, { id: 'openclaw:local', target: { type: 'local' }, jobs: [job()] }),
+      scoped('env-7', { id: 'openclaw:local', target: { type: 'local' }, jobs: [job()] })
     ])
 
     expect(entries).toHaveLength(2)

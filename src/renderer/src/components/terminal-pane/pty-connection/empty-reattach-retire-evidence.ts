@@ -1,6 +1,6 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 // Why not activationTreatsNoteAsFinished: a live+done note is a finished turn's idle anchor for a running pane, not sleep.
 export function isHibernationDoneRecord(record: SleepingAgentSessionRecord): boolean {

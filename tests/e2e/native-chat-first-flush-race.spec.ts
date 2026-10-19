@@ -2,95 +2,18 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
-import type { GlobalSettings } from '../../src/shared/global-settings-types'
+import {
+  enableNativeChatSetting,
+  seedClaudeProviderSession,
+  toggleTerminalTabToChatView,
+  claudeTranscriptLines
+} from './helpers/native-chat-transcript-fixture'
 
 const LOADING_TITLE = 'Loading conversation…'
 const ERROR_TITLE = 'Could not load conversation'
-
-async function enableNativeChatSetting(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const nextSettings = await window.api.settings.set({ experimentalNativeChat: true })
-    window.__store?.setState({ settings: nextSettings as GlobalSettings })
-  })
-}
-
-// Why: seeding agentStatusByPaneKey directly (rather than posting a real
-// `/hook/claude` event) mirrors the technique agent-session-quit-resume.spec.ts
-// uses to stay hermetic — it exercises the identical store → NativeChatView
-// path a real Claude Code hook would drive, without an installed CLI.
-async function seedClaudeProviderSession(
-  page: Page,
-  args: { paneKey: string; worktreeId: string; sessionId: string; transcriptPath: string }
-): Promise<void> {
-  await page.evaluate(({ paneKey, worktreeId, sessionId, transcriptPath }) => {
-    window.__store
-      ?.getState()
-      .setAgentStatus(
-        paneKey,
-        { state: 'working', prompt: 'e2e first-flush race probe', agentType: 'claude' },
-        'Claude',
-        undefined,
-        { worktreeId },
-        { providerSession: { key: 'session_id', id: sessionId, transcriptPath } }
-      )
-  }, args)
-}
-
-// Why: toggleTabViewMode keys off the *unified* tab id, which can differ from
-// the terminal tab id embedded in paneKey — resolve it the same way
-// TerminalPane.tsx does before calling the store action a real toggle/shortcut
-// would use.
-async function toggleTerminalTabToChatView(
-  page: Page,
-  args: { tabId: string; worktreeId: string }
-): Promise<void> {
-  await page.evaluate(({ tabId, worktreeId }) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Store unavailable')
-    }
-    const state = store.getState()
-    const unifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-      (tab) => tab.contentType === 'terminal' && tab.entityId === tabId
-    )
-    if (!unifiedTab) {
-      throw new Error('Unified terminal tab not found for chat toggle')
-    }
-    state.toggleTabViewMode(unifiedTab.id)
-  }, args)
-}
-
-function claudeTranscriptLines(args: {
-  sessionId: string
-  userText: string
-  assistantText: string
-}): string {
-  // Why: distinct timestamps keep the rendered order deterministic (a tie is
-  // broken by uuid, which would put the assistant turn first).
-  const userTime = new Date()
-  const assistantTime = new Date(userTime.getTime() + 2_000)
-  const lines = [
-    {
-      sessionId: args.sessionId,
-      uuid: `${args.sessionId}-user`,
-      timestamp: userTime.toISOString(),
-      type: 'user',
-      message: { role: 'user', content: [{ type: 'text', text: args.userText }] }
-    },
-    {
-      sessionId: args.sessionId,
-      uuid: `${args.sessionId}-assistant`,
-      timestamp: assistantTime.toISOString(),
-      type: 'assistant',
-      message: { model: 'claude-opus-4', content: [{ type: 'text', text: args.assistantText }] }
-    }
-  ]
-  return `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`
-}
 
 test.describe('Native chat first-flush transcript race (#8401)', () => {
   test('stays in loading (never errors) until a not-yet-flushed transcript appears, then hydrates live', async ({
@@ -111,11 +34,7 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
     const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-native-chat-'))
     const transcriptPath = path.join(scratchDir, `${sessionId}.jsonl`)
 
-    const screenshotDir = path.join(
-      process.cwd(),
-      'validation-screenshots',
-      `native-chat-first-flush-race-${Date.now()}`
-    )
+    const screenshotDir = testInfo.outputPath('screenshots')
     mkdirSync(screenshotDir, { recursive: true })
     await testInfo.attach('validation-screenshot-dir', {
       body: screenshotDir,

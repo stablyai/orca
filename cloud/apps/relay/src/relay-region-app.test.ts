@@ -44,7 +44,9 @@ describe('Relay region API', () => {
     expect(assign).toHaveBeenCalledWith(
       { userId: 'user-1', relayHostId: 'asiahost00000001' },
       'asia-east2',
-      'asia-east2'
+      'asia-east2',
+      undefined,
+      { hostRequested: true }
     )
     expect(recordRegionRequest).toHaveBeenCalledWith('asia-east2')
     expect(recordRegionSelection).toHaveBeenCalledWith({
@@ -80,7 +82,9 @@ describe('Relay region API', () => {
     expect(assign).toHaveBeenCalledWith(
       { userId: 'user-1', relayHostId: 'killhost00000001' },
       'asia-east2',
-      'us-central1'
+      'us-central1',
+      undefined,
+      { hostRequested: true }
     )
   })
 
@@ -121,7 +125,9 @@ describe('Relay region API', () => {
     expect(assign).toHaveBeenCalledWith(
       { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
       'asia-east2',
-      'asia-east2'
+      'asia-east2',
+      undefined,
+      { hostRequested: true }
     )
     expect(exchangeRegionCorrection).toHaveBeenCalledWith(
       { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },

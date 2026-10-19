@@ -50,17 +50,19 @@ describe('RPC main recordings', () => {
             loading: false
           })
         }
+        if (id === 'settings-task-hydration-fulfilled') {
+          expect(visibleState(recording)).toMatchObject({ hydrated: true })
+        }
         const golden = goldenRecording(pilot.scenarios(), recording)
         const bytes = goldenBytes(golden)
         if (run) {
           expect(bytes).toBe(first)
-        }
-        first = bytes
-        if (process.env.RPC_FOUNDATION_MODE === '--record') {
+        } else if (process.env.RPC_FOUNDATION_MODE === '--record') {
           await writeGolden(goldens, golden, '--record')
         } else {
           await expectGoldenFile(goldens, id, golden)
         }
+        first = bytes
       }
     })
   }

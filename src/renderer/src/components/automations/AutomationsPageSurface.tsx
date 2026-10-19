@@ -49,8 +49,6 @@ export function AutomationsPageSurface({
     createOpen,
     editingAutomationId,
     isSaving,
-    editingExternalTarget,
-    createTarget,
     automationYamlHooksByRepoKey,
     draft,
     setCreateOpen,
@@ -66,8 +64,6 @@ export function AutomationsPageSurface({
     externalActionKey,
     activePaneTab,
     setActivePaneTab,
-    selectedExternalRunPage,
-    setSelectedExternalRunPage,
     setSelectedAutomationRunPageId,
     setSelectedAutomationRuns,
     setRunHistoryReloadToken,
@@ -156,12 +152,8 @@ export function AutomationsPageSurface({
         isEditing={editingAutomationId !== null}
         isSaving={isSaving}
         canSave={presentation.canSaveDraft}
-        isEditingExternal={editingExternalTarget !== null}
-        createTarget={createTarget}
         createDestination={destination.createDestination.control}
-        editDestination={
-          destinationForm.isOrcaForm ? destinationForm.editDestinationControl : undefined
-        }
+        editDestination={destinationForm.editDestinationControl}
         notice={editorNotice}
         onNoticeRecover={(action) => {
           const host = editorNoticeHost ?? destination.editorRecoveryHost
@@ -187,15 +179,13 @@ export function AutomationsPageSurface({
         onProjectChange={editorActions.handleProjectChange}
         getRepoHostLabel={presentation.getAutomationRepoHostLabel}
         allowAddProject={
-          !destinationForm.isOrcaForm ||
-          (editingAutomationId !== null
+          editingAutomationId !== null
             ? destinationForm.editHostResolution.status === 'ready'
               ? getAutomationAuthorityTarget(destinationForm.editHostResolution.authority).kind ===
                 'local'
               : destinationForm.automationDialogTarget.kind === 'local'
-            : destinationForm.automationDialogTarget.kind === 'local')
+            : destinationForm.automationDialogTarget.kind === 'local'
         }
-        onCreateTargetChange={draftEffects.handleCreateTargetChange}
         onOpenChange={(open) => {
           setCreateOpen(open)
           if (!open) {
@@ -263,7 +253,6 @@ export function AutomationsPageSurface({
         <AutomationsDetailPane
           selected={selected}
           selectedExternal={selectedExternal}
-          selectedExternalRunPage={selectedExternalRunPage}
           selectedRuns={setup.selectedRuns}
           selectedRunsNotice={setup.selectedRunsNotice}
           selectedHostEntry={destination.rowRecoveryHost(selectedRow?.key ?? null)}
@@ -295,12 +284,8 @@ export function AutomationsPageSurface({
           hostLabelById={presentation.hostLabelById}
           selectedRunNowAvailability={presentation.selectedRunNowAvailability}
           worktreeMap={selectedRunWorktreeMap}
-          fetchExternalAutomationRuns={externalActions.fetchExternalAutomationRuns}
           onActivePaneTabChange={setActivePaneTab}
-          onClearExternalRunPage={() => setSelectedExternalRunPage(null)}
           requestExternalAction={externalActions.requestExternalAction}
-          openExternalRunPage={externalActions.openExternalRunPage}
-          openEditExternalDialog={editorActions.openEditExternalDialog}
           runNow={() => runSelectedRowAction(runActions.runNow)}
           openEditDialog={() => runSelectedRowAction(editorActions.openEditDialog)}
           toggleAutomation={() => runSelectedRowAction(managementActions.toggleAutomation)}
@@ -311,7 +296,6 @@ export function AutomationsPageSurface({
           onBackToList={() => {
             setIsDetailOpen(false)
             setSelectedAutomationRunPageId(null)
-            setSelectedExternalRunPage(null)
             setActivePaneTab('overview')
           }}
         />

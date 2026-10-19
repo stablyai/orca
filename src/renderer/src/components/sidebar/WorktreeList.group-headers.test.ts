@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getPinnedWorktreeRevealCollapsedGroupKeys } from './worktree-list/navigation/reveal-ancestors'
 import {
   createAppStoreModuleMock,
   createDropdownMenuModuleMock,
@@ -20,8 +19,7 @@ import {
 import {
   makeFolderWorkspacePathStatusMockState,
   makeFolderWorkspacePathStatusState,
-  makeRepo,
-  makeWorktree
+  makeRepo
 } from './worktree-list-lineage-card-test-fixtures'
 import { setLineageFixtureState } from './worktree-list-lineage-store-state'
 import { setPinnedFixtureState } from './worktree-list-pinned-store-state'
@@ -150,42 +148,6 @@ describe('WorktreeList lineage child card renderer', () => {
     const markup = await renderWorktreeListMarkup()
 
     expect(markup).not.toContain('data-repo-header-collapse-affordance=""')
-  })
-
-  it('uncollapses pinned reveal for a descendant that only lives under a pinned parent', () => {
-    const child = makeWorktree({
-      id: 'child-of-pinned',
-      instanceId: 'child-of-pinned-instance',
-      displayName: 'Child of pinned',
-      branch: 'child',
-      sortOrder: 2
-    })
-
-    expect(
-      getPinnedWorktreeRevealCollapsedGroupKeys({
-        worktree: child,
-        collapsedGroups: new Set(['pinned', 'all']),
-        inPinnedSection: true
-      })
-    ).toEqual(['pinned'])
-  })
-
-  it('uncollapses pinned reveal through the pinned section after host expansion', () => {
-    const worktree = makeWorktree({
-      id: 'pinned-ssh',
-      instanceId: 'pinned-ssh-instance',
-      displayName: 'Pinned SSH workspace',
-      branch: 'pinned-ssh',
-      sortOrder: 1
-    })
-    worktree.isPinned = true
-
-    expect(
-      getPinnedWorktreeRevealCollapsedGroupKeys({
-        worktree,
-        collapsedGroups: new Set(['host:ssh:builder-1', 'pinned', 'done'])
-      })
-    ).toEqual(['pinned'])
   })
 
   it('renders a collapse chevron on status group headers with worktrees', async () => {

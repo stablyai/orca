@@ -1,18 +1,19 @@
 import { app, type Event } from 'electron'
-import { closeAllWatchers } from '../ipc/filesystem-watcher'
+import { closeAllWatchers } from '../ipc/filesystem-watcher-shutdown'
 import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
-import { killAllPty } from '../ipc/pty'
-import { disconnectDaemon, shutdownDaemon } from '../daemon/daemon-init'
-import { beginSshShutdown } from '../ipc/ssh-shutdown-drain'
+import { killAllPty } from '../ipc/pty/kill-all'
+import { disconnectDaemon, shutdownDaemon } from '../daemon/daemon-provider-state'
+import { beginSshShutdown } from '../ipc/ssh/ssh-shutdown-drain'
 import { agentHookServer } from '../agent-hooks/server'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { removeManagedAgentHooksAsync } from '../agent-hooks/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../runtime/structured-agent-session-runtime'
 import { setStructuredAgentSessionTeardownTrigger } from '../runtime/structured-agent-session-runtime-teardown'
-import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/orca-runtime-files'
+import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file-watcher-leases'
 import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/paired-runtime-browser-client-host-runtime'
+import { disposeDesktopBrowserBridge } from '../ipc/desktop-browser-bridge-wiring'
 import { browserManager } from '../browser/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../codex/codex-state-db-backfill-recovery'
 import { stopCodexAccountSessionBridges } from '../codex/codex-account-session-bridge'
@@ -32,6 +33,7 @@ import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
 import { mainProcessState as state } from './main-process-state'
 import { isDevParentShutdownRequested } from './configure-process'
 import { getCanonicalUserDataPath } from '../persistence'
+import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
 
 // Why: will-quit fires twice — first pass preventDefaults and runs teardown; second pass exits.
 let daemonDisconnectDone = false
@@ -67,13 +69,17 @@ function shutdownWatchersOnce(): Promise<void> {
 }
 
 function installBeforeQuitHandler(): void {
-  app.on('before-quit', () => {
+  app.on('before-quit', (event: Event) => {
+    if (event.defaultPrevented) {
+      return
+    }
     if (isQuittingForUpdate()) {
       recordUpdaterLifecycle('before_quit_allowed', undefined, {
         message: 'before-quit allowed for update install'
       })
     }
     state.isQuitting = true
+    flushUnsavedCloudSessions()
     state.desktopRelayService?.fenceAndCloseNow()
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
     state.unsubscribeAgentAwakeStatusChanges?.()
@@ -155,7 +161,9 @@ function installWillQuitHandler(): void {
     state.uninstallRepoMaintenanceIdleGate = null
     // Why stop, not wait: a delete can run for minutes, and its record makes the next start finish it.
     stopBackgroundWorktreeRemovals()
-    agentHookServer.stop()
+    // Why keepStatus: the chat teardown above reads each chat's background work from that store
+    // after this returns; cleared, a chat whose only work was a subagent or command is not offered.
+    agentHookServer.stop({ keepStatus: true })
     // Why Windows only: POSIX hooks short-circuit on ORCA_PANE_KEY, while Windows must register a
     // bare script path that cannot express the guard and would otherwise keep spawning after quit.
     // Why bounded here: every other teardown member carries its own ceiling, and this one reaches
@@ -211,7 +219,7 @@ function installWillQuitHandler(): void {
         return
       }
       try {
-        await finalStore.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
+        await finalStore.flushFinalOrThrowAsync()
         await finalStore.freezeWritesAsync()
         state.profileStateAdmission?.release()
         state.profileStateAdmission = undefined
@@ -227,6 +235,7 @@ function installWillQuitHandler(): void {
       state.openCodeUsage?.flush(),
       state.museUsage?.flush()
     ]).then(() => {})
+    disposeDesktopBrowserBridge()
     const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()
     const skillUploadShutdown = state.runtime?.disposeSkillUploadSessions() ?? Promise.resolve()
     // Why: capture pid/runtimeId synchronously (before any await) so a later teardown path can't null them out mid-chain.
@@ -244,6 +253,11 @@ function installWillQuitHandler(): void {
           })
           .catch((error) => console.error('[runtime] Failed to stop local RPC transport:', error))
       : Promise.resolve()
+    // After session and RPC teardown, which can still retire notifications; will-quit is past every veto.
+    const notificationDismissalClose = Promise.allSettled([
+      structuredAgentSessionShutdown,
+      rpcStopAndClear
+    ]).then(() => state.runtime?.closeNotificationDismissals())
     // Why: allSettled (not all) keeps fail-open — a daemon-disconnect rejection still quits instead of hanging.
     // Why: telemetry flush folds in before app.quit() (bounded 2s); catch defensively so a flush failure can't cancel the quit chain.
     // Why: normal quits keep the detached daemon for warm reattach, but a dead dev parent leaves the temp/dev profile ownerless.
@@ -269,6 +283,7 @@ function installWillQuitHandler(): void {
       { name: 'codex-backfill-recovery', promise: codexBackfillRecoveryShutdown },
       { name: 'structured-agent-session', promise: structuredAgentSessionShutdown },
       { name: 'usage-cache', promise: usageCacheFlush },
+      { name: 'notification-dismissals', promise: notificationDismissalClose },
       { name: 'stats', promise: statsFlush },
       { name: 'state', promise: storeFlush }
     ])

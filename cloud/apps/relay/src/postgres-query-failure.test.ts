@@ -72,12 +72,12 @@ describe('PostgreSQL query failure diagnostics', () => {
     expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain('private')
   })
 
-  // ECONNRESET carries no SQLSTATE the routes retry on, and it arrives after the
-  // statement went out, so it stays a hard failure. The pair pins that boundary.
+  // A reset from the database layer answers 503 like 08006 (staging B1); transaction() still
+  // never retries it, since the statement went out.
   it.each([
     ['57014', true],
     ['55P03', true],
-    ['ECONNRESET', false]
+    ['ECONNRESET', true]
   ] as const)(
     'identifies execute failure %s and releases its client',
     async (code, transient) => {

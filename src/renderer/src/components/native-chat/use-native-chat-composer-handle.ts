@@ -16,16 +16,16 @@ export function useNativeChatComposerHandle(
   ref: ForwardedRef<NativeChatComposerHandle>,
   args: UseNativeChatComposerHandleArgs
 ): (event: ClipboardEventLike) => void {
-  const { textareaRef, draft, setDraft, setHistory, setActiveSuggestion, ...pasteArgs } = args
-  const { insertTypedText, insertPastedText, focus, contains } = useNativeChatTypedInsertion({
-    textareaRef,
-    caret: args.caret,
-    draft,
-    setDraft,
-    setCaret: args.setCaret,
-    setHistory,
-    setActiveSuggestion
-  })
+  const { textareaRef, draft, setDraft, setActiveSuggestion, ...pasteArgs } = args
+  const { insertTypedText, appendText, acceptsText, insertPastedText, focus, contains } =
+    useNativeChatTypedInsertion({
+      textareaRef,
+      caret: args.caret,
+      draft,
+      setDraft,
+      setCaret: args.setCaret,
+      setActiveSuggestion
+    })
 
   const { handlePaste: handlePasteEvent, pasteFromClipboard } = useNativeChatComposerPaste({
     ...pasteArgs,
@@ -34,8 +34,24 @@ export function useNativeChatComposerHandle(
 
   useImperativeHandle(
     ref,
-    () => ({ focus, insertTypedText, handlePasteEvent, pasteFromClipboard, contains }),
-    [focus, insertTypedText, handlePasteEvent, pasteFromClipboard, contains]
+    () => ({
+      focus,
+      insertTypedText,
+      acceptsText,
+      appendText,
+      handlePasteEvent,
+      pasteFromClipboard,
+      contains
+    }),
+    [
+      focus,
+      insertTypedText,
+      acceptsText,
+      appendText,
+      handlePasteEvent,
+      pasteFromClipboard,
+      contains
+    ]
   )
   return handlePasteEvent
 }

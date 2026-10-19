@@ -42,7 +42,8 @@ export function installMonacoViewStateTracking(params: MonacoViewStateTrackingPa
 
 export function restoreMonacoViewState(
   editorInstance: editor.IStandaloneCodeEditor,
-  viewStateKey: string
+  viewStateKey: string,
+  canFocus?: () => boolean
 ): void {
   const savedSelections = editorSelectionCache.get(viewStateKey)
   const savedScrollTop = scrollTopCache.get(viewStateKey)
@@ -55,9 +56,11 @@ export function restoreMonacoViewState(
       if (savedScrollTop !== undefined) {
         editorInstance.setScrollTop(savedScrollTop)
       }
-      editorInstance.focus()
+      if (canFocus?.() !== false) {
+        editorInstance.focus()
+      }
     })
-  } else {
+  } else if (canFocus?.() !== false) {
     editorInstance.focus()
   }
 }

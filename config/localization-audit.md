@@ -95,9 +95,9 @@ not invoke tools that can overwrite an entire target catalog.
 
 The coverage gate compares current candidates against
 `config/localization-coverage-allowlist.json`. The committed allowlist is
-small (10 reviewed entries — one test fixture title, five non-English
-language-name search keywords, and four reviewed product-name search
-keywords): new candidates fail the check and must be localized or added with
+small (11 reviewed entries — six non-English language-name search keywords,
+four reviewed product-name search keywords, and one non-UI `label` placement
+prop): new candidates fail the check and must be localized or added with
 a reviewed reason in the same change.
 
 The script scans `src/renderer/src` by default. That is the primary UI surface.

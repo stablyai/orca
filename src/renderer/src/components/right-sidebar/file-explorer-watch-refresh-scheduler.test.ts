@@ -29,6 +29,8 @@ function setup(
     refreshDir,
     isCoveredByFullRefresh: () => false,
     dirConcurrency: 4,
+    trailingMs: TRAILING_MS,
+    maxWaitMs: MAX_WAIT_MS,
     ...rest
   })
   return { refreshTree, refreshDir, scheduler }

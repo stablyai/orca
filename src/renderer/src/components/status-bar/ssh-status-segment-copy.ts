@@ -17,15 +17,3 @@ export function connectedHostCountLabel(count: number): string {
 export function connectingHostsLabel(): string {
   return translate('auto.components.status.bar.SshStatusSegment.connecting', 'Connecting…')
 }
-
-export function workspaceSyncProblemLabel(phase: string | undefined): string {
-  return phase === 'conflict'
-    ? translate(
-        'auto.components.status.bar.SshStatusSegment.workspaceConflict',
-        'Workspace conflict'
-      )
-    : translate(
-        'auto.components.status.bar.SshStatusSegment.workspaceSyncError',
-        'Workspace sync error'
-      )
-}

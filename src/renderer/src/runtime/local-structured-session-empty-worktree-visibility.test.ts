@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
-import { projectLocalStructuredSessionTabs } from './local-structured-session-tabs-sync'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { projectLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-projection'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { collectClientLayoutGroupIds } from './web-session-client-owned-tab-placement'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 

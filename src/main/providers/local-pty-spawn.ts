@@ -2,13 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 import { JCODE_RUNTIME_DIR_ENV_KEY } from '../../shared/jcode-runtime-dir'
-import { prewarmJcodeDaemon } from '../jcode/daemon-prewarm'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { prepareMacosTccLoginShell } from './macos-tcc-login-shell'
 import { finalizeLocalPtySpawnEnvironment } from './local-pty-finalize-environment'
 import { normalizeLocalCallerSessionId } from './local-pty-launch-helpers'
 import { createLocalPtyLaunchPlan, DeferredLocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
+import { validateWorkingDirectory, WorkingDirectoryValidationAbortedError } from './local-pty-utils'
 import { allocatePtyId, ptyShutdownOperations } from './local-pty-provider-state'
 import { activateLocalPtySession } from './local-pty-session-activation'
 import {
@@ -23,7 +23,7 @@ import {
 import { loadLocalPtyRuntimeSpawn } from './local-pty-runtime-spawn'
 import { destroyPtyProcess } from './local-pty-termination'
 import { updateHistoryEnvForFallback } from '../terminal-history'
-import type { PtySpawnOptions, PtySpawnResult } from './types'
+import type { PtySpawnOptions, PtySpawnResult } from './pty-provider-contract'
 
 export async function spawnLocalPty(
   args: PtySpawnOptions,
@@ -43,10 +43,7 @@ export async function spawnLocalPty(
   if (args.attachOnly) {
     throw new SessionNotFoundError(args.sessionId ?? '')
   }
-  // Why: the jcode runtime dir is stamped into the spawn env by the pty:spawn
-  // handler and the runtime env builder; create it async here at the provider
-  // chokepoint both paths pass through, keeping the sync spawn path free of
-  // filesystem syscalls.
+  // Validate the selected runtime directory before starting a fresh local process.
   const jcodeRuntimeDir = args.env?.[JCODE_RUNTIME_DIR_ENV_KEY]
   if (jcodeRuntimeDir) {
     try {
@@ -68,6 +65,18 @@ export async function spawnLocalPty(
       plan = plan.finish(available)
     }
     throwIfCanceled()
+    if (args.prevalidatedCwd !== plan.validationCwd) {
+      try {
+        await validateWorkingDirectory(plan.validationCwd, cancellation)
+      } catch (error) {
+        // Why: an abandoned probe keeps running for other waiters; report the spawn's own cancel.
+        if (error instanceof WorkingDirectoryValidationAbortedError) {
+          throwIfCanceled()
+        }
+        throw error
+      }
+      throwIfCanceled()
+    }
     const envResult = buildLocalPtySpawnEnvironment({
       id,
       spawn: args,
@@ -81,16 +90,6 @@ export async function spawnLocalPty(
       spawn: args,
       getOptions,
       plan,
-      env: finalEnv
-    })
-    // Why here rather than beside the mkdir above: the daemon inherits this env, and
-    // only finalEnv carries the hook port and token that buildPtyHostEnv adds — the
-    // managed hook script exits without them, so a daemon warmed from the raw spawn
-    // env would report no lifecycle events at all.
-    prewarmJcodeDaemon({
-      launchAgent: args.launchAgent,
-      runtimeDir: finalEnv[JCODE_RUNTIME_DIR_ENV_KEY],
-      cwd: args.cwd,
       env: finalEnv
     })
 

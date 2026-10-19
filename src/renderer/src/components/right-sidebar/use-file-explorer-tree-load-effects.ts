@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { shouldResetFileExplorerForVisibleWorktree } from './file-explorer-reset'
 import { decideExpandedDirLoad } from './file-explorer-stale-dir-cache'
@@ -16,6 +16,7 @@ type UseFileExplorerTreeLoadEffectsParams = {
   rootError: string | null
   isDirStale: (dirPath: string) => boolean
   loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
+  refreshTree: () => Promise<unknown>
   resetAndLoad: () => void
   resetSelection: () => void
   setNameFilterQuery: Dispatch<SetStateAction<string>>
@@ -31,13 +32,41 @@ export function useFileExplorerTreeLoadEffects({
   rootError,
   isDirStale,
   loadDir,
+  refreshTree,
   resetAndLoad,
   resetSelection,
   setNameFilterQuery
 }: UseFileExplorerTreeLoadEffectsParams): void {
+  const [completedStaleRefreshes, setCompletedStaleRefreshes] = useState(0)
+  const staleRefreshRef = useRef<{
+    worktreePath: string
+    promise: Promise<unknown>
+  } | null>(null)
+  useEffect(() => {
+    staleRefreshRef.current = null
+    return () => {
+      staleRefreshRef.current = null
+    }
+  }, [visibleFilesWorktreePath])
+  const followSymlinks = useAppStore((s) => s.settings?.followSymlinkedDirectories ?? false)
+  const lastFollowSymlinks = useRef(followSymlinks)
+  useEffect(() => {
+    if (lastFollowSymlinks.current !== followSymlinks) {
+      lastFollowSymlinks.current = followSymlinks
+      if (visibleFilesWorktreePath) {
+        resetAndLoad()
+      }
+    }
+  }, [followSymlinks, visibleFilesWorktreePath, resetAndLoad])
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
 
   const lastResetWorktreePathRef = useRef<string | null>(null)
+  useEffect(
+    () => () => {
+      lastResetWorktreePathRef.current = null
+    },
+    []
+  )
   useEffect(() => {
     if (!visibleFilesWorktreePath) {
       return
@@ -112,4 +141,37 @@ export function useFileExplorerTreeLoadEffects({
       void loadDir(dirPath, depth, decision === 'reload' ? { force: true } : undefined)
     }
   }, [expanded, visibleFilesWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (
+      !visibleFilesWorktreePath ||
+      rootError ||
+      loadingDirPaths.size > 0 ||
+      staleRefreshRef.current?.worktreePath === visibleFilesWorktreePath ||
+      !Array.from(expanded).some(
+        (dirPath) => dirCache[dirPath] && !dirCache[dirPath].error && isDirStale(dirPath)
+      )
+    ) {
+      return
+    }
+    // Reopening during an older read must retry after it drains, using the bounded refresh wave.
+    const refresh = { worktreePath: visibleFilesWorktreePath, promise: refreshTree() }
+    staleRefreshRef.current = refresh
+    const finish = () => {
+      if (staleRefreshRef.current === refresh) {
+        staleRefreshRef.current = null
+        setCompletedStaleRefreshes((count) => count + 1)
+      }
+    }
+    void refresh.promise.then(finish, finish)
+  }, [
+    visibleFilesWorktreePath,
+    rootError,
+    loadingDirPaths,
+    completedStaleRefreshes,
+    expanded,
+    dirCache,
+    isDirStale,
+    refreshTree
+  ])
 }

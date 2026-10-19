@@ -12,6 +12,7 @@ import {
 } from './helpers/store'
 import {
   sendToTerminal,
+  splitActiveTerminalPane,
   waitForActiveTerminalManager,
   waitForPaneCount,
   waitForPaneIdentitySnapshot
@@ -119,7 +120,7 @@ async function addRealOrcaRepo(page: Page, repoPath: string): Promise<string> {
       throw new Error('window.__store unavailable')
     }
     const state = store.getState()
-    await state.fetchRepos()
+    await state.fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
     const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
     if (!repo) {
       throw new Error(`Real Orca repo did not load: ${repoPath}`)
@@ -146,7 +147,6 @@ async function addRealOrcaRepo(page: Page, repoPath: string): Promise<string> {
     nextState.updateSettings({
       defaultTuiAgent: 'codex',
       disabledTuiAgents: [],
-      setupScriptLaunchMode: 'split-vertical',
       terminalGpuAcceleration: 'on',
       theme: 'dark'
     })
@@ -575,7 +575,7 @@ test.describe('Codex skill preview terminal artifact repro @headful', () => {
     createdWorktreeIds.length = 0
   })
 
-  test('captures the real Orca repo setup-split Codex skill preview overpaint before any click', async ({
+  test('captures the real Orca repo manual-split Codex skill preview overpaint before any click', async ({
     electronApp,
     orcaPage
   }, testInfo) => {
@@ -595,6 +595,7 @@ test.describe('Codex skill preview terminal artifact repro @headful', () => {
 
     await ensureTerminalVisible(orcaPage, 30_000)
     await waitForActiveTerminalManager(orcaPage, 30_000)
+    await splitActiveTerminalPane(orcaPage, 'vertical')
     await waitForPaneCount(orcaPage, 2, 60_000)
     await waitForPaneIdentitySnapshot(orcaPage, 2)
     const webglActive = await forceTerminalWebgl(orcaPage)
@@ -602,6 +603,11 @@ test.describe('Codex skill preview terminal artifact repro @headful', () => {
 
     const leftPane = await focusLeftTerminalPane(orcaPage)
     const rightPane = await getRightTerminalPane(orcaPage)
+    await sendToTerminal(
+      orcaPage,
+      rightPane.ptyId,
+      'for i in $(seq 1 120); do printf "Progress: split output %s\\n" "$i"; sleep 1; done\r'
+    )
     expect(leftPane.hasWebgl).toBe(true)
     expect(rightPane.hasWebgl).toBe(true)
     expect(leftPane.proposed).toEqual({ cols: leftPane.cols, rows: leftPane.rows })

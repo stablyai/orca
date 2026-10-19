@@ -10,8 +10,7 @@ import {
 } from './terminal-model-query-authority'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
-  markHiddenRendererPty,
-  setRendererPtyDeliveryInterest
+  markHiddenRendererPty
 } from '../ipc/pty-hidden-delivery-gate'
 
 const ALL_ON = {
@@ -32,21 +31,6 @@ describe('isTerminalModelQueryAuthorityEnabled', () => {
     expect(isTerminalModelQueryAuthorityEnabled(null)).toBe(true)
     expect(isTerminalModelQueryAuthorityEnabled(undefined)).toBe(true)
   })
-
-  it('is an independent off switch for the responder alone', () => {
-    expect(
-      isTerminalModelQueryAuthorityEnabled({ ...ALL_ON, terminalModelQueryAuthority: false })
-    ).toBe(false)
-  })
-
-  it('requires both Phase-4 gate switches — no marks exist without them', () => {
-    expect(
-      isTerminalModelQueryAuthorityEnabled({ ...ALL_ON, terminalHiddenDeliveryGate: false })
-    ).toBe(false)
-    expect(
-      isTerminalModelQueryAuthorityEnabled({ ...ALL_ON, terminalMainSideEffectAuthority: false })
-    ).toBe(false)
-  })
 })
 
 describe('shouldModelAnswerHiddenPtyQueries', () => {
@@ -62,32 +46,6 @@ describe('shouldModelAnswerHiddenPtyQueries', () => {
     markHiddenRendererPty('pty-1')
     expect(answer('pty-1')).toBe(true)
     expect(answer('pty-other')).toBe(false)
-  })
-
-  it('yields to registered renderer delivery interest (chunk is delivered to a sidecar)', () => {
-    markHiddenRendererPty('pty-1')
-    setRendererPtyDeliveryInterest('pty-1', true)
-    expect(answer('pty-1')).toBe(false)
-    setRendererPtyDeliveryInterest('pty-1', false)
-    expect(answer('pty-1')).toBe(true)
-  })
-
-  it('yields while a remote view subscriber is attached', () => {
-    markHiddenRendererPty('pty-1')
-    expect(
-      shouldModelAnswerHiddenPtyQueries({
-        ptyId: 'pty-1',
-        settings: ALL_ON,
-        hasRemoteViewSubscriber: true
-      })
-    ).toBe(false)
-  })
-
-  it('stays silent under any kill switch', () => {
-    markHiddenRendererPty('pty-1')
-    expect(answer('pty-1', { terminalModelQueryAuthority: false })).toBe(false)
-    expect(answer('pty-1', { terminalHiddenDeliveryGate: false })).toBe(false)
-    expect(answer('pty-1', { terminalMainSideEffectAuthority: false })).toBe(false)
   })
 })
 

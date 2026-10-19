@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
+import {
+  agentSessionOperationKey,
+  agentSessionOperationExpiry,
+  pruneAgentSessionOperationRows,
+  type AgentSessionOperationRow
+} from '../../shared/agent-session-operation-ledger'
 import {
   admitAgentSessionGlobalOperationRow,
-  admitAgentSessionOperationRow
+  admitAgentSessionOperationRow,
+  insertAcceptedAgentSessionOperationInto
 } from './agent-session-operation-admission'
 
 const NOW = 1_900_000_000_000
@@ -54,4 +60,25 @@ describe('global agent-session operation admission', () => {
       details: { reason: 'operationIdReused' }
     })
   })
+})
+
+it('expires the compatibility success row from host time even for a far-future id', () => {
+  const operationId = `${9_999_999_999_999}-${'b'.repeat(32)}`
+  const state = { operations: new Map<string, AgentSessionOperationRow>() }
+  insertAcceptedAgentSessionOperationInto(state, {
+    callerKey: 'client',
+    operationId,
+    fingerprint: 'accepted',
+    now: NOW,
+    operationIdScope: 'global',
+    outcome: { status: 'succeeded', sessionId: 'chat' }
+  })
+  const expiresAt = agentSessionOperationExpiry(NOW, NOW)
+  expect(state.operations.get(agentSessionOperationKey('client', operationId))).toMatchObject({
+    recordedAt: NOW,
+    expiresAt,
+    outcome: { status: 'succeeded' }
+  })
+  expect(pruneAgentSessionOperationRows(state.operations, expiresAt - 1).size).toBe(1)
+  expect(pruneAgentSessionOperationRows(state.operations, expiresAt).size).toBe(0)
 })

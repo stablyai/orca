@@ -1,8 +1,10 @@
+import type { WorkspaceAttachmentMetadata } from '../../../../shared/workspace-attachment-legacy'
 import type { AppState } from '@/store'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   RuntimeGeneratePullRequestFieldsOverrides,
   RuntimeGitContext
-} from '@/runtime/runtime-git-client'
+} from '@/runtime/runtime-git-client-context'
 import type { Repo } from '../../../../shared/repo-types'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control-ai-types'
@@ -27,10 +29,14 @@ export type UseCreatePullRequestDialogFieldsOptions = {
   worktreeId: string | null
   worktreePath: string
   branch: string
+  workspace?: WorkspaceAttachmentMetadata | null
   eligibility: HostedReviewCreationEligibility | null
   currentBaseRef?: string | null
   repo?: Pick<Repo, 'sourceControlAi'> | null
+  /** Generation preferences; routing comes from `target`. */
   settings: AppState['settings']
+  /** The worktree owner's transport. */
+  target: RuntimeClientTarget | null
   submitting: boolean
   prCreationDefaults?: SourceControlAiPrCreationDefaults
   sourceControlAiActionsVisible?: boolean

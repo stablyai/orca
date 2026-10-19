@@ -103,7 +103,7 @@ export function terminalMountAdapters(
       const connState = 'connected'
       let notifications: ReturnType<typeof useRefit>
       const hook = hookMount(() => {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the refs and callbacks the hook reads.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the terminal fake implements only the handle methods the refit calls.
         notifications = useRefit({
           activeHandleRef: { current: HANDLE },
           terminalRefs,
@@ -113,7 +113,6 @@ export function terminalMountAdapters(
           nativeChatCoveredRef: { current: false },
           clientRef: { current: client },
           deviceTokenRef: { current: DEVICE_TOKEN },
-          initializedHandlesRef: { current: new Set([HANDLE]) },
           connState,
           tabStripVisible: true,
           textScale: 1,

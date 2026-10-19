@@ -1,4 +1,4 @@
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import {
@@ -7,6 +7,7 @@ import {
   type StructuredAgentLaunchOptions
 } from '@/lib/structured-agent-session-launch'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
+import { StructuredAgentSessionCreateAbandonedError } from './structured-agent-session-launch-errors'
 
 export type StructuredAgentLaunchSettlement =
   | {
@@ -30,9 +31,12 @@ export type StructuredAgentLaunchHooks = {
   /** Abort the moment the caller abandons the launch. The loop cancels on the event, not only by
    *  polling after awaits, so a staged prompt is discarded before it can reach the provider. */
   signal?: AbortSignal
+  beforeCreate?: () => boolean
 }
 
 export type StructuredAgentLaunchHandle = {
+  /** An existing launch retains publication and any draft it already owns. */
+  joined?: boolean
   sessionId: string
   /** The host the chat is created on. */
   executionHostId: ExecutionHostId
@@ -80,6 +84,9 @@ async function settleStartedStructuredAgentLaunch(
     if (isCancelled()) {
       return cancelled()
     }
+    if (error instanceof StructuredAgentSessionCreateAbandonedError) {
+      return cancelled()
+    }
     if (error instanceof StructuredAgentSessionCreateRefusalError) {
       return { kind: 'failed', error }
     }
@@ -97,12 +104,20 @@ async function settleStartedStructuredAgentLaunch(
 /** Exposes the durable identity before host acquisition so its chat can render immediately. */
 export function beginStructuredAgentLaunchSettlement(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   options: StructuredAgentLaunchOptions,
   hooks: StructuredAgentLaunchHooks
 ): StructuredAgentLaunchHandle {
-  const launch = startStructuredAgentLaunch(worktreeId, agent, options)
+  const launch = startStructuredAgentLaunch(worktreeId, agent, {
+    ...options,
+    ...(hooks.beforeCreate ? { beforeCreate: hooks.beforeCreate } : {})
+  })
+  // Joining transfers no source ownership to the already independent destination.
+  if (launch.joined) {
+    hooks.beforeCreate?.()
+  }
   return {
+    joined: launch.joined,
     sessionId: launch.sessionId,
     executionHostId: launch.executionHostId,
     settlement: settleStartedStructuredAgentLaunch(worktreeId, launch, hooks),
@@ -114,7 +129,7 @@ export function beginStructuredAgentLaunchSettlement(
 /** Compatibility wrapper for callers that do not need the provisional identity. */
 export function settleStructuredAgentLaunch(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   options: StructuredAgentLaunchOptions,
   hooks: StructuredAgentLaunchHooks
 ): Promise<StructuredAgentLaunchSettlement> {

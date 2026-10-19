@@ -5,7 +5,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
 import { TERMINAL_QUERY_METHODS } from './terminal-query-methods'
-import { TerminalHandle, TerminalInspectProcess } from './unary-schemas'
+import { TerminalHandle } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import { eraseRpcMethods } from '../../core'
 
 /** The method as registered, so a schema swap on the definition cannot pass unseen. */
@@ -64,27 +64,6 @@ describe('terminal.inspectProcess registration', () => {
 })
 
 describe('terminal.inspectProcess params', () => {
-  it('preserves scanChildProcesses', () => {
-    expect(TerminalInspectProcess.parse({ terminal: 'term_1', scanChildProcesses: true })).toEqual({
-      terminal: 'term_1',
-      scanChildProcesses: true
-    })
-  })
-
-  it('preserves it alongside the incarnation fence', () => {
-    expect(
-      TerminalInspectProcess.parse({
-        terminal: 'term_1',
-        expectedIncarnationId: 'inc-1',
-        scanChildProcesses: true
-      })
-    ).toEqual({ terminal: 'term_1', expectedIncarnationId: 'inc-1', scanChildProcesses: true })
-  })
-
-  it('leaves it absent for a polling caller', () => {
-    expect(TerminalInspectProcess.parse({ terminal: 'term_1' })).toEqual({ terminal: 'term_1' })
-  })
-
   // The shape that produced the bug, pinned so nobody "simplifies" the method back onto the shared
   // handle schema: TerminalHandle drops the option on the floor without complaining.
   it('shows why the shared handle schema could not carry it', () => {

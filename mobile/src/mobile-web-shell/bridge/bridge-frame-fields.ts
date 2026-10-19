@@ -71,3 +71,10 @@ export const BRIDGE_NAVIGATE_BACK_NOTIFY = 'navigate-back'
  * to say so.
  */
 export const BRIDGE_EXTERNAL_LINK_GRANT = 'externalLink'
+
+/**
+ * The shell copies a `request` or `subscribe` frame's `envelope` onto the wire request, under the
+ * transport's own fields. A protocol grant like `fault`: a page asks first because an older shell
+ * drops the key and would send the request without the fields the caller asked for.
+ */
+export const BRIDGE_RPC_ENVELOPE_GRANT = 'rpcEnvelope'

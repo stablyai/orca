@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runProcess } from './child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { splitSearchGlobPatterns } from './text-search-glob-patterns'
 import {
   buildGitGrepArgs,

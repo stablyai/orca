@@ -150,7 +150,11 @@ describe('createLinearSlice invalidation', () => {
     expect(store.getState().linearListCache).toEqual({})
     expect(store.getState().linearProjectIssueCache).toEqual({})
     expect(store.getState().linearCustomViewIssueCache).toEqual({})
-    expect(linearGetIssue).toHaveBeenCalledWith(null, 'issue-id', 'workspace-1')
+    expect(linearGetIssue).toHaveBeenCalledWith(
+      { kind: 'default-scope', settings: null },
+      'issue-id',
+      'workspace-1'
+    )
   })
 
   it('connect invalidates cached Linear rows and waits for refreshed status', async () => {

@@ -1,8 +1,12 @@
 import { appendFile, rm, stat, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
+import { isAiVaultScanCancelledError } from '../../shared/ai-vault-types'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
-import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
+import {
+  registerTranscriptConsumer,
+  resetTranscriptConsumersForTests
+} from '../ai-vault/session-transcript-consumers'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import { runSessionSearchIndexPass } from './session-search-index-pass'
 import { parseTranscript } from './session-search-transcript-fixtures'
@@ -148,6 +152,43 @@ it('skips a source the reader cannot even open without failing the pass', async 
     n: 1
   })
   expect(states()[transcript(FIRST)]).toBe('failed')
+})
+
+it('stops a cancelled read part way without counting it as a failure', async () => {
+  // Several stream chunks, so the cancel lands with most of the file unread.
+  const turns = Array.from({ length: 100 }, (_, index) => `${index} ${'x'.repeat(2_000)}`)
+  await writeClaudeTranscript(transcript(FIRST), turns, FIRST)
+  const controller = new AbortController()
+  let firstMessages = 0
+  const unregister = registerTranscriptConsumer({
+    beginRead: (start) =>
+      start.candidate.file.path === transcript(FIRST)
+        ? {
+            message: () => {
+              firstMessages += 1
+              controller.abort()
+            },
+            finish: () => {}
+          }
+        : null
+  })
+  await expect(
+    runSessionSearchIndexPass(store, await candidates(), {
+      rows: rows(),
+      signal: controller.signal
+    })
+  ).rejects.toSatisfy(isAiVaultScanCancelledError)
+  unregister()
+
+  expect(firstMessages).toBeLessThan(turns.length)
+  expect(Object.values(states())).not.toContain('failed')
+
+  await passOverAll()
+  expect(states()).toEqual({
+    [transcript(FIRST)]: 'current',
+    [transcript(SECOND)]: 'current'
+  })
+  expect(errors).toEqual([])
 })
 
 // Finding 6: mtime alone is not the freshness key. A transcript that grows

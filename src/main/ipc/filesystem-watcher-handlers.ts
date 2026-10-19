@@ -5,6 +5,7 @@ import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { getRemoteWatcherKey } from './filesystem-watcher-paths'
 import {
   cancelInFlightRemoteInstallIfUnowned,
+  forgetCancelledInstallWaiter,
   forgetDesiredRemoteWatcher,
   registerWatcherSenderCleanup,
   releaseRemoteWatchListener
@@ -80,6 +81,11 @@ export function registerFilesystemWatcherHandlers(): void {
         // Why: the caller stopped watching on purpose — drop the intent or a later provider
         // registration would resurrect a watch nobody asked for.
         forgetDesiredRemoteWatcher(key, _event.sender.id)
+        forgetCancelledInstallWaiter(
+          watcherLifecycleState.cancelledRemoteInstallWaiters,
+          key,
+          _event.sender.id
+        )
         const suspended = watcherLifecycleState.suspendedRemoteWatcherListeners.get(key)
         suspended?.listeners.delete(_event.sender.id)
         if (suspended?.listeners.size === 0) {

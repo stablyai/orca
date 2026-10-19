@@ -22,7 +22,6 @@ export function createBrowserPageFocusActions(
         { ...workspace, activePageId: browserPageId },
         pages
       )
-      // TODO: duplicates setActiveBrowserTab/Page; can't reuse (they touch globals unconditionally). Extract a per-worktree-only helper.
       set((s) => {
         const isActiveWorktree = s.activeWorktreeId === worktreeId
         // Per-worktree slots: always update — safe pre-staging, only visible when user navigates here.

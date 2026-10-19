@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../shared/pairing'
 import type {
@@ -279,7 +280,7 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
     subscribeRemoteRuntimeRequestMock.mockReset()
     const unsolicitedAttempts = mockAttempts()
     const unsolicited = new PairedRuntimeBrowserHostLease({
-      pairing,
+      connection: pairedRuntimeConnectionFromOffer(pairing),
       authorityRuntimeId: 'runtime-a',
       browserHostClientId: 'host-a',
       hostCapabilities: ['webview']
@@ -414,7 +415,7 @@ function createReconnectLease(
   overrides: Partial<PairedRuntimeBrowserHostLeaseOptions>
 ): PairedRuntimeBrowserHostLease {
   return new PairedRuntimeBrowserHostLease({
-    pairing,
+    connection: pairedRuntimeConnectionFromOffer(pairing),
     authorityRuntimeId: 'runtime-a',
     browserHostClientId: 'host-a',
     hostCapabilities: ['webview'],

@@ -13,8 +13,6 @@ import {
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 
-const MAX_TRACKED_CHILD_SESSIONS = 64
-
 function getMusePaneState(state: HookListenerState, paneKey: string): MusePaneState {
   let pane = state.musePaneStateByPaneKey.get(paneKey)
   if (!pane) {
@@ -22,16 +20,6 @@ function getMusePaneState(state: HookListenerState, paneKey: string): MusePaneSt
     state.musePaneStateByPaneKey.set(paneKey, pane)
   }
   return pane
-}
-
-function rememberChildSession(pane: MusePaneState, childSessionId: string): void {
-  pane.childSessionIds.add(childSessionId)
-  if (pane.childSessionIds.size > MAX_TRACKED_CHILD_SESSIONS) {
-    const oldest = pane.childSessionIds.values().next().value
-    if (oldest !== undefined) {
-      pane.childSessionIds.delete(oldest)
-    }
-  }
 }
 
 function isChildSessionEvent(pane: MusePaneState, hookPayload: Record<string, unknown>): boolean {
@@ -66,7 +54,7 @@ export function normalizeMuseEvent(
     const childSessionId =
       readString(hookPayload, 'child_session_id') ?? readString(hookPayload, 'session_id')
     if (childSessionId) {
-      rememberChildSession(pane, childSessionId)
+      pane.childSessionIds.add(childSessionId)
     }
     return null
   }

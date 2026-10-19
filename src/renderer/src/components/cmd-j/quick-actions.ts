@@ -24,6 +24,8 @@ export type CmdJQuickAction = {
   description: string
   icon: LucideIcon
   verbKeywords: string[]
+  /** Query-bound actions must still match the live input when selected. */
+  sourceQuery?: string
   isAvailable: (ctx: CmdJQuickActionContext) => CmdJQuickActionAvailability
   run: (ctx: CmdJQuickActionContext) => Promise<CmdJQuickActionRunResult>
 }
@@ -40,12 +42,6 @@ function currentWorkspaceActionAvailability(
   return getCurrentWorkspaceActionAvailability(ctx)
 }
 
-function browserWorkspaceActionAvailability(
-  ctx: CmdJQuickActionContext
-): CmdJQuickActionAvailability {
-  return getBrowserWorkspaceActionAvailability(ctx)
-}
-
 async function runWorkspaceAction(
   ctx: CmdJQuickActionContext,
   run: (groupId: string) => Promise<void>
@@ -59,6 +55,17 @@ async function runWorkspaceAction(
   }
   await run(ctx.activeGroupId)
   return { status: 'ok' }
+}
+
+export async function runBrowserWorkspaceAction(
+  ctx: CmdJQuickActionContext,
+  run: (groupId: string) => Promise<void>
+): Promise<CmdJQuickActionRunResult> {
+  const availability = getBrowserWorkspaceActionAvailability(ctx)
+  if (!availability.available) {
+    return { status: 'unavailable', reason: availability.reason }
+  }
+  return runWorkspaceAction(ctx, run)
 }
 
 // Why: Cmd+J actions are for high-frequency, safe, context-light verbs.
@@ -80,14 +87,8 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
       translate('auto.components.cmd.j.quick.actions.verbs.openBrowser', 'open browser'),
       translate('auto.components.cmd.j.quick.actions.verbs.browserTab', 'browser tab')
     ],
-    isAvailable: browserWorkspaceActionAvailability,
-    run: async (ctx) => {
-      const availability = browserWorkspaceActionAvailability(ctx)
-      if (!availability.available) {
-        return { status: 'unavailable', reason: availability.reason }
-      }
-      return runWorkspaceAction(ctx, ctx.openNewBrowserTab)
-    }
+    isAvailable: getBrowserWorkspaceActionAvailability,
+    run: (ctx) => runBrowserWorkspaceAction(ctx, ctx.openNewBrowserTab)
   },
   {
     id: 'new-markdown-file',

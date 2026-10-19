@@ -1,20 +1,41 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import {
-  cacheToken,
-  getCachedToken,
-  recordCredentialError,
-  resetCredentialCaches
-} from './linear-workspace-registry'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import type * as Os from 'node:os'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-describe('Linear workspace credential caches', () => {
-  afterEach(() => resetCredentialCaches())
+let directory = ''
+afterEach(() => {
+  vi.doUnmock('os')
+  vi.resetModules()
+  rmSync(directory, { recursive: true, force: true })
+})
 
-  it('bounds token and credential-error entries during workspace churn', () => {
-    for (let index = 0; index < 132; index += 1) {
-      cacheToken(`workspace-${index}`, `token-${index}`)
-      recordCredentialError(`workspace-${index}`, `error-${index}`)
-    }
-    expect(getCachedToken('workspace-0')).toBeUndefined()
-    expect(getCachedToken('workspace-131')).toBe('token-131')
+describe('Linear workspace credential cache reset', () => {
+  it('clears warmed credentials without reading real account files', async () => {
+    directory = mkdtempSync(join(tmpdir(), 'orca-workspace-token-cache-'))
+    vi.resetModules()
+    vi.doMock('os', async () => {
+      const actual = await vi.importActual<typeof Os>('os')
+      return { ...actual, homedir: () => directory }
+    })
+    const { setSecretStore } = await import('../../shared/secret-store')
+    setSecretStore({
+      isEncryptionAvailable: () => false,
+      encryptString: (value) => Buffer.from(value),
+      decryptString: (value) => value.toString('utf-8'),
+      describeProtectionGap: () => null
+    })
+    const tokenDirectory = join(directory, '.orca', 'linear-tokens')
+    mkdirSync(tokenDirectory, { recursive: true })
+    writeFileSync(
+      join(tokenDirectory, `${Buffer.from('workspace').toString('base64url')}.enc`),
+      'token'
+    )
+    const { workspaceTokenFileCache, resetCredentialCaches } =
+      await import('./linear-workspace-registry')
+    expect(workspaceTokenFileCache.read('workspace')).toBe('token')
+    resetCredentialCaches()
+    expect(workspaceTokenFileCache.read('workspace', false)).toBeNull()
   })
 })

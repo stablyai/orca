@@ -36,19 +36,22 @@ internal val MOBILE_WEB_SHELL_CSP = listOf(
   //
   // `http:` stays out: it reaches no image TLS cannot serve, and a cleartext image is readable and
   // replaceable in flight by anything on the path.
-  "img-src 'self' data: https:",
+  "img-src 'self' data: blob: https:",
   "font-src 'none'",
   // The origin is one read-only directory behind the manifest map, so 'self' reaches nothing the
   // page cannot already read, and the bootstrap page reads ./manifest.json through it. This is the
   // fence for fetch and XMLHttpRequest; the document-start script covers only the two things the
   // native layer cannot see.
   "connect-src 'self'",
-  "media-src 'none'",
+  // Media previews play bytes downloaded through authenticated RPC, never a network URL.
+  "media-src blob:",
   "object-src 'none'",
   "frame-src 'none'",
   "child-src 'none'",
   "worker-src 'none'",
-  "base-uri 'none'",
+  // `about:` only, so a chat visual's srcdoc frame (which inherits this) keeps its own
+  // `about:srcdoc` base and in-page links stay in it; no network base can apply.
+  "base-uri about:",
   "form-action 'none'",
   "frame-ancestors 'none'"
 ).joinToString("; ")

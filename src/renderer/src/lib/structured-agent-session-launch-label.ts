@@ -1,6 +1,6 @@
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { AgentType } from '../../../shared/agent-status-types'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 
-export function structuredAgentLabel(agent: AgentSessionHandleProvider): string {
+export function structuredAgentLabel(agent: AgentType): string {
   return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
 }

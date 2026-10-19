@@ -17,7 +17,6 @@ import {
   getShellLaunchConfig as getDaemonShellLaunchConfig,
   getShellReadyWrapperRoot as getDaemonShellReadyWrapperRoot
 } from './daemon/shell-ready'
-import { ensureOverlayRestoreWrappers } from '../relay/pty-shell-overlay-wrappers'
 import { getShellLaunchConfig as getLocalShellLaunchConfig } from './providers/local-pty-shell-ready'
 import { selectShellStartupFeatures } from './shell-startup-features'
 
@@ -68,6 +67,8 @@ async function expectWrapperFiles(transport: string, root: string): Promise<void
 const CONTRACT_GLOBALS = new Set([
   'BUFFER',
   'CODEX_HOME',
+  // Exported only inside the claude function's subshell, for that one Claude process.
+  'CLAUDE_CONFIG_DIR',
   'HISTFILE',
   'MIMOCODE_HOME',
   'OPENCODE_CONFIG_DIR',
@@ -140,11 +141,6 @@ describePosix('generated shell wrapper files', () => {
     await expectWrapperFiles('daemon', getDaemonShellReadyWrapperRoot())
   })
 
-  it('relay overlay wrappers', async () => {
-    ensureOverlayRestoreWrappers(root)
-    await expectWrapperFiles('relay', root)
-  })
-
   // Why a rule and not another fixture: `REPLY`, zsh's shared scratch global,
   // was the wrapper's resolver out-parameter. A user config that constrained it
   // (`typeset -r REPLY`) aborted the wrapper at its first executable line — on
@@ -159,8 +155,7 @@ describePosix('generated shell wrapper files', () => {
         getDaemonShellLaunchConfig('/bin/zsh', STARTUP_COMMAND_FEATURES)
       },
       (): string => getDaemonShellReadyWrapperRoot()
-    ],
-    ['relay', (): void => void ensureOverlayRestoreWrappers(root), (): string => root]
+    ]
   ])('%s wrappers write no shell global outside Orca’s namespace', (_transport, generate, dir) => {
     generate()
 

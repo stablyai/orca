@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { moveWebRuntimeSessionTab } from './web-runtime-session'
+import { moveWebRuntimeSessionTab } from './web-runtime-session-tab-move'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import { ENVIRONMENT_ID, WORKTREE_ID } from './web-runtime-session-test-harness'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -19,10 +20,12 @@ const mocks = vi.hoisted(() => ({
   getWebSessionTabsTrackingGeneration: vi.fn(() => 0),
   acceptReplayedWebSessionTabsSnapshot: vi.fn(),
   resolveHostSessionTabIdForWebSessionTab: vi.fn(),
+  resolveHostSessionGroupIdForWebSessionTab: vi.fn(
+    (_args: { tabId: string }): string | null => null
+  ),
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
@@ -34,25 +37,30 @@ vi.mock('../store', () => ({
   }
 }))
 
-vi.mock('./web-session-tabs-sync', () => ({
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
-  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
-  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
+  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
+}))
+vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
     // The production caller invokes the returned settle receipt.
     return () => {}
-  },
-  resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
+  }
+}))
+vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
+  resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab,
+  resolveHostSessionGroupIdForWebSessionTab: mocks.resolveHostSessionGroupIdForWebSessionTab
 }))
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
-}))
-
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
@@ -91,13 +99,7 @@ describe('moveWebRuntimeSessionTab', () => {
       result: { moved: true }
     })
 
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       moveWebRuntimeSessionTab({
@@ -140,13 +142,7 @@ describe('moveWebRuntimeSessionTab', () => {
       result: { moved: true }
     })
 
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       moveWebRuntimeSessionTab({
@@ -202,13 +198,7 @@ describe('moveWebRuntimeSessionTab', () => {
       result: { moved: true }
     })
 
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       moveWebRuntimeSessionTab({
@@ -234,6 +224,103 @@ describe('moveWebRuntimeSessionTab', () => {
     })
   })
 
+  it('names a group this desktop split off by the host group its other tabs sit in', async () => {
+    mocks.getState.mockReturnValue({
+      settings: {
+        activeRuntimeEnvironmentId: ENVIRONMENT_ID
+      },
+      setActiveWorktree: mocks.setActiveWorktree,
+      groupsByWorktree: {
+        [WORKTREE_ID]: [
+          {
+            id: 'desktop-split-group',
+            activeTabId: 'local-terminal-unified',
+            tabOrder: ['local-only-unified', 'local-terminal-unified', 'local-browser-unified']
+          }
+        ]
+      }
+    })
+    mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
+      (_state, args: { tabId: string }) =>
+        args.tabId === 'local-browser-unified' ? 'host-browser-unified' : null
+    )
+    mocks.resolveHostSessionGroupIdForWebSessionTab.mockImplementation((args: { tabId: string }) =>
+      args.tabId === 'local-terminal-unified'
+        ? 'host-split-group'
+        : args.tabId === 'local-browser-unified'
+          ? 'host-source-group'
+          : null
+    )
+    const runtimeCall = vi.fn().mockResolvedValueOnce({
+      id: 'move',
+      ok: true,
+      result: { moved: true }
+    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
+
+    await expect(
+      moveWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        targetGroupId: 'desktop-split-group',
+        kind: 'move-to-group',
+        index: 2
+      })
+    ).resolves.toBe(true)
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ targetGroupId: 'host-split-group' })
+      })
+    )
+  })
+
+  it('falls back to the desktop id while a just-split group still records its old server group', async () => {
+    mocks.getState.mockReturnValue({
+      settings: {
+        activeRuntimeEnvironmentId: ENVIRONMENT_ID
+      },
+      setActiveWorktree: mocks.setActiveWorktree,
+      groupsByWorktree: {
+        [WORKTREE_ID]: [
+          { id: 'desktop-source', activeTabId: 'local-third', tabOrder: ['local-third'] },
+          {
+            id: 'desktop-split-group',
+            activeTabId: 'local-moved',
+            tabOrder: ['local-split-off', 'local-moved']
+          }
+        ]
+      }
+    })
+    mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
+      (_state, args: { tabId: string }) => `host-${args.tabId}`
+    )
+    // No server list since the split: every tab still records the source group.
+    mocks.resolveHostSessionGroupIdForWebSessionTab.mockReturnValue('host-source')
+    const runtimeCall = vi.fn().mockResolvedValueOnce({
+      id: 'move',
+      ok: true,
+      result: { moved: true }
+    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
+
+    await expect(
+      moveWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-moved',
+        targetGroupId: 'desktop-split-group',
+        kind: 'move-to-group',
+        index: 1
+      })
+    ).resolves.toBe(true)
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ targetGroupId: 'desktop-split-group' })
+      })
+    )
+  })
+
   it('does not mirror a reorder when the dragged tab is local-only', async () => {
     mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
       (_state, args: { tabId: string }) =>
@@ -245,13 +332,7 @@ describe('moveWebRuntimeSessionTab', () => {
       result: { moved: true }
     })
 
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       moveWebRuntimeSessionTab({

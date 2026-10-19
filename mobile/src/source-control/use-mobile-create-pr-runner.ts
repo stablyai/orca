@@ -31,6 +31,7 @@ type Params = {
   mountedRef: MutableRefObject<boolean>
   runGitWorkflow: RunGitWorkflow
   loadStatus: LoadStatus
+  cancelGenerateCommitMessage: () => void
   setActionError: (next: string | null) => void
   setCommitMessage: (next: string) => void
   setShowActionSheet: (next: boolean) => void
@@ -49,6 +50,7 @@ export function useMobileCreatePrRunner({
   mountedRef,
   runGitWorkflow,
   loadStatus,
+  cancelGenerateCommitMessage,
   setActionError,
   setCommitMessage,
   setShowActionSheet,
@@ -70,6 +72,8 @@ export function useMobileCreatePrRunner({
       }
       let progress: MobileHostedReviewCreateIntentProgress | null = null
       const ran = await runGitWorkflow(pushFirst ? 'push-create-pr' : 'create-pr', async () => {
+        // Why: this run commits the box's message, so it supersedes a running generation too.
+        cancelGenerateCommitMessage()
         created.current = await runMobileHostedReviewCreateIntent(client, worktreeId, {
           branch,
           title: branchLabel,
@@ -112,6 +116,7 @@ export function useMobileCreatePrRunner({
     },
     [
       branchLabel,
+      cancelGenerateCommitMessage,
       client,
       commitMessage,
       loadStatus,

@@ -47,6 +47,17 @@ afterEach(() => {
 })
 
 describe('managed account inherited environment', () => {
+  it.each(['opencode', 'opencode2', 'devin'])(
+    'keeps the selected account for delayed %s',
+    (agent) => {
+      selected.value = { XDG_DATA_HOME: join(tmpdir(), 'selected-account', 'data') }
+      const env: Record<string, string> = {}
+      applyManagedDataAccountEnvironment(env, { launchCommand: `sleep 30 && ${agent}` })
+      expect(env.XDG_DATA_HOME).toBe(selected.value.XDG_DATA_HOME)
+      expect(env.ORCA_DATA_ACCOUNT_PROVIDER).toBe(agent === 'devin' ? 'devin' : 'opencode')
+    }
+  )
+
   it.each([
     { launchAgent: 'opencode' as const },
     { launchAgent: 'claude' as const },

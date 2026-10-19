@@ -1,5 +1,7 @@
 import {
+  BRIDGE_MEDIA_NAME_MAX_CHARS,
   BRIDGE_MEDIA_READ_MAX_BYTES,
+  mediaNameParamsSchema,
   mediaPickParamsSchema,
   mediaReadParamsSchema,
   mediaReleaseParamsSchema,
@@ -46,6 +48,10 @@ type PickedAsset = {
   readonly mimeType?: string | null
   readonly width?: number
   readonly height?: number
+  /** The document picker's name for the file. */
+  readonly name?: string | null
+  /** The photo library's name for the file, where it reports one. */
+  readonly fileName?: string | null
 }
 
 type PickerResult = { readonly canceled: boolean; readonly assets?: readonly PickedAsset[] | null }
@@ -100,12 +106,14 @@ export function createNativeMediaVerbServer(
         // answered 0 above, and this is the file the handle will actually be read from.
         const { size } = deps.openFile(uri)
         refuseOverStagingCeiling(size)
+        const name = pickedName(asset)
         staged.push({
           uri,
           mime: asset.mimeType ?? UNKNOWN_STAGED_MIME,
           byteLength: size,
           ...(asset.width === undefined ? {} : { width: asset.width }),
-          ...(asset.height === undefined ? {} : { height: asset.height })
+          ...(asset.height === undefined ? {} : { height: asset.height }),
+          ...(name === null ? {} : { name })
         })
       }
     } catch (error) {
@@ -268,9 +276,28 @@ export function createNativeMediaVerbServer(
       const range = deps.registry.read(handle, offset, length)
       return { base64: readRange(range.uri, range.start, range.end), eof: range.eof }
     }
+    if (verb === 'native.media.name') {
+      const { handle } = mediaNameParamsSchema.parse(params)
+      return { name: deps.registry.name(handle) }
+    }
     const { handle } = mediaReleaseParamsSchema.parse(params)
     return { released: deps.registry.release(handle) }
   }
+}
+
+/** The picker's name for an asset, cut to what the name verb may answer; null when it gave none. */
+function pickedName(asset: PickedAsset): string | null {
+  const name = (asset.name ?? asset.fileName ?? '').trim()
+  if (name.length === 0) {
+    return null
+  }
+  if (name.length <= BRIDGE_MEDIA_NAME_MAX_CHARS) {
+    return name
+  }
+  // Keep a short extension: agents read meaning into it.
+  const dot = name.lastIndexOf('.')
+  const extension = dot > 0 && name.length - dot <= 16 ? name.slice(dot) : ''
+  return name.slice(0, BRIDGE_MEDIA_NAME_MAX_CHARS - extension.length) + extension
 }
 
 function readAssets(result: PickerResult): readonly PickedAsset[] {

@@ -1,3 +1,4 @@
+import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
@@ -19,7 +20,6 @@ import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { mapReposForWorktreeRefresh } from './worktree-refresh-pool'
-import { settingsForKnownRepoOwner } from './worktree-owner-settings'
 
 export function createFetchAllWorktrees(
   set: WorktreeSliceSet,
@@ -44,7 +44,6 @@ export function createFetchAllWorktrees(
           const requestStartedWorktrees = requestStartedState.worktreesByRepo[r.id]
           const hostId = getRepoExecutionHostId(r)
           const setup = getProjectHostSetupForRepoHost(requestStartedState, r.id, hostId)
-          const settings = settingsForKnownRepoOwner(requestStartedState.settings, r)
           const parsedHost = parseExecutionHostId(hostId)
           const directSshAuthority =
             parsedHost?.kind === 'ssh'
@@ -54,7 +53,7 @@ export function createFetchAllWorktrees(
             await fetchKnownSshWorktreesForRepo(set, r.id, parsedHost.id)
             return
           }
-          const refresh = await listDetectedWorktreesForRepoCoalesced(settings, r.id, {
+          const refresh = await listDetectedWorktreesForRepoCoalesced(r.id, {
             executionHostId: hostId,
             reuseRecentCompatibilityFailure: true,
             directSshAuthority,
@@ -113,19 +112,15 @@ export function createFetchAllWorktrees(
             await fetchKnownSshWorktreesForRepo(set, r.id, parsedHost.id)
             return { repoId: r.id, ok: false as const }
           }
-          const refresh = await listDetectedWorktreesForRepoCoalesced(
-            settingsForKnownRepoOwner(requestStartedState.settings, r),
-            r.id,
-            {
-              executionHostId: hostId,
-              reuseRecentCompatibilityFailure: true,
-              directSshAuthority,
-              connectionId: r.connectionId,
-              knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId),
-              isStaleCatalogPublication: (result) =>
-                isStaleWorktreeCatalogPublication(get(), r.id, hostId, result.catalogVersion)
-            }
-          )
+          const refresh = await listDetectedWorktreesForRepoCoalesced(r.id, {
+            executionHostId: hostId,
+            reuseRecentCompatibilityFailure: true,
+            directSshAuthority,
+            connectionId: r.connectionId,
+            knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId),
+            isStaleCatalogPublication: (result) =>
+              isStaleWorktreeCatalogPublication(get(), r.id, hostId, result.catalogVersion)
+          })
           if (refresh.status !== 'admitted') {
             return { repoId: r.id, ok: false as const }
           }
@@ -214,7 +209,7 @@ export function createFetchAllWorktrees(
         `[worktree-purge] hydration-time purge removing stale state for ${stale.length} worktree(s):`,
         stale
       )
-      get().purgeWorktreeTerminalState(stale)
+      runAsAutomaticDeselection(() => get().purgeWorktreeTerminalState(stale))
     }
     set({ hasHydratedWorktreePurge: true })
   }

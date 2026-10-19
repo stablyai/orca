@@ -151,6 +151,30 @@ function formatMissingKeys(label, keys) {
   return keys.map((key) => `${label}: ${key}`).join('\n')
 }
 
+// Language packs require nested names even though i18next also accepts flat keys.
+function collectDottedCatalogKeys(value, prefix = '') {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return []
+  }
+  return Object.entries(value).flatMap(([key, child]) => {
+    const keyPath = prefix ? `${prefix}.${key}` : key
+    return [...(key.includes('.') ? [keyPath] : []), ...collectDottedCatalogKeys(child, keyPath)]
+  })
+}
+
+function reportDottedCatalogKeys(fileName, catalog) {
+  const dottedKeys = collectDottedCatalogKeys(catalog)
+  if (dottedKeys.length === 0) {
+    return 0
+  }
+  console.error(`${fileName} has keys with a dot in the name. Write them as nested objects.`)
+  console.error(formatMissingKeys('dotted', dottedKeys.slice(0, 20)))
+  if (dottedKeys.length > 20) {
+    console.error(`...and ${dottedKeys.length - 20} more dotted keys`)
+  }
+  return 1
+}
+
 function normalizeInterpolationVariables(value) {
   return collectInterpolationVariables(value)
     .map((variable) => variable.slice(2, -2))
@@ -480,6 +504,9 @@ export async function main(
     }
     return 0
   }
+  if (reportDottedCatalogKeys('en.json', catalog) !== 0) {
+    return 1
+  }
   let catalogKeys = new Set(flattenCatalogKeys(catalog))
   const references = sharedReferences ?? (await collectLocalizationReferences(root))
 
@@ -539,6 +566,9 @@ export async function main(
     const localeName = fileName.replace(/\.json$/, '')
     const localeCatalogPath = path.join(localesDir, fileName)
     const localeCatalog = JSON.parse(await fs.readFile(localeCatalogPath, 'utf8'))
+    if (reportDottedCatalogKeys(fileName, localeCatalog) !== 0) {
+      return 1
+    }
     const exitCode = verifyLocaleCatalog(catalog, localeName, localeCatalog)
     if (exitCode !== 0) {
       console.error('')

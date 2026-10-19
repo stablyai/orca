@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { buildResolveConflictsPrompt } from './source-control/ai/prompts'
 import {
-  buildResolveConflictsPrompt,
   normalizeSourceControlViewMode,
-  pickDefaultSourceControlAgent,
   readCommitDraftForWorktree,
-  refreshSourceControlAfterRemoteAction,
-  shouldRenderCommitArea,
   writeCommitDraftForWorktree
-} from './SourceControl'
+} from './source-control/commit/commit-drafts'
+import {
+  pickDefaultSourceControlAgent,
+  shouldRenderCommitArea
+} from './source-control/commit/component-gates'
+import { refreshSourceControlAfterRemoteAction } from './source-control/sync/remote-refresh'
 import {
   loadSessionCommitDrafts,
   saveSessionCommitDrafts

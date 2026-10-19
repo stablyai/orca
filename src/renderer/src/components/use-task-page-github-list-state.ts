@@ -2,13 +2,12 @@ import type { TaskPageProviderStateModel } from './use-task-page-provider-state'
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import { getTaskPagePerRepoLimit } from '@/components/task-page-work-item-pagination'
 import { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '@/lib/new-workspace'
 import {
   buildTaskPageGitHubResumeContextKey,
   taskPageGitHubResumeCache
 } from '@/components/task-page-github-resume-cache'
-import { sortWorkItemsByNumber } from '../../../shared/work-items'
+import { getTaskPagePerRepoLimit, sortWorkItemsByNumber } from '../../../shared/work-items'
 import { useAppStore } from '@/store'
 import type { GitHubListRestoreWrite } from './task-page-github-list-scroll-restore'
 import { getTaskPageRepoSourceContext } from './task-page-source-context'

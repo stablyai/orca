@@ -52,11 +52,8 @@ export async function searchSessionService(
           supportsJcodeHistory
         }
   )
-  if (compatibleAgents.length === 0) {
-    return { kind: 'unavailable', reason: 'unsupported-agent' }
-  }
   const compatibleRequest =
-    compatibleAgents.length === agents.length
+    compatibleAgents.length === 0 || compatibleAgents.length === agents.length
       ? request
       : {
           ...request,
@@ -68,12 +65,16 @@ export async function searchSessionService(
   const hostScope = within
     ? resolveSessionSearchScope(within, sessionSearchScopeCatalog())
     : undefined
+  const retrievalScope =
+    compatibleAgents.length === 0 && hostScope?.kind !== 'unknown'
+      ? { kind: 'resolved' as const, paths: [''] }
+      : hostScope
   const freshness =
     request.freshness === 'wait-until-current'
       ? await reconcileWithin(current, freshnessTimeoutMs)
       : false
   const result = AiVaultSearchResponseSchema.parse(
-    await current.search(compatibleRequest, hostScope)
+    await current.search(compatibleRequest, retrievalScope)
   )
   if (result.kind !== 'results') {
     return result
@@ -81,6 +82,7 @@ export async function searchSessionService(
   const { debug, ...fields } = result
   return {
     ...fields,
+    ...(compatibleAgents.length === 0 ? { page: { cursor: null, hasMore: false } } : {}),
     hits: result.hits
       .filter((hit) => compatibleAgents.includes(hit.agent))
       .map((hit) => redactForTransport(hit, transport)),

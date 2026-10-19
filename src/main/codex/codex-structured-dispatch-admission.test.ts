@@ -54,7 +54,7 @@ describe('codex dispatch admission', () => {
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
     startTurn(connection, 'turn-1')
-    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
+    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1' })
 
     const outcome = await send(adapter, 'client-2')
 
@@ -120,7 +120,7 @@ describe('codex dispatch admission', () => {
     ])
   })
 
-  it('settles nothing for a user message this session never sent', async () => {
+  it('settles a send only by the id its echo carries', async () => {
     const codex = fakeCodexAppServer({ 'turn/steer': () => ({ turnId: 'turn-1' }) })
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
@@ -129,14 +129,14 @@ describe('codex dispatch admission', () => {
     await send(adapter, 'client-1')
 
     // A message another client sent on the same thread, and one Codex did not
-    // correlate at all.
+    // correlate at all. The journal ignores an id it holds no send for.
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-x', clientId: 'someone-else' })
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-y' })
 
-    expect(settlements).toEqual([])
+    expect(settlements.map(({ clientMessageId }) => clientMessageId)).toEqual(['someone-else'])
   })
 
-  it('rejects only when Codex answered and declined, and arms nothing for it', async () => {
+  it('rejects only when Codex answered and declined', async () => {
     const { CodexAppServerRequestError } = await import('./codex-app-server-connection')
     const codex = fakeCodexAppServer({
       'turn/start': () => {
@@ -148,24 +148,18 @@ describe('codex dispatch admission', () => {
         )
       }
     })
-    const settlements: LateSettlement[] = []
-    const adapter = await acquiredCodexAdapter({ codex, settlements })
-    const connection = codex.connections[0]!
+    const adapter = await acquiredCodexAdapter({ codex, settlements: [] })
 
     // Codex's own words reach the sentence and the fact; Orca's prefix reaches neither.
     expect(await send(adapter, 'client-1')).toEqual({
       state: 'rejected',
-      reason: 'The provider did not accept this message: thread not found.',
+      reason: "Codex didn't accept this message: thread not found.",
       rejection: {
         kind: 'providerRejected',
-        detail: { text: 'thread not found', audience: 'person' }
+        detail: { text: 'thread not found', audience: 'person' },
+        neverReachedAgent: true
       }
     })
-
-    // A refused write is disarmed, so a later echo of that id settles nothing.
-    startTurn(connection, 'turn-1')
-    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
-    expect(settlements).toEqual([])
   })
 
   it('retains correlation when a request fails after its write may have landed', async () => {
@@ -378,20 +372,6 @@ describe('codex dispatch admission', () => {
     await send(adapter, 'client-1')
 
     await adapter.closeSession('session-1')
-
-    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
-    expect(settlements).toEqual([])
-  })
-
-  it('leaves no waiter behind when the child exits', async () => {
-    const codex = fakeCodexAppServer({ 'turn/steer': () => ({ turnId: 'turn-1' }) })
-    const settlements: LateSettlement[] = []
-    const adapter = await acquiredCodexAdapter({ codex, settlements })
-    const connection = codex.connections[0]!
-    startTurn(connection, 'turn-1')
-    await send(adapter, 'client-1')
-
-    connection.handlers.onExit?.(new Error('codex app-server exited'))
 
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
     expect(settlements).toEqual([])

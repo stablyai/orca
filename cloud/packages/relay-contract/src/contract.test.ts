@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RELAY_CLOSE_CODE } from './close-codes.js'
+import { RELAY_CLOSE_CODE, RELAY_PHONE_CLOSE_REASON } from './close-codes.js'
 import {
   AuthRefreshSchema,
   DrainSchema,
@@ -52,6 +52,8 @@ describe('relay protocol contract', () => {
       LIMIT_EXCEEDED: 4429,
       DRAINING: 4503
     })
+    // Shipped phones match this exact text; it is a wire value, not copy.
+    expect(RELAY_PHONE_CLOSE_REASON).toEqual({ HOST_ATTACH_TIMEOUT: 'attach-timeout' })
     expect(RELAY_PROTOCOL_LIMITS).toMatchObject({
       firstFrameDeadlineMs: 2_000,
       maxHttpBodyBytes: 4_096,

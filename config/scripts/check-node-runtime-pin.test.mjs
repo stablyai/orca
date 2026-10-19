@@ -45,10 +45,14 @@ function validInput() {
     pin,
     assets,
     targets,
-    packageJson: { devDependencies: { electron: '43.7.5' }, engines: { node: '24' } },
+    packageJson: {
+      devDependencies: { electron: '43.7.5', '@types/node': '^24.19.2' },
+      engines: { node: '24' }
+    },
     rootImporter: {
       devDependencies: {
-        electron: { specifier: '43.7.5', version: '43.7.5(supports-color@7.2.0)' }
+        electron: { specifier: '43.7.5', version: '43.7.5(supports-color@7.2.0)' },
+        '@types/node': { specifier: '^24.19.2', version: '24.19.2' }
       }
     }
   }
@@ -83,6 +87,35 @@ describe('findNodeRuntimePinProblems', () => {
     expect(findNodeRuntimePinProblems(input)).toEqual([
       'NODE_RUNTIME_PIN.version 24.21.0 is not package.json engines.node major 26'
     ])
+  })
+
+  it.each(['^25.6.0', '^22.20.0', undefined])(
+    'rejects declared Node types %s outside the runtime major',
+    (nodeTypes) => {
+      const input = validInput()
+      input.packageJson.devDependencies['@types/node'] = nodeTypes
+      expect(findNodeRuntimePinProblems(input)).toEqual([
+        `package.json @types/node is ${nodeTypes}, but NODE_RUNTIME_PIN.version major is 24`
+      ])
+    }
+  )
+
+  it.each(['25.6.0', '22.20.0', undefined])(
+    'rejects locked Node types %s outside the runtime major',
+    (nodeTypes) => {
+      const input = validInput()
+      input.rootImporter.devDependencies['@types/node'].version = nodeTypes
+      expect(findNodeRuntimePinProblems(input)).toEqual([
+        `pnpm-lock.yaml resolves @types/node ${nodeTypes ?? null}, but NODE_RUNTIME_PIN.version major is 24`
+      ])
+    }
+  )
+
+  it('accepts Node type versions within the runtime major', () => {
+    const input = validInput()
+    input.packageJson.devDependencies['@types/node'] = '^24.18.0'
+    input.rootImporter.devDependencies['@types/node'].version = '24.19.0'
+    expect(findNodeRuntimePinProblems(input)).toEqual([])
   })
 
   it('requires exactly one asset per server target', () => {
@@ -189,7 +222,8 @@ describe('committed pin', () => {
 
   it('runs in the static analysis job', () => {
     const workflow = parse(readFileSync(path.join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
-    const commands = workflow.jobs.static_analysis.steps.map((step) => step.run ?? '')
-    expect(commands).toContain('pnpm run check:node-runtime-pin')
+    const packageJson = JSON.parse(readFileSync(path.join(projectDir, 'package.json'), 'utf8'))
+    const commands = workflow.jobs.preflight.steps.map((step) => step.run ?? '')
+    expect(commands).toContain(packageJson.scripts['check:node-runtime-pin'])
   })
 })

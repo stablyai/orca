@@ -140,8 +140,12 @@ function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
 }
 
 function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
+  // Why the path: it names the home a status reports on, which the CLI's process may not share with the app's panes.
   const statusSummary = result.statuses
-    .map((status) => `${status.agent}: ${status.state}`)
+    .map(
+      (status) =>
+        `${status.agent}: ${status.state}${status.configPath ? ` (${status.configPath})` : ''}`
+    )
     .join('\n')
   return [
     `agentStatusHooksEnabled: ${result.enabled}`,

@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -125,7 +126,7 @@ function TimeDigitInput({
   }
 
   return (
-    <input
+    <ImeInput
       type="text"
       inputMode="numeric"
       autoComplete="off"

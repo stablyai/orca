@@ -138,6 +138,33 @@ export function safeRemoveTree(path: string): void {
   }
 }
 
+// Why: cleanup must not traverse a symlink parent inside the owned overlay.
+function hasSafeOverlayAncestors(root: string, relativeTarget: string): boolean {
+  let current = root
+  try {
+    if (lstatSync(current).isSymbolicLink()) {
+      return false
+    }
+  } catch (error) {
+    return !!error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
+  }
+  const segments = relativeTarget.split(sep).filter(Boolean)
+  for (const [index, segment] of segments.entries()) {
+    current = join(current, segment)
+    if (index === segments.length - 1) {
+      break
+    }
+    try {
+      if (lstatSync(current).isSymbolicLink()) {
+        return false
+      }
+    } catch (error) {
+      return !!error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
+    }
+  }
+  return true
+}
+
 // Why: last-line guard against an overlay-root constant ever being
 // mis-resolved. Any caller that points safeRemoveTree at a path outside its
 // designated overlay root is refused so a misconfiguration cannot turn into
@@ -147,7 +174,13 @@ export function safeRemoveOverlay(overlayDir: string, overlayRoot: string): void
   const resolvedRoot = resolve(overlayRoot)
   const resolvedTarget = resolve(overlayDir)
   const rel = relative(resolvedRoot, resolvedTarget)
-  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+  if (
+    rel === '' ||
+    rel === '..' ||
+    rel.startsWith(`..${sep}`) ||
+    isAbsolute(rel) ||
+    !hasSafeOverlayAncestors(resolvedRoot, rel)
+  ) {
     console.warn(
       `[overlay-mirror] refusing to remove overlay outside root: target=${resolvedTarget} root=${resolvedRoot}`
     )

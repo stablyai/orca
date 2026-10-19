@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-command'
 import { useAppStore } from '@/store'
+import { buildAgentFeatureSkillInstallCommand } from '@/lib/agent-feature-install-commands'
 import {
   buildSkillCommandForRuntime,
   buildSkillInstallCommandForRuntime,
@@ -178,29 +178,6 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     )
   })
 
-  it('reinstalls Windows-host skill updates after the npx preflight', () => {
-    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
-
-    expect(
-      buildSkillCommandForRuntime(
-        'npx skills update orchestration --global',
-        {
-          runtime: 'host',
-          label: 'Windows'
-        },
-        'win32'
-      )
-    ).toBe(`${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`)
-  })
-
-  it('treats missing runtime as a preflighted Windows host fallback for skill updates', () => {
-    const installCommand = buildAgentFeatureSkillInstallCommand(['orca-cli'])
-
-    expect(
-      buildSkillCommandForRuntime('npx skills update orca-cli --global', undefined, 'win32')
-    ).toBe(`${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`)
-  })
-
   it('keeps non-Windows host skill installs on the direct npx path', () => {
     const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
 
@@ -214,19 +191,6 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
         'linux'
       )
     ).toBe(installCommand)
-  })
-
-  it('keeps non-Windows host skill updates on the update path', () => {
-    expect(
-      buildSkillCommandForRuntime(
-        'npx skills update orchestration --global',
-        {
-          runtime: 'host',
-          label: 'This device'
-        },
-        'linux'
-      )
-    ).toBe('npx skills update orchestration --global')
   })
 
   it('skips the Windows preflight while a remote runtime environment is focused', () => {
@@ -367,26 +331,6 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     expect(buildSkillSetupTerminalCommand(powershellCommand, 'wsl.exe', runtime, 'win32')).toBe(
       buildWslLoginShellCommand(skillCommand)
     )
-  })
-
-  it('keeps the bare reinstall rewrite for POSIX-family Windows skill updates', () => {
-    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
-    const previous = useAppStore.getState()
-    useAppStore.setState({
-      settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'git-bash' }
-    })
-
-    try {
-      expect(
-        buildSkillCommandForRuntime(
-          'npx skills update orchestration --global',
-          { runtime: 'host', label: 'Windows' },
-          'win32'
-        )
-      ).toBe(installCommand)
-    } finally {
-      useAppStore.setState({ settings: previous.settings })
-    }
   })
 
   it('does not wrap unrelated Windows host commands', () => {

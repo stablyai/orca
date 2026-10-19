@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
+import { subscribeEditorRuntimeFileWatch } from './editor-runtime-file-watch'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 import {
@@ -121,39 +121,19 @@ function subscribeRuntimeTarget(
     current: ((payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void) | null
   }
 ): void {
-  const key = getEditorExternalWatchTargetKey(target)
-  let cancelled = false
-  const pendingUnsubscribe = (): void => {
-    cancelled = true
+  const runtimeEnvironmentId = target.runtimeEnvironmentId
+  if (!runtimeEnvironmentId) {
+    return
   }
-  remoteWatchUnsubs.set(key, pendingUnsubscribe)
-  void subscribeRuntimeFileChanges(
-    {
-      settings: { activeRuntimeEnvironmentId: target.runtimeEnvironmentId! },
-      worktreeId: target.worktreeId,
-      worktreePath: target.worktreePath,
-      connectionId: target.connectionId
-    },
-    (payload) => fsChangedHandlerRef.current?.(payload, target.runtimeEnvironmentId),
-    (err) => warnExternalWatchFailure(target, err)
+  const key = getEditorExternalWatchTargetKey(target)
+  remoteWatchUnsubs.set(
+    key,
+    subscribeEditorRuntimeFileWatch(
+      { ...target, runtimeEnvironmentId },
+      (payload) => fsChangedHandlerRef.current?.(payload, runtimeEnvironmentId),
+      (error) => warnExternalWatchFailure(target, error)
+    )
   )
-    .then((unsubscribe) => {
-      if (cancelled) {
-        unsubscribe()
-        return
-      }
-      if (remoteWatchUnsubs.get(key) === pendingUnsubscribe) {
-        remoteWatchUnsubs.set(key, unsubscribe)
-      } else {
-        unsubscribe()
-      }
-    })
-    .catch((err) => {
-      if (remoteWatchUnsubs.get(key) === pendingUnsubscribe) {
-        remoteWatchUnsubs.delete(key)
-      }
-      warnExternalWatchFailure(target, err)
-    })
 }
 
 export function verifyLatchedMoveDestinations(

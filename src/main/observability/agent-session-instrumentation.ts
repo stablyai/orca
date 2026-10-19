@@ -1,4 +1,4 @@
-import { withSpan, type ActiveSpan } from './tracer'
+import { startSpan, withSpan, type ActiveSpan } from './tracer'
 
 export type AgentSessionCreatePhase =
   | 'reconcile_leases'
@@ -22,6 +22,23 @@ export type AgentSessionCreatePhaseRecorder = (timing: AgentSessionCreatePhaseTi
 /** Wrap the rare user-created structured session; no sampling is needed for this event. */
 export async function withAgentSessionSpan<T>(fn: (span: ActiveSpan) => Promise<T>): Promise<T> {
   return withSpan('agentSession.create', fn, { attributes: { kind: 'agent-session' } })
+}
+
+/** One spawned start's outcome and its spawn-to-outcome time, so the startup limits are tuned from
+ *  what each agent really takes. Agent id and numbers only. */
+export function recordAgentSessionStartup(startup: {
+  agent: string
+  outcome: string
+  durationMs: number
+}): void {
+  startSpan('agentSession.startup', {
+    attributes: {
+      kind: 'agent-session',
+      'agent_session.agent': startup.agent,
+      'agent_session.startup.outcome': startup.outcome,
+      'agent_session.startup.spawn_to_outcome_ms': Math.round(startup.durationMs)
+    }
+  }).end()
 }
 
 export async function withAgentSessionCreatePhase<T>(

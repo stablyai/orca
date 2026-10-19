@@ -4,6 +4,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
+  getDeleteWorktreeChangeCheckStates,
   getDeleteWorktreeDirtyChangeCounts,
   getDeleteWorktreeDirtyChangePreview,
   getDeleteWorktreeDirtyChangePreviews,
@@ -176,5 +177,51 @@ describe('delete-worktree loaded change previews', () => {
       0
     )
     expect(getDeleteWorktreeDirtyChangePreviews(input).size).toBe(0)
+    expect(getDeleteWorktreeChangeCheckStates(input).size).toBe(0)
+  })
+})
+
+describe('deletion check states', () => {
+  it('distinguishes pending, failed and completed reads on the target host', () => {
+    const pending = worktree('same', 'ssh:pending')
+    const failed = worktree('same', 'ssh:failed')
+    const clean = worktree('same', 'local')
+    const input = {
+      deleteTargets: [pending, failed, clean],
+      gitStatusByWorktree: { same: [{ path: 'wrong-host.ts' }] },
+      gitStatusByWorktreeIdentity: new Map([
+        [getWorktreeHostIdentity(failed), null],
+        [getWorktreeHostIdentity(clean), []]
+      ]),
+      repoMap: new Map()
+    }
+    expect(getDeleteWorktreeChangeCheckStates(input)).toEqual(
+      new Map([
+        [getWorktreeHostIdentity(pending), 'checking'],
+        [getWorktreeHostIdentity(failed), 'unavailable'],
+        [getWorktreeHostIdentity(clean), 'complete']
+      ])
+    )
+    expect(getDeleteWorktreeDirtyChangeCounts({ ...input, deleteStateByWorktreeId: {} }).size).toBe(
+      0
+    )
+  })
+
+  it('uses a hydrated read for a target without an explicit host', () => {
+    const target = worktree('legacy')
+    const entries: GitStatusEntry[] = [{ path: 'pending.ts', status: 'modified', area: 'unstaged' }]
+    const input = {
+      deleteTargets: [target],
+      gitStatusByWorktree: {},
+      gitStatusByWorktreeIdentity: new Map([[getWorktreeHostIdentity(target), entries]]),
+      repoMap: new Map()
+    }
+    expect(getDeleteWorktreeChangeCheckStates(input).get('legacy')).toBe('complete')
+    expect(
+      getDeleteWorktreeDirtyChangeCounts({ ...input, deleteStateByWorktreeId: {} }).get('legacy')
+    ).toBe(1)
+    expect(getDeleteWorktreeDirtyChangePreviews(input).get('legacy')?.files[0]?.path).toBe(
+      'pending.ts'
+    )
   })
 })

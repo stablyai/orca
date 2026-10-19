@@ -8,6 +8,7 @@ import {
   measureTextControlPasteByteLengthWithYield,
   pasteTextIntoTextControl
 } from '@/lib/text-control-paste'
+import { DICTATION_FOCUS_INPUT_EVENT } from './dictation-control-events'
 
 export type DictationInsertionTarget =
   | { kind: 'terminal'; tabId: string; paneId: number }
@@ -15,6 +16,15 @@ export type DictationInsertionTarget =
   | { kind: 'contentEditable'; element: HTMLElement }
 
 export function captureInsertionTarget(): DictationInsertionTarget | null {
+  const focused = readFocusedInsertionTarget()
+  if (focused) {
+    return focused
+  }
+  document.dispatchEvent(new Event(DICTATION_FOCUS_INPUT_EVENT))
+  return readFocusedInsertionTarget()
+}
+
+function readFocusedInsertionTarget(): DictationInsertionTarget | null {
   const activeElement = document.activeElement
 
   if (!activeElement) {

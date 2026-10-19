@@ -8,6 +8,7 @@ import {
 export const FILE_TERMINAL_ARTIFACT_METHODS = [
   defineMethod({
     name: 'files.readTerminalArtifact',
+    permission: 'workspace',
     params: TerminalArtifactFile,
     handler: async (params, { runtime, clientId }) =>
       runtime.readTerminalArtifactFile(
@@ -19,6 +20,7 @@ export const FILE_TERMINAL_ARTIFACT_METHODS = [
   }),
   defineMethod({
     name: 'files.readTerminalArtifactPreview',
+    permission: 'workspace',
     params: TerminalArtifactFile,
     handler: async (params, { runtime, clientId, clientKind, requestId }) => {
       const budget = remoteFileContentBudget(clientKind, requestId)
@@ -40,6 +42,7 @@ export const FILE_TERMINAL_ARTIFACT_METHODS = [
   }),
   defineMethod({
     name: 'files.writeTerminalArtifact',
+    permission: 'workspace',
     params: TerminalArtifactFileWrite,
     handler: async (params, { runtime, clientId }) =>
       runtime.writeTerminalArtifactFile(

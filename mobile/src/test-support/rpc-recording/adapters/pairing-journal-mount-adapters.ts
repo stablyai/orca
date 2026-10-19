@@ -46,6 +46,7 @@ export function pairingJournalMountAdapters(
               journal = null
               effect('journal-cleared', 'recovery')
             },
+            claimJournal: async () => () => {},
             readCredentialBundle: async () => null,
             writeCredentialBundle: async (written: { current: { version: number } }) => {
               effect('bundle-written', { version: written.current.version })
@@ -108,6 +109,8 @@ export function pairingJournalMountAdapters(
               clearJournal: async () => {
                 effect('journal-cleared', JOURNAL_ID)
               },
+              releaseJournal: () => {},
+              recoverPendingJournal: async () => {},
               writeCredentialBundle: async (written: { current: { version: number } }) => {
                 effect('bundle-written', { version: written.current.version })
               },

@@ -17,7 +17,7 @@ import type * as FileSystem from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import * as processes from '../../../shared/child-process/run-process'
+import * as processes from '@orca/process-host'
 import { copyProfileStateRecoveryFile } from './profile-state-recovery-copy'
 
 const cloneLink = vi.hoisted(() => ({ unsupported: false }))

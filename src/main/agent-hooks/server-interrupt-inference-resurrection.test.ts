@@ -87,7 +87,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('does not let late Codex tool hooks with explicit prompt resurrect an inferred interrupt', () => {
+  it('does not let late Codex tool hooks with explicit prompt resurrect a confirmed interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -107,19 +107,22 @@ describe('AgentHookServer listener replay', () => {
         },
         'conn-1'
       )
-      const baseline = server.getStatusSnapshot()[0]
-
       vi.setSystemTime(1_500)
-      expect(
-        server.inferInterrupt({
+      server.ingestRemote(
+        {
           paneKey: PANE,
-          baselineUpdatedAt: baseline.receivedAt,
-          baselineStateStartedAt: baseline.stateStartedAt,
-          baselinePrompt: 'Run sleep 30, then reply done.',
-          baselineAgentType: 'codex',
-          intent: 'plain-escape'
-        })
-      ).toBe(true)
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hookEventName: 'Interrupt',
+          payload: {
+            state: 'done',
+            prompt: 'Run sleep 30, then reply done.',
+            agentType: 'codex',
+            interrupted: true
+          }
+        },
+        'conn-1'
+      )
 
       vi.setSystemTime(6_000)
       server.ingestRemote(

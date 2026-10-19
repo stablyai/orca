@@ -15,6 +15,8 @@ export type AnsiSegment = AnsiStyle & { text: string }
 
 // oxlint-disable-next-line no-control-regex -- matches the ESC byte that introduces SGR sequences.
 const SGR_PATTERN = /\u001b\[([0-9;]*)m/g
+// oxlint-disable-next-line no-control-regex -- introducers accepted by the SGR parser and shared ANSI stripping patterns.
+const ANSI_INTRODUCER_PATTERN = /[\u001b\u0090\u0098\u009b\u009d-\u009f]/
 
 function xterm256Color(index: number): AnsiColor {
   if (index < 16) {
@@ -76,6 +78,9 @@ function applySgr(style: AnsiStyle, params: string): AnsiStyle {
 
 /** Splits terminal output into styled runs; non-SGR escape sequences are dropped. */
 export function parseAnsiSegments(input: string): AnsiSegment[] {
+  if (!ANSI_INTRODUCER_PATTERN.test(input)) {
+    return input ? [{ text: input }] : []
+  }
   const segments: AnsiSegment[] = []
   let style: AnsiStyle = {}
   let offset = 0

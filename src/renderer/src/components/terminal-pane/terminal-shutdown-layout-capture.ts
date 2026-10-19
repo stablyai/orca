@@ -1,9 +1,9 @@
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { serializeTerminalLayout } from './layout-serialization'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
+import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
@@ -15,17 +15,13 @@ type ShutdownPane = Pick<ManagedPane, 'id' | 'leafId' | 'terminal' | 'serializeA
 
 type ShutdownPaneManager = {
   getPanes(): ShutdownPane[]
-  getActivePane(): ShutdownPane | null
 }
 
 type CaptureTerminalShutdownLayoutArgs = {
   manager: ShutdownPaneManager
-  container: HTMLDivElement
-  expandedPaneId: number | null
   paneTransports: ReadonlyMap<number, Pick<PtyTransport, 'getPtyId'>>
-  paneTitlesByPaneId: Record<number, string>
-  existingLayout: TerminalLayoutSnapshot | undefined
-  chatLeafId?: string | null
+  /** The tab's stored layout; its structure is kept as is, never re-read from the DOM. */
+  existingLayout: TerminalLayoutSnapshot
   /** Merge prior for buffers, resolved across both scrollback homes; defaults to the shared layout's. */
   priorBuffersByLeafId?: Record<string, string>
   captureBuffers?: boolean
@@ -94,13 +90,9 @@ function serializeWithinSessionScrollbackByteLimit(
 
 export function captureTerminalShutdownLayout({
   manager,
-  container,
-  expandedPaneId,
   paneTransports,
-  paneTitlesByPaneId,
   existingLayout,
-  chatLeafId,
-  priorBuffersByLeafId = existingLayout?.buffersByLeafId,
+  priorBuffersByLeafId = existingLayout.buffersByLeafId,
   captureBuffers = true,
   clearedScrollbackLeafIds
 }: CaptureTerminalShutdownLayoutArgs): TerminalLayoutSnapshot {
@@ -135,19 +127,18 @@ export function captureTerminalShutdownLayout({
     }
   }
 
-  const activePaneId = manager.getActivePane()?.id ?? panes[0]?.id ?? null
-  const layout = serializeTerminalLayout(
-    container,
-    activePaneId,
-    expandedPaneId,
-    new Map(panes.map((pane) => [pane.id, pane.leafId]))
-  )
-  const currentLeafIds = new Set(panes.map((p) => p.leafId))
-  if (chatLeafId && panes.some((pane) => pane.leafId === chatLeafId)) {
-    layout.chatLeafId = chatLeafId
-  }
+  // Why the stored tree, not the mounted panes: reconciliation can leave a stored leaf unmounted.
+  const currentLeafIds = new Set(collectLeafIds(existingLayout.root))
   const livePtyIdsByLeafId: Record<string, string> = {}
   const preservedPtyIdsByLeafId: Record<string, string> = {}
+  const mountedLeafIds = new Set<string>(panes.map((p) => p.leafId))
+  for (const leafId of currentLeafIds) {
+    const priorPtyId = existingLayout.ptyIdsByLeafId?.[leafId]
+    // Why: reconciliation inserts an unmounted leaf only while it still has its binding.
+    if (!mountedLeafIds.has(leafId) && priorPtyId) {
+      preservedPtyIdsByLeafId[leafId] = priorPtyId
+    }
+  }
   for (const pane of panes) {
     const transport = paneTransports.get(pane.id)
     const livePtyId = transport?.getPtyId() ?? null
@@ -155,7 +146,7 @@ export function captureTerminalShutdownLayout({
       livePtyIdsByLeafId[pane.leafId] = livePtyId
       continue
     }
-    const priorPtyId = existingLayout?.ptyIdsByLeafId?.[pane.leafId]
+    const priorPtyId = existingLayout.ptyIdsByLeafId?.[pane.leafId]
     if (transport && priorPtyId) {
       // Why: shutdown can capture during the post-remount attach gap where
       // each pane has a transport but the deferred PTY ID is still null.
@@ -171,35 +162,31 @@ export function captureTerminalShutdownLayout({
       })
     : {}
   const mergedScrollbackRefs = mergeCapturedLeafState({
-    prior: omitClearedLeafState(existingLayout?.scrollbackRefsByLeafId, clearedScrollbackLeafIds),
+    prior: omitClearedLeafState(existingLayout.scrollbackRefsByLeafId, clearedScrollbackLeafIds),
     fresh: {},
     currentLeafIds
   })
   const ptyIdsByLeafId = { ...preservedPtyIdsByLeafId, ...livePtyIdsByLeafId }
-  // Why: shutdown snapshots can otherwise persist focus on a mounted pane whose
-  // transport was already cleared during PTY exit/reconnect cleanup. Unlike
-  // scrollback, PTY bindings only preserve prior ids during a live attach gap.
-  layout.activeLeafId = resolveTerminalLayoutActiveLeafId({
-    root: layout.root,
-    activeLeafId: layout.activeLeafId,
-    ptyIdsByLeafId
-  })
-  if (Object.keys(mergedBuffers).length > 0) {
-    layout.buffersByLeafId = mergedBuffers
+  const {
+    buffersByLeafId: _buffers,
+    scrollbackRefsByLeafId: _scrollbackRefs,
+    ptyIdsByLeafId: _ptyIds,
+    ...structure
+  } = existingLayout
+  return {
+    ...structure,
+    // Why: shutdown snapshots can otherwise persist focus on a mounted pane whose
+    // transport was already cleared during PTY exit/reconnect cleanup. Unlike
+    // scrollback, PTY bindings only preserve prior ids during a live attach gap.
+    activeLeafId: resolveTerminalLayoutActiveLeafId({
+      root: structure.root,
+      activeLeafId: structure.activeLeafId,
+      ptyIdsByLeafId
+    }),
+    ...(Object.keys(mergedBuffers).length > 0 ? { buffersByLeafId: mergedBuffers } : {}),
+    ...(Object.keys(mergedScrollbackRefs).length > 0
+      ? { scrollbackRefsByLeafId: mergedScrollbackRefs }
+      : {}),
+    ...(Object.keys(ptyIdsByLeafId).length > 0 ? { ptyIdsByLeafId } : {})
   }
-  if (Object.keys(mergedScrollbackRefs).length > 0) {
-    layout.scrollbackRefsByLeafId = mergedScrollbackRefs
-  }
-  if (Object.keys(ptyIdsByLeafId).length > 0) {
-    layout.ptyIdsByLeafId = ptyIdsByLeafId
-  }
-
-  const titleEntries = panes
-    .filter((p) => paneTitlesByPaneId[p.id])
-    .map((p) => [p.leafId, paneTitlesByPaneId[p.id]] as const)
-  if (titleEntries.length > 0) {
-    layout.titlesByLeafId = Object.fromEntries(titleEntries)
-  }
-
-  return layout
 }

@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
+import type { Tab } from '../../../../shared/tab-types'
+import {
+  isNativeChatSkillDiscoveryAwaitingDirectory,
+  type NativeChatSkillStateInputs
+} from './native-chat-skill-discovery-context'
 import {
   isNativeChatSkillForAgent,
+  resolveNativeChatSkillDiscoveryContext,
   resolveNativeChatSkillDiscoveryCwd
 } from './use-native-chat-skills'
+import { worktreeFixture } from './native-chat-workspace-test-fixtures'
 
 function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
   return {
@@ -67,6 +75,15 @@ describe('isNativeChatSkillForAgent', () => {
     expect(isNativeChatSkillForAgent('grok', skill({}), claude)).toBe(false)
   })
 
+  // Both OpenCode lines read `.claude/skills` in the home folder and the project, but not plugins.
+  it('shows OpenCode the Claude skill folders it reads, and not Claude plugins', () => {
+    const claude = discovery('claude')
+    expect(isNativeChatSkillForAgent('opencode', skill({}), claude)).toBe(true)
+    expect(isNativeChatSkillForAgent('opencode2', skill({}), claude)).toBe(true)
+    const plugin = { sources: [{ ...claude.sources[0], sourceKind: 'plugin' as const }] }
+    expect(isNativeChatSkillForAgent('opencode2', skill({}), plugin)).toBe(false)
+  })
+
   it('grants visibility through any contributing root, not just the dedup survivor', () => {
     const result = {
       sources: [
@@ -107,22 +124,23 @@ describe('isNativeChatSkillForAgent', () => {
 })
 
 describe('resolveNativeChatSkillDiscoveryCwd', () => {
+  const catalog = {
+    floatingWorkspacePath: null,
+    folderWorkspaces: [],
+    worktreesByRepo: {
+      'repo-1': [worktreeFixture('repo-1::/repo/worktree', '/repo/worktree', { repoId: 'repo-1' })]
+    }
+  }
+
   it('returns the owning worktree path for a terminal tab', () => {
     expect(
       resolveNativeChatSkillDiscoveryCwd(
         {
+          ...catalog,
           tabsByWorktree: {
             'repo-1::/repo/worktree': [
               {
                 id: 'tab-1'
-              }
-            ]
-          },
-          worktreesByRepo: {
-            'repo-1': [
-              {
-                id: 'repo-1::/repo/worktree',
-                path: '/repo/worktree'
               }
             ]
           }
@@ -136,12 +154,10 @@ describe('resolveNativeChatSkillDiscoveryCwd', () => {
     expect(
       resolveNativeChatSkillDiscoveryCwd(
         {
+          ...catalog,
           tabsByWorktree: {},
           unifiedTabsByWorktree: {
             'repo-1::/repo/worktree': [{ id: 'structured-tab-1' }]
-          },
-          worktreesByRepo: {
-            'repo-1': [{ id: 'repo-1::/repo/worktree', path: '/repo/worktree' }]
           }
         },
         'structured-tab-1'
@@ -151,7 +167,10 @@ describe('resolveNativeChatSkillDiscoveryCwd', () => {
 
   it('returns null when the tab has no known worktree owner', () => {
     expect(
-      resolveNativeChatSkillDiscoveryCwd({ tabsByWorktree: {}, worktreesByRepo: {} }, 'tab-1')
+      resolveNativeChatSkillDiscoveryCwd(
+        { ...catalog, tabsByWorktree: {}, worktreesByRepo: {} },
+        'tab-1'
+      )
     ).toBeNull()
   })
 
@@ -159,18 +178,85 @@ describe('resolveNativeChatSkillDiscoveryCwd', () => {
     expect(
       resolveNativeChatSkillDiscoveryCwd(
         {
+          ...catalog,
           tabsByWorktree: {
             'repo-1::/repo/worktree': [
               { id: 'tab-1', startupCwd: '/repo/worktree/packages/app' },
               { id: 'tab-2' }
             ]
-          },
-          worktreesByRepo: {
-            'repo-1': [{ id: 'repo-1::/repo/worktree', path: '/repo/worktree' }]
           }
         },
         'tab-1'
       )
     ).toBe('/repo/worktree/packages/app')
+  })
+})
+
+describe('floating workspace skill discovery', () => {
+  const floatingTab: Tab = {
+    id: 'floating-chat-1',
+    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+    groupId: 'floating-group',
+    contentType: 'agent-session',
+    entityId: 'session-1',
+    label: 'Codex Chat',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0,
+    isPinned: false,
+    agentSessionAgent: 'codex'
+  }
+  const floatingInputs: NativeChatSkillStateInputs = {
+    activeRepoId: null,
+    activeWorkspaceExecutionHostId: null,
+    activeWorktreeId: null,
+    detectedWorktreesByRepo: {},
+    floatingWorkspacePath: '/home/me/scratch',
+    folderWorkspaces: [],
+    projectGroups: [],
+    projects: [],
+    repos: [],
+    restoredRuntimeHostIdByWorkspaceSessionKey: {},
+    // Why a focused runtime: floating must stay local even when one is selected.
+    settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: 'env-1' },
+    structuredSessionLaunchDirectoryByTabId: {},
+    tabsByWorktree: {},
+    unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] },
+    worktreesByRepo: {}
+  }
+
+  it('scans nothing and awaits the pin rather than scanning the current setting', () => {
+    expect(resolveNativeChatSkillDiscoveryCwd(floatingInputs, 'floating-chat-1')).toBeNull()
+    expect(resolveNativeChatSkillDiscoveryContext(floatingInputs, 'floating-chat-1')).toBeNull()
+    expect(isNativeChatSkillDiscoveryAwaitingDirectory(floatingInputs, 'floating-chat-1')).toBe(
+      true
+    )
+  })
+
+  it('scans the pinned folder after the floating setting moved', () => {
+    const pinned: NativeChatSkillStateInputs = {
+      ...floatingInputs,
+      floatingWorkspacePath: '/home/me/changed-setting',
+      structuredSessionLaunchDirectoryByTabId: {
+        'floating-chat-1': { sessionId: 'session-1', launchDirectory: '/home/me/pinned' }
+      }
+    }
+    expect(isNativeChatSkillDiscoveryAwaitingDirectory(pinned, 'floating-chat-1')).toBe(false)
+    expect(resolveNativeChatSkillDiscoveryContext(pinned, 'floating-chat-1')).toMatchObject({
+      cwd: '/home/me/pinned',
+      executionHostKind: 'local',
+      runtimeTarget: { kind: 'local' },
+      discoveryTarget: { cwd: '/home/me/pinned', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+    })
+  })
+
+  it('stays not-ready until the floating directory resolves', () => {
+    expect(
+      resolveNativeChatSkillDiscoveryContext(
+        { ...floatingInputs, floatingWorkspacePath: null },
+        'floating-chat-1'
+      )
+    ).toBeNull()
   })
 })

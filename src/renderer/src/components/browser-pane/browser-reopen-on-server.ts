@@ -1,6 +1,6 @@
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
-import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session'
+import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-browser-creation'
 
 /**
  * Last committed URL, reduced to what is safe to restore on another browser engine.

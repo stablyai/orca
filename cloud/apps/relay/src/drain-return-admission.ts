@@ -44,6 +44,8 @@ export class RelayDrainReturnAdmission {
       maxConcurrent: number
       maxRetryAfterSeconds: number
       now?: () => number
+      // The raw sample behind the EWMA, so the lane's service time is reported.
+      onServiceMs?: (durationMs: number) => void
     }
   ) {}
 
@@ -108,6 +110,7 @@ export class RelayDrainReturnAdmission {
   }
 
   private recordService(durationMs: number): void {
+    this.options.onServiceMs?.(durationMs)
     const sample = Math.min(SERVICE_MS_CEILING, Math.max(SERVICE_MS_FLOOR, durationMs))
     this.serviceMs += SERVICE_EWMA_WEIGHT * (sample - this.serviceMs)
   }

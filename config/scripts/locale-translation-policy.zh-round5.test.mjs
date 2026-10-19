@@ -140,7 +140,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '代理',
         locale: 'zh'
       })
-    ).toBe('代理')
+    ).toBe('智能体')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitHubItemDialog.28986b3747',
@@ -148,7 +148,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '已启动 AI 代理处理失败的检查。',
         locale: 'zh'
       })
-    ).toBe('已启动 AI 代理处理失败的检查。')
+    ).toBe('已启动 AI 智能体处理失败的检查。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.LinearIssueMarkdownDescriptionEditor.d9c47069ef',

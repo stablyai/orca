@@ -12,8 +12,8 @@ import type {
 /**
  * Cleanup for an acquisition the host could not commit or prove. A session that
  * a first-hand exit already removed is not an absence to report as proven: the
- * ladder on its connection still answers, and that answer is classified exactly
- * as a start-time failure would be.
+ * ladder on its connection still answers, and that answer is classified like
+ * any other unproven acquisition cleanup.
  */
 export async function releaseClaudeAcquisition(input: {
   sessionId: string

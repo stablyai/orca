@@ -17,7 +17,7 @@ export const EXACT_NODE_ENTRYPOINT_IDENTITIES: readonly {
   // Why: Pi's npm shim launches a generic cli.js; only the exact package path is authoritative.
   {
     pattern:
-      /(?:^|\/)node_modules\/@(?:earendil-works|mariozechner)\/pi-coding-agent\/dist\/cli\.js$/,
+      /(?:^|\/)node_modules\/@(?:earendil-works|mariozechner)\/pi-coding-agent\/dist\/(?:bundle\/)?cli\.js$/,
     agent: 'pi',
     processName: 'pi'
   },

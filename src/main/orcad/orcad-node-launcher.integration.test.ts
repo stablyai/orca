@@ -4,7 +4,7 @@ import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import {
@@ -150,6 +150,9 @@ describe.skipIf(skip)('real pinned-Node launcher lifecycle', () => {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc']
     })
     children.add(child)
+    if (!child.stdout || !child.stderr) {
+      throw new Error('The launcher fixture requires stdout and stderr pipes')
+    }
     child.once('spawn', () => record('spawn'))
     let closed = false
     child.once('close', () => {

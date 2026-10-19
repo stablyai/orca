@@ -24,28 +24,33 @@ let workspaceDeleteModifierPressed = false
 let gitConflictOperationByWorktree: Record<string, GitConflictOperation> = {}
 let WorktreeCard: typeof WorktreeCardComponent
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      deleteStateByWorktreeId: {},
-      fetchHostedReviewForBranch,
-      fetchIssue,
-      gitConflictOperationByWorktree,
-      hostedReviewCache: {},
-      issueCache: {},
-      openModal,
-      projectGroups,
-      remoteBranchConflictByWorktreeId: {},
-      settings,
-      sshConnectionStates: new Map(),
-      sshTargetLabels: new Map(),
-      browserTabsByWorktree,
-      ptyIdsByTabId,
-      tabsByWorktree,
-      updateWorktreeMeta,
-      worktreeCardProperties
+vi.mock('@/store', () => {
+  const getState = () => ({
+    deleteStateByWorktreeId: {},
+    fetchHostedReviewForBranch,
+    fetchIssue,
+    gitConflictOperationByWorktree,
+    hostedReviewCache: {},
+    issueCache: {},
+    openModal,
+    projectGroups,
+    remoteBranchConflictByWorktreeId: {},
+    settings,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    browserTabsByWorktree,
+    ptyIdsByTabId,
+    tabsByWorktree,
+    updateWorktreeMeta,
+    worktreeCardProperties
+  })
+  return {
+    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+      getState,
+      subscribe: () => () => {}
     })
-}))
+  }
+})
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
@@ -76,7 +81,6 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
@@ -195,6 +199,18 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).not.toContain('bg-black/[0.08]')
     expect(markup).not.toContain('dark:bg-white/[0.10]')
     expect(markup).not.toContain('border-black/[0.015]')
+  })
+
+  it('marks multi-selected workspaces for the shared selected style, except the active one', () => {
+    const selected = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} isMultiSelected />
+    )
+    const activeSelected = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive isMultiSelected />
+    )
+
+    expect(selected).toContain('data-worktree-card-selected="true"')
+    expect(activeSelected).not.toContain('data-worktree-card-selected')
   })
 
   it('renders folder directory name in the detailed metadata row without a Folder badge', () => {

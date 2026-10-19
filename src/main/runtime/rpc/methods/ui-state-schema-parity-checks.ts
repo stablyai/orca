@@ -9,6 +9,8 @@ import type { AssertNoMissingKeys, AssertNoMissingValues } from './ui-state-sche
 // strict schema is deliberate — but it must stay deliberate rather than
 // forgotten, which is what the parity assertion below enforces.
 type MainOwnedUIState =
+  | 'jiraSavedFilterState'
+  | 'jiraQuickFilterState'
   | '_explorerDisplayRootMigrated'
   | 'trayMinimizeNoticeShown'
   | 'dashboardPopoutBounds'

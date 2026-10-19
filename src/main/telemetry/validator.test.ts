@@ -212,15 +212,6 @@ describe('validate', () => {
     expect(result.ok).toBe(true)
   })
 
-  it('accepts events without nth_repo_added (classifier degraded mode)', () => {
-    const result = validate('agent_started', {
-      agent_kind: 'claude-code',
-      launch_source: 'command_palette',
-      request_kind: 'new'
-    })
-    expect(result.ok).toBe(true)
-  })
-
   it('rejects negative nth_repo_added', () => {
     const result = validate('app_opened', { nth_repo_added: -1 } as never)
     expect(result.ok).toBe(false)

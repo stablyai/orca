@@ -4,15 +4,20 @@ import {
 } from '../../shared/browser-url'
 import { isChromiumInternalErrorUrl } from './browser-manager-types'
 import { BrowserManagerGuestPopupPolicy } from './browser-manager-guest-popup-policy'
+import { allowPageUnload } from './browser-guest-unload-policy'
+import { initiatingFrameUrl } from './browser-external-app-launch'
 
 export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManagerGuestPopupPolicy {
   protected installGuestNavigationPolicy(guest: Electron.WebContents): () => void {
-    const navigationGuard = (event: Electron.Event, url: string): boolean => {
+    const navigationGuard = (
+      event: Electron.Event<{ initiator?: Electron.WebFrameMain | null }>,
+      url: string
+    ): boolean => {
       // Why: Turnstile loads challenge resources via blob:; blocking them trips error 600010. Allow only http(s) blobs, not opaque ones.
       if (url.startsWith('blob:https://') || url.startsWith('blob:http://')) {
         return true
       }
-      // Why: initial file:// attach is allowed for user-opened previews, but block later file:// redirects so remote pages can't probe the FS.
+      // Why: initial file:// attach is allowed for user-opened previews, but block web → file:// navs and redirects so remote pages can't probe the FS.
       if (url.startsWith('file:')) {
         event.preventDefault()
         return false
@@ -20,13 +25,23 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       if (!normalizeBrowserNavigationUrl(url)) {
         // Why: will-attach-webview only validates the initial src; keep enforcing the allowlist on later navs.
         event.preventDefault()
+        this.requestExternalAppLaunch(guest, url, () => initiatingFrameUrl(event.initiator))
         return false
       }
       return true
     }
 
+    const willNavigateHandler = (event: Electron.Event, url: string): void => {
+      // Why: a local page's own links (e.g. relative <a href>) stay file:// → file://, as in Chrome;
+      // web pages still can't navigate into the filesystem.
+      if (url.startsWith('file:') && guest.getURL().startsWith('file:')) {
+        return
+      }
+      navigationGuard(event, url)
+    }
+
     const willRedirectHandler = (
-      event: Electron.Event,
+      event: Electron.Event<Electron.WebContentsWillRedirectEventParams>,
       url: string,
       _isInPlace: boolean,
       isMainFrame: boolean
@@ -126,11 +141,12 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       this.notifyBrowserGuestStateChanged(guest.id)
     }
 
-    guest.on('will-navigate', navigationGuard)
+    guest.on('will-navigate', willNavigateHandler)
     guest.on('will-redirect', willRedirectHandler)
     guest.on('did-start-navigation', didStartNavigationHandler)
     guest.on('did-navigate', didNavigateHandler)
     guest.on('did-fail-load', didFailLoadHandler)
+    guest.on('will-prevent-unload', allowPageUnload)
     const handleDestroyed = (): void => {
       const browserTabId = this.tabIdByWebContentsId.get(guest.id)
       // A destroyed primary guest also owns per-page callbacks that capture its WebContents.
@@ -149,11 +165,12 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         // guest may already be destroyed
       }
       if (!guest.isDestroyed()) {
-        guest.off('will-navigate', navigationGuard)
+        guest.off('will-navigate', willNavigateHandler)
         guest.off('will-redirect', willRedirectHandler)
         guest.off('did-start-navigation', didStartNavigationHandler)
         guest.off('did-navigate', didNavigateHandler)
         guest.off('did-fail-load', didFailLoadHandler)
+        guest.off('will-prevent-unload', allowPageUnload)
       }
     }
   }

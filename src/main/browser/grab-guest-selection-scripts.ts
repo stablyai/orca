@@ -42,7 +42,7 @@ export const AWAIT_CLICK_SCRIPT = `(async function() {
       // Why: freeze the highlight instead of removing it so the user sees
       // which element was selected while the copy menu is shown. Teardown
       // happens later when the renderer calls setGrabMode(false) or re-arms.
-      grab.freezeHighlight();
+      grab.freezeHighlight(payload.page.capturedAt);
       resolve(payload);
     }
 
@@ -64,7 +64,7 @@ export const AWAIT_CLICK_SCRIPT = `(async function() {
       }
       var payload = extractSelectedPayload(el);
       if (!payload) return;
-      grab.freezeHighlight();
+      grab.freezeHighlight(payload.page.capturedAt);
       resolve({ __orcaContextMenu: true, payload: payload });
     }
 

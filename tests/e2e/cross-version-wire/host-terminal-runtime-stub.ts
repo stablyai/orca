@@ -36,6 +36,8 @@ export function createHostTerminalRuntimeStub(
     rows?: number
     initialBuffer?: string
     overflowInitialSnapshots?: boolean
+    /** Replaces the default always-accepting PTY write, to script refusals and lost settlements. */
+    writeInput?: (text: string) => Promise<unknown>
   } = {}
 ): HostTerminalRuntimeStub {
   const terminalHandle = options.terminalHandle ?? 'terminal-journey'
@@ -156,6 +158,9 @@ export function createHostTerminalRuntimeStub(
     waitForTerminal: () => new Promise(() => {}),
     // The input oracle: the host reached the process with exactly this text.
     sendTerminal: async (_handle: string, action: { text?: string }) => {
+      if (options.writeInput) {
+        return options.writeInput(action?.text ?? '')
+      }
       if (typeof action?.text === 'string') {
         stub.writtenInput.push(action.text)
       }

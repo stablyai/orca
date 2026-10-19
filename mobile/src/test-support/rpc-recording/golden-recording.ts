@@ -1,6 +1,7 @@
 import { format } from 'oxfmt'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import {
   checkpointListDifference,
   decodeGoldenFile,
@@ -129,6 +130,10 @@ export async function expectGoldenFile(
 }
 /** Value-based compare for a run checked against decoded values rather than a committed file. */
 export function compareGolden(expected: GoldenRecording, actual: GoldenRecording): void {
+  // Matching recordings need no field-by-field diagnostic strings, but still pin encoded bytes.
+  if (isDeepStrictEqual(expected, actual) && goldenBytes(expected) === goldenBytes(actual)) {
+    return
+  }
   const problems = recordingProblems(expected, actual)
   // The field compares ignore key order and the re-encoded bytes do not, so the bytes decide last.
   if (!problems.length && goldenBytes(expected) !== goldenBytes(actual)) {

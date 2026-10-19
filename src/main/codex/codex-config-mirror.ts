@@ -16,7 +16,7 @@ import {
   type CodexSettingsPromotionHomes,
   type CodexSettingsPromotionPlan
 } from './config-settings-promotion'
-import { readCodexSettingsBaseline } from './config-settings-baseline'
+import { observeCodexSettingsBaseline, readCodexSettingsBaseline } from './config-settings-baseline'
 import { getCodexConfigSyncStatus, reportCodexConfigSyncOutcome } from './config-sync-stall'
 import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
 import { applyCodexDaemonSocketGuard } from './codex-daemon-socket-path-guard'
@@ -161,15 +161,13 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
   let mirroredRuntimeConfig = runtimeConfigBeforeMirror ?? ''
   if (rawSystemConfig.trim() !== '') {
     const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(homes.systemHomePath)
-    // The retired home has no ownership baseline; its entire MCP root stays canonical.
     mirroredRuntimeConfig =
       runtimeConfigBeforeMirror !== null
         ? mergeSystemCodexConfigIntoRuntime(
             runtimeConfigBeforeMirror,
             prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir),
             sourceConfigDir,
-            new Set(),
-            true
+            ...readLegacySharedHomeMcpOwnership(homes.runtimeHomePath)
           )
         : prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
   }
@@ -184,6 +182,24 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
   // Why: stage first, then compare immediately before replace so a retained
   // Codex trust write during mirror preparation wins.
   writeFileAtomicallyIfUnchanged(runtimeConfigPath, runtimeConfigBeforeMirror, nextRuntimeConfig)
+}
+
+/**
+ * Why: MCP servers added from an Orca terminal exist only in the retired home,
+ * so its last mirror's baseline decides which ones ~/.codex owns. With no
+ * baseline the whole root stays canonical, as before; an unreadable one throws
+ * rather than guess. Read-only: this one-way refresh never advances it.
+ */
+function readLegacySharedHomeMcpOwnership(
+  runtimeHomePath: string
+): [mirroredMcpServerNames: ReadonlySet<string>, mirroredMcpServerRoot: boolean] {
+  const observation = observeCodexSettingsBaseline(runtimeHomePath)
+  if (observation.kind === 'indeterminate') {
+    throw new Error('Codex settings baseline could not be read')
+  }
+  return observation.kind === 'present'
+    ? [observation.baseline.mcpServers, observation.baseline.mcpServerRoot]
+    : [new Set(), true]
 }
 
 type CodexConfigMirrorResult =

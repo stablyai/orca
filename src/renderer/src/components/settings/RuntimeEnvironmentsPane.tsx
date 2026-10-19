@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { SearchableSetting } from './SearchableSetting'
 import { EphemeralVmRuntimesSection } from './EphemeralVmRuntimesSection'
+import { ManagedServersSection } from './ManagedServersSection'
 import { CloudVmSetupGuide } from './CloudVmSetupGuide'
 import {
   getRuntimeEnvironmentsSearchEntry,
@@ -263,6 +264,13 @@ export function RuntimeEnvironmentsPane({
         <RuntimeServerShareSection
           shareServerFormOpen={shareServerFormOpen}
           onToggleShareServerForm={() => setShareServerFormOpen((open) => !open)}
+        />
+      ) : null}
+
+      {visibleWorkflow === 'connect' ? (
+        <ManagedServersSection
+          environments={environments}
+          onChanged={() => void loadEnvironments()}
         />
       ) : null}
 

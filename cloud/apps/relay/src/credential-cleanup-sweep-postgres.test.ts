@@ -1,6 +1,11 @@
 import pg from 'pg'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { RelayCredentialStore, type RelayIdentity } from './credential-store.js'
+import {
+  AUDIT_EVENT_RETENTION_MS,
+  CONFIRM_RESULT_RETENTION_MS,
+  RelayCredentialStore,
+  type RelayIdentity
+} from './credential-store.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 
 // The outage this guards against: the credential cleanup ran every 30s in all 23 cells and both
@@ -169,9 +174,9 @@ describePostgres('credential cleanup against PostgreSQL', () => {
     await database.query(`ANALYZE relay_connection_bases`)
 
     const reaper = await plan(
-      `DELETE FROM relay_connection_bases WHERE ctid IN (
+      `DELETE FROM relay_connection_bases WHERE ctid = ANY(ARRAY(
          SELECT ctid FROM relay_connection_bases WHERE active = ? AND deadline <= ? LIMIT 5000
-       )`,
+       ))`,
       [0, NOW - DAY_MS]
     )
 
@@ -279,5 +284,56 @@ describePostgres('credential cleanup against PostgreSQL', () => {
       { state: 'available', total: '2' },
       { state: 'invalidated', total: '3' }
     ])
+  })
+
+  it('plans the audit reaper off relay_audit_events_at when most rows are past retention', async () => {
+    // Unordered, a LIMIT with this many matches is cheapest as a sequential scan from page 0, which
+    // in production would reread every retained row once the oldest pages are reaped.
+    await database.query(
+      `INSERT INTO relay_audit_events (id, at, type, user_id, relay_host_id, detail_json)
+       SELECT 'old-' || n, ?, 'resume-confirmed', ?, ?, '{}' FROM generate_series(1, 20000) AS n`,
+      [NOW - AUDIT_EVENT_RETENTION_MS - DAY_MS, identity.userId, identity.relayHostId]
+    )
+    await database.query(`ANALYZE relay_audit_events`)
+
+    const reaper = await plan(
+      `DELETE FROM relay_audit_events WHERE ctid = ANY(ARRAY(
+         SELECT ctid FROM relay_audit_events WHERE at <= ? ORDER BY at LIMIT 5000
+       ))`,
+      [NOW - AUDIT_EVENT_RETENTION_MS]
+    )
+
+    expect(reaper).toContain('relay_audit_events_at')
+    expect(reaper).not.toContain('Seq Scan on relay_audit_events')
+  })
+
+  it('reaps old confirm results and audit events and keeps the ones inside retention', async () => {
+    await database.query(
+      `INSERT INTO relay_confirm_results
+       (user_id, relay_host_id, req_id, basis_conn_id, tuple_json, result_json, committed_at)
+       SELECT ?, ?, 'old-' || n, 'basis-1', '{}', '{}', ? FROM generate_series(1, 200) AS n`,
+      [identity.userId, identity.relayHostId, NOW - CONFIRM_RESULT_RETENTION_MS - 1]
+    )
+    await database.query(
+      `INSERT INTO relay_confirm_results
+       (user_id, relay_host_id, req_id, basis_conn_id, tuple_json, result_json, committed_at)
+       VALUES (?, ?, 'recent', 'basis-1', '{}', '{}', ?)`,
+      [identity.userId, identity.relayHostId, NOW - DAY_MS]
+    )
+    await database.query(
+      `INSERT INTO relay_audit_events (id, at, type, user_id, relay_host_id, detail_json)
+       VALUES ('old', ?, 'resume-confirmed', ?, ?, '{}'), ('recent', ?, 'resume-confirmed', ?, ?, '{}')`,
+      [
+        NOW - AUDIT_EVENT_RETENTION_MS - 1, identity.userId, identity.relayHostId,
+        NOW - DAY_MS, identity.userId, identity.relayHostId
+      ]
+    )
+
+    await store.cleanup()
+
+    expect(await database.query(`SELECT req_id FROM relay_confirm_results`)).toEqual([
+      { req_id: 'recent' }
+    ])
+    expect(await database.query(`SELECT id FROM relay_audit_events`)).toEqual([{ id: 'recent' }])
   })
 })

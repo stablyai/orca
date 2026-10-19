@@ -1,3 +1,9 @@
+import {
+  acquireReadyCodexForTest,
+  fakeCodex,
+  identityFor,
+  THREAD_ID
+} from './codex-structured-session-adapter-fixture'
 // A Codex session's frames, through the real adapter, into the host's child records: the order the
 // host receives them in, and the parent row they fold to, written out step by step.
 
@@ -24,7 +30,6 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { fakeCodex, identityFor, THREAD_ID } from './codex-structured-session-adapter-fixture'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 
 const parent = makeStructuredAgentStatusSubject(
@@ -135,7 +140,7 @@ async function producer() {
       moment()
     }
   }
-  await adapter.acquire({
+  await acquireReadyCodexForTest(adapter, {
     identity: identityFor('session-1'),
     fence: 7,
     spawnToken: 'spawn-9',
@@ -203,11 +208,13 @@ const shellFrame = (
 describe('Codex structured child-work producer', () => {
   it('delivers evidence only after the journal wrote and published the frame', async () => {
     const { send, records } = await producer()
-    send(turn('turn/started', THREAD_ID, 'p1'))
-    send(turn('turn/started', REVIEWER, 'r1'))
-    const deliveries = send(spawned(REVIEWER, 'review', 'p1'))
+    const deliveries = [
+      ...send(turn('turn/started', THREAD_ID, 'p1')),
+      ...send(turn('turn/started', REVIEWER, 'r1')),
+      ...send(spawned(REVIEWER, 'review', 'p1'))
+    ]
     const kinds = deliveries.map((delivery) => delivery.kind)
-    // The frame's own rows, then the parent's republished row, and only then its children.
+    // The turn's own rows, then the parent's republished row, and only then its child.
     expect(kinds.filter((kind) => kind === 'journal').length).toBeGreaterThan(0)
     expect(kinds.lastIndexOf('publish')).toBeGreaterThan(kinds.lastIndexOf('journal'))
     expect(kinds.at(-1)).toBe('evidence')
@@ -474,7 +481,8 @@ describe('Codex structured child-work producer', () => {
       before = step.parent
       step.check?.()
     }
-    expect(journalMoments).toBeGreaterThan(steps.length)
+    // The host writes the children's rows, so not every step writes one here.
+    expect(journalMoments).toBeGreaterThan(0)
     const settled = records()
     await adapter.closeSession('session-1')
     // Every child had already ended; closing the session changes none of what they said.

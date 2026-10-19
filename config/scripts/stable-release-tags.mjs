@@ -21,10 +21,14 @@ export function compareReleaseTags(a, b) {
 
 /** @param {string[]} tags @returns {string | null} */
 export function selectLatestStableReleaseTag(tags) {
-  return (
-    tags
-      .filter((tag) => STABLE_DESKTOP_RELEASE_TAG.test(tag))
-      .sort(compareReleaseTags)
-      .at(-1) ?? null
-  )
+  let latest = null
+  for (const tag of tags) {
+    if (
+      STABLE_DESKTOP_RELEASE_TAG.test(tag) &&
+      (latest === null || compareReleaseTags(latest, tag) <= 0)
+    ) {
+      latest = tag
+    }
+  }
+  return latest
 }

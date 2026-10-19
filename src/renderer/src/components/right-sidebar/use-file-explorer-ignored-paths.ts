@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitIgnoredPaths } from '@/runtime/runtime-git-client'
-import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
+import { getRuntimeGitIgnoredPaths } from '@/runtime/runtime-git-status-client'
+import { getWorktreeGitOwnerTarget } from './worktree-git-owner-target'
 
 const EMPTY_IGNORED_PATHS: readonly string[] = []
 export const FILE_EXPLORER_IGNORED_QUERY_DEBOUNCE_MS = 300
@@ -60,9 +60,13 @@ export function useFileExplorerIgnoredPaths({
     let canceled = false
     const refresh = (): void => {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      const target = getWorktreeGitOwnerTarget(activeWorktreeId)
+      if (!target) {
+        return
+      }
       void getRuntimeGitIgnoredPaths(
         {
-          settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
+          target,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId

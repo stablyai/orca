@@ -13,10 +13,10 @@ import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   getFishCodexShellLaunchPreflight,
-  getPosixCodexShellLaunchPreflight,
-  getPowerShellCodexShellLaunchPreflight
+  getPosixCodexShellLaunchPreflight
 } from '../../shared/codex-shell-function'
 import { resolveFishBinary } from '../../shared/fish-binary-requirement'
+import { getPowerShellAgentWrappers } from '../../shared/powershell-agent-wrappers'
 
 const isWindows = process.platform === 'win32'
 const fishLookup = resolveFishBinary()
@@ -31,6 +31,8 @@ const HELP_WITHOUT_FLAG = 'Usage: codex [OPTIONS] [PROMPT]\n      --no-alt-scree
 const ADDED: string[][] = [
   [],
   ['fix the bug'],
+  // Why: Windows PowerShell and pwsh's .cmd passing drop embedded quotes unless the wrapper escapes them.
+  ['say "hi" to "bob"'],
   ['exec the plan'],
   ['-m', 'gpt-5', '--yolo', 'x'],
   ['resume'],
@@ -160,7 +162,7 @@ function run(
     shell === 'fish'
       ? getFishCodexShellLaunchPreflight()
       : isPowerShell(shell)
-        ? getPowerShellCodexShellLaunchPreflight()
+        ? getPowerShellAgentWrappers()
         : getPosixCodexShellLaunchPreflight()
   // Why the guard: rows include `login`, which a real codex would run against the host's account.
   const guard = isPowerShell(shell)
@@ -231,9 +233,9 @@ describe('codex wrapper --no-daemon rule', () => {
 
       it('adds nothing when --help does not list the flag (0.155 and older)', () => {
         const sandbox = makeSandbox(HELP_WITHOUT_FLAG)
-        const result = run(shell, ALL.map((argv) => codexCall(shell, argv)).join('\n'), sandbox)
+        const result = run(shell, ADDED.map((argv) => codexCall(shell, argv)).join('\n'), sandbox)
 
-        expect(lines(result.stdout)).toEqual(ALL.map((argv) => expectedLine(argv, false)))
+        expect(lines(result.stdout)).toEqual(ADDED.map((argv) => expectedLine(argv, false)))
       })
 
       it('adds nothing with ORCA_CODEX_ISOLATE=0, read on every call', () => {

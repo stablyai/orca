@@ -1,4 +1,9 @@
-import { closeTestStores, createSqliteTestStore } from './persistence-test-harness'
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  createStore as createFreshStore,
+  testState
+} from './persistence-test-harness'
 /**
  * SSH re-adoption has to repair the automation with the workspace.
  *
@@ -16,14 +21,15 @@ import type { FolderWorkspace } from '../shared/folder-workspace-types'
 import type { ProjectGroup } from '../shared/project-group-types'
 import type { Repo } from '../shared/repo-types'
 import type { RemovedSshTargetTombstone } from '../shared/ssh-types'
-import type { SshConnectionStore } from './ssh/ssh-connection-store'
+import type { SshConnectionStore } from './ssh/connection/ssh-connection-store'
 import { getDefaultPersistedState } from '../shared/constants'
 import { toSshExecutionHostId } from '../shared/execution-host'
 import { hostStableKey } from '../shared/automation-owner-key'
 import { folderWorkspaceKey } from '../shared/workspace-scope'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
+import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -142,6 +148,10 @@ async function createStoreFromState(state: Record<string, unknown>) {
     JSON.stringify({ ...getDefaultPersistedState(testState.dir), ...state }),
     'utf-8'
   )
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('./persistence')
@@ -160,7 +170,7 @@ async function reloadStore() {
 
 async function createSshStore(state: Record<string, unknown>) {
   const store = await createStoreFromState(state)
-  const { SshConnectionStore } = await import('./ssh/ssh-connection-store')
+  const { SshConnectionStore } = await import('./ssh/connection/ssh-connection-store')
   return { store, ssh: new SshConnectionStore(store) }
 }
 
@@ -170,6 +180,8 @@ function readdDevBox(ssh: SshConnectionStore) {
 }
 
 beforeEach(() => {
+  hasCreatedStoreInCase = false
+  resetRetirementCollisionKeyCacheForTests()
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-readopt-'))
 })
 
@@ -347,7 +359,8 @@ describe('SSH re-adoption tombstone retention', () => {
 
   it('retains the tombstone when a same-id re-registration leaves the automation on the old incarnation', async () => {
     const { store } = await createSshStore(removedHostState())
-    const { readoptOrphanedWorkspacesForTarget } = await import('./ssh/ssh-target-readoption')
+    const { readoptOrphanedWorkspacesForTarget } =
+      await import('./ssh/targets/ssh-target-readoption')
     // Same id back with a new registration: nothing is re-pointed, so the automation
     // still depends on the tombstone as the only evidence its host was replaced.
     const target = { id: OLD_ID, label: 'Dev box', ...IDENTITY, generation: 9 }

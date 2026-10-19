@@ -11,6 +11,10 @@ import {
   containsCursorRestore
 } from './foreground-output-scan'
 import { containsHiddenStartupRendererQuery } from './hidden-startup-renderer-query'
+import {
+  noteTerminalOutputAfterInput,
+  terminalInputEchoAllowanceMs
+} from './terminal-input-echo-delay'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -23,6 +27,10 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
   ): void {
     // Why: every application byte funnels through here, so it's the one place the kitty keyboard mirror observes the pane's protocol negotiation.
     session.kittyKeyboardModes.scan(data)
+    // Why before classification: this chunk may be the echo that calibrates its own window.
+    if (data.length > 0) {
+      noteTerminalOutputAfterInput(session.inputEchoDelay, performance.now())
+    }
     if (foreground) {
       session.resetHiddenOutputRestoreIfPtyChanged()
     }
@@ -70,7 +78,8 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     if (synchronizedForegroundOutput && synchronizedOutputStarted) {
       session.synchronizedForegroundFrameInteractive =
         performance.now() - session.lastTerminalInputAt <=
-        FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS
+        FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS +
+          terminalInputEchoAllowanceMs(session.inputEchoDelay)
     } else if (!nextSynchronizedForegroundOutputActive && !synchronizedOutputEnded) {
       session.synchronizedForegroundFrameInteractive = false
     }

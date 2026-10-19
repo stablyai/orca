@@ -305,6 +305,13 @@ describe('FileExplorerToolbar', () => {
     expect(openInItems.props.labelPrefix).toBe('Open in ')
   })
 
+  it('passes the managed target owner to folder open-in launchers', () => {
+    const element = makeToolbar({ runtimeEnvironmentId: 'env-2', showGitIgnoredFilesToggle: false })
+
+    expect(findOpenInMenuItems(element).props.runtimeEnvironmentId).toBe('env-2')
+    expect(findOpenInMenuItems(element).props.connectionId).toBeNull()
+  })
+
   it('keeps the overflow menu as the last toolbar button', () => {
     const element = makeToolbar()
 

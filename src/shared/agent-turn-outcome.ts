@@ -17,10 +17,6 @@ export const AGENT_JOURNAL_TURN_OUTCOMES = [
 ] as const
 export type AgentJournalTurnOutcome = (typeof AGENT_JOURNAL_TURN_OUTCOMES)[number]
 
-export function isAgentJournalTurnOutcome(value: unknown): value is AgentJournalTurnOutcome {
-  return AGENT_JOURNAL_TURN_OUTCOMES.some((known) => known === value)
-}
-
 /** The verdict an agent-status row's `mainAgent.outcome` reports: the provider's, a `cancellation`
  *  Orca inferred from the user's own interrupt keystroke, or what the host observed of a turn's end
  *  when the provider gave no verdict. `interruption` is a death mid-turn the host proved and nobody

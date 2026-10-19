@@ -1,4 +1,5 @@
 import { defineConfig } from '@stablyai/playwright-test'
+import { resolveBuildSourceCommit } from '../config/scripts/build-source-commit.mjs'
 
 /**
  * Playwright config for Orca E2E tests.
@@ -14,6 +15,9 @@ import { defineConfig } from '@stablyai/playwright-test'
  */
 export default defineConfig({
   testDir: './e2e',
+  // Keep checkout provenance without fetching the PR base during test setup.
+  captureGitInfo: { commit: false, diff: false },
+  metadata: { sourceCommit: resolveBuildSourceCommit() },
   globalSetup: './e2e/global-setup.ts',
   globalTeardown: './e2e/global-teardown.ts',
   // Why: this suite launches a fresh Electron app and isolated userData dir per

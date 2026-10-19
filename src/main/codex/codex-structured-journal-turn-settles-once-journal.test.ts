@@ -14,6 +14,7 @@ import { createTrackedJournalOpener } from '../native-chat/agent-session-journal
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-codex-failed-turn'
 const THREAD = 'thread-abc'
@@ -35,7 +36,7 @@ async function session() {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: THREAD }
+      providerHandle: codexProviderHandle(THREAD)
     },
     stateDirectory: root,
     now: () => 1_000

@@ -35,7 +35,12 @@ async function rig(routes: Record<string, CodexTestRoute>) {
       body: CODEX_TEST_USER_MESSAGE,
       fence: 7
     })
-  const methods = () => connection.calls.map(({ method }) => method)
+  const methods = () =>
+    connection.calls
+      .map(({ method }) => method)
+      .filter(
+        (method) => method !== 'initialize' && method !== 'model/list' && method !== 'config/read'
+      )
   const endTurn = (turnId: string, status: 'completed' | 'interrupted') =>
     connection.handlers.onNotification?.('turn/completed', {
       threadId: CODEX_TEST_THREAD_ID,
@@ -147,8 +152,8 @@ describe('a Codex send while a turn runs', () => {
     ])
   })
 
-  it('is rejected in Codex words and disarmed when Codex refuses the steer and the start', async () => {
-    const { connection, settlements, send, methods } = await rig({
+  it('is rejected in Codex words when Codex refuses the steer and the start', async () => {
+    const { connection, send, methods } = await rig({
       'turn/steer': () => {
         throw refusedSteer('active turn cannot be steered')
       },
@@ -165,15 +170,14 @@ describe('a Codex send while a turn runs', () => {
 
     expect(await send('client-1')).toEqual({
       state: 'rejected',
-      reason: 'The provider did not accept this message: thread not found.',
+      reason: "Codex didn't accept this message: thread not found.",
       rejection: {
         kind: 'providerRejected',
-        detail: { text: 'thread not found', audience: 'person' }
+        detail: { text: 'thread not found', audience: 'person' },
+        neverReachedAgent: true
       }
     })
     expect(methods()).toEqual(['thread/start', 'turn/steer', 'turn/start'])
-    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
-    expect(settlements).toEqual([])
   })
 
   it('never re-sends a steer that may have landed, and keeps it armed for its echo', async () => {
@@ -210,7 +214,10 @@ describe('a Codex send made after Codex answered an earlier one, before it opene
     expect(await rig.send('client-1')).toEqual({ state: 'admitted' })
     const sending = rig.send('client-2')
     expect(await settledWithin(sending)).toBe('held')
-    const methods = () => rig.codex.connections[0]!.calls.map(({ method }) => method)
+    const methods = () =>
+      rig.codex.connections[0]!.calls.map(({ method }) => method).filter(
+        (method) => method !== 'initialize' && method !== 'model/list' && method !== 'config/read'
+      )
     expect(methods()).toEqual(['thread/start', 'turn/start'])
     return { ...rig, sending, methods }
   }
@@ -223,12 +230,16 @@ describe('a Codex send made after Codex answered an earlier one, before it opene
     expect(await rig.sending).toEqual({ state: 'admitted' })
     expect(rig.methods()).toEqual(['thread/start', 'turn/start', 'turn/steer'])
     expect(await rig.adapter.cancelTurn({ sessionId: 'session-1', fence: 7 })).toEqual({
-      cancelled: true
+      cancelled: true,
+      turnId: 'turn-1'
     })
-    expect(rig.settlements.map(({ clientMessageId }) => clientMessageId).sort()).toEqual([
-      'client-1',
-      'client-2'
-    ])
+    // Codex answers the interrupt, then ends the turn, which settles both.
+    await vi.waitFor(() =>
+      expect(rig.settlements.map(({ clientMessageId }) => clientMessageId).sort()).toEqual([
+        'client-1',
+        'client-2'
+      ])
+    )
   })
 
   it('starts its own turn when that turn ends without opening', async () => {

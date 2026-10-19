@@ -101,6 +101,9 @@ jobs:
       - uses: ./.github/actions/install-mobile-dependencies
         if: steps.cache-installer.outputs.cache-hit != 'true'
 
+      - uses: ./.github/actions/prepare-windows-agent-hook
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+
       - name: Build Windows installer (unsigned)
         if: steps.cache-installer.outputs.cache-hit != 'true'
         run: |

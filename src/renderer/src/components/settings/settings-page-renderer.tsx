@@ -35,6 +35,7 @@ import {
 } from './settings-interface-primary-section-renderers'
 import {
   renderAppearanceSettingsSection,
+  renderChatSettingsSection,
   renderInputSettingsSection,
   renderNotificationsSettingsSection,
   renderShortcutsSettingsSection,
@@ -53,6 +54,10 @@ import {
   renderPluginsSettingsSection
 } from './settings-advanced-section-renderers'
 import { renderProjectSettingsSections } from './settings-project-section-renderer'
+import {
+  SettingsHostScopePicker,
+  shouldShowSettingsHostScopePicker
+} from './SettingsHostScopePicker'
 
 export function renderSettingsLoading(
   interactions: SettingsInteractionController
@@ -89,7 +94,15 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
         onSelectSection={actions.scrollToSection}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {!model.isWebClient &&
+        shouldShowSettingsHostScopePicker(model.settingsHostScope, model.runtimeEnvironments) ? (
+          <SettingsHostScopePicker
+            scope={model.settingsHostScope}
+            environments={model.runtimeEnvironments}
+            onChoose={model.setSettingsHostChoice}
+          />
+        ) : null}
         <div
           ref={interactions.setContentScrollNode}
           className={cn(
@@ -137,6 +150,7 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
                 {renderMobileEmulatorSettingsSection(context)}
                 {renderFloatingWorkspaceSettingsSection(context)}
                 {renderAppearanceSettingsSection(context)}
+                {renderChatSettingsSection(context)}
                 {renderInputSettingsSection(context)}
                 {renderNotificationsSettingsSection(context)}
                 {renderShortcutsSettingsSection(context)}

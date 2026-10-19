@@ -26,7 +26,8 @@ export {
   createAgentStatusTracker,
   detectAgentStatusFromTitle,
   isQuarterCircleSpinnerOnlyAgentTitle,
-  normalizeTerminalTitle
+  normalizeTerminalTitle,
+  type AgentIdleStatus
 } from './agent-title-status'
 
 // Re-export so existing `agent-detection` importers keep working.

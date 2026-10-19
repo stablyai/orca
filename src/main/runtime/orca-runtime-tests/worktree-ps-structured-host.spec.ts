@@ -9,12 +9,7 @@ vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
 
-/**
- * The production read, not the projection. The structured-row suites feed
- * `attachRuntimeWorktreeAgentRows` a snapshot they built themselves; this executes `getWorktreePs`
- * in `orca-runtime-get-worktree-ps.ts`, which is `@ts-nocheck`, so a renamed dependency there stays
- * green in typecheck while `orca worktree ps` and mobile's poll would list nothing.
- */
+/** Covers the production status-store read, which a hand-built projection snapshot can bypass. */
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const SUBJECT = makeStructuredAgentStatusSubject(
   {

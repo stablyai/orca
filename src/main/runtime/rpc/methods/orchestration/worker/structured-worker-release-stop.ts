@@ -1,4 +1,4 @@
-import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
 import { stopStructuredWorker } from '../../orchestration-structured-worker-lifecycle'
@@ -18,7 +18,7 @@ export async function stopStructuredWorkerForRelease(args: {
   structured: StructuredWorkerIdentity
   dispatchId: string
   resource: WorkerTerminalResourceRow
-  runtime: OrcaRuntimeService
+  runtime: WorkerTerminalReleaseRuntime
   db: OrchestrationDb
   archiveSource: string | null
   archiveStatus: string | null

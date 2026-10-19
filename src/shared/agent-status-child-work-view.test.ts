@@ -66,6 +66,30 @@ function alias(
 }
 
 describe('projectAgentChildWorkViews', () => {
+  it('keeps Codex foreground commands in status records but out of all surface views', () => {
+    const foreground = record('foreground', {
+      provider: 'codex',
+      kind: 'command',
+      residency: 'foreground'
+    })
+    const records = [
+      foreground,
+      record('background', { provider: 'codex', kind: 'command', residency: 'background' }),
+      record('claude', { kind: 'command', residency: 'foreground' }),
+      record('agent', { provider: 'codex', residency: 'foreground' })
+    ]
+    expect(agentChildWorkLiveness([foreground])).toBe('monitoring')
+    expect(projectAgentChildWorkViews(records, []).map((view) => view.id)).toEqual([
+      'background',
+      'claude',
+      'agent'
+    ])
+    expect(
+      projectAgentChildWorkViews([{ ...foreground, residency: 'background' }], [])
+    ).toHaveLength(1)
+    expect(foreground.residency).toBe('foreground')
+  })
+
   it('carries what a surface reads and drops host bookkeeping', () => {
     const [view] = projectAgentChildWorkViews(
       [

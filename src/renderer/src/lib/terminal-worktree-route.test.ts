@@ -89,6 +89,21 @@ describe('resolveTerminalWorktreeRoute', () => {
     expect(resolveTerminalWorktreeRoute(localState(), 'repo-9::/stale')).toBeNull()
   })
 
+  it('refuses to spawn on a folder workspace two hosts publish, and tears raw ids down locally', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only these folder fields.
+    const twin = localState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' },
+      runtimeEnvironments: [{ id: 'focused-env' }],
+      folderWorkspaces: [
+        { id: 'twin', executionHostId: 'local' },
+        { id: 'twin', executionHostId: 'ssh:box', connectionId: 'box' }
+      ]
+    } as unknown as Partial<AppState>)
+    const id = folderWorkspaceKey('twin')
+    expect(resolveTerminalHostOwnership(twin, id, 'spawn').kind).toBe('unresolved')
+    expect(resolveTerminalHostOwnership(twin, id, 'teardown').kind).toBe('local-or-ssh')
+  })
+
   it('does not treat a folder workspace as an unresolved worktree', () => {
     expect(resolveTerminalWorktreeRoute(localState(), folderWorkspaceKey('abc-123'))).not.toBeNull()
   })

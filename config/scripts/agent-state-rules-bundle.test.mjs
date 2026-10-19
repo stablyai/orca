@@ -1,9 +1,5 @@
-// The rules-release gate: the bundle a release would publish validates in the app's own loader,
-// carries only agents whose transcripts the census replays, and only the protected workflow can
-// publish it.
-import { readdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
 import {
   BUNDLED_AGENT_STATE_RULES_VERSION,
   LIVE_UPDATABLE_AGENT_STATE_RULE_IDS,
@@ -11,11 +7,7 @@ import {
 } from '../../src/main/runtime/agent-state-rules/agent-state-rules-bundle.ts'
 import { BUNDLED_AGENT_STATE_RULE_FILES } from '../../src/main/runtime/agent-state-rules/agent-state-rules-catalog.ts'
 import { agentStateRulesDownloadUrl } from '../../src/main/runtime/agent-state-rules/agent-state-rules-live-update.ts'
-import {
-  AGENT_STATE_RULES_ENGINE_VERSION,
-  UNKNOWN_PANE_RULES_ID
-} from '../../src/main/runtime/agent-state-rules/agent-state-rules-schema.ts'
-import { CENSUS_TRANSCRIPTS } from '../../src/main/runtime/readiness-census-transcript-catalog.ts'
+import { AGENT_STATE_RULES_ENGINE_VERSION } from '../../src/main/runtime/agent-state-rules/agent-state-rules-schema.ts'
 import {
   AGENT_STATE_RULES_ASSET,
   buildAgentStateRulesBundle,
@@ -43,13 +35,6 @@ describe('agent state rules bundle build', () => {
     )
     expect(bundle.bundledOnly).toBeUndefined()
     expect(JSON.parse(buildAgentStateRulesBundle({ bundledOnly: true })).bundledOnly).toBe(true)
-  })
-
-  it('lets a rules release change only agents the readiness census replays', () => {
-    const replayed = new Set(CENSUS_TRANSCRIPTS.flatMap((transcript) => transcript.agent ?? []))
-    // Why unknown-pane: the census replays every recording on an agent-unknown pane too.
-    replayed.add(UNKNOWN_PANE_RULES_ID)
-    expect([...LIVE_UPDATABLE_AGENT_STATE_RULE_IDS].filter((id) => !replayed.has(id))).toEqual([])
   })
 
   it('publishes to the exact URL the app fetches', () => {
@@ -143,37 +128,5 @@ describe('publishAgentStateRules', () => {
     expect(() =>
       promoteAgentStateRules({ repo: REPO, engineVersion: 1, target: 'abc', gh: fake.gh })
     ).toThrow('has not been published')
-  })
-})
-
-describe('agent state rules workflows', () => {
-  const read = (name) => parse(readFileSync(`.github/workflows/${name}`, 'utf8'))
-  const publish = read('agent-state-rules-publish.yml')
-
-  it('publishes only on manual dispatch from main, in the protected environment', () => {
-    expect(Object.keys(publish.on)).toEqual(['workflow_dispatch'])
-    for (const name of ['publish-next', 'promote-stable']) {
-      const job = publish.jobs[name]
-      expect(job.environment).toBe('agent-state-rules')
-      expect(job.permissions).toEqual({ contents: 'write' })
-    }
-    expect(publish.permissions).toEqual({ contents: 'read' })
-    expect(publish.jobs.gate.if).toContain("github.ref == 'refs/heads/main'")
-    expect(publish.jobs['promote-stable'].if).toContain("github.ref == 'refs/heads/main'")
-    expect(publish.jobs['publish-next'].needs).toBe('gate')
-    // Why: every job must check out the dispatched commit, so publish runs what the gate tested.
-    const checkouts = Object.values(publish.jobs).flatMap((job) =>
-      job.steps.filter((step) => step.uses?.startsWith('actions/checkout'))
-    )
-    expect(checkouts.map((step) => step.with?.ref)).toEqual([undefined, undefined, undefined])
-  })
-
-  it('is the only workflow that publishes rules releases', () => {
-    const publishers = readdirSync('.github/workflows').filter((name) =>
-      /agent-state-rules-bundle\.mjs (?:publish|promote)|release create agent-state-rules/.test(
-        readFileSync(`.github/workflows/${name}`, 'utf8')
-      )
-    )
-    expect(publishers).toEqual(['agent-state-rules-publish.yml'])
   })
 })

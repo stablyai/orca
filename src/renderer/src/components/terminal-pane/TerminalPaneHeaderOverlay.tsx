@@ -1,19 +1,15 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import type { CSSProperties, RefObject } from 'react'
-import {
-  MessageSquare,
-  MessageSquarePlus,
-  SquareSplitVertical,
-  SquareTerminal,
-  X
-} from 'lucide-react'
+import { MessageSquarePlus, SquareSplitVertical, SquareTerminal, X } from 'lucide-react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
-import type { PtyTransport } from './pty-transport'
-import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
+import type { PtyTransport } from './pty-transport-types'
+import { TerminalPaneHeaderDropSurface } from './TerminalPaneHeaderDropSurface'
+import { TerminalPaneResumeInChatButton } from './TerminalPaneResumeInChatButton'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 export type PaneTitleOverlayRect = {
   left: number
@@ -43,16 +39,13 @@ type TerminalPaneHeaderOverlayProps = {
   hiddenStartupStyle: CSSProperties
   managerRef: RefObject<PaneManager | null>
   paneTransportsRef: RefObject<Map<number, PtyTransport>>
-  /** When true, this pane can switch between the terminal and the native chat
-   *  view; renders a chat/terminal toggle as the first button in the pane header
-   *  actions row (beside split/close). The caller gates it to the active pane to
-   *  avoid duplicating it across splits, and to bridge chat only — a structured
-   *  session has no terminal underneath to switch to. */
-  canToggleNativeChat?: boolean
-  /** True when the active pane is currently showing the native chat view. */
-  isChatViewMode?: boolean
-  /** Flip the active pane between the terminal and the native chat view. */
-  onToggleNativeChat?: () => void
+  /** True when the active pane shows the native chat view; renders its way back to the terminal.
+   *  Switching into chat view is no longer offered here. */
+  canShowTerminal?: boolean
+  /** Flip the active pane from the native chat view back to the terminal. */
+  onShowTerminal?: () => void
+  /** Offers the tab menu's "Switch to Chat" for the active pane's own conversation. */
+  canResumeInNewNativeChat?: boolean
   canContinueAgentSessionInNewSession?: boolean
   onContinueAgentSessionInNewSession?: (pane: ManagedPane) => void
   onSplitPane: (pane: ManagedPane, direction: 'vertical' | 'horizontal') => void
@@ -89,9 +82,9 @@ export default function TerminalPaneHeaderOverlay({
   hiddenStartupStyle,
   managerRef,
   paneTransportsRef,
-  canToggleNativeChat,
-  isChatViewMode,
-  onToggleNativeChat,
+  canShowTerminal,
+  onShowTerminal,
+  canResumeInNewNativeChat,
   canContinueAgentSessionInNewSession,
   onContinueAgentSessionInNewSession,
   onSplitPane,
@@ -144,10 +137,10 @@ export default function TerminalPaneHeaderOverlay({
         }
 
         return (
-          <div
-            key={`pane-title-${pane.leafId}`}
+          <TerminalPaneHeaderDropSurface
+            key={makePaneKey(tabId, pane.leafId)}
+            destination={{ pane, tabId, worktreeId, cwd, managerRef, paneTransportsRef }}
             className="pane-title-bar"
-            data-native-file-drop-target="terminal"
             data-terminal-tab-id={tabId}
             data-pane-prevent-terminal-focus=""
             {...(isActivePane ? { 'data-active-pane': '' } : {})}
@@ -156,40 +149,6 @@ export default function TerminalPaneHeaderOverlay({
             onPointerDownCapture={
               title || isEditing ? () => onActivatePaneTitleInteraction(pane.id) : undefined
             }
-            onDragOver={(event) => {
-              onActivatePaneTitleInteraction(pane.id)
-              if (
-                event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
-                event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-              ) {
-                event.preventDefault()
-                event.dataTransfer.dropEffect = 'copy'
-              }
-            }}
-            onDrop={(event) => {
-              if (
-                !event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) &&
-                !event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-              ) {
-                return
-              }
-              event.preventDefault()
-              event.stopPropagation()
-              onActivatePaneTitleInteraction(pane.id)
-              const manager = managerRef.current
-              if (!manager) {
-                return
-              }
-              void handleInternalTerminalFileDrop({
-                manager,
-                paneTransports: paneTransportsRef.current,
-                worktreeId,
-                tabId,
-                cwd,
-                dataTransfer: event.dataTransfer,
-                dropTarget: event.target
-              })
-            }}
             onContextMenuCapture={(event) => onPaneTitleContextMenu(event, pane.id)}
             style={{
               left: overlayRect.left,
@@ -198,7 +157,7 @@ export default function TerminalPaneHeaderOverlay({
             }}
           >
             {isEditing ? (
-              <input
+              <ImeInput
                 ref={renameInputRef}
                 className="pane-title-input"
                 aria-label={translate(
@@ -268,8 +227,8 @@ export default function TerminalPaneHeaderOverlay({
                           size="icon-xs"
                           className="pane-title-split-trigger"
                           aria-label={translate(
-                            'components.agentSessionContinuation.continueInNewSession',
-                            'Continue in New Session…'
+                            'components.agentSessionContinuation.handOffToAnotherAgent',
+                            'Hand Off to Another Agent'
                           )}
                           onClick={(event) => {
                             event.stopPropagation()
@@ -281,52 +240,43 @@ export default function TerminalPaneHeaderOverlay({
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={4}>
                         {translate(
-                          'components.agentSessionContinuation.continueInNewSession',
-                          'Continue in New Session…'
+                          'components.agentSessionContinuation.handOffToAnotherAgent',
+                          'Hand Off to Another Agent'
                         )}
                       </TooltipContent>
                     </Tooltip>
                   ) : null}
-                  {canToggleNativeChat && isActivePane ? (
+                  {canShowTerminal && isActivePane ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon-xs"
-                          // Same class as split so it shares the hover/active reveal
-                          // and sits as a peer in the [chat][split][×] cluster.
+                          // Same class as split so it shares the hover/active reveal.
                           className="pane-title-split-trigger"
-                          aria-label={
-                            isChatViewMode
-                              ? translate(
-                                  'components.native-chat.toggle.showTerminal',
-                                  'Show terminal'
-                                )
-                              : translate(
-                                  'components.native-chat.toggle.showChat',
-                                  'Show chat view'
-                                )
-                          }
-                          aria-pressed={isChatViewMode}
+                          aria-label={translate(
+                            'components.native-chat.toggle.showTerminal',
+                            'Show terminal'
+                          )}
                           onClick={(event) => {
                             event.stopPropagation()
-                            onToggleNativeChat?.()
+                            onShowTerminal?.()
                           }}
                         >
-                          {isChatViewMode ? (
-                            <SquareTerminal className="size-3" />
-                          ) : (
-                            <MessageSquare className="size-3" />
-                          )}
+                          <SquareTerminal className="size-3" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={4}>
-                        {isChatViewMode
-                          ? translate('components.native-chat.toggle.showTerminal', 'Show terminal')
-                          : translate('components.native-chat.toggle.showChat', 'Show chat view')}
+                        {translate('components.native-chat.toggle.showTerminal', 'Show terminal')}
                       </TooltipContent>
                     </Tooltip>
+                  ) : canResumeInNewNativeChat && isActivePane ? (
+                    <TerminalPaneResumeInChatButton
+                      tabId={tabId}
+                      worktreeId={worktreeId}
+                      paneKey={makePaneKey(tabId, pane.leafId)}
+                    />
                   ) : null}
                   {showAlwaysOnHeaders && showSplitButton ? (
                     <Tooltip>
@@ -407,7 +357,7 @@ export default function TerminalPaneHeaderOverlay({
                 </div>
               </>
             )}
-          </div>
+          </TerminalPaneHeaderDropSurface>
         )
       })}
     </div>

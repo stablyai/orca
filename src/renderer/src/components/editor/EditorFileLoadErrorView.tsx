@@ -1,6 +1,7 @@
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { displayIpcErrorMessage } from '@/lib/ipc-error'
 import { WORKTREE_HOST_UNRESOLVED_CODE } from './editor-panel-content-types'
 
 // Why: `loadError` is stored as English so logs and non-view consumers stay readable; the
@@ -13,7 +14,8 @@ function localizeFileLoadError(message: string, code: string | undefined): strin
       "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
     )
   }
-  return message
+  // Why: the stored text keeps Electron's IPC wrapper for classifiers; the view drops it.
+  return displayIpcErrorMessage(message) ?? message
 }
 
 // Why no Close action here: this view renders for real tabs and for synthesized inline

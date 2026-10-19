@@ -4,6 +4,7 @@
 // other. Re-exported from agent-status-types, so existing import sites are unchanged.
 
 import type { StructuredHostStatus } from './agent-hook-listener/listener-event'
+import type { ProgramStatusFacet } from './program-status/facet'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { WithAgentStatusObservation } from './agent-status-observation'
 import type {
@@ -65,8 +66,14 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   providerSessionOnly?: boolean
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** See AgentStatusEntry.programStatus. Live-only; older peers ignore it. */
+  programStatus?: ProgramStatusFacet
+  /** Only `programStatus` changed: readers patch the facet and treat nothing else as news. */
+  programStatusOnly?: true
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
+  /** A re-send of a cached row (reconnect or listener replay), not a new transition. */
+  isReplay?: boolean
   /** Present on rows the structured session host projects; `owned` keeps them fresh past the
    *  staleness window because the host still runs the provider child. */
   structuredHost?: StructuredHostStatus
@@ -84,7 +91,12 @@ export type AgentStatusCacheIdentity = {
 
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
 export type AgentStatusClearIpcPayload =
-  | { paneKey: string; statusUnavailable?: true }
+  | {
+      paneKey: string
+      statusUnavailable?: true
+      /** An OSC 7501 program took back its own row, so even a `done` row goes. */
+      programStatusRemoved?: true
+    }
   | {
       transient: true
       connectionId: string

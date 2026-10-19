@@ -6,22 +6,21 @@ import { writeStdoutLine } from '../stdout-line'
 import { loadCanonicalGuides, type BundledSkillGuide } from './bundled-skill-guide-table'
 import { SKILL_GUIDE_GET_HANDLER } from './skill-guide-get'
 import { resolveCliCommand, withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
-import { detectCommandsInInstallDirs } from '../../shared/local-agent-install-dir-detection'
-import {
-  getTuiAgentDetectionProbeCommands,
-  KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-  resolveDetectedTuiAgentIds
-} from '../../shared/tui-agent-detection-commands'
 import {
   getSpawnArgsForWindows,
   UnsafeWindowsBatchArgumentsError,
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
-import { isUsableSkillsCliAgentKey, toSkillsCliAgentKeys } from '../../shared/skills-cli-agent-keys'
+import { isUsableSkillsCliAgentKey } from '../../shared/skills-cli-agent-keys'
+import {
+  detectSkillsCliAgentKeys,
+  detectSkillsCliUpdateAgentKeys
+} from '../../shared/skills-cli-agent-detection'
 import {
   buildAgentFeatureSkillInstallArgs,
-  buildAgentFeatureSkillUpdateArgs
+  SKILLS_CLI_ENV_OVERRIDES
 } from '../../shared/agent-feature-install-commands'
+import { readOrcaCliBuildCommit } from '../cli-version'
 
 function resolveSelectedSkillNames(
   flags: Map<string, string | boolean>,
@@ -95,7 +94,7 @@ function runNpxSkills(args: string[]): Promise<number> {
       // Why the shared helper: it verifies the sibling node actually exists,
       // skips a bare-name fallback whose dirname is '.', and writes the key
       // Windows will really read — all of which a local join got wrong.
-      env: withCliRuntimeOnPath(resolved, { ...process.env })
+      env: withCliRuntimeOnPath(resolved, { ...process.env, ...SKILLS_CLI_ENV_OVERRIDES })
     })
     // Why: a missing npx/Node on a headless host surfaces as a raw spawn ENOENT;
     // wrap it so the CLI reports an actionable message like every other failure here.
@@ -116,19 +115,7 @@ function runNpxSkills(args: string[]): Promise<number> {
 
 type SkillMutationVerb = 'install' | 'update'
 
-/** Agents Orca can see on this host, as `skills --agent` keys. */
-function detectSkillsCliAgentKeys(): string[] {
-  const runtime = process.platform
-  const probes = getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, runtime)
-  const detected = resolveDetectedTuiAgentIds(
-    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    detectCommandsInInstallDirs(probes),
-    runtime
-  )
-  return detected.length === 0 ? [] : toSkillsCliAgentKeys(detected)
-}
-
-function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[] {
+function resolveAgentKeys(verb: SkillMutationVerb, flags: Map<string, string | boolean>): string[] {
   const requested = flags.get('agent')
   if (flags.has('agent') && typeof requested !== 'string') {
     throw new RuntimeClientError('invalid_argument', 'Missing required --agent')
@@ -162,6 +149,9 @@ function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[]
     }
     return keys
   }
+  if (verb === 'update') {
+    return detectSkillsCliUpdateAgentKeys()
+  }
   const detected = detectSkillsCliAgentKeys()
   if (detected.length > 0) {
     return detected
@@ -177,19 +167,20 @@ function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[]
   )
 }
 
-function buildNpxSkillsArgs(
-  verb: SkillMutationVerb,
-  skillNames: string[],
-  global: boolean,
-  agents: string[]
-): string[] {
-  const skillArgs =
-    verb === 'install'
-      ? buildAgentFeatureSkillInstallArgs(skillNames, { global, yes: true, agents })
-      : buildAgentFeatureSkillUpdateArgs(skillNames, { global, yes: true })
+function buildNpxSkillsArgs(skillNames: string[], global: boolean, agents: string[]): string[] {
+  const sourceCommit = readOrcaCliBuildCommit()
+  if (!sourceCommit) {
+    throw new RuntimeClientError(
+      'invalid_environment',
+      'Could not read the commit this Orca CLI was built from, so there is no source to install skills from.'
+    )
+  }
   // Why: a cold package cache makes bare `npx` prompt before it will fetch
   // `skills`, which strands an unattended host just like the picker does.
-  return ['--yes', ...skillArgs]
+  return [
+    '--yes',
+    ...buildAgentFeatureSkillInstallArgs(skillNames, { sourceCommit, global, yes: true, agents })
+  ]
 }
 
 /** Render the exact argv a real run spawns, so --dry-run can never drift from it. */
@@ -235,9 +226,9 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
     }
 
     const global = flags.get('local') !== true
-    // Why: install scopes its targets; update only refreshes what is already placed.
-    const agents = verb === 'install' ? resolveInstallAgentKeys(flags) : []
-    const npxArgs = buildNpxSkillsArgs(verb, skillNames, global, agents)
+    // Why: update is the same pinned `skills add`; `skills update` follows GitHub HEAD,
+    // which runs ahead of the build this CLI judges freshness against.
+    const npxArgs = buildNpxSkillsArgs(skillNames, global, resolveAgentKeys(verb, flags))
     const command = formatNpxCommand(npxArgs)
     const dryRun = flags.get('dry-run') === true
 

@@ -1,43 +1,27 @@
-import {
-  isWslShellName,
-  resolveLocalWindowsTerminalRuntimeOptions
-} from '../../../../shared/local-windows-terminal-runtime'
-import { isWslUncPath, toWindowsWslPath } from '../../../../shared/wsl-paths'
-import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
-import { CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE } from '../../../claude-accounts/environment'
+import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
 import { mintPtySessionId } from '../../../daemon/pty-session-id'
-import { resolveWslSessionContext } from '../../../daemon/wsl-session-context'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
-import { normalizeWindowsTerminalCwd } from '../../../providers/windows-shell-args'
-import { wslUncDirectoryExistsAsync } from '../../../wsl'
-import { getCodexSelectionTargetForPty } from '../host-env/codex-home'
 import {
   isClaudeLaunchCommand,
   recoverFreshSpawnProviderRouting,
   routesFreshSpawnsToLocalProvider
 } from '../host-env/fresh-spawn-routing'
-import { getAppPtyId, getProvider, getRelayPtyId } from '../provider/registry'
+import { getProvider } from '../provider/registry'
+import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
 export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
   // Establish daemon identity before the first await so hidden delivery is gated before byte zero.
-  ctx.provider = getProvider(args.connectionId)
+  // Only this machine spawns here: an `ssh:` connection throws, so every line below is local.
+  ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
   ctx.isDaemonHostSpawn =
-    !args.connectionId &&
-    !(ctx.provider instanceof LocalPtyProvider) &&
-    !routesFreshSpawnsToLocalProvider(ctx.provider)
+    !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
   ctx.isMintedSessionId = args.sessionId === undefined && ctx.isDaemonHostSpawn
   ctx.effectiveSessionId =
     args.sessionId ?? (ctx.isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
-  ctx.effectiveSessionAppId =
-    ctx.effectiveSessionId !== undefined
-      ? getAppPtyId(args.connectionId, ctx.effectiveSessionId)
-      : undefined
-  ctx.effectiveSessionRelayId =
-    ctx.effectiveSessionId !== undefined
-      ? getRelayPtyId(args.connectionId, ctx.effectiveSessionId)
-      : undefined
+  ctx.effectiveSessionAppId = ctx.effectiveSessionId
   ctx.initiallyHidden = args.initiallyHidden === true
   ctx.preSpawnHiddenMarkId =
     ctx.initiallyHidden && ctx.isDaemonHostSpawn && ctx.effectiveSessionAppId !== undefined
@@ -47,9 +31,9 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, true)
   }
   if (!ctx.earlyStablePaneOwner) {
-    const pathUsable = ctx.deps.assertFolderWorkspacePtyPathUsable(args.worktreeId)
-    if (pathUsable) {
-      await pathUsable
+    const admission = ctx.deps.assertWorkspaceAcceptsNewPty(args.worktreeId, args.sessionId)
+    if (admission) {
+      await admission
     }
   }
   ctx.spawnTiming.mark('stable_adoption_setup')
@@ -68,116 +52,23 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       : null
   ctx.spawnTiming.mark('stable_adoption')
   if (ctx.earlyStablePaneOwner && !ctx.preAdoptedStablePane) {
-    const pathUsable = ctx.deps.assertFolderWorkspacePtyPathUsable(args.worktreeId)
-    if (pathUsable) {
-      await pathUsable
+    const admission = ctx.deps.assertWorkspaceAcceptsNewPty(args.worktreeId, args.sessionId)
+    if (admission) {
+      await admission
     }
   }
-  if (!ctx.preAdoptedStablePane) {
-    // Why: reattach needs exact cwd, SSH cannot probe locally, and successful stable-pane adoption needs no launch preflight.
-    const requestedMissingCwdFallback =
-      !args.connectionId && !args.sessionId && args.cwdFallback === 'worktree'
-    const isPosixStartupCwd = args.cwd?.startsWith('/') === true
-    const startupWorkspaceCwd =
-      requestedMissingCwdFallback && isPosixStartupCwd
-        ? ctx.deps.resolvePtySpawnStartupCwd(args.worktreeId, '.')
-        : undefined
-    const initiallyResolvedStartupCwd =
-      requestedMissingCwdFallback && isPosixStartupCwd ? ctx.cwd : undefined
-    const startupTerminalRuntimeOptions =
-      requestedMissingCwdFallback && process.platform === 'win32'
-        ? resolveLocalWindowsTerminalRuntimeOptions({
-            requestedShellOverride: args.shellOverride,
-            settings: ctx.deps.getSettings?.(),
-            projectRuntime: args.projectRuntime,
-            fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
-          })
-        : undefined
-    const wslRuntimeOwnsStartupCwd =
-      requestedMissingCwdFallback &&
-      isPosixStartupCwd &&
-      (isWslShellName(startupTerminalRuntimeOptions?.shellOverride) ||
-        isWslUncPath(startupWorkspaceCwd ?? ''))
-    const startupWslContext = wslRuntimeOwnsStartupCwd
-      ? resolveWslSessionContext({
-          cwd: startupWorkspaceCwd,
-          shellOverride: startupTerminalRuntimeOptions?.shellOverride,
-          terminalWindowsWslDistro: startupTerminalRuntimeOptions?.terminalWindowsWslDistro
-        })
-      : undefined
-    let wslStartupCwdExists: boolean | null = null
-    let wslWorkspaceCwdExists: boolean | null = null
-    if (startupWslContext && initiallyResolvedStartupCwd) {
-      const validationCwd = toWindowsWslPath(initiallyResolvedStartupCwd, startupWslContext.distro)
-      wslStartupCwdExists = isWslUncPath(validationCwd)
-        ? await wslUncDirectoryExistsAsync(validationCwd)
-        : ctx.deps.localStartupCwdDirectoryExists(validationCwd)
-      if (wslStartupCwdExists === true) {
-        ctx.prevalidatedCwd = validationCwd
-      }
-      if (wslStartupCwdExists === false && startupWorkspaceCwd) {
-        wslWorkspaceCwdExists = isWslUncPath(startupWorkspaceCwd)
-          ? await wslUncDirectoryExistsAsync(startupWorkspaceCwd)
-          : ctx.deps.localStartupCwdDirectoryExists(startupWorkspaceCwd)
-        if (wslWorkspaceCwdExists === true) {
-          ctx.prevalidatedCwd = startupWorkspaceCwd
-        }
-      }
-    }
-    const allowMissingCwdFallback =
-      requestedMissingCwdFallback &&
-      (!wslRuntimeOwnsStartupCwd ||
-        (wslStartupCwdExists === false && wslWorkspaceCwdExists === true))
-    let didFallbackToWorkspaceRootCwd = false
-    ctx.cwd = ctx.deps.resolvePtySpawnStartupCwd(
-      args.worktreeId,
-      args.cwd,
-      allowMissingCwdFallback
-        ? {
-            directoryExists: (path) =>
-              startupWslContext &&
-              wslStartupCwdExists === false &&
-              path === initiallyResolvedStartupCwd
-                ? false
-                : startupWslContext && path === startupWorkspaceCwd
-                  ? wslWorkspaceCwdExists === true
-                  : ctx.deps.localStartupCwdDirectoryExists(
-                      process.platform === 'win32' ? normalizeWindowsTerminalCwd(path) : path
-                    ),
-            onFallbackToWorkspaceRoot: () => {
-              didFallbackToWorkspaceRootCwd = true
-            }
-          }
-        : undefined
-    )
-    if (didFallbackToWorkspaceRootCwd && wslWorkspaceCwdExists === true && ctx.cwd) {
-      ctx.prevalidatedCwd = ctx.cwd
-    }
-    ctx.startupCwdFallback =
-      didFallbackToWorkspaceRootCwd && ctx.cwd ? { kind: 'worktree', cwd: ctx.cwd } : undefined
-  }
-  ctx.spawnTiming.mark('preflight')
   const freshSpawnRecovery = ctx.preAdoptedStablePane
     ? undefined
-    : recoverFreshSpawnProviderRouting(ctx.provider, args.connectionId, args.sessionId)
+    : recoverFreshSpawnProviderRouting(ctx.provider, args.sessionId)
   if (freshSpawnRecovery) {
     await freshSpawnRecovery
     const previousHiddenMarkId = ctx.preSpawnHiddenMarkId
     ctx.isDaemonHostSpawn =
-      !args.connectionId &&
-      !(ctx.provider instanceof LocalPtyProvider) &&
-      !routesFreshSpawnsToLocalProvider(ctx.provider)
+      !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
     ctx.isMintedSessionId = args.sessionId === undefined && ctx.isDaemonHostSpawn
     ctx.effectiveSessionId =
       args.sessionId ?? (ctx.isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
-    ctx.effectiveSessionAppId =
-      ctx.effectiveSessionId !== undefined
-        ? getAppPtyId(args.connectionId, ctx.effectiveSessionId)
-        : undefined
-    ctx.effectiveSessionRelayId =
-      ctx.effectiveSessionId !== undefined
-        ? getRelayPtyId(args.connectionId, ctx.effectiveSessionId)
-        : undefined
+    ctx.effectiveSessionAppId = ctx.effectiveSessionId
     ctx.preSpawnHiddenMarkId =
       ctx.initiallyHidden && ctx.isDaemonHostSpawn && ctx.effectiveSessionAppId !== undefined
         ? ctx.effectiveSessionAppId
@@ -191,45 +82,36 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       }
     }
   }
-  ctx.isClaudeLaunch =
-    !ctx.preAdoptedStablePane && !args.connectionId && isClaudeLaunchCommand(args.command)
-  if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
-    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
-  }
-  ctx.terminalRuntimeOptions =
-    process.platform === 'win32' && !args.connectionId
-      ? resolveLocalWindowsTerminalRuntimeOptions({
-          requestedShellOverride: args.shellOverride,
-          settings: ctx.deps.getSettings?.(),
-          projectRuntime: args.projectRuntime,
-          fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
-        })
-      : {
-          shellOverride:
-            args.shellOverride ??
-            (ctx.deps.getSettings?.()?.terminalDefaultShell?.trim() || undefined),
-          terminalWindowsWslDistro: null
-        }
-  const initialShellOverride = ctx.terminalRuntimeOptions.shellOverride
+  ctx.isClaudeLaunch = !ctx.preAdoptedStablePane && isClaudeLaunchCommand(args.command)
   // Why: daemon host-env setup needs a stable id BEFORE provider.spawn so buildPtyHostEnv hooks/Pi cleanup can run; daemon still honors opts.sessionId ?? mint().
   // Note: sessionId is STABLE across daemon restarts by design — do NOT simplify to a fresh UUID per spawn; that orphans reconnectable state.
   // Why: only clear ids minted in THIS request on failure — a caller-supplied args.sessionId may name an existing PTY we must not clobber.
-  ctx.expectedWslDistro = !args.connectionId
-    ? (resolveWslSessionContext({
-        cwd: ctx.cwd,
-        sessionId: ctx.effectiveSessionId,
-        shellOverride: ctx.terminalRuntimeOptions.shellOverride,
-        terminalWindowsWslDistro: ctx.terminalRuntimeOptions.terminalWindowsWslDistro
-      })?.distro ?? null)
-    : null
-  const initialSelectionTarget = getCodexSelectionTargetForPty(
-    initialShellOverride,
-    ctx.cwd,
-    ctx.expectedWslDistro
-  )
+  const target = await resolvePtySpawnStartupTarget({
+    worktreeId: args.worktreeId,
+    cwd: args.cwd,
+    sessionId: ctx.effectiveSessionId,
+    shellOverride: args.shellOverride,
+    plannedPty: ctx.paneAgentLaunch?.launchRuntime?.pty,
+    projectRuntimeSource: { kind: 'sent', projectRuntime: args.projectRuntime },
+    // Why: reattach needs exact cwd, and successful stable-pane adoption needs no launch preflight.
+    missingCwdFallback:
+      !ctx.preAdoptedStablePane && !args.sessionId && args.cwdFallback === 'worktree'
+        ? { directoryExists: ctx.deps.localStartupCwdDirectoryExists }
+        : undefined,
+    getSettings: ctx.deps.getSettings,
+    resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd
+  })
+  ctx.cwd = target.cwd
+  ctx.prevalidatedCwd = target.prevalidatedCwd
+  ctx.startupCwdFallback = target.startupCwdFallback
+  ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
+  ctx.expectedWslDistro = target.expectedWslDistro
+  ctx.codexSelectionTarget = target.codexSelectionTarget
+  ctx.spawnTiming.mark('preflight')
+  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
   ctx.claudeAuth =
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(initialSelectionTarget)
+      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
       : null
   ctx.spawnTiming.mark('auth')
 }

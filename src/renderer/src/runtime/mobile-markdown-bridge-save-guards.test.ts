@@ -15,10 +15,6 @@ import {
   setupWindow
 } from './mobile-markdown-bridge-test-harness'
 
-vi.mock('@/components/tab-bar/group-tab-order', () => ({
-  getActiveTabNavOrder: () => [{ type: 'editor', id: '/repo/README.md', tabId: 'tab-md' }]
-}))
-
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: () => null
 }))

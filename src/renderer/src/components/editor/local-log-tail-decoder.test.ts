@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LocalLogTailReadResult } from '../../../../shared/local-log-tail-types'
-import { LocalLogTailDecoder } from './local-log-tail-decoder'
+import { LocalLogTailDecoder, LOCAL_LOG_TAIL_MAX_BYTES } from './local-log-tail-decoder'
 
 const IDENTITY = '1:2:3'
 
@@ -56,5 +56,75 @@ describe('LocalLogTailDecoder', () => {
     const result = decoder.apply(chunk(new Uint8Array(), 0, { reset: true }))
 
     expect(result).toEqual({ kind: 'reset' })
+  })
+
+  it('scans only newly decoded bytes while a large JSONL record is incomplete', () => {
+    const decoder = new LocalLogTailDecoder('', IDENTITY)
+    const bytes = Buffer.from('x'.repeat(256 * 1024))
+    const frames = 32
+    const realLastIndexOf = String.prototype.lastIndexOf
+    let scannedCharacters = 0
+    let output = ''
+    String.prototype.lastIndexOf = function (
+      this: string,
+      searchString: string,
+      position?: number
+    ): number {
+      scannedCharacters += this.length
+      return realLastIndexOf.call(this, searchString, position)
+    }
+    try {
+      for (let frame = 1; frame <= frames; frame += 1) {
+        const result = decoder.apply(chunk(bytes, frame * bytes.length))
+        if (result.kind === 'append') {
+          output += result.content
+        }
+      }
+      const completed = decoder.apply(chunk(Buffer.from('\n'), frames * bytes.length + 1))
+      if (completed.kind === 'append') {
+        output += completed.content
+      }
+    } finally {
+      String.prototype.lastIndexOf = realLastIndexOf
+    }
+    expect(output).toBe(`${'x'.repeat(bytes.length * frames)}\n`)
+    expect(scannedCharacters).toBeLessThanOrEqual(bytes.length * frames + 1)
+  })
+
+  it('preserves exact completed records at every UTF-8 byte boundary', () => {
+    const text = '雪🐋\rfirst\n\nα second\r\nlast 🦀\nunfinished'
+    const bytes = Buffer.from(text)
+    for (let cut = 0; cut <= bytes.length; cut += 1) {
+      const decoder = new LocalLogTailDecoder('header 雪\nold unfinished', IDENTITY)
+      const offset = decoder.nextByteOffset
+      const first = decoder.apply(chunk(bytes.subarray(0, cut), offset + cut, { hasMore: true }))
+      const second = decoder.apply(chunk(bytes.subarray(cut), offset + bytes.length))
+      const completed = decoder.apply(chunk(Buffer.from('\n'), offset + bytes.length + 1))
+      const outputs = [first, second, completed]
+      expect(outputs.every((output) => output.kind === 'append')).toBe(true)
+      expect(
+        outputs.map((output) => (output.kind === 'append' ? output.content : '')).join('')
+      ).toBe(`${text}\n`)
+      expect(decoder.nextByteOffset).toBe(offset + bytes.length + 1)
+      expect(decoder.expectedIdentity).toBe(IDENTITY)
+    }
+  })
+
+  it('leaves pending text and offsets unchanged on reset and size limit', () => {
+    const decoder = new LocalLogTailDecoder('', IDENTITY)
+    decoder.apply(chunk(Buffer.from('pending'), 7))
+    expect(decoder.apply(chunk(Buffer.from('ignored\n'), 0, { reset: true }))).toEqual({
+      kind: 'reset'
+    })
+    expect(decoder.apply(chunk(Buffer.from('ignored\n'), LOCAL_LOG_TAIL_MAX_BYTES + 1))).toEqual({
+      kind: 'limit'
+    })
+    expect(decoder.nextByteOffset).toBe(7)
+    expect(decoder.expectedIdentity).toBe(IDENTITY)
+    expect(decoder.apply(chunk(Buffer.from('\n'), 8))).toEqual({
+      kind: 'append',
+      content: 'pending\n',
+      hasMore: false
+    })
   })
 })

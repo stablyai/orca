@@ -1,8 +1,7 @@
 import { MonitorCog } from 'lucide-react'
 import {
   COMPUTER_USE_SKILL_INSTALL_COMMAND,
-  COMPUTER_USE_SKILL_NAME,
-  COMPUTER_USE_SKILL_UPDATE_COMMAND
+  COMPUTER_USE_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -22,12 +21,6 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
         activeSkillRuntime.agentRuntime
       )
     : COMPUTER_USE_SKILL_INSTALL_COMMAND
-  const updateCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(
-        COMPUTER_USE_SKILL_UPDATE_COMMAND,
-        activeSkillRuntime.agentRuntime
-      )
-    : COMPUTER_USE_SKILL_UPDATE_COMMAND
   const {
     installed: computerUseSkillDetected,
     loading: computerUseSkillLoading,
@@ -46,7 +39,6 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
         'Enables agents to inspect and operate local desktop apps.'
       )}
       command={installCommand}
-      installedCommand={updateCommand}
       terminalTitle="Computer Use setup"
       terminalAriaLabel="Computer Use skill install terminal"
       terminalWorktreeId="settings-computer-use-skill-terminal"

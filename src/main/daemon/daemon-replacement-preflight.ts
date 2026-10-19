@@ -16,6 +16,7 @@ import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
 import { getDaemonPidPath, type DaemonProcessHandle } from './daemon-spawner'
 import { killStaleDaemon } from './daemon-stale-kill'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
+import { inspectDaemonHostImage } from './daemon-host-image'
 import { PROTOCOL_VERSION } from './types'
 
 // Why a count on top of the wall clock: DAEMON_RECOVERY_BUDGET_MS ends the grace, but a socket
@@ -67,8 +68,31 @@ export async function prepareDaemonReplacement(
         `[daemon] Migrated adopted daemon PID ${pidRecord.pid} out of legacy app scope into a durable scope`
       )
     }
-    const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
-    if (resolverHealth === 'unhealthy') {
+    // Why before identity: a daemon from a previous mount always reads as a different app path,
+    // and that branch would keep it as a normal target for fresh terminals.
+    const hostImage = inspectDaemonHostImage(pidRecord)
+    const resolverHealth =
+      hostImage.verdict === 'severed'
+        ? null
+        : await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
+    if (hostImage.verdict === 'severed') {
+      const liveSessionCount = await getAliveDaemonSessionCount(
+        socketPath,
+        tokenPath,
+        recoveryDeadlineMs
+      )
+      if (liveSessionCount !== 0) {
+        console.warn(
+          liveSessionCount === null
+            ? '[daemon] Keeping daemon whose AppImage files are gone because live session state could not be verified'
+            : `[daemon] Keeping daemon whose AppImage files are gone because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+        )
+        return preserveDaemon('degraded-new-pty-fallback')
+      }
+      console.warn('[daemon] Replacing idle daemon whose AppImage files are gone')
+      pendingReplacement = { reason: 'severed_host_image', liveSessionCount }
+      confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)).cleaned
+    } else if (resolverHealth === 'unhealthy') {
       const liveSessionCount = await getAliveDaemonSessionCount(
         socketPath,
         tokenPath,

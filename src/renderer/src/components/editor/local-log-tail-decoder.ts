@@ -50,8 +50,12 @@ export class LocalLogTailDecoder {
 
     this.byteOffset = result.nextByteOffset
     this.fileIdentity = result.fileIdentity
-    this.lineCarry += this.decoder.decode(decodeBase64(result.contentBase64), { stream: true })
-    const lastCompleteLineEnd = this.lineCarry.lastIndexOf('\n') + 1
+    const decoded = this.decoder.decode(decodeBase64(result.contentBase64), { stream: true })
+    const chunkLineEnd = decoded.lastIndexOf('\n') + 1
+    const previousCarryLength = this.lineCarry.length
+    this.lineCarry += decoded
+    // Why: the carry has no LF, so only newly decoded text can complete a record.
+    const lastCompleteLineEnd = chunkLineEnd === 0 ? 0 : previousCarryLength + chunkLineEnd
     if (lastCompleteLineEnd === 0) {
       return { kind: 'append', content: '', hasMore: result.hasMore }
     }

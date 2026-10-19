@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Animated } from 'react-native'
 import { reconcileMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
 import type { MobileSessionTerminalRuntimeModel } from './use-mobile-session-terminal-runtime'
@@ -33,6 +33,10 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     null
   )
   const [quickCommandsSupported, setQuickCommandsSupported] = useState<boolean | null>(null)
+  // Why: an older host's character cap; null until a host says it has one.
+  const [quickCommandAgentPromptMaxLength, setQuickCommandAgentPromptMaxLength] = useState<
+    number | null
+  >(null)
   // Structured-session features are negotiated with the same host capability probe as
   // the other session surfaces; consumers never maintain a second status cache.
   const [agentSessionHostSupport, setAgentSessionHostSupport] =
@@ -60,6 +64,14 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
   }
   const createWarning = reconciledCreateWarningState.visible
 
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   const clearDelayedActionTimers = useCallback(() => {
     for (const timer of delayedActionTimersRef.current) {
       clearTimeout(timer)
@@ -85,6 +97,9 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
 
   const showToast = useCallback(
     (message: string, durationMs = 1200) => {
+      if (!mountedRef.current) {
+        return
+      }
       const seq = toastSeqRef.current + 1
       toastSeqRef.current = seq
       clearToastHideTimer()
@@ -120,6 +135,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     setAgentSessionHistorySupported,
     quickCommandsSupported,
     setQuickCommandsSupported,
+    quickCommandAgentPromptMaxLength,
+    setQuickCommandAgentPromptMaxLength,
     agentSessionHostSupport,
     setAgentSessionHostSupport,
     browserScreencastSupportedRef,

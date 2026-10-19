@@ -47,8 +47,8 @@ describe('ExternalAutomationProbeScheduler', () => {
     const run = vi.fn(() => Promise.resolve('manager'))
 
     const [first, second] = await Promise.all([
-      scheduler.schedule({ key: 'hermes@self', scopeKey: 'owner:desktop:self', run }),
-      scheduler.schedule({ key: 'hermes@self', scopeKey: 'owner:desktop:self', run })
+      scheduler.schedule({ key: 'openclaw@self', scopeKey: 'owner:desktop:self', run }),
+      scheduler.schedule({ key: 'openclaw@self', scopeKey: 'owner:desktop:self', run })
     ])
 
     expect(run).toHaveBeenCalledTimes(1)
@@ -61,7 +61,7 @@ describe('ExternalAutomationProbeScheduler', () => {
     const run = vi.fn(() => Promise.resolve('manager'))
 
     const release = scheduler.beginPriorityWork()
-    const probe = scheduler.schedule({ key: 'hermes@self', scopeKey: 'owner:desktop:self', run })
+    const probe = scheduler.schedule({ key: 'openclaw@self', scopeKey: 'owner:desktop:self', run })
 
     expect(run).not.toHaveBeenCalled()
     expect(scheduler.queued).toBe(1)
@@ -78,7 +78,7 @@ describe('ExternalAutomationProbeScheduler', () => {
     const keptRun = vi.fn(() => Promise.resolve('local'))
 
     const inFlight = scheduler.schedule({
-      key: 'hermes@ssh',
+      key: 'openclaw@ssh',
       scopeKey: 'owner:desktop:ssh:target-a:3',
       run: () => never.promise
     })
@@ -88,7 +88,7 @@ describe('ExternalAutomationProbeScheduler', () => {
       run: queuedRun
     })
     const kept = scheduler.schedule({
-      key: 'hermes@self',
+      key: 'openclaw@self',
       scopeKey: 'owner:desktop:self',
       run: keptRun
     })
@@ -110,7 +110,7 @@ describe('ExternalAutomationProbeScheduler', () => {
     const scheduler = new ExternalAutomationProbeScheduler({ concurrency: 1 })
     const never = deferred<string>()
     const probe = scheduler.schedule({
-      key: 'hermes@self',
+      key: 'openclaw@self',
       scopeKey: 'owner:desktop:self',
       run: () => never.promise
     })
@@ -127,10 +127,10 @@ describe('ExternalAutomationProbeScheduler', () => {
     const scheduler = new ExternalAutomationProbeScheduler({ concurrency: 2 })
     const never = deferred<string>()
     const run = vi.fn(() => never.promise)
-    const first = scheduler.schedule({ key: 'hermes@self', scopeKey: 'self', run })
+    const first = scheduler.schedule({ key: 'openclaw@self', scopeKey: 'self', run })
 
     scheduler.cancelAll()
-    const second = scheduler.schedule({ key: 'hermes@self', scopeKey: 'self', run })
+    const second = scheduler.schedule({ key: 'openclaw@self', scopeKey: 'self', run })
 
     await expect(first).rejects.toBeInstanceOf(ExternalAutomationProbeCancelledError)
     await expect(second).rejects.toBeInstanceOf(ExternalAutomationProbeCancelledError)

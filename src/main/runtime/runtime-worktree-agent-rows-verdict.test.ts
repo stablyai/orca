@@ -21,6 +21,7 @@ import { indexedStatusFeedSession } from '../native-chat/agent-session-wire/stru
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
@@ -67,7 +68,7 @@ async function openJournal(): Promise<AgentSessionJournal> {
       workspaceId: WORKSPACE_ID,
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
     stateDirectory: join(root, SESSION)
   })
@@ -108,11 +109,9 @@ function ingest(summary: AgentSessionStatusSummary, children: AgentChildWorkEvid
     hasHostSidebarActivity: false,
     agents: []
   } as unknown as RuntimeWorktreePsSummary
+  const summaries = new Map([[WORKSPACE_ID, row]])
   attachRuntimeWorktreeAgentRows({
-    summaries: new Map([[WORKSPACE_ID, row]]),
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `getSummary` below resolves every row by id, so the path index is never read.
-    pathIndex: { byPath: new Map(), byRealPath: new Map() } as never,
-    missingWorktreeIds: new Set(),
+    summaries,
     workingTerminalEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
@@ -124,7 +123,7 @@ function ingest(summary: AgentSessionStatusSummary, children: AgentChildWorkEvid
       hookSnapshots
     }),
     orchestrationByPaneKey: null,
-    getSummary: (map, _p, _m, id) => map.get(id) ?? null
+    getSummary: (id) => summaries.get(id) ?? null
   })
   return { status: hookSnapshots[0], ps: row.agents[0] }
 }

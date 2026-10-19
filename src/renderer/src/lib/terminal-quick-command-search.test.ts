@@ -126,3 +126,25 @@ describe('terminal quick command search', () => {
     ).toBe(true)
   })
 })
+
+describe('searching long prompt bodies', () => {
+  it('normalizes a saved prompt once, not on every keystroke', () => {
+    let bodyReads = 0
+    const prompt = `Review the change. ${'context '.repeat(1000)}needle`
+    const command: TerminalQuickCommand = {
+      id: 'long',
+      label: 'Long review',
+      action: 'agent-prompt',
+      agent: 'claude',
+      get prompt() {
+        bodyReads += 1
+        return prompt
+      }
+    }
+
+    for (const query of ['n', 'ne', 'nee', 'needle']) {
+      expect(searchTerminalQuickCommands([command], query)).toEqual([command])
+    }
+    expect(bodyReads).toBe(1)
+  })
+})

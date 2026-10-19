@@ -1,0 +1,1543 @@
+{
+  "about": "Layout rework P3: what the server and its clients report in each mixed-version, two-client and phone scenario, recorded from runs on main. Ids are replaced by labels in first-seen order; PTY labels keep their minting kind (pty@@ = daemon, ptyServe = serve). See tests/e2e/helpers/layout-compat-baseline.ts. Linux only: CI records and compares them; macOS and Windows have no baselines.",
+  "scenarios": {
+    "new-desktop-on-old-server": {
+      "linux": {
+        "runtimeProtocolVersion": 3,
+        "steps": [
+          {
+            "step": "desktop shows the server workspace",
+            "oldServer": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "pty@@1",
+                  "title": "host-made",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "oldServerTerminals": [
+              {
+                "tab": "tab1",
+                "leaf": "leaf1",
+                "pty": "pty@@1",
+                "title": "host-made"
+              }
+            ],
+            "desktop": {
+              "tabs": 1,
+              "tree": "leaf1",
+              "paneTitles": [],
+              "drawnPanes": ["leaf1"],
+              "drawnPaneTitles": []
+            }
+          },
+          {
+            "step": "desktop splits right",
+            "oldServer": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "pty@@1",
+                  "title": "host-made",
+                  "tree": {
+                    "split": "vertical",
+                    "ratio": 0.5,
+                    "first": "leaf1",
+                    "second": "leaf2"
+                  },
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf2",
+                  "pty": "pty@@2",
+                  "title": "Terminal",
+                  "tree": {
+                    "split": "vertical",
+                    "ratio": 0.5,
+                    "first": "leaf1",
+                    "second": "leaf2"
+                  },
+                  "paneTitles": []
+                }
+              ]
+            },
+            "oldServerTerminals": [
+              {
+                "tab": "tab1",
+                "leaf": "leaf1",
+                "pty": "pty@@1",
+                "title": "host-made"
+              },
+              {
+                "tab": "tab1",
+                "leaf": "leaf2",
+                "pty": "pty@@2",
+                "title": null
+              }
+            ],
+            "desktop": {
+              "tabs": 1,
+              "tree": {
+                "split": "vertical",
+                "ratio": 0.5,
+                "first": "leaf1",
+                "second": "leaf2"
+              },
+              "paneTitles": [],
+              "drawnPanes": ["leaf1", "leaf2"],
+              "drawnPaneTitles": []
+            }
+          },
+          {
+            "step": "desktop drags the divider",
+            "oldServer": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "pty@@1",
+                  "title": "host-made",
+                  "tree": {
+                    "split": "vertical",
+                    "ratio": 0.8,
+                    "first": "leaf1",
+                    "second": "leaf2"
+                  },
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf2",
+                  "pty": "pty@@2",
+                  "title": "Terminal",
+                  "tree": {
+                    "split": "vertical",
+                    "ratio": 0.8,
+                    "first": "leaf1",
+                    "second": "leaf2"
+                  },
+                  "paneTitles": []
+                }
+              ]
+            },
+            "oldServerTerminals": [
+              {
+                "tab": "tab1",
+                "leaf": "leaf1",
+                "pty": "pty@@1",
+                "title": "host-made"
+              },
+              {
+                "tab": "tab1",
+                "leaf": "leaf2",
+                "pty": "pty@@2",
+                "title": null
+              }
+            ],
+            "desktop": {
+              "tabs": 1,
+              "tree": {
+                "split": "vertical",
+                "ratio": 0.8,
+                "first": "leaf1",
+                "second": "leaf2"
+              },
+              "paneTitles": [],
+              "drawnPanes": ["leaf1", "leaf2"],
+              "drawnPaneTitles": []
+            }
+          },
+          {
+            "step": "desktop renames a pane",
+            "oldServer": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "pty@@1",
+                  "title": "host-made",
+                  "tree": {
+                    "split": "vertical",
+                    "ratio": 0.8,
+                    "first": "leaf1",
+                    "second": "leaf2"
+                  },
+                  "paneTitles": ["leaf1=renamed-pane"]
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf2",
+                  "pty": "pty@@2",
+                  "title": "Terminal",
+                  "tree": {
+                    "split": "vertical",
+                    "ratio": 0.8,
+                    "first": "leaf1",
+                    "second": "leaf2"
+                  },
+                  "paneTitles": ["leaf1=renamed-pane"]
+                }
+              ]
+            },
+            "oldServerTerminals": [
+              {
+                "tab": "tab1",
+                "leaf": "leaf1",
+                "pty": "pty@@1",
+                "title": "host-made"
+              },
+              {
+                "tab": "tab1",
+                "leaf": "leaf2",
+                "pty": "pty@@2",
+                "title": null
+              }
+            ],
+            "desktop": {
+              "tabs": 1,
+              "tree": {
+                "split": "vertical",
+                "ratio": 0.8,
+                "first": "leaf1",
+                "second": "leaf2"
+              },
+              "paneTitles": ["leaf1=renamed-pane"],
+              "drawnPanes": ["leaf1", "leaf2"],
+              "drawnPaneTitles": ["renamed-pane"]
+            }
+          },
+          {
+            "step": "after the server restarts and the desktop reconnects",
+            "oldServer": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "pty@@1",
+                  "title": "Terminal 1",
+                  "tree": {
+                    "split": "vertical",
+                    "ratio": 0.8,
+                    "first": "leaf1",
+                    "second": "leaf2"
+                  },
+                  "paneTitles": ["leaf1=renamed-pane"]
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf2",
+                  "pty": "pty@@2",
+                  "title": "Terminal 1",
+                  "tree": {
+                    "split": "vertical",
+                    "ratio": 0.8,
+                    "first": "leaf1",
+                    "second": "leaf2"
+                  },
+                  "paneTitles": ["leaf1=renamed-pane"]
+                }
+              ]
+            },
+            "oldServerTerminals": [
+              {
+                "tab": "tab1",
+                "leaf": "leaf1",
+                "pty": "pty@@1",
+                "title": null
+              },
+              {
+                "tab": "tab1",
+                "leaf": "leaf2",
+                "pty": "pty@@2",
+                "title": null
+              }
+            ],
+            "desktop": {
+              "tabs": 1,
+              "tree": {
+                "split": "vertical",
+                "ratio": 0.8,
+                "first": "leaf1",
+                "second": "leaf2"
+              },
+              "paneTitles": ["leaf1=renamed-pane"],
+              "drawnPanes": ["leaf1", "leaf2"],
+              "drawnPaneTitles": ["renamed-pane"]
+            }
+          }
+        ]
+      }
+    },
+    "old-cli-terminal-create": {
+      "linux": {
+        "exitCode": 0,
+        "ok": true,
+        "error": null,
+        "resultFields": [
+          "executionHostId",
+          "handle",
+          "hostPlatform",
+          "incarnationId",
+          "paneKey",
+          "ptyId",
+          "surface",
+          "tabId",
+          "title",
+          "warning",
+          "worktreeId"
+        ],
+        "ptyId": "pty@@1",
+        "server": {
+          "activeTab": "tab1",
+          "groups": [
+            {
+              "tabs": ["tab1"],
+              "active": "tab1"
+            }
+          ],
+          "rows": [
+            {
+              "type": "terminal",
+              "tab": "tab1",
+              "leaf": "leaf1",
+              "pty": "pty@@1",
+              "title": "old-cli",
+              "tree": "leaf1",
+              "paneTitles": []
+            }
+          ]
+        }
+      }
+    },
+    "old-desktop-on-new-server": {
+      "linux": {
+        "oldDesktopVersion": "1.4.224",
+        "steps": [
+          {
+            "step": "old desktop opens the server workspace",
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "pty@@1",
+                  "title": "host-made",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe1",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "serverTerminals": [
+              {
+                "tab": "tab1",
+                "leaf": "leaf1",
+                "pty": "pty@@1",
+                "title": "host-made"
+              },
+              {
+                "tab": "tab2",
+                "leaf": "leaf2",
+                "pty": "ptyServe1",
+                "title": null
+              }
+            ],
+            "published": {
+              "groups": [["tab1", "tab2"]],
+              "tabs": [
+                {
+                  "tab": "tab1",
+                  "kind": "terminal",
+                  "customTitle": "host-made",
+                  "tree": "leaf1",
+                  "panes": [
+                    {
+                      "leaf": "leaf1",
+                      "pty": "pty@@1"
+                    }
+                  ]
+                },
+                {
+                  "tab": "tab2",
+                  "kind": "terminal",
+                  "customTitle": null,
+                  "tree": "leaf2",
+                  "panes": [
+                    {
+                      "leaf": "leaf2",
+                      "pty": "ptyServe1"
+                    }
+                  ]
+                }
+              ]
+            },
+            "oldDesktopTabs": 2,
+            "oldDesktopPanes": ["leaf2"]
+          },
+          {
+            "step": "old desktop splits right",
+            "server": {
+              "activeTab": "tab2",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab2"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "pty@@1",
+                  "title": "host-made",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe1",
+                  "title": "Terminal",
+                  "tree": {
+                    "split": "vertical",
+                    "ratio": 0.5,
+                    "first": "leaf2",
+                    "second": "leaf3"
+                  },
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf3",
+                  "pty": "pty@@2",
+                  "title": "Terminal",
+                  "tree": {
+                    "split": "vertical",
+                    "ratio": 0.5,
+                    "first": "leaf2",
+                    "second": "leaf3"
+                  },
+                  "paneTitles": []
+                }
+              ]
+            },
+            "serverTerminals": [
+              {
+                "tab": "tab1",
+                "leaf": "leaf1",
+                "pty": "pty@@1",
+                "title": "host-made"
+              },
+              {
+                "tab": "tab2",
+                "leaf": "leaf3",
+                "pty": "pty@@2",
+                "title": null
+              },
+              {
+                "tab": "tab2",
+                "leaf": "leaf2",
+                "pty": "ptyServe1",
+                "title": null
+              }
+            ],
+            "published": {
+              "groups": [["tab1", "tab2"]],
+              "tabs": [
+                {
+                  "tab": "tab1",
+                  "kind": "terminal",
+                  "customTitle": "host-made",
+                  "tree": "leaf1",
+                  "panes": [
+                    {
+                      "leaf": "leaf1",
+                      "pty": "pty@@1"
+                    }
+                  ]
+                },
+                {
+                  "tab": "tab2",
+                  "kind": "terminal",
+                  "customTitle": null,
+                  "tree": {
+                    "split": "vertical",
+                    "ratio": 0.5,
+                    "first": "leaf2",
+                    "second": "leaf3"
+                  },
+                  "panes": [
+                    {
+                      "leaf": "leaf2",
+                      "pty": "ptyServe1"
+                    },
+                    {
+                      "leaf": "leaf3",
+                      "pty": "pty@@2"
+                    }
+                  ]
+                }
+              ]
+            },
+            "oldDesktopTabs": 2,
+            "oldDesktopPanes": ["leaf2", "leaf3"]
+          },
+          {
+            "step": "old desktop closes the new pane",
+            "server": {
+              "activeTab": "tab2",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab2"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "pty@@1",
+                  "title": "host-made",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe1",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "serverTerminals": [
+              {
+                "tab": "tab1",
+                "leaf": "leaf1",
+                "pty": "pty@@1",
+                "title": "host-made"
+              },
+              {
+                "tab": "tab2",
+                "leaf": "leaf2",
+                "pty": "ptyServe1",
+                "title": null
+              }
+            ],
+            "published": {
+              "groups": [["tab1", "tab2"]],
+              "tabs": [
+                {
+                  "tab": "tab1",
+                  "kind": "terminal",
+                  "customTitle": "host-made",
+                  "tree": "leaf1",
+                  "panes": [
+                    {
+                      "leaf": "leaf1",
+                      "pty": "pty@@1"
+                    }
+                  ]
+                },
+                {
+                  "tab": "tab2",
+                  "kind": "terminal",
+                  "customTitle": null,
+                  "tree": "leaf2",
+                  "panes": [
+                    {
+                      "leaf": "leaf2",
+                      "pty": "ptyServe1"
+                    }
+                  ]
+                }
+              ]
+            },
+            "oldDesktopTabs": 2,
+            "oldDesktopPanes": ["leaf2"]
+          },
+          {
+            "step": "after server restart",
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "pty@@1",
+                  "title": "host-made",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe1",
+                  "title": "Terminal 2",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "serverTerminals": [
+              {
+                "tab": "tab1",
+                "leaf": "leaf1",
+                "pty": "pty@@1",
+                "title": "host-made"
+              },
+              {
+                "tab": "tab2",
+                "leaf": "leaf2",
+                "pty": "ptyServe1",
+                "title": null
+              }
+            ],
+            "published": {
+              "groups": [["tab1", "tab2"]],
+              "tabs": [
+                {
+                  "tab": "tab1",
+                  "kind": "terminal",
+                  "customTitle": "host-made",
+                  "tree": "leaf1",
+                  "panes": [
+                    {
+                      "leaf": "leaf1",
+                      "pty": "pty@@1"
+                    }
+                  ]
+                },
+                {
+                  "tab": "tab2",
+                  "kind": "terminal",
+                  "customTitle": null,
+                  "tree": "leaf2",
+                  "panes": [
+                    {
+                      "leaf": "leaf2",
+                      "pty": "ptyServe1"
+                    }
+                  ]
+                }
+              ]
+            },
+            "oldDesktopTabs": 2,
+            "oldDesktopPanes": ["leaf2"]
+          }
+        ]
+      }
+    },
+    "old-phone-on-new-server": {
+      "linux": {
+        "steps": [
+          {
+            "step": "phone creates two terminals",
+            "phone": {
+              "activeTab": "tab2",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab2"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "Terminal",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "Terminal",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          },
+          {
+            "step": "phone activates the first",
+            "reply": {
+              "ok": true,
+              "fields": [
+                "activeGroupId",
+                "activeTabId",
+                "activeTabType",
+                "publicationEpoch",
+                "snapshotVersion",
+                "tabGroups",
+                "tabs",
+                "worktree"
+              ]
+            },
+            "phone": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "Terminal",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "Terminal",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          },
+          {
+            "step": "phone renames the first",
+            "reply": {
+              "ok": true,
+              "fields": ["rename"]
+            },
+            "phone": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          },
+          {
+            "step": "phone focuses the second",
+            "reply": {
+              "ok": true,
+              "fields": ["focus"]
+            },
+            "phone": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          },
+          {
+            "step": "host pins the second",
+            "phone": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          },
+          {
+            "step": "phone closes the pinned tab",
+            "reply": {
+              "ok": false,
+              "error": "terminal_tab_pinned"
+            },
+            "phone": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          },
+          {
+            "step": "phone opens a file",
+            "reply": {
+              "ok": false,
+              "error": "runtime_error",
+              "message": "renderer_unavailable"
+            },
+            "phone": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          },
+          {
+            "step": "phone reconnects after a server restart",
+            "snapshotBefore": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "snapshotAfter": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal 2",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "terminalsAfter": [
+              {
+                "tab": "tab1",
+                "pty": "ptyServe1"
+              },
+              {
+                "tab": "tab2",
+                "pty": "ptyServe2"
+              }
+            ]
+          },
+          {
+            "step": "phone closes the first terminal",
+            "reply": {
+              "ok": true,
+              "fields": ["close"]
+            },
+            "phone": {
+              "activeTab": "tab2",
+              "groups": [
+                {
+                  "tabs": ["tab2"],
+                  "active": "tab2"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal 2",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab2",
+              "groups": [
+                {
+                  "tabs": ["tab2"],
+                  "active": "tab2"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal 2",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          }
+        ],
+        "snapshotFields": [
+          "activeGroupId",
+          "activeTabId",
+          "activeTabType",
+          "publicationEpoch",
+          "snapshotVersion",
+          "tabGroups",
+          "tabs",
+          "type",
+          "worktree"
+        ],
+        "terminalRowFields": [
+          "id",
+          "incarnationId",
+          "isActive",
+          "isPinned",
+          "leafId",
+          "parentLayout",
+          "parentTabId",
+          "ptyId",
+          "startupCwd",
+          "status",
+          "terminal",
+          "title",
+          "type"
+        ]
+      }
+    },
+    "serve-restart-keeps-@@-terminals": {
+      "linux": {
+        "created": {
+          "cli": "pty@@1",
+          "serve": "tab3"
+        },
+        "before": {
+          "server": {
+            "activeTab": "tab1",
+            "groups": [
+              {
+                "tabs": ["tab1", "tab2", "tab3"],
+                "active": "tab1"
+              }
+            ],
+            "rows": [
+              {
+                "type": "terminal",
+                "tab": "tab1",
+                "leaf": "leaf1",
+                "pty": "ptyServe1",
+                "title": "Terminal",
+                "tree": "leaf1",
+                "paneTitles": []
+              },
+              {
+                "type": "terminal",
+                "tab": "tab2",
+                "leaf": "leaf2",
+                "pty": "pty@@1",
+                "title": "cli-created",
+                "tree": "leaf2",
+                "paneTitles": []
+              },
+              {
+                "type": "terminal",
+                "tab": "tab3",
+                "leaf": "leaf3",
+                "pty": "ptyServe2",
+                "title": "Terminal",
+                "tree": "leaf3",
+                "paneTitles": []
+              }
+            ]
+          },
+          "terminals": [
+            {
+              "tab": "tab2",
+              "leaf": "leaf2",
+              "pty": "pty@@1",
+              "title": "cli-created"
+            },
+            {
+              "tab": "tab1",
+              "leaf": "leaf1",
+              "pty": "ptyServe1",
+              "title": null
+            },
+            {
+              "tab": "tab3",
+              "leaf": "leaf3",
+              "pty": "ptyServe2",
+              "title": null
+            }
+          ],
+          "published": {
+            "groups": [["tab1", "tab2", "tab3"]],
+            "tabs": [
+              {
+                "tab": "tab1",
+                "kind": "terminal",
+                "customTitle": null,
+                "tree": "leaf1",
+                "panes": [
+                  {
+                    "leaf": "leaf1",
+                    "pty": "ptyServe1"
+                  }
+                ]
+              },
+              {
+                "tab": "tab2",
+                "kind": "terminal",
+                "customTitle": "cli-created",
+                "tree": "leaf2",
+                "panes": [
+                  {
+                    "leaf": "leaf2",
+                    "pty": "pty@@1"
+                  }
+                ]
+              },
+              {
+                "tab": "tab3",
+                "kind": "terminal",
+                "customTitle": null,
+                "tree": "leaf3",
+                "panes": [
+                  {
+                    "leaf": "leaf3",
+                    "pty": "ptyServe2"
+                  }
+                ]
+              }
+            ]
+          },
+          "desktopTabs": 3,
+          "desktopPanes": 1
+        },
+        "after": {
+          "server": {
+            "activeTab": "<first listed>",
+            "groups": [
+              {
+                "active": "<desktop tab or first listed>",
+                "tabs": ["tab1", "tab2", "tab3"]
+              }
+            ],
+            "rows": [
+              {
+                "type": "terminal",
+                "tab": "tab1",
+                "leaf": "leaf1",
+                "pty": "ptyServe1",
+                "title": "Terminal <position>",
+                "tree": "leaf1",
+                "paneTitles": []
+              },
+              {
+                "type": "terminal",
+                "tab": "tab2",
+                "leaf": "leaf2",
+                "pty": "pty@@1",
+                "title": "cli-created",
+                "tree": "leaf2",
+                "paneTitles": []
+              },
+              {
+                "type": "terminal",
+                "tab": "tab3",
+                "leaf": "leaf3",
+                "pty": "ptyServe2",
+                "title": "Terminal <position>",
+                "tree": "leaf3",
+                "paneTitles": []
+              }
+            ]
+          },
+          "terminals": [
+            {
+              "tab": "tab2",
+              "leaf": "leaf2",
+              "pty": "pty@@1",
+              "title": "cli-created"
+            },
+            {
+              "tab": "tab1",
+              "leaf": "leaf1",
+              "pty": "ptyServe1",
+              "title": null
+            },
+            {
+              "tab": "tab3",
+              "leaf": "leaf3",
+              "pty": "ptyServe2",
+              "title": null
+            }
+          ],
+          "published": {
+            "groups": [["tab1", "tab2", "tab3"]],
+            "tabs": [
+              {
+                "tab": "tab1",
+                "kind": "terminal",
+                "customTitle": null,
+                "tree": "leaf1",
+                "panes": [
+                  {
+                    "leaf": "leaf1",
+                    "pty": "ptyServe1"
+                  }
+                ]
+              },
+              {
+                "tab": "tab2",
+                "kind": "terminal",
+                "customTitle": "cli-created",
+                "tree": "leaf2",
+                "panes": [
+                  {
+                    "leaf": "leaf2",
+                    "pty": "pty@@1"
+                  }
+                ]
+              },
+              {
+                "tab": "tab3",
+                "kind": "terminal",
+                "customTitle": null,
+                "tree": "leaf3",
+                "panes": [
+                  {
+                    "leaf": "leaf3",
+                    "pty": "ptyServe2"
+                  }
+                ]
+              }
+            ]
+          },
+          "desktopTabs": 3,
+          "desktopPanes": 1
+        }
+      }
+    }
+  }
+}

@@ -11,7 +11,7 @@ import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
 import { providerDiagnostic } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
-import type { JournalLifecycleMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
+import type { JournalLifecycleIdentityMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
 import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { structuredCompactionOutcome } from '../native-chat/agent-session-wire/structured-conversation-command-outcome'
 import { readCodexJournalRecord } from './codex-structured-journal-translation-values'
@@ -94,7 +94,7 @@ export class CodexJournalCommandTurn {
       error: string | null
       completedAt: number
     }
-  ): JournalLifecycleMutationInput[] {
+  ): JournalLifecycleIdentityMutationInput[] {
     const carried = this.carried.get(providerTurnId)
     if (!carried) {
       return []

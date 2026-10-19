@@ -45,9 +45,11 @@ vi.mock('../daemon/daemon-folder-access-reset', () => ({
   resetFolderAccessForDaemon: resetFolderAccessForDaemonMock
 }))
 
-vi.mock('../daemon/daemon-init', () => ({
+vi.mock('../daemon/daemon-provider-restart', () => ({
+  restartDaemon: restartDaemonMock
+}))
+vi.mock('../daemon/daemon-provider-state', () => ({
   getDaemonProvider: getDaemonProviderMock,
-  restartDaemon: restartDaemonMock,
   getCurrentDaemonMacTccAttributionHealth: getCurrentDaemonMacTccAttributionHealthMock
 }))
 

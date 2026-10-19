@@ -45,7 +45,7 @@ for (const mode of ['scalar', 'batch', 'legacy', 'missing-method']) {
       return { id: 'result', ok: true, result: [{ exists: true }] }
     })
     const context = {
-      settings: { activeRuntimeEnvironmentId: 'owner' },
+      target: { kind: 'environment' as const, environmentId: 'owner' },
       worktreeId: 'folder-1',
       worktreePath: '/folder'
     }

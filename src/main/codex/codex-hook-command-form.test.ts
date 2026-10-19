@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   buildWindowsHookPowerShellCommand,
   createManagedCommandMatcher,
@@ -24,7 +24,7 @@ const POSIX_GOLDEN =
 const WINDOWS_BARE_GOLDEN = 'C:/Users/alice/.orca/agent-hooks/codex-hook.cmd'
 const WINDOWS_CMD_GOLDEN =
   'C:\\Windows\\System32\\cmd.exe --% /d /v:off /c @"C:/Users/First Last/.orca/agent-hooks/codex-hook.cmd"'
-// Why kept: local builds before the absolute cmd.exe wrote it; the managed installer and app start convert it.
+// Why kept: local builds before the absolute cmd.exe wrote it; the managed installer and the app-start reconcile convert it.
 const WINDOWS_BARE_CMD_SPELLING =
   'cmd --% /d /c @"C:/Users/First Last/.orca/agent-hooks/codex-hook.cmd"'
 const WINDOWS_ENV = { SystemRoot: 'C:\\Windows', ComSpec: 'C:\\Windows\\system32\\cmd.exe' }
@@ -163,7 +163,7 @@ describe('the Windows spelling change', () => {
       { hooks: [{ type: 'command', command: 'user-hook.cmd' }] }
     ]
   })
-  const plan = (command: string, policy: 'add-missing-only' | 'convert-older-forms') =>
+  const plan = (command: string, convertOlderForms: boolean) =>
     planRealHomeCodexHookEntries({
       hooks: hooksWith(command),
       sourcePath: 'C:/Users/First Last/.codex/hooks.json',
@@ -173,7 +173,7 @@ describe('the Windows spelling change', () => {
         command: WINDOWS_CMD_GOLDEN
       },
       isOrcaCommand: createManagedCommandMatcher('codex-hook.cmd'),
-      policy
+      convertOlderForms
     })
 
   it.each([
@@ -188,19 +188,19 @@ describe('the Windows spelling change', () => {
       wrapWindowsHookCommand('C:\\Users\\First Last\\.orca\\agent-hooks\\codex-hook.cmd')
     ]
   ])('converts %s to the cmd.exe spelling once, in its slot, at app start', (_case, older) => {
-    const converted = plan(older, 'convert-older-forms')
-    expect(converted.changed).toBe(true)
+    const converted = plan(older, true)
+    expect(converted).toMatchObject({ kind: 'settle', changedLabels: new Set(['stop']) })
     expect(converted.hooks.Stop).toEqual([
       { hooks: [{ type: 'command', command: WINDOWS_CMD_GOLDEN, timeout: 10 }] },
       { hooks: [{ type: 'command', command: 'user-hook.cmd' }] }
     ])
-    expect(plan(WINDOWS_CMD_GOLDEN, 'convert-older-forms').changed).toBe(false)
+    expect(plan(WINDOWS_CMD_GOLDEN, true)).toMatchObject({ changedLabels: new Set() })
   })
 
   it.each([WINDOWS_POWERSHELL_TEXT, WINDOWS_BARE_CMD_SPELLING])(
     'leaves the older Windows form %# alone on a pane launch',
     (older) => {
-      expect(plan(older, 'add-missing-only').changed).toBe(false)
+      expect(plan(older, false)).toMatchObject({ changedLabels: new Set() })
     }
   )
 })

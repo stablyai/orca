@@ -1,17 +1,18 @@
 import type { Repo } from '../../../../shared/repo-types'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import { deleteRemoteWorktreeHistory } from '../../../remote-worktree-history-cleanup'
 import { killAllProcessesForWorktree } from '../../../runtime/worktree-teardown'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/preserved-branch-cleanup'
 import { notifyWorktreesChanged } from '../../worktree-remote'
-import { clearProviderPtyState, getLocalPtyProvider, getSshPtyProvider } from '../../pty'
+import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
+import { getLocalPtyProvider } from '../../pty/provider/registry'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { getFolderWorkspaceRootId } from '../folder-workspace-model'
 import { preservedBranchCleanupByScope } from './preserved-branch-cleanup'
 import { removeWorktreeMetadataAndTransientState } from './worktree-removal-ownership'
+import { teardownStops } from '../../../runtime/owned-session-teardown-policy'
 
 export async function removeFolderWorkspace(
   context: WorktreeIpcContext,
@@ -25,8 +26,6 @@ export async function removeFolderWorkspace(
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
   }
   const ownerHost = parseExecutionHostId(removalHostId)
-  const sshPtyProvider =
-    ownerHost?.kind === 'ssh' ? getSshPtyProvider(ownerHost.targetId) : undefined
   // Why: folder workspaces share one root, so there's no Git remove step to close shells; sweep PTYs before dropping metadata.
   await withWorktreeRemoveStageSpan('pty_sweep', 'folder', async () => {
     // Folder projects can be SSH-backed, so fence the sweep to the owning host exactly
@@ -41,25 +40,19 @@ export async function removeFolderWorkspace(
       ...(ownerHost?.kind === 'runtime'
         ? { resolvedRuntimeEnvironmentId: ownerHost.environmentId }
         : {}),
-      localProvider: sshPtyProvider ?? getLocalPtyProvider(),
+      localProvider: getLocalPtyProvider(),
       onPtyStopped: clearProviderPtyState,
       // A structured session is on no PTY surface, so the sweeps above leave it attached to a
       // workspace this removal is about to forget. Closed best-effort, exactly like those PTYs.
-      closeStructuredSessions: true,
-      ...(externalHost
-        ? {
-            includeProviderInventory: ownerHost?.kind === 'ssh' && Boolean(sshPtyProvider),
-            includeLocalRegistry: false
-          }
-        : {})
+      closeStructuredSessions: teardownStops('folder-removal', 'structured-chat'),
+      ...(externalHost ? { includeProviderInventory: false, includeLocalRegistry: false } : {})
     }).catch((err) => {
       console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
     })
   })
   await withWorktreeRemoveStageSpan('metadata_purge', 'folder', async () => {
-    await deleteRemoteWorktreeHistory(sshPtyProvider, args.worktreeId)
     removeWorktreeMetadataAndTransientState(
-      store,
+      { store, runtime, entryPoint: 'folder-removal' },
       args.worktreeId,
       removalHostId,
       args.snapshotPruneBatchId

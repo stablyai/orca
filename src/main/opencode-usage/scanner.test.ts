@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, statSync, unlinkSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -437,6 +437,17 @@ describe('scanOpenCodeUsageDatabases', () => {
     return path
   }
 
+  function appendLiveSessionRow(path: string, sessionId: string, inputTokens: number): void {
+    const previousMtimeMs = statSync(path).mtimeMs
+    const db = new Database(path)
+    insertSessionTotalsRow(db, sessionId, inputTokens)
+    db.close()
+    // Why: the row fits the existing page and can land in the same coarse mtime
+    // tick, so pin a later mtime to change the scanner's mtime+size fingerprint.
+    const changedAt = new Date(previousMtimeMs + 1000)
+    utimesSync(path, changedAt, changedAt)
+  }
+
   it('does not scan disk databases when OPENCODE_DB uses memory', async () => {
     writeSessionTotalsDb('opencode.db', [])
     process.env.OPENCODE_DB = ':memory:'
@@ -491,9 +502,7 @@ describe('scanOpenCodeUsageDatabases', () => {
 
     // The canonical db keeps growing while the backup stays cached; session-1
     // must stay owned by the canonical db.
-    const db = new Database(canonicalPath)
-    insertSessionTotalsRow(db, 'session-2', 200)
-    db.close()
+    appendLiveSessionRow(canonicalPath, 'session-2', 200)
 
     const third = await scanOpenCodeUsageDatabases([], second.processedDatabases)
     expect(
@@ -517,9 +526,7 @@ describe('scanOpenCodeUsageDatabases', () => {
     )
     expect(firstBackup?.ownedSessionIds).toEqual([])
 
-    const db = new Database(canonicalPath)
-    insertSessionTotalsRow(db, 'session-2', 200)
-    db.close()
+    appendLiveSessionRow(canonicalPath, 'session-2', 200)
 
     const second = await scanOpenCodeUsageDatabases([], first.processedDatabases)
     const secondBackup = second.processedDatabases.find((database) =>

@@ -13,6 +13,7 @@ export type CommandSpec = {
   // and is single-valued for `worktree create`, which one global set cannot say.
   repeatableFlags?: string[]
   positionalArgs?: string[]
+  variadicPositional?: boolean
   examples?: string[]
   notes?: string[]
   // Why: `--from`/`--terminal` names either the acting caller or a target, and only the spec can

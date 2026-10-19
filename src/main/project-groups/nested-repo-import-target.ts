@@ -2,13 +2,8 @@ import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { listWorktreeGraph } from '../git/worktree'
 
-type WorktreeLister = {
-  listWorktrees: (repoPath: string) => Promise<GitWorktreeInfo[]>
-}
-
 export type NestedRepoImportTargetResolver = {
   resolveLocal: (repoPath: string) => Promise<string>
-  resolveSsh: (repoPath: string, gitProvider: WorktreeLister) => Promise<string>
 }
 
 function findImportTarget(
@@ -59,29 +54,12 @@ async function resolveWithCache(
 
 export function createNestedRepoImportTargetResolver(): NestedRepoImportTargetResolver {
   const localCache = new Map<string, string>()
-  const sshCaches = new WeakMap<WorktreeLister, Map<string, string>>()
-
   return {
     resolveLocal: (repoPath) =>
-      resolveWithCache(repoPath, localCache, (path) => listWorktreeGraph(path)),
-    resolveSsh: (repoPath, gitProvider) => {
-      let cache = sshCaches.get(gitProvider)
-      if (!cache) {
-        cache = new Map()
-        sshCaches.set(gitProvider, cache)
-      }
-      return resolveWithCache(repoPath, cache, (path) => gitProvider.listWorktrees(path))
-    }
+      resolveWithCache(repoPath, localCache, (path) => listWorktreeGraph(path))
   }
 }
 
 export async function resolveLocalNestedRepoImportTargetPath(repoPath: string): Promise<string> {
   return createNestedRepoImportTargetResolver().resolveLocal(repoPath)
-}
-
-export async function resolveSshNestedRepoImportTargetPath(
-  repoPath: string,
-  gitProvider: WorktreeLister
-): Promise<string> {
-  return createNestedRepoImportTargetResolver().resolveSsh(repoPath, gitProvider)
 }

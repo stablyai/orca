@@ -18,6 +18,17 @@ on:
         required: true
         default: preserve
         type: string
+      reserve-placement:
+        description: Preserve step-5 reserve placement, or set it; turning it off is refused while any cell is reserve
+        required: true
+        default: preserve
+        type: choice
+        options: [preserve, 'off', dry-run, 'on']
+      shadow-seat-feed-cells:
+        description: Preserve the step-3 shadow seat-feed cells, or set all or a comma list of cell ids; dropping a reserve cell is refused
+        required: true
+        default: preserve
+        type: string
       prune-incompatible-revisions:
         description: Retain only the newly verified serving and rollback revisions
         required: true
@@ -39,6 +50,10 @@ on:
       predecessor-image-digest:
         description: Exact immutable serving predecessor digest for the one-time identity bootstrap
         required: true
+        type: string
+      shape-baseline-revision:
+        description: Only after a Terraform apply changed the director template. The apply's 0% revision, whose shape the deploy adopts
+        required: false
         type: string
 
 permissions:
@@ -68,6 +83,8 @@ jobs:
       IMAGE_DIGEST: ${{ inputs.image-digest }}
       REGIONAL_PLACEMENT_MODE: ${{ inputs.regional-placement-mode }}
       REGION_CORRECTION_COHORT_PERCENT: ${{ inputs.region-correction-cohort-percent }}
+      RESERVE_PLACEMENT: ${{ inputs.reserve-placement }}
+      SHADOW_SEAT_FEED_CELLS: ${{ inputs.shadow-seat-feed-cells }}
       PRUNE_INCOMPATIBLE_REVISIONS: ${{ inputs.prune-incompatible-revisions }}
       # Floor the served revision must keep, matching relay_min_instances in
       # environments/production.tfvars. This gate only fails a bad deploy; Terraform
@@ -80,6 +97,7 @@ jobs:
       EXPECTED_REHOME_GENERATION: ${{ inputs.expected-rehome-generation }}
       BOOTSTRAP_RUNTIME_IDENTITY: ${{ inputs.bootstrap-runtime-identity }}
       PREDECESSOR_IMAGE_DIGEST: ${{ inputs.predecessor-image-digest }}
+      SHAPE_BASELINE_REVISION: ${{ inputs.shape-baseline-revision }}
     steps:
       - uses: actions/checkout@v4
 
@@ -93,6 +111,8 @@ jobs:
           id_token_include_email: true
 
       - uses: google-github-actions/setup-gcloud@v2
+        with:
+          skip_install: true
 
       - uses: ./.github/actions/cloud-sql-rollout-lease
         with:
@@ -127,7 +147,13 @@ jobs:
             [[ "${PREDECESSOR_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
             test "${PRUNE_INCOMPATIBLE_REVISIONS}" = false
             test "${REGIONAL_PLACEMENT_MODE}" = preserve
+            test -z "${SHAPE_BASELINE_REVISION}"
             test "${CONFIRMATION}" = BOOTSTRAP_RELAY_DIRECTOR_REHOME_IDENTITY
+          elif test -n "${SHAPE_BASELINE_REVISION}"; then
+            [[ "${SHAPE_BASELINE_REVISION}" =~ ^orca-cloud-relay-[0-9]{5}-[a-z0-9]{3}$ ]]
+            test "${PRUNE_INCOMPATIBLE_REVISIONS}" = false
+            test "${REGIONAL_PLACEMENT_MODE}" = preserve
+            test "${CONFIRMATION}" = ADOPT_RELAY_DIRECTOR_TERRAFORM_SHAPE
           elif test "${PRUNE_INCOMPATIBLE_REVISIONS}" = true; then
             test "${REGIONAL_PLACEMENT_MODE}" = preserve
             test "${CONFIRMATION}" = PRUNE_INCOMPATIBLE_RELAY_DIRECTOR_REVISIONS
@@ -209,12 +235,17 @@ jobs:
           fi
           [[ "${target_version}" =~ ^[1-9][0-9]*$ ]]
           RELEASE_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:8}"
+          shape_args=()
+          if test -n "${SHAPE_BASELINE_REVISION}"; then
+            shape_args=(--shape-baseline-revision "${SHAPE_BASELINE_REVISION}")
+          fi
           node dev/scripts/deploy-relay-blue-green.mjs \
             --project "${GCP_PROJECT_ID}" \
             --region "${GCP_REGION}" \
             --service "${DIRECTOR_SERVICE_NAME}" \
             --image "${IMAGE}" \
             --role director \
+            "${shape_args[@]}" \
             --runtime-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
             --predecessor-runtime-service-account "${PREDECESSOR_RUNTIME_SERVICE_ACCOUNT}" \
             --bootstrap-runtime-identity "${BOOTSTRAP_RUNTIME_IDENTITY}" \
@@ -228,7 +259,9 @@ jobs:
             --prune-revisions "${PRUNE_INCOMPATIBLE_REVISIONS}" \
             --release-id "${RELEASE_ID}" \
             --regional-placement-secret-version "${target_version}" \
-            --region-correction-cohort-percent "${REGION_CORRECTION_COHORT_PERCENT}"
+            --region-correction-cohort-percent "${REGION_CORRECTION_COHORT_PERCENT}" \
+            --reserve-placement "${RESERVE_PLACEMENT}" \
+            --shadow-seat-feed-cells "${SHADOW_SEAT_FEED_CELLS}"
           echo "REGIONAL_PLACEMENT_ENABLED=${desired}" >> "${GITHUB_ENV}"
           echo "REGIONAL_PLACEMENT_VERSION=${target_version}" >> "${GITHUB_ENV}"
 

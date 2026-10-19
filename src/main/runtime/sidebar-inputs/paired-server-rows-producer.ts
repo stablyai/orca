@@ -1,0 +1,251 @@
+import { ProducerRevision } from './producer-revision'
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { describePairedServerHosts } from '../../../shared/paired-server-hosts'
+import type { MobileRelayServerWorktreeRow } from '../../../shared/mobile-relay-hosts-contract'
+import {
+  normalizePairedServerRow,
+  type PairedServerRowsSnapshot
+} from '../../../shared/sidebar-list/paired-server-rows'
+import type {
+  MobileDesktopRelayHostListing,
+  MobileDesktopRelayHosts,
+  MobileDesktopRelayHostWatch
+} from '../mobile-desktop-relay/mobile-desktop-relay-hosts'
+import {
+  describeRelayHosts,
+  relayHostFence
+} from '../mobile-desktop-relay/mobile-relay-host-descriptions'
+import type { ServerWorktreeRows } from '../mobile-desktop-relay/mobile-relay-host-catalog'
+import {
+  SERVER_FETCH_TIMEOUT_MS,
+  SERVER_WORKTREE_LIMIT,
+  WorktreePsReplySchema,
+  stampServerWorktreeRows
+} from '../mobile-desktop-relay/server-worktree-fetch'
+
+// Owner-approved fallback for changes a server announces no event for (status-only, older servers).
+export const FALLBACK_REFRESH_MS = 30_000
+
+type ServerEntry = {
+  environmentId: string
+  fence: string
+  identity: Pick<MobileDesktopRelayHostListing, 'pairingRevision' | 'runtimeId'>
+  inContact: boolean
+  /** Null until a fetch under this pairing answered. */
+  rows: MobileRelayServerWorktreeRow[] | null
+  /** The rows are the server's answer since it last came into contact; else unverifiable. */
+  confirmed: boolean
+  watch: MobileDesktopRelayHostWatch | null
+  refreshing: Promise<void> | null
+  refreshAgain: boolean
+}
+
+/**
+ * The desktop's one live set of paired-server workspace rows, needing no window. A server is
+ * refetched when it comes into contact, on each of its change events, when a reader asks, and
+ * every 30 s while the list is showing. A server's last rows read unverifiable once it loses
+ * contact, until a fetch answers again. Only removing or re-pairing a server drops them; a fetch
+ * that answers replaces them, deletions included.
+ */
+export class PairedServerRowsProducer implements ServerWorktreeRows {
+  private readonly servers = new Map<string, ServerEntry>()
+  private hosts: MobileDesktopRelayHosts | null = null
+  readonly revision = new ProducerRevision()
+
+  constructor(
+    private readonly options: {
+      hasDemand: () => boolean
+      hostLabelOverrides: () => ReadonlyMap<ExecutionHostId, string>
+    }
+  ) {}
+
+  attach(hosts: MobileDesktopRelayHosts): () => void {
+    this.hosts = hosts
+    const stopStatus = hosts.onStatusChanged(() => this.sync())
+    const stopRetired = hosts.onEnvironmentRetired(() => this.sync())
+    const fallback = setInterval(() => {
+      if (this.options.hasDemand()) {
+        for (const entry of this.servers.values()) {
+          if (entry.inContact) {
+            void this.refresh(entry.environmentId)
+          }
+        }
+      }
+    }, FALLBACK_REFRESH_MS)
+    fallback.unref?.()
+    this.sync()
+    return () => {
+      clearInterval(fallback)
+      stopStatus()
+      stopRetired()
+      for (const entry of this.servers.values()) {
+        entry.watch?.close()
+      }
+      this.servers.clear()
+      this.hosts = null
+      this.revision.bump()
+    }
+  }
+
+  /** Re-reads the configured servers: drops removed or re-paired ones, watches those in contact. */
+  sync(): void {
+    const hosts = this.hosts
+    if (!hosts) {
+      return
+    }
+    const fences = new Map(
+      hosts.list().environments.map((environment) => [environment.id, relayHostFence(environment)])
+    )
+    for (const [environmentId, entry] of this.servers) {
+      if (fences.get(environmentId) !== entry.fence) {
+        entry.watch?.close()
+        this.servers.delete(environmentId)
+        this.revision.bump()
+      }
+    }
+    // Why the shown hosts: a managed server reached over its SSH host's relay is not in contact here.
+    const shown = new Map(describeRelayHosts(hosts).map((host) => [host.environmentId, host]))
+    for (const host of shown.values()) {
+      if (!this.servers.has(host.environmentId)) {
+        this.servers.set(host.environmentId, {
+          environmentId: host.environmentId,
+          fence: relayHostFence(host.identity),
+          identity: host.identity,
+          inContact: false,
+          rows: null,
+          confirmed: false,
+          watch: null,
+          refreshing: null,
+          refreshAgain: false
+        })
+        this.revision.bump()
+      }
+    }
+    for (const entry of this.servers.values()) {
+      const inContact = shown.get(entry.environmentId)?.health === 'available'
+      if (inContact !== entry.inContact) {
+        entry.inContact = inContact
+        entry.confirmed = false
+        this.revision.bump()
+      }
+      // Why current(): a replaced transport can end the stream without telling it.
+      if (inContact && !entry.watch?.current()) {
+        entry.watch?.close()
+        this.watch(hosts, entry)
+      } else if (!inContact && entry.watch) {
+        entry.watch.close()
+        entry.watch = null
+      }
+    }
+  }
+
+  /** Fetches now, or joins the fetch in flight. */
+  refresh(environmentId: string): Promise<void> {
+    const entry = this.servers.get(environmentId)
+    if (!entry || !this.hosts) {
+      return Promise.resolve()
+    }
+    if (!entry.refreshing) {
+      const refreshing = this.fetchUntilCurrent(this.hosts, entry).finally(() => {
+        entry.refreshing = null
+      })
+      entry.refreshing = refreshing
+    }
+    return entry.refreshing
+  }
+
+  /** The server's raw rows as last fetched under this pairing; null when none were. */
+  rows(environmentId: string, fence: string): readonly MobileRelayServerWorktreeRow[] | null {
+    const entry = this.servers.get(environmentId)
+    return entry && entry.fence === fence ? entry.rows : null
+  }
+
+  snapshot(): PairedServerRowsSnapshot {
+    const shown = new Map(
+      (this.hosts
+        ? describePairedServerHosts({
+            ...this.hosts.list(),
+            hostLabelOverrides: this.options.hostLabelOverrides()
+          })
+        : []
+      ).map(({ environmentId, label, health, compatibility, pairedDeviceId }) => [
+        environmentId,
+        { label, health, compatibility, pairedDeviceId }
+      ])
+    )
+    return {
+      revision: this.revision.value,
+      servers: [...this.servers.values()].map((entry) => {
+        const hostId = toRuntimeExecutionHostId(entry.environmentId)
+        return {
+          hostId,
+          freshness: entry.inContact && entry.confirmed ? 'live' : 'unverifiable',
+          host: shown.get(entry.environmentId) ?? null,
+          rows: (entry.rows ?? []).flatMap((row) => normalizePairedServerRow(hostId, row) ?? [])
+        }
+      })
+    }
+  }
+
+  private watch(hosts: MobileDesktopRelayHosts, entry: ServerEntry): void {
+    const current = (): boolean => this.servers.get(entry.environmentId) === entry
+    // Ready fires on every (re)connect, so contact and a missed-event replay both count as changes.
+    const watch = hosts.watchChanges({ environmentId: entry.environmentId }, entry.identity, {
+      onChange: () => {
+        if (current()) {
+          // A fetch already in flight may predate this change, so one more runs after it.
+          entry.refreshAgain ||= entry.refreshing !== null
+          void this.refresh(entry.environmentId)
+        }
+      },
+      onClose: () => {
+        if (current() && entry.watch === watch) {
+          entry.watch = null
+        }
+      }
+    })
+    entry.watch = watch
+  }
+
+  private unconfirm(entry: ServerEntry): void {
+    if (entry.confirmed) {
+      entry.confirmed = false
+      this.revision.bump()
+    }
+  }
+
+  private async fetchUntilCurrent(hosts: MobileDesktopRelayHosts, entry: ServerEntry) {
+    do {
+      entry.refreshAgain = false
+      await this.fetch(hosts, entry)
+    } while (entry.refreshAgain && this.servers.get(entry.environmentId) === entry)
+  }
+
+  private async fetch(hosts: MobileDesktopRelayHosts, entry: ServerEntry): Promise<void> {
+    let response: Awaited<ReturnType<MobileDesktopRelayHosts['call']>> | null = null
+    try {
+      response = await hosts.call(
+        { environmentId: entry.environmentId },
+        'worktree.ps',
+        { limit: SERVER_WORKTREE_LIMIT, supportsWorktreeVisibilitySourceDefaults: true },
+        // Why the transport bound too: it ends the hung call, so the next request fetches afresh.
+        { timeoutMs: SERVER_FETCH_TIMEOUT_MS, expected: entry.identity }
+      )
+    } catch {
+      // An unreachable server keeps its last rows.
+    }
+    // Why: an answer that lands after a re-pair or removal belongs to the old pairing.
+    if (this.servers.get(entry.environmentId) !== entry) {
+      return
+    }
+    const reply = response?.ok ? WorktreePsReplySchema.safeParse(response.result) : null
+    if (!reply?.success) {
+      this.unconfirm(entry)
+      return
+    }
+    entry.rows = stampServerWorktreeRows(entry.environmentId, reply.data.worktrees)
+    entry.confirmed = entry.inContact
+    // Every answer moves the revision: rows carry activity that changes without a catalog event.
+    this.revision.bump()
+  }
+}

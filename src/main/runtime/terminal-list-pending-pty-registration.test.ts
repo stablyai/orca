@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { spawnWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import {
   createInventoryRuntime,
   deferred,
@@ -51,7 +52,9 @@ describe('terminal listing while a spawn binding is being persisted', () => {
       })
 
       const releaseSpawn =
-        phase === 'provider' ? await runtime.acquireWorktreeTerminalSpawn(WORKTREE) : undefined
+        phase === 'provider'
+          ? await runtime.acquireWorktreeTerminalSpawn(spawnWorktreeTarget(WORKTREE, null))
+          : undefined
       if (phase === 'binding') {
         runtime.beginPtyRegistration(ptyId, incarnationId)
       }
@@ -100,7 +103,9 @@ describe('terminal listing while a spawn binding is being persisted', () => {
   it('continues reporting a committed surface while another spawn is pending', async () => {
     const { runtime } = createInventoryRuntime(async () => [processRow()])
     runtime.register()
-    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(WORKTREE)
+    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(WORKTREE, null)
+    )
     try {
       const listed = await runtime.listTerminals(`id:${WORKTREE}`)
       expect(listed.terminals).toEqual([
@@ -113,7 +118,9 @@ describe('terminal listing while a spawn binding is being persisted', () => {
 
   it('does not block orphan recovery in an unrelated workspace', async () => {
     const { runtime } = createInventoryRuntime(async () => [processRow()])
-    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn('repo::/tmp/another-workspace')
+    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget('repo::/tmp/another-workspace', null)
+    )
     try {
       const listed = await runtime.listTerminals(`id:${WORKTREE}`)
       expect(listed.terminals).toEqual([
@@ -126,7 +133,9 @@ describe('terminal listing while a spawn binding is being persisted', () => {
 
   it('permits orphan recovery once the competing spawn admission has ended', async () => {
     const { runtime } = createInventoryRuntime(async () => [processRow()])
-    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(WORKTREE)
+    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(WORKTREE, null)
+    )
     runtime.beginPtyRegistration(PTY, PREDECESSOR)
     try {
       await expect(runtime.listTerminals(`id:${WORKTREE}`)).rejects.toThrow(

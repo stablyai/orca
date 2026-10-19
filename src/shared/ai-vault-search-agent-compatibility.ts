@@ -25,10 +25,6 @@ const LEGACY_SEARCH_AGENTS: readonly AiVaultAgent[] = [
   'muse'
 ]
 
-export function needsSearchAgentNegotiation(agents: readonly AiVaultAgent[]): boolean {
-  return agents.some((agent) => !LEGACY_SEARCH_AGENTS.includes(agent))
-}
-
 export function compatibleSearchAgents(
   agents: readonly AiVaultAgent[],
   status: Pick<

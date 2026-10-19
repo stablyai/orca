@@ -15,7 +15,8 @@ const { events, yieldToEventLoop } = vi.hoisted(() => {
 
 vi.mock('../../../../shared/event-loop-yield', () => ({ yieldToEventLoop }))
 
-import { planTerminalPaste, type TerminalPasteTarget } from './terminal-paste-coordinator'
+import { planTerminalPaste } from './terminal-paste-coordinator'
+import type { TerminalPasteTarget } from './terminal-paste-model'
 import { executeTerminalPastePlan } from './terminal-paste-executor'
 
 const target: TerminalPasteTarget = {

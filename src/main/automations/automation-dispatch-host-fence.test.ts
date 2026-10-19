@@ -21,10 +21,7 @@ import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence'
 import { resolveAutomationRunTarget } from './run-target-resolution'
 import { AutomationService } from './service'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
-
-const testState = { dir: '' }
+import { closeTestStores, createStore, testState } from '../persistence-test-harness'
 
 vi.mock('electron', () => ({
   app: {
@@ -36,14 +33,6 @@ vi.mock('electron', () => ({
     decryptString: (ciphertext: Buffer) => ciphertext.toString('utf-8').slice('encrypted:'.length)
   }
 }))
-
-async function createStore(): Promise<Store> {
-  vi.resetModules()
-  installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store: StoreClass, initDataPath } = await import('../persistence')
-  initDataPath()
-  return createSqliteTestStore(StoreClass, { dataFile: join(testState.dir, 'orca-data.json') })
-}
 
 /** The reachable shape: a runtime-owned id is derived, not minted per lifecycle. */
 const TARGET_ID = 'runtime-ssh-recipe-1'

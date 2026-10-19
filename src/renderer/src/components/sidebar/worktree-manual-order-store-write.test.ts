@@ -8,6 +8,9 @@ import { makeWorktree } from '../worktree-jump-palette-test-fixtures'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
 
+const toastInfo = vi.hoisted(() => vi.fn())
+vi.mock('sonner', () => ({ toast: { info: toastInfo, dismiss: vi.fn() } }))
+
 /**
  * The sidebar drop only reorders if the payload `reorderWorktrees` builds is the
  * one `updateWorktreesMeta` consumes. The e2e that covered this replaced the store
@@ -61,6 +64,7 @@ describe('sidebar manual-order drop', () => {
   beforeEach(() => {
     useAppStore.setState(initialState, true)
     updateMeta.mockClear()
+    toastInfo.mockClear()
     Object.assign(window, { api: { worktrees: { updateMeta } } })
   })
 
@@ -85,6 +89,7 @@ describe('sidebar manual-order drop', () => {
 
     expect(manualOrderedIds()).toEqual([ids[1], ids[0], ids[2]])
     expect(useAppStore.getState().sortBy).toBe('manual')
+    expect(toastInfo).toHaveBeenCalledTimes(1)
     expect(updateMeta).toHaveBeenCalledWith({
       worktreeId: ids[0],
       executionHostId: 'local',
@@ -111,5 +116,25 @@ describe('sidebar manual-order drop', () => {
     expect(useAppStore.getState().sortBy).toBe('smart')
     expect(useAppStore.getState().sortEpoch).toBe(epochBeforeDrop)
     expect(updateMeta).not.toHaveBeenCalled()
+    expect(toastInfo).not.toHaveBeenCalled()
+  })
+
+  it('reorders silently when Manual is already the sort', async () => {
+    const worktrees = seedManualOrderedRows(3)
+    useAppStore.setState({ sortBy: 'manual' })
+    const ids = worktrees.map((worktree) => worktree.id)
+    const reorder = renderReorder(worktrees)
+
+    await act(async () => {
+      reorder.current.reorderWorktrees({
+        groups: [{ key: GROUP_KEY, worktreeIds: ids }],
+        sourceGroupKey: GROUP_KEY,
+        draggedIds: [ids[0]!],
+        dropIndex: 2
+      })
+    })
+
+    expect(manualOrderedIds()).toEqual([ids[1], ids[0], ids[2]])
+    expect(toastInfo).not.toHaveBeenCalled()
   })
 })

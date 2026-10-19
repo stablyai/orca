@@ -1,18 +1,22 @@
-// A /clear's one store write: the conversation it continues in, founded at rest, and the marker
-// on the cleared record that points there. Either both land, on disk too, or neither does.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
+import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  providerContextBoundaryForClear,
+  type AgentSessionConversationClear
+} from './agent-session-conversation-command-record'
 import { isAgentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 
 const NOW = 1_800_000_000_000
 const SOURCE = 'session-alpha'
-const REPLACEMENT = `clear-${'a'.repeat(40)}`
 const INDETERMINATE: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
 
 let directory: string
@@ -53,110 +57,157 @@ async function storeWithSource(): Promise<AgentSessionRecordStore> {
     },
     now: NOW
   })
+  const fence = store.getRecord(SOURCE)!.lease.runtimeFence
+  await store.commitProcessIdentity({
+    sessionId: SOURCE,
+    fence,
+    process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken: 'spawn-a' },
+    now: NOW
+  })
+  await store.proveOwner({
+    sessionId: SOURCE,
+    fence,
+    link: {
+      linkId: 'pre-clear-proof',
+      origin: 'created',
+      mintedAtFence: fence,
+      observedAt: NOW,
+      handle: claudeProviderHandle('pre-clear-provider-context', null)
+    },
+    now: NOW
+  })
   await store.setSessionTabVisibility(SOURCE, true, 'tab-alpha')
   return store
 }
 
-function marker(fence: number, replacementSessionId = REPLACEMENT) {
+function clear(fence: number): AgentSessionConversationClear {
   return {
-    command: 'clear' as const,
-    state: 'completed' as const,
-    phase: 'committed' as const,
-    runtimeFence: fence,
-    operationId: `${NOW}-${'2'.repeat(32)}`,
-    callerKey: 'client-1',
-    replacementSessionId
+    sessionId: SOURCE,
+    fence,
+    now: NOW + 5,
+    command: {
+      command: 'clear',
+      state: 'completed',
+      phase: 'committed',
+      runtimeFence: fence,
+      operationId: `${NOW}-${'2'.repeat(32)}`,
+      callerKey: 'client-1'
+    }
   }
 }
 
-describe("a /clear's commit", () => {
-  it('founds the replacement at rest and points the cleared record at it, on disk', async () => {
-    const store = await storeWithSource()
-    const fence = store.getRecord(SOURCE)!.lease.runtimeFence
-    await store.commitConversationClear({
+async function prepare(released = true) {
+  const store = await storeWithSource()
+  if (released) {
+    await store.evictProvenDeadOwner({
       sessionId: SOURCE,
-      fence,
-      command: marker(fence),
-      claimKeyId: 'key-1',
-      now: NOW + 5
+      expectedFence: store.getRecord(SOURCE)!.lease.runtimeFence,
+      probe: { outcome: 'exit-observed' },
+      now: NOW + 1
     })
+  }
+  const journal = new AgentSessionJournal({
+    database: openTestJournalHostDatabase(directory),
+    identity: {
+      sessionId: SOURCE,
+      workspaceId: 'workspace-1',
+      hostId: 'local',
+      agent: 'claude',
+      providerHandle: null
+    },
+    now: () => NOW + 5
+  })
+  await journal.open()
+  const completed = clear(store.getRecord(SOURCE)!.lease.runtimeFence)
+  const operation = {
+    callerKey: completed.command.callerKey,
+    operationId: completed.command.operationId
+  }
+  await store.admitOperation({ ...operation, fingerprint: 'clear', now: NOW })
+  const append = (input = completed) =>
+    journal.context.clear(
+      providerContextBoundaryForClear(input),
+      store.conversationReceipts.clear(() => input, operation),
+      agentSessionOperationKey(operation.callerKey, operation.operationId)
+    )
+  return { store, journal, completed, operation, append }
+}
 
-    const reopened = await open()
-    const source = reopened.getRecord(SOURCE)!
-    expect(source.conversationCommand).toEqual(marker(fence))
-    expect(reopened.getRecord(REPLACEMENT)).toEqual({
-      schemaVersion: source.schemaVersion,
-      sessionId: REPLACEMENT,
-      location: source.location,
-      provider: 'claude',
-      accountHome: source.accountHome,
-      options: { model: 'sonnet' },
-      launchArgs: ['--flag'],
-      providerHandleChain: [],
-      createdAt: NOW + 5,
-      updatedAt: NOW + 5,
-      lease: {
-        sessionId: REPLACEMENT,
-        runtimeKind: 'native',
-        runtimeFence: 1,
-        handoffStage: null,
-        provenHandleLinkId: null,
-        ownerProcess: null,
-        reservedSpawnToken: null,
-        leaseDeadlineAt: NOW + 5,
-        lastRenewedAt: NOW + 5,
-        handoffOperationId: null,
-        journalCheckpoint: null,
-        claimKeyId: 'key-1',
-        claimStatus: 'released',
-        // Loading marks every lease for this host's adjudication, as it does any record's.
-        unreconciled: true,
-        deathEvidence: null
-      }
+async function queueClearCards(journal: AgentSessionJournal) {
+  for (const messageId of ['first', 'command', 'last']) {
+    await journal.queuedMessages.insert({
+      messageId,
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: messageId }],
+        ...(messageId === 'command' ? { command: { name: 'compact' } } : {})
+      },
+      fingerprint: messageId,
+      hostInstance: 'host-1'
     })
-    expect(reopened.getSessionTabId(REPLACEMENT)).toBe('tab-alpha')
-    expect(reopened.getSessionTabId(SOURCE)).toBeNull()
-  })
+  }
+}
 
-  it('writes neither the replacement nor the marker when the commit is refused', async () => {
-    const store = await storeWithSource()
-    const fence = store.getRecord(SOURCE)!.lease.runtimeFence
-    // The source's lease moved after the clear read it: the marker's fenced write refuses.
-    const refused = await store
-      .commitConversationClear({
-        sessionId: SOURCE,
-        fence: fence + 1,
-        command: marker(fence + 1),
-        claimKeyId: 'key-1',
-        now: NOW
-      })
-      .catch((error: unknown) => error)
-    expect(isAgentSessionRefusalError(refused)).toBe(true)
-
-    for (const each of [store, await open()]) {
-      expect(each.getRecord(REPLACEMENT)).toBeNull()
-      expect(each.getRecord(SOURCE)?.conversationCommand).toBeUndefined()
-      expect(each.getSessionTabId(SOURCE)).toBe('tab-alpha')
-      expect(each.listRecords().map((record) => record.sessionId)).toEqual([SOURCE])
-    }
-  })
-
-  it('never overwrites a record already under the replacement id', async () => {
-    const store = await storeWithSource()
-    const fence = store.getRecord(SOURCE)!.lease.runtimeFence
+describe('clear transaction', () => {
+  it('publishes one boundary and receipt while preserving the record and tab on disk', async () => {
+    const { store, journal, completed, operation, append } = await prepare()
     const before = store.getRecord(SOURCE)!
-    const refused = await store
-      .commitConversationClear({
-        sessionId: SOURCE,
-        fence,
-        command: marker(fence, SOURCE),
-        claimKeyId: 'key-1',
-        now: NOW
-      })
-      .catch((error: unknown) => error)
-    expect(refused).toMatchObject({
-      refusal: { code: 'agent_session_conflict', details: { reason: 'sessionExists' } }
+    expect(before.providerHandleChain).toHaveLength(1)
+    await queueClearCards(journal)
+    const epoch = journal.cursor().epoch
+    await append()
+    const reopened = await open()
+    expect(reopened.listRecords()).toHaveLength(1)
+    expect(reopened.getRecord(SOURCE)).toMatchObject({
+      providerContextBoundary: providerContextBoundaryForClear(completed),
+      providerHandleChain: [],
+      lease: { provenHandleLinkId: null },
+      accountHome: before.accountHome,
+      options: before.options,
+      conversationCommand: completed.command
     })
-    expect(store.getRecord(SOURCE)).toEqual(before)
+    expect(reopened.getSessionTabId(SOURCE)).toBe('tab-alpha')
+    expect(JSON.stringify(reopened.getRecord(SOURCE))).not.toContain('pre-clear-provider-context')
+    expect(journal.cursor().epoch).toBe(epoch)
+    expect(journal.queuedMessages.get('command')).toMatchObject({
+      state: 'withdrawn',
+      settledByOp: agentSessionOperationKey(operation.callerKey, operation.operationId)
+    })
+    expect(journal.queuedMessages.pauses()).toMatchObject([{ messageIds: ['first', 'last'] }])
+    expect(
+      reopened.getOperationRow(operation.callerKey, operation.operationId)?.outcome.status
+    ).toBe('succeeded')
+  })
+
+  it('rolls the divider and receipt back when the fence moved', async () => {
+    const { store, journal, completed, operation, append } = await prepare()
+    await queueClearCards(journal)
+    const before = journal.cursor()
+    const previousChain = store.getRecord(SOURCE)!.providerHandleChain
+    const refused = await append({ ...completed, fence: completed.fence + 1 }).catch(
+      (error: unknown) => error
+    )
+    expect(isAgentSessionRefusalError(refused)).toBe(true)
+    expect(journal.cursor()).toEqual(before)
+    expect(
+      journal.queuedMessages.list().map(({ messageId, state }) => ({ messageId, state }))
+    ).toEqual(['first', 'command', 'last'].map((messageId) => ({ messageId, state: 'waiting' })))
+    expect(journal.queuedMessages.pauses()).toEqual([])
+    expect((await open()).getRecord(SOURCE)?.providerContextBoundary).toBeUndefined()
+    expect((await open()).getRecord(SOURCE)?.providerHandleChain).toEqual(previousChain)
+    expect(store.getOperationRow(operation.callerKey, operation.operationId)?.outcome.status).toBe(
+      'pending'
+    )
+  })
+
+  it('refuses a boundary while ownership is still reserved', async () => {
+    const { store, journal, append } = await prepare(false)
+    const before = journal.cursor()
+    await expect(append()).rejects.toMatchObject({
+      refusal: { code: 'agent_session_ownership_unknown' }
+    })
+    expect(journal.cursor()).toEqual(before)
+    expect(store.getRecord(SOURCE)?.providerContextBoundary).toBeUndefined()
   })
 })

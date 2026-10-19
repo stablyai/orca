@@ -1,4 +1,4 @@
-// Claude's declarative task protocol, read as subagent roster events.
+// Claude's declarative task protocol, read for which tasks are subagents and which ids name them.
 //
 // `local_agent`, `local_workflow` and `local_bash` tasks all arrive on the same
 // `message:system:task_*` channel and ALL carry a `tool_use_id`, so id presence
@@ -6,10 +6,8 @@
 // the subagent roster. `task_type` is the discriminator, with `subagent_type`
 // covering CLI releases that predate it.
 
-import type { NativeChatSubagentState } from '../../shared/native-chat-types'
 import {
   classifyClaudeBackgroundTaskKind,
-  claudeTaskDescription,
   claudeTaskId,
   isBoundedClaudeTaskId
 } from './claude-background-task-tracker'
@@ -23,37 +21,16 @@ const TASK_SUBTYPES: ReadonlySet<string> = new Set([
   'task_notification'
 ])
 
-/** Provider status → the carrier's vocabulary. `killed` and `stopped` both mean
- *  the task was deliberately ended, which the carrier calls `stopped`; every
- *  in-flight status collapses to `working`. A Map, not an object, so a payload
- *  carrying `__proto__` as its status cannot resolve to an inherited value. */
-const TASK_STATES: ReadonlyMap<string, NativeChatSubagentState> = new Map([
-  ['pending', 'working'],
-  ['running', 'working'],
-  ['paused', 'working'],
-  ['completed', 'completed'],
-  ['failed', 'failed'],
-  ['killed', 'stopped'],
-  ['stopped', 'stopped']
-] satisfies [string, NativeChatSubagentState][])
-
 export type ClaudeSubagentTaskFrame = {
-  /** Canonical, resume-stable id — the roster key. */
+  /** Canonical, resume-stable id. */
   taskId: string
   /** Re-minted when Claude re-announces a resumed task, so it is only an alias. */
   toolUseId: string | null
-  label: string | null
-  /** null when the frame reported no lifecycle status. */
-  state: NativeChatSubagentState | null
-  backgrounded: boolean | null
-  /** Any `task_started`, subagent or not. Proof this CLI declares its tasks. */
-  announcement: boolean
-  /** `task_started` for a task the roster should show. Only an announcement
-   *  creates an entry: an update carries no `task_type`, so honouring one for an
-   *  unknown id would roster whatever else shares this channel. */
+  /** `task_started` for a subagent. Only an announcement says what a task is: an update carries
+   *  no `task_type`. */
   announcesSubagent: boolean
-  /** Ambient housekeeping, or a task that is not a subagent at all. Its ids must
-   *  never reach the roster, by this frame or by later child traffic. */
+  /** Ambient housekeeping, or a task that is not a subagent at all. Its ids must never be read as
+   *  a subagent's, by this frame or by later child traffic. */
   excluded: boolean
 }
 
@@ -72,10 +49,6 @@ export function isClaudeSubagentTask(message: Record<string, unknown>): boolean 
   )
 }
 
-function taskState(value: unknown): NativeChatSubagentState | null {
-  return typeof value === 'string' ? (TASK_STATES.get(value) ?? null) : null
-}
-
 export function readClaudeSubagentTaskFrame(
   message: Record<string, unknown>
 ): ClaudeSubagentTaskFrame | null {
@@ -90,8 +63,8 @@ export function readClaudeSubagentTaskFrame(
   if (!taskId) {
     return null
   }
-  const patch = claudeRecord(message.patch)
-  const toolUseId = claudeText(message.tool_use_id) ?? claudeText(patch?.tool_use_id)
+  const toolUseId =
+    claudeText(message.tool_use_id) ?? claudeText(claudeRecord(message.patch)?.tool_use_id)
   const announcement = subtype === 'task_started'
   // Housekeeping Claude runs for itself; the user never asked for it.
   const suppressed = message.ambient === true || message.skip_transcript === true
@@ -99,25 +72,6 @@ export function readClaudeSubagentTaskFrame(
   return {
     taskId,
     toolUseId: toolUseId && isBoundedClaudeTaskId(toolUseId) ? toolUseId : null,
-    label:
-      claudeTaskDescription(message.description) ??
-      claudeTaskDescription(patch?.description) ??
-      // Bounded like a description: the roster stores whatever this returns.
-      (announcement ? (claudeTaskDescription(message.subagent_type) ?? null) : null),
-    // Notifications carry terminal evidence; progress carries usage only.
-    state:
-      subtype === 'task_notification'
-        ? taskState(message.status)
-        : announcement || subtype === 'task_updated'
-          ? taskState(patch?.status ?? message.status)
-          : null,
-    backgrounded:
-      typeof patch?.is_backgrounded === 'boolean'
-        ? patch.is_backgrounded
-        : typeof message.is_backgrounded === 'boolean'
-          ? message.is_backgrounded
-          : null,
-    announcement,
     announcesSubagent: subagent,
     excluded: announcement && !subagent
   }

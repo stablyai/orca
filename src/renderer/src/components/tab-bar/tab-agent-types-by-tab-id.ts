@@ -27,12 +27,6 @@ const EMPTY_AGENT_STATUS_BY_PANE_KEY: Record<string, AgentStatusEntry> = Object.
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: Record<string, TerminalLayoutSnapshot> = Object.freeze({})
 const EMPTY_TAB_AGENT_TYPES_BY_TAB_ID: Record<string, AgentType> = Object.freeze({})
 const EMPTY_UNSAFE_TABS_BY_ID: Record<string, true> = Object.freeze({})
-const DISABLED_TAB_BAR_AGENT_PROJECTIONS: TabBarAgentProjections = Object.freeze({
-  nativeChatEnabled: false,
-  tabAgentTypesByTabId: EMPTY_TAB_AGENT_TYPES_BY_TAB_ID,
-  nativeChatTabWideFallbackUnsafeTabsById: EMPTY_UNSAFE_TABS_BY_ID
-})
-
 function reuseRecordIfEqual<T>(
   previous: Record<string, T> | undefined,
   next: Record<string, T>
@@ -142,18 +136,7 @@ export function createTabBarAgentProjectionSelector(
   let cachedEnabledResult: TabBarAgentProjections | null = null
 
   return (state) => {
-    if (state.settings?.experimentalNativeChat !== true) {
-      if (cachedEnabledResult) {
-        cachedAgentStatusByPaneKey = null
-        cachedAgentTypeLayoutsByTabId = null
-        cachedAgentTypesByTabId = EMPTY_TAB_AGENT_TYPES_BY_TAB_ID
-        cachedUnsafeLayoutsByTabId = null
-        cachedUnsafeTabsById = EMPTY_UNSAFE_TABS_BY_ID
-        cachedEnabledResult = null
-      }
-      return DISABLED_TAB_BAR_AGENT_PROJECTIONS
-    }
-
+    const nativeChatEnabled = state.settings?.experimentalNativeChat === true
     const statuses = state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY
     const layouts = state.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID
     if (statuses !== cachedAgentStatusByPaneKey || layouts !== cachedAgentTypeLayoutsByTabId) {
@@ -172,13 +155,14 @@ export function createTabBarAgentProjectionSelector(
       cachedUnsafeLayoutsByTabId = layouts
     }
     if (
-      cachedEnabledResult?.tabAgentTypesByTabId === cachedAgentTypesByTabId &&
+      cachedEnabledResult?.nativeChatEnabled === nativeChatEnabled &&
+      cachedEnabledResult.tabAgentTypesByTabId === cachedAgentTypesByTabId &&
       cachedEnabledResult.nativeChatTabWideFallbackUnsafeTabsById === cachedUnsafeTabsById
     ) {
       return cachedEnabledResult
     }
     cachedEnabledResult = {
-      nativeChatEnabled: true,
+      nativeChatEnabled,
       tabAgentTypesByTabId: cachedAgentTypesByTabId,
       nativeChatTabWideFallbackUnsafeTabsById: cachedUnsafeTabsById
     }

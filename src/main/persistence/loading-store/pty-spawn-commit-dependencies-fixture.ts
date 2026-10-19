@@ -18,7 +18,7 @@ export function createPtySpawnCommitDependencies(
     getLocalPtyStartupPromise: unexpectedPreflight,
     getLocalPtyProviderStartupPromise: unexpectedPreflight,
     adoptStablePane: unexpectedPreflight,
-    assertFolderWorkspacePtyPathUsable: unexpectedPreflight,
+    assertWorkspaceAcceptsNewPty: unexpectedPreflight,
     resolvePtySpawnStartupCwd: unexpectedPreflight,
     localStartupCwdDirectoryExists: unexpectedPreflight,
     prepareCodexResumeHome: unexpectedPreflight,

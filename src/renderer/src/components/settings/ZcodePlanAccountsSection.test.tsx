@@ -138,13 +138,16 @@ describe('ZcodePlanAccountsSection', () => {
     render(<ZcodePlanAccountsSection />)
 
     expect(await screen.findByText('Using the ZCode CLI sign-in')).toBeInTheDocument()
-    expect(screen.getByText(/~\/\.zcode\/cli\/config\.json/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/selected Coding Plan from the ZCode CLI credential store/)
+    ).toBeInTheDocument()
   })
 
   it('saves a trimmed API key through the credential IPC', async () => {
     render(<ZcodePlanAccountsSection />)
 
     const input = await screen.findByPlaceholderText('Paste your GLM Coding Plan API key')
+    mocks.getStatus.mockResolvedValue({ apiKeyConfigured: true, zcodeCliConfigured: false })
     fireEvent.change(input, { target: { value: '  glm-secret  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 

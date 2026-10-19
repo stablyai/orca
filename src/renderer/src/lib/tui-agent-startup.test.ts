@@ -30,6 +30,24 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  // Native chat ignores a custom launch command; a terminal launch must still run it.
+  it('starts a terminal Claude with its custom launch command', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'claude',
+        prompt: 'Fix the bug',
+        cmdOverrides: { claude: 'claude-wrapper' },
+        platform: 'darwin'
+      })
+    ).toEqual({
+      agent: 'claude',
+      launchCommand: "claude-wrapper 'Fix the bug'",
+      expectedProcess: 'claude',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('claude-wrapper')
+    })
+  })
+
   it('uses Gemini interactive prompt mode instead of dropping the prompt', () => {
     expect(
       buildAgentStartupPlan({

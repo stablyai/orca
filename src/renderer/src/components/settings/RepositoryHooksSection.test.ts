@@ -168,10 +168,6 @@ describe('RepositoryHooksSection execution ownership', () => {
       await Promise.resolve()
     })
 
-    expect(readRuntimeIssueCommand).toHaveBeenCalledWith(
-      { activeRuntimeEnvironmentId: 'hub' },
-      repo.id,
-      'runtime:hub'
-    )
+    expect(readRuntimeIssueCommand).toHaveBeenCalledWith('runtime:hub', repo.id)
   })
 })

@@ -56,6 +56,7 @@ vi.mock('../repo-worktrees', () => ({
 }))
 
 import { registerHostedReviewHandlers } from './hosted-review'
+import { WorktreeCatalogUnavailableError } from '../../shared/worktree/worktree-catalog-availability'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -306,7 +307,7 @@ describe('registerHostedReviewHandlers', () => {
     expect(getHostedReviewForBranchMock.mock.calls[0][0]).not.toHaveProperty('active')
   })
 
-  it('carries a selected-worktree claim through to the branch lookup', async () => {
+  it('carries a selected-worktree claim and explicit refresh through to the branch lookup', async () => {
     getHostedReviewForBranchMock.mockResolvedValueOnce(null)
     registerHostedReviewHandlers(store as never, stats as never)
 
@@ -314,13 +315,14 @@ describe('registerHostedReviewHandlers', () => {
       repoPath,
       repoId: repo.id,
       branch: 'feature/selected',
-      active: true
+      active: true,
+      force: true
     })
 
     // Why: the right sidebar renders only the selected worktree, so its lookup
     // earns the per-minute tier instead of the card-list interval (#11532).
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ branch: 'feature/selected', active: true })
+      expect.objectContaining({ branch: 'feature/selected', active: true, force: true })
     )
   })
 
@@ -407,6 +409,27 @@ describe('registerHostedReviewHandlers', () => {
       })
     )
     expect(resolveRegisteredWorktreePathMock).not.toHaveBeenCalled()
+  })
+
+  it('reports an unreachable SSH host as unavailable, not as a foreign worktree', async () => {
+    listRepoWorktreeGraphMock.mockRejectedValueOnce(
+      new WorktreeCatalogUnavailableError(
+        `Worktree catalog unavailable for ${repoPath}: SSH connection "ssh-1" is not connected.`
+      )
+    )
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    const result = handlers['hostedReview:getCreationEligibility'](null, {
+      repoPath,
+      repoId: repo.id,
+      worktreePath,
+      branch: 'feature/pr',
+      base: 'main'
+    })
+
+    await expect(result).rejects.toBeInstanceOf(WorktreeCatalogUnavailableError)
+    await expect(result).rejects.not.toThrow('does not belong')
+    expect(getHostedReviewCreationEligibilityMock).not.toHaveBeenCalled()
   })
 
   it('passes SSH connectionId through pull request creation and records successful creates', async () => {

@@ -20,6 +20,7 @@ import { isGrokEvent } from './provider-event-names'
 import { extractGrokToolFields } from './providers/grok-tool-fields'
 import { extractHermesToolFields } from './providers/hermes-tool-fields'
 import { extractJcodeToolFields } from './providers/jcode-tool-fields'
+import { extractKiroToolFields } from './providers/kiro-tool-fields'
 
 /** The per-provider answer to "is this event a user-initiated new turn?". Exported so the
  *  observation stamp reuses it instead of minting a second list of event-name literals. */
@@ -87,6 +88,9 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       // prompt before the model generates — its real turn boundary. session_start
       // returns early in normalizeJcodeEvent and clears the cache itself.
       return eventName === 'turn_start'
+    case 'kiro':
+      // Why: agentSpawn opens a fresh session in the pane, so stale tool/prompt caches go too.
+      return eventName === 'agentSpawn' || eventName === 'userPromptSubmit'
   }
 }
 
@@ -210,5 +214,7 @@ export function extractToolFields(
       return extractClaudeToolFields(eventName, hookPayload)
     case 'jcode':
       return extractJcodeToolFields(eventName, hookPayload)
+    case 'kiro':
+      return extractKiroToolFields(eventName, hookPayload)
   }
 }

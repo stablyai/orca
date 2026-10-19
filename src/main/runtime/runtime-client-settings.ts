@@ -10,93 +10,39 @@ import {
 } from '../../shared/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai'
-import {
-  SOURCE_CONTROL_LAUNCH_ACTION_IDS,
-  type SourceControlAiActionDefaults
-} from '../../shared/source-control-ai-actions'
+import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../shared/source-control-ai-actions'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
-import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import type { RuntimeStore } from './runtime-store-contract'
-
-export type RuntimeClientSettings = Pick<
-  GlobalSettings,
-  | 'defaultTuiAgent'
-  | 'disabledTuiAgents'
-  | 'agentCmdOverrides'
-  | 'agentDefaultArgs'
-  | 'agentDefaultEnv'
-  | 'agentStatusHooksEnabled'
-  | 'terminalCopyTrimsGutter'
-  | 'defaultTaskSource'
-  | 'defaultTaskViewPreset'
-  | 'visibleTaskProviders'
-  | 'defaultRepoSelection'
-  | 'defaultLinearTeamSelection'
-  | 'githubProjects'
-  | 'experimentalNewWorktreeCardStyle'
-  | 'experimentalNativeChat'
-  | 'openAgentTabsInChatByDefault'
-  | 'experimentalStructuredNativeChat'
-  | 'compactWorktreeCards'
-  | 'minimaxGroupId'
-  | 'minimaxUsageModels'
-  | 'minimaxEndpoint'
-  | 'zcodePlanSite'
-  | 'prBotAuthorOverrides'
-  | 'artifactSharingEnabled'
-  | 'worktreeVisibilityDefaults'
-  | 'agentSkillSharingEnabled'
-  | 'machineName'
-> & {
-  hostSettingOverrides: RuntimeHostDisplayLabelOverrides
-  sourceControlAi: RuntimeClientSourceControlAi
-}
-
-/** The saved per-action launch recipes (agent, prompt template, agent args), already migrated. */
-export type RuntimeClientSourceControlAi = { actions: SourceControlAiActionDefaults }
-
-/** Safe paired projection: host labels only; filesystem defaults stay host-private. */
-export type RuntimeHostDisplayLabelOverrides = Partial<
-  Record<ExecutionHostId, { displayLabel: string }>
->
-
-export type RuntimeClientSettingsUpdate = Pick<
-  Partial<GlobalSettings>,
-  | 'agentStatusHooksEnabled'
-  | 'defaultTuiAgent'
-  | 'disabledTuiAgents'
-  | 'agentDefaultArgs'
-  | 'agentDefaultEnv'
-  | 'defaultTaskSource'
-  | 'defaultTaskViewPreset'
-  | 'visibleTaskProviders'
-  | 'defaultRepoSelection'
-  | 'defaultLinearTeamSelection'
-  | 'githubProjects'
-  | 'experimentalNewWorktreeCardStyle'
-  | 'compactWorktreeCards'
-  | 'minimaxGroupId'
-  | 'minimaxUsageModels'
-  | 'minimaxEndpoint'
-  | 'zcodePlanSite'
-  | 'prBotAuthorOverrides'
-  | 'worktreeVisibilityDefaults'
-  | 'machineName'
->
+import {
+  agentLaunchSettingsMutationUpdates,
+  projectAgentLaunchSettings,
+  type AgentLaunchSettings,
+  type AgentLaunchSettingsMutation
+} from '../../shared/agent-launch-settings'
+import { agentLaunchSettingsRollbackUpdates } from './agent-launch-settings-rollback'
+import type {
+  RuntimeClientSettings,
+  RuntimeClientSettingsUpdate,
+  RuntimeClientSourceControlAi,
+  RuntimeHostDisplayLabelOverrides
+} from './runtime-client-settings-shape'
 
 export class RuntimeClientSettingsController {
   private reconciliationGeneration = 0
   private reconciliationTail: Promise<void> = Promise.resolve()
 
   constructor(
-    private readonly store: Pick<RuntimeStore, 'getSettings' | 'updateSettings'> | null,
+    private readonly store: Pick<
+      RuntimeStore,
+      'getSettings' | 'updateSettings' | 'runDurableMutation'
+    > | null,
     private readonly notifyReposChanged: (() => void) | undefined = undefined
   ) {}
 
@@ -107,6 +53,7 @@ export class RuntimeClientSettingsController {
     const settings = this.store.getSettings()
     return {
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
+      newWorkspaceSetupOnly: false,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],
       agentCmdOverrides: settings.agentCmdOverrides ?? {},
       agentDefaultArgs: settings.agentDefaultArgs ?? {},
@@ -125,11 +72,10 @@ export class RuntimeClientSettingsController {
         : null,
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
-      // The three that decide whether a new agent tab -- and so an orchestration worker -- is a
-      // structured chat session rather than a terminal agent.
       experimentalNativeChat: settings.experimentalNativeChat === true,
-      openAgentTabsInChatByDefault: settings.openAgentTabsInChatByDefault === true,
-      experimentalStructuredNativeChat: settings.experimentalStructuredNativeChat === true,
+      // Older clients use this key to fall back to terminal-backed chat. Keep their default terminal.
+      openAgentTabsInChatByDefault: false,
+      experimentalStructuredNativeChat: settings.experimentalNativeChat === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
@@ -140,6 +86,10 @@ export class RuntimeClientSettingsController {
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings),
       machineName: settings.machineName ?? '',
+      // Why projected: a web client's Settings → Chat edits this host's new-chat default.
+      ...(settings.nativeChatPermissionMode
+        ? { nativeChatPermissionMode: settings.nativeChatPermissionMode }
+        : {}),
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
@@ -157,7 +107,14 @@ export class RuntimeClientSettingsController {
     }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
-    this.store.updateSettings(updates, { notifyListeners: true })
+    // Legacy clients can select an agent or a shell, but cannot select None.
+    this.store.updateSettings(
+      {
+        ...updates,
+        ...(updates.defaultTuiAgent !== undefined ? { newWorkspaceSetupOnly: false } : {})
+      },
+      { notifyListeners: true }
+    )
     const settings = this.store.getSettings()
     if (updates.worktreeVisibilityDefaults !== undefined) {
       this.notifyReposChanged?.()
@@ -178,6 +135,55 @@ export class RuntimeClientSettingsController {
       throw new Error('runtime_unavailable')
     }
     return this.store.getSettings().terminalQuickCommands ?? []
+  }
+
+  getAgentLaunch(): AgentLaunchSettings {
+    if (!this.store?.getSettings) {
+      throw new Error('runtime_unavailable')
+    }
+    return projectAgentLaunchSettings(this.store.getSettings())
+  }
+
+  async mutateAgentLaunch(mutation: AgentLaunchSettingsMutation): Promise<AgentLaunchSettings> {
+    const store = this.store
+    if (!store?.getSettings || !store.updateSettings || !store.runDurableMutation) {
+      throw new Error('runtime_unavailable')
+    }
+    const applySettings = store.updateSettings.bind(store)
+    const committed = await store.runDurableMutation(() => {
+      const before = store.getSettings()
+      const updates = agentLaunchSettingsMutationUpdates(before, mutation, process.platform)
+      applySettings(updates, { notifyListeners: true })
+      const applied = store.getSettings()
+      return {
+        value: {
+          settings: projectAgentLaunchSettings(applied),
+          reconcileHooks:
+            updates.disabledTuiAgents !== undefined &&
+            !haveSameDisabledTuiAgents(before.disabledTuiAgents, applied.disabledTuiAgents)
+        },
+        rollback: () => {
+          const rollback = agentLaunchSettingsRollbackUpdates(
+            before,
+            applied,
+            store.getSettings(),
+            updates
+          )
+          if (Object.keys(rollback).length > 0) {
+            applySettings(rollback, { notifyListeners: true })
+          }
+        }
+      }
+    })
+    if (committed.reconcileHooks) {
+      void this.reconcileManagedAgentHooks().catch((error) => {
+        console.error(
+          '[agent-hooks] Failed to reconcile managed hooks after saving launch settings:',
+          error
+        )
+      })
+    }
+    return committed.settings
   }
 
   updateTerminalQuickCommands(mutation: TerminalQuickCommandMutation): TerminalQuickCommand[] {

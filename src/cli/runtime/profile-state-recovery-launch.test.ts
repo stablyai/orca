@@ -10,7 +10,7 @@ import {
 } from './profile-state-recovery-launch'
 
 const mocks = vi.hoisted(() => ({ run: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: mocks.run }))
+vi.mock('@orca/process-host', () => ({ runProcess: mocks.run }))
 vi.mock('./launch', () => ({
   resolveForegroundOrcaExecutable: () => '/packaged/Orca',
   resolveAppRoot: () => '/application',
@@ -105,6 +105,13 @@ describe('profile-state recovery launch', () => {
       code: 'invalid_argument',
       message: 'Backup unavailable'
     })
+  })
+
+  it('round-trips latest JSON selection and the exported SQLite revision', async () => {
+    expect(
+      await launchProfileStateRecovery({ userDataPath: '.', selector: { kind: 'latest-json' } })
+    ).toEqual(result)
+    expect(mocks.run.mock.calls[0][0].args.at(-1)).toContain('"kind":"latest-json"')
   })
 
   it.each([

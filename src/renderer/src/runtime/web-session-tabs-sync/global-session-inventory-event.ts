@@ -1,4 +1,6 @@
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/structured-agent-session-launch-unconfirmed-recheck'
 import { useAppStore } from '../../store'
 import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
@@ -173,4 +175,7 @@ export function handleGlobalSessionInventoryEvent({
         settleHydration?.()
       }
     })
+  // Each subscription opens with one census: the host is reachable again. Chats it lists were
+  // already settled as published above, before any recovery await.
+  recheckUnconfirmedStructuredAgentLaunches(toRuntimeExecutionHostId(environmentId))
 }

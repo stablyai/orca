@@ -92,9 +92,10 @@ function makeQueue(
 
 function send(
   queue: WorkerThreadRequestQueue<Request, Response>,
-  label: string
+  label: string,
+  owner?: { readonly signal: AbortSignal }
 ): Promise<Response> {
-  return queue.dispatch((id) => ({ id, label }), TIMEOUT_MS)
+  return queue.dispatch((id) => ({ id, label }), TIMEOUT_MS, undefined, owner)
 }
 
 /** Resolve to the response or to the rejection, so a test can assert on either. */
@@ -326,6 +327,161 @@ describe('WorkerThreadRequestQueue', () => {
     expect(labels(workers[3])).toEqual(['d'])
     workers[3].respond()
     expect(await behind).toMatchObject({ label: 'd' })
+  })
+
+  it('keeps one owner fault budget across idle batches and refuses a fourth worker', async () => {
+    const workers: FakeWorker[] = []
+    const queue = makeQueue(workers)
+    const owner = { signal: new AbortController().signal }
+    try {
+      for (let fault = 0; fault < 3; fault++) {
+        const call = settle(send(queue, `owned-${fault}`, owner))
+        workers.at(-1)?.emit('error', new Error(`fault-${fault}`))
+        expect(await call).toMatchObject({ message: `fault-${fault}` })
+      }
+      const refused = settle(send(queue, 'fourth', owner))
+      expect(workers).toHaveLength(3)
+      await expect(refused).resolves.toMatchObject({ message: 'crashed repeatedly (fault-2)' })
+      const nextScan = send(queue, 'new-scan', { signal: new AbortController().signal })
+      expect(workers).toHaveLength(4)
+      workers[3].respond()
+      await expect(nextScan).resolves.toMatchObject({ label: 'new-scan' })
+    } finally {
+      queue.dispose()
+    }
+  })
+
+  it('resets only the successful owner and does not count idle worker exits', async () => {
+    const workers: FakeWorker[] = []
+    const queue = makeQueue(workers)
+    const a = { signal: new AbortController().signal }
+    const b = { signal: new AbortController().signal }
+    try {
+      const initial = send(queue, 'initial', a)
+      workers[0].respond()
+      await initial
+      workers[0].emit('exit', 17)
+      for (let fault = 0; fault < 2; fault++) {
+        const call = settle(send(queue, `a-${fault}`, a))
+        workers.at(-1)?.emit('error', new Error(`a-fault-${fault}`))
+        await call
+      }
+      const peer = send(queue, 'b-success', b)
+      workers.at(-1)?.respond()
+      await peer
+      const third = settle(send(queue, 'a-third', a))
+      workers.at(-1)?.emit('error', new Error('a-third-fault'))
+      await third
+      const refused = settle(send(queue, 'a-fourth', a))
+      expect(workers).toHaveLength(4)
+      await expect(refused).resolves.toMatchObject({
+        message: 'crashed repeatedly (a-third-fault)'
+      })
+      const healthy = send(queue, 'b-still-healthy', b)
+      workers.at(-1)?.respond()
+      await expect(healthy).resolves.toMatchObject({ label: 'b-still-healthy' })
+    } finally {
+      queue.dispose()
+    }
+  })
+
+  it('clears a successful owner budget while preserving another owner failure count', async () => {
+    const workers: FakeWorker[] = []
+    const queue = makeQueue(workers)
+    const a = { signal: new AbortController().signal }
+    const b = { signal: new AbortController().signal }
+    try {
+      for (const owner of [a, b]) {
+        for (let fault = 0; fault < 2; fault++) {
+          const call = settle(send(queue, 'failure', owner))
+          workers.at(-1)?.emit('error', new Error('failure'))
+          await call
+        }
+      }
+      const successful = send(queue, 'a-success', a)
+      workers.at(-1)?.respond()
+      await successful
+      const thirdB = settle(send(queue, 'b-third', b))
+      workers.at(-1)?.emit('error', new Error('b-third-fault'))
+      await thirdB
+      for (let fault = 0; fault < 2; fault++) {
+        const call = settle(send(queue, 'a-new-failure', a))
+        workers.at(-1)?.emit('error', new Error('a-new-failure'))
+        await call
+      }
+      const stillAllowed = send(queue, 'a-allowed', a)
+      expect(workers).toHaveLength(8)
+      workers.at(-1)?.respond()
+      await expect(stillAllowed).resolves.toMatchObject({ label: 'a-allowed' })
+      await expect(settle(send(queue, 'b-refused', b))).resolves.toMatchObject({
+        message: 'crashed repeatedly (b-third-fault)'
+      })
+      expect(workers).toHaveLength(8)
+    } finally {
+      queue.dispose()
+    }
+  })
+
+  it('drains only the failing owner while queued peers keep their FIFO order', async () => {
+    const workers: FakeWorker[] = []
+    const queue = makeQueue(workers)
+    const a = { signal: new AbortController().signal }
+    const b = { signal: new AbortController().signal }
+    try {
+      const failed = ['a1', 'a2', 'a3', 'a4'].map((label) => settle(send(queue, label, a)))
+      const peer = settle(send(queue, 'peer', b))
+      const ordinary = settle(send(queue, 'ordinary'))
+      for (let fault = 0; fault < 3; fault++) {
+        workers.at(-1)?.emit('error', new Error(`fault-${fault}`))
+      }
+      expect(workers).toHaveLength(4)
+      expect(labels(workers[3])).toEqual(['peer'])
+      expect((await Promise.all(failed)).at(-1)).toMatchObject({
+        message: 'crashed repeatedly (fault-2)'
+      })
+      workers[3].respond()
+      await expect(peer).resolves.toMatchObject({ label: 'peer' })
+      expect(labels(workers[3])).toEqual(['peer', 'ordinary'])
+      workers[3].respond()
+      await expect(ordinary).resolves.toMatchObject({ label: 'ordinary' })
+    } finally {
+      queue.dispose()
+    }
+  })
+
+  it('keeps retirement refusals out of the owner failure budget', async () => {
+    vi.useFakeTimers()
+    const workers: FakeWorker[] = []
+    let finish: (code: number) => void = () => {}
+    const first = new FakeWorker()
+    first.exit = new Promise((resolve) => {
+      finish = resolve
+    })
+    const queue = makeQueue(workers, {
+      awaitRetirement: true,
+      makeWorker: () => (workers.length === 0 ? first : new FakeWorker())
+    })
+    const owner = { signal: new AbortController().signal }
+    try {
+      const failed = settle(send(queue, 'first', owner))
+      first.emit('error', new Error('first-fault'))
+      await failed
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await expect(settle(send(queue, 'not-executed', owner))).resolves.toMatchObject({
+          message: 'unavailable: previous worker still exiting'
+        })
+      }
+      expect(workers).toHaveLength(1)
+      finish(1)
+      await vi.advanceTimersByTimeAsync(0)
+      const recovered = send(queue, 'recovered', owner)
+      expect(workers).toHaveLength(2)
+      workers[1].respond()
+      await expect(recovered).resolves.toMatchObject({ label: 'recovered' })
+    } finally {
+      finish(1)
+      queue.dispose()
+    }
   })
 
   describe('awaitRetirement', () => {

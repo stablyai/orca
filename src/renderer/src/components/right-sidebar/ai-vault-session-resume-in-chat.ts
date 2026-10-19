@@ -8,7 +8,7 @@ import { isAntigravityReferenceSession } from '../../../../shared/antigravity-se
 import { isWslStoredAiVaultSessionFile } from '@/lib/ai-vault-resume-target'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { adoptsCliConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultSession
@@ -26,17 +26,26 @@ export type AiVaultResumeInChatEligibility =
   | { available: false; reason: AiVaultResumeInChatBlockedReason }
 
 /**
- * Claude and Codex do not have the same freedom about *where* a conversation may be resumed.
+ * Agents do not have the same freedom about *where* a conversation may be resumed.
  *
- * Codex is handed the rollout file and a cwd, so it can resume into any workspace. Claude's SDK
- * stores transcripts under a project key derived from the launch cwd, so resuming from a workspace
- * other than the one the conversation was recorded in looks in a directory the transcript is not in.
+ * Codex is handed the rollout file and a cwd, so it can resume into any workspace. Claude, Grok and
+ * OMP store conversations under a folder derived from the launch cwd, so resuming from a workspace
+ * other than the one the conversation was recorded in looks in a folder the conversation is not in,
+ * OpenCode refuses a conversation that does not belong to the launch cwd, and a Pi chat forks a
+ * conversation recorded elsewhere into a copy instead of taking it over.
  * That is a resume that silently yields nothing, which is worse than a disabled affordance.
  */
 export function aiVaultSessionResumeInChatWorkspaceMatters(
   agent: AiVaultSession['agent']
 ): boolean {
-  return agent === 'claude'
+  return (
+    agent === 'claude' ||
+    agent === 'grok' ||
+    agent === 'omp' ||
+    agent === 'opencode' ||
+    agent === 'opencode2' ||
+    agent === 'pi'
+  )
 }
 
 /**
@@ -65,13 +74,13 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   > & { structuredSession?: AiVaultSession['structuredSession'] }
   targetWorkspaceId: string | null
   targetWorkspacePath: string | null
-  /** The route the same (workspace, agent) pair would take for a fresh chat. Reused rather than
-   *  re-derived: it already encodes the settings flag, host capability, platform refusals and the
-   *  WSL/repair refusal, and a second copy of those conditions would drift from it. */
+  /** Whether the same (workspace, agent) pair can host a structured chat; the Chat UI switch does
+   *  not apply. Reused rather than re-derived: it already encodes host capability, platform refusals
+   *  and the WSL/repair refusal, and a second copy of those conditions would drift from it. */
   structuredRouteAvailable: boolean
 }): AiVaultResumeInChatEligibility {
   const { session } = args
-  if (isAntigravityReferenceSession(session) || !isAgentSessionHandleProvider(session.agent)) {
+  if (isAntigravityReferenceSession(session) || !adoptsCliConversations(session.agent)) {
     return { available: false, reason: 'agent' }
   }
   // An already-adopted row reopens its own chat instead; offering a second resume of it would ask

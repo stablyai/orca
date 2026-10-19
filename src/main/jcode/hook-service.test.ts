@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -17,6 +17,7 @@ import { JcodeHookService } from './hook-service'
 import {
   getJcodeConfigPath,
   getJcodeManagedCommand,
+  getJcodeManagedScriptFileName,
   getJcodeManagedScriptPath,
   JCODE_HOOK_EVENTS
 } from './hook-settings'
@@ -72,6 +73,123 @@ describe('JcodeHookService', () => {
     expect(script).toContain('payload="$JCODE_HOOK_PAYLOAD"')
   })
 
+  it('reports a missing managed script and repairs it without changing config', () => {
+    const service = new JcodeHookService()
+    service.install()
+    const config = readFileSync(getJcodeConfigPath(), 'utf8')
+    rmSync(getJcodeManagedScriptPath())
+
+    expect(service.getStatus()).toMatchObject({
+      state: 'partial',
+      managedHooksPresent: true,
+      detail: 'Managed hook script missing'
+    })
+    expect(readFileSync(getJcodeConfigPath(), 'utf8')).toBe(config)
+    expect(service.install().state).toBe('installed')
+    expect(readFileSync(getJcodeManagedScriptPath(), 'utf8')).toContain('/hook/jcode')
+    expect(readFileSync(getJcodeConfigPath(), 'utf8')).toBe(config)
+  })
+
+  it('reports missing scripts alongside incomplete event coverage and user hooks', () => {
+    const service = new JcodeHookService()
+    service.install()
+    writeFileSync(
+      getJcodeConfigPath(),
+      `[hooks]\nsession_start = ${tomlQuoteString(getJcodeManagedCommand(getJcodeManagedScriptPath()))}\nturn_end = "~/bin/my-turn-notify"\n`,
+      'utf8'
+    )
+    rmSync(getJcodeManagedScriptPath())
+
+    const status = service.getStatus()
+    expect(status.state).toBe('partial')
+    expect(status.detail).toContain('Managed hook script missing')
+    expect(status.detail).toContain(
+      'Managed hook missing for events: turn_start, pre_tool, post_tool, session_end'
+    )
+    expect(status.detail).toContain('User-owned hooks kept for events: turn_end')
+    expect(service.install().state).toBe('partial')
+    expect(service.getStatus().detail).not.toContain('script missing')
+    expect(readFileSync(getJcodeConfigPath(), 'utf8')).toContain(
+      'turn_end = "~/bin/my-turn-notify"'
+    )
+  })
+
+  it.each([
+    '/Users/previous/.orca/agent-hooks/jcode-hook.sh',
+    'C:\\Users\\previous\\.orca\\agent-hooks\\jcode-hook.cmd'
+  ])('recognizes a stale managed command %s without a local script', (stalePath) => {
+    const service = new JcodeHookService()
+    const configPath = getJcodeConfigPath()
+    mkdirSync(dirname(configPath), { recursive: true })
+    writeFileSync(
+      configPath,
+      `[hooks]\nturn_end = ${tomlQuoteString(getJcodeManagedCommand(stalePath))}\n`,
+      'utf8'
+    )
+
+    const status = service.getStatus()
+    expect(status.state).toBe('partial')
+    expect(status.managedHooksPresent).toBe(true)
+    expect(status.detail).toContain('Managed hook command outdated for events: turn_end')
+    expect(status.detail).toContain('Managed hook script missing')
+    expect(status.detail).not.toContain('User-owned')
+    expect(service.install().state).toBe('installed')
+    expect(readFileSync(configPath, 'utf8')).not.toContain('previous')
+  })
+
+  it('does not report complete stale event coverage as installed when the current script exists', () => {
+    const service = new JcodeHookService()
+    service.install()
+    const staleCommand = getJcodeManagedCommand('/Users/previous/.orca/agent-hooks/jcode-hook.sh')
+    writeFileSync(
+      getJcodeConfigPath(),
+      `[hooks]\n${JCODE_HOOK_EVENTS.map((event) => `${event} = ${tomlQuoteString(staleCommand)}`).join('\n')}\n`,
+      'utf8'
+    )
+
+    const status = service.getStatus()
+    expect(status.state).toBe('partial')
+    expect(status.managedHooksPresent).toBe(true)
+    expect(status.detail).toBe(
+      `Managed hook command outdated for events: ${JCODE_HOOK_EVENTS.join(', ')}`
+    )
+    expect(service.install().state).toBe('installed')
+  })
+
+  it('reports legacy unquoted commands as outdated even when the script exists', () => {
+    const service = new JcodeHookService()
+    service.install()
+    writeFileSync(
+      getJcodeConfigPath(),
+      `[hooks]\n${JCODE_HOOK_EVENTS.map((event) => `${event} = ${tomlQuoteString(getJcodeManagedScriptPath())}`).join('\n')}\n`,
+      'utf8'
+    )
+
+    const status = service.getStatus()
+    expect(status.state).toBe('partial')
+    expect(status.detail).toContain('Managed hook command outdated for events:')
+    expect(status.detail).not.toContain('script missing')
+    expect(status.detail).not.toContain('User-owned')
+    expect(service.install().state).toBe('installed')
+  })
+
+  it('does not mistake a user command mentioning the managed script in a comment for Orca ownership', () => {
+    const configPath = getJcodeConfigPath()
+    mkdirSync(dirname(configPath), { recursive: true })
+    writeFileSync(
+      configPath,
+      `[hooks]\nturn_end = "~/bin/my-turn-notify" # replaces agent-hooks/${getJcodeManagedScriptFileName()}\n`,
+      'utf8'
+    )
+
+    const status = new JcodeHookService().getStatus()
+    expect(status.state).toBe('partial')
+    expect(status.managedHooksPresent).toBe(false)
+    expect(status.detail).toContain('User-owned hooks kept for events: turn_end')
+    expect(status.detail).not.toContain('command outdated')
+    expect(status.detail).not.toContain('script missing')
+  })
+
   it('preserves unrelated config tables when installing hooks', () => {
     const configPath = getJcodeConfigPath()
     mkdirSync(dirname(configPath), { recursive: true })
@@ -107,6 +225,8 @@ describe('JcodeHookService', () => {
     expect(before).toContain('turn_end')
     const status = new JcodeHookService().remove()
     expect(status.state).toBe('not_installed')
+    expect(status.detail).toBeNull()
+    expect(existsSync(getJcodeManagedScriptPath())).toBe(true)
     const after = readFileSync(getJcodeConfigPath(), 'utf8')
     expect(after).not.toContain(getJcodeManagedScriptPath())
   })

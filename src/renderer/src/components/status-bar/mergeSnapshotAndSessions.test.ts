@@ -57,7 +57,7 @@ const baseCtx = (overrides: Partial<MergeContext> = {}): MergeContext => ({
   workspaceSessionReady: true,
   repoDisplayNameById: new Map(),
   repoConnectionIdById: new Map(),
-  repoRuntimeScopedById: new Map(),
+  repoRuntimeHostIdById: new Map(),
   ...overrides
 })
 
@@ -432,10 +432,7 @@ describe('mergeSnapshotAndSessions', () => {
         ['runtime-repo', null],
         ['ssh-repo', 'ssh-target-1']
       ]),
-      repoRuntimeScopedById: new Map([
-        ['runtime-repo', true],
-        ['ssh-repo', false]
-      ])
+      repoRuntimeHostIdById: new Map([['runtime-repo', 'runtime:env-1']])
     })
 
     const out = mergeSnapshotAndSessions(makeSnapshot([runtimeWt]), sessions, ctx)
@@ -460,6 +457,68 @@ describe('mergeSnapshotAndSessions', () => {
     expect(orphan.worktrees[0].sessions[0]).toMatchObject({
       sessionId: 'opaque-local-orphan',
       bound: false
+    })
+  })
+
+  it("lists a paired server's own samples under the projects it hosts, read-only", () => {
+    const serverWt: WorktreeMemory = {
+      worktreeId: 'runtime-repo::/srv/Wt',
+      worktreeName: 'Wt',
+      repoId: 'runtime-repo',
+      repoName: 'server-name',
+      cpu: 7,
+      memory: 700,
+      history: [600, 700],
+      sessions: [{ sessionId: 'server-pty', paneKey: null, pid: 9, cpu: 7, memory: 700 }]
+    }
+    const strangerWt: WorktreeMemory = {
+      ...serverWt,
+      worktreeId: 'local-repo::/srv/Other',
+      repoId: 'local-repo',
+      repoName: 'Other',
+      sessions: [{ sessionId: 'stranger-pty', paneKey: null, pid: 10, cpu: 1, memory: 10 }]
+    }
+    const localWt: WorktreeMemory = {
+      ...serverWt,
+      worktreeId: 'local-repo::/Users/me/Wt',
+      repoId: 'local-repo',
+      repoName: 'local',
+      sessions: [{ sessionId: 'local-pty', paneKey: null, pid: 11, cpu: 1, memory: 10 }]
+    }
+    const ctx = baseCtx({
+      repoDisplayNameById: new Map([['runtime-repo', 'Server Project']]),
+      repoRuntimeHostIdById: new Map([['runtime-repo', 'runtime:env-1']]),
+      runtimeHostResources: [
+        { hostId: 'runtime:env-1', hostLabel: 'Lab box', worktrees: [serverWt, strangerWt] }
+      ]
+    })
+
+    // Why: this machine's sweep of the same id must not render under the server's project.
+    const out = mergeSnapshotAndSessions(makeSnapshot([localWt, serverWt]), [], ctx)
+
+    const server = out.find((repo) => repo.repoId === 'runtime-repo')!
+    expect(server).toMatchObject({ repoName: 'Server Project', cpu: 7, memory: 700 })
+    expect(server.worktrees).toHaveLength(1)
+    expect(server.worktrees[0]).toMatchObject({
+      worktreeId: 'runtime-repo::/srv/Wt',
+      isRemote: true,
+      hostLabel: 'Lab box',
+      history: [600, 700]
+    })
+    expect(server.worktrees[0].sessions[0]).toMatchObject({
+      sessionId: 'server-pty',
+      readOnly: true
+    })
+
+    const local = out.find((repo) => repo.repoId === 'local-repo')!
+    expect(local.worktrees.map((wt) => wt.worktreeId)).toEqual(['local-repo::/Users/me/Wt'])
+    expect(local.worktrees[0].sessions[0].readOnly).toBeUndefined()
+
+    // A server row this client places elsewhere keeps its own host-qualified group.
+    const stranger = out.find((repo) => repo.repoId === 'runtime:env-1|local-repo')!
+    expect(stranger.worktrees[0]).toMatchObject({
+      worktreeId: 'runtime:env-1|local-repo::/srv/Other',
+      hostLabel: 'Lab box'
     })
   })
 

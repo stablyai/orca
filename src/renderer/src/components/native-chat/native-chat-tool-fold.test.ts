@@ -47,6 +47,43 @@ describe('foldToolMessages', () => {
     expect(folded[0]?.blocks).toHaveLength(3)
   })
 
+  // A stored-only provider event draws nothing; splitting a run around it would show two runs
+  // back to back with no visible reason. A plan update does split: it draws as the task list.
+  it('keeps one run across a wordless provider event, but not across a plan update', () => {
+    const frameRow = (id: string, kind: string): NativeChatMessage =>
+      msg({
+        id,
+        role: 'system',
+        blocks: [
+          {
+            type: 'text',
+            text: `codex · ${kind}`,
+            providerFrame: {
+              provider: 'codex',
+              kind,
+              payload: { head: '{}', byteLength: 2, digest: 'digest', truncated: false }
+            }
+          }
+        ]
+      })
+    const run = (between: NativeChatMessage): string[] =>
+      foldToolMessages([
+        msg({
+          id: 'a1',
+          blocks: [
+            { type: 'text', text: 'go' },
+            { type: 'tool-call', name: 'Bash', input: {} }
+          ]
+        }),
+        msg({ id: 'r1', role: 'tool', blocks: [{ type: 'tool-result', output: 'ok' }] }),
+        between,
+        msg({ id: 'a2', blocks: [{ type: 'tool-call', name: 'Bash', input: {} }] }),
+        msg({ id: 'r2', role: 'tool', blocks: [{ type: 'tool-result', output: 'ok' }] })
+      ]).map((message) => message.id)
+    expect(run(frameRow('frame', 'notification:future/event'))).toEqual(['a1', 'frame'])
+    expect(run(frameRow('plan', 'notification:turn/plan/updated'))).toEqual(['a1', 'plan', 'a2'])
+  })
+
   it('drops a tool result no loaded call can own instead of leaving it standalone', () => {
     const folded = foldToolMessages([
       msg({ id: 'u', role: 'user', blocks: [{ type: 'text', text: 'hi' }] }),

@@ -197,20 +197,14 @@ describe('forkAgentSessionFromPane', () => {
       [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
     }
     const result = {
-      surface: {
-        kind: 'local-agent-session',
-        tabId: 'structured-agent-session-session-1',
-        sessionId: 'session-1'
-      },
+      surface: { kind: 'host-published' },
       startupPlan: {},
       pasteDraftAfterLaunch: false,
       structuredSettlement: new Promise(() => {})
     }
     mockLaunchAgentInNewTab.mockImplementationOnce(
-      (args: {
-        beforeSurfaceOpen?: (surface: { kind: 'local-agent-session'; sessionId: string }) => void
-      }) => {
-        args.beforeSurfaceOpen?.({ kind: 'local-agent-session', sessionId: 'session-1' })
+      (args: { beforeSurfaceOpen?: (surface: { kind: 'host-published' }) => void }) => {
+        args.beforeSurfaceOpen?.({ kind: 'host-published' })
         return result
       }
     )
@@ -242,20 +236,14 @@ describe('forkAgentSessionFromPane', () => {
         [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
       }
       const result = {
-        surface: {
-          kind: 'local-agent-session',
-          tabId: 'structured-agent-session-session-1',
-          sessionId: 'session-1'
-        },
+        surface: { kind: 'host-published' },
         startupPlan: {},
         pasteDraftAfterLaunch: false,
         structuredSettlement: Promise.resolve(settlement)
       }
       mockLaunchAgentInNewTab.mockImplementationOnce(
-        (args: {
-          beforeSurfaceOpen?: (surface: { kind: 'local-agent-session'; sessionId: string }) => void
-        }) => {
-          args.beforeSurfaceOpen?.({ kind: 'local-agent-session', sessionId: 'session-1' })
+        (args: { beforeSurfaceOpen?: (surface: { kind: 'host-published' }) => void }) => {
+          args.beforeSurfaceOpen?.({ kind: 'host-published' })
           return result
         }
       )

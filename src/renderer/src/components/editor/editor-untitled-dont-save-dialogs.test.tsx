@@ -30,15 +30,22 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: vi.fn() }))
 const FILE_ID = '/repo/untitled.md'
 
 function mainWindowDialogController(fileId: string): TerminalEditorCloseDialogActionsInput {
+  const pendingEditorCloseQueueRef = { current: [fileId] }
   return {
     advanceEditorCloseQueue: vi.fn(),
+    closedReactionsRef: { current: new Map() },
     inFlightSaveFileIdRef: { current: null },
     isClosingRef: { current: false },
-    pendingEditorCloseQueueRef: { current: [fileId] },
+    pendingEditorCloseQueueRef,
     queueEditorCloseRequests: vi.fn(),
     releaseCloseDialogGuardAfterDebounce: vi.fn(),
     saveDialogFileId: fileId,
     setSaveDialogFileId: vi.fn(),
+    settleQueuedClose: vi.fn((settled: string) => {
+      pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
+        (queued) => queued !== settled
+      )
+    }),
     waitForFileClosed: vi.fn(async () => true),
     windowCloseAfterDirtyRef: { current: null }
   }

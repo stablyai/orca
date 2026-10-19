@@ -402,6 +402,32 @@ test('builds a C31 canary that only C31 placement satisfies', () => {
   assert.throws(() => buildProductionCanaryEvidence(onC30), /C31 canary load was not placed only on C31/)
 })
 
+test('builds a C34 canary that only C34 placement satisfies', () => {
+  const c34 = 'production-gce-c34'
+  const evidence = buildProductionCanaryEvidence(canaryInput({}, c34))
+  assert.equal(evidence.kind, 'production-c34-canary')
+  assert.equal(verifyRolloutEvidence(
+    evidence, workflowRun(evidence),
+    verifyExpected('production-c34-canary', { cellIds: [c34], selectorGeneration: 9 })
+  ), evidence)
+  const onC31 = canaryInput({}, c34)
+  onC31.loadReport.assignedCellOrigins = ['https://c31.relay.onorca.dev']
+  assert.throws(() => buildProductionCanaryEvidence(onC31), /C34 canary load was not placed only on C34/)
+})
+
+test('builds a C35 canary that only C35 placement satisfies', () => {
+  const c35 = 'production-gce-c35'
+  const evidence = buildProductionCanaryEvidence(canaryInput({}, c35))
+  assert.equal(evidence.kind, 'production-c35-canary')
+  assert.equal(verifyRolloutEvidence(
+    evidence, workflowRun(evidence),
+    verifyExpected('production-c35-canary', { cellIds: [c35], selectorGeneration: 9 })
+  ), evidence)
+  const onC34 = canaryInput({}, c35)
+  onC34.loadReport.assignedCellOrigins = ['https://c34.relay.onorca.dev']
+  assert.throws(() => buildProductionCanaryEvidence(onC34), /C35 canary load was not placed only on C35/)
+})
+
 test('records but does not gate organic US-targeted fallbacks during a canary', () => {
   // Mirrors C31's 2026-10-01 canary: US-targeted fallbacks, none targeting Asia.
   const input = canaryInput({}, 'production-gce-c31')

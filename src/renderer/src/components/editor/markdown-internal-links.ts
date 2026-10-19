@@ -56,7 +56,7 @@ function normalizePathForCompare(p: string): string {
   return np
 }
 
-function hasMarkdownExtension(p: string): boolean {
+export function hasMarkdownExtension(p: string): boolean {
   const lastDot = p.lastIndexOf('.')
   if (lastDot === -1) {
     return false

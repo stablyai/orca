@@ -76,7 +76,8 @@ describe('orchestration send structured payload flags', () => {
         ['task-id', 'task_1'],
         ['dispatch-id', 'ctx_1'],
         ['outcome', 'succeeded'],
-        ['files-modified', 'src/a.ts, src/b.ts'],
+        ['files-modified', ' src/a.ts, ,src/b.ts, '],
+        ['phase', 'verification'],
         ['report-path', 'reports/done.md']
       ])
     )
@@ -96,7 +97,8 @@ describe('orchestration send structured payload flags', () => {
           dispatchId: 'ctx_1',
           outcome: 'succeeded',
           filesModified: ['src/a.ts', 'src/b.ts'],
-          reportPath: 'reports/done.md'
+          reportPath: 'reports/done.md',
+          phase: 'verification'
         }),
         waitForLifecycleSettlement: true,
         devMode: false

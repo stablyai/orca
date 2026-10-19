@@ -15,13 +15,6 @@ const FEEDBACK_IMAGE_EXTENSIONS: Record<string, string> = {
   'image/gif': 'gif'
 }
 
-export {
-  MAX_FEEDBACK_IMAGE_BYTES,
-  MAX_FEEDBACK_IMAGE_COUNT,
-  MAX_FEEDBACK_IMAGE_TOTAL_BYTES
-} from '../../shared/feedback-image-limits'
-export type { FeedbackImageAttachment } from '../../shared/feedback-submit-contract'
-
 export const MAX_FEEDBACK_IMAGE_RESPONSE_BYTES = 64 * 1024
 export const FEEDBACK_IMAGE_FORM_FIELD = 'feedbackImage'
 

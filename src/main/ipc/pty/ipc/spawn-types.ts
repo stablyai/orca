@@ -9,17 +9,16 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalStartupCwdMissingDirFallback } from '../../../../shared/terminal-startup-cwd'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence'
-import type { PtySpawnResult } from '../../../providers/types'
-import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import type { CodexSessionResumePreparation } from '../../../codex/codex-session-resume-home'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import type {
   CodexHomePtySpawnedLifecycleArgs,
   GetSelectedCodexHomePath,
   PrepareClaudeAuth,
   PrepareCodexSessionResume
 } from '../host-env/types'
-import type { CodexResumeLaunch, PreparedCodexResumeHome } from '../host-env/codex-resume'
 import type { StablePaneOwner } from '../pane/stable-owner'
+import type { ResolvedPtyHost } from '../provider/registry'
+import type { PtySpawnCodexResumeDeps } from '../spawn-host-env'
 
 export type PtySpawnIpcArgs = {
   cols: number
@@ -53,6 +52,12 @@ export type PtySpawnIpcArgs = {
   leafId?: string
   // Why: a pane with a live owner is otherwise reattached, so a restart names the PTY it replaces.
   replacesPtyId?: string
+  // Untyped on purpose: parseTerminalPanePlacement is the one check, and drops what it rejects.
+  placement?: unknown
+  // Untyped on purpose: isRestoreSpawnIntent is the one check; anything else is undeclared.
+  spawnIntent?: unknown
+  // Untyped on purpose: planPaneAgentLaunch's AgentLaunch.safeParse is the one check.
+  agentLaunch?: unknown
   // Why: renderer-threaded launch telemetry (telemetry-plan.md§Agent launch semantics); loosely typed because the main-side schema validator is the single enforcement point.
   telemetry?: {
     agent_kind?: unknown
@@ -79,7 +84,7 @@ export type AdoptStablePaneResult = {
   materialized?: true
 }
 
-export type PtySpawnIpcDeps = {
+export type PtySpawnIpcDeps = PtySpawnCodexResumeDeps & {
   runtime?: OrcaRuntimeService
   store?: Store
   getSettings?: () => GlobalSettings
@@ -89,35 +94,18 @@ export type PtySpawnIpcDeps = {
     prepareCodexSessionResume?: PrepareCodexSessionResume
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
   }
-  getLocalPtyStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
+  getLocalPtyStartupPromise: (hostId?: ResolvedPtyHost) => Promise<void> | undefined
   adoptStablePane: (args: AdoptStablePaneArgs) => Promise<AdoptStablePaneResult | null>
-  assertFolderWorkspacePtyPathUsable: (worktreeId: string | undefined) => Promise<void> | void
+  assertWorkspaceAcceptsNewPty: (
+    worktreeId: string | undefined,
+    sessionId?: string
+  ) => Promise<void> | void
   resolvePtySpawnStartupCwd: (
     worktreeId: string | undefined,
     cwd: string | undefined,
     missingDirFallback?: TerminalStartupCwdMissingDirFallback
   ) => string | undefined
   localStartupCwdDirectoryExists: (path: string) => boolean
-  prepareCodexResumeHome: (args: {
-    connectionId?: string | null
-    launchAgent?: TuiAgent
-    providerSession?: AgentProviderSessionMetadata
-    target: CodexAccountSelectionTarget
-    launchEnv?: NodeJS.ProcessEnv
-  }) => PreparedCodexResumeHome | null
-  noCodexResumeLaunch: (command: string | undefined) => CodexResumeLaunch
-  resolveCodexResumeLaunch: (
-    command: string | undefined,
-    prepared: PreparedCodexResumeHome
-  ) => Promise<CodexResumeLaunch>
-  reconcileSharedRuntimeResumeHome: (
-    resumeHome: Extract<CodexSessionResumePreparation, { outcome: 'resume' }>,
-    resolveCurrent: () => string | null | Promise<string | null>
-  ) => Promise<string>
-  stripSequencedStartupResumeArgv: <T extends Record<string, string> | undefined>(
-    env: T,
-    launch: CodexResumeLaunch
-  ) => T
   transitionSpawnHiddenRendererPtyDeliveryState: (id: string, hidden: boolean) => void
   trustedTerminalHandleEnv: Set<string>
   sendPtySpawnedToRenderer: (id: string) => void

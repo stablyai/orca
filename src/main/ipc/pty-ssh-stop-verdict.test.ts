@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verdict'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { registerPtyHandlers } from './pty/register-handlers'
 import {
-  registerPtyHandlers,
   deletePtyOwnership,
-  setPtyOwnership,
-  getLocalPtyProvider,
-  registerSshPtyProvider,
-  unregisterSshPtyProvider
-} from './pty'
+  ptyIncarnationById,
+  ptyOwnership,
+  setPtyOwnership
+} from './pty/provider/ownership-state'
+import { getLocalPtyProvider } from './pty/provider/registry'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -62,8 +62,12 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
   function installController(): {
     controller: {
       kill: (ptyId: string) => boolean
-      listProcesses: (connectionId?: string | null) => Promise<{ id: string }[]>
-      retireRejectedPty: (ptyId: string, stopConfirmed: boolean) => void
+      listProcesses: (hostId?: string) => Promise<{ id: string }[]>
+      retireRejectedPty: (
+        ptyId: string,
+        stopConfirmed: boolean,
+        incarnationId: string | undefined
+      ) => void
       stopAndWait: (ptyId: string, opts?: { deadlineMs?: number }) => Promise<boolean>
     }
     runtime: {
@@ -88,7 +92,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
   }
 
   it('reports an unconfirmed stop instead of a fabricated kill', () => {
-    setPtyOwnership('ssh-detached-pty', 'ssh-dropped')
+    setPtyOwnership('ssh-detached-pty', 'ssh:ssh-dropped')
     const { controller, runtime } = installController()
 
     expect(controller.kill('ssh-detached-pty')).toBe(false)
@@ -102,7 +106,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
   })
 
   it('reports an unconfirmed exact stop instead of a fabricated teardown', async () => {
-    setPtyOwnership('ssh-detached-stop', 'ssh-dropped')
+    setPtyOwnership('ssh-detached-stop', 'ssh:ssh-dropped')
     const { controller, runtime } = installController()
 
     await expect(controller.stopAndWait('ssh-detached-stop')).resolves.toBe(false)
@@ -116,7 +120,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
 
   it('preserves lost-contact evidence for renderer IPC teardown', async () => {
     const ptyId = 'ssh-renderer-detached'
-    setPtyOwnership(ptyId, 'ssh-dropped')
+    setPtyOwnership(ptyId, 'ssh:ssh-dropped')
     const { runtime } = installController()
     try {
       await handlers.get('pty:kill')!(null, { id: ptyId })
@@ -133,10 +137,10 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
 
   it('retires a rejected split without asserting an unconfirmed exit', () => {
     const ptyId = 'ssh-rejected-split'
-    setPtyOwnership(ptyId, 'ssh-dropped')
+    setPtyOwnership(ptyId, 'ssh:ssh-dropped')
     const { controller, runtime } = installController()
     try {
-      controller.retireRejectedPty(ptyId, false)
+      controller.retireRejectedPty(ptyId, false, undefined)
 
       expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
         ptyId,
@@ -145,6 +149,26 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, -1, undefined)
       expect(runtime.onPtyExit).not.toHaveBeenCalledWith(ptyId, 0, expect.anything())
     } finally {
+      deletePtyOwnership(ptyId)
+    }
+  })
+
+  it('leaves a same-id respawn alone when the rejected incarnation is retired', () => {
+    const ptyId = 'ssh-respawned-split'
+    // The rejected spawn's stop already retired its incarnation; a respawn took the id since.
+    setPtyOwnership(ptyId, 'ssh:ssh-live')
+    ptyIncarnationById.set(ptyId, 'inc-respawn')
+    const { controller, runtime } = installController()
+    try {
+      controller.retireRejectedPty(ptyId, true, 'inc-rejected')
+      controller.retireRejectedPty(ptyId, false, 'inc-rejected')
+
+      expect(ptyOwnership.get(ptyId)).toBe('ssh:ssh-live')
+      expect(ptyIncarnationById.get(ptyId)).toBe('inc-respawn')
+      expect(runtime.onPtyExit).not.toHaveBeenCalled()
+      expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalled()
+    } finally {
+      ptyIncarnationById.delete(ptyId)
       deletePtyOwnership(ptyId)
     }
   })
@@ -160,138 +184,5 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       expect.objectContaining({ immediate: true })
     )
     expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalled()
-  })
-
-  it('records provider-confirmed absence when the exit event was missed', async () => {
-    const connectionId = 'ssh-confirmed-absent'
-    const ptyId = 'ssh-confirmed-absent-pty'
-    const provider = {
-      onExit: vi.fn(() => () => {}),
-      shutdown: vi.fn(async () => {}),
-      listProcesses: vi.fn(async () => [])
-    }
-    registerSshPtyProvider(connectionId, provider as never)
-    setPtyOwnership(ptyId, connectionId)
-    try {
-      const { controller, runtime } = installController()
-
-      await expect(controller.stopAndWait(ptyId)).resolves.toBe(true)
-      expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, 0, undefined)
-      expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalled()
-    } finally {
-      deletePtyOwnership(ptyId)
-      unregisterSshPtyProvider(connectionId)
-    }
-  })
-
-  it('reports lost contact when a registered provider drops during the stop', async () => {
-    const connectionId = 'ssh-mid-stop-drop'
-    const ptyId = 'ssh-mid-stop-pty'
-    const provider = {
-      onExit: vi.fn(() => () => {}),
-      shutdown: vi.fn(async () => {
-        throw new Error('relay disconnected during stop')
-      })
-    }
-    registerSshPtyProvider(connectionId, provider as never)
-    setPtyOwnership(ptyId, connectionId)
-    try {
-      const { controller, runtime } = installController()
-
-      await expect(controller.stopAndWait(ptyId)).resolves.toBe(false)
-      expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
-        ptyId,
-        'relay disconnected during stop'
-      )
-    } finally {
-      deletePtyOwnership(ptyId)
-      unregisterSshPtyProvider(connectionId)
-    }
-  })
-
-  it('preserves lost-contact evidence when fire-and-forget shutdown rejects', async () => {
-    const connectionId = 'ssh-async-kill-drop'
-    const ptyId = 'ssh-async-kill-pty'
-    const provider = {
-      onExit: vi.fn(() => () => {}),
-      shutdown: vi.fn(async () => {
-        throw new Error('relay disconnected during kill')
-      })
-    }
-    registerSshPtyProvider(connectionId, provider as never)
-    setPtyOwnership(ptyId, connectionId)
-    try {
-      const { controller, runtime } = installController()
-
-      expect(controller.kill(ptyId)).toBe(true)
-      await vi.waitFor(() =>
-        expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
-          ptyId,
-          'relay disconnected during kill'
-        )
-      )
-      expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, -1, undefined)
-    } finally {
-      deletePtyOwnership(ptyId)
-      unregisterSshPtyProvider(connectionId)
-    }
-  })
-
-  it('isolates a failed SSH inventory from healthy providers', async () => {
-    const failedConnectionId = 'ssh-inventory-failed'
-    const healthyConnectionId = 'ssh-inventory-healthy'
-    const failedPtyId = 'ssh-inventory-failed-pty'
-    const healthyPtyId = 'ssh-inventory-healthy-pty'
-    registerSshPtyProvider(failedConnectionId, {
-      listProcesses: vi.fn(async () => {
-        throw new Error('inventory transport failed')
-      })
-    } as never)
-    registerSshPtyProvider(healthyConnectionId, {
-      listProcesses: vi.fn(async () => [{ id: healthyPtyId }])
-    } as never)
-    setPtyOwnership(failedPtyId, failedConnectionId)
-    setPtyOwnership(healthyPtyId, healthyConnectionId)
-    try {
-      const { controller, runtime } = installController()
-
-      await expect(controller.listProcesses()).resolves.toEqual(
-        expect.arrayContaining([{ id: healthyPtyId }])
-      )
-      expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
-        failedPtyId,
-        'inventory transport failed'
-      )
-      expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalledWith(
-        healthyPtyId,
-        expect.anything()
-      )
-    } finally {
-      deletePtyOwnership(failedPtyId)
-      deletePtyOwnership(healthyPtyId)
-      unregisterSshPtyProvider(failedConnectionId)
-      unregisterSshPtyProvider(healthyConnectionId)
-    }
-  })
-
-  it('reports a provider-observed survivor as live', async () => {
-    const connectionId = 'ssh-still-live'
-    const ptyId = 'ssh-still-live-pty'
-    const provider = {
-      onExit: vi.fn(() => () => {}),
-      shutdown: vi.fn(async () => {}),
-      listProcesses: vi.fn(async () => [{ id: ptyId }])
-    }
-    registerSshPtyProvider(connectionId, provider as never)
-    setPtyOwnership(ptyId, connectionId)
-    try {
-      const { controller, runtime } = installController()
-
-      await expect(controller.stopAndWait(ptyId)).resolves.toBe(false)
-      expect(runtime.markPtyLivenessLive).toHaveBeenCalledWith(ptyId)
-    } finally {
-      deletePtyOwnership(ptyId)
-      unregisterSshPtyProvider(connectionId)
-    }
   })
 })

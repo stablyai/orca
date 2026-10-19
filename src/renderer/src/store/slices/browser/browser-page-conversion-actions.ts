@@ -8,10 +8,12 @@ import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
 import { planBrowserPageConversion } from '../browser-page-conversion'
 import { findPage, findWorkspace, mirrorWorkspaceFromActivePage } from '../browser-page-records'
 import { assertManagedBrowserMaterializationAllowed } from '@/lib/client-creation-action-policy'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-close'
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
 import { isLocalBrowserPageOwner } from './browser-host-state'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { recordLayoutApply } from '@/runtime/layout-apply-send'
 
 export function createBrowserPageConversionActions(
   set: BrowserSliceSet,
@@ -35,7 +37,10 @@ export function createBrowserPageConversionActions(
         declaredOwnership !== undefined
           ? declaredOwnership
           : oldPageForOwnership
-            ? (getRuntimeEnvironmentIdForWorktree(get(), oldPageForOwnership.worktreeId) ?? null)
+            ? runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+                get(),
+                oldPageForOwnership.worktreeId
+              )
             : null
       )
       let converted: BrowserPage | null = null
@@ -59,7 +64,9 @@ export function createBrowserPageConversionActions(
         const nextRemoteBrowserPageHandlesByPageId = { ...s.remoteBrowserPageHandlesByPageId }
         delete nextRemoteBrowserPageHandlesByPageId[plan.oldPage.id]
         const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
+        const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }
         delete nextBrowserAnnotationsByPageId[plan.oldPage.id]
+        delete nextBrowserAnnotationMarkerIdsByPageId[plan.oldPage.id]
         const nextBrowserCertificateFailuresByPageId = { ...s.browserCertificateFailuresByPageId }
         delete nextBrowserCertificateFailuresByPageId[plan.oldPage.id]
         return {
@@ -85,7 +92,8 @@ export function createBrowserPageConversionActions(
           ),
           remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
           browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
-          browserAnnotationsByPageId: nextBrowserAnnotationsByPageId
+          browserAnnotationsByPageId: nextBrowserAnnotationsByPageId,
+          browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId
         }
       })
       // Why the casts: the assignments happen inside set()'s callback, which TS's flow analysis does
@@ -111,6 +119,15 @@ export function createBrowserPageConversionActions(
         releaseDocPreviewGrant(docPageIdToRelease)
       }
       const workspaceAfter = findWorkspace(get().browserTabsByWorktree, newPage.workspaceId)
+      // Switch point: main puts the new page in the old one's place.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && workspaceAfter) {
+        recordLayoutApply(get(), workspaceAfter.worktreeId, {
+          type: 'replaceBrowserPage',
+          browserTabId: workspaceAfter.id,
+          pageId,
+          newPageId: newPage.id
+        })
+      }
       if (workspaceAfter?.activePageId === newPage.id) {
         const item = Object.values(get().unifiedTabsByWorktree)
           .flat()

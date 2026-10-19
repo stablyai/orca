@@ -73,6 +73,7 @@ export function sessionTerminalCreateMountAdapters(
       >(
         'mobile/src/session/use-mobile-session-terminal-create-actions.ts'
       ).useMobileSessionTerminalCreateActions
+      modules.load('mobile/src/session/mobile-session-terminal-create-request.ts')
 
       let terminals: Terminal[] = []
       let sessionTabs: MobileSessionTab[] = []
@@ -139,7 +140,11 @@ export function sessionTerminalCreateMountAdapters(
             },
             showToast: (message: string, durationMs?: number) =>
               effect('toast', { message, durationMs: durationMs ?? null }),
-            unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
+            unsubscribeTerminal: (handle: string) => {
+              // The real unsubscribe drops the handle's drawn-snapshot mark with its stream.
+              initializedHandlesRef.current.delete(handle)
+              effect('unsubscribe-terminal', { handle })
+            },
             subscribeToTerminal: (handle: string) => effect('subscribe-terminal', { handle }),
             fetchSessionTabs: async () => {
               effect('fetch-session-tabs', {})

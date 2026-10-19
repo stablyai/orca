@@ -217,6 +217,20 @@ describe('BrowserClientDownloadTransferStore', () => {
     expect(store.activeTransferCount()).toBe(1)
   })
 
+  it('releases only the named generation of a page', async () => {
+    const { store } = createStore()
+    await store.accept({ ...base, contentBase64: 'AAA=', offset: 0, final: false })
+    const replacement = { ...base, transferId: 'transfer-2', pageHostGeneration: 3 }
+    await store.accept({ ...replacement, contentBase64: 'AAA=', offset: 0, final: false })
+
+    await store.releasePage(base.browserPageId, base.pageHostGeneration)
+
+    expect(store.activeTransferCount()).toBe(1)
+    await expect(
+      store.accept({ ...replacement, contentBase64: '', offset: 2, final: false })
+    ).resolves.not.toThrow()
+  })
+
   it('rejects a transfer resumed under a replaced page generation', async () => {
     const { store } = createStore()
     await store.accept({ ...base, contentBase64: 'AAA=', offset: 0, final: false })

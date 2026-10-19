@@ -11,7 +11,7 @@
 import { useEffect, useState } from 'react'
 import type { AgentSessionConversationOutline } from '../../../../shared/agent-session-conversation-outline'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { readStructuredAgentSessionConversationOutline } from '@/runtime/structured-agent-session-client'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
 import { selectStructuredRailOutline } from './structured-agent-session-rail-outline'

@@ -1,6 +1,8 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
+import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
 import {
   AgentLetterIcon,
   AiderIcon,
@@ -33,15 +35,15 @@ export const getAgentCatalog = createLocalizedCatalog(buildAgentCatalogEntries)
 // Why: tests and a few legacy call sites still import a catalog snapshot.
 export const AGENT_CATALOG: AgentCatalogEntry[] = getAgentCatalog()
 
-export function getAgentLabel(agent: TuiAgent): string {
-  return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
+export function getAgentLabel(agent: TerminalAgent): string {
+  return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? formatAgentTypeLabel(agent)
 }
 
 export function AgentIcon({
   agent,
   size = 14
 }: {
-  agent: TuiAgent | null | undefined
+  agent: TerminalAgent | null | undefined
   size?: number
 }): React.JSX.Element {
   // Why: render a neutral question-mark glyph when the agent identity is not
@@ -82,7 +84,9 @@ export function AgentIcon({
   // Why: prefer the favicon bundled at build time so the icon renders without a
   // live network request — Google's favicon service is unreachable in some
   // regions and offline, which left these icons broken (#8451).
-  const bundledFaviconUrl = AGENT_FAVICON_ASSETS[agent]
+  // Why: recognition-only DSB shares the bundled DeepSeek mark.
+  const iconAgent = agent === 'dsb' ? 'dsh' : agent
+  const bundledFaviconUrl = AGENT_FAVICON_ASSETS[iconAgent]
   // Why: one resolved src for guard + attribute so empty `iconUrl` cannot pass
   // a truthy `||` check while `??` still renders a broken `<img src="">`.
   const iconSrc = catalogEntry?.iconUrl ?? bundledFaviconUrl
@@ -113,6 +117,5 @@ export function AgentIcon({
       />
     )
   }
-  const label = catalogEntry?.label ?? agent
-  return <AgentLetterIcon letter={label.charAt(0).toUpperCase()} size={size} />
+  return <AgentLetterIcon letter={getAgentLabel(agent).charAt(0).toUpperCase()} size={size} />
 }

@@ -4,7 +4,7 @@ import {
   workspaceKindForWorktreeId,
   type ProspectiveWorkspace
 } from '@/lib/agent-launch-route-input'
-import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
+import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session-launch-plan'
 import { useAppStore } from '@/store'
 
 export type SourceControlLaunchAgentArgsApplicabilityInput = {
@@ -47,9 +47,9 @@ export function sourceControlLaunchAppliesAgentArgs(
     return true
   }
   return (
-    planAgentSessionLaunch(useAppStore.getState(), {
+    resolveAgentSessionLaunchRoute(useAppStore.getState(), {
       agent: input.agent,
       workspace: prospectiveWorkspace(input)
-    }).route !== 'structured-native-chat'
+    }) !== 'structured-native-chat'
   )
 }

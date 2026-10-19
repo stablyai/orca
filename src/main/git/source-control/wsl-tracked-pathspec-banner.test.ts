@@ -68,7 +68,7 @@ function guestScript(args: unknown): string {
 
 /** Wrap the payload in the caller's own fence when it asked for one; otherwise hand it over raw. */
 function loginShellStdout(script: string, payload: string): string {
-  const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(script)?.[1]
+  const nonce = /__ORCA_WSL_CAPTURE_BEGIN_ ([^_]+)__/.exec(script)?.[1]
   return nonce
     ? `${BANNER}__ORCA_WSL_CAPTURE_BEGIN_${nonce}__${payload}__ORCA_WSL_CAPTURE_END_${nonce}__`
     : `${BANNER}${payload}`

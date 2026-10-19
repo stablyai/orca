@@ -23,20 +23,21 @@ const target: SshTarget = {
 const HOST_KEY_ERROR =
   'Host key verification failed for build-01.internal. The key does not match the entry in your known_hosts file. ssh and git will refuse this host too. Run: ssh-keygen -R build-01.internal'
 
-async function renderCard(state: SshConnectionState | undefined): Promise<HTMLElement> {
+async function renderCard(
+  state: SshConnectionState | undefined,
+  cardTarget: SshTarget = target
+): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   await act(async () => {
     createRoot(container).render(
       <TooltipProvider>
         <SshTargetCard
-          target={target}
+          target={cardTarget}
           state={state}
           testing={false}
           onConnect={vi.fn()}
           onDisconnect={vi.fn()}
-          onTerminateSessions={vi.fn()}
-          onResetRelay={vi.fn()}
           onTest={vi.fn()}
           onEdit={vi.fn()}
           onRemove={vi.fn()}
@@ -80,5 +81,19 @@ describe('the connection error on an SSH target card', () => {
     const container = await renderCard(undefined)
 
     expect(container.textContent).not.toContain('Host key verification failed')
+  })
+})
+
+describe('an SSH host its managed server does not serve', () => {
+  it('leaves the reason to the translated status line instead of repeating main’s English', async () => {
+    const container = await renderCard({
+      targetId: 'target-1',
+      status: 'error',
+      error: 'This SSH host isn’t supported by this version of Orca.',
+      reconnectAttempt: 0,
+      managedServer: { kind: 'relay', reason: 'orcad_unavailable', detail: 'unsupported_host' }
+    })
+
+    expect(container.textContent).not.toContain('This SSH host isn’t supported')
   })
 })

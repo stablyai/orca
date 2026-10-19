@@ -3,6 +3,7 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson,
   decodeTerminalStreamText,
+  decodeTerminalInputAck,
   type TerminalStreamFrame
 } from '../../../shared/terminal-stream-protocol'
 import { deliverTerminalDataWithDeferredCredit } from '@/lib/pane-manager/terminal-delivery-credit'
@@ -44,6 +45,21 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
     stream.watchdog.recordInbound(isOutput)
     if (frame.opcode === TerminalStreamOpcode.WriteUnavailable) {
       stream.callbacks.onWriteUnavailable?.()
+      return
+    }
+    if (frame.opcode === TerminalStreamOpcode.PausedOutputDropped) {
+      if (!stream.supportsPausedOutputDropNotice) {
+        return
+      }
+      stream.pausedOutputGapExpected = true
+      stream.callbacks.onPausedOutputDropped?.()
+      return
+    }
+    if (frame.opcode === TerminalStreamOpcode.InputAck) {
+      if (!stream.supportsInputAck) {
+        return
+      }
+      stream.callbacks.onInputAck?.(frame.seq, decodeTerminalInputAck(frame.payload))
       return
     }
     if (isOutput) {
@@ -89,11 +105,6 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
         frame.opcode === TerminalStreamOpcode.OutputSpan && typeof span?.rawLength === 'number'
           ? span.rawLength
           : data.length
-      // Why: a resync snapshot is authoritative; discard live output while
-      // it is in flight, but still return transport credit in finally.
-      if (stream.resyncInFlight) {
-        return
-      }
       const seq = typeof frame.seq === 'number' && frame.seq > 0 ? frame.seq : undefined
       // Why: older servers replay snapshot-covered buffered chunks after a
       // requested recovery; rendering them would duplicate the recovered tail.
@@ -104,11 +115,20 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
       ) {
         return
       }
-      if (this.detectOutputGap(stream, seq, rawLength)) {
+      const resyncInFlight = stream.resyncInFlight
+      // Why: keep painting while recovery is in flight — gating froze the pane for
+      // the whole round trip (#18488); the snapshot replaces the screen when it lands.
+      // expectedSeq stays at the gap so a recovery that never lands can still be retried.
+      if (
+        !resyncInFlight &&
+        !stream.pausedOutputGapExpected &&
+        this.detectOutputGap(stream, seq, rawLength)
+      ) {
         this.requestResyncSnapshot(stream)
         return
       }
-      if (typeof seq === 'number') {
+      if (typeof seq === 'number' && !resyncInFlight) {
+        stream.pausedOutputGapExpected = false
         stream.expectedSeq = seq
         stream.commandProbeBaselineSeq = undefined
       }

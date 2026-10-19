@@ -1,4 +1,8 @@
-import { isPageStorageKeyForRoute, PAGE_STORAGE_MAX_VALUE_CHARS } from '../page-storage-keys'
+import {
+  isHostWorkspaceStorageKey,
+  isPageStorageKeyForRoute,
+  PAGE_STORAGE_MAX_VALUE_CHARS
+} from '../page-storage-keys'
 
 /**
  * The page's AsyncStorage: the app's store, read from `init` and written over the `storage` grant.
@@ -67,6 +71,9 @@ let oversizeKeys: ReadonlySet<string> = new Set()
 let hostId = ''
 /** And the route, because two of the keys are scoped to the workspace the route names. */
 let routePathname = ''
+/** Set for a host-area page, which opens any workspace of its host in-page: those keys are read
+ *  from the shell on demand and may be written. */
+let readWorkspaceKey: ((key: string) => Promise<string | null>) | null = null
 
 /** Called once by the entry, before anything renders, with what `init` carried. */
 export function publishPageStorage(
@@ -74,7 +81,8 @@ export function publishPageStorage(
   writer: PageStorageWriter,
   forHostId: string,
   forRoutePathname: string,
-  forOversizeKeys: readonly string[] = []
+  forOversizeKeys: readonly string[] = [],
+  forWorkspaceKeyReader: ((key: string) => Promise<string | null>) | null = null
 ): void {
   values.clear()
   oversizeKeys = new Set(forOversizeKeys)
@@ -84,6 +92,13 @@ export function publishPageStorage(
   write = writer
   hostId = forHostId
   routePathname = forRoutePathname
+  readWorkspaceKey = forWorkspaceKeyReader
+}
+
+function getItem(key: string): Promise<string | null> {
+  return readWorkspaceKey !== null && isHostWorkspaceStorageKey(key, hostId)
+    ? readWorkspaceKey(key)
+    : Promise.resolve(values.get(key) ?? null)
 }
 
 /**
@@ -94,7 +109,7 @@ export function publishPageStorage(
  * which is exactly the failure the grant exists to avoid.
  */
 function accept(key: string, value: string | null): PageStorageRefusal | null {
-  if (!isPageStorageKeyForRoute(key, hostId, routePathname)) {
+  if (!isPageStorageKeyForRoute(key, hostId, routePathname, readWorkspaceKey !== null)) {
     return 'not-allowed'
   }
   // The envelope's own bound, imported rather than restated: without it an oversized value is
@@ -168,11 +183,13 @@ function applyBatch(pairs: readonly (readonly [string, string | null])[]): Promi
 }
 
 const pageAsyncStorage = {
-  getItem: (key: string): Promise<string | null> => Promise.resolve(values.get(key) ?? null),
+  getItem,
   setItem: (key: string, value: string): Promise<void> => settle(key, accept(key, value)),
   removeItem: (key: string): Promise<void> => settle(key, accept(key, null)),
   multiGet: (keys: readonly string[]): Promise<[string, string | null][]> =>
-    Promise.resolve(keys.map((key) => [key, values.get(key) ?? null])),
+    Promise.all(
+      keys.map(async (key): Promise<[string, string | null]> => [key, await getItem(key)])
+    ),
   multiSet: (pairs: readonly [string, string][]): Promise<void> => applyBatch(pairs),
   multiRemove: (keys: readonly string[]): Promise<void> =>
     applyBatch(keys.map((key) => [key, null] as const)),

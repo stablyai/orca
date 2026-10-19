@@ -45,7 +45,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(() => ({ hosts: [] })),
   sshConfigHostsToTargets: vi.fn(() => [])
 }))
@@ -197,7 +197,7 @@ describe('profile state authority bootstrap', () => {
         expect(() => bootstrapProfileStateAuthority(options)).toThrow(
           ProfileStateRecoveryRequiredError
         )
-        expect(readFileSync(options.databaseFile)).toEqual(before)
+        expect(readFileSync(options.databaseFile).equals(before)).toBe(true)
       }
       const exportPath = profileStateJsonExportPath(options.dataFile, 1)
       writeFileSync(exportPath, raw)
@@ -502,7 +502,7 @@ describe('profile state authority bootstrap', () => {
       expect.arrayContaining([options.databaseFile, `${options.databaseFile}-wal`])
     )
     expect(existsSync(options.databaseFile)).toBe(false)
-    expect(readFileSync(options.dataFile)).toEqual(restoredJson)
+    expect(readFileSync(options.dataFile).equals(restoredJson)).toBe(true)
     expect(existsSync(exportPath)).toBe(false)
     expect(readFileSync(join(result.quarantine.directory, 'profile-state.db'), 'utf8')).toBe(
       'corrupt sqlite primary'
@@ -538,7 +538,7 @@ describe('profile state authority bootstrap', () => {
         exportPath
       })
     ).toThrow('Profile state JSON is invalid')
-    expect(readFileSync(options.databaseFile)).toEqual(databaseBytes)
-    expect(readFileSync(options.dataFile)).toEqual(dataBytes)
+    expect(readFileSync(options.databaseFile).equals(databaseBytes)).toBe(true)
+    expect(readFileSync(options.dataFile).equals(dataBytes)).toBe(true)
   })
 })

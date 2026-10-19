@@ -14,7 +14,10 @@ vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
   }
 })
 
-import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
+import {
+  buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
+  EXTERNAL_MUTATION_DEBOUNCE_MS
+} from './editor-external-watch-event-reconciliation'
 import { verifyLatchedMoveDestinations } from './useEditorExternalWatch'
 import { useAppStore } from '@/store'
 import { getOpenFilesForExternalFileChange } from '@/components/editor/editor-autosave'
@@ -77,7 +80,7 @@ describe('self-move source suppression (in-flight)', () => {
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
     handleFsChanged(payload([{ kind: 'delete', absolutePath: '/repo/notes.md' }]))
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
 
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'deleted')
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'renamed')
@@ -116,7 +119,7 @@ describe('self-move source suppression (in-flight)', () => {
         { kind: 'create', absolutePath: '/repo/dst/late.md' }
       ])
     )
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
 
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-late', 'renamed')
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-late', 'deleted')
@@ -129,7 +132,7 @@ describe('self-move source suppression (in-flight)', () => {
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
     handleFsChanged(payload([{ kind: 'delete', absolutePath: '/repo/notes.md' }]))
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
 
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'deleted')
     dispose()

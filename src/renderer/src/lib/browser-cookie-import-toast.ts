@@ -154,6 +154,27 @@ function emitPartitionSkippedImportWarning(summary: BrowserCookieImportSummary):
   if (!summary.partitionSkippedCookies) {
     return
   }
+  const breakdown = summary.partitionSkipBreakdown
+  if (
+    breakdown &&
+    Number.isSafeInteger(summary.partitionSkippedCookies) &&
+    Number.isSafeInteger(breakdown.unreadableCookies) &&
+    breakdown.unreadableCookies > 0 &&
+    Number.isSafeInteger(breakdown.preservedRelatedCookies) &&
+    breakdown.preservedRelatedCookies >= 0 &&
+    breakdown.unreadableCookies + breakdown.preservedRelatedCookies ===
+      summary.partitionSkippedCookies
+  ) {
+    toast.warning(
+      translate(
+        'auto.lib.browser.cookie.import.toast.partitionSkippedBreakdown',
+        'Cookies with unreadable site partitions: {{value0}}. Related cookies left unimported to protect existing sessions: {{value1}}. Existing cookies for these sites were left unchanged. Check these sites in this profile before signing in again.',
+        { value0: breakdown.unreadableCookies, value1: breakdown.preservedRelatedCookies }
+      ),
+      { duration: 12000 }
+    )
+    return
+  }
   toast.warning(
     translate(
       'auto.lib.browser.cookie.import.toast.partitionSkipped',

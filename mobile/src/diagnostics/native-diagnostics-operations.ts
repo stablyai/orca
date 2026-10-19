@@ -9,6 +9,7 @@ import { getReportableConnectionIncidentId } from './connection-diagnostics-anal
 import { buildConnectionDiagnosticsReport } from './connection-diagnostics-report'
 import { submitConnectionDiagnostics } from './connection-diagnostics-submission'
 import type { DiagnosticsDeviceOperations } from './diagnostics-device-operations'
+import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/bridge-frame-fields'
 
 export function createNativeDiagnosticsOperations(
   host: HostProfile,
@@ -33,7 +34,8 @@ export function createNativeDiagnosticsOperations(
           desktopAppVersion,
           entries: snapshot.entries,
           activePath: snapshot.activePath,
-          pendingPath: snapshot.pendingPath
+          pendingPath: snapshot.pendingPath,
+          bridgeProtocolVersion: BRIDGE_PROTOCOL_VERSION
         }),
         appVersion,
         platform,

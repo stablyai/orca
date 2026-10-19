@@ -20,6 +20,11 @@ import {
   respondToBrowserWebAuthnAccountRequest
 } from '../browser/browser-webauthn-account-picker'
 import type { BrowserWebAuthnAccountResponse } from '../../shared/browser-webauthn-account'
+import type {
+  BrowserExternalAppResponse,
+  BrowserExternalAppResponseResult
+} from '../../shared/browser-external-app'
+import { respondToBrowserExternalAppRequest } from '../browser/browser-external-app-launch'
 
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
 
@@ -44,6 +49,7 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:activeTabChanged')
   ipcMain.removeHandler('browser:proceedCertificate')
   ipcMain.removeHandler('browser:respondWebAuthnAccount')
+  ipcMain.removeHandler('browser:respondExternalApp')
 
   const registerGuest = (
     event: Electron.IpcMainInvokeEvent,
@@ -103,7 +109,12 @@ export function registerBrowserHandlers(): void {
     'browser:prepareSshWorkspacePartition',
     async (
       event,
-      args: { targetId?: unknown; browserProfileId?: unknown; skipProbe?: unknown }
+      args: {
+        targetId?: unknown
+        browserProfileId?: unknown
+        skipProbe?: unknown
+        expectedSshTargetGeneration?: unknown
+      }
     ) => {
       // Why (review P1-2): preparing mints bindings whose LRU eviction destroys
       // cookie jars; only the trusted renderer naming a REGISTERED target may.
@@ -113,13 +124,14 @@ export function registerBrowserHandlers(): void {
       if (typeof args?.targetId !== 'string' || args.targetId.length === 0) {
         throw new Error('browser_local_route_target_invalid')
       }
-      const { getSshConnectionStore } = await import('./ssh')
-      const registered = getSshConnectionStore()
-        ?.listTargets()
-        .some((target) => target.id === args.targetId)
-      if (!registered) {
-        throw new Error('browser_local_route_target_invalid')
-      }
+      const { getSshConnectionStore } = await import('./ssh/ssh')
+      const { requireLocalSshBrowserRouteTarget } =
+        await import('../browser/local-ssh-browser-route')
+      requireLocalSshBrowserRouteTarget(
+        getSshConnectionStore()?.listTargets(),
+        args.targetId,
+        args.expectedSshTargetGeneration
+      )
       const { prepareLocalSshBrowserPartition } =
         await import('../browser/local-ssh-browser-partitions')
       return prepareLocalSshBrowserPartition({
@@ -184,6 +196,16 @@ export function registerBrowserHandlers(): void {
         return false
       }
       return respondToBrowserWebAuthnAccountRequest(event.sender, response)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:respondExternalApp',
+    (event, response: BrowserExternalAppResponse): Promise<BrowserExternalAppResponseResult> => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return Promise.resolve('rejected')
+      }
+      return respondToBrowserExternalAppRequest(event.sender, response)
     }
   )
 

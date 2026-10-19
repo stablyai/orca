@@ -66,12 +66,28 @@ export class CodexResetCreditLedger {
     return this.attemptsByKey.get(idempotencyKey)
   }
 
-  getUnresolvedKey(accountScopeKey: string): string | undefined {
-    return this.unresolvedKeyByAccountScope.get(accountScopeKey)
+  /** The attempt a request answers as: its own key's, its offer's claimant, or the account's
+   *  unresolved one, in that order. */
+  findAttemptFor(
+    idempotencyKey: string,
+    scopeKey: string,
+    accountScopeKey: string
+  ): { idempotencyKey: string; attempt: CodexResetCreditAttempt } | null {
+    for (const key of [
+      idempotencyKey,
+      this.attemptKeyByOffer.get(scopeKey),
+      this.unresolvedKeyByAccountScope.get(accountScopeKey)
+    ]) {
+      const attempt = key === undefined ? undefined : this.attemptsByKey.get(key)
+      if (key !== undefined && attempt) {
+        return { idempotencyKey: key, attempt }
+      }
+    }
+    return null
   }
 
-  getClaimedKey(scopeKey: string): string | undefined {
-    return this.attemptKeyByOffer.get(scopeKey)
+  getUnresolvedKey(accountScopeKey: string): string | undefined {
+    return this.unresolvedKeyByAccountScope.get(accountScopeKey)
   }
 
   createFresh(

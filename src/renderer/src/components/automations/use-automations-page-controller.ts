@@ -55,7 +55,6 @@ export function useAutomationsPageController() {
     destination
   })
   const draftEffects = useAutomationDraftEffects({
-    store,
     local,
     setup,
     destination,

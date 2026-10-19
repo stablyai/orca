@@ -35,7 +35,7 @@ vi.mock('@/lib/structured-agent-session-launch-recovery', async () => {
   return { ...actual, launchAndReconcile: vi.fn(actual.launchAndReconcile) }
 })
 
-vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
+vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: mocks.refresh
 }))
 
@@ -178,7 +178,8 @@ describe('structured agent launch reload recovery', () => {
           })
         })
       }),
-      expect.any(Function)
+      expect.any(Function),
+      true
     )
   })
 })

@@ -53,7 +53,8 @@ describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
     expect(rowJumps).toEqual([])
     // Why assert the activation and not just the silent bus: a premature return would also emit nothing.
     expect(harness.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-c', {
-      navigationIntent: 'user-open'
+      navigationIntent: 'user-open',
+      showWorkspaceList: true
     })
   })
 
@@ -70,6 +71,7 @@ describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
 
     expect(harness.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::path', {
       navigationIntent: 'user-open',
+      showWorkspaceList: true,
       executionHostId: 'ssh:box'
     })
   })

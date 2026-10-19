@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 /**
  * `browser.screencast` is the one stream a phone, a paired desktop client, the web client and the
  * CLI all open against the same host page. Stamping every subscriber as the mobile driver put the
