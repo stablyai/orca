@@ -19,11 +19,13 @@ function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
 
 function makeSession(
   repo: Repo,
-  sidebarRepoHeaderIds: readonly string[]
+  sidebarRepoHeaderIds: readonly string[],
+  projectGroupRepo?: Repo
 ): ProjectHeaderDragSession {
   return {
     repo,
-    bucketKey: getProjectHeaderDragBucketKey(repo),
+    projectGroupRepo,
+    bucketKey: getProjectHeaderDragBucketKey(projectGroupRepo ?? repo),
     sidebarRepoHeaderIds,
     pointerId: 1,
     headerRects: [],
@@ -137,5 +139,33 @@ describe('commitProjectHeaderDragDrop', () => {
     })
 
     expect(onCommitProjectGroupOrder).not.toHaveBeenCalled()
+  })
+
+  it("reorders the row that placed a header in the group, on that row's host", () => {
+    const onCommitProjectGroupOrder = vi.fn()
+    // Header 'c' anchors on this Orca's ungrouped row; a paired host's row 'c-paired' placed it.
+    const anchor = makeRepo('c', { projectGroupId: null })
+    const placedBy = makeRepo('c-paired', {
+      projectGroupId: 'group-1',
+      projectGroupOrder: 5,
+      executionHostId: 'runtime:paired'
+    })
+    const siblings = [
+      makeRepo('a', { projectGroupId: 'group-1', projectGroupOrder: 0 }),
+      makeRepo('b', { projectGroupId: 'group-1', projectGroupOrder: 1 })
+    ]
+
+    commitProjectHeaderDragDrop({
+      session: makeSession(anchor, ['a', 'b', 'c'], placedBy),
+      sidebarDropIndex: 0,
+      orderedRepoIds: ['a', 'b', 'c'],
+      repoById: new Map([...siblings.map((repo) => [repo.id, repo] as const), ['c', placedBy]]),
+      liveRepos: [...siblings, anchor, placedBy],
+      usesProjectGroupOrdering: true,
+      onCommitRepoOrder: vi.fn(),
+      onCommitProjectGroupOrder
+    })
+
+    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith(placedBy, 'group-1', -1)
   })
 })

@@ -48,7 +48,8 @@ export type SectionAppendContext = {
 export function appendOrderedGroups(
   ctx: SectionAppendContext,
   groupsToAppend: OrderedGroupEntry[],
-  projectGroupDepth = 0
+  projectGroupDepth = 0,
+  projectGroupRepoByKey?: ReadonlyMap<string, Repo | undefined>
 ): void {
   const {
     result,
@@ -68,6 +69,7 @@ export function appendOrderedGroups(
   for (const [key, group] of groupsToAppend) {
     const isCollapsed = collapsedGroups.has(key)
     const repo = group.repo
+    const projectGroupRepo = projectGroupRepoByKey?.get(key)
     const folderPairs = group.folderWorkspaces ?? []
     const header =
       groupBy === 'repo'
@@ -78,6 +80,7 @@ export function appendOrderedGroups(
             count: group.items.length,
             icon: { kind: 'project' as const },
             repo,
+            ...(projectGroupRepo && projectGroupRepo !== repo ? { projectGroupRepo } : {}),
             projectGroupDepth
           }
         : groupBy === 'workspace-status'

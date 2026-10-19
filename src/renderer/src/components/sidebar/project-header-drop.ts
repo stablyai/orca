@@ -36,7 +36,7 @@ export function getSidebarOrderedRepoHeaderIdsByBucket(
     if (row.type !== 'header' || !row.repo) {
       continue
     }
-    const bucketKey = getProjectHeaderDragBucketKey(row.repo)
+    const bucketKey = getProjectHeaderDragBucketKey(row.projectGroupRepo ?? row.repo)
     const list = buckets.get(bucketKey) ?? []
     list.push(row.repo.id)
     buckets.set(bucketKey, list)

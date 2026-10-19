@@ -15,6 +15,7 @@ import type { Repo } from '../../../../shared/repo-types'
 export function createProjectHeaderDragSession(args: {
   event: PointerEvent<HTMLElement>
   repo: Repo
+  projectGroupRepo?: Repo
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
   getScrollContainer: () => HTMLElement | null
 }): ProjectHeaderDragSession | null {
@@ -27,7 +28,7 @@ export function createProjectHeaderDragSession(args: {
   if (isRepoHeaderActionTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
-  const bucketKey = getProjectHeaderDragBucketKey(args.repo)
+  const bucketKey = getProjectHeaderDragBucketKey(args.projectGroupRepo ?? args.repo)
   const sidebarRepoHeaderIds = args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
   // Why: a single project in its bucket has nowhere to land, so skip arming
   // drag and let the header click toggle collapse instead.
@@ -43,6 +44,7 @@ export function createProjectHeaderDragSession(args: {
   // header click still reaches the inner collapse handler on pointerup.
   return {
     repo: args.repo,
+    projectGroupRepo: args.projectGroupRepo,
     bucketKey,
     sidebarRepoHeaderIds,
     pointerId: args.event.pointerId,
