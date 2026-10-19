@@ -61,12 +61,18 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
       return
     }
     const current = argsRef.current
-    if (current.agentSendTargetWorktreeId !== pendingRevealWorktree.worktreeId) {
-      expandGroupsForWorktreeReveal(
+    if (
+      current.agentSendTargetWorktreeId !== pendingRevealWorktree.worktreeId &&
+      !expandGroupsForWorktreeReveal(
         current,
         pendingRevealWorktree.worktreeId,
-        pendingRevealWorktree.executionHostId
+        pendingRevealWorktree.executionHostId,
+        pendingRevealWorktree.expandCollapsedGroups === true
       )
+    ) {
+      // Why: target stays hidden in a group the user collapsed; drop the reveal instead of retrying.
+      clearPendingRevealWorktreeId()
+      return
     }
 
     let cancelled = false

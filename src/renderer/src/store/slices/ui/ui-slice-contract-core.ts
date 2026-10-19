@@ -21,6 +21,8 @@ export type PendingSidebarWorktreeReveal = {
   behavior: 'auto' | 'smooth'
   highlight?: boolean
   beginRename?: boolean
+  /** Explicit user reveal: open collapsed groups even when keepSidebarGroupsCollapsedOnReveal is on. */
+  expandCollapsedGroups?: boolean
 }
 
 export type PendingSidebarRowReveal = {
@@ -216,6 +218,7 @@ export type UISliceCore = {
       behavior?: PendingSidebarWorktreeReveal['behavior']
       highlight?: boolean
       beginRename?: boolean
+      expandCollapsedGroups?: boolean
       executionHostId?: ExecutionHostId
     }
   ) => void

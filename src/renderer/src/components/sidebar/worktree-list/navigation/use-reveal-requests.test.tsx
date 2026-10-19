@@ -133,6 +133,7 @@ describe('revealing a filtered workspace', () => {
       behavior: 'smooth',
       highlight: true,
       beginRename: false,
+      expandCollapsedGroups: true,
       executionHostId: 'ssh:dev'
     })
     expect(document.querySelector('[role="dialog"]')).toBeNull()
@@ -233,6 +234,7 @@ describe('revealing a filtered workspace', () => {
         behavior: 'smooth',
         highlight: true,
         beginRename: true,
+        expandCollapsedGroups: true,
         executionHostId: undefined
       })
     }

@@ -6163,7 +6163,9 @@
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
           "failedUnnestWorkspace": "Failed to unnest workspace",
-          "hostRepairRequired": "Re-pair required"
+          "hostRepairRequired": "Re-pair required",
+          "groupColor": "Group color",
+          "groupColorNone": "None"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -7284,6 +7286,14 @@
           "showPinnedWorktreesInGroups": {
             "title": "Also show pinned worktrees in their original lists",
             "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR."
+          },
+          "projectHeaderClickOpensWorkspace": {
+            "title": "Click project name to open its workspace",
+            "description": "Opens the primary workspace terminal. Use the chevron to collapse."
+          },
+          "keepSidebarGroupsCollapsedOnReveal": {
+            "title": "Keep collapsed groups collapsed",
+            "description": "Opening a workspace or agent activity doesn't expand groups you collapsed."
           }
         },
         "AutoRenameBranchFromWorkSetting": {

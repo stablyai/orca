@@ -161,7 +161,8 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
                 ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
                 behavior: options?.behavior ?? 'smooth',
                 ...(options?.highlight ? { highlight: true } : {}),
-                ...(options?.beginRename ? { beginRename: true } : {})
+                ...(options?.beginRename ? { beginRename: true } : {}),
+                ...(options?.expandCollapsedGroups ? { expandCollapsedGroups: true } : {})
               }
             }
       ),

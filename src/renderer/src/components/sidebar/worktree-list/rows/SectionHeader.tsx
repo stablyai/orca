@@ -20,9 +20,12 @@ import type {
 } from '../../../../../../shared/sidebar-list/row-types'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import { getWorkspaceStatusFromGroupKey } from '../../workspace-status'
-import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'
-import { resolveProjectGroupHeaderColor } from '../../project-header-color'
+import {
+  getSectionHeaderRowStyle,
+  resolveProjectGroupAccentColor,
+  resolveProjectGroupHeaderColor
+} from '../../project-header-color'
 import { getRepoHeaderCreateState } from '../../repo-header-create-state'
 import { ProjectHeaderActions } from '../../ProjectHeaderActions'
 import {
@@ -46,6 +49,7 @@ import {
 } from './header-event-guards'
 import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 import { getWorktreeOptionId } from './option-dom'
+import { activateSectionHeader } from './repo-header-open-workspace'
 
 export type SectionHeaderRowContext = {
   groupBy: WorktreeGroupBy
@@ -177,6 +181,9 @@ export function renderWorktreeSectionHeaderRow(args: {
       })
     : null
   const collapseKey = row.collapseKey ?? row.key
+  const projectGroupColor = isProjectGroupHeader ? resolveProjectGroupAccentColor(row) : null
+  const activateHeader = (): void =>
+    activateSectionHeader(row, isRepoHeader, () => ctx.toggleGroupWithScrollAnchor(collapseKey))
   const isHeaderCollapsed = ctx.collapsedGroups.has(collapseKey)
   // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.
   const showHeaderCollapseAffordance =
@@ -205,7 +212,7 @@ export function renderWorktreeSectionHeaderRow(args: {
             )
           : 'absolute top-0'
       )}
-      style={isActiveStickyHeader ? undefined : { transform: getVirtualRowTransform(vItem.start) }}
+      style={getSectionHeaderRowStyle(isActiveStickyHeader, projectGroupColor, vItem.start)}
     >
       <div
         id={getWorktreeOptionId(row.key)}
@@ -238,7 +245,8 @@ export function renderWorktreeSectionHeaderRow(args: {
         className={cn(
           // Why: no row-level grab — only the title surface below shows the hand;
           // actions use cursor-pointer so … / + never look reorderable.
-          'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
+          // Why: select-none keeps repeated clicks from selecting header text.
+          'group relative flex h-7 w-full select-none items-center gap-1.5 pr-2 text-left transition-all',
           !(isDraggableRepoHeader || isDraggableProjectGroupHeader) && 'cursor-pointer',
           ctx.highlightedRevealRowKey === row.key &&
             'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
@@ -290,7 +298,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           if (shouldIgnoreRepoHeaderToggle(event)) {
             return
           }
-          ctx.toggleGroupWithScrollAnchor(collapseKey)
+          activateHeader()
         }}
         onKeyDown={(e) => {
           if (shouldIgnoreRepoHeaderToggle(e)) {
@@ -298,7 +306,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           }
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
-            ctx.toggleGroupWithScrollAnchor(collapseKey)
+            activateHeader()
           }
         }}
       >
@@ -319,6 +327,7 @@ export function renderWorktreeSectionHeaderRow(args: {
               'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
               repoHeaderColor ? 'text-muted-foreground' : headerVisual.tone
             )}
+            style={projectGroupColor ? { color: projectGroupColor } : undefined}
           >
             {row.repo ? (
               <RepoIconGlyph
@@ -334,7 +343,12 @@ export function renderWorktreeSectionHeaderRow(args: {
 
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-1.5">
-              <div className="min-w-0 truncate text-[13px] font-semibold leading-none">{label}</div>
+              <div
+                className="min-w-0 truncate text-[13px] font-semibold leading-none"
+                style={projectGroupColor ? { color: projectGroupColor } : undefined}
+              >
+                {label}
+              </div>
               <RepoForkIndicator upstream={row.repo?.upstream} />
               <FolderPathStatusIndicator status={projectGroupPathStatus} />
               {isRepoHeader ? <RepoScanUnavailableIndicator repo={row.repo!} /> : null}
@@ -366,6 +380,7 @@ export function renderWorktreeSectionHeaderRow(args: {
               groupId={projectGroupIdForHeader}
               hostId={projectGroupHostIdForHeader}
               label={label}
+              color={projectGroupColor}
               onRename={ctx.onRenameProjectGroup}
               onDelete={ctx.onDeleteProjectGroup}
             />

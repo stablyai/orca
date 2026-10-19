@@ -52,11 +52,14 @@ export type PendingSidebarRevealArgs = {
 }
 
 // Expand whatever collapsed section hides the reveal target, then scroll to it.
+// Returns false when the user opted to keep groups collapsed and the target is hidden by one.
 export function expandGroupsForWorktreeReveal(
   args: PendingSidebarRevealArgs,
   worktreeId: string,
-  executionHostId?: ExecutionHostId
-): void {
+  executionHostId?: ExecutionHostId,
+  forceExpand = false
+): boolean {
+  const keepCollapsed = !forceExpand && args.settings?.keepSidebarGroupsCollapsedOnReveal === true
   const hostScopedGroups = args.renderRows.some(
     (row) => row.type === 'host-header' || (row.type === 'header' && row.collapseKey !== undefined)
   )
@@ -73,12 +76,14 @@ export function expandGroupsForWorktreeReveal(
     }
   )
   if (folderGroupKeys.length > 0) {
-    for (const groupKey of folderGroupKeys) {
-      if (args.collapsedGroups.has(groupKey)) {
-        args.toggleGroup(groupKey)
-      }
+    const collapsedFolderKeys = folderGroupKeys.filter((key) => args.collapsedGroups.has(key))
+    if (keepCollapsed && collapsedFolderKeys.length > 0) {
+      return false
     }
-    return
+    for (const groupKey of collapsedFolderKeys) {
+      args.toggleGroup(groupKey)
+    }
+    return true
   }
   const targetWorktree = args.worktrees.find(
     (worktree) =>
@@ -86,15 +91,20 @@ export function expandGroupsForWorktreeReveal(
       (!executionHostId || !worktree.hostId || worktree.hostId === executionHostId)
   )
   if (!targetWorktree) {
-    return
+    return true
   }
-  for (const groupKey of getWorktreeRevealCollapsedGroupKeys({
+  const collapsedKeys = getWorktreeRevealCollapsedGroupKeys({
     ...args,
     worktree: targetWorktree,
     hostScopedGroups
-  })) {
+  })
+  if (keepCollapsed && collapsedKeys.length > 0) {
+    return false
+  }
+  for (const groupKey of collapsedKeys) {
     args.toggleGroup(groupKey)
   }
+  return true
 }
 
 export function resolvePendingSidebarReveal(args: {

@@ -184,6 +184,7 @@ export function useSidebarRevealRequests(args: {
         behavior: 'smooth',
         highlight: true,
         beginRename: (detail as { beginRename?: boolean } | undefined)?.beginRename === true,
+        expandCollapsedGroups: true,
         executionHostId: currentSidebarExecutionHostId ?? undefined
       })
     },
