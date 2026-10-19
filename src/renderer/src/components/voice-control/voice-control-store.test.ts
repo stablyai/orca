@@ -4,6 +4,7 @@ import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   publishVoiceControlAgentActivity,
+  publishVoiceControlMicMuted,
   publishVoiceControlState,
   publishVoiceControlToolActivity,
   publishVoiceControlTranscript,
@@ -59,6 +60,30 @@ describe('voice-control-store', () => {
     expect(result.current.agents).toEqual({})
     expect(result.current.transcript).toEqual([])
     expect(result.current.toolActivity).toBeNull()
+  })
+
+  it('tracks mic mute and clears it when the session ends', () => {
+    const { result } = harness()
+    expect(result.current.micMuted).toBe(false)
+    act(() => {
+      publishVoiceControlState({ sessionId: 's1', state: 'live' })
+      publishVoiceControlMicMuted(true)
+    })
+    expect(result.current.micMuted).toBe(true)
+    act(() => {
+      publishVoiceControlState({ sessionId: null, state: 'idle' })
+    })
+    expect(result.current.micMuted).toBe(false)
+  })
+
+  it('keeps mic mute across mid-session state events', () => {
+    const { result } = harness()
+    act(() => {
+      publishVoiceControlState({ sessionId: 's1', state: 'live' })
+      publishVoiceControlMicMuted(true)
+      publishVoiceControlState({ sessionId: 's1', state: 'live' })
+    })
+    expect(result.current.micMuted).toBe(true)
   })
 
   it('narrates known tools with localized labels and hides internal ones', () => {

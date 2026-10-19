@@ -3569,7 +3569,9 @@
             "d8993b9285": "La clé OpenAI enregistrée n'a pas pu être lue. Saisissez-la à nouveau dans Réglages > Voix.",
             "d5b8ea55f9": "Ajoutez une clé API OpenAI dans Réglages > Voix pour utiliser le contrôle vocal complet.",
             "de37e25e2e": "Afficher la transcription",
-            "7423b7184a": "Masquer la transcription"
+            "7423b7184a": "Masquer la transcription",
+            "c78204a814": "Couper le micro",
+            "d666fd4996": "Réactiver le micro"
           },
           "VoiceControlController": {
             "e34835dab1": "Microphone déconnecté. Le contrôle vocal s’est arrêté.",
@@ -9484,7 +9486,12 @@
           "33b29f0de3": "5 min",
           "f6ba2a270c": "Désactivé",
           "0605aacbb4": "Suspendre en l'absence de parole",
-          "22db9fce48": "Met fin à la session après ce nombre de minutes sans parole ni activité d'outil. L'audio en temps réel est facturé à la minute de connexion : une session silencieuse raccroche au lieu de rester inactive."
+          "22db9fce48": "Met fin à la session après ce nombre de minutes sans parole ni activité d'outil. L'audio en temps réel est facturé à la minute de connexion : une session silencieuse raccroche au lieu de rester inactive.",
+          "4f9b393144": "Vitesse de la voix",
+          "13f55eb2b7": "Vitesse à laquelle parle le coordinateur. S'applique aux nouvelles sessions.",
+          "60021885d3": "1x",
+          "2620edd21a": "1.25x",
+          "d6e8e02d37": "1.5x"
         },
         "VoicePane": {
           "6fa734ed95": "Supprimer {{value0}}",

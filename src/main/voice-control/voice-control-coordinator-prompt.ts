@@ -25,6 +25,8 @@ export function buildCoordinatorInstructions(options: {
     'Speaking rules:',
     '- Everything you say is spoken aloud. Be brief. No markdown, no lists with more than three items, no code snippets — describe code changes in words.',
     '- One request produces at most two utterances: acknowledge it once, immediately and conversationally ("on it", "let me check"), then use tools — the next thing you say is the answer.',
+    '- Instant reads — list_agents, describe_screen, see_screen, read_terminal — skip the acknowledgment entirely: answer directly. "Let me check" followed a second later by the answer is oversharing.',
+    '- Relayed agent updates are one sentence, outcome only ("the login fix is done — tests green"). No preamble, no "I just heard from…", no recap of what you asked for.',
     '- After a tool returns, speak only when its output IS the final answer. Never narrate progress, never re-acknowledge, never read tool output aloud as a status update.',
     '- Retries are silent. A command that fails for a fixable reason — wrong selector, missing flag — gets fixed and retried without a word. Speak when you have the result or a genuine blocker.',
     '- Microphone transcription mangles names. When the user dictates a repo, URL, branch, or account name, your acknowledgment must state the exact identifier you are about to use ("Cloning github.com/workato/otto") so a wrong guess gets caught in a second, not after a failed command.',

@@ -44,6 +44,7 @@ describe('VoiceControlSettingsSection', () => {
     expect(screen.getByRole('combobox', { name: 'Max session length' })).toHaveTextContent(
       '30 minutes'
     )
+    expect(screen.getByRole('combobox', { name: 'Speech speed' })).toHaveTextContent('1×')
     expect(screen.getByRole('combobox', { name: 'Suspend when quiet' })).toHaveTextContent(
       '5 minutes'
     )
@@ -106,6 +107,22 @@ describe('VoiceControlSettingsSection', () => {
 
     expect(onUpdateVoiceSettings).toHaveBeenCalledWith({
       control: { ...getDefaultVoiceControlSettings(), maxSessionMinutes: 0 }
+    })
+  })
+
+  it('merges the speech speed pick onto the control', async () => {
+    const { user, onUpdateVoiceSettings } = renderSection()
+
+    await user.click(screen.getByRole('combobox', { name: 'Speech speed' }))
+
+    for (const label of ['1×', '1.25×', '1.5×']) {
+      expect(screen.getByRole('option', { name: label })).toBeVisible()
+    }
+
+    await user.click(screen.getByRole('option', { name: '1.5×' }))
+
+    expect(onUpdateVoiceSettings).toHaveBeenCalledWith({
+      control: { ...getDefaultVoiceControlSettings(), voiceSpeed: 1.5 }
     })
   })
 

@@ -3299,7 +3299,9 @@
             "d8993b9285": "No se pudo leer la clave de OpenAI guardada. Introdúcela de nuevo en Configuración > Voz.",
             "d5b8ea55f9": "Añade una clave de API de OpenAI en Configuración > Voz para usar el control de voz completo.",
             "de37e25e2e": "Mostrar transcripción",
-            "7423b7184a": "Ocultar transcripción"
+            "7423b7184a": "Ocultar transcripción",
+            "c78204a814": "Silenciar micrófono",
+            "d666fd4996": "Activar micrófono"
           },
           "VoiceControlController": {
             "e34835dab1": "Micrófono desconectado. El control de voz se detuvo.",
@@ -9168,7 +9170,12 @@
           "33b29f0de3": "5 minutos",
           "f6ba2a270c": "Desactivado",
           "0605aacbb4": "Suspender cuando no se hable",
-          "22db9fce48": "Termina la sesión tras estos minutos sin voz ni actividad de herramientas. El audio en tiempo real se factura por minuto conectado, así que una sesión en silencio cuelga en lugar de quedar inactiva."
+          "22db9fce48": "Termina la sesión tras estos minutos sin voz ni actividad de herramientas. El audio en tiempo real se factura por minuto conectado, así que una sesión en silencio cuelga en lugar de quedar inactiva.",
+          "4f9b393144": "Velocidad de la voz",
+          "13f55eb2b7": "Velocidad a la que habla el coordinador. Se aplica a las sesiones nuevas.",
+          "60021885d3": "1x",
+          "2620edd21a": "1.25x",
+          "d6e8e02d37": "1.5x"
         },
         "VoicePane": {
           "68de13f72c": "No se pudo eliminar el modelo.",

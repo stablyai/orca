@@ -4347,7 +4347,9 @@
             "d5b8ea55f9": "Add an OpenAI API key in Settings > Voice to use full voice control.",
             "d8993b9285": "The stored OpenAI key could not be read. Re-enter it in Settings > Voice.",
             "de37e25e2e": "Show transcript",
-            "7423b7184a": "Hide transcript"
+            "7423b7184a": "Hide transcript",
+            "c78204a814": "Mute microphone",
+            "d666fd4996": "Unmute microphone"
           },
           "VoiceControlController": {
             "e34835dab1": "Microphone disconnected. Voice control stopped.",
@@ -10277,7 +10279,12 @@
           "33b29f0de3": "5 minutes",
           "f6ba2a270c": "Off",
           "0605aacbb4": "Suspend when quiet",
-          "22db9fce48": "Ends the session after this many minutes with no speech or tool activity. Realtime audio bills per connected minute, so a quiet session hangs up instead of idling."
+          "22db9fce48": "Ends the session after this many minutes with no speech or tool activity. Realtime audio bills per connected minute, so a quiet session hangs up instead of idling.",
+          "4f9b393144": "Speech speed",
+          "13f55eb2b7": "How fast the coordinator speaks. Applies to new sessions.",
+          "60021885d3": "1×",
+          "2620edd21a": "1.25×",
+          "d6e8e02d37": "1.5×"
         },
         "VoicePane": {
           "6fa734ed95": "Delete {{value0}}",
