@@ -31,11 +31,14 @@ export function getSidebarOrderedRepoHeaderIdsByBucket(
 ): Map<ProjectHeaderDragBucketKey, string[]> {
   const buckets = new Map<ProjectHeaderDragBucketKey, string[]>()
   for (const row of rows) {
-    const repo = row.type === 'header' ? getHeaderDragRepo(row) : undefined
+    if (row.type !== 'header') {
+      continue
+    }
+    const repo = getHeaderDragRepo(row)
     if (!repo) {
       continue
     }
-    const bucketKey = getProjectHeaderDragBucketKey(repo)
+    const bucketKey = getProjectHeaderDragBucketKey(row.projectGroupRepo ?? repo)
     const list = buckets.get(bucketKey) ?? []
     list.push(repo.id)
     buckets.set(bucketKey, list)

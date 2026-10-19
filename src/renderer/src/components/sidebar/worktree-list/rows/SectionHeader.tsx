@@ -279,7 +279,8 @@ export function renderWorktreeSectionHeaderRow(args: {
           }
           onPointerDown={
             isDraggableRepoHeader && headerRepo
-              ? (event) => headerDrag.repoDrag.onHandlePointerDown(event, headerRepo)
+              ? (event) =>
+                  headerDrag.repoDrag.onHandlePointerDown(event, headerRepo, row.projectGroupRepo)
               : isDraggableProjectGroupHeader && projectGroupDragIdForHeader
                 ? (event) =>
                     headerDrag.projectGroupDrag.onHandlePointerDown(

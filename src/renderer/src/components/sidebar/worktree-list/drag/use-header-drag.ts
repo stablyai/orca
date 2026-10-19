@@ -165,6 +165,17 @@ export function useWorktreeSidebarHeaderDrag(args: {
     },
     [moveProjectToGroup]
   )
+  // Why: a header drawn in a group through another host's row ranks among its siblings by that row.
+  const repoByHeaderIdForDrag = useMemo(() => {
+    let byHeaderId: Map<string, Repo> | null = null
+    for (const row of rows) {
+      if (row.type === 'header' && row.repo && row.projectGroupRepo) {
+        byHeaderId ??= new Map(repoMap)
+        byHeaderId.set(row.repo.id, row.projectGroupRepo)
+      }
+    }
+    return byHeaderId ?? repoMap
+  }, [repoMap, rows])
   const commitProjectGroupHeaderOrder = useCallback(
     (groupId: string, tabOrder: number) => {
       if (!Number.isFinite(tabOrder)) {
@@ -181,7 +192,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
   const repoDrag = useRepoHeaderDrag({
     orderedRepoIds: allRepoIds,
     sidebarRepoHeaderIdsByBucket,
-    repoById: repoMap,
+    repoById: repoByHeaderIdForDrag,
     getLiveRepos: readLiveRepos,
     usesProjectGroupOrdering: hasProjectGroups,
     onCommitRepoOrder: commitRepoReorder,

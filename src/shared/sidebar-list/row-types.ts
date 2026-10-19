@@ -37,6 +37,8 @@ export type GroupHeaderRow = {
   count: number
   icon: SidebarHeaderIcon
   repo?: Repo
+  /** The member row whose Project Group places this section, when it is not `repo`. */
+  projectGroupRepo?: Repo
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
   hostId?: ExecutionHostId

@@ -28,12 +28,18 @@ export type UseRepoHeaderDragArgs = {
 
 export type RepoHeaderDragController = {
   state: RepoDragState
-  onHandlePointerDown: (event: PointerEvent<HTMLElement>, repo: Repo) => void
+  onHandlePointerDown: (
+    event: PointerEvent<HTMLElement>,
+    repo: Repo,
+    projectGroupRepo?: Repo
+  ) => void
 }
 
 export type ProjectHeaderDragSession = {
   // Why the row, not its id: a twin on another host shares the id.
   repo: Repo
+  /** The member row whose Project Group places this header, when it is not `repo`. */
+  projectGroupRepo?: Repo
   bucketKey: ProjectHeaderDragBucketKey
   sidebarRepoHeaderIds: readonly string[]
   pointerId: number
