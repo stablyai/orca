@@ -156,6 +156,34 @@ describe('NativeChatComposerActions', () => {
     expect(onStop).not.toHaveBeenCalled()
   })
 
+  it.each([false, true])(
+    'a press on Send or Stop leaves focus where it was (working: %s)',
+    (isWorking) => {
+      render(
+        <NativeChatComposerActions
+          attachDisabled={false}
+          dictationDisabled={false}
+          sendDisabled={false}
+          isWorking={isWorking}
+          isDictating={false}
+          isDictationHoldMode={false}
+          onAttach={vi.fn()}
+          onDictationToggle={vi.fn()}
+          onDictationHoldStart={vi.fn()}
+          onDictationHoldEnd={vi.fn()}
+          onSend={vi.fn()}
+          onStop={vi.fn()}
+          sessionOptionsSurface={null}
+          sessionOptionsSnapshot={[]}
+        />
+      )
+
+      const button = screen.getByRole('button', { name: isWorking ? 'Stop the agent' : 'Send' })
+      // fireEvent returns false when the default (moving focus to the button) was prevented.
+      expect(fireEvent.mouseDown(button)).toBe(false)
+    }
+  )
+
   it('says on the disabled send button what to do to send', () => {
     render(
       <NativeChatComposerActions

@@ -2,6 +2,7 @@ import { SQLITE_RUNTIME_INCLUDE } from './vitest-sqlite-runtime-files.mjs'
 
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 export const NODE_RUNTIME_INCLUDE = [
+  'src/main/runtime/structured-agent-cli-writers.test.ts',
   'config/scripts/vitest-sqlite-runtime-boundary.test.ts',
   'config/scripts/cloud-security-history-workflow.test.mjs',
   'config/scripts/skill-recipe-shell.test.mjs',
@@ -18,6 +19,8 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/session-parse-cache-large-scan.test.ts',
   'src/main/ai-vault/session-parse-cache-metadata-checkpoint.test.ts',
   'src/main/ai-vault/session-parse-cache-persistence.test.ts',
+  'src/main/ai-vault/session-scanner-scope-cwd-facts.test.ts',
+  'src/main/ai-vault/session-scanner-scope-walk.test.ts',
   // Electron main bridges streams with Node's implementation.
   'src/main/host/electron-http-client.test.ts',
   'src/main/daemon/daemon-init-provider-installation.test.ts',
@@ -61,6 +64,7 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/main/foreign-sqlite-readers/**/*.test.ts',
   'src/main/browser/*cookie*.test.ts',
   // Playwright's CDP transport needs Node's WebSocket implementation.
+  'src/main/browser/browser-popup-adapter-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-native-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-background-compatibility.electron.test.ts',
@@ -85,10 +89,9 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-feed-conversation-name.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-first-input-identity.test.ts',
+  'src/main/native-chat/structured-chat-naming.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-outgrown-child.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-permission-mode.test.ts',
-  'src/main/native-chat/structured-chat-naming-command-first.test.ts',
-  'src/main/native-chat/structured-chat-naming-status-hook.test.ts',
   'src/main/runtime/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/structured-session-mail-redrive-wiring.test.ts',
   'src/main/runtime/rpc/ws-transport.test.ts',

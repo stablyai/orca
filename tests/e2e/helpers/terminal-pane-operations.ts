@@ -4,6 +4,7 @@ import {
   readPaneIdentitySnapshot,
   resolveActiveTabId
 } from './terminal-pane-identity'
+import { REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT } from '../../../src/renderer/src/constants/terminal'
 
 export async function readTerminalPaneDomLeafOrder(page: Page): Promise<string[]> {
   const snapshot = await readPaneIdentitySnapshot(page)
@@ -125,25 +126,53 @@ export async function closeActiveTerminalPane(page: Page): Promise<void> {
   if (!tabId) {
     throw new Error('closeActiveTerminalPane: no active terminal tab')
   }
-  await page.evaluate((tabId) => {
-    const paneManagers = window.__paneManagers
-    if (!paneManagers) {
-      throw new Error('closeActiveTerminalPane: terminal store/manager unavailable')
-    }
+  await requestTerminalPaneClose(page, tabId, 'active')
+}
 
-    const manager = paneManagers.get(tabId)
-    const panes = manager?.getPanes?.() ?? []
-    if (!manager?.closePane || panes.length < 2) {
-      return
-    }
-
-    const activePane = manager.getActivePane?.() ?? panes[0]
-    if (!activePane) {
-      return
-    }
-
-    manager.closePane(activePane.id)
-  }, tabId)
+/**
+ * Closes one of a tab's split panes the way the user's close does (pane menu, shortcut), then waits
+ * for it to go. A bare `PaneManager.closePane` skips the close command main applies first in a
+ * layout-owner build, so main keeps a pane whose terminal had not attached yet.
+ */
+export async function requestTerminalPaneClose(
+  page: Page,
+  tabId: string,
+  pane: 'active' | 'last'
+): Promise<void> {
+  const leafId = await page.evaluate(
+    ({ tabId, pane, closeEvent }) => {
+      const manager = window.__paneManagers?.get(tabId)
+      if (!manager) {
+        throw new Error(`requestTerminalPaneClose: no mounted pane manager for tab ${tabId}`)
+      }
+      const panes = manager.getPanes()
+      const target = pane === 'last' ? panes.at(-1) : (manager.getActivePane() ?? panes[0])
+      if (!target || panes.length < 2) {
+        return null
+      }
+      manager.setActivePane(target.id, { focus: false })
+      window.dispatchEvent(new CustomEvent(closeEvent, { detail: { tabId } }))
+      return target.leafId
+    },
+    { tabId, pane, closeEvent: REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT }
+  )
+  if (!leafId) {
+    return
+  }
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          ({ tabId, leafId }) =>
+            window.__paneManagers
+              ?.get(tabId)
+              ?.getPanes()
+              .some((candidate) => candidate.leafId === leafId) ?? false,
+          { tabId, leafId }
+        ),
+      { timeout: 15_000, message: `pane ${leafId} did not close` }
+    )
+    .toBe(false)
 }
 
 export async function focusLastTerminalPane(page: Page): Promise<void> {

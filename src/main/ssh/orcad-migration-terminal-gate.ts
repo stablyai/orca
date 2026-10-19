@@ -6,6 +6,7 @@
  */
 import { isLiveSshPtyLease, type SshRemotePtyLease } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
+import { PtyExitProof } from '../pty-exit-proof'
 
 export type OrcadMigrationTerminalVerdict =
   | { verdict: 'exited'; provenPtyIds: string[] }
@@ -117,9 +118,10 @@ export function retireProvenExitedLeases(
     return
   }
   const proven = new Set(proof.provenPtyIds)
+  const census = PtyExitProof.from('host-census', undefined)
   for (const lease of store.getSshRemotePtyLeases(targetId)) {
     if (lease.state !== 'terminated' && proven.has(lease.ptyId)) {
-      store.markSshRemotePtyLease(targetId, lease.ptyId, 'terminated')
+      store.markSshRemotePtyLease(targetId, lease.ptyId, census)
     }
   }
 }

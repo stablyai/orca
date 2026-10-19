@@ -55,6 +55,34 @@ export function captureRemoteCliBrowserRevocation(): (webContentsId?: number) =>
   }
 }
 
+/**
+ * Captured where a browser command is queued: `run` puts the queued work back in exactly that
+ * scope (none for a desktop-local command), never the queue runner's, which may be another host's.
+ */
+export function captureRemoteCliBrowserScope(): {
+  bridged: boolean
+  /** Fires when the host behind the command is revoked. */
+  revoked?: AbortSignal
+  run<T>(work: () => T): T
+} {
+  const active = scope.getStore()
+  return {
+    bridged: active !== undefined,
+    revoked: active?.revoked,
+    run: (work) => (active ? scope.run(active, work) : scope.exit(work))
+  }
+}
+
+/** Runs `work` in no host's scope, so long-lived resources it creates never inherit one. */
+export function runOutsideRemoteCliBrowserScope<T>(work: () => T): T {
+  return scope.exit(work)
+}
+
+/** Throws inside a bridged command once it was revoked or `webContentsId` stopped being admitted. */
+export function assertRemoteCliBrowserAccess(webContentsId?: number): void {
+  captureRemoteCliBrowserRevocation()(webContentsId)
+}
+
 /** Null outside a bridged command; inside one, the scoped workspace or a refusal. */
 export function resolveRemoteCliBrowserScopeSelector(
   selector: string

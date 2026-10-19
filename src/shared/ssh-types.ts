@@ -34,12 +34,15 @@ export type SshRemoteRuntimeResolution = {
   orcaMajor: number
 }
 
+/** Who created a hidden target as an implementation detail, and so owns its lifecycle. */
+export type SshTargetOwner = { type: 'on-demand-runtime'; runtimeId: string }
+
 export type SshTarget = {
   id: string
   label: string
   /** Internal owner for targets that Orca creates as implementation details.
    *  Owned targets are hidden from normal SSH-host management surfaces. */
-  owner?: { type: 'on-demand-runtime'; runtimeId: string }
+  owner?: SshTargetOwner
   /** Host alias to resolve through OpenSSH config (ssh -G). */
   configHost?: string
   host: string
@@ -349,6 +352,8 @@ export type SshManagedServerStatus =
       canLeaveBehind?: true
       /** A move to the managed server stopped short and keeps the host locked until it resumes. */
       held?: true
+      /** Setup lost contact with the host, so nothing proves it failed there. */
+      contactLost?: true
       /** COMPAT(legacy-relay-bridge): the connect stayed up so the bridge serves those terminals. */
       bridged?: true
     }

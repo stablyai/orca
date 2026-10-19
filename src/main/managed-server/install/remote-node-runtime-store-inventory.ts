@@ -7,7 +7,7 @@ import {
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_RUNTIMES_DIRNAME
 } from '../../../shared/orcad-artifacts'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
@@ -48,7 +48,7 @@ export function runtimeStoreInventoryCommand(host: RemoteHostPlatform, remoteHom
 
   const refPrefix = RUNTIME_REF_NODE_PREFIX
   return [
-    `root=${shellEscape(root)}`,
+    `root=${quotePosixShell(root)}`,
     `rt="$root"/${ORCAD_RUNTIMES_DIRNAME}`,
     `[ -d "$rt" ] || { printf '%s\\n' ${INVENTORY_OK}; exit 0; }`,
     `[ -r "$root" ] && [ -x "$root" ] || { printf '%s\\n' ${REFS_ERR}; exit 0; }`,

@@ -1,8 +1,8 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../../persistence'
-import { SshConnectionStore } from '../../ssh/ssh-connection-store'
+import { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import { awaitSignInForCredentialHosts } from './ssh-sign-in-requirement'
-import { SshConnectionManager } from '../../ssh/ssh-connection-manager'
+import { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import { quitTeardownStartGate } from '../../quit-teardown-start-gate'
 import {
@@ -11,7 +11,7 @@ import {
   setSshTargetMutations,
   setSshTargetRegistryHandlers,
   setSshTargetRegistryStore
-} from '../../ssh/ssh-target-registry'
+} from '../../ssh/targets/ssh-target-registry'
 
 import { registerSshBrowseHandler } from './ssh-browse'
 import { registerCredentialHandler } from './ssh-passphrase'
@@ -19,7 +19,7 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import {
   initializeSshConnectionGenerationSession,
   resetSshConnectionGenerations
-} from '../../ssh/ssh-connection-generation'
+} from '../../ssh/connection/ssh-connection-generation'
 import { resetSshProviderAuthorities } from '../../ssh/ssh-provider-authority'
 import { installManagedOrcadStartStatus } from '../runtime-environments/runtime-environment-managed-tunnel'
 import {

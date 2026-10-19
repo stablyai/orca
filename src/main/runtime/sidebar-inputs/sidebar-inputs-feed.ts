@@ -27,7 +27,7 @@ export type SidebarInputsFeedDomain = {
   rereadOnRead?: boolean
 }
 
-// One revision per burst of producer changes.
+// A change after a quiet spell publishes at once; the rest of its burst at most this often.
 const FLUSH_COALESCE_MS = 50
 
 /**
@@ -113,6 +113,7 @@ class FeedSession {
   private readonly detaches: (() => void)[]
   private timer: ReturnType<typeof setTimeout> | null = null
   private flushing: Promise<void> | null = null
+  private lastFlushAt = Number.NEGATIVE_INFINITY
   private disposed = false
 
   constructor(
@@ -178,10 +179,13 @@ class FeedSession {
       return
     }
     this.markDirty(name)
-    this.timer ??= setTimeout(() => {
-      this.timer = null
-      void this.flushDirty()
-    }, FLUSH_COALESCE_MS)
+    this.timer ??= setTimeout(
+      () => {
+        this.timer = null
+        void this.flushDirty()
+      },
+      Math.max(0, this.lastFlushAt + FLUSH_COALESCE_MS - performance.now())
+    )
   }
 
   private markDirty(name: string): void {
@@ -206,6 +210,7 @@ class FeedSession {
   }
 
   private async flush(): Promise<void> {
+    this.lastFlushAt = performance.now()
     const marks = this.marks
     const due = this.domains.filter((domain) => this.dirty.has(domain.name))
     this.dirty.clear()

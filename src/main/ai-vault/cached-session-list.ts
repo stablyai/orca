@@ -22,7 +22,7 @@ import {
   type LocalAiVaultScanProgressHandle
 } from './ai-vault-local-scan-progress'
 import {
-  aiVaultSessionDepthCovers,
+  aiVaultCachedDepthServes,
   requestedAiVaultSessionDepth,
   truncateAiVaultListResult,
   type AiVaultSessionDepth
@@ -119,7 +119,7 @@ export async function listAiVaultSessions(
     args?.force !== true &&
     cachedList?.key === key &&
     cachedList.expiresAt > now &&
-    aiVaultSessionDepthCovers(cachedList.depth, depth)
+    aiVaultCachedDepthServes(cachedList.depth, depth, args?.scopePaths)
   ) {
     return truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths)
   }
@@ -164,7 +164,7 @@ export async function listAiVaultSessions(
           args?.force === true ||
           current?.key !== key ||
           current.expiresAt <= Date.now() ||
-          !aiVaultSessionDepthCovers(current.depth, depth)
+          !aiVaultCachedDepthServes(current.depth, depth, args?.scopePaths)
         ) {
           cachedList = {
             key,

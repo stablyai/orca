@@ -1,16 +1,17 @@
 // @vitest-environment happy-dom
 
 /**
- * One store goes in; the desktop window's row pipeline (switch on) and a phone reading main's feed
- * (feed pages, the shared installer, buildSidebarFeedRows) must draw the same list. The goldens
- * check that list is right; this checks only that the two adapters agree.
+ * One store goes in; the window's own row pipeline (switch on), the desktop window reading main's
+ * feed (useMainSidebarListModel) and a phone reading it (feed pages, the shared installer,
+ * buildSidebarFeedRows) must draw the same list. The goldens check that list is right; this
+ * checks only that the adapters agree.
  *
  * Never compared, as no feed input carries them: the window's drag previews, search, hover hold
  * and agent-send reveal; its imported-worktrees and new-external-worktrees cards; its create
  * preflight; host-header health and detail.
  * Known gaps the phone shows differently, so the fixture leaves them out: a creation a paired
- * server runs; a paired server's activity under "Hide sleeping" (the window reads its own tabs);
- * a PR unlinked on a server workspace; an SSH workspace reached through a paired server.
+ * server runs; a PR unlinked on a server workspace; an SSH workspace reached through a paired
+ * server; a server terminal only another client opened (the server counts it, the window does not).
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, renderHook } from '@testing-library/react'
@@ -24,6 +25,9 @@ import type { HostSectionRow } from '../../../../shared/sidebar-list/host-sectio
 import type { readSidebarFeedDomains } from '../../../../shared/sidebar-list/sidebar-feed-domains'
 import type { buildSidebarFeedRows } from '../../../../shared/sidebar-list/sidebar-feed-rows'
 import { GOLDEN_NOW } from './sidebar-list-golden-factories.test-fixture'
+import type { DesktopSidebarFeed } from '@/lib/desktop-sidebar-feed'
+import { readSidebarFeedDomains as readFeedDomainsSwitchedOn } from '../../../../shared/sidebar-list/sidebar-feed-domains'
+import { useMainSidebarListModel } from './worktree-list/listing/use-main-list-model'
 import {
   GOLDEN_WORKTREE_IDS,
   buildGoldenStoreState,
@@ -38,6 +42,8 @@ import {
 import {
   feedDomainsFromWindowState,
   parityActiveState,
+  parityServerBrowserTabState,
+  parityServerTerminalState,
   parityWorldOverrides,
   phoneInputsFromWindowState,
   projectParityRows
@@ -46,6 +52,13 @@ import {
 const SWITCH = '../../../../shared/sidebar-inputs-switch'
 vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 vi.mock('@/lib/sidebar-list-session', () => ({ useSidebarListSession: () => {} }))
+// The feed the window would install from main; set per list.
+let windowFeed: DesktopSidebarFeed | null = null
+vi.mock('@/lib/desktop-sidebar-feed', () => ({
+  useDesktopSidebarFeed: () => windowFeed,
+  onDesktopSidebarFeedInstalled: () => () => {},
+  refreshDesktopSidebarFeed: () => 0
+}))
 
 // The phone page is built without the switch, so its adapter loads in a module graph with it off.
 let phoneAdapter: {
@@ -86,9 +99,12 @@ function desktopActiveRowKeys(rows: readonly HostSectionRow[], state: AppState):
   return keys
 }
 
-function desktopList(state: Partial<AppState>): string[] {
+function desktopList(
+  state: Partial<AppState>,
+  useListModel?: Parameters<typeof useGoldenSidebarPipeline>[0]
+): string[] {
   useAppStore.setState(state)
-  const { result, unmount } = renderHook(() => useGoldenSidebarPipeline())
+  const { result, unmount } = renderHook(() => useGoldenSidebarPipeline(useListModel))
   const { sectionRows } = result.current.rowModel
   const lines = projectParityRows(
     sectionRows,
@@ -98,7 +114,7 @@ function desktopList(state: Partial<AppState>): string[] {
   return lines
 }
 
-async function phoneList(state: Partial<AppState>): Promise<string[]> {
+async function installFeed(state: Partial<AppState>) {
   useAppStore.setState(state)
   const full = useAppStore.getState()
   const feed = new SidebarInputsFeed(
@@ -113,6 +129,11 @@ async function phoneList(state: Partial<AppState>): Promise<string[]> {
   if (!installed) {
     throw new Error('the feed installed nothing')
   }
+  return { installed, full }
+}
+
+async function phoneList(state: Partial<AppState>): Promise<string[]> {
+  const { installed, full } = await installFeed(state)
   const { catalog, view } = phoneInputsFromWindowState(full)
   const { sectionRows, activeRowKeys } = phoneAdapter.buildSidebarFeedRows(
     phoneAdapter.readSidebarFeedDomains(installed),
@@ -127,13 +148,27 @@ function worldState(view: GoldenView, extra: Partial<AppState> = {}): Partial<Ap
   return { ...base, ...parityWorldOverrides(base), ...extra }
 }
 
-/** Both adapters over one store; the desktop's list is the expected side. */
+/** The window's list built from main's feed, as an ORCA_SIDEBAR_INPUTS=main window draws it. */
+async function windowFeedList(state: Partial<AppState>): Promise<string[]> {
+  const { installed } = await installFeed(state)
+  windowFeed = { domains: readFeedDomainsSwitchedOn(installed), readId: 1 }
+  try {
+    return desktopList(state, useMainSidebarListModel)
+  } finally {
+    windowFeed = null
+  }
+}
+
+/** Every adapter over one store; the window's own list is the expected side. */
 async function expectAdaptersAgree(state: Partial<AppState>): Promise<string[]> {
   const desktop = desktopList(state)
   useAppStore.setState(initialState, true)
   const phone = await phoneList(state)
   useAppStore.setState(initialState, true)
+  const fromFeed = await windowFeedList(state)
+  useAppStore.setState(initialState, true)
   expect(phone.join('\n')).toBe(desktop.join('\n'))
+  expect(fromFeed.join('\n')).toBe(desktop.join('\n'))
   return desktop
 }
 
@@ -210,6 +245,15 @@ describe('sidebar list parity: desktop window and feed reader', () => {
       { showSleepingWorkspaces: false, ...goldenLiveTerminalState() },
       /^ITEM .*\|orca::\/w\/feat-a /
     ],
+    // The server reports the desktop's terminal; only the desktop knows its browser tab.
+    'hide sleeping with a paired server terminal': [
+      { showSleepingWorkspaces: false, ...parityServerTerminalState() },
+      /^ITEM .*runtime:env-1\|api::\/w\/api-y /
+    ],
+    'hide sleeping with a browser tab in a paired server workspace': [
+      { showSleepingWorkspaces: false, ...parityServerBrowserTabState() },
+      /^ITEM .*runtime:env-1\|api::\/w\/api-y /
+    ],
     'hide default branch': [{ hideDefaultBranchWorkspace: true }, /^ITEM .*api-y /],
     // The same id on two hosts: only the SSH copy is open.
     'open on one of two hosts': [
@@ -218,11 +262,11 @@ describe('sidebar list parity: desktop window and feed reader', () => {
     ],
     'open folder workspace': [
       parityActiveState('folder:fw-remote', 'ssh:gpu-vm'),
-      /^FOLDER folder-workspace:fw-remote .* ACTIVE$/
+      /^FOLDER folder-workspace:ssh:gpu-vm\|folder:fw-remote .* ACTIVE$/
     ],
     'open server folder workspace': [
       parityActiveState('folder:fw-server', 'runtime:env-1'),
-      /^FOLDER folder-workspace:fw-server group=pg-server-folders .* ACTIVE$/
+      /^FOLDER folder-workspace:runtime:env-1\|folder:fw-server group=pg-server-folders .* ACTIVE$/
     ],
     'hide CLI-created': [
       { hideCliCreatedWorkspaces: true },

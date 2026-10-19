@@ -1,0 +1,10 @@
+# Store writes whose first parameter is a bare repo or worktree id (R4-2), as Class.method.
+# This is a RATCHET: entries may only be REMOVED. Take RepoHostTarget or HostWorktreeTarget.
+# Prune after a fix: pnpm check:id-only-store-write-ratchet --prune
+MetadataLineageOperations.migrateWorktreeIdentity
+MetadataLineageOperations.removeWorkspaceLineage
+MetadataLineageOperations.removeWorktreeLineage
+MetadataLineageOperations.removeWorktreeMeta
+MetadataLineageOperations.setWorktreeLineage
+MetadataLineageOperations.setWorktreeMeta
+MetadataLineageOperations.setWorktreeMetaForHost

@@ -544,15 +544,13 @@ describe('launchAgentInNewTab', () => {
 
     launchAgentInNewTab({ requestId: 'request-12', agent: 'codex', worktreeId: 'wt-1' })
 
-    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: 'wt-1',
-        environmentId: 'web-runtime',
-        agentSessionKind: 'fresh',
-        agent: 'codex',
-        viewMode: 'terminal'
-      })
-    )
+    expect(mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0]).toMatchObject({
+      worktreeId: 'wt-1',
+      environmentId: 'web-runtime',
+      agentSessionKind: 'fresh',
+      agent: 'codex',
+      viewMode: 'terminal'
+    })
   })
 
   it('propagates the resolved terminal mode to paired web runtime launches', async () => {
@@ -568,15 +566,13 @@ describe('launchAgentInNewTab', () => {
 
     launchAgentInNewTab({ requestId: 'request-13', agent: 'codex', worktreeId: 'wt-1' })
 
-    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: 'wt-1',
-        environmentId: 'web-runtime',
-        agentSessionKind: 'fresh',
-        agent: 'codex',
-        viewMode: 'terminal'
-      })
-    )
+    expect(mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0]).toMatchObject({
+      worktreeId: 'wt-1',
+      environmentId: 'web-runtime',
+      agentSessionKind: 'fresh',
+      agent: 'codex',
+      viewMode: 'terminal'
+    })
   })
 
   it('surfaces a toast when host agent launch fails in paired web clients', async () => {

@@ -1,5 +1,6 @@
 import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { getBridgePathFromCommandPath, getPosixDirname, quoteShell } from './wsl-cli-scripts'
+import { getBridgePathFromCommandPath, getPosixDirname } from './wsl-cli-scripts'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
 
 const WSL_COMMAND_NAME = 'orca-ide'
 
@@ -47,14 +48,14 @@ export async function readWslCliCommandFile(
   const output = await run(
     distro,
     [
-      `if [ -L ${quoteShell(commandPath)} ]; then`,
+      `if [ -L ${quotePosixShellDoubleQuotedApostrophe(commandPath)} ]; then`,
       '  printf __ORCA_NOT_FILE__',
-      `elif [ ! -e ${quoteShell(commandPath)} ]; then`,
+      `elif [ ! -e ${quotePosixShellDoubleQuotedApostrophe(commandPath)} ]; then`,
       '  printf __ORCA_MISSING__',
-      `elif [ ! -f ${quoteShell(commandPath)} ]; then`,
+      `elif [ ! -f ${quotePosixShellDoubleQuotedApostrophe(commandPath)} ]; then`,
       '  printf __ORCA_NOT_FILE__',
       'else',
-      `  cat ${quoteShell(commandPath)}`,
+      `  cat ${quotePosixShellDoubleQuotedApostrophe(commandPath)}`,
       'fi'
     ].join('\n'),
     { loginPath: 'none' }
@@ -208,7 +209,7 @@ async function readPathConfigured(
   try {
     const output = await run(
       distro,
-      `case ":$PATH:" in *:${quoteShell(pathDirectory)}:*) printf yes ;; *) printf no ;; esac`,
+      `case ":$PATH:" in *:${quotePosixShellDoubleQuotedApostrophe(pathDirectory)}:*) printf yes ;; *) printf no ;; esac`,
       { loginPath: 'preferred' }
     )
     return output.trim() === 'yes'

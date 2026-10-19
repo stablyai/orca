@@ -31,6 +31,7 @@ import {
 } from './structured-agent-session-precommit-refusal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
+import { structuredLaunchSeedOnSavedListing } from '../../session-tabs/structured-launch-seed-listing'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
@@ -86,7 +87,8 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   firstMessage?: StructuredAgentSessionFirstMessage
   atRest?: boolean
 }): Promise<PreparedStructuredAgentSessionCreate> {
-  const structuredAgentCliSourceEvidence = args.structuredAgentCliSourceEvidence ??
+  const structuredAgentCliSourceEvidence =
+    args.structuredAgentCliSourceEvidence ??
     (args.resumeFrom?.cliSource
       ? captureStructuredAgentCliSource(() => args.runtime.getAgentProviderSessionRows())
       : undefined)
@@ -136,20 +138,26 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     hostLaunchDirectory,
     ...resolvedAttach
   } = resolved
+  // The ledger covers explicit overrides, never defaults that settings can change on replay.
+  // Explicit picks replace the saved selection; the permission default is the chat's own.
+  const picked = args.options
+    ? atRest
+      ? { ...resolved.options, ...args.options }
+      : { ...seededPermissionMode(resolved.options), ...args.options }
+    : resolved.options
+  // After the fingerprints: a remembered model the saved listing no longer names moves, with the
+  // effort the create runs under it. A model the create names itself is never moved.
+  const options = args.options?.model
+    ? picked
+    : await structuredLaunchSeedOnSavedListing(host, args.agent, picked, () =>
+        args.runtime.resolveStructuredAgentSessionLocalWorkspacePath(args.worktree)
+      )
   return {
     host,
     ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
     attachParams: {
       ...resolvedAttach,
-      // The ledger covers explicit overrides, never defaults that settings can change on replay.
-      // Explicit picks replace the saved selection; the permission default is the chat's own.
-      ...(args.options
-        ? {
-            options: atRest
-              ? { ...resolved.options, ...args.options }
-              : { ...seededPermissionMode(resolved.options), ...args.options }
-          }
-        : {}),
+      ...(options ? { options } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
       agent: resolved.agent,
@@ -252,10 +260,19 @@ export async function createStructuredAgentSessionForWorktree(args: {
   activate: boolean
   options?: Readonly<Record<string, string>>
   tabId?: string
+  /** Create without starting the agent; its first message starts it. */
+  atRest?: true
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+  // An at-rest create's ledger row is keyed by its intent, as a client's create is.
+  const envelope = args.atRest
+    ? {
+        ...args.envelope,
+        payloadFingerprint: structuredAgentSessionCreateIntentFingerprint(args)
+      }
+    : args.envelope
   const prepared: PreparedStructuredAgentSessionCreate | StructuredCreateRefused =
     await resolveUncommittedStructuredCreate(() =>
-      prepareStructuredAgentSessionCreateForWorktree(args)
+      prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope })
     )
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }

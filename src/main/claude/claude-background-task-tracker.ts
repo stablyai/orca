@@ -31,7 +31,8 @@ export {
 } from './claude-background-task-frames'
 export type { ClaudeBackgroundTaskKind } from './claude-background-task-frames'
 
-const MAX_TRACKED_TASKS = 256
+/** Ended ids remembered to refuse a late start; live tasks take no bound. */
+const MAX_TERMINAL_TASK_IDS = 256
 export type ClaudeGoalBackgroundWork = 'live' | 'unverifiable' | 'exited'
 
 export class ClaudeBackgroundTaskTracker {
@@ -245,10 +246,6 @@ export class ClaudeBackgroundTaskTracker {
         coverageIncomplete = true
         continue
       }
-      if (!roster.has(id) && roster.size >= MAX_TRACKED_TASKS) {
-        coverageIncomplete = true
-        continue
-      }
       // An authoritative live roster supersedes an earlier terminal edge — for
       // the ids it actually lists. Wiping the whole set left a finished
       // FOREGROUND id undefended, since the start guard now convicts only
@@ -268,7 +265,7 @@ export class ClaudeBackgroundTaskTracker {
       })
     }
     this.coverageIncomplete = coverageIncomplete
-    for (const [id, task] of combineClaudeBackgroundTaskRoster(prior, roster, MAX_TRACKED_TASKS)) {
+    for (const [id, task] of combineClaudeBackgroundTaskRoster(prior, roster)) {
       this.tasks.set(id, task)
     }
     for (const [id, task] of prior) {
@@ -279,22 +276,6 @@ export class ClaudeBackgroundTaskTracker {
   }
 
   private upsert(id: string, task: Omit<TrackedClaudeBackgroundTask, 'liveInTurn'>): void {
-    if (!this.tasks.has(id) && this.tasks.size >= MAX_TRACKED_TASKS) {
-      let foregroundId: string | undefined
-      for (const [candidateId, candidate] of this.tasks) {
-        if (!candidate.backgrounded) {
-          foregroundId = candidateId
-          break
-        }
-      }
-      if (!foregroundId) {
-        if (task.backgrounded) {
-          this.coverageIncomplete = true
-        }
-        return
-      }
-      this.tasks.delete(foregroundId)
-    }
     const existing = this.tasks.get(id) ?? this.retention.resume(id)
     this.terminalTaskIds.delete(id)
     if (existing) {
@@ -318,7 +299,7 @@ export class ClaudeBackgroundTaskTracker {
     this.tasks.delete(id)
     this.terminalTaskIds.delete(id)
     this.terminalTaskIds.add(id)
-    if (this.terminalTaskIds.size > MAX_TRACKED_TASKS) {
+    if (this.terminalTaskIds.size > MAX_TERMINAL_TASK_IDS) {
       const oldest = this.terminalTaskIds.values().next()
       if (!oldest.done) {
         this.terminalTaskIds.delete(oldest.value)

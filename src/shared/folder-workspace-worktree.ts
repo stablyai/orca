@@ -33,7 +33,7 @@ export function projectGroupIdFromRepoId(repoId: string | null | undefined): str
   return projectGroupId === '' ? null : projectGroupId
 }
 
-function getFolderWorkspaceWorktreeHostId(
+export function getFolderWorkspaceWorktreeHostId(
   workspace: Pick<FolderWorkspace, 'executionHostId' | 'connectionId'>
 ): ExecutionHostId {
   return workspace.executionHostId ?? getConnectionExecutionHostId(workspace.connectionId)

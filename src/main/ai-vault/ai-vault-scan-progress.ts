@@ -97,6 +97,13 @@ export function noteAiVaultScanReading(signal: AbortSignal | undefined, total: n
   reporter?.workChanged()
 }
 
+/** A pass stopped early: `count` transcripts it announced will not be read. */
+export function noteAiVaultScanUnread(signal: AbortSignal | undefined, count: number): void {
+  const reporter = signal ? reporters.get(signal) : undefined
+  reporter?.tally.dropUnread(count)
+  reporter?.workChanged()
+}
+
 export function noteAiVaultScanFilesRead(signal: AbortSignal | undefined, count: number): void {
   const reporter = signal ? reporters.get(signal) : undefined
   reporter?.tally.addRead(count)

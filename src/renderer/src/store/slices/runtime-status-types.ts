@@ -43,6 +43,9 @@ export type RuntimeStatusStoreState = RuntimeStatusSlice &
       | 'clearRuntimeDetectedAgents'
       | 'markEnvironmentSshStateStale'
       | 'purgeStaleRuntimeHostState'
+      | 'pairedTerminalTabCloseIntentsByEnvironment'
+      | 'recordPairedTerminalTabCloseIntent'
+      | 'clearPairedTerminalTabCloseIntents'
     >
   >
 

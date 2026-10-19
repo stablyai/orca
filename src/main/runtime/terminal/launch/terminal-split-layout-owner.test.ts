@@ -8,6 +8,11 @@ import {
 } from '../../orca-runtime-test-fixtures.spec'
 import { createMobileCreateTestNotifier } from '../../orca-runtime-test-scenario-builders.spec'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import {
+  clearPaneSpawnReservation,
+  makePaneSpawnReservationKey,
+  reservePaneSpawn
+} from '../../../ipc/pty/pane/spawn-reservation'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -35,6 +40,36 @@ function graph(leafIds: string[], unboundLeafIds: string[] = []) {
   }
 }
 
+type RuntimeInternals = {
+  recordPtyWorktree: (
+    ptyId: string,
+    worktreeId: string,
+    opts: { connected: boolean; tabId: string; paneKey: string }
+  ) => void
+}
+
+function internalsOf(runtime: OrcaRuntimeService): RuntimeInternals {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recordPtyWorktree is declared on OrcaRuntimeService's inheritance chain.
+  return runtime as unknown as RuntimeInternals
+}
+
+function graphWithSplit(newLeafId: string) {
+  const next = graph([HEADLESS_LEAF_ID, newLeafId])
+  return {
+    ...next,
+    tabs: next.tabs.map((tab) => ({
+      ...tab,
+      layout: {
+        type: 'split' as const,
+        direction: 'vertical' as const,
+        ratio: 0.5,
+        first: { type: 'leaf' as const, leafId: HEADLESS_LEAF_ID },
+        second: { type: 'leaf' as const, leafId: newLeafId }
+      }
+    }))
+  }
+}
+
 describe('a split of a pane the window draws, in a layout-owner build', () => {
   function setup() {
     const store = makeRuntimeStoreWithWorkspaceSession(makeWorkspaceSessionWithHeadlessTerminal())
@@ -51,7 +86,7 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
       written.add(listener)
       return () => written.delete(listener)
     })
-    const notifier = createMobileCreateTestNotifier(vi.fn())
+    const notifier = { ...createMobileCreateTestNotifier(vi.fn()), closeTerminalPane: vi.fn() }
     const runtime = new OrcaRuntimeService(store.runtimeStore)
     runtime.setNotifier(notifier)
     runtime.syncWindowGraph(1, graph([HEADLESS_LEAF_ID]))
@@ -60,6 +95,7 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
       collectLayoutLeafIdsInOrder(store.getSession().terminalLayoutsByTabId[TAB_ID]!.root!)
     return {
       ...store,
+      notifier,
       runtime,
       handle: handle!,
       splitTerminal: vi.mocked(notifier.splitTerminal),
@@ -67,26 +103,88 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
     }
   }
 
-  it('writes the new pane in main before the window mounts it, and keeps it however the start goes', async () => {
-    const { runtime, runtimeStore, handle, splitTerminal, leafIds } = setup()
-    const withdraw = vi.fn(async () => null)
-    Reflect.set(runtimeStore, 'withdrawTerminalPane', withdraw)
+  it('writes the new pane in main before the window mounts it, and takes it back when its terminal never starts', async () => {
+    const { runtime, handle, splitTerminal, leafIds, notifier } = setup()
 
     vi.useFakeTimers()
     try {
       const split = runtime.splitTerminal(handle, { direction: 'vertical', command: 'make test' })
-      const rejected = expect(split).rejects.toThrow('Timed out waiting for split pane handle')
+      const rejected = expect(split).rejects.toThrow(
+        /^split_pane_not_started: .*did not start within 10 s.*closed/
+      )
       await vi.waitFor(() => expect(splitTerminal).toHaveBeenCalledTimes(1))
       const notice = splitTerminal.mock.calls[0]![2]!
       expect(notice).toMatchObject({ command: 'make test', sourceLeafId: HEADLESS_LEAF_ID })
       expect(leafIds()).toEqual([HEADLESS_LEAF_ID, notice.newLeafId])
 
-      // Its terminal never starts: main keeps a dead pane, as any, and takes nothing back.
+      // Its terminal never starts: main takes the pane back, and the window drops it too.
       await vi.advanceTimersByTimeAsync(11_000)
       await rejected
-      expect(leafIds()).toEqual([HEADLESS_LEAF_ID, notice.newLeafId])
-      expect(withdraw).not.toHaveBeenCalled()
+      expect(leafIds()).toEqual([HEADLESS_LEAF_ID])
+      expect(notifier.closeTerminalPane).toHaveBeenCalledWith(TAB_ID, notice.newLeafId)
     } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a pane whose terminal bound before the wait ran out, though the window reported it late', async () => {
+    const { runtime, runtimeStore, handle, splitTerminal, leafIds, notifier } = setup()
+
+    vi.useFakeTimers()
+    try {
+      const startedAt = Date.now()
+      const split = runtime.splitTerminal(handle, { direction: 'vertical' })
+      await vi.waitFor(() => expect(splitTerminal).toHaveBeenCalledTimes(1))
+      const newLeafId = splitTerminal.mock.calls[0]![2]!.newLeafId!
+      await vi.advanceTimersByTimeAsync(9_900 - (Date.now() - startedAt))
+      // Main binds the started terminal at 9.9 s; the busy window's report lands after 10 s.
+      await runtimeStore.persistPtyBinding({
+        worktreeId: TEST_WORKTREE_ID,
+        tabId: TAB_ID,
+        leafId: newLeafId,
+        ptyId: 'pty-1'
+      })
+      await vi.advanceTimersByTimeAsync(600)
+      internalsOf(runtime).recordPtyWorktree('pty-1', TEST_WORKTREE_ID, {
+        connected: true,
+        tabId: TAB_ID,
+        paneKey: makePaneKey(TAB_ID, newLeafId)
+      })
+      runtime.syncWindowGraph(1, graphWithSplit(newLeafId))
+      await vi.advanceTimersByTimeAsync(0)
+      await expect(split).resolves.toMatchObject({ tabId: TAB_ID, leafId: newLeafId })
+      expect(leafIds()).toEqual([HEADLESS_LEAF_ID, newLeafId])
+      expect(notifier.closeTerminalPane).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the pane of a start still under way when the wait runs out, with the plain timeout', async () => {
+    const { runtime, handle, splitTerminal, leafIds, notifier } = setup()
+    const reservations: (() => void)[] = []
+
+    vi.useFakeTimers()
+    try {
+      const split = runtime.splitTerminal(handle, { direction: 'vertical' })
+      const rejected = expect(split).rejects.toThrow(/^Timed out waiting for split pane handle$/)
+      await vi.waitFor(() => expect(splitTerminal).toHaveBeenCalledTimes(1))
+      const newLeafId = splitTerminal.mock.calls[0]![2]!.newLeafId!
+      // A slow (SSH-style) start of the pane's terminal is under way and has not bound yet.
+      const reservationKey = makePaneSpawnReservationKey(
+        TEST_WORKTREE_ID,
+        'ssh-1',
+        makePaneKey(TAB_ID, newLeafId)
+      )!
+      const reservation = reservePaneSpawn(reservationKey)
+      reservations.push(() => clearPaneSpawnReservation(reservationKey, reservation))
+
+      await vi.advanceTimersByTimeAsync(11_000)
+      await rejected
+      expect(leafIds()).toEqual([HEADLESS_LEAF_ID, newLeafId])
+      expect(notifier.closeTerminalPane).not.toHaveBeenCalled()
+    } finally {
+      reservations.forEach((release) => release())
       vi.useRealTimers()
     }
   })
@@ -147,7 +245,7 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
     vi.useFakeTimers()
     try {
       const split = runtime.splitTerminal(handle, { direction: 'vertical' })
-      const rejected = expect(split).rejects.toThrow('Timed out waiting for split pane handle')
+      const rejected = expect(split).rejects.toThrow('split_pane_not_started')
       await vi.waitFor(() => expect(splitTerminal).toHaveBeenCalledTimes(1))
       // An unrelated write while the pane waits for its terminal.
       runtimeStore.setWorkspaceSession(runtimeStore.getWorkspaceSession())

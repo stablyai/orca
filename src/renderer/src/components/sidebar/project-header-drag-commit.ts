@@ -7,6 +7,7 @@ import {
 } from './project-header-drop'
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
 import type { Repo } from '../../../../shared/repo-types'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 export function commitProjectHeaderDragDrop(args: {
   session: ProjectHeaderDragSession
@@ -15,7 +16,12 @@ export function commitProjectHeaderDragDrop(args: {
   repoById: ReadonlyMap<string, Repo>
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
-  onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupOrder: (
+    repoId: string,
+    projectGroupId: string | null,
+    order: number,
+    hostId: ExecutionHostId
+  ) => void
 }): void {
   const draggedRepo = args.repoById.get(args.session.repoId)
   if (!draggedRepo) {
@@ -59,7 +65,13 @@ export function commitProjectHeaderDragDrop(args: {
       dropIndex: siblingDropIndex,
       repoOrderRankById
     })
-    args.onCommitProjectGroupOrder(args.session.repoId, draggedRepo.projectGroupId ?? null, order)
+    // Why the dragged row's host: its group and order came from that row, so main writes that twin.
+    args.onCommitProjectGroupOrder(
+      args.session.repoId,
+      draggedRepo.projectGroupId ?? null,
+      order,
+      getRepoExecutionHostId(draggedRepo)
+    )
     return
   }
 

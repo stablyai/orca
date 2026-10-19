@@ -262,6 +262,19 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(lastCallArgs()).toMatchObject({ limit: 1000, force: false })
   })
 
+  // A deeper scan keeps every scoped row, so reusing it would ignore the lowered depth.
+  it('rescans a scoped view at a lowered depth instead of reusing the deeper scan', async () => {
+    listSessionsMock.mockResolvedValue({ ...EMPTY_RESULT, sessions: [makeVaultSession(1)] })
+    await renderHook(['/repo'], 'ssh:dev-box', 'unlimited')
+    await flushMicrotasks()
+
+    await rerenderHook(['/repo'], 'ssh:dev-box', 250)
+    await flushMicrotasks()
+
+    expect(listSessionsMock).toHaveBeenCalledTimes(2)
+    expect(lastCallArgs()).toMatchObject({ limit: 250, scopePaths: ['/repo'] })
+  })
+
   it('reuses a loaded larger depth when lowering and raising within its coverage', async () => {
     const loaded = {
       ...EMPTY_RESULT,

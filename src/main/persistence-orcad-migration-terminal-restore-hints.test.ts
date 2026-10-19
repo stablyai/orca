@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { OrcadMigrationBlobDescriptor } from '../shared/orcad-migration-blob-transfer'
-import type { OrcadMigrationManifest } from '../shared/orcad-migration-manifest'
+import type { OrcadMigrationBlobDescriptor } from '../shared/orcad-migration/orcad-migration-blob-transfer'
+import type { OrcadMigrationManifest } from '../shared/orcad-migration/orcad-migration-manifest'
 import { getOrcadMigrationReceivedBlobPath } from './persistence/migrating-orcad-catalog/orcad-migration-blob-staging'
 import { buildWslMoveRestoreHintsBlob } from './persistence/moving-wsl-projects/wsl-move-restore-hints-blob'
 import {
@@ -234,7 +234,7 @@ describe('orcad migration terminal restore hints through the store', () => {
     stageBlob(store, input, encodedHints())
     expect(await commitDurably(store, input)).toBe('committed')
 
-    store.removeProjectForHost(REPOSITORY.id, 'local')
+    store.removeProjectForHost({ id: REPOSITORY.id, executionHostId: 'local' })
     expect(peek(store, PANE, DORMANT_WORKTREE_ID)).toBeNull()
     expect(peek(store, OTHER_PANE, FOLDER_KEY)).toBe('/srv/app')
 

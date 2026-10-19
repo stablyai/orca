@@ -216,6 +216,17 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     }
   }
 
+  getRendererContextForGuest(
+    guestWebContentsId: number
+  ): { browserPageId: string; renderer: Electron.WebContents } | null {
+    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    if (!browserPageId) {
+      return null
+    }
+    const renderer = this.resolveRendererForBrowserTab(browserPageId)
+    return renderer ? { browserPageId, renderer } : null
+  }
+
   protected resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {
     return this.resolvePopupOwnerContext(guestWebContentsId)?.browserTabId ?? null
   }

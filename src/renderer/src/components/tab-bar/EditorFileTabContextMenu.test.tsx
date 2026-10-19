@@ -367,8 +367,8 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     )
 
     expect(labels).toContain('Close Others')
-    expect(labels.some((label) => label.includes('Close Tabs To The Right'))).toBe(true)
-    expect(labels.some((label) => label.includes('Close Tabs To The Left'))).toBe(true)
+    expect(labels.some((label) => label.includes('Close All Tabs To The Right'))).toBe(true)
+    expect(labels.some((label) => label.includes('Close All Tabs To The Left'))).toBe(true)
   })
 
   it('hides the shortcut chip when close-all is unassigned', async () => {

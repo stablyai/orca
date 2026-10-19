@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn<(message: string) => void>(),
   admitStructuredLaunchOnHost:
     vi.fn<(target: unknown, worktree: string, agent: string) => Promise<{ kind: string }>>(),
+  sleeping: false,
+  navigationIndex: 0,
   activeWorktreeId: 'other-worktree'
 }))
 
@@ -34,7 +36,13 @@ vi.mock('@/lib/worktree-activation', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => ({ activeWorktreeId: mocks.activeWorktreeId }) }
+  useAppStore: {
+    getState: () => ({
+      activeWorktreeId: mocks.activeWorktreeId,
+      worktreeNavHistoryIndex: mocks.navigationIndex,
+      sleepingAgentSessionsByPaneKey: mocks.sleeping ? { source: { worktreeId: 'worktree-1' } } : {}
+    })
+  }
 }))
 
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
@@ -65,6 +73,9 @@ const session: AiVaultSession = {
 describe('resumeAiVaultSessionInNewChat', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.sleeping = false
+    mocks.navigationIndex = 0
+    mocks.activeWorktreeId = 'other-worktree'
     mocks.prepareAiVaultSessionForResume.mockResolvedValue({ sessionId: 'provider-1' })
     mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: null })
     mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
@@ -129,8 +140,41 @@ describe('resumeAiVaultSessionInNewChat', () => {
     expect(mocks.admitStructuredLaunchOnHost).not.toHaveBeenCalled()
   })
 
+  it.each(['refusal', 'success', 'newer-navigation'] as const)(
+    'keeps sleeping History cold until actual creation: %s',
+    async (outcome) => {
+      mocks.sleeping = true
+      let settle!: (value: StructuredAgentLaunchSettlement) => void
+      const settlement = new Promise<StructuredAgentLaunchSettlement>((resolve) => {
+        settle = resolve
+      })
+      mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+        args.beforeOpen?.('session-1')
+        return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' }, settlement }
+      })
+      await resumeAiVaultSessionInNewChat(session, 'codex', 'worktree-1', 'resume-click')
+      expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
+      if (outcome === 'newer-navigation') {
+        mocks.navigationIndex += 1
+      }
+      settle(
+        outcome === 'refusal'
+          ? { kind: 'failed', error: new Error('refused') }
+          : { kind: 'structured', sessionId: 'session-1' }
+      )
+      await settlement
+      expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledTimes(outcome === 'success' ? 1 : 0)
+      expect(mocks.toastError).toHaveBeenCalledTimes(outcome === 'refusal' ? 1 : 0)
+    }
+  )
+
   it.each([
     ['agent_session_conflict', undefined, 'Another chat is already holding this conversation.'],
+    [
+      'agent_session_conflict',
+      'conversationHeldElsewhere',
+      "Orca can't confirm Codex has exited in its terminal. Stop what's running there or close the terminal, then try again."
+    ],
     [
       'agent_session_identity_required',
       'transcriptNotFound',

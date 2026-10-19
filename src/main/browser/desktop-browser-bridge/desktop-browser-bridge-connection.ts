@@ -28,6 +28,7 @@ export class DesktopBrowserBridgeConnection {
   private attachmentId: string | null = null
   private closed = false
   private readonly revoked = new AbortController()
+  private readonly cancellations = new Map<string, AbortController>()
 
   constructor(
     private readonly options: {
@@ -102,15 +103,29 @@ export class DesktopBrowserBridgeConnection {
       this.lose(new Error('desktop_browser_bridge_request_before_ready'))
       return
     }
+    if (parsed.data.type === 'cancel') {
+      this.cancellations.get(parsed.data.requestId)?.abort()
+      return
+    }
     void this.answer(this.attachmentId, parsed.data)
   }
 
   private async answer(attachmentId: string, request: DesktopBrowserBridgeRequest): Promise<void> {
     // Why: once orcad has stopped waiting, a command still queued here must not run late.
-    const signal = request.timeoutMs
-      ? AbortSignal.any([this.revoked.signal, AbortSignal.timeout(request.timeoutMs)])
-      : this.revoked.signal
-    const outcome = await this.options.execute(request, signal)
+    const cancelled = new AbortController()
+    this.cancellations.set(request.requestId, cancelled)
+    const signals = [this.revoked.signal, cancelled.signal]
+    if (request.timeoutMs) {
+      signals.push(AbortSignal.timeout(request.timeoutMs))
+    }
+    let outcome: DesktopBrowserBridgeOutcome
+    try {
+      outcome = await this.options.execute(request, AbortSignal.any(signals))
+    } finally {
+      if (this.cancellations.get(request.requestId) === cancelled) {
+        this.cancellations.delete(request.requestId)
+      }
+    }
     const sendRequest = this.subscription?.sendRequest
     if (this.closed || this.attachmentId !== attachmentId || !sendRequest) {
       return

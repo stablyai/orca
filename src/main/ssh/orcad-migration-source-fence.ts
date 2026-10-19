@@ -8,11 +8,11 @@
  */
 import { randomUUID } from 'node:crypto'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
-import type { OrcadMigrationBlocker } from '../../shared/orcad-migration-preflight'
+import type { OrcadMigrationBlocker } from '../../shared/orcad-migration/orcad-migration-preflight'
 import {
   ORCAD_MIGRATION_SOURCE_CUTOVER_VERSION,
   type OrcadMigrationSourceCutover
-} from '../../shared/orcad-migration-source-cutover'
+} from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { SshTarget } from '../../shared/ssh-types'
 import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
 import {
@@ -24,12 +24,12 @@ import {
   confirmOrcadMigrationTerminalsUnderFence,
   type OrcadMigrationTerminalVerdict
 } from './orcad-migration-terminal-gate'
-import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 import {
   isBlockingOrcadMigrationBlocker,
   preflightOrcadMigrationExport,
   type OrcadMigrationPreflightStore
-} from './ssh-target-orcad-preflight'
+} from './targets/ssh-target-orcad-preflight'
 import { orcadMigrationRefusalReason } from './orcad-migration-refusal-reason'
 
 export const ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS = 'orcad_migration_leave_behind_terminals'

@@ -43,6 +43,8 @@ export type NativeChatPickerState = {
   retrySkills: () => void
   classifySend: (draft: string) => NativeChatSendClassification
   clearSkillOrigin: () => void
+  /** The draft still leads with the skill the user picked from the menu. */
+  isPickedSkill: (draft: string) => boolean
   completeItem: (item: NativeChatPickerItem) => void
   completeMention: (path: string) => void
   dismiss: (triggerKey: string) => void
@@ -239,6 +241,10 @@ export function useNativeChatPickerState(args: {
   const clearSkillOrigin = useCallback(() => {
     skillOriginRef.current = null
   }, [])
+  const isPickedSkill = useCallback(
+    (value: string) => skillOriginRef.current === (value.split(/\s/, 1)[0] ?? ''),
+    []
+  )
   const dismiss = useCallback(
     (triggerKey: string) => setDismissed({ context: dismissalContext, triggerKey }),
     [dismissalContext]
@@ -250,6 +256,7 @@ export function useNativeChatPickerState(args: {
     retrySkills: discovery.retry,
     classifySend,
     clearSkillOrigin,
+    isPickedSkill,
     completeItem,
     completeMention,
     dismiss,

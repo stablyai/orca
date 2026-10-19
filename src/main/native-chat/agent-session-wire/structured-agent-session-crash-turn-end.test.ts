@@ -168,6 +168,9 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps>): void {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire: vi.fn(),
       dispatch: vi.fn(),
       cancelTurn: vi.fn(),
@@ -431,6 +434,9 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     const acquire = vi.fn<StructuredAgentSessionAdapter['acquire']>()
     openHost({
       adapter: {
+        open: async () => ({
+          reportedOptions: { model: '' }
+        }),
         acquire,
         dispatch: vi.fn(),
         cancelTurn: vi.fn(),
@@ -473,6 +479,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
           { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
         )
         return {
+          acquisitionGeneration: globalThis.crypto.randomUUID(),
           process,
           link: {
             linkId: `claude-${fence}-link`,
@@ -486,6 +493,9 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     )
     openHost({
       adapter: {
+        open: async () => ({
+          reportedOptions: { model: '' }
+        }),
         acquire,
         dispatch: vi.fn(),
         cancelTurn: vi.fn(),
@@ -552,6 +562,7 @@ async function hostWithFailingFirstStart(failure: Error) {
         throw failure
       }
       return {
+        acquisitionGeneration: globalThis.crypto.randomUUID(),
         process,
         link: {
           linkId: `claude-${fence}-link`,
@@ -565,6 +576,9 @@ async function hostWithFailingFirstStart(failure: Error) {
   )
   openHost({
     adapter: {
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire,
       releaseAcquisition: async () => true,
       dispatch: vi.fn(),

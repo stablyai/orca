@@ -412,7 +412,7 @@ describe('DashboardAgentRow', () => {
 
     expect(markup).toContain('Monitoring background tasks')
     expect(markup).toContain('lucide-activity')
-    expect(classTokens(markup)).toContain('text-yellow-500')
+    expect(classTokens(markup)).toContain('text-agent-working')
     expect(markup).not.toContain('data-agent-spinner')
     expect(markup).not.toContain('data-agent-row-tool-slot')
   })
@@ -525,5 +525,77 @@ describe('DashboardAgentRow', () => {
 
     expect(classTokens(markup)).toContain('worktree-agent-lineage-parent-row')
     expect(markup).toContain('aria-label="Show 2 child agents"')
+  })
+
+  describe('with an OSC 7501 program status', () => {
+    it('says a block the program reports in place of the tool step', () => {
+      const markup = renderRow(
+        makeAgent(
+          {},
+          {
+            toolName: 'Bash',
+            toolInput: 'pnpm test',
+            programStatus: {
+              state: 'blocked',
+              kind: 'auth',
+              message: 'Session expired',
+              observedAt: 1
+            }
+          }
+        )
+      )
+
+      expect(markup).toContain('Sign-in required: Session expired')
+      expect(markup).not.toContain('lucide-wrench')
+    })
+
+    it("falls back to the program's message when the row names no tool", () => {
+      const markup = renderRow(
+        makeAgent(
+          {},
+          { programStatus: { state: 'working', message: 'Running tests', observedAt: 1 } }
+        )
+      )
+
+      expect(markup).toContain('data-agent-row-tool-input="true"')
+      expect(markup).toContain('Running tests')
+    })
+
+    it("shows a blocked program row's message, which has no tool step to ride", () => {
+      const markup = renderRow(
+        makeAgent(
+          {},
+          {
+            state: 'blocked',
+            agentType: 'gh',
+            programStatus: {
+              state: 'blocked',
+              kind: 'auth',
+              message: 'Run gh auth login',
+              observedAt: 1
+            }
+          }
+        )
+      )
+
+      expect(markup).toContain('Sign-in required: Run gh auth login')
+    })
+
+    it("keeps a real agent's input without a tool name off the row", () => {
+      const markup = renderRow(makeAgent({}, { toolInput: 'src/app.ts' }))
+
+      expect(markup).not.toContain('src/app.ts')
+      expect(markup).toContain('data-agent-row-tool-placeholder="true"')
+    })
+
+    it('labels the progress ring with the same percentage the tooltip shows', () => {
+      const markup = renderRow(
+        makeAgent({}, { programStatus: { state: 'working', progress: 42, observedAt: 1 } })
+      )
+
+      expect(markup).toContain('role="progressbar"')
+      expect(markup).toContain('aria-label="Working · 42%"')
+      expect(markup).not.toContain('>42%<')
+    })
   })
 })

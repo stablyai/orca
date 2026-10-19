@@ -166,6 +166,8 @@ describe('setAgentStatuses', () => {
             update.routing,
             update.metadata
           )
+      } else if (update.kind === 'programStatus') {
+        sequentialStore.getState().setAgentProgramStatus(update.paneKey, update.programStatus)
       } else {
         sequentialStore
           .getState()

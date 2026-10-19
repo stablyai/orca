@@ -10,8 +10,8 @@ import { orcadMigrationCutoverFixture } from '../../ssh/orcad-migration-cutover-
 import { listEnvironments } from '../../../shared/runtime-environment-store'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { SshTargetOrcadClaims } from '../../ssh/ssh-target-orcad-claims'
-import { emptyDependentStateStore } from '../../ssh/ssh-target-orcad-dependents-fixture'
+import { SshTargetOrcadClaims } from '../../ssh/targets/ssh-target-orcad-claims'
+import { emptyDependentStateStore } from '../../ssh/targets/ssh-target-orcad-dependents-fixture'
 import {
   withDeactivatedVersion,
   withDeactivatedVersionCommitted,
@@ -41,7 +41,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../ssh/ssh-target-registry', () => ({
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getSshConnectionManager: () => ({ connect: mocks.connect }),
   getSshTargetRegistryStore: () => mocks.state.store
 }))

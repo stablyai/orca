@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { MOBILE_PROJECT_SECTIONS_METHOD } from '../../../src/shared/mobile-project-sections-contract'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 import type { ProjectHostSetupMethod } from '../../../src/shared/project-types'
+import type { ProjectGroup, ProjectGroupCreatedFrom } from '../../../src/shared/project-group-types'
 import type { RepoKind } from '../../../src/shared/repo-types'
 import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
 import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
@@ -56,12 +57,35 @@ const setupSchema = z.object({
   executionHostId: salvagedOptional('executionHostId', hostIdSchema)
 })
 
+const PROJECT_GROUP_CREATED_FROM_ARMS = hostUnionArms<ProjectGroupCreatedFrom>({
+  manual: true,
+  'folder-scan': true,
+  migration: true
+})
+
+const projectGroupSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  parentPath: z.string().nullable(),
+  connectionId: salvagedOptional('connectionId', z.string().nullable()),
+  executionHostId: salvagedOptional('executionHostId', z.string().nullable()),
+  parentGroupId: z.string().nullable(),
+  createdFrom: z.enum(PROJECT_GROUP_CREATED_FROM_ARMS).catch('manual'),
+  tabOrder: z.number(),
+  isCollapsed: z.boolean(),
+  color: z.string().nullable(),
+  createdAt: z.number(),
+  updatedAt: z.number()
+}) satisfies z.ZodType<ProjectGroup, unknown>
+
 const catalogSchema = z.object({
   repos: salvagingArray(repoSchema),
   projects: salvagingArray(z.object({ id: z.string(), displayName: z.string() })),
   setups: salvagingArray(setupSchema),
   // Until the phone has read the shared UI value (projectOrderBy, ui.get), it orders by this.
-  projectOrderBy: z.enum(PROJECT_ORDER_BY_ARMS).catch('manual')
+  projectOrderBy: z.enum(PROJECT_ORDER_BY_ARMS).catch('manual'),
+  // Every host's project groups, for a list built from the sidebar feed; older desktops omit it.
+  projectGroups: salvagedOptional('projectGroups', salvagingArray(projectGroupSchema))
 })
 
 /** The desktop sidebar's Project grouping inputs, as this phone reads them. */
@@ -77,6 +101,20 @@ export const projectSectionsRead = bindDeferredRpcOperation(
     read: rpcResultVariant(
       'project-sections',
       z.object({ catalog: catalogSchema.nullable() }).transform(({ catalog }) => catalog)
+    )
+  })
+)
+
+/** A host's own project groups, which a feed-built list files folder workspaces under. */
+export const hostProjectGroupsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'projectGroup.host-groups-or-skip',
+    method: 'projectGroup.list',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant(
+      'project-groups',
+      z.object({ groups: salvagingArray(projectGroupSchema) }).transform(({ groups }) => groups)
     )
   })
 )

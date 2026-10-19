@@ -18,15 +18,10 @@ export function commitAgentSessionRewindCompletion(
   ) {
     throw new Error('agent_session_rewind:stale-context')
   }
+  const { retained: _retained, hydrationVerified: _hydrationVerified, ...current } = rewind
   draft.records.set(sessionId, {
     ...record,
-    rewind: {
-      ...rewind,
-      phase: 'completed',
-      epoch: cursor.epoch,
-      sequence: cursor.sequence,
-      retained: []
-    }
+    rewind: { ...current, phase: 'completed', epoch: cursor.epoch, sequence: cursor.sequence }
   })
   settleAgentSessionOperationInto(draft, {
     callerKey: rewind.callerKey,

@@ -22,8 +22,8 @@ import {
   advanceSshConnectionGeneration,
   assertSshMutationExpectation,
   resetSshConnectionGenerations
-} from './ssh/ssh-connection-generation'
-import { getRuntimeOwnedSshTargetId } from './ssh/ssh-connection-store'
+} from './ssh/connection/ssh-connection-generation'
+import { getRuntimeOwnedSshTargetId } from './ssh/connection/ssh-connection-store'
 import {
   _getLocalWorktreeScanGenerationCacheSize,
   getLocalWorktreeScanGeneration,
@@ -108,7 +108,7 @@ describe('Store', () => {
     expect(isLocalWorktreeScanGenerationCurrent(repoId, beforeAdd)).toBe(false)
 
     const beforeRemove = getLocalWorktreeScanGeneration(repoId)
-    store.removeProjectForHost(repoId, 'local')
+    store.removeProjectForHost({ id: repoId, executionHostId: 'local' })
     expect(isLocalWorktreeScanGenerationCurrent(repoId, beforeRemove)).toBe(false)
 
     const beforeReAdd = getLocalWorktreeScanGeneration(repoId)
@@ -122,7 +122,7 @@ describe('Store', () => {
     for (let index = 0; index < 200; index += 1) {
       const repoId = `scan-churn-${index}`
       store.addRepo(makeRepo({ id: repoId }))
-      store.removeProjectForHost(repoId, 'local')
+      store.removeProjectForHost({ id: repoId, executionHostId: 'local' })
     }
 
     expect(_getLocalWorktreeScanGenerationCacheSize()).toBe(initialCacheSize)
@@ -255,10 +255,13 @@ describe('Store', () => {
     const group = store.createProjectGroup({ name: 'Platform', createdFrom: 'manual' })
     store.addRepo(makeRepo({ id: 'r1', projectGroupId: group.id, projectGroupOrder: 1 }))
 
-    const updated = store.updateRepo('r1', {
-      projectGroupId: '',
-      projectGroupOrder: Number.POSITIVE_INFINITY
-    } as never)
+    const updated = store.updateRepo(
+      { id: 'r1' },
+      {
+        projectGroupId: '',
+        projectGroupOrder: Number.POSITIVE_INFINITY
+      }
+    )
 
     expect(updated?.projectGroupId).toBeNull()
     expect(updated?.projectGroupOrder).toBe(1)
@@ -268,7 +271,7 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
 
-    const updated = store.updateRepo('r1', { executionHostId: 'runtime:env-1' })
+    const updated = store.updateRepo({ id: 'r1' }, { executionHostId: 'runtime:env-1' })
 
     expect(updated?.executionHostId).toBe('runtime:env-1')
     expect(store.getRepo('r1')?.executionHostId).toBe('runtime:env-1')
@@ -290,7 +293,7 @@ describe('Store', () => {
     store.setWorktreeMeta('r1::/path/wt2', { displayName: 'wt2' })
     store.setWorktreeMeta('r2::/other', { displayName: 'other' })
 
-    store.removeProjectForHost('r1', 'local')
+    store.removeProjectForHost({ id: 'r1', executionHostId: 'local' })
 
     expect(store.getRepo('r1')).toBeUndefined()
     expect(store.getWorktreeMeta('r1::/path/wt1')).toBeUndefined()
@@ -309,7 +312,7 @@ describe('Store', () => {
         ...store.getWorkspaceSession(),
         terminalTopologyRevisionByRepoId: { [repoId]: 1 }
       })
-      store.removeProjectForHost(repoId, 'local')
+      store.removeProjectForHost({ id: repoId, executionHostId: 'local' })
     }
 
     expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId).toEqual({})
@@ -328,7 +331,7 @@ describe('Store', () => {
       lastVisitedAtByWorktreeId: { 'r1::/path/wt1': 111, 'r2::/other': 222 }
     })
 
-    store.removeProjectForHost('r1', 'local')
+    store.removeProjectForHost({ id: 'r1', executionHostId: 'local' })
 
     const session = store.getWorkspaceSession()
     expect(session.lastVisitedAtByWorktreeId?.['r1::/path/wt1']).toBeUndefined()
@@ -350,7 +353,7 @@ describe('Store', () => {
       hostId
     )
 
-    store.removeProjectForHost('r1', 'local')
+    store.removeProjectForHost({ id: 'r1', executionHostId: 'local' })
 
     const hostSession = store.getWorkspaceSession(hostId)
     expect(hostSession.lastVisitedAtByWorktreeId?.['r1::/path/wt1']).toBeUndefined()
@@ -376,7 +379,7 @@ describe('Store', () => {
     store.addRepo(makeRepo({ id: 'r1' }))
     store.addRepo(makeRepo({ id: 'r2', path: '/repo2' }))
 
-    store.removeProjectForHost('r1', 'local')
+    store.removeProjectForHost({ id: 'r1', executionHostId: 'local' })
 
     expect(store.getProjects().map((project) => project.id)).toEqual(['repo:r2'])
     expect(store.getProjectHostSetups().map((setup) => setup.id)).toEqual(['r2'])
@@ -409,7 +412,7 @@ describe('Store', () => {
       })
     )
 
-    store.removeProjectForHost('r1', 'local')
+    store.removeProjectForHost({ id: 'r1', executionHostId: 'local' })
 
     expect(store.getWorktreeLineage('r1::/path/child')).toBeUndefined()
     expect(store.getWorktreeLineage('r2::/other-child')).toBeUndefined()
@@ -431,7 +434,7 @@ describe('Store', () => {
     )
     const beforeRemove = getLocalWorktreeScanGeneration('shared')
 
-    store.removeProjectForHost('shared', 'ssh:ssh-old')
+    store.removeProjectForHost({ id: 'shared', executionHostId: 'ssh:ssh-old' })
 
     expect(isLocalWorktreeScanGenerationCurrent('shared', beforeRemove)).toBe(false)
   })
@@ -454,7 +457,7 @@ describe('Store', () => {
       hostId: 'ssh:ssh-old'
     })
 
-    store.removeProjectForHost('shared', 'ssh:ssh-old')
+    store.removeProjectForHost({ id: 'shared', executionHostId: 'ssh:ssh-old' })
 
     const remaining = store.getRepos().filter((r) => r.id === 'shared')
     expect(remaining).toHaveLength(1)
@@ -498,7 +501,7 @@ describe('Store', () => {
       'ssh:ssh-a'
     )
 
-    store.removeProjectForHost('shared', 'ssh:ssh-a')
+    store.removeProjectForHost({ id: 'shared', executionHostId: 'ssh:ssh-a' })
 
     // The removed SSH host's session is pruned; the surviving local session stays.
     expect(
@@ -532,7 +535,7 @@ describe('Store', () => {
       'ssh:ssh-a'
     )
 
-    store.removeProjectForHost('shared', 'local')
+    store.removeProjectForHost({ id: 'shared', executionHostId: 'local' })
 
     expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.['shared::/repo']).toBeUndefined()
     expect(
@@ -559,7 +562,7 @@ describe('Store', () => {
       lastVisitedAtByWorktreeId: { '|shared::/repo/wt-orphan': 111 }
     })
 
-    store.removeProjectForHost('shared', 'local')
+    store.removeProjectForHost({ id: 'shared', executionHostId: 'local' })
 
     expect(
       store.getWorkspaceSession().lastVisitedAtByWorktreeId?.['|shared::/repo/wt-orphan']
@@ -610,7 +613,7 @@ describe('Store', () => {
       'ssh:ssh-b'
     )
 
-    store.removeProjectForHost('shared', 'ssh:ssh-a')
+    store.removeProjectForHost({ id: 'shared', executionHostId: 'ssh:ssh-a' })
 
     // Only the removed host's partition is pruned; local and the other SSH host survive.
     expect(
@@ -697,7 +700,7 @@ describe('Store', () => {
     // A hostId-less meta is treated as local and left behind (never delete the wrong host's meta).
     store.setWorktreeMeta('shared::/local/repo/wt', { displayName: 'local-wt' })
 
-    store.removeProjectForHost('shared', 'ssh:ssh-old')
+    store.removeProjectForHost({ id: 'shared', executionHostId: 'ssh:ssh-old' })
 
     expect(store.getWorktreeMeta('shared::/remote/repo/wt')).toBeUndefined()
     expect(store.getWorktreeMeta('shared::/local/repo/wt')).toBeDefined()
@@ -708,7 +711,7 @@ describe('Store', () => {
     store.addRepo(makeRepo({ id: 'only', connectionId: 'ssh-x', executionHostId: 'ssh:ssh-x' }))
     store.setWorktreeMeta('only::/repo/wt', { displayName: 'wt', hostId: 'ssh:ssh-x' })
 
-    store.removeProjectForHost('only', 'ssh:ssh-x')
+    store.removeProjectForHost({ id: 'only', executionHostId: 'ssh:ssh-x' })
 
     expect(store.getRepo('only')).toBeUndefined()
     expect(store.getWorktreeMeta('only::/repo/wt')).toBeUndefined()

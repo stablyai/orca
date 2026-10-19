@@ -202,14 +202,24 @@ export function buildWorktreeRenameState(
         closedTombstoneEntries.rows.map(({ tabId, ...tombstone }) => [tabId, tombstone])
       )
     : s.closedTerminalTabTombstonesByTabId
-  const currentCloseIntents = s.clientHostedBrowserCloseIntentsByEnvironment ?? {}
-  let closeIntentsChanged = false
-  const clientHostedBrowserCloseIntentsByEnvironment = Object.fromEntries(
-    Object.entries(currentCloseIntents).map(([environmentId, intents]) => {
-      const repointed = repointRows(intents)
-      closeIntentsChanged = closeIntentsChanged || repointed.changed
-      return [environmentId, repointed.changed ? repointed.rows : intents]
-    })
+  const repointRowsByEnvironment = <T extends { worktreeId: string }>(
+    current: Record<string, T[]> | undefined
+  ): Record<string, T[]> | null => {
+    let changed = false
+    const next = Object.fromEntries(
+      Object.entries(current ?? {}).map(([environmentId, intents]) => {
+        const repointed = repointRows(intents)
+        changed = changed || repointed.changed
+        return [environmentId, repointed.changed ? repointed.rows : intents]
+      })
+    )
+    return changed ? next : null
+  }
+  const clientHostedBrowserCloseIntentsByEnvironment = repointRowsByEnvironment(
+    s.clientHostedBrowserCloseIntentsByEnvironment
+  )
+  const pairedTerminalTabCloseIntentsByEnvironment = repointRowsByEnvironment(
+    s.pairedTerminalTabCloseIntentsByEnvironment
   )
   const currentSleepingAgentSessionsByPaneKey = s.sleepingAgentSessionsByPaneKey ?? {}
   const sleepingAgentSessionsByPaneKey = Object.values(currentSleepingAgentSessionsByPaneKey).some(
@@ -242,7 +252,12 @@ export function buildWorktreeRenameState(
     ...(closedTerminalTabTombstonesByTabId !== s.closedTerminalTabTombstonesByTabId
       ? { closedTerminalTabTombstonesByTabId }
       : {}),
-    ...(closeIntentsChanged ? { clientHostedBrowserCloseIntentsByEnvironment } : {}),
+    ...(clientHostedBrowserCloseIntentsByEnvironment
+      ? { clientHostedBrowserCloseIntentsByEnvironment }
+      : {}),
+    ...(pairedTerminalTabCloseIntentsByEnvironment
+      ? { pairedTerminalTabCloseIntentsByEnvironment }
+      : {}),
     ...(s.activeWorktreeId === oldWorktreeId ? { activeWorktreeId: newWorktreeId } : {}),
     // The active workspace key derives from the worktree id, so keep it in sync when the active worktree is renamed.
     ...(s.activeWorkspaceKey === worktreeWorkspaceKey(oldWorktreeId)

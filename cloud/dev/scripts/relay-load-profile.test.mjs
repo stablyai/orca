@@ -4,6 +4,7 @@ import {
   parseRelayLoadArguments,
   relayLoadPrincipalIndex,
   relayLoadReaderEvidenceError,
+  relayLoadResumePhoneIndexes,
   relayLoadSpliceIndexes,
   relayLoadSpliceProfile,
   relayLoadSpliceStartDelayMs
@@ -212,6 +213,20 @@ test('maps splice ownership deterministically within a shard', () => {
   ])
 
   assert.deepEqual(relayLoadSpliceIndexes(config), [2, 6, 10])
+})
+
+test('puts resume phones on the controls after the splice controls', () => {
+  const config = parseRelayLoadArguments([
+    ...required, '--controls', '4', '--splices', '1', '--resume-phones', '2',
+    '--shard-count', '4', '--shard-index', '2'
+  ])
+
+  assert.deepEqual(relayLoadSpliceIndexes(config), [2])
+  assert.deepEqual(relayLoadResumePhoneIndexes(config), [6, 10])
+  assert.throws(
+    () => parseRelayLoadArguments([...required, '--controls', '2', '--splices', '1', '--resume-phones', '2']),
+    /--splices plus --resume-phones cannot exceed --controls/
+  )
 })
 
 test('staggered shards form one deterministic splice ramp', () => {

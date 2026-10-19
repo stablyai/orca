@@ -55,6 +55,8 @@ vi.mock('@/store', () => ({
 
 import {
   readHostStructuredAgents,
+  hostStructuredAgentsReadFailed,
+  loadHostStructuredAgents,
   resetHostStructuredAgentsForTests
 } from './host-structured-agents'
 import { installHostStructuredAgentsSync } from './host-structured-agents-sync'
@@ -211,5 +213,20 @@ describe('host structured agents', () => {
     await Promise.resolve()
 
     expect(agentIds('local')).toBeUndefined()
+    expect(hostStructuredAgentsReadFailed('local', null)).toBe(true)
+  })
+
+  it('keeps a completed failure while explicitly rechecking and clears it only on a valid result', async () => {
+    mocks.callRuntimeRpc.mockRejectedValueOnce(new Error('host unreachable'))
+    await loadHostStructuredAgents('local', REGISTERED, null)
+    expect(hostStructuredAgentsReadFailed('local', null)).toBe(true)
+    const result = Promise.withResolvers<unknown>()
+    mocks.callRuntimeRpc.mockReturnValueOnce(result.promise)
+    const retry = loadHostStructuredAgents('local', REGISTERED, null)
+    expect(hostStructuredAgentsReadFailed('local', null)).toBe(true)
+    result.resolve(GROK_LIST)
+    await retry
+    expect(hostStructuredAgentsReadFailed('local', null)).toBe(false)
+    expect(agentIds('local')).toEqual(['claude', 'grok'])
   })
 })

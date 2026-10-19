@@ -194,9 +194,10 @@ jobs:
         with:
           node-version: 24
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/setup@v2
         with:
-          package_json_file: cloud/package.json
+          package-json-file: cloud/package.json
+          install: false
         if: ${{ steps.inputs.outputs.canary == 'true' }}
 
       - name: Install exact canary dependencies

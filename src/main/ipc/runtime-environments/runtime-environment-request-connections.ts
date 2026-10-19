@@ -144,6 +144,51 @@ export function sendRemoteRuntimeSharedControlRequest<TResult>(
   )
 }
 
+/**
+ * Sends only on the shared socket whose own `status.get` named `expectedRuntimeId`; null when it
+ * did not, or the socket changed before sending. Nothing is sent to another runtime either way.
+ */
+export async function sendRemoteRuntimeSharedControlRequestOnRuntime<TResult>(
+  environmentId: string,
+  pairedConnection: PairedRuntimeConnection,
+  method: string,
+  params: unknown,
+  timeoutMs: number,
+  expectedRuntimeId: string,
+  envelope?: RuntimeOrchestrationEnvelope,
+  signal?: AbortSignal
+): Promise<RuntimeRpcResponse<TResult> | null> {
+  const shared = getSharedControlConnection(environmentId, pairedConnection)
+  let statusSocket: number | undefined
+  const status = await shared.request<RuntimeStatus>(
+    'status.get',
+    undefined,
+    timeoutMs,
+    undefined,
+    signal,
+    () => {
+      statusSocket = shared.socketGeneration.peek()
+    }
+  )
+  if (!status.ok || status.result.runtimeId !== expectedRuntimeId) {
+    return null
+  }
+  let socketChanged = false
+  try {
+    return await shared.request<TResult>(method, params, timeoutMs, envelope, signal, () => {
+      socketChanged = shared.socketGeneration.peek() !== statusSocket
+      if (socketChanged) {
+        throw new Error('Runtime connection changed before sending')
+      }
+    })
+  } catch (error) {
+    if (socketChanged) {
+      return null
+    }
+    throw error
+  }
+}
+
 export function subscribeRemoteRuntimeSharedControlRequest<TResult>(
   environmentId: string,
   pairedConnection: PairedRuntimeConnection,

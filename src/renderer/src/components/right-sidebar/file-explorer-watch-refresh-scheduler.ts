@@ -1,9 +1,5 @@
 import type { FileExplorerTreeRefreshOutcome } from './file-explorer-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import {
-  WATCH_BATCH_MAX_WAIT_MS,
-  WATCH_BATCH_TRAILING_MS
-} from '../../../../shared/filesystem-watch-batch-window'
 import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
 
 type SchedulerTimer = ReturnType<typeof setTimeout>
@@ -21,8 +17,8 @@ export type CreateFileExplorerWatchRefreshSchedulerParams = {
   /** Dirs a full tree refresh already re-reads; the scheduler has no view of `expanded`. */
   isCoveredByFullRefresh: (dirPath: string) => boolean
   dirConcurrency: number
-  trailingMs?: number
-  maxWaitMs?: number
+  trailingMs: number
+  maxWaitMs: number
   schedule?: (callback: () => void, delayMs: number) => SchedulerTimer
   clear?: (timer: SchedulerTimer) => void
 }
@@ -40,8 +36,8 @@ export function createFileExplorerWatchRefreshScheduler({
   refreshDir,
   isCoveredByFullRefresh,
   dirConcurrency,
-  trailingMs = WATCH_BATCH_TRAILING_MS,
-  maxWaitMs = WATCH_BATCH_MAX_WAIT_MS,
+  trailingMs,
+  maxWaitMs,
   schedule = setTimeout,
   clear = clearTimeout
 }: CreateFileExplorerWatchRefreshSchedulerParams): FileExplorerWatchRefreshScheduler {

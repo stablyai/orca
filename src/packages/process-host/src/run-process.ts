@@ -121,6 +121,7 @@ export function runProcess(
     })
     child.stderr?.on('data', (chunk: Buffer | string) => {
       stderr.write(chunk)
+      spec.onStderr?.(chunk)
       if (spec.killOnOutputLimit && stderr.truncated()) {
         stopAndSettle()
       }

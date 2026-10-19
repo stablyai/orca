@@ -4,12 +4,12 @@ import {
   type KnownRuntimeEnvironment,
   type RuntimeSshTunnelLink
 } from '../../../shared/runtime-environments'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { OrcadManagedServing } from './orcad-managed-serving'
-import type { SshConnectionManager } from '../../ssh/ssh-connection-manager'
+import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
-import type { getSshTargetRegistryStore } from '../../ssh/ssh-target-registry'
+import type { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import {
   dropActiveOrcadTunnel,
   managedTunnelAccess,

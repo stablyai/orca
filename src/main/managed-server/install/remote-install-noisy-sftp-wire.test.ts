@@ -5,7 +5,7 @@ import { Client, Server as Ssh2Server, utils, type Connection } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { spawnProcess } from '@orca/process-host'
-import { SshConnection } from '../../ssh/ssh-connection'
+import { SshConnection } from '../../ssh/connection/ssh-connection'
 import { uploadRelayDirectory, writeRelayFile } from './remote-install-transfers'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 

@@ -68,6 +68,16 @@ function isMissingSessionPathError(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
+/** The session's cwd from its manifest alone; null when the manifest lists no session. */
+export function clineManifestCwd(metadataContent: string): string | null {
+  const metadata = parseJsonRecord(metadataContent)
+  return metadata ? clineMetadataCwd(metadata) : null
+}
+
+function clineMetadataCwd(metadata: Record<string, unknown>): string | null {
+  return extractString(metadata.cwd) ?? extractString(metadata.workspace_root)
+}
+
 export function parseClineSessionContent(
   file: FileWithMtime,
   metadataContent: string,
@@ -88,7 +98,7 @@ export function parseClineSessionContent(
     sessionId,
     messages: messageSink
   })
-  accumulator.cwd = extractString(metadata.cwd) ?? extractString(metadata.workspace_root)
+  accumulator.cwd = clineMetadataCwd(metadata)
   accumulator.model = extractString(metadata.model)
   updateTimeline(accumulator, metadata.started_at)
 

@@ -5,6 +5,7 @@ import { openEnum } from '../zod-salvage'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../workspace-statuses'
 import { SMART_TIERS } from './sort-stamps'
 import { WorkspaceRowSchema } from './workspace-rows'
+import { HostReportedActivitySchema, type HostReportedActivity } from './workspace-activity-facts'
 
 /** One paired-server workspace as the sidebar lists it, keyed by its host-qualified id. */
 const PairedServerWorkspaceRowSchema = z
@@ -41,6 +42,10 @@ const PairedServerWorkspaceRowSchema = z
       smartAt: true
     }).partial().shape
   )
+  .extend({
+    /** The server's own terminals and agents there; older desktops omit it. */
+    activity: HostReportedActivitySchema.optional().catch(undefined)
+  })
 
 /** See PairedServerHost; health and compatibility stay open strings, as a reader only compares them. */
 const PairedServerHostFactsSchema = z.object({
@@ -96,8 +101,25 @@ const ServerWorktreePsRowSchema = z.object({
   detachedHead: z.literal(true).optional().catch(undefined),
   lastActivityAt: z.number().optional().catch(undefined),
   smartTier: z.enum(SMART_TIERS).optional().catch(undefined),
-  smartAt: z.number().optional().catch(undefined)
+  smartAt: z.number().optional().catch(undefined),
+  liveTerminalCount: z.number().optional().catch(undefined),
+  unverifiableTerminalCount: z.number().optional().catch(undefined),
+  status: z.string().optional().catch(undefined),
+  workingMode: z.string().optional().catch(undefined)
 })
+
+function reportedActivity(row: z.infer<typeof ServerWorktreePsRowSchema>): HostReportedActivity {
+  const working = row.workingMode === 'monitoring' ? 'monitoring' : 'working'
+  return {
+    terminal:
+      (row.liveTerminalCount ?? 0) > 0
+        ? 'live'
+        : (row.unverifiableTerminalCount ?? 0) > 0
+          ? 'unverifiable'
+          : null,
+    agent: row.status === 'permission' ? 'permission' : row.status === 'working' ? working : null
+  }
+}
 
 /** A server's own `worktree.ps` row, with defaults for what older servers omit; null without an id. */
 export function normalizePairedServerRow(
@@ -116,6 +138,10 @@ export function normalizePairedServerRow(
     parentWorktreeId,
     lineageWorktreeInstanceId,
     parentWorktreeInstanceId,
+    liveTerminalCount: _liveTerminalCount,
+    unverifiableTerminalCount: _unverifiableTerminalCount,
+    status: _status,
+    workingMode: _workingMode,
     ...fields
   } = parsed.data
   return {
@@ -132,6 +158,7 @@ export function normalizePairedServerRow(
             parentWorktreeInstanceId
           }
         : null,
-    recentAt: lastActivityAt
+    recentAt: lastActivityAt,
+    activity: reportedActivity(parsed.data)
   }
 }

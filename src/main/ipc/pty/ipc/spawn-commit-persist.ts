@@ -1,4 +1,3 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { closeStartupQueryAuthorityForPty } from '../provider/registry'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 import { recordCodexPaneAccountForSpawn } from '../host-env/codex-home'
@@ -9,7 +8,6 @@ import {
   pendingPtyIdBySerializerGeneration,
   rendererSerializerReadiness
 } from '../pane/serializer-state'
-import { ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { resolveCommittedPtySize, type PtyGrid } from '../delivery/attached-pty-size'
 import { discardUnpersistedPtySpawn } from '../pane/spawn-registration'
@@ -70,7 +68,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<P
       }
     } catch (err) {
       console.error('[pty] failed to persist PTY binding after spawn:', err)
-      await discardUnpersistedPtySpawn(ctx.provider, ctx.result)
+      await discardUnpersistedPtySpawn(ctx.provider, ctx.result, ctx.deps.runtime)
       if (err instanceof Error && err.message === 'terminal_pane_owner_changed') {
         throw err
       }
@@ -98,10 +96,6 @@ export function publishPtyIpcSpawnCommit(ctx: PtyIpcSpawnState, committedSize: P
     target: ctx.codexSelectionTarget,
     settings: ctx.deps.getSettings?.()
   })
-  ptyOwnership.set(ctx.result.id, LOCAL_EXECUTION_HOST_ID)
-  if (ctx.result.incarnationId) {
-    ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
-  }
   if (ctx.initiallyHidden) {
     // Refresh the pre-spawn hidden mark only after this incarnation survives its save.
     ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.result.id, true)
@@ -109,7 +103,7 @@ export function publishPtyIpcSpawnCommit(ctx: PtyIpcSpawnState, committedSize: P
       // Defense: never strand a mark on an id the provider renamed.
       ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
     }
-    // Why after ptyOwnership.set: provider lookup routes by ownership, and a hidden-spawned agent should be paceable from its first flood.
+    // Why after ownership (recorded at commit start): provider lookup routes by it, and a hidden-spawned agent should be paceable from its first flood.
     ctx.deps.syncPtyBackgroundedDelivery(ctx.result.id, 'spawn')
     closeStartupQueryAuthorityForPty(ctx.result.id)
   }

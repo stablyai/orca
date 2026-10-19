@@ -826,7 +826,7 @@ this order:
 |---|---|---|
 | Dead-man tripped | runtime-status `admitModeEffective=db` under a reserve switch file | Exact |
 | Overrun | runtime-status `enforcedConnectionUnits` over `connectionCapacity.hardCap` | Invariant check: the ledger already refuses past its cap, so this trips only if that refusal broke. It counts seats, bookings, in-flight and phone units |
-| 503s | Director `request_count` 503s above max(1.5x background, background + 20) for 3 complete minutes | Proxy that can miss: fleet-wide, since no signal attributes a 503 to a cell, so a problem on one cell can stay under the fleet's line |
+| 503s | Director non-drain 503s (the roll ladder's measure: `request_count` 503s less the drain-return deferrals and the `host-rate-limited` and `host-in-flight` re-dials the director's `orca_relay_runtime_metrics` count) above max(1.5x background, background + 20) for 3 complete minutes | Proxy that can miss: fleet-wide, since no signal attributes a 503 to a cell, so a problem on one cell can stay under the fleet's line |
 | Duplicate past grace | The ledger reconcile's `orca_relay_reserve_ledger_seat_behind_row` for the cell, reported again more than 90 s (60 s demotion close + 30 s map lag) after it was first seen, keyed by director instance, cell, epoch and row epoch | Proxy that can only over-count: the line names no host, so two hosts sharing that key read as one seat |
 | Host drop | runtime-status `controls` fell more than 5% (and at least 10 hosts) within 5 minutes with no `draining` sample | Exact |
 | Ledger drift | Queued plus dropped rows in each director's newest `orca_relay_reserve_ledger_summary`, over the cell's controls, above 0.5% for 2 minutes | Proxy that can only over-count: the summaries are fleet-wide, so exact only while this is the only reserve cell |
@@ -837,7 +837,15 @@ newest minute any code has a point for is how far the series is published: a 503
 before it with no point had no 503s, so a quiet fleet reads zero. Minutes past it are left out, not
 counted; fewer than 3 published minutes in the read, no request series at all, or an unparseable
 timestamp is unverifiable. This assumes the codes publish together; one code lagging the others
-delays a trip by its lag but cannot hide one, because a later read sees its points. Until the
+delays a trip by its lag but cannot hide one, because a later read sees its points. A host's own
+early or duplicate re-dial says nothing about a cell and grows with traffic: on 2026-10-18 it was
+~98% of 503s and tripped c7 back twice with no fault. The subtraction is only trusted where the
+director logged: a judged minute no runtime-metrics line covers is unverifiable, a 10-minute read
+with fewer lines than a single instance logs (20) or at its entry limit is unverifiable, and the
+measured background leaves such minutes out (and is not measured with fewer than half of its 10
+metered). Coverage is any instance, not every one: an instance whose lines are missing while others
+log under-subtracts its re-dials, which can only push toward a trip, never hide one. The same measure is the
+background and `background-503-per-minute`. Until the
 minutes before `flipped-at` are published (3 minutes past it) the 503 rule is pending, which does
 not add to the streak. The duplicate read also takes `orca_relay_reserve_ledger_summary`, which
 every placing director logs each minute, in the same query and window: with no summary from the

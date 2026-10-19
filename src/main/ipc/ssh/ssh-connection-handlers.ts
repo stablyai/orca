@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import {
   setSshTargetRegistryHandlers,
   getSshTargetRegistryStore
-} from '../../ssh/ssh-target-registry'
+} from '../../ssh/targets/ssh-target-registry'
 import {
   assertSshConnectsNotFenced,
   connectInFlight,

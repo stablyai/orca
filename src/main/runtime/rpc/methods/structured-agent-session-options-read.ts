@@ -23,6 +23,8 @@ import { agentSessionPinnedLaunchDirectory } from '../../agent-session-record-la
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { clientReadsOptionsWithoutModel } from './structured-agent-session-policy'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
+import { structuredAgentSessionOptionModels } from '../../../native-chat/agent-session-wire/structured-agent-session-option-models'
+import { finishedListingIds } from '../../../../shared/structured-agent-session-options'
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
@@ -88,13 +90,23 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
           .catch(() => null)
         return catalog.read({ ...params, workspacePath })
       }
-      const answer = await read()
-      // The chat's running agent can say what no listing does: a Pi that started with no model.
-      const started =
-        record?.provider === params.agent
-          ? host.deps.adapter.startUnavailable?.(record.sessionId)
-          : undefined
-      return started && !answer.unavailable ? { ...answer, unavailable: started } : answer
+      const listing = await read()
+      const own = record?.provider === params.agent ? record : null
+      // A reopened chat's own model stays a row, so a client that replaces an unlisted one keeps
+      // it. Not a new chat's read (it names a worktree): that answer seeds the next new chat's list.
+      return own &&
+        worktree === undefined &&
+        finishedListingIds(listing) &&
+        listing.origin !== 'unknown'
+        ? {
+            ...listing,
+            models: structuredAgentSessionOptionModels(
+              listing.models,
+              own.options?.model,
+              (row) => row
+            )
+          }
+        : listing
     }
   })
 ]

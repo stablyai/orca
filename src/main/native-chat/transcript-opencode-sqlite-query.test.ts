@@ -503,7 +503,9 @@ describe('readOpenCodeTranscriptSignal', () => {
     insertPart(db, { id: 'prt-1', messageId: 'msg-1', time: 10, data: { type: 'text', text: 'a' } })
     insertPart(db, { id: 'prt-2', messageId: 'msg-2', time: 20, data: { type: 'text', text: 'b' } })
 
-    db.exec("ALTER TABLE session ADD COLUMN directory TEXT; UPDATE session SET directory = '/folder'")
+    db.exec(
+      "ALTER TABLE session ADD COLUMN directory TEXT; UPDATE session SET directory = '/folder'"
+    )
     const signal = readOpenCodeTranscriptSignal(path, 'ses-1')
     expect(signal).toEqual({
       cwd: '/folder',

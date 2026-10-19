@@ -21,14 +21,28 @@ import {
   readRuntime,
   WRITE_CONFIRMATION
 } from './operate-relay-cell-flags.mjs'
-import { readDirectorRequestsByCodePerMinute, readLogEntries } from './relay-same-cap-shadow-gate.mjs'
-import { minutesOf } from './relay-same-cap-shadow-gate-verdict.mjs'
+import {
+  DIRECTOR_METRICS_LIMIT,
+  readDirectorDrainReturn,
+  readDirectorRequestsByCodePerMinute,
+  readLogEntries
+} from './relay-same-cap-shadow-gate.mjs'
+import {
+  DIRECTOR_METRICS_INTERVAL_MS,
+  drainReturnByMinute,
+  minuteKey,
+  minutesOf,
+  withoutDrainDeferrals
+} from './relay-same-cap-shadow-gate-verdict.mjs'
 import { PRODUCTION_LEASE } from './cloud-sql-rollout-lock-census.mjs'
 import { RELAY_REPOSITORY_ROOT } from './relay-repository.mjs'
 import {
   evaluateWatchSample,
   initialWatchState,
   measuredBackground,
+  measuredPhoneBackground,
+  phoneSinceOf,
+  PHONE_WATCH_RULES,
   RESERVE_WATCH_RULES
 } from './relay-reserve-watch-rules.mjs'
 
@@ -58,8 +72,11 @@ function integerIn(name, raw, min, max) {
 }
 
 // The flip back's request. Its generation is a placeholder: the flip back re-reads the current one.
+// A phone-rule trip turns off only the phone path; anything else flips the whole cell back. Both
+// remove the phonePath key, so a cell rolled back to an image without the switch takes the write.
 export function dbFlipRequest(values) {
-  return parseCellFlagsRequest({ ...values, set: 'admitMode=db', 'expected-generation': '0' })
+  const set = values.flip === 'phonePath' ? 'phonePath=default' : 'admitMode=db,phonePath=default'
+  return parseCellFlagsRequest({ ...values, set, 'expected-generation': '0' })
 }
 
 // `now` is the watch's start: a later segment of a long watch must not age flipped-at out.
@@ -93,6 +110,8 @@ export function parseWatchArguments(values, now = Date.now()) {
   if (!values['state-file']) throw new Error('--state-file is required')
   return {
     request,
+    // The flag tool's own inputs, for turning the phone path off mid-watch.
+    flipValues: values,
     directorService: values['director-service'],
     durationMinutes: integerIn('duration-minutes', values['duration-minutes'], 5, MAX_WATCH_MINUTES),
     segmentMinutes: integerIn('segment-minutes', values['segment-minutes'], 1, MAX_SEGMENT_MINUTES),
@@ -119,6 +138,8 @@ export async function readCellSample(fetchImpl, request, idToken, wait) {
       ok: true,
       admitModeConfigured: runtime.flagsApplied.flags?.admitMode ?? 'db',
       admitModeEffective: runtime.admitModeEffective,
+      phonePathConfigured: runtime.flagsApplied.flags?.phonePath ?? 'db',
+      resumeAuditDropped: runtime.runtime?.resumeAuditDropped,
       draining: runtime.draining === true,
       controls,
       enforcedUnits: runtime.runtime?.enforcedConnectionUnits,
@@ -130,29 +151,95 @@ export async function readCellSample(fetchImpl, request, idToken, wait) {
 }
 
 const minuteFloor = (at) => Math.floor(at / MINUTE_MS) * MINUTE_MS
-const failed503Read = (error) => ({ ok: false, error, perMinute: {}, minutes: [], publishedThrough: null })
+const failed503Read = (error) => ({ ok: false, error, perMinute: {}, minutes: [], publishedThrough: null, unmetered: [] })
 
-// The `minutes` whole minutes that end at the minute boundary `endedAt`: the 503 counts, and the
-// newest minute any response code has a point for. The director always serves something, so that
-// front is how far the 503 series is published; no front at all is no evidence. A code publishing
-// late only delays a trip: a later read sees its points.
+// The `minutes` whole minutes that end at the minute boundary `endedAt`: the director's non-drain
+// 503s, the roll ladder's measure its line comes from. Cloud Run's 503 count less what the
+// director's runtime metrics attribute to drain-return deferrals and to a host re-dialling inside
+// its own retry interval or while its last dial is in flight (10-18: ~98% of 503s), since those
+// grow with traffic, not trouble. `publishedThrough` is the newest minute any response code has a
+// point for (the director always serves something, so no front at all is no evidence); a minute
+// with no metrics line from any instance is `unmetered`, since subtracting nothing there is a guess.
+// Coverage is any instance, not each: one instance's missing lines under-subtract, biased to a trip.
 export async function readDirector503Minutes(reader, { projectId, directorService, endedAt, minutes }) {
   const span = { startedAt: new Date(endedAt - minutes * MINUTE_MS), endedAt: new Date(endedAt) }
+  const config = { projectId, directorService }
   let read
   try {
-    read = await readDirectorRequestsByCodePerMinute(reader, { config: { projectId, directorService }, span })
+    read = await readDirectorRequestsByCodePerMinute(reader, { config, span })
   } catch (error) {
     // A point with an unparseable end time has no minute.
     return failed503Read(`director 503 metric unreadable: ${error instanceof Error ? error.message : error}`)
   }
   if (read.failed) return failed503Read('director 503 metric read failed')
+  // A line covers the 30 s before it, so the last minute's tail is in the next minute's lines.
+  const metrics = await readDirectorDrainReturn(reader, {
+    config,
+    window: { startedAt: span.startedAt, endedAt: new Date(endedAt + DIRECTOR_METRICS_INTERVAL_MS) }
+  })
+  const lineTimes = metrics.flatMap((part) => part.samples.map((sample) => Date.parse(sample.timestamp)))
+  if (lineTimes.some((at) => !Number.isFinite(at))) return failed503Read('director runtime metrics line with an unparseable timestamp')
+  const scheduled = drainReturnByMinute(metrics, DIRECTOR_METRICS_LIMIT)
+  if (scheduled.truncated) return failed503Read('director runtime metrics read failed, truncated, or short')
+  const keys = minutesOf(span)
+  const metered = new Set(lineTimes.flatMap((at) => [minuteKey(at - DIRECTOR_METRICS_INTERVAL_MS), minuteKey(at - 1)]))
+  const nonDrain = withoutDrainDeferrals({ perMinute: read.byCode['503'] ?? {} }, scheduled, keys)
   const published = Object.values(read.byCode).flatMap((perMinute) => Object.keys(perMinute)).sort()
   return {
     ok: true,
-    perMinute: read.byCode['503'] ?? {},
-    minutes: minutesOf(span),
-    publishedThrough: published.at(-1) ?? null
+    perMinute: Object.fromEntries(keys.map((minute, index) => [minute, nonDrain.series[index]])),
+    minutes: keys,
+    publishedThrough: published.at(-1) ?? null,
+    unmetered: keys.filter((minute) => !metered.has(minute))
   }
+}
+
+const CELL_METRICS_EVENT = 'orca_relay_runtime_metrics'
+const PHONE_SIGNALS = ['credentialRefusals', 'confirmFailures', 'attachDeadlines', 'acceptDatabaseErrors', 'renewalFailures', 'completedAccepts']
+const sumOf = (counts) => Object.values(counts ?? {}).reduce((sum, count) => sum + Number(count), 0)
+
+// The cell's own runtime metrics lines (one per 30 s) for the `minutes` whole minutes ending at
+// `endedAt`, per minute: what the phone rules judge. A line counts toward the minute it ends in;
+// a minute no line covers is `unmetered`, never zero.
+export async function readCellPhoneMinutes(reader, { cellId, endedAt, minutes }) {
+  const span = { startedAt: new Date(endedAt - minutes * MINUTE_MS), endedAt: new Date(endedAt) }
+  const read = await readLogEntries(reader, {
+    filter: [
+      'resource.type="gce_instance"',
+      `jsonPayload.event="${CELL_METRICS_EVENT}"`,
+      `jsonPayload.cellId="${cellId}"`,
+      `timestamp>="${span.startedAt.toISOString()}"`,
+      `timestamp<"${new Date(endedAt + DIRECTOR_METRICS_INTERVAL_MS).toISOString()}"`
+    ].join(' AND '),
+    projection:
+      'json(timestamp,jsonPayload.phoneRejectionsByCodeDelta,jsonPayload.resumeConfirmFailuresByCodeDelta,' +
+      'jsonPayload.phoneAttachDeadlinesDelta,jsonPayload.phoneAcceptDatabaseErrorsDelta,jsonPayload.resumeRenewalFailuresDelta,' +
+      'jsonPayload.clientAcceptCompletedDelta)',
+    limit: LOG_ENTRY_LIMIT
+  })
+  if (read.failed) return failedRead(read.error)
+  if (read.entries.length >= LOG_ENTRY_LIMIT) return failedRead('cell runtime metrics read truncated')
+  const keys = minutesOf(span)
+  const series = Object.fromEntries(PHONE_SIGNALS.map((signal) => [signal, keys.map(() => 0)]))
+  const metered = new Set()
+  for (const entry of read.entries) {
+    const at = Date.parse(entry.timestamp)
+    if (!Number.isFinite(at)) return failedRead('cell runtime metrics line with an unparseable timestamp')
+    const payload = entry.jsonPayload ?? {}
+    if (payload.phoneAttachDeadlinesDelta === undefined) {
+      return { ...failedRead('cell runtime metrics carry no phone counters (an image before step 6)'), permanent: true }
+    }
+    metered.add(minuteKey(at - DIRECTOR_METRICS_INTERVAL_MS)).add(minuteKey(at - 1))
+    const index = keys.indexOf(minuteKey(at - 1))
+    if (index < 0) continue
+    series.credentialRefusals[index] += Number(payload.phoneRejectionsByCodeDelta?.['4401'] ?? 0)
+    series.confirmFailures[index] += sumOf(payload.resumeConfirmFailuresByCodeDelta)
+    series.attachDeadlines[index] += Number(payload.phoneAttachDeadlinesDelta)
+    series.acceptDatabaseErrors[index] += Number(payload.phoneAcceptDatabaseErrorsDelta ?? 0)
+    series.renewalFailures[index] += Number(payload.resumeRenewalFailuresDelta ?? 0)
+    series.completedAccepts[index] += Number(payload.clientAcceptCompletedDelta ?? 0)
+  }
+  return { ok: true, minutes: keys, series, unmetered: keys.filter((minute) => !metered.has(minute)) }
 }
 
 const LEDGER_SUMMARY_EVENT = 'orca_relay_reserve_ledger_summary'
@@ -342,13 +429,48 @@ export async function watchSegment(config, dependencies) {
         endedAt: baselineEndsAt,
         minutes: BACKGROUND_MINUTES
       })
-      state = { ...state, background: read.ok ? measuredBackground(read.perMinute, read.minutes, read.publishedThrough) : null }
+      state = { ...state, background: read.ok ? measuredBackground(read) : null }
     }
     const reader = createReader(deps, request.projectId)
     // Serialised: concurrent Logging reads are what earn a 429.
+    const cell = await readCellSample(deps.fetchImpl, request, dependencies.idToken, sleep)
+    const phoneWatched = cell.ok && cell.phonePathConfigured === 'memory' && state.phoneOffAt === null
+    const phoneSince = phoneSinceOf(cell, state)
+    const phoneBaselineEndsAt = phoneSince === null ? null : minuteFloor(phoneSince)
+    if (phoneWatched && !state.phoneBackground && phoneBaselineEndsAt !== null && at >= phoneBaselineEndsAt + METRIC_DELAY_MS) {
+      const read = await readCellPhoneMinutes(reader, {
+        cellId: request.cellId,
+        endedAt: phoneBaselineEndsAt,
+        minutes: BACKGROUND_MINUTES
+      })
+      // A restart or roll in those minutes leaves no background to judge against: no phone
+      // rule could ever pass, so refuse rather than turn the phone path off for certain.
+      const incomplete = read.ok ? read.unmetered.length > 0 && `no metrics for ${read.unmetered.join(', ')}` : read.permanent && read.error
+      if (incomplete) {
+        state = {
+          ...state,
+          state: 'refused',
+          verdict:
+            `${request.cellId}: the phone background, the 10 minutes before ${new Date(phoneBaselineEndsAt).toISOString()}, ` +
+            `is incomplete (${incomplete}), as after a cell restart or roll; start a new watch with a later --flipped-at`
+        }
+        await writeFile(config.stateFile, JSON.stringify(state))
+        break
+      }
+      state = { ...state, phoneBackground: measuredPhoneBackground(read) }
+    }
     const sample = {
       at,
-      cell: await readCellSample(deps.fetchImpl, request, dependencies.idToken, sleep),
+      cell,
+      ...(phoneWatched
+        ? {
+            phone: await readCellPhoneMinutes(reader, {
+              cellId: request.cellId,
+              endedAt: minuteFloor(at - METRIC_DELAY_MS),
+              minutes: PHONE_WATCH_RULES.readMinutes
+            })
+          }
+        : {}),
       director503: await readDirector503Minutes(reader, {
         projectId: request.projectId,
         directorService,
@@ -362,6 +484,13 @@ export async function watchSegment(config, dependencies) {
     const result = evaluateWatchSample(state, sample, { unverifiableLimit: config.unverifiableLimit })
     state = result.state
     log(result.line)
+    for (const kind of result.pages) {
+      await raiseAlarm(
+        { mode: request.mode, cellId: request.cellId, projectId: request.projectId, kind, reason: `sustained for ${PHONE_WATCH_RULES.pageAfterMs / MINUTE_MS} min` },
+        { runGcloud: dependencies.runGcloud, log }
+      )
+    }
+    if (state.state === 'watching' && state.phoneTrip) state = await turnPhonePathOff(config, state, at, { ...deps, log })
     await writeFile(config.stateFile, JSON.stringify(state))
     if (state.state !== 'watching') break
     await sleep(Math.max(0, at + SAMPLE_INTERVAL_MS - now()))
@@ -370,8 +499,41 @@ export async function watchSegment(config, dependencies) {
   return state
 }
 
-function writeOutcome(githubOutput, { state, verdict }) {
-  return appendFile(githubOutput, `state=${state}\nverdict=${(verdict ?? '').replace(/[\r\n]+/g, ' ')}\n`)
+// Writes phonePath=db (the flag tool's CAS write, a plan in dry-run) and keeps watching the
+// reserve rules. A write that fails keeps the trip, so the next sample retries it, and pages once
+// after PHONE_OFF_PAGE_AFTER_FAILURES in a row: the cell stays watched either way.
+export const PHONE_OFF_PAGE_AFTER_FAILURES = 3
+async function turnPhonePathOff(config, state, at, dependencies) {
+  try {
+    const result = await flipBack({ ...config.flipValues, flip: 'phonePath' }, dependencies)
+    dependencies.log(JSON.stringify({ event: 'orca_relay_reserve_watch_phone_path_off', cellId: state.cellId, verdict: state.phoneTrip, written: result.written }))
+    return { ...state, phoneOffAt: at, phoneTrip: null, phoneOffFailures: 0 }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    const failures = (state.phoneOffFailures ?? 0) + 1
+    dependencies.log(JSON.stringify({ event: 'orca_relay_reserve_watch_phone_path_off_failed', cellId: state.cellId, failures, reason }))
+    if (failures === PHONE_OFF_PAGE_AFTER_FAILURES) {
+      await raiseAlarm(
+        {
+          mode: config.request.mode,
+          cellId: state.cellId,
+          projectId: config.request.projectId,
+          kind: 'flip-back-failed',
+          flip: 'phonePath',
+          reason: `${state.phoneTrip}; phonePath=db failed ${failures} times: ${reason}`
+        },
+        { runGcloud: dependencies.runGcloud, log: dependencies.log }
+      )
+    }
+    return { ...state, phoneOffFailures: failures }
+  }
+}
+
+function writeOutcome(githubOutput, { state, verdict, flip }) {
+  return appendFile(
+    githubOutput,
+    `state=${state}\nverdict=${(verdict ?? '').replace(/[\r\n]+/g, ' ')}\nflip=${flip ?? 'admitMode'}\n`
+  )
 }
 
 // The job's outcome. A watch that ended mid-segment (a crash, a timeout) records failed, which the
@@ -431,7 +593,11 @@ export async function flipBack(values, dependencies) {
     )
   for (let attempt = 1; ; attempt += 1) {
     const current = await readCurrentObject(fetchImpl, base, dependencies.accessToken)
-    if ((current.object?.flags?.admitMode ?? 'db') !== 'reserve') {
+    const stillOn =
+      values.flip === 'phonePath'
+        ? (current.object?.flags?.phonePath ?? 'db') === 'memory'
+        : (current.object?.flags?.admitMode ?? 'db') === 'reserve'
+    if (!stillOn) {
       const result = { written: false, alreadyDb: true, generation: current.generation }
       record(result)
       return result
@@ -464,7 +630,7 @@ export async function flipBack(values, dependencies) {
 
 export const ALARM_EVENT = 'orca_relay_reserve_watch_alarm'
 export const ALARM_LOG_NAME = 'orca-relay-reserve-watch'
-export const ALARM_KINDS = ['refused', 'flip-back-failed']
+export const ALARM_KINDS = ['refused', 'flip-back-failed', 'audit-drops', 'renewal-failures']
 
 // GitHub's workflow-command escaping, so a verdict cannot end the annotation or start another.
 export const escapeWorkflowCommand = (text) => text.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')
@@ -474,12 +640,18 @@ const escapeWorkflowProperty = (text) => escapeWorkflowCommand(text).replace(/:/
  * Both kinds can leave the cell in reserve with nothing watching it. Only write mode pages: a
  * dry-run watch never flips back, so its refusal or failure changes nothing for the cell.
  */
-export async function raiseAlarm({ mode, cellId, projectId, kind, reason }, { runGcloud, log = console.log }) {
+export async function raiseAlarm({ mode, cellId, projectId, kind, reason, flip }, { runGcloud, log = console.log }) {
   if (!ALARM_KINDS.includes(kind)) throw new Error(`--kind must be one of ${ALARM_KINDS.join(', ')}`)
   const message =
     kind === 'refused'
       ? `${cellId} may be in reserve mode and unwatched: the watch was refused (${reason}). Rerun it, or flip the cell to db with Operate Relay Production Cell Flags.`
-      : `${cellId} may still be in reserve mode with no watch: the flip back did not land (${reason}). Flip it to db by hand with Operate Relay Production Cell Flags (set=admitMode=db), or with the break-glass inputs logged above if the cell does not answer.`
+      : kind === 'audit-drops'
+        ? `${cellId} is losing resume audit rows (${reason}); phones still connect. Check its database writes, or set phonePath=db.`
+        : kind === 'renewal-failures'
+          ? `${cellId} cannot renew phone credentials (${reason}); phones still connect but age toward re-pairing. Check its database writes, or set phonePath=db.`
+          : flip === 'phonePath'
+            ? `${cellId} may still have phonePath=memory with no watch: turning it off did not land (${reason}). Set phonePath=default by hand with Operate Relay Production Cell Flags.`
+            : `${cellId} may still be in reserve mode with no watch: the flip back did not land (${reason}). Flip it to db by hand with Operate Relay Production Cell Flags (set=admitMode=db), or with the break-glass inputs logged above if the cell does not answer.`
   log(`::error title=${escapeWorkflowProperty(`Reserve watch ${kind} for ${cellId}`)}::${escapeWorkflowCommand(message)}`)
   if (mode !== 'write') return { paged: false }
   const entry = JSON.stringify({ event: ALARM_EVENT, cellId, kind, reason })
@@ -518,7 +690,8 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
         'state-file',
         'github-output',
         'verdict',
-        'kind'
+        'kind',
+        'flip'
       ].map((name) => [name, { type: 'string' }])
     )
   })
@@ -528,7 +701,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   try {
     if (command === 'alarm') {
       await raiseAlarm(
-        { mode: values.mode, cellId: values['cell-id'] ?? '', projectId: values['project-id'], kind: values.kind, reason: values.verdict ?? '' },
+        { mode: values.mode, cellId: values['cell-id'] ?? '', projectId: values['project-id'], kind: values.kind, reason: values.verdict ?? '', flip: values.flip },
         { runGcloud }
       )
       // The alarm step is red, whatever the page did.
@@ -542,6 +715,13 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
       const config = await parseWatchSegment(values)
       const state = await watchSegment(config, {
         idToken,
+        // For turning the phone path off mid-watch; without it that write fails and the workflow's flip back retries.
+        accessToken: process.env.ORCA_RELAY_CONTROL_ACCESS_TOKEN,
+        audit: {
+          writtenBy: `reserve-watch/${process.env.GITHUB_TRIGGERING_ACTOR ?? process.env.GITHUB_ACTOR ?? 'unknown'}`,
+          runId: process.env.GITHUB_RUN_ID ?? 'local',
+          runAttempt: process.env.GITHUB_RUN_ATTEMPT ?? '0'
+        },
         readRolloutLease: readProductionRolloutLease,
         runGcloud
       })

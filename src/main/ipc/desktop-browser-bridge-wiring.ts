@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto'
 import { webContents, type BrowserWindow } from 'electron'
 import {
+  DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
   isDesktopBrowserBridgeMethod
 } from '../../shared/desktop-browser-bridge-protocol'
@@ -31,8 +32,8 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 import { ensureOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
-import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
-import type { SshConnectionManager } from '../ssh/ssh-connection-manager'
+import { getSshTargetRegistryStore } from '../ssh/targets/ssh-target-registry'
+import type { SshConnectionManager } from '../ssh/connection/ssh-connection-manager'
 import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-environment-status-probe'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environments/runtime-environment-connectivity-handlers'
 import { setDesktopBrowserBridgeControl } from './desktop-browser-bridge-reconcile'
@@ -135,7 +136,8 @@ export function installDesktopBrowserBridge(options: {
         {
           clientCapabilities: [
             ...ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-            DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY
+            DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
+            DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY
           ]
         }
       )

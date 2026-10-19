@@ -23,6 +23,10 @@ import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
 import * as runtimeStatusConnectionGeneration from './runtime-status-connection-generation'
 import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
 import {
+  pairedTerminalTabCloseIntentStoreOf,
+  reconcileWebSessionCloseReplaysWithCatalog
+} from '@/runtime/web-session-close-replay'
+import {
   ensureBrowserClientHostOnRuntimeContact,
   ensureBrowserClientHostsForRestoredPages
 } from '@/runtime/restored-client-hosted-browser-host-attach'
@@ -158,6 +162,10 @@ export const createRuntimeStatusSlice: (
       get().purgeStaleRuntimeHostState?.(retiredEnvironmentIds)
       retiredEnvironmentIds.forEach(dismissRuntimeDisconnectedToast)
     }
+    reconcileWebSessionCloseReplaysWithCatalog(pairedTerminalTabCloseIntentStoreOf(get), {
+      listed: nextIds,
+      ...peerReplacement
+    })
   },
 
   applyRuntimeHostStatusSnapshot: (snapshot) => {

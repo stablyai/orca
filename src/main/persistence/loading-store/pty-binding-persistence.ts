@@ -11,6 +11,10 @@ import type { PtyBindingSourceExpectation } from './store'
 
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { SessionHostPartitionOperations } from './session-host-partitions'
+import {
+  withdrawUnstartedPane,
+  type UnstartedPaneKept
+} from '../terminal-topology/unstarted-pane-withdraw'
 import { resolveHostId } from './session-host-partitions'
 import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
@@ -244,12 +248,17 @@ export class PtyBindingPersistenceOperations {
     )
   }
 
+  /** With `stillStarting`, a pane whose terminal bound or is starting stays (UnstartedPaneKept). */
   withdrawTerminalPane(
     pane: CommandOf<'closePane'>,
-    hostId?: string | null
-  ): Promise<LayoutRefusalCode | null> {
+    hostId?: string | null,
+    stillStarting?: () => boolean
+  ): Promise<LayoutRefusalCode | UnstartedPaneKept | null> {
+    const resolved = resolveHostId(hostId)
     return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
-      withdrawPane(resolveHostId(hostId), pane, this.topology())
+      stillStarting
+        ? withdrawUnstartedPane(resolved, pane, this.topology(), stillStarting)
+        : withdrawPane(resolved, pane, this.topology())
     )
   }
 

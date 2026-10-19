@@ -209,7 +209,7 @@ it("leaves the shell's Anthropic auth alone in the PowerShell function", () => {
 
 it('restores PowerShell process env without creating empty variables', () => {
   const script = getPowerShellClaudeShellFunction()
-  expect(script.startsWith('\n$orcaClaudeCommand = Get-Command claude')).toBe(true)
+  expect(script.startsWith('$orcaClaudeCommand = Get-Command claude')).toBe(true)
   expect(script).toContain('finally {')
   // .NET 9+ turns a $null/'' SetEnvironmentVariable into an empty variable, not a removal.
   expect(script).not.toMatch(/SetEnvironmentVariable\([^)]*,\s*(\$null|''|"")\s*,/)
@@ -227,6 +227,12 @@ it('prints no Orca text from the PowerShell function and creates a missing accou
     'if (-not [IO.Directory]::Exists($orcaClaudeHome)) { $null = New-Item -ItemType Directory -Path $orcaClaudeHome -Force -ErrorAction SilentlyContinue }'
   )
   expect(script).toContain('-not [IO.Path]::IsPathRooted($orcaClaudeHome)')
+})
+
+it('escapes its arguments for the resolved PowerShell binary before splatting them', () => {
+  expect(getPowerShellClaudeShellFunction()).toContain(
+    '$claudeArgs = @(__OrcaEscapeNativeArgs $binary.Source $args)'
+  )
 })
 
 it('trims the PowerShell pointer read as POSIX command substitution does', () => {

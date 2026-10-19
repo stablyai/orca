@@ -321,6 +321,28 @@ describe('runtime composition parity (Electron vs orcad)', () => {
     expect(actual).toEqual([...declared].sort())
   })
 
+  // #30731: orcad once installed a browser factory that could not place pages on a desktop.
+  it('installs a browser factory on both roots that hosts pages on a paired desktop', () => {
+    const installs: Record<Root, { root: string; call: string; file: string; option: RegExp }> = {
+      electron: {
+        root: 'src/main/startup/main-process-preflight.ts',
+        call: 'installElectronBrowserCommands(',
+        file: 'src/main/host/electron-browser-commands.ts',
+        option: /\bclientHosting: true\b/
+      },
+      orcad: {
+        root: 'src/main/orcad/orcad-lifecycle.ts',
+        call: 'startOrcadBrowserProvider(',
+        file: 'src/main/orcad/orcad-browser-startup.ts',
+        option: /\bclientHostingWithoutEngine: true\b/
+      }
+    }
+    for (const [root, install] of Object.entries(installs)) {
+      expect(read(install.root), root).toContain(install.call)
+      expect(read(install.file), root).toMatch(install.option)
+    }
+  })
+
   it('lists each advertised-but-unserved capability against what the host advertises', () => {
     for (const difference of DECLARED_HOST_DIFFERENCES) {
       expect(difference.reason, difference.wiring).not.toBe('')

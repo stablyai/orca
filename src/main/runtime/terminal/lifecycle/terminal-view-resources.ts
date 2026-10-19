@@ -94,6 +94,9 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     ReturnType<typeof createAgentStatusOscProcessor>
   >()
 
+  // PTYs whose last OSC 7501 facet dies with the program; their exit must clear it.
+  protected liveProgramStatusFacetPtyIds = new Set<string>()
+
   // Why: per-PTY shared title trackers (all-titles ordering + stale-working
   // timer) replace last-title-per-chunk scanning so main observes the same
   // intra-chunk working→idle transitions the renderer does (issue #1083).

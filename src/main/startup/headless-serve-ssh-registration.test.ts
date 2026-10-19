@@ -7,9 +7,9 @@ const mocks = await vi.hoisted(async () => {
 
 vi.mock('../ssh/config/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
-vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('../ssh/connection/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('../ipc/ssh/ssh-host-server-connect', () => mocks.hostServerConnect)
-vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
+vi.mock('../ssh/connection/ssh-connection-manager', () => mocks.sshConnectionManager)
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
@@ -19,7 +19,7 @@ import {
   connectRegisteredSshTarget,
   listRegisteredSshTargets,
   SSH_TARGET_MANAGEMENT_UNSERVED_MESSAGE
-} from '../ssh/ssh-target-registry'
+} from '../ssh/targets/ssh-target-registry'
 import { createSshIpcHarness } from '../ipc/ssh/ssh-ipc-test-harness'
 import type { SshTarget } from '../../shared/ssh-types'
 import { mainProcessState } from './main-process-state'

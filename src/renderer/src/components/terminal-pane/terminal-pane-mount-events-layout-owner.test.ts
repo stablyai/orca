@@ -62,6 +62,7 @@ function install(manager: PaneManager, ptyDeps: { startup?: unknown } = {}): () 
       worktreeId: 'wt-1',
       isActive: true,
       managerRef: { current: manager },
+      showPaneTitle: vi.fn(),
       persistLayoutSnapshot: vi.fn(),
       syncCanExpandState: vi.fn(),
       queueResizeAll: vi.fn()

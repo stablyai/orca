@@ -16,7 +16,10 @@ import { probeActiveOrcadReadiness } from '../../ssh/orcad-active-readiness'
 import { resolveOrcadRemoteContext, type OrcadRemoteContext } from '../install/orcad-remote-context'
 import { ORCAD_INSTALL_MODEL } from '../install/remote-install-model'
 import { computeRemoteInstallDir } from '../install/remote-versioned-install'
-import { getSshConnectionManager, getSshTargetRegistryStore } from '../../ssh/ssh-target-registry'
+import {
+  getSshConnectionManager,
+  getSshTargetRegistryStore
+} from '../../ssh/targets/ssh-target-registry'
 
 export const ORCAD_BIND_HOST = '127.0.0.1'
 

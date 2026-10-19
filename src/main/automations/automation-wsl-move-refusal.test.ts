@@ -19,6 +19,7 @@ import {
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { AutomationService } from './service'
 import { WSL_MOVE_IN_PROGRESS, WSL_MOVE_OWNED_BY_HOST } from './dispatch-refusal'
+import type * as PrecheckRunner from './precheck-runner'
 
 const runAutomationPrecheckMock = vi.hoisted(() => vi.fn())
 
@@ -33,7 +34,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./precheck-runner', () => ({
+vi.mock('./precheck-runner', async (importOriginal) => ({
+  ...(await importOriginal<typeof PrecheckRunner>()),
   runAutomationPrecheck: runAutomationPrecheckMock
 }))
 

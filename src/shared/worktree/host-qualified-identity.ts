@@ -1,4 +1,9 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../execution-host'
+import {
+  getConnectionExecutionHostId,
+  normalizeHostPart,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../execution-host'
 import type { Worktree } from './types'
 
 /**
@@ -37,6 +42,19 @@ export function hostWorktreeTarget(row: {
 }): HostWorktreeTarget {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the only constructor of the brand; `hostId` is a concrete host by the parameter type.
   return { id: row.id, hostId: row.hostId } as HostWorktreeTarget
+}
+
+/** A PTY spawn's workspace copy: its `connectionId` is what picks the provider that runs it. */
+export function spawnWorktreeTarget(
+  worktreeId: string | undefined,
+  connectionId: string | null | undefined
+): HostWorktreeTarget | undefined {
+  return worktreeId
+    ? hostWorktreeTarget({
+        id: worktreeId,
+        hostId: getConnectionExecutionHostId(normalizeHostPart(connectionId))
+      })
+    : undefined
 }
 
 /**

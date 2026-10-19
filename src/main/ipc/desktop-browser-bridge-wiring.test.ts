@@ -13,7 +13,7 @@ vi.mock('./ssh/ssh-ipc-context', () => ({ persistedStore: null }))
 vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
   ensureOrcadManagedTunnel: vi.fn()
 }))
-vi.mock('../ssh/ssh-target-registry', async (importOriginal) => ({
+vi.mock('../ssh/targets/ssh-target-registry', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getSshTargetRegistryStore: () => ({ listTargets: () => targets })
 }))

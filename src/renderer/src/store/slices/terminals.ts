@@ -24,6 +24,7 @@ import { createTerminalLayoutActions } from '../terminals/terminal-layout-state'
 import { createTerminalStartupQueueActions } from '../terminals/terminal-startup-queues'
 import { createWorkspaceTerminalHydrationActions } from '../terminals/workspace-terminal-hydration'
 import { createWorkspaceTerminalReconnectActions } from '../terminals/workspace-terminal-reconnect'
+import { createPairedTerminalTabCloseIntentSlice } from '../terminals/paired-terminal-tab-close-intent-actions'
 
 export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> = (set, get) => ({
   tabsByWorktree: {},
@@ -93,7 +94,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   ...createTerminalLayoutActions(set, get),
   ...createTerminalStartupQueueActions(set, get),
   ...createWorkspaceTerminalHydrationActions(set, get),
-  ...createWorkspaceTerminalReconnectActions(set, get)
+  ...createWorkspaceTerminalReconnectActions(set, get),
+  ...createPairedTerminalTabCloseIntentSlice(set)
 })
 
 /** Switch point: a terminal tab's own changes go to main first, from every caller. */

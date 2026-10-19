@@ -2,7 +2,7 @@
 import {
   isRetainedOrcadMigrationSourceCutover,
   type OrcadMigrationSourceCutover
-} from '../../../shared/orcad-migration-source-cutover'
+} from '../../../shared/orcad-migration/orcad-migration-source-cutover'
 import {
   getOrcadSshDeployment,
   type KnownRuntimeEnvironment

@@ -14,8 +14,12 @@ export function getBrowserHostLeaseRegistry(
   if (!registry) {
     registry = new BrowserHostLeaseRegistry({
       authorityRuntimeId: runtime.getRuntimeId(),
-      onClientPageReleased: (browserPageId) => {
-        void releaseBrowserClientDownloadTransfersForPage(runtime, browserPageId).catch((error) => {
+      onClientPageReleased: (browserPageId, pageHostGeneration) => {
+        void releaseBrowserClientDownloadTransfersForPage(
+          runtime,
+          browserPageId,
+          pageHostGeneration
+        ).catch((error) => {
           console.warn('[browser-host-lease] download transfer cleanup failed:', error)
         })
       },

@@ -13,19 +13,22 @@ import {
   managedRuntimeInstallView,
   type ManagedRuntimeInstallAction
 } from './managed-runtime-install-view'
+import { ManagedRuntimeActionsMenu } from './ManagedRuntimeActionsMenu'
 import { ManagedRuntimeLinkButton } from './ManagedRuntimeLinkButton'
-import { ManagedRuntimeRemoveButton } from './ManagedRuntimeRemoveButton'
 
 // Parts are joined by ' · ', so a sentence followed by another part drops its full stop.
 const said = (text: string, last: boolean): string => (last ? text : text.replace(/[.。]$/u, ''))
 
-/** Settings' one-line install state for the runtime Orca provides an agent, on the host it runs on,
- *  with its actions as links, except a first Install, which is a button the caller places at its
- *  row's end. A chat's install card shows the same host answer, so either one's action moves both. */
+/** Settings' one-line install state for the runtime Orca provides an agent, on the host it runs
+ *  on, with Cancel and retries as links. A first Install button, and the ⋯ menu with Update,
+ *  Reinstall and Remove, are what the caller places at its row's end. A chat's install card shows
+ *  the same host answer, so either one's action moves both. */
 export function ManagedRuntimeInstallRow(props: {
   observation: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
   agentLabel: string
-  children: (line: React.ReactNode, button: React.ReactNode) => React.ReactNode
+  children: (line: React.ReactNode, actions: React.ReactNode) => React.ReactNode
+  /** A sign-in runs the installed server, so Install and Remove wait for it; Cancel does not. */
+  signInRunning?: boolean
 }): React.JSX.Element {
   const { observation, agentLabel } = props
   // A click holds its button until the host answers, so a double click starts nothing twice.
@@ -55,12 +58,13 @@ export function ManagedRuntimeInstallRow(props: {
   const button = view.prominent ? view.action : null
   const action = button ? null : view.action
   const removable = observation.removable && view.removable
+  const held = pending !== null || props.signInRunning === true
   const primary = (chosen: ManagedRuntimeInstallAction) => () =>
     chosen.kind === 'cancel'
       ? cancelManagedRuntimeInstall(subject, chosen.operationId)
       : installManagedRuntime(subject)
   const parts: React.ReactNode[] = []
-  const trailing = Boolean(alert || action || removable || view.note)
+  const trailing = Boolean(alert || action || view.note)
   if (view.status !== null) {
     parts.push(
       <span key="status" className="inline-flex items-center gap-1.5">
@@ -81,7 +85,7 @@ export function ManagedRuntimeInstallRow(props: {
   if (alert) {
     parts.push(
       <span key="alert" role="alert" className="break-words text-destructive">
-        {said(alert, !(action || removable || view.note))}
+        {said(alert, !(action || view.note))}
       </span>
     )
   }
@@ -89,22 +93,11 @@ export function ManagedRuntimeInstallRow(props: {
     parts.push(
       <ManagedRuntimeLinkButton
         key="action"
-        disabled={pending !== null}
+        disabled={action.kind === 'cancel' ? pending !== null : held}
         onClick={() => act(action.kind, primary(action))}
       >
         {action.label}
       </ManagedRuntimeLinkButton>
-    )
-  }
-  if (removable) {
-    parts.push(
-      <ManagedRuntimeRemoveButton
-        key="remove"
-        agentLabel={agentLabel}
-        host={subject.target}
-        disabled={pending !== null}
-        onRemove={() => act('remove', () => removeManagedRuntime(subject))}
-      />
     )
   }
   if (view.note) {
@@ -122,19 +115,33 @@ export function ManagedRuntimeInstallRow(props: {
       )}
     </div>
   )
+  const menu = view.menuAction
+  const install = menu && { label: menu.label, onSelect: () => act(menu.kind, primary(menu)) }
+  const remove = removable ? () => act('remove', () => removeManagedRuntime(subject)) : null
   return (
     <>
       {props.children(
         line,
-        button ? (
-          <Button
-            size="xs"
-            disabled={pending !== null}
-            onClick={() => act(button.kind, primary(button))}
-          >
-            {button.label}
-          </Button>
-        ) : null
+        <>
+          {button ? (
+            <Button
+              size="xs"
+              disabled={button.kind === 'cancel' ? pending !== null : held}
+              onClick={() => act(button.kind, primary(button))}
+            >
+              {button.label}
+            </Button>
+          ) : null}
+          {install || remove ? (
+            <ManagedRuntimeActionsMenu
+              agentLabel={agentLabel}
+              host={subject.target}
+              install={install}
+              onRemove={remove}
+              disabled={held}
+            />
+          ) : null}
+        </>
       )}
     </>
   )

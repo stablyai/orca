@@ -5,6 +5,14 @@ inputs:
   save-cache:
     description: Publish a validated helper from the default branch.
     default: 'false'
+  build:
+    description: Build here; 'false' only restores, so the caller can build in a background run step.
+    default: 'true'
+
+outputs:
+  cache-hit:
+    description: Whether the helper was restored under the exact key.
+    value: ${{ steps.cache.outputs.cache-hit }}
 
 runs:
   using: composite
@@ -30,22 +38,14 @@ runs:
         key: ${{ steps.identity.outputs.key }}
 
     - name: Build or validate Wayland clipboard helper
+      if: inputs.build != 'false'
       shell: bash
       env:
         CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
-      run: |
-        if node config/scripts/build-wayland-clipboard.mjs; then
-          exit 0
-        fi
-        if [ "$CACHE_HIT" != true ]; then
-          exit 1
-        fi
-        echo 'Discarding an unusable Wayland clipboard cache and rebuilding from source.'
-        rm -rf -- native/wayland-clipboard/.build
-        node config/scripts/build-wayland-clipboard.mjs
+      run: bash "$GITHUB_ACTION_PATH/build-or-validate.sh"
 
     - name: Save validated Wayland clipboard helper from main
-      if: inputs.save-cache == 'true' && steps.cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      if: inputs.build != 'false' && inputs.save-cache == 'true' && steps.cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
       uses: actions/cache/save@v5
       continue-on-error: true
       with:

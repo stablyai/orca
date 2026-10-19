@@ -1,8 +1,9 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { filterRecord, omitStoredFields, withoutKey } from './stored-record-fields'
 import { canReplacePreviewContentType, partitionPinnedTabOrder } from './tab-order'
 import { getNextTerminalOrdinal } from './terminal-tab-ordinal'
 import { layoutContainsLeafId } from './terminal-pane-tree'
-import { editorTabShowsFile } from './workspace-layout-editor-tab-file'
+import { editorTabShowsFile, keptAfterEditorClose } from './workspace-layout-editor-tab-file'
 import {
   applied,
   boundPtyIds,
@@ -104,7 +105,10 @@ export function closeTab(
     next = {
       ...next,
       editorFiles: next.editorFiles.filter(
-        (file) => !editorTabShowsFile(tab.entityId, file, next.worktreeId)
+        // Why the switch: shipped builds close through this code too.
+        ORCA_LAYOUT_OWNER_IS_MAIN
+          ? keptAfterEditorClose(workspace, next, tab.entityId)
+          : (file) => !editorTabShowsFile(tab.entityId, file, next.worktreeId)
       )
     }
   }

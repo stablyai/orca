@@ -1,3 +1,4 @@
+import { BrowserClientProfileMetadata } from '../../shared/browser-client-profile-switch-protocol'
 import {
   deriveBrowserRoutePartition,
   type DerivedBrowserRoutePartition
@@ -130,7 +131,13 @@ export class BrowserRouteSessionRegistry {
     input: BrowserRoutePreparePageInput,
     rendererFence: BrowserRouteRendererPrepareFence
   ): Promise<BrowserRouteSessionHandle> {
-    this.dependencies.validateProfile(input.identity.browserProfileId)
+    const metadata = input.profileMetadata
+      ? BrowserClientProfileMetadata.parse(input.profileMetadata)
+      : undefined
+    if (metadata && metadata.id !== input.identity.browserProfileId) {
+      throw new Error('browser_route_partition_profile_unavailable')
+    }
+    this.dependencies.validateProfile(input.identity.browserProfileId, metadata)
     const derived = resolveBrowserRouteSessionPartition(
       this.dependencies,
       input,
@@ -161,7 +168,8 @@ export class BrowserRouteSessionRegistry {
     const promise = this.preparePartition(
       derived,
       input.identity.browserProfileId,
-      input.proxyEndpoint
+      input.proxyEndpoint,
+      metadata
     )
     const pendingState = {
       partition: derived.partition,
@@ -238,9 +246,11 @@ export class BrowserRouteSessionRegistry {
   private async preparePartition(
     derived: DerivedBrowserRoutePartition,
     browserProfileId: string,
-    proxyEndpoint: ProxyEndpoint
+    proxyEndpoint: ProxyEndpoint,
+    profileMetadata?: BrowserClientProfileMetadata
   ): Promise<PreparedPartition> {
     const session = await prepareBrowserRouteSessionPolicy({
+      ...(profileMetadata ? { profileMetadata } : {}),
       partition: derived.partition,
       browserProfileId,
       proxyEndpoint,

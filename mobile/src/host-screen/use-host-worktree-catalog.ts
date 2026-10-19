@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { useFocusEffect } from 'expo-router'
 import { setCachedWorktrees } from '../cache/worktree-cache'
 import type { RpcClient } from '../transport/rpc-client'
@@ -6,6 +7,7 @@ import type { ConnectionState } from '../transport/types'
 import { RpcIncompatibleReplyError } from '../transport/rpc-incompatible-reply-error'
 import { useWorktreeResync } from '../transport/use-worktree-resync'
 import { startHostWorktreeRefresh } from '../worktree/host-worktree-refresh'
+import type { HostSidebarFeedTriggers } from './host-sidebar-feed-reader'
 import { areWorktreeListsEqual } from '../worktree/worktree-list-snapshot'
 import {
   clearConfirmedActiveWorktreeIdentity,
@@ -28,8 +30,10 @@ export function useHostWorktreeCatalog(args: {
   fetchRepoMetadata: FetchHostRepoMetadata
   hostCapabilities: readonly string[]
   hostId: string | undefined
+  /** Null in a build that lists without the feed. */
+  sidebarFeed: HostSidebarFeedTriggers | null
   state: HostScreenState
-  syncViewSettingsFromDesktop: () => Promise<void>
+  syncViewSettingsFromDesktop: (options?: { reconnected?: boolean }) => Promise<void>
 }) {
   const {
     client,
@@ -38,6 +42,7 @@ export function useHostWorktreeCatalog(args: {
     fetchRepoMetadata,
     hostCapabilities,
     hostId,
+    sidebarFeed,
     state,
     syncViewSettingsFromDesktop
   } = args
@@ -87,8 +92,10 @@ export function useHostWorktreeCatalog(args: {
     [hostCapabilities]
   )
 
+  // A re-read asked for during a flight: that flight may predate the change that asked.
+  const fetchWorktreesQueuedRef = useRef(false)
   const fetchWorktrees = useCallback(
-    async (options: { allowDuringModal?: boolean } = {}) => {
+    async (options: { allowDuringModal?: boolean; queueIfInFlight?: boolean } = {}) => {
       if (!client || connState !== 'connected' || !hostId) {
         return
       }
@@ -97,6 +104,7 @@ export function useHostWorktreeCatalog(args: {
       }
       // Why: prevent slow remote hosts from stacking overlapping worktree.ps requests during polling.
       if (fetchWorktreesInFlightRef.current) {
+        fetchWorktreesQueuedRef.current ||= options.queueIfInFlight === true
         return
       }
       fetchWorktreesInFlightRef.current = true
@@ -150,16 +158,22 @@ export function useHostWorktreeCatalog(args: {
           setSleptIds((prev) => retainLiveSleptWorktreeIdentities(prev, confirmed))
 
           // Sync pin state from server so desktop-initiated pins reflect without relying on stale AsyncStorage.
+          // Switch point: a feed-built list keeps no pin cache of its own.
           const serverPinned = new Set(confirmed.filter((w) => w.isPinned).map((w) => w.worktreeId))
-          setPinnedIds((prev) => {
-            if (serverPinned.size === prev.size && [...serverPinned].every((id) => prev.has(id))) {
-              return prev
-            }
-            if (hostId) {
-              void savePinnedIds(hostId, serverPinned)
-            }
-            return serverPinned
-          })
+          if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+            setPinnedIds((prev) => {
+              if (
+                serverPinned.size === prev.size &&
+                [...serverPinned].every((id) => prev.has(id))
+              ) {
+                return prev
+              }
+              if (hostId) {
+                void savePinnedIds(hostId, serverPinned)
+              }
+              return serverPinned
+            })
+          }
         }
       } catch (error) {
         // Will retry on reconnect
@@ -172,10 +186,19 @@ export function useHostWorktreeCatalog(args: {
         }
       } finally {
         fetchWorktreesInFlightRef.current = false
+        if (fetchWorktreesQueuedRef.current) {
+          fetchWorktreesQueuedRef.current = false
+          // The latest render's fetch, without this flight's modal override: the client may have changed.
+          void fetchWorktreesRef.current({ queueIfInFlight: true })
+        }
       }
     },
     [client, connState, hostId, fetchServerRows]
   )
+  const fetchWorktreesRef = useRef(fetchWorktrees)
+  useEffect(() => {
+    fetchWorktreesRef.current = fetchWorktrees
+  }, [fetchWorktrees])
 
   useFocusEffect(
     useCallback(() => {
@@ -194,9 +217,17 @@ export function useHostWorktreeCatalog(args: {
       client,
       fetchWorktrees,
       fetchRepoMetadata,
-      syncViewSettings: syncViewSettingsFromDesktop
+      syncViewSettings: syncViewSettingsFromDesktop,
+      sidebarFeed
     })
-  }, [client, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
+  }, [
+    client,
+    connState,
+    fetchWorktrees,
+    fetchRepoMetadata,
+    syncViewSettingsFromDesktop,
+    sidebarFeed
+  ])
 
   useFocusEffect(
     useCallback(() => {

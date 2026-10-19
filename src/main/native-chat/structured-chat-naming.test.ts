@@ -8,6 +8,17 @@ import {
   createStructuredChatNamingHandler,
   type StructuredChatNamingDeps
 } from './structured-chat-naming'
+import { firstStructuredChatNamingPrompt } from '../../shared/structured-chat-naming-eligibility'
+import {
+  attach,
+  CALLER,
+  envelope,
+  hostTestState
+} from './agent-session-wire/structured-agent-session-host-test-harness'
+import {
+  HOST_TEST_SESSION,
+  hostTestMessage
+} from './agent-session-wire/structured-agent-session-host-test-data'
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {
@@ -299,4 +310,28 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     expect(state.deps.generate).not.toHaveBeenCalled()
     print.mockRestore()
   })
+})
+
+it("names a chat from a real host's status feed once its first send runs", async () => {
+  const { host, store, log } = hostTestState()
+  host.deps.onSessionStatusChanged = createStructuredChatNamingHandler({
+    getStore: () => store,
+    getSettings: () => ({}),
+    workerTaskTitle: () => null,
+    readFirstPrompt: async (id, startedAt) =>
+      firstStructuredChatNamingPrompt(await host.journalSnapshot(id), startedAt),
+    generate: async () => 'auth/login',
+    onNamed: vi.fn(),
+    logger: log.logger
+  })
+  await attach()
+
+  const body = hostTestMessage('Please repair the login flow')
+  expect(
+    await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+  ).toMatchObject({ ok: true })
+
+  await vi.waitFor(() =>
+    expect(store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('auth/login')
+  )
 })

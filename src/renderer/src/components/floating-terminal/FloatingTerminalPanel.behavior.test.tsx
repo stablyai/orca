@@ -82,6 +82,17 @@ vi.mock('@/components/contextual-tours/use-contextual-tour', async () => {
 vi.mock('@/components/ui/dialog', async () => {
   return (await import('./floating-terminal-panel-component-stubs')).createDialogModule()
 })
+// Why: the panel runs as a plain function here, so the real confirmation dialog's useContext has
+// no dispatcher; confirm immediately so bulk-close assertions still run right after the click.
+vi.mock('@/components/use-bulk-tab-close-confirmation', () => ({
+  useBulkTabCloseConfirmation:
+    () => (_scope: string, selectTabIds: () => string[], closeTabs: (tabIds: string[]) => void) => {
+      const tabIds = selectTabIds()
+      if (tabIds.length > 0) {
+        closeTabs(tabIds)
+      }
+    }
+}))
 vi.mock('@/components/terminal/useTerminalSaveDialog', async () => {
   return (
     await import('./floating-terminal-panel-test-module-mocks')

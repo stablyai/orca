@@ -49,7 +49,7 @@ async function mount(initial: Props) {
       enabled: true,
       fence: props.fence,
       mutate,
-      hostSupport: { sendOptions: true, permissionModes: true }
+      hostSupport: { permissionModes: true }
     })
     frames.push(modelChoices(options.optionSnapshot))
     return null

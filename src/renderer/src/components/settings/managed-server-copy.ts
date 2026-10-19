@@ -3,7 +3,7 @@ import type {
   OrcadManagedPendingMigrationRow,
   OrcadManagedRuntimeStatus
 } from '../../../../shared/orcad-managed-runtime'
-import type { OrcadMigrationBlocker } from '../../../../shared/orcad-migration-preflight'
+import type { OrcadMigrationBlocker } from '../../../../shared/orcad-migration/orcad-migration-preflight'
 import { translate } from '@/i18n/i18n'
 import { dependencyKindLabel } from './managed-server-dependency-kinds'
 

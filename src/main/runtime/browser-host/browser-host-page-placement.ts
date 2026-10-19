@@ -138,6 +138,24 @@ export class BrowserHostPagePlacementRegistry {
     return reservation.placement
   }
 
+  commitClientPageReplacement(
+    reservation: BrowserClientPagePlacementReservation,
+    expected: RuntimeBrowserClientPlacement
+  ): RuntimeBrowserClientPlacement {
+    const state = this.placementsByPageId.get(reservation.browserPageId)
+    if (
+      this.reservationsByPageId.get(reservation.browserPageId) !== reservation ||
+      state?.placement !== expected ||
+      state.retirement
+    ) {
+      throw new Error('browser_page_placement_stale')
+    }
+    this.reservationsByPageId.delete(reservation.browserPageId)
+    this.releaseReservationSlot(reservation)
+    this.placementsByPageId.set(reservation.browserPageId, { placement: reservation.placement })
+    return reservation.placement
+  }
+
   cancelClientPageReservation(reservation: BrowserClientPagePlacementReservation): boolean {
     if (this.reservationsByPageId.get(reservation.browserPageId) !== reservation) {
       return false

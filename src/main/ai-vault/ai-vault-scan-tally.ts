@@ -54,6 +54,10 @@ export class AiVaultScanTally {
     this.readDone += count
   }
 
+  dropUnread(count: number): void {
+    this.readTotal -= count
+  }
+
   snapshot(): AiVaultScanWork {
     const agents: AiVaultScanWork['agents'] = []
     for (const [agent, tally] of this.agents) {

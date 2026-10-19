@@ -9,8 +9,17 @@ import {
   removeVersionedCacheDatabase
 } from '../sqlite/versioned-cache-database'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import type { PersistedSessionParseCacheEntry } from './session-parse-cache-store'
-import type { SessionSidecarObservation } from './session-sidecar-stat'
+import type {
+  PersistedSessionParseCacheEntry,
+  SessionScopeCwdLookup,
+  SessionScopeCwdStamp
+} from './session-parse-cache-store'
+import {
+  ensureScopeCwdsTable,
+  readScopeCwdRows,
+  writeScopeCwdRows
+} from './session-scope-cwds-table'
+import { parsePersistedSidecar } from './session-sidecar-stat'
 
 // Bump when the row layout or cached session semantics change; a mismatched
 // database is dropped whole.
@@ -68,6 +77,21 @@ export class SessionParseCacheDatabase {
     }, undefined)
   }
 
+  /** Each path's parse-row cwd and stored scope cwd, without decoding whole sessions. */
+  readScopeCwds(paths: readonly string[]) {
+    const parsed = this.run((db) => readScopeCwdRows(db, paths, 'parsed'), undefined)
+    const read = this.run((db) => readScopeCwdRows(db, paths, 'read'), undefined)
+    const found = parsed ?? new Map<string, SessionScopeCwdLookup>()
+    for (const [path, row] of read ?? []) {
+      found.set(path, { ...found.get(path), ...row })
+    }
+    return { found, parsed: parsed !== undefined, read: read !== undefined }
+  }
+
+  writeScopeCwds(rows: Iterable<[string, SessionScopeCwdStamp]>, seenAt: number): void {
+    this.run((db) => writeScopeCwdRows(db, rows, seenAt), undefined)
+  }
+
   /**
    * One transaction; a caller chunks large writes so the event loop gets turns
    * between them. `keepExisting` leaves rows already present untouched.
@@ -105,7 +129,10 @@ export class SessionParseCacheDatabase {
   }
 
   delete(path: string): void {
-    this.run((db) => db.prepare('DELETE FROM rows WHERE path = ?').run(path), undefined)
+    this.run((db) => {
+      db.prepare('DELETE FROM rows WHERE path = ?').run(path)
+      db.prepare('DELETE FROM scope_cwds WHERE path = ?').run(path)
+    }, undefined)
   }
 
   /** Oldest first, so repeated calls work through every stale row outside `excludeGlob`. */
@@ -114,7 +141,8 @@ export class SessionParseCacheDatabase {
       (db) =>
         db
           .prepare(
-            'SELECT path FROM rows WHERE seen_at < ? AND path NOT GLOB ? ORDER BY seen_at LIMIT ?'
+            `SELECT path FROM (SELECT path, seen_at FROM rows UNION ALL SELECT path, seen_at FROM scope_cwds)
+             WHERE seen_at < ? AND path NOT GLOB ? GROUP BY path ORDER BY MIN(seen_at) LIMIT ?`
           )
           .all(cutoff, excludeGlob, limit)
           .flatMap((row) => (typeof row.path === 'string' ? [row.path] : [])),
@@ -126,18 +154,23 @@ export class SessionParseCacheDatabase {
   deleteSeenBefore(cutoff: number, glob: string): boolean {
     return this.run(
       (db) =>
-        Number(
-          db.prepare('DELETE FROM rows WHERE seen_at < ? AND path GLOB ?').run(cutoff, glob).changes
-        ) > 0,
+        ['rows', 'scope_cwds']
+          .map((table) =>
+            Number(
+              db.prepare(`DELETE FROM ${table} WHERE seen_at < ? AND path GLOB ?`).run(cutoff, glob)
+                .changes
+            )
+          )
+          .some((changes) => changes > 0),
       false
     )
   }
 
   markSeen(path: string, seenAt: number): void {
-    this.run(
-      (db) => db.prepare('UPDATE rows SET seen_at = ? WHERE path = ?').run(seenAt, path),
-      undefined
-    )
+    this.run((db) => {
+      db.prepare('UPDATE rows SET seen_at = ? WHERE path = ?').run(seenAt, path)
+      db.prepare('UPDATE scope_cwds SET seen_at = ? WHERE path = ?').run(seenAt, path)
+    }, undefined)
   }
 
   /** Hands freed pages back to the file system after deletes. */
@@ -189,7 +222,8 @@ function openDatabase(path: string): SyncDatabase {
     version: SESSION_PARSE_CACHE_SCHEMA_VERSION,
     sql: SCHEMA_SQL,
     directoryMode: PRIVATE_DIRECTORY_MODE,
-    pageSize: PAGE_SIZE
+    pageSize: PAGE_SIZE,
+    afterSchema: ensureScopeCwdsTable
   })
   hardenSqliteDatabaseFiles(path)
   return db
@@ -232,20 +266,4 @@ export function parsePersistedSessionParseCacheRow(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-// Why: added after SCHEMA_VERSION 2 shipped, so a row an older build wrote has
-// no such field. Absent (or unreadable) means unknown, which costs one re-parse
-// of the rows that have a sibling and nothing at all for the rest.
-function parsePersistedSidecar(value: unknown): SessionSidecarObservation | undefined {
-  if (value === 'none' || value === 'unknown') {
-    return value
-  }
-  if (!isRecord(value)) {
-    return undefined
-  }
-  const { path, mtimeMs, sizeBytes } = value
-  return typeof path === 'string' && typeof mtimeMs === 'number' && typeof sizeBytes === 'number'
-    ? { path, mtimeMs, sizeBytes }
-    : undefined
 }

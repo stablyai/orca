@@ -20,6 +20,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TerminalActions } from './terminal-actions'
 import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { PairedTerminalTabCloseIntentSlice } from './paired-terminal-tab-close-intent-actions'
 
 export type TerminalState = {
   tabsByWorktree: Record<string, TerminalTab[]>
@@ -140,7 +141,7 @@ export type TerminalState = {
   deferredSshReconnectTargets: string[]
   deferredSshSessionIdsByTabId: Record<string, string>
 }
-export type TerminalSlice = TerminalState & TerminalActions
+export type TerminalSlice = TerminalState & TerminalActions & PairedTerminalTabCloseIntentSlice
 
 export type TerminalStoreSet = Parameters<StateCreator<AppState, [], [], AppState>>[0]
 export type TerminalStoreGet = Parameters<StateCreator<AppState, [], [], AppState>>[1]

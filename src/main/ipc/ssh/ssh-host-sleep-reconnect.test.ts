@@ -10,7 +10,7 @@ vi.mock('electron', async () => {
 vi.mock('../../managed-server/lifecycle/orcad-managed-tunnel', () => ({
   recoverOrcadManagedTunnelsAfterHostResume: recoverManagedTunnels
 }))
-vi.mock('../../ssh/ssh-target-registry', () => ({
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getSshConnectionManager: () => ({ retryStalledReconnects })
 }))
 

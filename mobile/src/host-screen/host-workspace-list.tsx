@@ -1,5 +1,13 @@
 import { useMemo } from 'react'
-import { Platform, Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  RefreshControl,
+  SectionList,
+  Text,
+  View
+} from 'react-native'
 import { ChevronDown, ChevronRight, Pin } from 'lucide-react-native'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
@@ -10,12 +18,16 @@ import { NewWorkspaceFab, FAB_SIZE } from '../components/NewWorkspaceFab'
 import { WorktreeListRow } from '../components/WorktreeListRow'
 import { colors, spacing } from '../theme/mobile-theme'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
-import { HostWorkspaceListStates } from '../worktree/host-workspace-list-states'
+import {
+  HostWorkspaceListReopen,
+  HostWorkspaceListStates
+} from '../worktree/host-workspace-list-states'
 import { getWorktreeStatus } from '../worktree/workspace-list-sections'
 import { repoColor } from '../worktree/repo-color'
 import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { buildRepoLookById } from './host-repo-looks'
+import { HostPendingCreationRow } from './host-pending-creation-row'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
@@ -44,6 +56,12 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
     state
   } = controller
   const { rawSections, sections, repoById } = sectionsResult
+  const { pending } = settings.pendingViewChanges
+  // A collapse the desktop has not answered spins on its header.
+  const pendingCollapseKeys = useMemo(
+    () => new Set(pending.flatMap((change) => (change.kind === 'collapse' ? [change.key] : []))),
+    [pending]
+  )
   const repoLookById = useMemo(() => buildRepoLookById(repoById), [repoById])
   const { worktreeCardProperties, compactWorktreeCards, newCardStyle } = state.view
   const cardDetails = useMemo(
@@ -113,17 +131,26 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         </View>
       )}
 
-      <HostWorkspaceListStates
-        connState={connState}
-        worktreesLoaded={state.worktreesLoaded}
-        displayCount={displayWorktrees.length}
-        sectionCount={sections.length}
-        catalogError={state.catalogError}
-        search={state.search}
-        activeFilterCount={controller.activeFilterCount}
-      />
+      {/* A feed this page cannot read: the host is older or newer than the page. */}
+      {controller.feed?.kind === 'reopen' ? (
+        <HostWorkspaceListReopen />
+      ) : (
+        <HostWorkspaceListStates
+          connState={connState}
+          // A feed-built list is loaded once the feed installs; rows draw before worktree.ps answers.
+          worktreesLoaded={
+            controller.feed ? controller.feed.kind === 'ready' : state.worktreesLoaded
+          }
+          // A feed-built list counts its sections, so collapsed ones and a failing worktree.ps never blank it.
+          displayCount={controller.feed ? sections.length : displayWorktrees.length}
+          sectionCount={sections.length}
+          catalogError={state.catalogError}
+          search={state.search}
+          activeFilterCount={controller.activeFilterCount}
+        />
+      )}
 
-      {sections.length > 0 && (
+      {sections.length > 0 && controller.feed?.kind !== 'reopen' && (
         <SectionList
           ref={activeWorktreeScroll.sectionListRef}
           sections={sections}
@@ -143,12 +170,15 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
           renderSectionHeader={({ section }) => {
+            const pendingCreations = section.pendingCreations?.map((creation) => (
+              <HostPendingCreationRow key={creation.key} creation={creation} />
+            ))
             if (!section.title) {
-              return null
+              return pendingCreations ? <>{pendingCreations}</> : null
             }
             const isCollapsed = controller.collapsedGroups.has(section.key)
-            const rawSection = rawSections.find((s) => s.key === section.key)
-            const count = rawSection?.data.length ?? 0
+            const count =
+              section.count ?? rawSections.find((s) => s.key === section.key)?.data.length ?? 0
             // Why: the desktop's header draws its anchor repo's colour and icon.
             const repoSectionLook =
               state.view.groupBy === 'repo' && section.repo
@@ -157,30 +187,40 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
             const repoSectionColor = repoSectionLook?.color ?? null
             const repoSectionIcon = repoSectionLook?.icon ?? null
             return (
-              <Pressable
-                style={styles.sectionHeader}
-                onPress={() => settings.toggleCollapsed(section.key)}
-              >
-                {isCollapsed ? (
-                  <ChevronRight size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                ) : (
-                  <ChevronDown size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                )}
-                {section.icon === 'pin' && (
-                  <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                )}
-                {state.view.groupBy === 'repo' ? (
-                  <View style={styles.sectionRepoIcon}>
-                    <MobileRepoIcon
-                      repoIcon={repoSectionIcon}
-                      size={14}
-                      color={repoSectionColor ?? colors.textSecondary}
+              <>
+                <Pressable
+                  style={styles.sectionHeader}
+                  onPress={() => settings.toggleCollapsed(section.key)}
+                >
+                  {isCollapsed ? (
+                    <ChevronRight size={12} color={colors.textMuted} style={styles.sectionIcon} />
+                  ) : (
+                    <ChevronDown size={12} color={colors.textMuted} style={styles.sectionIcon} />
+                  )}
+                  {section.icon === 'pin' && (
+                    <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
+                  )}
+                  {state.view.groupBy === 'repo' ? (
+                    <View style={styles.sectionRepoIcon}>
+                      <MobileRepoIcon
+                        repoIcon={repoSectionIcon}
+                        size={14}
+                        color={repoSectionColor ?? colors.textSecondary}
+                      />
+                    </View>
+                  ) : null}
+                  <Text style={styles.sectionTitle}>{section.title}</Text>
+                  <Text style={styles.sectionCount}>{count}</Text>
+                  {pendingCollapseKeys.has(section.key) && (
+                    <ActivityIndicator
+                      size="small"
+                      color={colors.textMuted}
+                      style={styles.sectionIcon}
                     />
-                  </View>
-                ) : null}
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                <Text style={styles.sectionCount}>{count}</Text>
-              </Pressable>
+                  )}
+                </Pressable>
+                {pendingCreations}
+              </>
             )
           }}
           ItemSeparatorComponent={ListSeparator}

@@ -1,3 +1,4 @@
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
 /**
  * Drives the real `Store`, because the value of the prune gate is entirely in whether the shipping
@@ -78,7 +79,9 @@ describe('store signals to the worktree metadata prune gate', () => {
     } as unknown as WorkspaceSessionState)
     parkGate()
 
-    store.removeWorkspaceSessionStateForWorktree(WORKTREE_ID)
+    store.removeWorkspaceSessionStateForWorktree(
+      hostWorktreeTarget({ id: WORKTREE_ID, hostId: 'local' })
+    )
 
     expect(isLocalWorktreeMetadataPruneDue(REPO_ID)).toBe(true)
   })

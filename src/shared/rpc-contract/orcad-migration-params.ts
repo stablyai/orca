@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   MAX_ORCAD_MIGRATION_BLOBS,
   OrcadMigrationBlobDescriptorSchema
-} from '../orcad-migration-blob-transfer'
+} from '../orcad-migration/orcad-migration-blob-transfer'
 
 // Why unknown: the handler parses and digest-checks the manifest itself, so a malformed one is
 // refused with a migration error rather than a generic params failure.

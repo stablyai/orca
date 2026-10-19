@@ -15,7 +15,7 @@ import {
 import { ORCAD_MIGRATION_DESTINATION_UNSUPPORTED } from './orcad-migration-catalog-client'
 import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-journal'
 import { fenceOrcadMigrationSource } from './orcad-migration-source-fence'
-import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 import { fakeOrcadMigrationDestination as fakeDestination } from './orcad-migration-destination-fake'
 
 const TARGET: SshTarget = {
@@ -142,7 +142,7 @@ describe('migration cutover coordinator', () => {
   it.each([
     [
       'a source row changed',
-      (store: Store) => store.updateRepo('repo-1', { displayName: 'Renamed' }),
+      (store: Store) => store.updateRepo(store.getRepo('repo-1')!, { displayName: 'Renamed' }),
       'orcad_migration_source_changed'
     ],
     [
@@ -165,7 +165,7 @@ describe('migration cutover coordinator', () => {
   it('refuses a commit whose source changed after staging', async () => {
     const h = await setup()
     await stageOrcadMigrationDestination(h.context, h.migrationId)
-    h.store.updateRepo('repo-1', { displayName: 'Renamed' })
+    h.store.updateRepo(h.store.getRepo('repo-1')!, { displayName: 'Renamed' })
     await expect(commitOrcadMigrationDestination(h.context, h.migrationId)).rejects.toThrow(
       'orcad_migration_source_changed'
     )

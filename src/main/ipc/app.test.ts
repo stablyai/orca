@@ -183,7 +183,7 @@ describe('registerAppHandlers', () => {
 
     registerAppHandlers(store as never)
 
-    expect(registerRendererShutdownCheckpointHandlerMock).toHaveBeenCalledWith(store)
+    expect(registerRendererShutdownCheckpointHandlerMock).toHaveBeenCalledWith(store, undefined)
     expect(registerMacKeyboardLayoutChangeNotificationsMock).toHaveBeenCalledOnce()
   })
 

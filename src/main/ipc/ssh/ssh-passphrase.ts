@@ -1,6 +1,7 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { SSH_CREDENTIAL_TIMEOUT_MS, type SshCredentialKind } from '../../ssh/ssh-connection-utils'
+import { SSH_CREDENTIAL_TIMEOUT_MS } from '../../ssh/connection/ssh-connection-timing'
+import type { SshCredentialKind } from '../../ssh/connection/ssh-connection-callbacks'
 import { recordSshCredentialDeclined } from '../../ssh/ssh-credential-decline'
 const pendingRequests = new Map<
   string,

@@ -21,7 +21,7 @@ function deps(overrides: Partial<HostKeyVerifierDeps> = {}): HostKeyVerifierDeps
     port: 22,
     displayHost: 'example.com',
     strictHostKeyChecking: 'ask',
-    isEphemeralRuntimeTarget: false,
+    policy: { kind: 'standard' },
     siteConfigSuppressed: false,
     knownHostsUnreadable: false,
     entries: [],
@@ -121,7 +121,7 @@ describe('the ssh2 host key verifier', () => {
     it.each([
       ['a key we already know', { entries: parseKnownHosts(`example.com ssh-ed25519 ${ED_A}`) }],
       ['a rejected key', { entries: parseKnownHosts(`example.com ssh-ed25519 ${ED_B}`) }],
-      ['an ephemeral runtime target', { isEphemeralRuntimeTarget: true }],
+      ['an ephemeral runtime target', { policy: { kind: 'ephemeral' as const } }],
       ['a lax StrictHostKeyChecking', { strictHostKeyChecking: 'no' }]
     ])('does not record %s', (_label, overrides) => {
       const rememberHostKey = vi.fn()

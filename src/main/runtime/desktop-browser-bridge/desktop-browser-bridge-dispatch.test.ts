@@ -2,6 +2,7 @@ import '../rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import {
+  DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_SETTING_LABEL
 } from '../../../shared/desktop-browser-bridge-protocol'
@@ -54,6 +55,7 @@ function orcadRuntime(options: { localBrowser?: boolean } = {}) {
         method,
         params,
         caller: context.caller,
+        signal: context.signal,
         hostEnabled: true,
         registry: getDesktopBrowserBridgeRegistry(runtime),
         localBrowserAvailable: options.localBrowser === true,
@@ -73,7 +75,12 @@ const DESKTOP = {
   clientCapabilities: [DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY]
 }
 
-async function attachDesktop(dispatcher: RpcDispatcher, options = DESKTOP) {
+async function attachDesktop(
+  dispatcher: RpcDispatcher,
+  options:
+    | typeof DESKTOP
+    | (Omit<typeof DESKTOP, 'clientCapabilities'> & { clientCapabilities: string[] }) = DESKTOP
+) {
   const events: Record<string, unknown>[] = []
   const done = dispatcher.dispatchStreaming(
     {
@@ -286,5 +293,41 @@ describe('desktop browser bridge on orcad', () => {
 
     expect(response).toMatchObject({ ok: true, result: { url: 'local' } })
     expect(events).toHaveLength(1)
+  })
+
+  it.each([
+    {
+      name: 'a cancel-capable desktop hears',
+      capabilities: [DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY],
+      cancels: true
+    },
+    { name: 'an older desktop never hears', capabilities: [], cancels: false }
+  ])('$name that the CLI cancelled a forwarded command', async ({ capabilities, cancels }) => {
+    setDesktopBrowserBridgeHostEnabled(true)
+    const { runtime } = orcadRuntime()
+    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
+    const { events } = await attachDesktop(dispatcher, {
+      ...DESKTOP,
+      clientCapabilities: [DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY, ...capabilities]
+    })
+    const cli = new AbortController()
+
+    const call = dispatcher.dispatch(
+      {
+        id: 'cli-goto',
+        authToken: 'owner',
+        method: 'browser.goto',
+        params: { url: 'https://example.com', worktree: 'path:/srv/app' }
+      },
+      { signal: cli.signal }
+    )
+    await vi.waitFor(() => expect(events).toHaveLength(2))
+    const forwarded = ForwardedEvent.parse(events[1])
+    cli.abort()
+
+    await expect(call).resolves.toMatchObject({ ok: false })
+    expect(events.slice(2)).toEqual(
+      cancels ? [{ type: 'cancel', requestId: forwarded.requestId }] : []
+    )
   })
 })

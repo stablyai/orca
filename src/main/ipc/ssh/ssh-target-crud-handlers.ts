@@ -14,12 +14,15 @@ import {
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { closeOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { rotateSshProviderAuthority } from '../../ssh/ssh-provider-authority'
-import { getSshTargetRegistryStore, setSshTargetMutations } from '../../ssh/ssh-target-registry'
+import {
+  getSshTargetRegistryStore,
+  setSshTargetMutations
+} from '../../ssh/targets/ssh-target-registry'
 import {
   allowsDirectSshRelay,
   isManagedOrcadSshTarget,
   isRuntimeOwnedSshTarget
-} from '../../ssh/ssh-connection-store'
+} from '../../ssh/connection/ssh-connection-store'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-ssh-access'

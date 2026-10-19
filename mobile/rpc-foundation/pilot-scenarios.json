@@ -11984,10 +11984,8 @@
         {
           "complete": "github.listWorkItems#1",
           "params": {
-            "before": {
-              "$undefined": true
-            },
             "limit": 36,
+            "page": 1,
             "query": "is:issue bug",
             "repo": "id:repo-1"
           },

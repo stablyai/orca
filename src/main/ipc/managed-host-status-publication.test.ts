@@ -9,7 +9,7 @@ vi.mock('./ssh/ssh-ipc-context', () => ({
   persistedStore: null,
   portForwardManager: null
 }))
-vi.mock('../ssh/ssh-target-registry', async (importOriginal) => ({
+vi.mock('../ssh/targets/ssh-target-registry', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getSshTargetRegistryStore: () => null
 }))

@@ -12,7 +12,7 @@ import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
 import {
   recoveryRecordMatches,
   sleepingRecordsEquivalentIgnoringCaptureTime
-} from './agent-status-recovery-equivalence'
+} from '../../../../shared/agent-resume-record-equivalence'
 import {
   isValidCompletedAgentHibernationEntry,
   manualSleepCaptureEntry,

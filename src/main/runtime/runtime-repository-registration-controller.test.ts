@@ -1,8 +1,9 @@
 import { runProcessSync } from '@orca/process-host'
-import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import type { Repo } from '../../shared/repo-types'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -136,5 +137,71 @@ describe('RuntimeRepositoryRegistrationController.add through a symlink alias', 
     const added = await controller.add(folderPath, 'folder')
 
     expect(added.id).not.toBe('ssh-row')
+  })
+})
+
+describe('RuntimeRepositoryRegistrationController.add stores the checkout git lists', () => {
+  let root: string
+
+  beforeEach(async () => {
+    // Why realpath: macOS tmpdir is itself a symlink, and the expectations name git's resolved root.
+    root = await realpath(await mkdtemp(join(tmpdir(), 'orca-runtime-add-root-')))
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('stores the real toplevel when a git project is added through a symlink alias', async () => {
+    const repoPath = join(root, 'repo')
+    await mkdir(repoPath)
+    gitInit(repoPath)
+    await symlink(repoPath, join(root, 'repo-link'), dirLinkType)
+    const { controller } = createController()
+
+    const added = await controller.add(join(root, 'repo-link'), 'git')
+
+    expect(normalizeRuntimePathForComparison(added.path)).toBe(
+      normalizeRuntimePathForComparison(repoPath)
+    )
+    expect(added.displayName).toBe('repo')
+  })
+
+  it('stores the toplevel when a subdirectory of a git checkout is added', async () => {
+    const repoPath = join(root, 'mono')
+    await mkdir(join(repoPath, 'pkg', 'web'), { recursive: true })
+    gitInit(repoPath)
+    const { controller } = createController()
+
+    const added = await controller.add(join(repoPath, 'pkg', 'web'), 'git')
+
+    expect(normalizeRuntimePathForComparison(added.path)).toBe(
+      normalizeRuntimePathForComparison(repoPath)
+    )
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps a literal backslash in a POSIX checkout name',
+    async () => {
+      const repoPath = join(root, 'repo\\name')
+      await mkdir(repoPath)
+      gitInit(repoPath)
+      const { controller } = createController()
+
+      const added = await controller.add(repoPath, 'git')
+
+      expect(added.path).toBe(repoPath)
+    }
+  )
+
+  it('keeps the typed path for a folder workspace reached through an alias', async () => {
+    const folderPath = join(root, 'notes')
+    await mkdir(folderPath)
+    await symlink(folderPath, join(root, 'notes-link'), dirLinkType)
+    const { controller } = createController()
+
+    const added = await controller.add(join(root, 'notes-link'), 'folder')
+
+    expect(added.path).toBe(join(root, 'notes-link'))
   })
 })

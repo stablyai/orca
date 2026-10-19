@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('electron', () => ({ ipcMain: { handle: mocks.handle } }))
-vi.mock('../../ssh/ssh-target-registry', () => ({
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getSshTargetRegistryStore: () => ({
     getTarget: () => mocks.state.target,
     addTarget: mocks.addTarget,

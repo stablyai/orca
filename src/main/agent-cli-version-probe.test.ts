@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   isStableCliVersionFrom,
   isStableCliVersionOnLine,
+  observeAgentCliVersion,
   probeAgentCliVersion
 } from './agent-cli-version-probe'
 
@@ -59,16 +60,20 @@ describe('probeAgentCliVersion', () => {
     ['oversized output', { outputTruncated: true }]
   ])('cannot tell after %s', async (_label, result) => {
     prints('1.18.31\n', result)
+    expect(await observeAgentCliVersion(INPUT, anyVersion)).toBe('inconclusive')
     expect(await probeAgentCliVersion(INPUT, anyVersion)).toBe(false)
   })
 
   it('cannot tell when the output names no version, or the program does not start', async () => {
     prints('usage: agent [options]\n')
-    expect(await probeAgentCliVersion(INPUT, anyVersion)).toBe(false)
+    expect(await observeAgentCliVersion(INPUT, anyVersion)).toBe('inconclusive')
     runProcess.mockImplementationOnce(() => {
       throw new Error('spawn ENOENT')
     })
-    expect(await probeAgentCliVersion(INPUT, anyVersion)).toBe(false)
+    expect(await observeAgentCliVersion(INPUT, anyVersion)).toBe('inconclusive')
+    // Only a release it read and refused is a verdict.
+    prints('1.18.31\n')
+    expect(await observeAgentCliVersion(INPUT, () => false)).toBe('unsupported')
   })
 })
 

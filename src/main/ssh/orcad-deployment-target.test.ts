@@ -5,8 +5,8 @@ import {
   parseOrcadLinuxLibc,
   resolveOrcadDeploymentTargetFacts
 } from './orcad-deployment-target'
-import { SshConnection } from './ssh-connection'
-import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
+import { SshConnection } from './connection/ssh-connection'
+import { createCallbacks, createTarget } from './connection/ssh-connection-test-fixtures'
 import { execCommand } from './remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 

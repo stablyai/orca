@@ -1,4 +1,5 @@
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
@@ -20,9 +21,11 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
   const runtime = ctx.deps.runtime
   const acquireWorktreeSpawn = runtime?.acquireWorktreeTerminalSpawn
   ctx.releaseWorktreeSpawn = acquireWorktreeSpawn
-    ? await acquireWorktreeSpawn.call(runtime, args.worktreeId, {
-        refuseSleptWorktree: args.refuseSleptWorktree
-      })
+    ? await acquireWorktreeSpawn.call(
+        runtime,
+        spawnWorktreeTarget(args.worktreeId, args.connectionId),
+        { refuseSleptWorktree: args.refuseSleptWorktree }
+      )
     : undefined
   let awaitingAnotherStart = false
   try {

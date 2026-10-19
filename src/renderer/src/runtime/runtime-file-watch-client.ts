@@ -102,7 +102,8 @@ function createSharedRuntimeFileWatch(
       {
         selector: target.environmentId,
         method: 'files.watch',
-        params: { worktree: toRuntimeWorktreeSelector(worktreeId) },
+        // Why: this client coalesces watcher reads, so it can take the faster host cadence.
+        params: { worktree: toRuntimeWorktreeSelector(worktreeId), batchCadence: 'interval' },
         timeoutMs: 15_000
       },
       {

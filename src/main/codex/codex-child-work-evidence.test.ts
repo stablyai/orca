@@ -548,7 +548,7 @@ describe('Codex child-work evidence', () => {
     expect(byKind('command')).toEqual([expect.objectContaining({ membership: 'live' })])
   })
 
-  it('leaves no record behind a finished shell, so none displaces a finished child', () => {
+  it('leaves no record behind a finished shell', () => {
     const { send, byKind, records, log } = runningChild()
     send(turn('turn/completed', CHILD, 'c1'))
     const before = log.length

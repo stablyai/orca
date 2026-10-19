@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { CLAUDE_PLUGIN_DIR_FLAG, type ClaudeCliFlag } from '../claude/claude-cli-flag-support'
 import {
+  acquireReadyCodexForTest,
   adapterFor,
   fakeCodex,
   identityFor
@@ -99,8 +100,9 @@ describe('inline visuals launch preference', () => {
       prepareVisuals
     })
     const adapter = adapterFor(codex, {}, [], { resolveLaunch })
+    // The thread opens after the acquire returns; each check below reads its `thread/start`.
     const start = (sessionId: string) =>
-      adapter.acquire({
+      acquireReadyCodexForTest(adapter, {
         identity: {
           ...identityFor(sessionId),
           hostId: LOCAL_EXECUTION_HOST_ID,
@@ -129,9 +131,12 @@ describe('inline visuals launch preference', () => {
       expect(disabled.calls.slice(0, openIndex).map(({ method }) => method)).not.toContain(
         'config/read'
       )
-      expect(
-        disabled.calls.find(({ method }) => method === 'thread/start')?.params
-      ).not.toHaveProperty('config')
+      const disabledOpen = disabled.calls.find(({ method }) => method === 'thread/start')
+      const scratchDirOverride = `shell_environment_policy.set.${NATIVE_CHAT_SCRATCH_DIR_ENV}`
+      expect(disabledOpen?.params?.config).not.toHaveProperty([
+        'sandbox_workspace_write.writable_roots'
+      ])
+      expect(disabledOpen?.params?.config).not.toHaveProperty([scratchDirOverride])
       expect(existsSync(nativeChatScratchFolderFor(stateDirectory, 'disabled'))).toBe(false)
       expect(first.closed).toBe(false)
       expect(first.calls).toEqual(firstCalls)

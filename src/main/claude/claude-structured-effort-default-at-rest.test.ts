@@ -17,7 +17,6 @@ import type { StructuredAgentSessionMutationContext } from '../native-chat/agent
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { composeCodexSessionOptionCatalog } from '../codex/codex-structured-model-catalog'
-import { nativeSessionOptionsFromReport } from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
 import {
   ClaudeStructuredSessionAdapter,
   type ClaudeStructuredSessionEvent
@@ -192,16 +191,26 @@ function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
   return readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
 }
 
-function pickerEffort(result: Awaited<ReturnType<typeof readAtRest>>, agent = 'claude') {
+function pickerEffortRow(result: Awaited<ReturnType<typeof readAtRest>>, agent = 'claude') {
   const seed = getAgentSessionOptionCatalog(agent)!
   const state = applyStructuredAgentSessionOptions(
     createStructuredAgentSessionOptionState(agent, seed),
     seed,
     result
   )
-  const effort = structuredAgentSessionOptionSnapshot(state).find((row) => row.id === 'effort')
+  return structuredAgentSessionOptionSnapshot(state).find((row) => row.id === 'effort')
+}
+
+function pickerEffort(result: Awaited<ReturnType<typeof readAtRest>>, agent = 'claude') {
+  const effort = pickerEffortRow(result, agent)
   return effort?.kind.type === 'select' ? effort.kind.currentValue : undefined
 }
+
+/** The chat's own effort under a model its list does not name: one value, read-only. */
+const READ_ONLY_EFFORT = (value: string, label = value) => ({
+  settable: false,
+  kind: { type: 'select', currentValue: value, choices: [{ value, label }] }
+})
 
 describe('Claude effort default at rest', () => {
   it("learns the model's default from a live child's applied effort", async () => {
@@ -246,7 +255,7 @@ describe('Claude effort default at rest', () => {
     expect(catalogDefault(other, 'opus[1m]')).toBe('medium')
   })
 
-  it('offers no effort for a model the catalog does not list, at rest as live', async () => {
+  it('offers no effort menu for a model the catalog does not list, at rest as live', async () => {
     const store = new AgentModelCatalogStore()
     const unlisted = { model: 'claude-unlisted-9', effort: 'medium' }
     // The CLI runs a model its own catalog does not list, as a newer or pinned model can be.
@@ -259,8 +268,12 @@ describe('Claude effort default at rest', () => {
       result.models.find((entry) => entry.id === unlisted.model)
     expect(row(live)).toEqual(expect.objectContaining({ id: unlisted.model, efforts: [] }))
     expect(row(resting)).toEqual(row(live))
-    expect(pickerEffort(live)).toBeUndefined()
-    expect(pickerEffort(resting)).toBeUndefined()
+    // No menu: the chat's own effort shows read-only, named as a listed row names it. The host names
+    // the saved listing's ids for a live child that lists none of its own.
+    expect(pickerEffortRow({ ...live, listedModelIds: resting.listedModelIds })).toMatchObject(
+      READ_ONLY_EFFORT(unlisted.effort, 'Medium')
+    )
+    expect(pickerEffortRow(resting)).toMatchObject(READ_ONLY_EFFORT(unlisted.effort, 'Medium'))
   })
 
   it('lists an unlisted Codex model at rest exactly as its live child does', async () => {
@@ -302,7 +315,10 @@ describe('Claude effort default at rest', () => {
 
     expect(resting.models).toEqual(live.models)
     expect(live.models.find((entry) => entry.id === 'gpt-unlisted')).toMatchObject({ efforts: [] })
-    expect(pickerEffort(resting, 'codex')).toBeUndefined()
+    // The host names the saved listing's ids for a live child that lists none of its own.
+    for (const answer of [resting, { ...live, listedModelIds: resting.listedModelIds }]) {
+      expect(pickerEffortRow(answer, 'codex')).toMatchObject(READ_ONLY_EFFORT('high', 'High'))
+    }
   })
 
   it("keeps a Claude model's effort at rest with no catalog yet, as a live child with none does", async () => {
@@ -401,10 +417,7 @@ describe('Claude effort default at rest', () => {
 
     const reported = (await claudeOpened(adapter, SESSION)).reportedOptions
     expect(reported).not.toHaveProperty('effort')
-    // The record the start persists names the listed row the catalog learned under.
-    const record = restingRecord(
-      nativeSessionOptionsFromReport({ reported: reported, restoreSkipped: [] })
-    )
+    const record = restingRecord({ model: 'opus[1m]' })
     expect(record.options).toEqual({ model: 'opus[1m]' })
     expect((await readAtRest(store, record)).current.effort).toBe('medium')
     expect(record.options).toEqual({ model: 'opus[1m]' })

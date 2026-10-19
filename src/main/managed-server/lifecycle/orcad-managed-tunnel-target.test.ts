@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import {
   OrcadManagedIdentityError,

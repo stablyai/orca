@@ -13,6 +13,7 @@ import {
 } from '../../claude-agent-teams-shim-env'
 import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { SPLIT_PANE_WAIT_TIMEOUT_MESSAGE } from './terminal-split-wait-timeout'
 
 export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRuntimeWithSplitPtyBackedTerminal {
   abstract getTerminalHandleForPaneKey(
@@ -185,7 +186,7 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
         if (idx !== -1) {
           this.graphSyncCallbacks.splice(idx, 1)
         }
-        reject(new Error('Timed out waiting for split pane handle'))
+        reject(new Error(SPLIT_PANE_WAIT_TIMEOUT_MESSAGE))
       }, timeoutMs)
 
       const check = (): void => {

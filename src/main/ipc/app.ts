@@ -26,7 +26,10 @@ import {
   markdownDocumentFromFilePath
 } from '../../shared/markdown-document-paths'
 import { registerMacSymbolicHotkeysProbeHandler } from './macos-symbolic-hotkeys-probe'
-import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
+import {
+  registerRendererShutdownCheckpointHandler,
+  type QuitResumeRecordsFor
+} from './renderer-shutdown-checkpoint'
 import { readMacKeyboardLayoutSnapshot } from './macos-keyboard-layout-snapshot'
 import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-layout-change-notifications'
 import { isProfileStateSaveDelayed } from '../startup/profile-state-save-delay'
@@ -34,6 +37,7 @@ import { readCommandStdout, readKeyboardInputSourceId } from './macos-keyboard-i
 import { getWindowsAdministratorStatus } from '../windows/windows-administrator-status'
 
 type RegisterAppHandlersOptions = {
+  quitResumeRecordsFor?: QuitResumeRecordsFor
   onBeforeRelaunch?: () => void | Promise<void>
   /** Only for app:relaunch, whose app.exit(0) is committed and skips will-quit. */
   onBeforeRelaunchExit?: () => void | Promise<void>
@@ -111,7 +115,7 @@ function resolveDevFeatureWallAssetDir(): string {
 }
 
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
-  registerRendererShutdownCheckpointHandler(store)
+  registerRendererShutdownCheckpointHandler(store, options.quitResumeRecordsFor)
   registerMacKeyboardLayoutChangeNotifications()
   ipcMain.handle('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)
   ipcMain.handle('app:getWindowsAdministratorStatus', getWindowsAdministratorStatus)

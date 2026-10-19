@@ -1,5 +1,5 @@
 import type { PortForwardEntry } from '../../../shared/ssh-types'
-import type { SshConnection } from '../ssh-connection'
+import type { SshConnection } from '../connection/ssh-connection'
 
 export type PortForwardCloseReason =
   | { kind: 'removed' }

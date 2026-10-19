@@ -3,6 +3,7 @@ import { getAllWorktreesFromState } from '@/store/selectors'
 import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import {
+  getLocalExecutionHostLabel,
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId
 } from '../../../../shared/execution-host'
@@ -20,6 +21,7 @@ import type {
   SidebarFeedView
 } from '../../../../shared/sidebar-list/sidebar-feed-rows'
 import type { SmartStampFields } from '../../../../shared/sidebar-list/sort-stamps'
+import { buildPairedServerActivityFacts } from '../../../../shared/sidebar-list/paired-server-activity-facts'
 import { GOLDEN_NOW, folder, group, lineage } from './sidebar-list-golden-factories.test-fixture'
 import { sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
 import {
@@ -130,14 +132,65 @@ export function parityActiveState(
   return { activeWorktreeId: worktreeId, activeWorkspaceExecutionHostId: hostId }
 }
 
+const SERVER_WORKTREE_ID = 'api::/w/api-y'
+
+/** A desktop terminal in a server workspace: the PTY is the server's, which reports it. */
+export function parityServerTerminalState(): Partial<AppState> {
+  return {
+    tabsByWorktree: {
+      [SERVER_WORKTREE_ID]: [
+        {
+          id: 'tab-server',
+          ptyId: 'pty-server',
+          worktreeId: SERVER_WORKTREE_ID,
+          title: 'Terminal 1',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: GOLDEN_NOW
+        }
+      ]
+    },
+    ptyIdsByTabId: { 'tab-server': ['pty-server'] }
+  }
+}
+
+/** A desktop browser tab in a server workspace: the server never sees it. */
+export function parityServerBrowserTabState(): Partial<AppState> {
+  return {
+    browserTabsByWorktree: {
+      [SERVER_WORKTREE_ID]: [
+        {
+          id: 'browser-server',
+          worktreeId: SERVER_WORKTREE_ID,
+          url: 'about:blank',
+          title: '',
+          loading: false,
+          faviconUrl: null,
+          canGoBack: false,
+          canGoForward: false,
+          loadError: null,
+          createdAt: GOLDEN_NOW
+        }
+      ]
+    }
+  }
+}
+
 /**
- * The feed domains main would publish for this store, read through the same projections the
- * shadow comparison holds equal to main's producers in every e2e run.
+ * The feed domains main would publish for this store, read through the window-side projections
+ * the shadow comparison held equal to main's producers before the window read main's feed.
  */
 export function feedDomainsFromWindowState(state: AppState): SidebarInputsFeedDomain[] {
   const worktrees = getAllWorktreesFromState(state)
   const servers = readWindowPairedServerHosts(state, new Set([SERVER_HOST_ID]))
+  const windowActivity = readWindowWorkspaceActivityFacts(state, GOLDEN_NOW)
   const serverRows = readWindowPairedServerRows(state, new Set(servers.keys()))
+  // The server reports the terminals and agents the desktop runs in its workspaces.
+  const reportedRows = [...serverRows.values()].map((row) => {
+    const facts = windowActivity.get(row.worktreeId)
+    return { ...row, activity: { terminal: facts?.terminal ?? null, agent: facts?.agent ?? null } }
+  })
   const domain = (name: string, read: () => Record<string, unknown>): SidebarInputsFeedDomain => ({
     name,
     read,
@@ -154,11 +207,17 @@ export function feedDomainsFromWindowState(state: AppState): SidebarInputsFeedDo
         })
       )
     ),
-    domain('activity', () =>
-      Object.fromEntries(
-        toLocallyOwnedRows(state, readWindowWorkspaceActivityFacts(state, GOLDEN_NOW))
-      )
-    ),
+    domain('activity', () => ({
+      // The window's browser and chat tabs, as its saved session for the server holds them.
+      ...buildPairedServerActivityFacts(
+        [{ hostId: SERVER_HOST_ID, freshness: 'live', rows: reportedRows }],
+        () => ({
+          browserTabsByWorktree: state.browserTabsByWorktree,
+          unifiedTabs: state.unifiedTabsByWorktree
+        })
+      ),
+      ...Object.fromEntries(toLocallyOwnedRows(state, windowActivity))
+    })),
     domain('review', () => ({
       ...buildPairedServerReviewFacts(
         [{ hostId: SERVER_HOST_ID, rows: [...serverRows.values()] }],
@@ -217,7 +276,8 @@ export function phoneInputsFromWindowState(state: AppState): {
       workspaceStatuses: state.workspaceStatuses,
       pinnedDisplayPolicy: getPinnedWorktreeDisplayPolicy(state.settings),
       defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
-      hostLabelOverrides: getHostDisplayLabelOverrides(state.settings)
+      hostLabelOverrides: getHostDisplayLabelOverrides(state.settings),
+      localHostLabel: getLocalExecutionHostLabel()
     }
   }
 }

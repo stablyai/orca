@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration-manifest-validation'
-import type { OrcadMigrationManifest } from '../../shared/orcad-migration-manifest'
-import { ORCAD_MIGRATION_SOURCE_KIND_UNKNOWN } from '../../shared/orcad-migration-source-kind'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest'
+import { ORCAD_MIGRATION_SOURCE_KIND_UNKNOWN } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import {
   ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY

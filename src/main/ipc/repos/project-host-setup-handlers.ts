@@ -14,6 +14,8 @@ import type {
 } from '../../../shared/project-types'
 import { getProjectIdForProviderIdentity } from '../../../shared/project-host-setup-projection'
 import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
+import { assertImportedFolderRemoteMatchesProject } from '../../../shared/imported-folder-project-identity'
+import { readCurrentGitRemoteIdentity } from '../../repo-git-remote-identity'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { updateProjectHostSetupWithProvenKind } from '../../folder-repo-git-conversion'
@@ -46,6 +48,7 @@ function buildProjectHostSetupResult(store: Store, repo: Repo): ProjectHostSetup
 function alignRepoWithRequestedProject(
   store: Store,
   repo: Repo,
+  folderRemote: Pick<Repo, 'gitRemoteIdentity'>,
   projectId: string,
   setupMethod: ProjectHostSetupExistingFolderArgs['setupMethod'] = 'imported-existing-folder',
   requestedProviderIdentity?: ProjectHostSetupExistingFolderArgs['projectProviderIdentity']
@@ -63,8 +66,9 @@ function alignRepoWithRequestedProject(
     if (!identity || getProjectIdForProviderIdentity(identity) !== projectId) {
       throw new Error('Imported folder does not match the selected project identity.')
     }
+    assertImportedFolderRemoteMatchesProject(folderRemote, identity)
     // Why: stamp the selected project's provider identity when the folder lacks upstream, so projection can merge it.
-    const updated = store.updateRepo(repo.id, {
+    const updated = store.updateRepo(repo, {
       upstream: {
         owner: identity.owner,
         repo: identity.repo,
@@ -77,7 +81,7 @@ function alignRepoWithRequestedProject(
     repo = updated
     setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
   }
-  const updated = store.updateRepo(repo.id, { projectHostSetupMethod: setupMethod })
+  const updated = store.updateRepo(repo, { projectHostSetupMethod: setupMethod })
   if (!updated) {
     throw new Error(
       `Project setup repo disappeared before setup metadata could be linked: ${repo.id}`
@@ -114,11 +118,11 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
         rawArgs,
         'project_host_setup_update_invalid_args'
       )
-      assertWslMoveHostSetupIdWritable(store, args.setupId)
+      assertWslMoveHostSetupIdWritable(store, args)
       const result = await updateProjectHostSetupWithProvenKind(
         store,
         (setupArgs) => {
-          assertWslMoveHostSetupIdWritable(store, setupArgs.setupId)
+          assertWslMoveHostSetupIdWritable(store, setupArgs)
           return store.updateProjectHostSetup(setupArgs)
         },
         args
@@ -143,7 +147,7 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
         rawArgs,
         'project_host_setup_delete_invalid_args'
       )
-      assertWslMoveHostSetupIdWritable(store, args.setupId)
+      assertWslMoveHostSetupIdWritable(store, args)
       const result = store.deleteProjectHostSetup(args)
       if (!result) {
         throw new Error(`Project host setup not found: ${args.setupId}`)
@@ -180,11 +184,16 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
       if ('error' in result) {
         throw new Error(result.error)
       }
+      // Why: a registered row's stored remote can predate a remote the user has since added.
+      const folderRemote = result.alreadyExisted
+        ? await readCurrentGitRemoteIdentity(result.repo)
+        : result.repo
       let aligned: ProjectHostSetupResult
       try {
         aligned = alignRepoWithRequestedProject(
           store,
           result.repo,
+          folderRemote,
           args.projectId,
           args.setupMethod,
           args.projectProviderIdentity
@@ -192,7 +201,7 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
       } catch (err) {
         // Why: an import that cannot be linked must not leave a new repo registration or authorization root behind.
         if (!result.alreadyExisted) {
-          store.removeProjectForHost(result.repo.id, getRepoExecutionHostId(result.repo))
+          store.removeProjectForHost(result.repo)
           invalidateAuthorizedRootsCache()
         }
         throw err

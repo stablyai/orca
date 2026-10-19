@@ -47,18 +47,23 @@ export class RuntimeRepositoryRegistrationController {
     if (gitInfo && !gitInfo.isRepo) {
       throw new Error(`Not a valid git repository: ${path}`)
     }
+    // Why: git lists the main checkout at its resolved toplevel; storing a symlink alias or a
+    // subdirectory instead hides that checkout as external, so the project shows no workspaces.
+    const repoPath = gitInfo?.rootPath ?? path
     const sameHostRepos = store
       .getRepos()
       .filter((repo) => runtimeRepoMatchesExecutionHost(repo, executionHostId))
     // Why: git's toplevel is already resolved through symlinks, so an alias of a tracked checkout finds it.
     const existing =
-      sameHostRepos.find((repo) => runtimePathsEqual(repo.path, path)) ??
+      sameHostRepos.find(
+        (repo) => runtimePathsEqual(repo.path, path) || runtimePathsEqual(repo.path, repoPath)
+      ) ??
       (await findProjectAtSameRealPath(
         // Why: SSH rows name paths on another machine; resolving them here could match an unrelated local dir.
         sameHostRepos.filter(
           (repo) => parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'ssh'
         ),
-        gitInfo?.rootPath ?? path
+        repoPath
       ))
     if (existing) {
       if (
@@ -66,7 +71,7 @@ export class RuntimeRepositoryRegistrationController {
         parseExecutionHostId(executionHostId)?.kind === 'runtime'
       ) {
         const adopted =
-          store.updateRepo(existing.id, { executionHostId }) ??
+          store.updateRepo(existing, { executionHostId }) ??
           ({ ...existing, executionHostId } as Repo)
         this.invalidate(existing.id)
         return adopted
@@ -77,14 +82,14 @@ export class RuntimeRepositoryRegistrationController {
     // validated and will read `path` in this process. A `runtime:` stamp is how a paired client
     // addresses the row, not a second machine holding the files.
     const detected = await detectRepoIconAndUpstream({
-      repoPath: path,
+      repoPath,
       kind,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
     const repo: Repo = {
       id: randomUUID(),
-      path,
-      displayName: displayName?.trim() || getRepoName(path),
+      path: repoPath,
+      displayName: displayName?.trim() || getRepoName(repoPath),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       ...(executionHostId != null ? { executionHostId } : {}),
       ...detected,

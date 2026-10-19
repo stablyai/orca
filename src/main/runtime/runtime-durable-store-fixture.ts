@@ -7,7 +7,10 @@ import {
   type PaneLayoutChange,
   type TerminalPaneAdmission
 } from '../persistence/terminal-topology/terminal-pane-admission'
-import type { CommandOf } from '../../shared/workspace-layout/workspace-layout-command-types'
+import type {
+  CommandOf,
+  LayoutRefusalCode
+} from '../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { clearReplacedPaneBinding } from '../persistence/loading-store/replaced-pane-binding'
 
@@ -102,7 +105,17 @@ export function withRuntimePaneAdmission<
   return Object.assign(store, {
     admitTerminalPane: async (admission: TerminalPaneAdmission, hostId?: string) =>
       commit(hostId, (session) => admitPaneToSession(resolveHostId(hostId), session, admission)),
-    withdrawTerminalPane: async (pane: CommandOf<'closePane'>, hostId?: string) =>
-      commit(hostId, (session) => withdrawPaneFromSession(resolveHostId(hostId), session, pane))
+    withdrawTerminalPane: async (
+      pane: CommandOf<'closePane'>,
+      hostId?: string,
+      stillStarting?: () => boolean
+    ): Promise<LayoutRefusalCode | 'bound' | 'starting' | null> =>
+      commit(hostId, (session) =>
+        stillStarting && session.terminalLayoutsByTabId?.[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId]
+          ? { value: 'bound' as const, session: null }
+          : stillStarting?.()
+            ? { value: 'starting' as const, session: null }
+            : withdrawPaneFromSession(resolveHostId(hostId), session, pane)
+      )
   })
 }

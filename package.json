@@ -14,7 +14,7 @@
     "audit:perf": "oxlint --config config/oxlint-performance-audit.json --format json src",
     "test:perf:contracts": "vitest run --config config/vitest.performance.config.ts",
     "format": "oxfmt --write .",
-    "lint": "oxlint && pnpm run audit:anti-slop && pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run check:reliability-gates && pnpm run check:dead-classes && pnpm run check:max-lines-ratchet && pnpm run check:ts-nocheck-ratchet && pnpm run check:runtime-electron-ratchet && pnpm run check:focus-read-ratchet && pnpm run check:layout-writer-ratchets && pnpm run check:deprecated-runtime-owner-ratchet && pnpm run check:path-literal-ratchet && pnpm run check:legacy-relay-fence-ratchet && pnpm run check:readme-local-links && pnpm run check:node-runtime-pin && pnpm run verify:rpc-params-catalog && pnpm run verify:acp-protocol && pnpm run verify:bundled-skill-guides && pnpm run verify:skill-bundle-manifest && pnpm run verify:localization-catalogs && pnpm run verify:localization-extraction && pnpm run verify:localization-coverage && pnpm run check:process-host-imports && pnpm run check:main-sync-spawn-ratchet && pnpm run check:compat-boundary-imports",
+    "lint": "oxlint && pnpm run audit:anti-slop && pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run check:reliability-gates && pnpm run check:dead-classes && pnpm run check:max-lines-ratchet && pnpm run check:ts-nocheck-ratchet && pnpm run check:runtime-electron-ratchet && pnpm run check:focus-read-ratchet && pnpm run check:layout-writer-ratchets && pnpm run check:path-literal-ratchet && pnpm run check:legacy-relay-fence-ratchet && pnpm run check:unproven-pty-retirement-ratchet && pnpm run check:id-only-store-write-ratchet && pnpm run check:readme-local-links && pnpm run check:node-runtime-pin && pnpm run verify:rpc-params-catalog && pnpm run verify:acp-protocol && pnpm run verify:bundled-skill-guides && pnpm run verify:skill-bundle-manifest && pnpm run verify:localization-catalogs && pnpm run verify:localization-extraction && pnpm run verify:localization-coverage && pnpm run check:process-host-imports && pnpm run check:main-sync-spawn-ratchet && pnpm run check:compat-boundary-imports",
     "audit:code-quality": "pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run audit:react-doctor",
     "audit:code-quality:native": "oxlint --config config/oxlint-code-quality-native-plugins.json src config tests mobile --deny-warnings",
     "audit:code-quality:type-aware": "oxlint --type-aware --config config/oxlint-code-quality-type-aware.json src config tests --deny-warnings",
@@ -38,9 +38,10 @@
     "check:reliability-gates": "node config/scripts/check-reliability-gates.mjs",
     "check:max-lines-ratchet": "node config/scripts/check-max-lines-ratchet.mjs",
     "check:ts-nocheck-ratchet": "node config/scripts/check-ts-nocheck-ratchet.mjs",
-    "check:deprecated-runtime-owner-ratchet": "node config/scripts/check-deprecated-runtime-owner-ratchet.mjs",
     "check:path-literal-ratchet": "node config/scripts/check-path-literal-ratchet.mjs",
     "check:legacy-relay-fence-ratchet": "node config/scripts/check-legacy-relay-fence-ratchet.mjs",
+    "check:unproven-pty-retirement-ratchet": "node config/scripts/check-unproven-pty-retirement-ratchet.mjs",
+    "check:id-only-store-write-ratchet": "node config/scripts/check-id-only-store-write-ratchet.mjs",
     "check:worktree-id-composer-ratchet": "node config/scripts/check-worktree-id-composer-ratchet.mjs",
     "check:e2e-typecheck-ratchet": "node config/scripts/check-e2e-typecheck-ratchet.mjs",
     "check:runtime-electron-ratchet": "node config/scripts/check-runtime-electron-ratchet.mjs",
@@ -123,7 +124,7 @@
     "postinstall": "pnpm run build:packages && node config/scripts/rebuild-native-deps.mjs",
     "rebuild:electron": "node config/scripts/rebuild-native-deps.mjs",
     "reclaim-space": "node config/scripts/reclaim-worktree-space.mjs",
-    "rebuild:node": "pnpm rebuild node-pty",
+    "rebuild:node": "node config/scripts/ensure-native-runtime.mjs --runtime=node --force",
     "build:unpack": "pnpm run build && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --dir",
     "build:win": "pnpm run build:desktop && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --win",
     "build:icons": "bash resources/icon-source/generate.sh",
@@ -255,7 +256,7 @@
     "@tiptap/starter-kit": "3.31.3",
     "@types/hast": "^3.0.4",
     "@types/mdast": "^4.0.4",
-    "@types/node": "^25.6.0",
+    "@types/node": "^24.19.2",
     "@types/proper-lockfile": "^4.1.4",
     "@types/qrcode": "^1.5.6",
     "@types/react": "~19.2.18",
@@ -362,7 +363,7 @@
   "engines": {
     "node": "24"
   },
-  "packageManager": "pnpm@12.8.1+sha512.f64ba907507f5ceafe06c8d38e6052d0179444580ec1279ddd5bfc11cb48aa8a2644b66598e07e761da84872a9fc57d5f902b87fa49d024198d558612aabbe45",
+  "packageManager": "pnpm@12.14.0+sha512.c18ba6d87993d3d164cb5e8948f32b2c06ee854487e06cd8d86781342fb3e5bb4634367034711e86802baa9c37bea906ce1929ad08d70884c97d801df13389a6",
   "reactDoctor": {
     "ignore": {
       "overrides": [

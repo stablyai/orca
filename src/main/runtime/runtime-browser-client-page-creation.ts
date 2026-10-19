@@ -1,4 +1,4 @@
-import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../shared/browser-client-automation-protocol'
 import { browserNetworkExecutionHostKey } from '../browser/browser-network-execution-route'
 import type { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'

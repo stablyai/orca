@@ -4,7 +4,7 @@
  */
 import { OrcadStdioBridgePortForwardProvider } from './orcad-stdio-bridge-provider'
 import { rememberOrcadTunnelTransport } from '../../ssh/orcad-tunnel-transport-memo'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type {
   PortForwardStartOptions,
   SshPortForwardProvider,

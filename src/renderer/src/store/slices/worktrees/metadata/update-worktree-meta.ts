@@ -33,6 +33,7 @@ import {
   resolveGitHubReviewPushTarget
 } from './hosted-review-push-target'
 import { persistWorktreeMeta } from './worktree-meta-persist'
+import { withPendingSidebarRowWrites } from '@/lib/sidebar-pending-layer'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
@@ -42,7 +43,7 @@ export function createUpdateWorktreeMeta(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['updateWorktreeMeta'] {
-  return async (worktreeId, updates, options) => {
+  const update: WorktreeSlice['updateWorktreeMeta'] = async (worktreeId, updates, options) => {
     const shouldApplyUpdate = options?.shouldApply
     const requestedHostId = options?.executionHostId
     const existingWorktree = findKnownWorktreeById(get(), worktreeId, requestedHostId)
@@ -298,4 +299,19 @@ export function createUpdateWorktreeMeta(
     }
     return { ok: true }
   }
+  // A conditional write may not apply, so only an unconditional one shows ahead of main.
+  return (worktreeId, updates, options) =>
+    options?.shouldApply
+      ? update(worktreeId, updates, options)
+      : withPendingSidebarRowWrites(
+          () => [
+            {
+              worktreeId,
+              updates,
+              executionHostId:
+                options?.executionHostId ?? findKnownWorktreeById(get(), worktreeId)?.hostId
+            }
+          ],
+          () => update(worktreeId, updates, options)
+        )
 }

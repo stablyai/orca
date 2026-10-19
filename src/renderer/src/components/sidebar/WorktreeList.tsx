@@ -25,15 +25,13 @@ import { EMPTY_PROJECT_GROUPS } from './worktree-list/viewport/viewport-props'
 import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from './worktree-list/drag/drop-commit-context'
 import { useAgentSendTargetWorktreeId } from './worktree-list/listing/use-agent-send-target'
 import { useProjectGroupDialogs } from './worktree-list/rows/use-project-group-dialogs'
-import { useSidebarExternalWorktreeCards } from './worktree-list/listing/use-external-worktree-cards'
-import { useSidebarHostVisibleScope } from './worktree-list/listing/use-host-visible-scope'
 import { useSidebarRevealRequests } from './worktree-list/navigation/use-reveal-requests'
-import { useSidebarSectionRows } from './worktree-list/listing/use-section-rows'
 import { useSidebarWorktreeFilters } from './worktree-list/listing/use-filters'
 import { useSidebarWorktreeSelection } from './worktree-list/navigation/use-selection'
-import { useSidebarWorktreeSortOrder } from './worktree-list/listing/use-sort-order'
-import { useOrderHeldWhileEngaged } from './worktree-list/listing/use-order-hold'
-import { useVisibleSidebarWorktrees } from './worktree-list/listing/use-visible-worktrees'
+import { useWindowSidebarListModel } from './worktree-list/listing/use-window-list-model'
+import { useMainSidebarListModel } from './worktree-list/listing/use-main-list-model'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
@@ -47,6 +45,12 @@ type WorktreeListProps = {
   onWorkspaceBoardDragPreviewCommit?: () => void
   onWorkspaceBoardDragPreviewCancel?: () => void
 }
+
+// Switch point: this host's window lists main's inputs; a paired web client builds its own view.
+const useSidebarListModel =
+  ORCA_SIDEBAR_INPUTS_IS_MAIN && !isPairedWebClientWindow()
+    ? useMainSidebarListModel
+    : useWindowSidebarListModel
 
 const WorktreeList = React.memo(function WorktreeList({
   scrollOffsetRef,
@@ -108,61 +112,31 @@ const WorktreeList = React.memo(function WorktreeList({
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState, hasFilters, clearFilters, revealWorkspaceFilters } =
     useSidebarWorktreeFilters()
-  const sortedIds = useOrderHeldWhileEngaged(
-    useSidebarWorktreeSortOrder({ repoMap, sortBy }),
-    sortBy
-  )
   const manualOrderCatalog = useMemo(
     () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
     [allWorktrees, folderWorkspaces]
   )
-  const { visibleWorktrees, pairedDeviceIdsByEnvironment } = useVisibleSidebarWorktrees({
+  const { visibleWorktrees, visibleScope, externalWorktreeCards, rowModel } = useSidebarListModel({
     filterState,
     sortBy,
-    sortedIds,
-    repoMap,
-    worktreeLineageById,
-    defaultHostId,
-    agentSendTargetWorktreeId
-  })
-  const visibleScope = useSidebarHostVisibleScope({
-    filterState,
-    defaultHostId,
-    repos,
-    projectGroups,
-    folderWorkspaces,
-    pairedDeviceIdsByEnvironment
-  })
-  const externalWorktreeCards = useSidebarExternalWorktreeCards({
-    repos,
-    visibleReposForRows: visibleScope.visibleReposForRows,
-    detectedWorktreesByRepo,
-    filterRepoIds: filterState.filterRepoIds
-  })
-  const rowModel = useSidebarSectionRows({
     groupBy,
     projectOrderBy,
     pinnedDisplayPolicy,
     defaultHostId,
-    worktrees: visibleWorktrees,
+    workspaceStatuses,
+    settings,
+    collapsedGroups,
     repos,
     repoMap,
+    allWorktrees,
     worktreeMap,
     worktreeLineageById,
-    prCache,
-    settings,
-    workspaceStatuses,
-    effectiveCollapsedGroups: collapsedGroups,
-    agentSendTargetWorktreeId,
+    projectGroups,
+    folderWorkspaces,
     projectGrouping,
-    visibleReposForRows: visibleScope.visibleReposForRows,
-    visibleProjectGroupsForRows: visibleScope.visibleProjectGroupsForRows,
-    visibleFolderWorkspacesForRows: visibleScope.visibleFolderWorkspacesForRows,
-    importedWorktreesByRepo: externalWorktreeCards.importedWorktreesByRepo,
-    newExternalWorktreesInboxByRepo: externalWorktreeCards.newExternalWorktreesInboxByRepo,
-    filterRepoIds: filterState.filterRepoIds,
-    visibleWorkspaceHostIds: filterState.visibleWorkspaceHostIds,
-    workspaceHostScope: filterState.workspaceHostScope
+    detectedWorktreesByRepo,
+    prCache,
+    agentSendTargetWorktreeId
   })
   const effectiveCollapsedGroups = rowModel.effectiveCollapsedGroups
   const selection = useSidebarWorktreeSelection({

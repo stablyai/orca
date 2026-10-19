@@ -26,8 +26,7 @@ import {
 import { openAbsoluteTabEntryFile } from './tab-create-entry-absolute-file'
 import {
   getTabEntryAllowAbsolutePaths,
-  getTabEntryFileOperationContext,
-  isTabEntryAbsolutePathAllowed
+  getTabEntryFileOperationContext
 } from './tab-create-entry-local-path'
 import type { TabEntryLocalPlatform } from './tab-create-entry-path-validation'
 export {
@@ -48,6 +47,7 @@ export {
   isTabEntryAbsolutePathAllowed
 } from './tab-create-entry-local-path'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+import { openHtmlFilePreview } from '@/lib/open-html-file-preview'
 
 export type TabCreateEntryArgs = {
   classification?: TabEntryActionClassification
@@ -60,6 +60,7 @@ export type TabCreateEntryArgs = {
 export type TabEntryOperations = {
   createRuntimePath: typeof createRuntimePath
   openWorkspaceBrowserTab: typeof openWorkspaceBrowserTab
+  openHtmlFilePreview: typeof openHtmlFilePreview
   openFile: (
     file: Omit<OpenFile, 'id' | 'isDirty'>,
     options?: { preview?: boolean; targetGroupId?: string }
@@ -74,8 +75,7 @@ type OpenTabEntryWithOperationsArgs = {
   fileList: RuntimeFileListState
   worktreeId: string
   groupId: string
-  worktreePath: string
-  runtimeContext: RuntimeFileOperationArgs
+  getFileContext: () => { worktreePath: string; runtimeContext: RuntimeFileOperationArgs }
   allowAbsolutePaths: boolean
   localPlatform: TabEntryLocalPlatform
   searchEngine: SearchEngine
@@ -185,11 +185,10 @@ export async function openTabEntryWithOperations({
   localPlatform,
   operations,
   query,
-  runtimeContext,
+  getFileContext,
   searchEngine,
   searchUrlOptions,
-  worktreeId,
-  worktreePath
+  worktreeId
 }: OpenTabEntryWithOperationsArgs): Promise<void> {
   const entryContext: TabEntryOptionsContext = { allowAbsolutePaths, localPlatform, searchEngine }
   const classification =
@@ -198,12 +197,23 @@ export async function openTabEntryWithOperations({
     throw new Error(classification.message)
   }
 
+  if (classification.kind === 'html-file-url') {
+    operations.openHtmlFilePreview({
+      filePath: classification.filePath,
+      worktreeId,
+      targetGroupId: groupId
+    })
+    return
+  }
+
   if (isNetworkTabEntry(classification)) {
     await operations.openWorkspaceBrowserTab(
       getNetworkTabRequest(classification, { worktreeId, groupId }, searchUrlOptions)
     )
     return
   }
+
+  const { worktreePath, runtimeContext } = getFileContext()
 
   if (classification.kind === 'absolute-file') {
     if (!allowAbsolutePaths) {
@@ -260,33 +270,32 @@ export async function openTabEntryWithOperations({
 export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
   const state = useAppStore.getState()
   const searchUrlOptions = { kagiSessionLink: state.browserKagiSessionLink }
-  if (args.classification && isNetworkTabEntry(args.classification)) {
-    await openWorkspaceBrowserTab(getNetworkTabRequest(args.classification, args, searchUrlOptions))
-    return
-  }
-  const searchEngine = state.browserDefaultSearchEngine ?? DEFAULT_SEARCH_ENGINE
-  const worktree = state.getKnownWorktreeById(args.worktreeId)
-  if (!worktree) {
-    throw new Error('No active worktree.')
-  }
-  const runtimeContext = getTabEntryFileOperationContext(state, args.worktreeId, worktree.path)
-  const allowAbsolutePaths = isTabEntryAbsolutePathAllowed(runtimeContext)
+  const allowAbsolutePaths = getTabEntryAllowAbsolutePaths(state, args.worktreeId)
   const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'
   await openTabEntryWithOperations({
     query: args.query,
     fileList: args.fileList,
     worktreeId: args.worktreeId,
     groupId: args.groupId,
-    worktreePath: worktree.path,
-    runtimeContext,
+    getFileContext: () => {
+      const worktree = state.getKnownWorktreeById(args.worktreeId)
+      if (!worktree) {
+        throw new Error('No active worktree.')
+      }
+      return {
+        worktreePath: worktree.path,
+        runtimeContext: getTabEntryFileOperationContext(state, args.worktreeId, worktree.path)
+      }
+    },
     allowAbsolutePaths,
     localPlatform,
-    searchEngine,
+    searchEngine: state.browserDefaultSearchEngine ?? DEFAULT_SEARCH_ENGINE,
     searchUrlOptions,
     classification: args.classification,
     operations: {
       createRuntimePath,
       openWorkspaceBrowserTab,
+      openHtmlFilePreview,
       openFile: state.openFile,
       statRuntimePath,
       statUserOpenedPath,

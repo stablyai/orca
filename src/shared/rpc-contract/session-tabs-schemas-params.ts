@@ -111,10 +111,6 @@ export const TerminalPaneLayoutNodeSchema = z
     })
   )
 
-const PaneLayoutEditIntentSchema = z.literal('gesture')
-
-export type PaneLayoutEditIntent = z.infer<typeof PaneLayoutEditIntentSchema>
-
 export const UpdatePaneLayout = WorktreeTabSelector.extend({
   tabId: z
     .unknown()
@@ -124,8 +120,9 @@ export const UpdatePaneLayout = WorktreeTabSelector.extend({
   expandedLeafId: z.string().max(128).nullable().optional(),
   chatLeafId: z.string().max(128).nullable().optional(),
   titlesByLeafId: z.record(z.string(), z.string()).optional(),
-  // Why: marks a user's layout gesture; .catch keeps a newer client's unknown intent from failing the edit.
-  intent: PaneLayoutEditIntentSchema.optional().catch(undefined)
+  // Why: panes the user renamed in this edit; the rest of titlesByLeafId is a resend, not a rename.
+  // An older client's `intent: 'gesture'` tag is stripped unread: renamedLeafIds is the one delta.
+  renamedLeafIds: z.array(z.string().max(128)).max(64).optional().catch(undefined)
 })
 
 export const SetTabProps = WorktreeTabSelector.extend({

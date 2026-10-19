@@ -29,7 +29,8 @@ describe('buildProjectSectionCatalog', () => {
       repos: [repo('r1'), repo('r1', 'runtime:m4air')],
       projects: [],
       setups: [],
-      projectOrderBy: 'manual'
+      projectOrderBy: 'manual',
+      projectGroups: undefined
     }
     const catalog = buildProjectSectionCatalog(
       served,

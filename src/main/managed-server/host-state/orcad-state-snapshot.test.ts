@@ -4,9 +4,7 @@ import {
   captureOrcadStateSnapshotCommand,
   clearOrcadStateSnapshotMembersCommand,
   compareOrcadStateSnapshotCommand,
-  newestStateMtimeCommand,
   orcadSnapshotDirName,
-  parseNewestStateMtimeSeconds,
   parseOrcadSnapshotCapture,
   parseOrcadSnapshotPresence,
   parseOrcadSnapshotRestore,
@@ -14,6 +12,7 @@ import {
   restoreOrcadStateSnapshotCommand,
   ORCAD_STATE_MUTATION_DEADLINE_SECONDS
 } from './orcad-state-snapshot'
+import { newestStateMtimeCommand, parseNewestStateMtimeSeconds } from './orcad-state-newest-mtime'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { ORCAD_SNAPSHOT_EXCLUDED, ORCAD_SNAPSHOT_MEMBERS } from './orcad-state-snapshot-members'
 
@@ -23,6 +22,11 @@ const ROOT = '/home/u/.orca'
 const SNAP = '/home/u/.orca-remote/orcad-state-snapshots/pre-0.2.0+bb01-1000'
 const BASE = '/home/u/.orca-remote'
 
+/** Every `for m in <members>;` list a command walks. */
+function memberLists(command: string): string[] {
+  return [...command.matchAll(/for m in ([^;]+);/g)].map((match) => match[1])
+}
+
 /** The work inside the lock-and-deadline wrapper, with its quoting undone. */
 function innerScript(command: string): string {
   return command.replaceAll(`'\\''`, `'`)
@@ -30,20 +34,23 @@ function innerScript(command: string): string {
 
 describe('capturing the pre-activation snapshot', () => {
   it('captures the profile state a rollback needs', () => {
-    const command = captureOrcadStateSnapshotCommand(posix, ROOT, SNAP, BASE)
-    for (const member of ORCAD_SNAPSHOT_MEMBERS) {
-      expect(command).toContain(`'${member}'`)
-    }
+    expect(memberLists(captureOrcadStateSnapshotCommand(posix, ROOT, SNAP, BASE))).toEqual([
+      ORCAD_SNAPSHOT_MEMBERS.join(' ')
+    ])
   })
 
   // The live daemon owns <root>/daemon and outlives every restart. Restoring a stale copy of
   // its socket, PID record and token would break the fence that keeps its terminals adoptable.
-  it.each(ORCAD_SNAPSHOT_EXCLUDED)('never captures %s', (excluded) => {
-    expect(captureOrcadStateSnapshotCommand(posix, ROOT, SNAP, BASE)).not.toContain(`'${excluded}'`)
-  })
-
-  it.each(ORCAD_SNAPSHOT_EXCLUDED)('never removes or restores over %s', (excluded) => {
-    expect(restoreOrcadStateSnapshotCommand(posix, ROOT, SNAP, BASE)).not.toContain(`'${excluded}'`)
+  it.each(ORCAD_SNAPSHOT_EXCLUDED)('never captures, removes or restores over %s', (excluded) => {
+    const commands = [
+      captureOrcadStateSnapshotCommand(posix, ROOT, SNAP, BASE),
+      restoreOrcadStateSnapshotCommand(posix, ROOT, SNAP, BASE),
+      clearOrcadStateSnapshotMembersCommand(posix, ROOT, BASE),
+      compareOrcadStateSnapshotCommand(posix, ROOT, SNAP, BASE)
+    ]
+    for (const list of commands.flatMap(memberLists)) {
+      expect(list.split(' ')).not.toContain(excluded)
+    }
   })
 
   it('writes the archive under a temp name and renames, so a killed deploy leaves no torn tar', () => {
@@ -56,8 +63,11 @@ describe('capturing the pre-activation snapshot', () => {
     ['CAPTURED', 'captured'],
     ['EMPTY', 'empty'],
     ['tar: broken', 'failed'],
-    ['', 'failed']
-  ])('parses %s as %s', (output, expected) => {
+    ['', 'failed'],
+    // A gateway that merges stderr into stdout appends bash's job notice after the verdict (#30491).
+    ['CAPTURED\r\nsh: line 1:  2468 Terminated   ( while sleep 60 ... )\n', 'captured'],
+    ['FAILED\nCAPTURED-looking noise', 'failed']
+  ])('parses %j as %s', (output, expected) => {
     expect(parseOrcadSnapshotCapture(output)).toBe(expected)
   })
 
@@ -75,7 +85,10 @@ describe('the host-side guard around every state mutation', () => {
     ['clear', () => clearOrcadStateSnapshotMembersCommand(posix, ROOT, BASE)]
   ])('%s runs under the host lock and a host-enforced deadline', (_label, build) => {
     const command = build()
-    expect(command).toContain(`timeout -s KILL ${ORCAD_STATE_MUTATION_DEADLINE_SECONDS} sh -c`)
+    expect(command).toContain(
+      `orca_deadline="timeout -s KILL ${ORCAD_STATE_MUTATION_DEADLINE_SECONDS}"`
+    )
+    expect(command).toContain('orca_state_group $orca_deadline sh -c')
     expect(innerScript(command)).toContain(`lock='${BASE}/orcad-state-mutation.lock'`)
     expect(command).toContain('echo STATE_MUTATION_DEADLINE')
   })
@@ -84,9 +97,9 @@ describe('the host-side guard around every state mutation', () => {
 describe('restoring the snapshot', () => {
   it('proves the archive extracts before clearing the live members', () => {
     const command = innerScript(restoreOrcadStateSnapshotCommand(posix, ROOT, SNAP, BASE))
-    const extract = command.indexOf(`tar -C '${ROOT}/.orcad-state-restore-stage'`)
+    const extract = command.indexOf('tar -C "$stage" -xf "$archive"')
     expect(extract).toBeGreaterThan(-1)
-    expect(extract).toBeLessThan(command.indexOf(`rm -rf '${ROOT}'/'profiles'`))
+    expect(extract).toBeLessThan(command.indexOf('rm -rf "$root/$m"'))
   })
 
   it('reports a missing archive instead of extracting nothing and claiming success', () => {
@@ -94,6 +107,7 @@ describe('restoring the snapshot', () => {
     expect(parseOrcadSnapshotRestore('MISSING')).toBe('missing')
     expect(parseOrcadSnapshotRestore('RESTORED')).toBe('restored')
     expect(parseOrcadSnapshotRestore('FAILED')).toBe('failed')
+    expect(parseOrcadSnapshotRestore('RESTORED\nsh: line 1: 13 Terminated')).toBe('restored')
   })
 
   it.each([

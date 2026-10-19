@@ -167,6 +167,7 @@ export function registerCoreHandlers(
   registered = true
 
   registerAppHandlers(store, {
+    quitResumeRecordsFor: (session) => runtime.quitResumeRecordsFor(session),
     onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
     // Why here, not onBeforeRelaunch: restart and profile switches quit through will-quit, which closes it.
     onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)

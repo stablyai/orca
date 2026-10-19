@@ -71,7 +71,9 @@ beforeEach(() => {
   mocks.listSessions.mockReset()
   mocks.listSessions.mockReturnValue(new Promise(() => {}))
   Object.assign(window, {
-    api: { aiVault: { listSessions: mocks.listSessions, cancelListSessions: vi.fn(async () => {}) } }
+    api: {
+      aiVault: { listSessions: mocks.listSessions, cancelListSessions: vi.fn(async () => {}) }
+    }
   })
 })
 

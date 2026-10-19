@@ -29,7 +29,7 @@ import {
   browserPageSchema,
   browserWorkspaceSchema
 } from './workspace-session-browser-schema'
-import { clientHostedBrowserCloseIntentSchema } from './client-hosted-browser-close-intent'
+import { workspaceSessionCloseIntentFieldSchemas } from './workspace-session-close-intent-schema'
 import { persistedClientHostedBrowserPageSchema } from './client-hosted-browser-page-record'
 import { persistedOpenFileSchema } from './workspace-session-editor-schema'
 import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
@@ -257,10 +257,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     'clientHostedBrowserPagesByWorktree',
     salvagingRecord(worktreeIdSchema, salvagingArray(persistedClientHostedBrowserPageSchema))
   ),
-  clientHostedBrowserCloseIntentsByEnvironment: salvagedOptional(
-    'clientHostedBrowserCloseIntentsByEnvironment',
-    salvagingRecord(z.string().min(1), salvagingArray(clientHostedBrowserCloseIntentSchema))
-  ),
+  ...workspaceSessionCloseIntentFieldSchemas,
   activeTabTypeByWorktree: salvagedOptional(
     'activeTabTypeByWorktree',
     salvagingRecord(worktreeIdSchema, workspaceVisibleTabTypeSchema)

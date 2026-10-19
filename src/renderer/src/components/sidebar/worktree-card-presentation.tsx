@@ -87,7 +87,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     showDeleteQuickAction
   } = card
 
-  // Why: pinned trees mix repos, so ordinary rows keep the repo icon; cross-repo children use the name.
+  // Why: pinned trees mix repos, so ordinary rows lead with the project chip; cross-repo children keep the regular project badge.
   const showPinnedRepoIcon = inPinnedSection && !!repo && !showProjectName
   const showInlineRepoBadge =
     cardDetails.repoInTitle && !!repo && !hideRepoBadge && !isFolder && !showPinnedRepoIcon

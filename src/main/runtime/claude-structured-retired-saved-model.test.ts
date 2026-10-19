@@ -65,6 +65,12 @@ describe("a Claude chat whose saved model the CLI says doesn't exist", () => {
       model: RETIRED,
       effort: 'high'
     })
+    // The picker shows what the child runs now, so the next send moves the chat off the model.
+    await vi.waitFor(async () =>
+      expect((await host.readOptions(SESSION, { readsWithoutModel: true })).current.model).not.toBe(
+        RETIRED
+      )
+    )
   })
 
   it("keeps a model the reply did not come from: a subagent's own error", async () => {

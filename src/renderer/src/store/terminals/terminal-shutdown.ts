@@ -9,7 +9,7 @@ import {
 } from '../slices/agent-status'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from './terminal-pty-identities'
-import { resolveRuntimeOwnerForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
 import { resolveTerminalTeardownOwner } from './terminal-teardown-owner'
 import { createTerminalShutdownGuardController } from './terminal-shutdown-guards'
 import { commitTerminalShutdownState } from './terminal-shutdown-state'
@@ -39,7 +39,7 @@ export function createTerminalShutdownActions(
       const expectedRuntimePtyIds = sortedUniquePtyIds(opts?.expectedRuntimePtyIds)
       const backendOwnsPtyTeardown = opts?.backendOwnsPtyTeardown === true
       const teardownOwner = resolveTerminalTeardownOwner(
-        resolveRuntimeOwnerForWorktree(get(), worktreeId),
+        resolveTerminalPtyOwner(get(), worktreeId),
         rendererShutdownPtyIds
       )
       // Why: treating an unattributable owner as local skips the host stop yet still clears
@@ -101,6 +101,7 @@ export function createTerminalShutdownActions(
         guards.markShutdownPending()
         guards.unregisterHandlers()
         try {
+          opts?.onAdmitted?.()
           // Backend ownership is opt-in; the default owner RPC prevents remote PTY leaks.
           if (runtimeEnvironmentId && !backendOwnsPtyTeardown) {
             await (shutdownReason === 'manual-sleep'

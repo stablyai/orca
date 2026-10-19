@@ -1,14 +1,14 @@
 import {
   BrowserNetworkTunnelEvent,
-  type BrowserHostLeaseAuthority,
-  type BrowserNetworkExecutionHost
+  type BrowserHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import {
   subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription,
-  type RemoteRuntimeSubscriptionOptions
+  type RemoteRuntimeSubscription
 } from '../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-subscription-contract'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,

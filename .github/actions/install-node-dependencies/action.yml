@@ -86,7 +86,7 @@ runs:
         case "$LOOKUP_REQUEST" in
           [aA][uU][tT][oO])
             # Hosted runners have Node for this manifest-only check before toolchain setup.
-            lookup_only="$(node -p 'const p = require("./package.json"); p.engines?.node === "24" && typeof p.packageManager === "string" && p.packageManager.split("+")[0] === "pnpm@12.8.1"')"
+            lookup_only="$(node -p 'const p = require("./package.json"); p.engines?.node === "24" && typeof p.packageManager === "string" && p.packageManager.split("+")[0] === "pnpm@12.14.0"')"
             ;;
         esac
         printf 'lookup-only=%s\n' "$lookup_only" >> "$GITHUB_OUTPUT"

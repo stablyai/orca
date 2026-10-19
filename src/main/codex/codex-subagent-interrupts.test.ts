@@ -4,6 +4,7 @@ import { codexPrimaryCommandTaskId } from '../../shared/structured-session-foreg
 import { CodexAppServerRequestError } from './codex-app-server-connection'
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import {
+  acquireReadyCodexForTest,
   adapterFor,
   fakeCodex,
   identityFor,
@@ -34,7 +35,7 @@ async function runningHelper(routes: Record<string, Route>) {
   const live = () => codex.connections.at(-1)!
   const notify = (method: string, params: unknown): void =>
     live().handlers.onNotification?.(method, params)
-  await adapter.acquire({ identity, fence: 7, spawnToken: 'spawn-1' })
+  await acquireReadyCodexForTest(adapter, { identity, fence: 7, spawnToken: 'spawn-1' })
   notify('turn/started', { threadId: THREAD_ID, turn: { id: 'turn-1', status: 'inProgress' } })
   notify('item/started', {
     threadId: THREAD_ID,

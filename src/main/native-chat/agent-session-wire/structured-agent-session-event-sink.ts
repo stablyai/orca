@@ -17,7 +17,6 @@ import {
   type StructuredAgentSessionTransitionSink
 } from './structured-agent-session-transition'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { StructuredAgentSessionExitObservation } from './structured-agent-session-exit-observation'
 
 export type StructuredAgentSessionSinkAdmission =
   | { accepted: true }
@@ -86,7 +85,6 @@ export type StructuredAgentSessionRevisionResolver = (
 export type StructuredAgentSessionRevisionOptions = StructuredAgentSessionItemAppendOptions
 
 export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSink & {
-  observeExit?: StructuredAgentSessionExitObservation['record']
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
@@ -173,7 +171,6 @@ export type StructuredAgentSessionEventTarget = {
 
 export type DeferredStructuredAgentSessionEventSink = {
   sink: StructuredAgentSessionEventSink
-  exitObservation(): Pick<StructuredAgentSessionExitObservation, 'heldSends' | 'observedAt'>
   bind(target: StructuredAgentSessionEventTarget): void
   unbind(): void
   close(): void
@@ -219,7 +216,6 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
   readingControl?: StructuredAgentSessionReadingControl
   onBackpressureChange?: (backpressured: boolean, state: StructuredAgentSessionSinkState) => void
 }): DeferredStructuredAgentSessionEventSink {
-  const exit = new StructuredAgentSessionExitObservation()
   const watermarks = { ...DEFAULT_WATERMARKS, ...deps.watermarks }
   const failed = (error: unknown): void => {
     deps.logger.error('writing provider events to the chat journal failed', {
@@ -289,10 +285,10 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
     )
 
   return {
-    exitObservation: () => exit,
     sink: {
-      observeExit: exit.record,
-      appendItem: (identity, body, options) => void appendItem(identity, body, options),
+      appendItem: (identity, body, options) => {
+        appendItem(identity, body, options)
+      },
       tryAppendItem: appendItem,
       ...resolvedAppend,
       ...createStructuredAgentSessionTransitionMembers(queue),
@@ -311,7 +307,9 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
         return admission
       },
       tryAppendLifecycleBatch: appendLifecycleBatch,
-      bindReadingControl: (control) => queue.bindReadingControl(control),
+      bindReadingControl: (control) => {
+        return queue.bindReadingControl(control)
+      },
       appendTombstone: (identity, options = {}) => {
         queue.submit(
           {
@@ -329,7 +327,9 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
           },
           options
         ),
-      publish: (options = {}) => void publish(options),
+      publish: (options = {}) => {
+        publish(options)
+      },
       written: queue.written,
       setActivity: (activity) => {
         queue.submit({

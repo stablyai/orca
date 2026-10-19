@@ -19,8 +19,8 @@ import {
   type OrcadMigrationBlobDescriptor,
   type OrcadMigrationBlobKind,
   type OrcadMigrationBlobUploadState
-} from '../../../shared/orcad-migration-blob-transfer'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { syncDirectoryDurablySync } from '../../durable-file-write'
 import {
   appendOrcadMigrationStagedChunk,
@@ -56,7 +56,8 @@ const receivedDirectoryPath: ReceivedBlobPathResolver = (root, manifest, descrip
 const RECEIVED_BLOB_DESTINATIONS: Record<OrcadMigrationBlobKind, ReceivedBlobPathResolver> = {
   'terminal-restore-hints': receivedDirectoryPath,
   'shell-history': receivedDirectoryPath,
-  'agent-session-records': receivedDirectoryPath
+  'agent-session-records': receivedDirectoryPath,
+  'editor-drafts': receivedDirectoryPath
 }
 
 export function getOrcadMigrationReceivedBlobPath(

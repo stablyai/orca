@@ -96,6 +96,27 @@ describe('sidebar inputs feed', () => {
     expect(phone.pending?.params).toMatchObject({ cursor: notice.revision })
   })
 
+  it('publishes a change after a quiet spell at once and the rest of its burst together', async () => {
+    const host = makeHost()
+    const phone = new TestPhone(host.feed, 'conn-1')
+    phone.refresh()
+    await phone.settle()
+    await vi.advanceTimersByTimeAsync(100)
+    const before = host.events.length
+    host.rows.set('a', 2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(host.events).toHaveLength(before + 1)
+    host.rows.set('a', 3)
+    host.rows.set('a', 4)
+    await vi.advanceTimersByTimeAsync(40)
+    expect(host.events).toHaveLength(before + 1)
+    await vi.advanceTimersByTimeAsync(20)
+    expect(host.events).toHaveLength(before + 2)
+    phone.notice(host.lastEvent())
+    await phone.settle()
+    expect(phone.view()).toEqual(host.truth())
+  })
+
   it('coalesces notices into one read in flight and one more after it', async () => {
     const host = makeHost()
     const phone = new TestPhone(host.feed, 'conn-1')

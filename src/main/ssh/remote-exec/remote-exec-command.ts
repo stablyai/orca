@@ -3,7 +3,11 @@ import type {
   RemoteCommandChannel,
   RemoteInstallTransport
 } from '../../managed-server/install/remote-install-transport'
-import { createSshOperationAbortError, type SshExecOptions } from '../ssh-connection-utils'
+import { createSshOperationAbortError, type SshExecOptions } from '../connection/ssh-exec-options'
+import {
+  REMOTE_COMMAND_DECODER_UNAVAILABLE,
+  REMOTE_COMMAND_DECODER_UNAVAILABLE_EXIT
+} from '../ssh-posix-command-wrapper'
 import {
   redactRelayInstallMarkerError,
   redactRelayInstallMarkerTokens
@@ -75,8 +79,83 @@ export function sshCommandExitError(
   })
 }
 
+type ExecTransport = Pick<
+  RemoteInstallTransport,
+  'exec' | 'execWithClosedStdin' | 'usesSystemSshTransport'
+>
+
+// Hosts that could not decode a compressed command; they get every command plain. Keyed by SSH
+// target id where the transport has one, so a reconnect's new connection object keeps the verdict.
+const targetsWithoutCommandDecoder = new Set<string>()
+const transportsWithoutCommandDecoder = new WeakSet<ExecTransport>()
+
+function commandDecoderTargetId(conn: ExecTransport): string | null {
+  if (!('getTarget' in conn) || typeof conn.getTarget !== 'function') {
+    return null
+  }
+  const target: unknown = conn.getTarget()
+  return typeof target === 'object' &&
+    target !== null &&
+    'id' in target &&
+    typeof target.id === 'string'
+    ? target.id
+    : null
+}
+
+function lacksCommandDecoder(conn: ExecTransport): boolean {
+  const id = commandDecoderTargetId(conn)
+  return id === null
+    ? transportsWithoutCommandDecoder.has(conn)
+    : targetsWithoutCommandDecoder.has(id)
+}
+
+function rememberLacksCommandDecoder(conn: ExecTransport): void {
+  const id = commandDecoderTargetId(conn)
+  if (id === null) {
+    transportsWithoutCommandDecoder.add(conn)
+  } else {
+    targetsWithoutCommandDecoder.add(id)
+  }
+}
+
+function isCommandDecoderUnavailable(error: unknown): boolean {
+  return (
+    isSshCommandExitError(error) &&
+    error.exitCode === REMOTE_COMMAND_DECODER_UNAVAILABLE_EXIT &&
+    error.message.includes(REMOTE_COMMAND_DECODER_UNAVAILABLE)
+  )
+}
+
 export async function execCommand(
-  conn: Pick<RemoteInstallTransport, 'exec' | 'execWithClosedStdin' | 'usesSystemSshTransport'>,
+  conn: ExecTransport,
+  command: string,
+  options?: ExecCommandOptions
+): Promise<string> {
+  if (lacksCommandDecoder(conn)) {
+    return execCommandOnce(conn, command, { ...options, compressCommand: false })
+  }
+  try {
+    return await execCommandOnce(conn, command, {
+      ...options,
+      // Not with stdin: its bytes are spent once, so a decoder miss could not be resent.
+      compressCommand: options?.compressCommand ?? !options?.stdin
+    })
+  } catch (error) {
+    // Nothing ran: the wrapper checks for its decoders before reading stdin or the script.
+    if (
+      options?.stdin ||
+      options?.compressCommand === false ||
+      !isCommandDecoderUnavailable(error)
+    ) {
+      throw error
+    }
+    rememberLacksCommandDecoder(conn)
+    return execCommandOnce(conn, command, { ...options, compressCommand: false })
+  }
+}
+
+async function execCommandOnce(
+  conn: ExecTransport,
   command: string,
   options?: ExecCommandOptions
 ): Promise<string> {

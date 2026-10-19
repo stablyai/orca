@@ -293,7 +293,7 @@ vi.mock('../../terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
-vi.mock('../../ssh/ssh-target-registry', () => ({
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getRegisteredSshState: () => ({ remotePlatform: 'linux' })
 }))
 

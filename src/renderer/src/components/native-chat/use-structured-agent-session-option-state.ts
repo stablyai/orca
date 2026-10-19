@@ -213,18 +213,10 @@ export function useStructuredAgentSessionOptionState(args: {
     target,
     AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
   )
-  // What the picker shows and a send carries, for this session's host.
-  const optionView = useCallback(
-    (
-      state: StructuredAgentSessionOptionState,
-      seed: Readonly<Record<string, string>> | undefined,
-      held: Readonly<Record<string, string>>
-    ) => structuredAgentSessionOptionView(state, seed, held, takesSendOptions),
-    [takesSendOptions]
-  )
 
   return {
-    optionView,
+    // What the picker shows and a send carries.
+    optionView: structuredAgentSessionOptionView,
     takesSendOptions,
     conversationSupport,
     rereadOptions,

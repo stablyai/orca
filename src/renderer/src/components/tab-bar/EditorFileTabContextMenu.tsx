@@ -186,14 +186,14 @@ export function EditorFileTabContextMenu({
           <PanelRightClose className="size-3.5" />
           {translate(
             'auto.components.tab.bar.EditorFileTabContextMenu.e5ff31ccaf',
-            'Close Tabs To The Right'
+            'Close All Tabs To The Right'
           )}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
           <PanelLeftClose className="size-3.5" />
           {translate(
             'components.tab.bar.EditorFileTabContextMenu.closeTabsToLeft',
-            'Close Tabs To The Left'
+            'Close All Tabs To The Left'
           )}
         </DropdownMenuItem>
         <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />

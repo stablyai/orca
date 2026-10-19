@@ -107,6 +107,7 @@ function createClaudeAdapter(
     onChildWorkEvidence: (sessionId, evidence, producer) =>
       host()?.publishChildWorkEvidence(sessionId, evidence, producer),
     onDispatchSettledLate: followUps.onDispatchSettledLate,
+    onSessionIdle: followUps.releaseUnansweredDispatches,
     ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
   })
@@ -122,6 +123,7 @@ function createAcpAdapter(
     const sources = structuredAgentLaunchSources(context)
     const part = acpStructuredLaunchPart(spec, {
       readJournal,
+      ...deps.acpLaunchCommand,
       dataDirectory: deps.stateDirectory,
       logger: deps.logger
     })
@@ -132,18 +134,13 @@ function createAcpAdapter(
       readLaunch: composeStructuredLaunchRead(definition, sources, part),
       dataDirectory: deps.stateDirectory,
       resolveLaunchArgs: () => deps.resolveLaunchArgs(spec.agent),
-      connect: (launch, options) => createAcpAgentConnection(launch, options),
+      connect: deps.openAcpConnection ?? createAcpAgentConnection,
       onChildWorkEvidence: (sessionId, evidence, producer) =>
         context.host()?.publishChildWorkEvidence(sessionId, evidence, producer),
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
       onDispatchSettledLate: followUps.onDispatchSettledLate,
       logger: deps.logger,
-      // Every exit, expected or not: the host ends that child's record.
-      onEvent: (event) => {
-        if (event.type === 'ended') {
-          context.deliverLifecycle(event)
-        }
-      }
+      onEvent: context.deliverLifecycle
     })
   }
 }

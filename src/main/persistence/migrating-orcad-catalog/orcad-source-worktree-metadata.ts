@@ -1,7 +1,7 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
-import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
+import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { canonicalWorktreeIdentity } from '../../../shared/worktree/identity'
 import {
   getExecutionHostIdFromWorktreeHostIdentity,

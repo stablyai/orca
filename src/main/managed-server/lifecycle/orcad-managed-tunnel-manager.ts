@@ -8,9 +8,9 @@ import {
 } from '../../../shared/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
-import type { SshConnection } from '../../ssh/ssh-connection'
-import { isAuthError } from '../../ssh/ssh-connection-utils'
-import type { SshConnectionManager } from '../../ssh/ssh-connection-manager'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
+import { isAuthError } from '../../ssh/ssh-reconnect-error-classification'
+import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import { OrcadManagedTunnelTransportProvider } from './orcad-managed-tunnel-transport'
 import {
@@ -28,7 +28,7 @@ import {
   type ActiveOrcadTunnel
 } from './orcad-managed-tunnel-active'
 import { checkManagedTunnelServing, type OrcadTunnelServing } from './orcad-managed-tunnel-serving'
-import type { getSshTargetRegistryStore } from '../../ssh/ssh-target-registry'
+import type { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import {
   environmentForwardChecks,
   forwardToVerifiedOrcad,

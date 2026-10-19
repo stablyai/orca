@@ -1,7 +1,7 @@
 import type {
   OrcadMigrationDormantStatePayload,
   OrcadMigrationManifest
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
@@ -16,9 +16,10 @@ import {
 import { recordRetirementNamespaceRegistry } from '../../worktree-retirement-namespace'
 import {
   applyPreparedOrcadMigrationWorkspaceSession,
-  prepareOrcadMigrationWorkspaceSession,
   type PreparedOrcadMigrationWorkspaceSession
 } from './orcad-destination-workspace-session'
+import { prepareOrcadMigrationSessionWithDrafts } from './orcad-destination-editor-drafts'
+import type { OrcadMigrationEditorDraft } from '../../../shared/orcad-migration/orcad-migration-editor-drafts'
 import {
   applyPreparedOrcadMigrationAutomationState,
   prepareOrcadMigrationAutomationState,
@@ -46,9 +47,11 @@ export type PreparedOrcadMigrationDormantState = {
   clientState: PreparedOrcadMigrationClientState
 }
 
+/** `editorDrafts`: the verified declared drafts at commit; absent while staging. */
 export function prepareOrcadMigrationDormantState(
   manifest: OrcadMigrationManifest,
-  state: PersistedState
+  state: PersistedState,
+  editorDrafts?: readonly OrcadMigrationEditorDraft[]
 ): PreparedOrcadMigrationDormantState {
   const payload = manifest.payload.dormantState
   if (!payload) {
@@ -116,7 +119,7 @@ export function prepareOrcadMigrationDormantState(
         entry.registry
       )
     })),
-    workspaceSession: prepareOrcadMigrationWorkspaceSession(payload.workspaceSession, state),
+    workspaceSession: prepareOrcadMigrationSessionWithDrafts(payload, state, editorDrafts),
     automationState: prepareOrcadMigrationAutomationState(
       payload.automations,
       payload.automationRuns,

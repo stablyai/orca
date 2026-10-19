@@ -32,7 +32,8 @@ on:
           Switches to change, e.g. readinessLocal=true,admitMode=reserve (key=default removes a
           key). Every other switch keeps its current value. Known: readinessLocal, ticketCheck,
           admitMode, intakePerSec, reserveDryRun, rejectionFence, readTimeoutMarginMs,
-          reregisterInFlight
+          reregisterInFlight, phonePath (memory only takes effect in reserve; a reserve flip
+          must name phonePath)
         required: true
         type: string
       expected-generation:

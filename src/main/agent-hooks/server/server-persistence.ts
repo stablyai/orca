@@ -42,6 +42,9 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       }
       const {
         promptInteractionKey: _promptInteractionKey,
+        // Why: stitched on at publish only; guards a stitched copy that reached the map by mistake.
+        programStatus: _programStatus,
+        programStatusOnly: _programStatusOnly,
         // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
         restoredUnconfirmed: _restoredUnconfirmed,
         // Why: same — the sequencer that issued it dies with the process (see PersistedAgentHookEventPayload).

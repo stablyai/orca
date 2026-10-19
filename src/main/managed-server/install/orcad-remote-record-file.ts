@@ -5,7 +5,7 @@
  * absent one, and treating it as absent is how a client deploys over a live install.
  */
 import { randomUUID } from 'node:crypto'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { removeRemoteFileCommand } from '../../ssh/ssh-remote-commands'
 import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
@@ -41,7 +41,7 @@ export async function readBoundedOrcadRemoteRecord(
   if (isWindowsRemoteHost(target.host)) {
     return readWindowsRecord(target, path, maxBytes)
   }
-  const file = shellEscape(path)
+  const file = quotePosixShell(path)
   // Why markers: an empty stdout must never be mistaken for "no record" when the read failed.
   const output = await execOrcadRemote(
     target,
@@ -104,8 +104,8 @@ export async function writeAtomicOrcadRemoteRecord(
     }
     await execOrcadRemote(
       target,
-      `umask 077; printf %s ${shellEscape(contents)} > ${shellEscape(partialPath)} && ` +
-        `mv -f ${shellEscape(partialPath)} ${shellEscape(path)}`
+      `umask 077; printf %s ${quotePosixShell(contents)} > ${quotePosixShell(partialPath)} && ` +
+        `mv -f ${quotePosixShell(partialPath)} ${quotePosixShell(path)}`
     )
   } catch (error) {
     // Why keep the partial on an unconfirmed termination: the write may still be running there.

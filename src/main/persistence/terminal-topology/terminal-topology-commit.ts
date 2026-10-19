@@ -34,6 +34,11 @@ import { writeRestorable } from './restorable-write'
 import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
 import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'
 import { resolveWindowPaneDetach, type WindowPaneDetachCommand } from './window-pane-detach'
+import {
+  fencedIfLayoutOwner,
+  layoutCommandFence,
+  partitionsFence
+} from './closed-pane-binding-fence'
 
 // The commit boundary for terminal layout (tabs, panes, pane-to-PTY bindings). Wraps the close and
 // the pane move; the close transform still lives in runtime/ and other writers move here later.
@@ -52,7 +57,11 @@ export function closeLeafOrTab(
 ): () => DurableProfileStateMutation<Error | undefined> {
   return traced(
     commit.target.kind === 'pane' ? 'close_leaf' : 'close_tab',
-    terminalSurfaceCloseMutation(commit),
+    // A start under way in a pane main closed must not bring it back.
+    fencedIfLayoutOwner(
+      () => ({ sessions: commit, fences: true }),
+      terminalSurfaceCloseMutation(commit)
+    ),
     // Refusals are fixed reason codes, never ids.
     (refusal) => refusal?.message
   )
@@ -81,12 +90,16 @@ export function admitPane(
 ): () => DurableProfileStateMutation<TerminalPaneAdmissionOutcome> {
   return traced(
     'admit_pane',
-    () =>
-      commitPaneChange(
-        hostId,
-        admitPaneToSession(hostId, context.getSession(hostId), admission),
-        context
-      ),
+    // A pane main writes again under a closed pane's id binds as any.
+    fencedIfLayoutOwner(
+      () => partitionsFence([hostId], context.getSession, false),
+      () =>
+        commitPaneChange(
+          hostId,
+          admitPaneToSession(hostId, context.getSession(hostId), admission),
+          context
+        )
+    ),
     (outcome) => (outcome === 'admitted' || outcome === 'exists' ? undefined : outcome)
   )
 }
@@ -99,12 +112,16 @@ export function withdrawPane(
 ): () => DurableProfileStateMutation<LayoutRefusalCode | null> {
   return traced(
     'withdraw_pane',
-    () =>
-      commitPaneChange(
-        hostId,
-        withdrawPaneFromSession(hostId, context.getSession(hostId), pane),
-        context
-      ),
+    // A start under way in a pane main took back must not bring it back.
+    fencedIfLayoutOwner(
+      () => partitionsFence([hostId], context.getSession, true),
+      () =>
+        commitPaneChange(
+          hostId,
+          withdrawPaneFromSession(hostId, context.getSession(hostId), pane),
+          context
+        )
+    ),
     (code) => code ?? undefined
   )
 }
@@ -120,14 +137,18 @@ export function applyLayout(
 ): () => DurableProfileStateMutation<LayoutApplyOutcome> {
   return traced(
     'apply_layout',
-    () =>
-      command.type === 'movePaneToNewTab' && command.windowDetach
-        ? commitWindowPaneDetach(
-            hostIds,
-            { ...command, windowDetach: command.windowDetach },
-            context
-          )
-        : commitLayoutCommand(hostIds, command, context),
+    // Closes fence the panes they removed; creates lift the fence on the ids they write.
+    fencedIfLayoutOwner(
+      () => layoutCommandFence(command.type, hostIds, context.getSession),
+      () =>
+        command.type === 'movePaneToNewTab' && command.windowDetach
+          ? commitWindowPaneDetach(
+              hostIds,
+              { ...command, windowDetach: command.windowDetach },
+              context
+            )
+          : commitLayoutCommand(hostIds, command, context)
+    ),
     (outcome) => (outcome.ok ? undefined : outcome.code)
   )
 }

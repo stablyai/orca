@@ -283,3 +283,21 @@ it.each(['options', 'firstMessage'] as const)(
     expect(rig.adapter.acquire).not.toHaveBeenCalled()
   }
 )
+
+it('answers an old client whose start failed before spawning in plain words', async () => {
+  const raw = 'codex sessions pin CODEX_HOME, not CLAUDE_CONFIG_DIR'
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  rig.adapter.acquire.mockRejectedValueOnce(new AgentSessionPreSpawnError(new Error(raw)))
+
+  const answer = await call('agentSession.create', params(), legacy)
+
+  // Thrown as before, so the wire code an old client reads is unchanged; only the words are new.
+  expect(answer).toMatchObject({
+    ok: false,
+    error: {
+      code: 'runtime_error',
+      message: "Codex couldn't start. Send your message to try again."
+    }
+  })
+  expect(JSON.stringify(answer)).not.toContain(raw)
+})

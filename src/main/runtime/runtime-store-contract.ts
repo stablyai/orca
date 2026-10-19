@@ -161,6 +161,8 @@ export type RuntimeStore = {
     terminalModelQueryAuthority?: GlobalSettings['terminalModelQueryAuthority']
     worktreeVisibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
     hostSettingOverrides?: GlobalSettings['hostSettingOverrides']
+    activeRuntimeEnvironmentId?: GlobalSettings['activeRuntimeEnvironmentId']
+    showPinnedWorktreesInGroups?: GlobalSettings['showPinnedWorktreesInGroups']
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
     nativeChatSessionOptions?: GlobalSettings['nativeChatSessionOptions']
     nativeChatPermissionMode?: GlobalSettings['nativeChatPermissionMode']

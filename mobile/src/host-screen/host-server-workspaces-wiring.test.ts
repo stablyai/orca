@@ -29,7 +29,7 @@ import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import type { Worktree } from '../worktree/workspace-list-types'
-import { useHostDisplayWorktrees } from './use-host-display-worktrees'
+import { useHostDisplayWorktrees, useResolvedHostPlatform } from './use-host-display-worktrees'
 import { useHostScreenState } from './use-host-screen-state'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
@@ -135,6 +135,7 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
       fetchRepoMetadata: async () => {},
       hostCapabilities,
       hostId: 'host-1',
+      sidebarFeed: null,
       state,
       syncViewSettingsFromDesktop: async () => {}
     })
@@ -153,7 +154,11 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
     })
     held.state = state
     held.fetch = catalog.fetchWorktrees
-    held.rows = useHostDisplayWorktrees('connected', state, 'host-1')
+    held.rows = useHostDisplayWorktrees(
+      'connected',
+      state,
+      useResolvedHostPlatform(state, 'host-1')
+    )
     return null
   }
   await act(async () => {

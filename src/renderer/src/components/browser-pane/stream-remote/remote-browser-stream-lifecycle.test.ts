@@ -230,6 +230,22 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.currentStatusKind).toBe('live')
   })
 
+  // #30341: the resize found no subscription to restart, so the stream kept the opening size.
+  it('restarts at the new size when the pane was resized while its stream was opening', async () => {
+    const harness = createHarness()
+    const subscribe = harness.holdNextSubscribe()
+    harness.lifecycle.open()
+    await settle()
+
+    harness.setViewportSize({ width: 1400, height: 900 })
+    expect(harness.lifecycle.restartForViewport('page-1')).toBe(false)
+    subscribe.release()
+    await settle()
+
+    expect(harness.streams.map((stream) => stream.viewportWidth)).toEqual([800, 1400])
+    expect(harness.streams[0].unsubscribeCount).toBe(1)
+  })
+
   it('ignores a viewport change that is within measurement jitter', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)

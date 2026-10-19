@@ -14,7 +14,7 @@ on:
       - 'pnpm-workspace.yaml'
       - 'tsconfig.json'
       - '.npmrc'
-      - '.pnpmfile.cjs'
+      - 'config/pnpmfile.cjs'
       - '.github/actions/install-node-dependencies/**'
       - '.github/actions/restore-pnpm-verification/**'
       - '.github/actions/prepare-headless-compiler/**'

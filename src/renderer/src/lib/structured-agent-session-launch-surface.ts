@@ -143,6 +143,8 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   sessionId: string
   agent: TuiAgent
   targetGroupId?: string
+  /** The tab the chat opens right after, in that tab's group. */
+  afterTabId?: string
   activate?: boolean
 }): Tab {
   const state = useAppStore.getState()
@@ -171,6 +173,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
     targetGroupId:
       group?.id ??
       (address?.worktreeId === args.worktreeId ? address.targetGroupId : args.targetGroupId),
+    ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
     activate: args.activate !== false
   })
   // Switch point: main records the chat tab the window just drew.

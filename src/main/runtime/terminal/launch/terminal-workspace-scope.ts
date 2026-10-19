@@ -5,7 +5,7 @@ import {
   isFloatingWorkspaceSelector
 } from '../../../../shared/floating-workspace-worktree'
 import { resolveFloatingTerminalCwd } from '../../../ipc/floating-workspace-directory'
-import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-network-execution-host'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId,
@@ -14,7 +14,7 @@ import {
 } from '../../../../shared/execution-host'
 import { resolveRuntimeBrowserNetworkExecutionHost } from '../../runtime-browser-network-execution-host'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
-import { getRegisteredSshState } from '../../../ssh/ssh-target-registry'
+import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import {
   resolveWorktreeHostRouting,
   resolveWorktreeLaunchHost

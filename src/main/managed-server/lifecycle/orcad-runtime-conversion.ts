@@ -9,7 +9,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { OrcadManagedConversionResult } from '../../../shared/orcad-managed-runtime'
-import type { OrcadMigrationSourceCutover } from '../../../shared/orcad-migration-source-cutover'
+import type { OrcadMigrationSourceCutover } from '../../../shared/orcad-migration/orcad-migration-source-cutover'
 import { recordManagedOrcadMigration } from '../../../shared/runtime-environment-managed-orcad-store'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
 import {
@@ -36,7 +36,7 @@ import { createSshRelayMigrationSource } from '../../ssh/orcad-migration-ssh-rel
 import {
   leaveBehindClearsOrcadMigrationBlockers,
   onlyLeavableOrcadMigrationBlockers
-} from '../../ssh/ssh-target-orcad-preflight'
+} from '../../ssh/targets/ssh-target-orcad-preflight'
 import { ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON } from '../../ssh/orcad-migration-source-fence'
 import { retainOrcadMigrationSource } from '../../ssh/orcad-migration-source-retention'
 import {

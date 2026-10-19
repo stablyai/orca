@@ -1,3 +1,4 @@
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 import { closeTestStores, createSqliteTestStore, testState } from './persistence-test-harness'
 import { Store as CanonicalStore } from './persistence/loading-store/store'
 import { initDataPath as initCanonicalDataPath } from './persistence/loading-store/user-data-path'
@@ -109,7 +110,7 @@ describe('worktree removal across host session partitions', () => {
   it('does not materialize an unwritten host partition when removing session state directly', async () => {
     const store = await createStore()
 
-    store.removeWorkspaceSessionStateForWorktree(STALE, ENV_A)
+    store.removeWorkspaceSessionStateForWorktree(hostWorktreeTarget({ id: STALE, hostId: ENV_A }))
 
     expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
   })

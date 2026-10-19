@@ -85,6 +85,7 @@ const handleRemoteWatcherTerminalError: RemoteWatcherTerminalErrorHandler = (
   }
   watcherLifecycleState.remoteWatchers.delete(key)
   state.batch.close()
+  // Why: a suspended snapshot means a removal or its restore owns these listeners; a retry would race it.
   if (
     watcherLifecycleState.remoteWatchersClosed ||
     watcherLifecycleState.suspendedRemoteWatcherListeners.has(key)

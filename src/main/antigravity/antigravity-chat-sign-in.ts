@@ -18,6 +18,7 @@ import type { ConnectAcpAgent } from '../acp/acp-structured-connection'
 import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
 import { prepareAcpLaunch } from '../acp/acp-structured-launch-preparation'
 import { AcpAgentError, AcpConnectionClosedError } from '../acp/acp-errors'
+import { saveSignInModels } from './antigravity-sign-in-models'
 import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { structuredAgentHostLaunchSources } from '../runtime/structured-agent-launch-support'
 import {
@@ -219,6 +220,7 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       })
       owned.sessionId = started.sessionId
       current.pending = undefined
+      saveSignInModels(spec, accountHome, started)
     } finally {
       signal.removeEventListener('abort', stop)
       await closeAntigravitySignInOwner(home, server)

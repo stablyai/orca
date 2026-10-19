@@ -93,8 +93,8 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
     const request = { limit: 1000, scopePaths: ['/project'] }
     const first = await listAiVaultSessions(request)
 
-    // A narrower request reuses the same scan entry and its scan ID.
-    const cached = await listAiVaultSessions({ ...request, limit: 100 })
+    // A repeat request reuses the same scan entry and its scan ID.
+    const cached = await listAiVaultSessions(request)
 
     expect(cached.scannedAt).toBe('scan-A')
     expect(cached.scanId).toBe(first.scanId)

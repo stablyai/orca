@@ -19,10 +19,17 @@ export const WorkspaceActivityFactsSnapshotSchema = z.object({
   facts: z.record(z.string(), WorkspaceActivityFactsSchema)
 })
 
+/** What a paired server reports for one of its own workspaces; the tabs are its clients' to add. */
+export const HostReportedActivitySchema = WorkspaceActivityFactsSchema.pick({
+  terminal: true,
+  agent: true
+})
+
 export type LiveAgentWorktreeStatus = z.infer<typeof LiveAgentWorktreeStatusSchema>
 export type WorkspaceActivityFacts = z.infer<typeof WorkspaceActivityFactsSchema>
 export type WorkspaceTerminalLiveness = NonNullable<WorkspaceActivityFacts['terminal']>
 export type WorkspaceActivityFactsSnapshot = z.infer<typeof WorkspaceActivityFactsSnapshotSchema>
+export type HostReportedActivity = z.infer<typeof HostReportedActivitySchema>
 
 export const IDLE_WORKSPACE_ACTIVITY: WorkspaceActivityFacts = {
   terminal: null,

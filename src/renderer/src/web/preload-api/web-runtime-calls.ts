@@ -13,6 +13,7 @@ import {
   runtimeCallQueuePool,
   updateEnvironmentFromResponse
 } from './web-runtime-session'
+import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../web-runtime-request-registry'
 
 export type WebRuntimeResultCaller = <TResult>(
   method: string,
@@ -58,12 +59,60 @@ export function assertEnvironmentPairing(selector: string, expectedRevision?: nu
   }
 }
 
+/** Per client (epochs restart with each client): the connection whose runtime last answered a status probe. */
+const probedConnections = new WeakMap<object, { epoch: number; runtimeId: string }>()
+
+function responseRuntimeId(response: unknown): string | undefined {
+  if (typeof response !== 'object' || response === null || !('_meta' in response)) {
+    return undefined
+  }
+  const meta: unknown = response._meta
+  return typeof meta === 'object' && meta !== null && 'runtimeId' in meta
+    ? typeof meta.runtimeId === 'string'
+      ? meta.runtimeId
+      : undefined
+    : undefined
+}
+
+/**
+ * Why: a request shaped for one runtime's capabilities must reach that runtime. The same client
+ * reconnects internally, so pin it to the connection the matching status probe ran on; with no
+ * such probe, refuse so the caller re-probes.
+ */
+function callPinnedToRuntime(
+  client: ReturnType<typeof getClientForEnvironment>,
+  method: string,
+  params: unknown,
+  timeoutMs: number | undefined,
+  expectedEnvironmentRuntimeId: string | undefined
+): Promise<RuntimeRpcResponse<unknown>> {
+  if (method === 'status.get') {
+    const epoch = client.connectionEpoch
+    return client.call(method, params, { timeoutMs }).then((response) => {
+      const runtimeId = responseRuntimeId(response)
+      if (response.ok && runtimeId && client.connectionEpoch === epoch) {
+        probedConnections.set(client, { epoch, runtimeId })
+      }
+      return response
+    })
+  }
+  if (expectedEnvironmentRuntimeId === undefined) {
+    return client.call(method, params, { timeoutMs })
+  }
+  const probed = probedConnections.get(client)
+  if (probed?.runtimeId !== expectedEnvironmentRuntimeId) {
+    return Promise.reject(new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE))
+  }
+  return client.call(method, params, { timeoutMs, expectedConnectionEpoch: probed.epoch })
+}
+
 export async function callEnvironmentEnvelope<TResult = unknown>(
   selector: string,
   method: string,
   params?: unknown,
   timeoutMs?: number,
-  expectedEnvironmentPairingRevision?: number
+  expectedEnvironmentPairingRevision?: number,
+  expectedEnvironmentRuntimeId?: string
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = resolveEnvironment(selector)
   const assertPairing = () => assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
@@ -76,7 +125,13 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
     if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
       return Promise.resolve(manuallyDisconnectedResponse(environment))
     }
-    return getClientForEnvironment(environment).call(method, params, { timeoutMs })
+    return callPinnedToRuntime(
+      getClientForEnvironment(environment),
+      method,
+      params,
+      timeoutMs,
+      expectedEnvironmentRuntimeId
+    )
   })
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)

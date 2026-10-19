@@ -163,6 +163,7 @@ function fixture(options: { platform?: NodeJS.Platform } = {}) {
     keybindings: {},
     worktreeId: 'workspace',
     managerRef: { current: { getActivePane: () => pane, getPanes: () => [pane, sibling] } },
+    paneTransportsRef: { current: new Map() },
     setTerminalError: vi.fn()
   } as unknown as TerminalPaneCloseController
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these are the two execution callbacks read by the listener.

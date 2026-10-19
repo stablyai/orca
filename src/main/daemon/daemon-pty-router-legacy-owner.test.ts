@@ -4,6 +4,8 @@ import { DaemonPtyRouter } from './daemon-pty-router'
 import { TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 
 const SPAWN = { cols: 80, rows: 24 }
+// Above any real pid ceiling, so the exit probe always finds it missing.
+const MISSING_PID = 2_147_483_000
 
 // #26296: after a daemon update, the old daemon keeps the sessions it runs; the new one takes only new ids.
 describe('DaemonPtyRouter keeps live sessions on their older daemon', () => {
@@ -94,4 +96,45 @@ describe('DaemonPtyRouter keeps live sessions on their older daemon', () => {
     expect(legacy.spawn).not.toHaveBeenCalled()
     expect(legacy.probePtyLiveness).toHaveBeenCalledOnce()
   })
+
+  // A daemon still on its socket is not proven exited by a missing pid alone.
+  it('refuses while the older daemon socket answers even if its pid is gone', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['claude-session'])
+    vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('wedged'))
+    vi.mocked(legacy.probePtyLiveness).mockResolvedValue(null)
+    vi.mocked(legacy.getLastAuthenticatedDaemonIdentity).mockReturnValue({
+      pid: MISSING_PID,
+      startedAtMs: 0,
+      launchNonce: 'legacy'
+    })
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await expect(router.spawn({ ...SPAWN, sessionId: 'claude-session' })).rejects.toBeInstanceOf(
+      TerminalSessionOwnerUnverifiedError
+    )
+    expect(current.spawn).not.toHaveBeenCalled()
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'creates on the current daemon once the older daemon socket and pid are both gone',
+    async () => {
+      const current = createAdapter('current')
+      const legacy = createAdapter('legacy', ['claude-session'])
+      vi.mocked(legacy.listProcesses).mockRejectedValue(
+        Object.assign(new Error('connect ENOENT'), { code: 'ENOENT', syscall: 'connect' })
+      )
+      vi.mocked(legacy.probePtyLiveness).mockResolvedValue(null)
+      vi.mocked(legacy.getLastAuthenticatedDaemonIdentity).mockReturnValue({
+        pid: MISSING_PID,
+        startedAtMs: 0,
+        launchNonce: 'legacy'
+      })
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+      await router.spawn({ ...SPAWN, sessionId: 'claude-session' })
+
+      expect(current.spawn).toHaveBeenCalledOnce()
+    }
+  )
 })

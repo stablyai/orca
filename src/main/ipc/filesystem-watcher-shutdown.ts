@@ -15,6 +15,8 @@ export async function closeAllWatchers(): Promise<void> {
   watcherLifecycleState.unwatchableRoots.clear()
   watcherLifecycleState.suspendedLocalWatcherListeners.clear()
   watcherLifecycleState.suspendedRemoteWatcherListeners.clear()
+  watcherLifecycleState.cancelledLocalInstallWaiters.clear()
+  watcherLifecycleState.cancelledRemoteInstallWaiters.clear()
   for (const retry of watcherLifecycleState.pendingLocalCapacityRetries.values()) {
     retry.cancelWait()
   }

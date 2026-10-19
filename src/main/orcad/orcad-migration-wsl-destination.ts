@@ -2,8 +2,8 @@
  * Only the orcad an Orca desktop launched inside a distro may receive that distro's projects: the
  * move keeps every file where it is, so any other host would own paths it cannot see.
  */
-import type { OrcadMigrationManifestSource } from '../../shared/orcad-migration-manifest'
-import { isOrcadMigrationLocalWslSource } from '../../shared/orcad-migration-source-kind'
+import type { OrcadMigrationManifestSource } from '../../shared/orcad-migration/orcad-migration-manifest'
+import { isOrcadMigrationLocalWslSource } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
 
 export const ORCAD_MIGRATION_SOURCE_NOT_THIS_HOST = 'orcad_migration_source_not_this_host'

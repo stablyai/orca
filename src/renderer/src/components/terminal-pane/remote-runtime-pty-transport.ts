@@ -51,9 +51,9 @@ import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../runtime/runti
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle,
-  runtimeTerminalErrorMessage,
-  toRemoteRuntimePtyId
+  runtimeTerminalErrorMessage
 } from '../../runtime/runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { getRemoteRuntimeTerminalMultiplexer } from '../../runtime/remote-runtime-terminal-multiplexer'
 import { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } from '../../runtime/remote-runtime-terminal-snapshot-state'
 import { restoredSnapshotPaintsPrintableContent } from './restored-snapshot-coverage'

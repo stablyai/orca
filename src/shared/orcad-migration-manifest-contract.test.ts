@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ORCAD_MIGRATION_MANIFEST_VERSION,
   parseOrcadMigrationManifest
-} from './orcad-migration-manifest-validation'
+} from './orcad-migration/orcad-migration-manifest-validation'
 
 const digest = 'a'.repeat(64)
 

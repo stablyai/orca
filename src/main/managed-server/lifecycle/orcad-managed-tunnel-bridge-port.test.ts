@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { PortForwardStartOptions } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import type * as ForwardProcess from '../../ssh/system-transport/system-ssh-forward-process'
 

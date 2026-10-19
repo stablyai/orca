@@ -1,5 +1,5 @@
-import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration-manifest'
-import { isRecord } from '../../../shared/orcad-migration-manifest-fields'
+import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration/orcad-migration-manifest'
+import { isRecord } from '../../../shared/orcad-migration/orcad-migration-manifest-fields'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { SESSION_FOCUS_FIELDS } from '../../../shared/workspace-session-host-field-ownership'
@@ -32,6 +32,8 @@ const MERGED_SESSION_RECORD_FIELDS = [
 export type PreparedOrcadMigrationWorkspaceSession = {
   incoming: WorkspaceSessionState | undefined
   merged: WorkspaceSessionState | undefined
+  /** Checked at staging without the declared drafts; never applied, or they would be lost. */
+  editorDraftsPending?: true
 }
 
 export function prepareOrcadMigrationWorkspaceSession(
@@ -41,13 +43,20 @@ export function prepareOrcadMigrationWorkspaceSession(
   if (!incoming) {
     return { incoming: undefined, merged: undefined }
   }
-  assertNoSessionRecordConflicts(state.workspaceSession, incoming)
-  assertNoSessionFocusConflicts(state.workspaceSession, incoming)
-  assertNoSessionEntityConflicts(state.workspaceSession, incoming)
+  assertNoOrcadMigrationSessionConflicts(state.workspaceSession, incoming)
   return {
     incoming,
     merged: mergeWorkspaceSessions(state.workspaceSession, incoming)
   }
+}
+
+export function assertNoOrcadMigrationSessionConflicts(
+  existing: WorkspaceSessionState,
+  incoming: WorkspaceSessionState
+): void {
+  assertNoSessionRecordConflicts(existing, incoming)
+  assertNoSessionFocusConflicts(existing, incoming)
+  assertNoSessionEntityConflicts(existing, incoming)
 }
 
 function assertNoSessionFocusConflicts(
@@ -73,6 +82,9 @@ export function applyPreparedOrcadMigrationWorkspaceSession(
   prepared: PreparedOrcadMigrationWorkspaceSession,
   state: PersistedState
 ): void {
+  if (prepared.editorDraftsPending) {
+    throw new Error('orcad_migration_editor_drafts_not_applied')
+  }
   if (prepared.merged) {
     state.workspaceSession = prepared.merged
   }
@@ -121,13 +133,21 @@ export function collectOrcadMigrationSessionEntityOwners(
   session: WorkspaceSessionState
 ): Map<string, string> {
   const owners = new Map<string, string>()
-  const add = (key: string, owner: string): void => {
+  visitOrcadMigrationSessionEntities(session, (key, owner) => {
     const current = owners.get(key)
     // A duplicate entity id is invalid even when both rows claim the same owner. Marking every
     // repeat lets the caller reject duplicates within the incoming payload as well as conflicts
     // with already-committed state.
     owners.set(key, current === undefined ? owner : '\0')
-  }
+  })
+  return owners
+}
+
+/** Each identity the destination keeps unique (`kind:id`), with its owning worktree or tab id. */
+export function visitOrcadMigrationSessionEntities(
+  session: WorkspaceSessionState,
+  add: (key: string, owner: string) => void
+): void {
   for (const [owner, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
     tabs.forEach((tab) => add(`terminal:${tab.id}`, owner))
   }
@@ -162,5 +182,4 @@ export function collectOrcadMigrationSessionEntityOwners(
   for (const [owner, groups] of Object.entries(session.tabGroups ?? {})) {
     groups.forEach((group) => add(`group:${group.id}`, owner))
   }
-  return owners
 }

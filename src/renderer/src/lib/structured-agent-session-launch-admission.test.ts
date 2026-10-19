@@ -429,3 +429,27 @@ describe('a paired server that cannot resolve a new workspace yet', () => {
     expect(onHostDeclined).toHaveBeenCalledOnce()
   })
 })
+
+it('keeps explicit refusal owned by admission and keeps an opened chat failure out of the menu', async () => {
+  for (const supported of [false, true]) {
+    mocks.toastError.mockClear()
+    mocks.createSupport.mockResolvedValue({ supported, reason: 'wsl' })
+    const plan = adoptAgentSessionLaunchVerdict({ ...pairedPlan(), requestedSurface: 'chat' })
+    if (supported) {
+      mocks.createSupport
+        .mockResolvedValueOnce({ supported: true })
+        .mockResolvedValueOnce({ supported: false })
+    }
+    const onHostDeclined = vi.fn()
+    const launch = beginStructuredAgentSessionProvisionalLaunch({ plan, hooks: {}, onHostDeclined })
+    await expect(launch?.settlement).resolves.toMatchObject({ kind: 'failed' })
+    expect(onHostDeclined).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledTimes(supported ? 0 : 1)
+    if (!supported) {
+      await expect(launch?.promptDeliveryResult).resolves.toMatchObject({
+        delivered: false,
+        failureNotified: true
+      })
+    }
+  }
+})

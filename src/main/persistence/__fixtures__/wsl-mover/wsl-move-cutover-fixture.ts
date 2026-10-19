@@ -1,5 +1,5 @@
 /** A valid WSL move journal record whose manifest is bound to it. */
-import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../../shared/orcad-migration-manifest-validation'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import {
   wslMoveJournalKey,
   type WslMoveCutover,

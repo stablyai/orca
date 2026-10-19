@@ -13,7 +13,7 @@ import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
-  isRuntimeOwnedSshTargetId,
+  isOwnedSshTargetId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../../shared/execution-host'
@@ -79,7 +79,7 @@ export function SshStatusSegment({
   const targets = Array.from(sshTargetLabels.entries())
     // Why: runtime-owned (per-workspace-env) SSH targets are hidden — never list them
     // as a user-facing SSH host in the status bar.
-    .filter(([id]) => !isRuntimeOwnedSshTargetId(id) && visibleHosts.has(toSshExecutionHostId(id)))
+    .filter(([id]) => !isOwnedSshTargetId(id) && visibleHosts.has(toSshExecutionHostId(id)))
     .map(([id, label]) => {
       const state = sshConnectionStates.get(id)
       return {

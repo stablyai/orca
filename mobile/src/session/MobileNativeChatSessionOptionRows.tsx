@@ -172,8 +172,23 @@ export function SessionOptionSummaryRow({
   valueColor?: string
   disabled: boolean
   divided: boolean
-  onPress: () => void
+  /** Absent for a value with no choice to make: the row reads as text, with no page behind it. */
+  onPress?: () => void
 }): React.JSX.Element {
+  if (!onPress) {
+    return (
+      <View
+        accessible
+        accessibilityLabel={`${label}, ${value}`}
+        style={[styles.summaryRow, divided && styles.rowDivided]}
+      >
+        <Text style={styles.summaryLabel}>{label}</Text>
+        <Text style={styles.summaryValue} numberOfLines={1}>
+          {value}
+        </Text>
+      </View>
+    )
+  }
   return (
     <Pressable
       accessibilityLabel={`${label}, ${value}`}

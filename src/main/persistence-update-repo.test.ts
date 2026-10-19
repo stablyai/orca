@@ -82,7 +82,7 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo())
 
-    const updated = store.updateRepo('r1', { displayName: 'renamed' })
+    const updated = store.updateRepo({ id: 'r1' }, { displayName: 'renamed' })
     expect(updated).not.toBeNull()
     expect(updated!.displayName).toBe('renamed')
     expect(store.getRepo('r1')!.displayName).toBe('renamed')
@@ -95,14 +95,14 @@ describe('Store', () => {
     const initialGeneration = getLocalWorktreeScanGeneration('scan-round-trip')
     expect(isLocalWorktreeScanGenerationCurrent('scan-round-trip', initialGeneration)).toBe(true)
 
-    const folder = store.updateRepo('scan-round-trip', { kind: 'folder' })
+    const folder = store.updateRepo({ id: 'scan-round-trip' }, { kind: 'folder' })
     expect(folder?.kind).toBe('folder')
     expect(isLocalWorktreeScanGenerationCurrent('scan-round-trip', initialGeneration)).toBe(false)
 
     const folderGeneration = getLocalWorktreeScanGeneration('scan-round-trip')
     expect(isLocalWorktreeScanGenerationCurrent('scan-round-trip', folderGeneration)).toBe(true)
 
-    const git = store.updateRepo('scan-round-trip', { kind: 'git' })
+    const git = store.updateRepo({ id: 'scan-round-trip' }, { kind: 'git' })
     expect(git?.kind).toBe('git')
     expect(isLocalWorktreeScanGenerationCurrent('scan-round-trip', folderGeneration)).toBe(false)
   })
@@ -119,7 +119,10 @@ describe('Store', () => {
       })
     )
 
-    const updated = store.updateRepo('shared', { displayName: 'Remote renamed' }, 'ssh:server')
+    const updated = store.updateRepo(
+      { id: 'shared', executionHostId: 'ssh:server' },
+      { displayName: 'Remote renamed' }
+    )
 
     expect(updated?.path).toBe('/remote/repo')
     expect(store.getRepos().filter((repo) => repo.id === 'shared')).toMatchObject([
@@ -128,15 +131,30 @@ describe('Store', () => {
     ])
   })
 
+  it('updateRepo writes the row it was handed, not the first row with that id', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'shared', path: '/remote/repo', connectionId: 'server' }))
+    store.addRepo(makeRepo({ id: 'shared', path: '/local/repo' }))
+    const local = store.getRepos().find((repo) => repo.path === '/local/repo')!
+
+    const updated = store.updateRepo(local, { displayName: 'Local renamed' })
+
+    expect(updated?.path).toBe('/local/repo')
+    expect(store.getRepos().map((repo) => repo.displayName)).toEqual(['test', 'Local renamed'])
+  })
+
   it('updateRepo keeps project host setup compatibility records in sync', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ worktreeBasePath: '../worktrees' }))
 
-    store.updateRepo('r1', {
-      displayName: 'renamed',
-      worktreeBasePath: '../new-worktrees',
-      upstream: { owner: 'stablyai', repo: 'orca' }
-    })
+    store.updateRepo(
+      { id: 'r1' },
+      {
+        displayName: 'renamed',
+        worktreeBasePath: '../new-worktrees',
+        upstream: { owner: 'stablyai', repo: 'orca' }
+      }
+    )
 
     expect(store.getProjects()).toEqual([
       expect.objectContaining({
@@ -176,7 +194,7 @@ describe('Store', () => {
     })
     const store = await createStore()
 
-    store.updateRepo('r1', { displayName: 'renamed' })
+    store.updateRepo({ id: 'r1' }, { displayName: 'renamed' })
     store.reorderRepos(['r1'])
 
     expect(store.getProjects().map((project) => project.id)).toEqual(['repo:r1', 'cloud-project'])
@@ -459,7 +477,7 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo())
 
-    store.updateRepo('r1', { projectHostSetupMethod: 'cloned' })
+    store.updateRepo({ id: 'r1' }, { projectHostSetupMethod: 'cloned' })
 
     expect(store.getRepo('r1')?.projectHostSetupMethod).toBe('cloned')
     expect(store.getProjectHostSetups()).toEqual([
@@ -474,13 +492,16 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo())
 
-    const updated = store.updateRepo('r1', {
-      repoIcon: {
-        type: 'image',
-        source: 'upload',
-        src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
-      } as never
-    })
+    const updated = store.updateRepo(
+      { id: 'r1' },
+      {
+        repoIcon: {
+          type: 'image',
+          source: 'upload',
+          src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
+        } as never
+      }
+    )
 
     expect(updated).not.toBeNull()
     expect(updated!.repoIcon).toBeUndefined()
@@ -491,7 +512,7 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo())
 
-    const updated = store.updateRepo('r1', { badgeColor: ' ABCDEF ' })
+    const updated = store.updateRepo({ id: 'r1' }, { badgeColor: ' ABCDEF ' })
 
     expect(updated!.badgeColor).toBe('#abcdef')
     expect(store.getRepo('r1')!.badgeColor).toBe('#abcdef')
@@ -501,7 +522,7 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo({ badgeColor: '#123456' }))
 
-    const updated = store.updateRepo('r1', { badgeColor: 'blue' })
+    const updated = store.updateRepo({ id: 'r1' }, { badgeColor: 'blue' })
 
     expect(updated!.badgeColor).toBe('#123456')
     expect(store.getRepo('r1')!.badgeColor).toBe('#123456')
@@ -527,12 +548,15 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo())
 
-    const updated = store.updateRepo('r1', {
-      upstream: { owner: ' stablyai ', repo: ' orca ' }
-    })
+    const updated = store.updateRepo(
+      { id: 'r1' },
+      {
+        upstream: { owner: ' stablyai ', repo: ' orca ' }
+      }
+    )
     expect(updated!.upstream).toEqual({ owner: 'stablyai', repo: 'orca' })
 
-    store.updateRepo('r1', { upstream: null })
+    store.updateRepo({ id: 'r1' }, { upstream: null })
     store.flush()
     const reloaded = await createStore()
     expect(reloaded.getRepo('r1')!.upstream).toBeNull()
@@ -542,20 +566,23 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo())
 
-    const updated = store.updateRepo('r1', {
-      gitRemoteIdentity: {
-        canonicalKey: 'gitlab.example.com/team/orca',
-        remoteName: 'origin',
-        remoteUrl: 'git@gitlab.example.com:team/orca.git'
+    const updated = store.updateRepo(
+      { id: 'r1' },
+      {
+        gitRemoteIdentity: {
+          canonicalKey: 'gitlab.example.com/team/orca',
+          remoteName: 'origin',
+          remoteUrl: 'git@gitlab.example.com:team/orca.git'
+        }
       }
-    })
+    )
     expect(updated!.gitRemoteIdentity).toEqual({
       canonicalKey: 'gitlab.example.com/team/orca',
       remoteName: 'origin',
       remoteUrl: 'git@gitlab.example.com:team/orca.git'
     })
 
-    store.updateRepo('r1', { gitRemoteIdentity: null })
+    store.updateRepo({ id: 'r1' }, { gitRemoteIdentity: null })
     store.flush()
     const reloaded = await createStore()
     expect(reloaded.getRepo('r1')!.gitRemoteIdentity).toBeNull()
@@ -573,9 +600,12 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo())
 
-    const updated = store.updateRepo('r1', {
-      upstream: { owner: ' acme ', repo: ' widgets ', host: ' GHE.example:8443 ' }
-    })
+    const updated = store.updateRepo(
+      { id: 'r1' },
+      {
+        upstream: { owner: ' acme ', repo: ' widgets ', host: ' GHE.example:8443 ' }
+      }
+    )
     expect(updated!.upstream).toEqual({
       owner: 'acme',
       repo: 'widgets',
@@ -608,14 +638,14 @@ describe('Store', () => {
 
   it('updateRepo returns null for nonexistent id', async () => {
     const store = await createStore()
-    expect(store.updateRepo('nope', { displayName: 'x' })).toBeNull()
+    expect(store.updateRepo({ id: 'nope' }, { displayName: 'x' })).toBeNull()
   })
 
   it('updateRepo persists issueSourcePreference across reloads', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
 
-    const updated = store.updateRepo('r1', { issueSourcePreference: 'upstream' })
+    const updated = store.updateRepo({ id: 'r1' }, { issueSourcePreference: 'upstream' })
     expect(updated!.issueSourcePreference).toBe('upstream')
 
     store.flush()
@@ -627,16 +657,19 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo())
 
-    const updated = store.updateRepo('r1', {
-      ghAccount: { host: ' GitHub.COM ', user: ' Alice ' }
-    })
+    const updated = store.updateRepo(
+      { id: 'r1' },
+      {
+        ghAccount: { host: ' GitHub.COM ', user: ' Alice ' }
+      }
+    )
     expect(updated!.ghAccount).toEqual({ host: 'github.com', user: 'Alice' })
 
     store.flush()
     const reloaded = await createStore()
     expect(reloaded.getRepo('r1')!.ghAccount).toEqual({ host: 'github.com', user: 'Alice' })
 
-    const cleared = reloaded.updateRepo('r1', { ghAccount: null })
+    const cleared = reloaded.updateRepo({ id: 'r1' }, { ghAccount: null })
     expect(cleared!.ghAccount).toBeUndefined()
   })
 
@@ -644,7 +677,7 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo())
 
-    const updated = store.updateRepo('r1', { forkSyncMode: 'safe-auto' })
+    const updated = store.updateRepo({ id: 'r1' }, { forkSyncMode: 'safe-auto' })
     expect(updated!.forkSyncMode).toBe('safe-auto')
 
     store.flush()
@@ -656,7 +689,8 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo({ forkSyncMode: 'ask' }))
 
-    const updated = store.updateRepo('r1', { forkSyncMode: 'always' as never })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: feeds the sanitizer a value its type forbids, on purpose.
+    const updated = store.updateRepo({ id: 'r1' }, { forkSyncMode: 'always' as never })
 
     expect(updated!.forkSyncMode).toBe('ask')
 
@@ -683,7 +717,7 @@ describe('Store', () => {
     expect(store.getRepo('r1')!.issueSourcePreference).toBe('origin')
 
     // Why: `Object.assign` skips undefined, so updateRepo needs an explicit delete branch or the key with value undefined wouldn't clear.
-    store.updateRepo('r1', { issueSourcePreference: undefined })
+    store.updateRepo({ id: 'r1' }, { issueSourcePreference: undefined })
     expect(store.getRepo('r1')!.issueSourcePreference).toBeUndefined()
 
     store.flush()

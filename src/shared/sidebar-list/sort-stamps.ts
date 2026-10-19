@@ -1,8 +1,4 @@
-import {
-  agentTurnEndedOnPurpose,
-  type AgentMainAgentVerdictSource
-} from '../agent-main-agent-verdict'
-import { detectAgentStatusFromTitle } from '../agent-detection'
+import { agentPhaseTransition, nextAgentPhase, type AgentPhase } from '../agent-transitions'
 
 /**
  * Sort stamps the host that owns a workspace writes on its record when something happens there.
@@ -10,7 +6,7 @@ import { detectAgentStatusFromTitle } from '../agent-detection'
  */
 
 /** Smart's tiers, most demanding first. No tier means Rest, ordered by `recentAt`. */
-export const SMART_TIERS = ['needs-you', 'done', 'working'] as const
+export const SMART_TIERS = ['needs-you', 'done', 'working'] as const satisfies readonly AgentPhase[]
 export type SmartTier = (typeof SMART_TIERS)[number]
 
 export function isSmartTier(value: unknown): value is SmartTier {
@@ -23,7 +19,6 @@ export type SmartStampFields = { smartTier?: SmartTier; smartAt?: number }
 export type SortStamps = { recentAt: number } & SmartStampFields
 
 /** One agent pane's place in Smart, and when it took it. */
-export type AgentPhase = SmartTier | 'rest'
 export type AgentPaneState = { phase: AgentPhase; at: number }
 
 /** A `recentAt` stamp this soon after the previous one is dropped; the first one wins. */
@@ -40,33 +35,6 @@ export type SortStampEvent =
   | { kind: 'bell' }
   | { kind: 'terminal-started' }
 
-/** A hook row's phase. A turn the user stopped is not news, so it rests. */
-export function hookRowAgentPhase(row: AgentMainAgentVerdictSource): AgentPhase {
-  switch (row.state) {
-    case 'blocked':
-    case 'waiting':
-      return 'needs-you'
-    case 'working':
-      return 'working'
-    case 'done':
-      return agentTurnEndedOnPurpose(row) ? 'rest' : 'done'
-  }
-}
-
-/** A hookless agent's phase from its terminal title, by the heuristic Smart's dots use. */
-export function titleAgentPhase(title: string): AgentPhase {
-  switch (detectAgentStatusFromTitle(title)) {
-    case 'permission':
-      return 'needs-you'
-    case 'working':
-      return 'working'
-    case 'idle':
-      return 'done'
-    case null:
-      return 'rest'
-  }
-}
-
 /**
  * A pane's state after observing `observed` at `now`. Done only follows a turn, and stays until
  * the next prompt or the agent exits (owner decision Q1: no fade; change it here before the flip).
@@ -77,7 +45,7 @@ export function nextAgentPaneState(
   observed: AgentPhase,
   now: number
 ): AgentPaneState {
-  const phase = observed === 'done' && previous.phase === 'rest' ? 'rest' : observed
+  const phase = nextAgentPhase(previous.phase, observed)
   if (phase === previous.phase) {
     return previous
   }
@@ -110,12 +78,7 @@ export function classifySortStampEvent(
   event: SortStampEvent,
   now: number
 ): SortStamps | null {
-  const stampsRecent =
-    event.kind !== 'agent' ||
-    (event.from !== event.to &&
-      (event.to === 'needs-you' ||
-        event.to === 'done' ||
-        (event.to === 'working' && event.from !== 'needs-you')))
+  const stampsRecent = event.kind !== 'agent' || agentPhaseTransition(event.from, event.to) !== null
   const recentAt =
     stampsRecent && now - current.recentAt >= RECENT_STAMP_THROTTLE_MS ? now : current.recentAt
   const smart =
@@ -133,4 +96,13 @@ export function classifySortStampEvent(
     recentAt,
     ...(smart.smartTier !== undefined ? { smartTier: smart.smartTier, smartAt: smart.smartAt } : {})
   }
+}
+
+/** A finish, a request for input or a bell: news that flags the workspace for whoever isn't looking. */
+export function isUnreadNews(event: SortStampEvent): boolean {
+  if (event.kind !== 'agent') {
+    return event.kind === 'bell'
+  }
+  const transition = agentPhaseTransition(event.from, event.to)
+  return transition === 'turn-finished' || transition === 'needs-input'
 }

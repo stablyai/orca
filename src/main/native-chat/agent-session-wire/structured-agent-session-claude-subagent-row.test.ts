@@ -1,7 +1,7 @@
 // A Claude background helper through the shipping adapter, host and child records: its saved row
 // stays working past its spawn result and its turn's end until its own end frame; and a helper the
-// store had no room for keeps the strip incomplete, and the agent past idle cleanup, until the
-// strip's Stop ends the agent.
+// store refused keeps the strip incomplete, and the agent past idle cleanup, until the strip's Stop
+// ends the agent.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,8 +9,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { AGENT_STATUS_STORE_LIMITS } from '../../../shared/agent-status-store-contract'
-import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { isSubagentBlock } from '../../../shared/native-chat-types'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import { acpChildWorkStatusSink } from '../../acp/acp-structured-child-work.test-support'
@@ -184,38 +182,9 @@ it("keeps a background helper's row working past its spawn result and its turn's
   )
 })
 
-it("keeps an agent whose helper the store had no room for past idle cleanup, until the strip's Stop", async () => {
-  // Another session holds every child record the store has room for.
-  const busy = makeStructuredAgentStatusSubject(
-    { executionHostId: 'local', wslDistro: null, workspaceId: 'busy', workspaceKind: 'folder' },
-    'busy-session'
-  )
-  records.sink.publish(
-    {
-      sessionId: 'busy-session',
-      workspaceId: 'busy',
-      agent: 'claude',
-      status: 'working',
-      latestPrompt: 'Busy',
-      updatedAt: 1
-    },
-    busy
-  )
-  records.sink.publishChildWork?.(
-    busy,
-    Array.from({ length: AGENT_STATUS_STORE_LIMITS.children }, (_unused, index) => ({
-      type: 'live' as const,
-      observedAt: 1,
-      child: {
-        handle: { idKind: 'task_id' as const, id: `busy-${index}` },
-        kind: 'agent' as const,
-        residency: 'background' as const,
-        state: 'working' as const,
-        stoppable: true
-      }
-    })),
-    'claude'
-  )
+it("keeps an agent whose helper the store refused past idle cleanup, until the strip's Stop", async () => {
+  // The store refuses every child record this session reports.
+  records.sink.publishChildWork = () => undefined
   const connection = claude.connections[0]!
   await sendAndEcho(connection, 'Run it in the background.')
   for (const [index, captured] of RESUMED_BY_MESSAGE.filter(({ at }) => at <= 3_349).entries()) {

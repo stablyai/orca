@@ -6,7 +6,7 @@
  * relay resolved. Asking that relay, or probing its socket, with the same runtime is what keeps a
  * host with no PATH Node from reading every relay as unverifiable.
  */
-import type { SshConnection } from '../ssh-connection'
+import type { SshConnection } from '../connection/ssh-connection'
 import { execCommand } from '../remote-exec/remote-exec-command'
 
 const RELAY_DAEMON_MARKER = ' relay.js --detached '

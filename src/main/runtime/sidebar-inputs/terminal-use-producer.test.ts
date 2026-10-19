@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { TERMINAL_USE_THROTTLE_MS, TerminalUseProducer } from './terminal-use-producer'
-import type { WorkspaceRef } from './sort-stamp-records'
+import type { AgentPaneWorkspace } from '../../agent-hooks/agent-transition-detector'
 
-function harness(workspace: WorkspaceRef | null, fenced = false) {
+function harness(workspace: AgentPaneWorkspace | null, fenced = false) {
   const writes: string[] = []
   const records = new Set(['repo::/w', 'ssh:box|repo::/w', 'f1'])
   const producer = new TerminalUseProducer({

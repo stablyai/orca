@@ -12,6 +12,7 @@ import {
   findIndexedRepoOwner as findRepoRecord,
   findIndexedWorktreeOwner as findWorktreeRecord,
   hasIndexedDetectedWorktree,
+  resolveIndexedProjectGroupOwner,
   resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
@@ -23,8 +24,15 @@ import {
   getRuntimeEnvironmentIdForFolderWorkspace
 } from './folder-workspace-runtime-owner'
 import {
+  namedHostForOwnerRef,
+  resolveOwner,
+  someWorktreeCopy,
+  type WorkspaceOwnerRef
+} from './resolve-owner'
+import { SELF_LOCAL_AUTHORITY, type HostAuthority } from '../../../shared/host-authority'
+import type { ExecutionHostOwnerMatch } from '../../../shared/worktree-execution-host-resolution'
+import {
   getFloatingWorkspaceOperationRoute,
-  resolveActiveWorkspaceRoute,
   resolveWorktreeOperationRouteResult
 } from './worktree-operation-route'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
@@ -51,59 +59,22 @@ function getActiveWorkspaceExecutionHostId(
     : null
 }
 
-export type WorktreeRuntimeOwner =
-  | { kind: 'runtime'; environmentId: string }
-  | { kind: 'non-runtime' }
-  // Why: the same repo id and path is published by two hosts (e.g. mid ssh-to-runtime migration).
-  | { kind: 'ambiguous' }
-
-const NON_RUNTIME_OWNER: WorktreeRuntimeOwner = { kind: 'non-runtime' }
-const AMBIGUOUS_OWNER: WorktreeRuntimeOwner = { kind: 'ambiguous' }
-
-function toRuntimeOwner(environmentId: string | null | undefined): WorktreeRuntimeOwner {
-  return environmentId ? { kind: 'runtime', environmentId } : NON_RUNTIME_OWNER
-}
-
 /**
- * @deprecated Use `resolveOwner` (`./resolve-owner`), which keeps the host and reports twins as
- * `ambiguous`. Here ambiguous collapses to `null`, which callers read as local; read-only use only.
+ * The server the pre-`resolveOwner` resolver picked for a row that names no host (`null`: this
+ * app or a twin). Only {@link resolveOwnerWithLegacyFallback} reads it, after a named host,
+ * a twin and every stamped row have already been answered.
  */
-export function getRuntimeEnvironmentIdForWorktree(
+function legacyRuntimeEnvironmentId(
   state: WorktreeRuntimeOwnerState,
-  worktreeId: string | null | undefined
+  worktreeId: string
 ): string | null {
-  const owner = resolveRuntimeOwnerForWorktree(state, worktreeId)
-  return owner.kind === 'runtime' ? owner.environmentId : null
-}
-
-/**
- * @deprecated Use `resolveOwner` (`./resolve-owner`). This drops the host, reads local, SSH and
- * unknown alike as `non-runtime`, and sends folder twins to the focused runtime.
- */
-export function resolveRuntimeOwnerForWorktree(
-  state: WorktreeRuntimeOwnerState,
-  worktreeId: string | null | undefined
-): WorktreeRuntimeOwner {
-  if (!worktreeId) {
-    return NON_RUNTIME_OWNER
-  }
-  const floatingRoute = getFloatingWorkspaceOperationRoute(worktreeId)
-  if (floatingRoute) {
-    return toRuntimeOwner(floatingRoute.runtimeEnvironmentId)
-  }
-  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
-  if (activeRoute) {
-    return toRuntimeOwner(activeRoute.runtimeEnvironmentId)
-  }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    return toRuntimeOwner(
-      getRuntimeEnvironmentIdForFolderWorkspace(state, workspaceScope.folderWorkspaceId)
-    )
+    return getRuntimeEnvironmentIdForFolderWorkspace(state, workspaceScope.folderWorkspaceId)
   }
   const indexedOwner = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
   if (indexedOwner.kind === 'ambiguous') {
-    return AMBIGUOUS_OWNER
+    return null
   }
   if (indexedOwner.kind === 'resolved') {
     const owner = indexedOwner.owner
@@ -113,15 +84,16 @@ export function resolveRuntimeOwnerForWorktree(
     // Why: a row on a web client that names no server is still reached through its only one.
     const onlyHost = getPairedWebClientEnvironmentId(state)
     if (!hasDetectedOwner && (projectedRuntimeOwner || parsedHost)) {
-      return toRuntimeOwner(
+      return (
         projectedRuntimeOwner ||
-          (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : onlyHost)
+        (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : onlyHost) ||
+        null
       )
     }
     if (!hasDetectedOwner) {
       const repoResolution = resolveIndexedRepoOwner(state.repos, owner.repoId)
       if (repoResolution.kind === 'ambiguous') {
-        return AMBIGUOUS_OWNER
+        return null
       }
       if (
         repoResolution.kind === 'resolved' &&
@@ -129,18 +101,13 @@ export function resolveRuntimeOwnerForWorktree(
       ) {
         const repoHost = parseExecutionHostId(getRepoExecutionHostId(repoResolution.owner))
         if (repoHost) {
-          return toRuntimeOwner(repoHost.kind === 'runtime' ? repoHost.environmentId : onlyHost)
+          return (repoHost.kind === 'runtime' ? repoHost.environmentId : onlyHost) || null
         }
       }
     }
   }
   const resolution = resolveWorktreeOperationRouteResult(state, worktreeId)
-  if (resolution.kind === 'ambiguous') {
-    return AMBIGUOUS_OWNER
-  }
-  return resolution.kind === 'resolved'
-    ? toRuntimeOwner(resolution.route.runtimeEnvironmentId)
-    : NON_RUNTIME_OWNER
+  return resolution.kind === 'resolved' ? resolution.route.runtimeEnvironmentId || null : null
 }
 
 function getFocusedRuntimeOrLocalExecutionHostId(
@@ -223,4 +190,80 @@ export function getExecutionHostIdForWorktree(
     getKnownExecutionHostIdForWorktree(state, worktreeId) ??
     getFocusedRuntimeOrLocalExecutionHostId(state)
   )
+}
+
+function hasRowHost(row: { executionHostId?: string | null; connectionId?: string | null }) {
+  return Boolean(row.executionHostId?.trim() || row.connectionId?.trim())
+}
+
+/** Through the owner index: rows on two hosts always include a stamped one. */
+function hasStampedRepoRow(state: WorktreeRuntimeOwnerState, repoId: string): boolean {
+  const repo = resolveIndexedRepoOwner(state.repos, repoId)
+  return repo.kind === 'ambiguous' || (repo.kind === 'resolved' && hasRowHost(repo.owner))
+}
+
+/** A row that names its host; without one the deprecated resolver's guess still applies. */
+function hasHostEvidence(state: WorktreeRuntimeOwnerState, workspaceId: string): boolean {
+  if (getFloatingWorkspaceOperationRoute(workspaceId)) {
+    return true
+  }
+  const scope = parseWorkspaceKey(workspaceId)
+  if (scope?.type === 'folder') {
+    const folder = findFolderWorkspaceOwner(state, scope.folderWorkspaceId)
+    if (!folder || hasRowHost(folder)) {
+      return Boolean(folder)
+    }
+    const group = resolveIndexedProjectGroupOwner(state.projectGroups, folder.projectGroupId)
+    return group.kind === 'ambiguous' || (group.kind === 'resolved' && hasRowHost(group.owner))
+  }
+  const repoId = getRepoIdFromWorktreeId(workspaceId)
+  return (
+    someWorktreeCopy(state, workspaceId, (row) =>
+      Boolean(row.hostId?.trim() || row.runtimeOwnerEnvironmentId?.trim())
+    ) || hasStampedRepoRow(state, repoId)
+  )
+}
+
+/**
+ * `resolveOwner` for callers folding off the deprecated resolvers: a named host and stamped rows
+ * resolve as `resolveOwner` does (twins and contested hosts stay `ambiguous`), while `missing` and
+ * rows with no host stamp keep the deprecated answer, single focused runtime included.
+ */
+export function resolveOwnerWithLegacyFallback(
+  state: WorktreeRuntimeOwnerState,
+  ref: WorkspaceOwnerRef
+): ExecutionHostOwnerMatch<HostAuthority> {
+  const match = resolveOwner(state, ref)
+  if (
+    namedHostForOwnerRef(state, ref) ||
+    match.kind === 'ambiguous' ||
+    (match.kind === 'resolved' && hasHostEvidence(state, ref.workspaceId))
+  ) {
+    return match
+  }
+  const legacyEnvironmentId = legacyRuntimeEnvironmentId(state, ref.workspaceId)
+  if (legacyEnvironmentId) {
+    return {
+      kind: 'resolved',
+      owner: { endpoint: { kind: 'environment', environmentId: legacyEnvironmentId }, at: 'local' }
+    }
+  }
+  return match.kind === 'resolved' ? match : { kind: 'resolved', owner: SELF_LOCAL_AUTHORITY }
+}
+
+/**
+ * The paired server behind {@link resolveOwnerWithLegacyFallback}, or `null` for this app, a
+ * directly dialed SSH target or a twin: for readers whose twin answer is "no server", as before.
+ */
+export function runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+  state: WorktreeRuntimeOwnerState,
+  workspaceId: string | null | undefined
+): string | null {
+  if (!workspaceId) {
+    return null
+  }
+  const match = resolveOwnerWithLegacyFallback(state, { workspaceId })
+  return match.kind === 'resolved' && match.owner.endpoint.kind === 'environment'
+    ? match.owner.endpoint.environmentId
+    : null
 }

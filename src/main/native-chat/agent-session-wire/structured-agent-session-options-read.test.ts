@@ -73,6 +73,40 @@ describe('options at rest', () => {
     expect(read).toHaveBeenLastCalledWith({ agent: 'codex', sessionId: SESSION, savedOnly: true })
   })
 
+  it("names the saved listing's ids for a live child with no listing of its own, as at rest", async () => {
+    const record = { ...restingRecord(), options: { model: 'gpt-unlisted', effort: 'high' } }
+    const listed = { id: 'gpt-5.5', label: 'GPT-5.5', isDefault: true, efforts: [] }
+    let live = false
+    const conversation = () => ({
+      child: live ? { fence: 7 } : null,
+      params: { provider: 'codex' },
+      journal: { threadGoal: () => null, context: { floor: () => null } }
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read touches only the declared context fields.
+    const context = {
+      deps: {
+        adapter: {
+          readOptions: async () => ({
+            models: [listed, { ...listed, id: 'gpt-unlisted', isDefault: false }],
+            current: { model: 'gpt-unlisted', effort: 'high' }
+          })
+        },
+        agents: NO_STRUCTURED_AGENTS,
+        store: { getRecord: () => record },
+        modelCatalog: { read: async () => ({ origin: 'probe', models: [listed], fetchedAt: 1 }) }
+      },
+      serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
+      openConversation: async () => conversation(),
+      conversation: async () => conversation()
+    } as unknown as StructuredAgentSessionMutationContext
+    const read = () =>
+      readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
+    const resting = await read()
+    live = true
+    expect((await read()).listedModelIds).toEqual(resting.listedModelIds)
+    expect(resting.listedModelIds).toEqual(['gpt-5.5'])
+  })
+
   it.each(['codex', 'omp', 'grok', 'opencode'] as const)(
     '%s keeps an unknown model and learns menus from later options',
     async (provider) => {
@@ -147,8 +181,8 @@ describe('live Codex option reads', () => {
   it('keeps newer saved picks after a cold live listing waits without holding the session lane', async () => {
     const listing = Promise.withResolvers<void>()
     const queue = new StructuredAgentSessionTaskQueue()
+    const record = { ...restingRecord(), options: { model: 'gpt-picked', effort: 'high' } }
     const child = { fence: 7 }
-    const record = restingRecord()
     const apply = vi.fn(() => ({
       models: [{ id: 'gpt-live', label: 'GPT Live', efforts: [] }],
       current: { model: 'gpt-live', effort: 'high', confirmed: ['model', 'effort'] as const }
@@ -175,7 +209,9 @@ describe('live Codex option reads', () => {
       conversation: async () => live
     } as unknown as StructuredAgentSessionMutationContext
 
-    const reading = readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
+    const reading = readStructuredAgentSessionOptions(context, SESSION, {
+      readsWithoutModel: false
+    })
     await vi.waitFor(() =>
       expect(prepareReadOptions).toHaveBeenCalledWith({ sessionId: SESSION, fence: 7 })
     )
@@ -186,7 +222,7 @@ describe('live Codex option reads', () => {
     record.options = { model: 'gpt-next', effort: 'low' }
     listing.resolve()
     await expect(reading).resolves.toMatchObject({
-      current: { model: 'gpt-next', effort: 'low', confirmed: [] }
+      current: { model: 'gpt-next', effort: 'low' }
     })
     expect(apply).toHaveBeenCalledOnce()
   })

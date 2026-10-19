@@ -1,6 +1,6 @@
-import type { SshConnectionCallbacks } from '../../ssh/ssh-connection-utils'
+import type { SshConnectionCallbacks } from '../../ssh/connection/ssh-connection-callbacks'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import { isSshHostCensusInFlight } from '../../ssh/ssh-connection-attribution'
+import { isSshHostCensusInFlight } from '../../ssh/connection/ssh-connection-attribution'
 import {
   clearSshCredentialDeclined,
   isSshCredentialDeclined
@@ -11,7 +11,7 @@ import {
   testingTargets
 } from './ssh-connect-attempt-registry'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
-import { getSshTargetRegistryStore } from '../../ssh/ssh-target-registry'
+import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { recordSshSignInRequirement } from './ssh-sign-in-requirement'
 import { restoreManagedHostPortForwards } from './ssh-managed-port-forward-restore'
 import { requestCredential } from './ssh-passphrase'

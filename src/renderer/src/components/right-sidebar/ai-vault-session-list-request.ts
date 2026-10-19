@@ -52,6 +52,7 @@ export function cacheAiVaultSessionList(
     key: aiVaultSessionResultCacheKey(request.executionHostScope, request.scopePaths),
     executionHostScope: request.executionHostScope,
     limit: request.sessionLimit,
+    scopePaths: request.scopePaths,
     result,
     replaceHostEntries: options.replaceHostEntries
   })

@@ -150,7 +150,8 @@ async function commandTurn(clientMessageId: string) {
   return (await journal()).items.find((item) => item.itemId === itemId)
 }
 
-it('answers at handover, then journals its own entry, turn and result (B1, B16)', async () => {
+it('answers at handover before the provider reports holding the command, then journals its result', async () => {
+  Object.assign(state.host.deps.adapter, { heldSends: () => new Set<string>() })
   await attach()
   const events = await subscribe()
   const params = compactParams()
@@ -379,7 +380,7 @@ it('refuses the command at handover when the provider opened a turn meanwhile (B
   void state.host['tasks'].serialize(SESSION, () => held.promise)
   const commanded = state.host.conversationCommand(CALLER, params)
   void state.host['tasks'].serialize(SESSION, async () => {
-    events?.appendItem(
+    await events?.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'provider-turn', ordinal: 0 },
       { kind: 'turn', turnId: 'provider-turn', state: 'running' },
       { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }

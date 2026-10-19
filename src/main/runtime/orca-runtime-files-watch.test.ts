@@ -57,7 +57,10 @@ import {
   awaitRuntimeFileWatcherUnsubscribes
 } from './files/watch/file-watcher-leases'
 import { RuntimeFileCommands } from './orca-runtime-files'
-import { WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS } from './files/watch/windows-file-watch'
+import {
+  WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS,
+  WINDOWS_RUNTIME_FILE_WATCH_REFRESH_MS
+} from './files/watch/windows-file-watch'
 
 function createWindowsWatcher(close: () => void) {
   const watcher = new EventEmitter() as EventEmitter & { close: ReturnType<typeof vi.fn> }
@@ -146,7 +149,7 @@ describe('RuntimeFileCommands file watching', () => {
 
     emit?.()
     emit?.()
-    await vi.advanceTimersByTimeAsync(149)
+    await vi.advanceTimersByTimeAsync(WINDOWS_RUNTIME_FILE_WATCH_REFRESH_MS - 1)
     expect(onEvents).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1)

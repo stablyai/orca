@@ -30,7 +30,7 @@ export type ReposIpcMocks = {
     | 'getSshTargets',
     ReposIpcSpy
   > & {
-    updateRepo: Mock<(repoId: string, updates: Record<string, unknown>) => unknown>
+    updateRepo: Mock<(target: { id: string }, updates: Record<string, unknown>) => unknown>
   }
   gitSpawnMock: ReposIpcSpy
   gitSpawnAfterWindowsEnvironmentReadyMock: ReposIpcSpy

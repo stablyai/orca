@@ -62,10 +62,14 @@ import {
   OptionsParams,
   RewindParams,
   SendParams,
+  SleepWorkspaceParams,
   SubscribeParams,
   UnsubscribeParams
 } from './structured-agent-session-schemas'
 import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { structuredSessionNeverStarted } from '../../agent-session-record-founding'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY } from '../../../../shared/protocol-version'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
@@ -161,6 +165,52 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       // Clients call this only when the user closes this chat's tab or cancels its launch.
       await host.close(params.sessionId, 'user-close')
       return { ok: true as const }
+    }
+  }),
+  defineMethod({
+    name: 'agentSession.sleepWorkspace',
+    permission: 'workspace',
+    params: SleepWorkspaceParams,
+    handler: async (params, ctx) => {
+      requireStructuredCapability(ctx)
+      const installed = getStructuredAgentSessionHost()
+      if (installed) {
+        return installed.sleepWorkspace(params.workspaceId)
+      }
+      let store: Awaited<ReturnType<typeof ctx.runtime.openAgentSessionRecordStore>>
+      try {
+        store = await ctx.runtime.openAgentSessionRecordStore()
+      } catch (error) {
+        const appeared = getStructuredAgentSessionHost()
+        if (appeared) {
+          return appeared.sleepWorkspace(params.workspaceId)
+        }
+        console.warn('[agent-session] workspace sleep record inventory unavailable', error)
+        return { stoppedSessionIds: [], failures: [{ reason: 'inventory-unavailable' }] }
+      }
+      const appeared = getStructuredAgentSessionHost()
+      if (appeared) {
+        return appeared.sleepWorkspace(params.workspaceId)
+      }
+      try {
+        const records = store
+          .listRecords()
+          .filter(
+            (record) =>
+              record.location.workspaceId === params.workspaceId &&
+              record.location.executionHostId === LOCAL_EXECUTION_HOST_ID
+          )
+        const stoppedSessionIds = records
+          .filter(structuredSessionNeverStarted)
+          .map((record) => record.sessionId)
+        const failures = records
+          .filter((record) => !structuredSessionNeverStarted(record))
+          .map((record) => ({ sessionId: record.sessionId, reason: 'stop-unverifiable' as const }))
+        return failures.length > 0 ? { stoppedSessionIds, failures } : { stoppedSessionIds }
+      } catch (error) {
+        console.warn('[agent-session] workspace sleep record inventory failed', error)
+        return { stoppedSessionIds: [], failures: [{ reason: 'inventory-unavailable' }] }
+      }
     }
   }),
   ...STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS,

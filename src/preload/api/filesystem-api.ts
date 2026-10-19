@@ -20,6 +20,10 @@ import type {
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import type { LocalFileAccess } from '../../shared/local-file-access'
 import type {
+  FileWriteDiskPrecondition,
+  FileWriteResult
+} from '../../shared/file-write-disk-precondition'
+import type {
   CreateVenvResult,
   KernelFrameEvent,
   KernelStartResult,
@@ -114,8 +118,9 @@ export type FilesystemApi = {
         content: string
         connectionId?: string
         access?: LocalFileAccess
+        diskPrecondition?: FileWriteDiskPrecondition
       } & SshMutationExpectation
-    ) => Promise<void>
+    ) => Promise<FileWriteResult>
     createFile: (
       args: {
         filePath: string

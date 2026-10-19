@@ -157,16 +157,18 @@ describe('branch line total completeness', () => {
 
     expect(result.didHitLimit).toBe(true)
     expect(result.branchLineTotal).toBeUndefined()
+    expect(result.branchLineTotalUnavailable).toBeUndefined()
     expect(rangedDiffCalls()).toEqual([])
   })
 
-  it('omits the total when the ranged numstat fails, rather than reporting zero', async () => {
+  it('invalidates the total when the ranged numstat fails, rather than reporting zero', async () => {
     const { repo } = await createFixtureRepo()
 
     const result = await getStatus(repo, { branchLineTotalMergeBase: BOGUS_MERGE_BASE })
 
     expect(result.entries.length).toBeGreaterThan(0)
     expect(result.branchLineTotal).toBeUndefined()
+    expect(result.branchLineTotalUnavailable).toBe(BOGUS_MERGE_BASE)
     // The diff really was attempted, so this is a failure path and not a gate.
     expect(rangedDiffCalls()).toHaveLength(1)
   })
@@ -178,6 +180,7 @@ describe('branch line total completeness', () => {
     const result = await getStatus(root, { branchLineTotalMergeBase: BOGUS_MERGE_BASE })
 
     expect(result.branchLineTotal).toBeUndefined()
+    expect(result.branchLineTotalUnavailable).toBeUndefined()
     expect(rangedDiffCalls()).toEqual([])
   })
 

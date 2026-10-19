@@ -30,6 +30,8 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { PtyTransport } from '../pty-transport-types'
 import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal-inline-images-settings'
+import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../../../shared/program-status/protocol'
+import { readCachedRuntimeEnvironmentCapability } from '../../../runtime/runtime-rpc-client'
 
 /** Transport creation, terminal capability replies, viewport claims, and undeliverable-input recovery. */
 export function installPtyInputRecovery(session: ConnectPanePtySession): void {
@@ -125,6 +127,12 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       resolveTerminalInlineImagesEnabled(useAppStore.getState().settings?.terminalInlineImages) &&
       terminalRendersInlineImages(session.pane.terminal),
     skipOscColorQueryReplies: () => !session.shouldAnswerPaneOscColorQueries(),
+    answerProgramStatusQueries: () =>
+      !session.runtimeEnvironmentId ||
+      readCachedRuntimeEnvironmentCapability(
+        session.runtimeEnvironmentId,
+        PROGRAM_STATUS_RUNTIME_CAPABILITY
+      ) === true,
     ...(session.isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
   })
   session.respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(

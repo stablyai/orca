@@ -25,6 +25,7 @@ export type RelayReconnectDependencies = {
 }
 
 type RecoveryGate = 'external-signal' | 'fresh-credential'
+type RetainableRelaySession = Pick<MobileRelayRpcSession, 'getFailure' | 'probeAfterBackground'>
 
 export class RelayReconnectController {
   private readonly failureCount = new RelayRecoveryFailureCount(RELAY_STABLE_CONNECTION_MS)
@@ -32,7 +33,7 @@ export class RelayReconnectController {
   private activeRelayConnectedAt: number | null = null
   private nextAttemptAt = 0
   private timer: ReturnType<typeof setTimeout> | null = null
-  private activeSession: Pick<MobileRelayRpcSession, 'getFailure'> | null = null
+  private activeSession: RetainableRelaySession | null = null
   private recoveryGate: RecoveryGate | null = null
   private gateReprobePending = false
   private gateReprobeStreak = 0
@@ -60,6 +61,8 @@ export class RelayReconnectController {
 
   handleForeground(logical: StableLogicalRpcClient, wasForeground: boolean): void {
     if (!wasForeground) {
+      // Only a relay the background grace retained is still set here.
+      this.activeSession?.probeAfterBackground()
       // Why: an app resume is a fresh signal, unlike repeated network-flap
       // nudges — it resets the gated cadence even when it cannot lift the
       // credential gate, so reopening the app never waits out a 15min tick.
@@ -121,8 +124,8 @@ export class RelayReconnectController {
     logical.suspendActiveSession()
   }
 
-  // Only the failure is ever read back; the narrow type keeps test doubles honest.
-  setActiveSession(session: Pick<MobileRelayRpcSession, 'getFailure'>): void {
+  // Only these are ever used; the narrow type keeps test doubles honest.
+  setActiveSession(session: RetainableRelaySession): void {
     // Why: an authenticated relay is the desktop accepting this device — the only
     // evidence that outranks a rejection streak.
     this.evidence.clear()
@@ -276,7 +279,7 @@ export class RelayReconnectController {
     // only reaches this branch — a director HTTP error carries no relay close code.
     const delay =
       recovery?.kind === 'retry-after-host-offline'
-        ? this.delays.hostOfflineDelayMs()
+        ? this.delays.hostOfflineDelayMs(this.failureCount.claimAttachTimeoutRedial(error))
         : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
     this.nextAttemptAt = now + delay
     if (error instanceof MobileE2EEAuthenticationError) {

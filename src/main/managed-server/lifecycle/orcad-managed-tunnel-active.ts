@@ -6,8 +6,8 @@ import {
   type RuntimeSshTunnelLink
 } from '../../../shared/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
-import type { SshConnection } from '../../ssh/ssh-connection'
-import { adoptSshConnection } from '../../ssh/ssh-connection-attribution'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
+import { adoptSshConnection } from '../../ssh/connection/ssh-connection-attribution'
 import type {
   PortForwardEntry,
   SshPortForwardManager

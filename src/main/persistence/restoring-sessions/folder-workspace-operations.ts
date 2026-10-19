@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { normalizeFolderWorkspaceName } from '../../../shared/folder-workspaces'
 import { getNextProjectGroupOrder } from '../../../shared/project-groups'
 import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-context'
@@ -9,6 +11,7 @@ import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-i
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
+import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-operations'
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
@@ -273,8 +276,12 @@ export class FolderWorkspacePersistenceOperations {
     return true
   }
 
-  moveProjectToGroup(repoId: string, groupId: string | null, order?: number): Repo | null {
-    const repo = this.state.repos.find((entry) => entry.id === repoId)
+  moveProjectToGroup(target: RepoHostTarget, groupId: string | null, order?: number): Repo | null {
+    const repo = findRepoRowForHostScopedWrite(
+      this.state.repos,
+      target.id,
+      getRepoExecutionHostId(target)
+    )
     if (!repo) {
       return null
     }
@@ -282,7 +289,7 @@ export class FolderWorkspacePersistenceOperations {
       groupId && (this.state.projectGroups ?? []).some((group) => group.id === groupId)
         ? groupId
         : null
-    const siblingRepos = this.state.repos.filter((entry) => entry.id !== repoId)
+    const siblingRepos = this.state.repos.filter((entry) => entry !== repo)
     repo.projectGroupId = normalizedGroupId
     repo.projectGroupOrder =
       typeof order === 'number' && Number.isFinite(order)

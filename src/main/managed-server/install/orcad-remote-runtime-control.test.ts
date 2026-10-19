@@ -12,7 +12,7 @@ import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { launchOrcadAndAwaitReadiness } from './orcad-remote-runtime-control'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import type { OrcadLaunchSpec } from './orcad-remote-launch'
-import { createSshOperationAbortError } from '../../ssh/ssh-connection-utils'
+import { createSshOperationAbortError } from '../../ssh/connection/ssh-exec-options'
 
 const host = getRemoteHostPlatform('linux-arm64')
 const spec: OrcadLaunchSpec = {

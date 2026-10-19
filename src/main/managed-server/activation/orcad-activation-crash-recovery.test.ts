@@ -15,8 +15,8 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../ssh/ssh-connection-utils', () => ({
-  shellEscape: (s: string) => `'${s}'`
+vi.mock('../../../shared/shell-argument-quoting', () => ({
+  quotePosixShell: (s: string) => `'${s}'`
 }))
 vi.mock('../install/remote-install-lock', async (importOriginal) => ({
   ...(await importOriginal<typeof InstallLock>()),
@@ -142,7 +142,10 @@ function expectExactlyTheRecordedSlot(): void {
 
 /** Unconfirmed termination never deletes a slot directory or a snapshot. */
 function expectNoSlotOrSnapshotRemoved(): void {
-  const removals = host.commands.filter((command) => /\brm -r?f\b/u.test(command))
+  const removals = host.commands
+    .filter((command) => /\brm -r?f\b/u.test(command))
+    // A failed capture's own partial archive was never a snapshot.
+    .map((command) => command.replace(/rm -f '[^']*\/state\.tar'\.partial/gu, ''))
   for (const command of removals) {
     // A file inside a slot (a consumed stop request) may go; the slot directory never does.
     expect(command).not.toMatch(/rm -r?f '[^']*\/orcad-\d[^'/]*\/?'/u)

@@ -4,7 +4,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import { ensureStructuredAgentSessionAgentForOperation } from './structured-agent-session-agent-start'
+import { startStructuredAgentSessionAgentForOperation } from './structured-agent-session-agent-start'
+import { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
+import { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
 import { recordStructuredAgentSessionOptionIntent } from './structured-agent-session-options-read'
 import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
@@ -18,11 +20,18 @@ describe('an operation whose agent start throws', () => {
     const context = {
       deps: { logger: log.logger },
       sessions: new Map(),
+      serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
+      tasks: { trackAttach: (start: Promise<unknown>) => start },
+      runtimeState: {
+        acquireAborts: new StructuredAgentSessionAcquireAborts(),
+        startFlights: new StructuredAgentSessionStartFlights(),
+        startupAttempts: { begin: () => {}, abandon: () => {} }
+      },
       reconcileLeases: () => Promise.reject(cause)
     }
 
-    const refused = await ensureStructuredAgentSessionAgentForOperation(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial context double; the start throws at `reconcileLeases`, before any other member is read.
+    const refused = await startStructuredAgentSessionAgentForOperation(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial context double; the start throws at `reconcileLeases`, before any member past its registration is read.
       context as unknown as StructuredAgentSessionAttachContext,
       SESSION
     )

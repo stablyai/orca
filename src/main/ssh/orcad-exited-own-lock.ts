@@ -29,7 +29,7 @@ import {
   ORCAD_STATE_MUTATION_LOCK_DIRNAME
 } from '../managed-server/host-state/orcad-state-snapshot-members'
 import { CMD_EXE_COMMAND_LINE_MAX_CHARS } from '../providers/windows-shell-args'
-import { shellEscape } from './ssh-connection-utils'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import type { InstallLockExitedOwnerProof } from '../managed-server/install/remote-install-lock'
 import { isWindowsRemoteHost, joinRemotePath } from './ssh-remote-platform'
 
@@ -126,11 +126,11 @@ function exitedOwnLockCheckCommand(
   const quiet = (path: string): string =>
     `[ -n "$(find ${path} -maxdepth 0 -mmin +${ORCAD_EXITED_OWN_LOCK_QUIET_SECONDS / 60} 2>/dev/null)" ]`
   return [
-    `${posixOrcadFenceOwnedTest(lock)} && ${quiet(shellEscape(lock.lockDir))} || exit 0;`,
+    `${posixOrcadFenceOwnedTest(lock)} && ${quiet(quotePosixShell(lock.lockDir))} || exit 0;`,
     ...(mutationLock
       ? [
           // Any mutation lock refuses, as the steal does: it can only take an absent one.
-          `[ -e ${shellEscape(mutationLock)} ] && exit 0;`
+          `[ -e ${quotePosixShell(mutationLock)} ] && exit 0;`
         ]
       : []),
     'echo EXITED_OWNER'

@@ -35,7 +35,7 @@ function beforeAttachEnds(host: StructuredAgentSessionHost, atEnd: () => void): 
   aborts.begin = (sessionId) => {
     const started = begin(sessionId)
     return {
-      signal: started.signal,
+      ...started,
       end: () => {
         if (!fired) {
           fired = true
@@ -70,7 +70,7 @@ describe('a Grok start the host aborts', () => {
     await rig.frame('initialize')
     // The start has no bound of its own: the quit is what ends it.
     expect(await within(host.flushAllStreamedEvents({ trigger: 'quit' }), 2_000)).not.toBe(STALLED)
-    expect((await attaching).ok).toBe(false)
+    expect((await attaching).ok).toBe(true)
     expect(rig.child().exited).toBe(true)
     await rig.adapter.closeAll()
   })
@@ -180,6 +180,7 @@ async function openClosedResumableChat(options: { hangsHandshake?: number } = {}
     deps: { resolveLaunch: launch(() => resumed) }
   })
   expect(await rig.host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
+  await rig.ready()
   resumed = true
   await rig.host.close(SESSION, 'user-close')
   return { ...rig, children: () => children }

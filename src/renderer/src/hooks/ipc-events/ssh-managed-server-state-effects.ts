@@ -159,11 +159,7 @@ async function loadManagedServerCatalogs(targetId: string, load: CatalogLoad): P
   }
   // Why gated: startup runs its own scan once every host's catalog is in.
   if (useAppStore.getState().startupWorktreeRefreshCompleted) {
-    const executionHostId = toRuntimeExecutionHostId(environmentId)
-    const repos = useAppStore
-      .getState()
-      .repos.filter((repo) => getRepoExecutionHostId(repo) === executionHostId)
-    await Promise.all(repos.map((repo) => store.fetchWorktrees(repo.id, { executionHostId })))
+    await fetchServerWorktrees(environmentId)
   }
   if (!isCurrent()) {
     return
@@ -192,6 +188,13 @@ async function loadManagedServerCatalogs(targetId: string, load: CatalogLoad): P
   rehomeActiveWorkspaceWhenKnown(targetId, environmentId, linkedRepoIds, isCurrent)
 }
 
+async function fetchServerWorktrees(environmentId: string): Promise<void> {
+  const executionHostId = toRuntimeExecutionHostId(environmentId)
+  const state = useAppStore.getState()
+  const repos = state.repos.filter((repo) => getRepoExecutionHostId(repo) === executionHostId)
+  await Promise.all(repos.map((repo) => state.fetchWorktrees(repo.id, { executionHostId })))
+}
+
 /**
  * Why keep watching: the server's worktree rows arrive with startup's scan on cold start, and a
  * failed scan leaves them missing until a later one, so a missing row never reads as no copy.
@@ -210,7 +213,10 @@ function rehomeActiveWorkspaceWhenKnown(
       unsubscribe()
       return
     }
+    const startupScanFinished =
+      state.startupWorktreeRefreshCompleted && !previous.startupWorktreeRefreshCompleted
     if (
+      !startupScanFinished &&
       state.worktreesByRepo === previous.worktreesByRepo &&
       state.detectedWorktreesByRepo === previous.detectedWorktreesByRepo &&
       state.activeWorktreeId === previous.activeWorktreeId &&
@@ -220,6 +226,11 @@ function rehomeActiveWorkspaceWhenKnown(
     }
     if (rehomeActiveWorkspace(targetId, environmentId, linkedRepoIds) !== 'pending') {
       unsubscribe()
+    } else if (startupScanFinished) {
+      // Why: that scan may have started before the server's projects loaded, or failed for them.
+      fetchServerWorktrees(environmentId).catch((error: unknown) => {
+        console.warn('[ssh] Could not list the managed server worktrees:', error)
+      })
     }
   })
 }

@@ -5,7 +5,7 @@ import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-te
 import { withTimeoutResult } from '../../runtime-async-boundaries'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
 import { inferWorktreeIdFromPtyId } from '../../runtime-worktree-path-identity'
-import { getRegisteredSshState } from '../../../ssh/ssh-target-registry'
+import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,

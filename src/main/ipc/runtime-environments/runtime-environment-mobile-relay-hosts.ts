@@ -16,7 +16,10 @@ import type {
 } from '../../runtime/mobile-desktop-relay/mobile-desktop-relay-hosts'
 import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import { getRegisteredSshState, listRegisteredSshTargets } from '../../ssh/ssh-target-registry'
+import {
+  getRegisteredSshState,
+  listRegisteredSshTargets
+} from '../../ssh/targets/ssh-target-registry'
 import { getRuntimeEnvironmentStatusSnapshots } from './runtime-environment-request-connections'
 import {
   callRuntimeEnvironment,

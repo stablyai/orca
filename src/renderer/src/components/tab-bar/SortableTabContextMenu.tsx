@@ -232,14 +232,14 @@ export function SortableTabContextMenu({
           <PanelRightClose className="size-3.5" />
           {translate(
             'auto.components.tab.bar.SortableTabContextMenu.c1ee099c7e',
-            'Close Tabs To The Right'
+            'Close All Tabs To The Right'
           )}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCloseToLeft(tab.id)} disabled={!hasTabsToLeft}>
           <PanelLeftClose className="size-3.5" />
           {translate(
             'components.tab.bar.SortableTabContextMenu.closeTabsToLeft',
-            'Close Tabs To The Left'
+            'Close All Tabs To The Left'
           )}
         </DropdownMenuItem>
         <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />

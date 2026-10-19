@@ -7,7 +7,7 @@
  */
 import { ORCAD_LOCK_FILE_NAME } from '../orcad/orcad-instance-lock'
 import { PRIMARY_RUNTIME_METADATA_FILE } from '../../shared/runtime-bootstrap'
-import { shellEscape } from './ssh-connection-utils'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { selectOrcadSlotRuntimeCommand } from '../managed-server/install/orcad-remote-runtime'
 import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import { orcadWindowsSlotOpCommand } from '../managed-server/install/orcad-remote-windows-node'
@@ -65,7 +65,7 @@ export function initialOrcadActivationAdmissionCommand(
   // The subshell turns the selector's `exit 78` into silence, which parses as unverifiable.
   return (
     `(${selectOrcadSlotRuntimeCommand(host, remoteInstallDir, legacyNodePath)}; ` +
-    `"$orcad_runtime" -e ${shellEscape(script)} ${shellEscape(JSON.stringify(owners))})`
+    `"$orcad_runtime" -e ${quotePosixShell(script)} ${quotePosixShell(JSON.stringify(owners))})`
   )
 }
 

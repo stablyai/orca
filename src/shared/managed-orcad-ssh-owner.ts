@@ -1,9 +1,7 @@
-import type { SshTarget } from './ssh-types'
+import type { SshTarget, SshTargetOwner } from './ssh-types'
 
 /** The runtime id phase-3 builds wrote into `owner` before the fence moved to `orcadFence`. */
 const LEGACY_MANAGED_ORCAD_RUNTIME_ID_PREFIX = 'managed-orcad:'
-
-type SshTargetOwner = NonNullable<SshTarget['owner']>
 
 /** The managed Orca server this host serves, or null for a direct SSH host. */
 export function getManagedOrcadFenceEnvironmentId(

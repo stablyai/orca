@@ -15,7 +15,8 @@ import { selectPrE2eSpecs } from './pr-e2e-source-routing.mjs'
 it.each([
   'src/main/runtime/runtime-browser-commands-factory.ts',
   'src/main/runtime/orca-runtime-get-status.ts',
-  'src/main/orcad/orcad-browser-startup.ts'
+  'src/main/orcad/orcad-browser-startup.ts',
+  'src/main/runtime/browser/browser-client-page-opening.ts'
 ])('routes the managed browser capability oracle from %s', (path) => {
   expect(selectPrE2eSpecs([path])).toContain('tests/e2e/ssh-orcad-browser-capabilities.spec.ts')
 })

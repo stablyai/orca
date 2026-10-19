@@ -3,11 +3,10 @@ import type { TerminalPaneSplitSource } from '../../../shared/feature-education-
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeTerminalClose, RuntimeTerminalSplit } from '../../../shared/runtime-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
-import type { PaneLayoutEditIntent } from '../../../shared/rpc-contract/session-tabs-schemas-params'
 import { runtimeEnvironmentIdUnlessTwin } from '../lib/resolve-owner'
 import { useAppStore } from '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
-import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import {
@@ -200,7 +199,7 @@ export async function updateWebRuntimePaneLayout(args: {
   expandedLeafId: string | null
   chatLeafId?: string | null
   titlesByLeafId?: Record<string, string>
-  intent?: PaneLayoutEditIntent
+  renamedLeafIds?: string[]
 }): Promise<boolean> {
   // Why: a twin's edit must not reach either host on a guess; it stays local until one is chosen.
   const environmentId = runtimeEnvironmentIdUnlessTwin(
@@ -225,7 +224,7 @@ export async function updateWebRuntimePaneLayout(args: {
         expandedLeafId: args.expandedLeafId,
         ...(args.chatLeafId !== undefined ? { chatLeafId: args.chatLeafId } : {}),
         ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {}),
-        ...(args.intent ? { intent: args.intent } : {})
+        ...(args.renamedLeafIds ? { renamedLeafIds: args.renamedLeafIds } : {})
       },
       timeoutMs: 15_000
     })

@@ -7,9 +7,9 @@ const mocks = await vi.hoisted(async () => {
 
 vi.mock('../../ssh/config/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
-vi.mock('../../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('../../ssh/connection/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
-vi.mock('../../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
+vi.mock('../../ssh/connection/ssh-connection-manager', () => mocks.sshConnectionManager)
 vi.mock('../../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
@@ -20,8 +20,8 @@ vi.mock(import('../../ssh/legacy-relay/legacy-relay-bridge-registry'), async (im
 }))
 
 import type { SshTarget } from '../../../shared/ssh-types'
-import type { SshConnection } from '../../ssh/ssh-connection'
-import { recordSshConnectionOpened } from '../../ssh/ssh-connection-attribution'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
+import { recordSshConnectionOpened } from '../../ssh/connection/ssh-connection-attribution'
 import {
   decideHostServer,
   publishBridgedUnservedHostServer,

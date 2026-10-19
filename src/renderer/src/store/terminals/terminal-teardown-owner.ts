@@ -2,7 +2,7 @@ import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime-pty-id'
-import type { WorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
+import type { TerminalPtyOwner } from '@/lib/terminal-worktree-route'
 
 export type TerminalTeardownOwner =
   | { kind: 'resolved'; runtimeEnvironmentId: string | null }
@@ -14,7 +14,7 @@ export type TerminalTeardownOwner =
  * attributed, so teardown is refused rather than treated as local.
  */
 export function resolveTerminalTeardownOwner(
-  worktreeOwner: WorktreeRuntimeOwner,
+  worktreeOwner: TerminalPtyOwner,
   ptyIds: readonly string[]
 ): TerminalTeardownOwner {
   if (worktreeOwner.kind === 'runtime') {

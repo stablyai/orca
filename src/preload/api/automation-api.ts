@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   AutomationDispatchRequest,
   AutomationDispatchResult,
@@ -35,7 +36,11 @@ export type AutomationsApi = {
     runId: string
   }) => Promise<AutomationPrecheckResult | null>
   markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
-  snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }) => Promise<number>
+  snapshotWorkspaceName: (args: {
+    workspaceId: string
+    hostId: ExecutionHostId
+    displayName: string
+  }) => Promise<number>
   rendererReady: () => Promise<void>
   onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void) => () => void
   onChanged: (callback: (payload: AutomationsChangedPayload) => void) => () => void

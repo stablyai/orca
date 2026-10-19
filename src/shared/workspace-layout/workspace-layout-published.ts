@@ -96,12 +96,7 @@ function publishTab(
     id: tab.id,
     kind: tab.kind,
     entityId: tab.entityId,
-    executionHostId: tabExecutionHostId(
-      tab,
-      workspace.editorFiles,
-      partition,
-      workspace.worktreeId
-    ),
+    executionHostId: tabExecutionHostId(tab, workspace, partition),
     createdAt: tab.createdAt,
     customTitle: tab.customTitle,
     color: tab.color,

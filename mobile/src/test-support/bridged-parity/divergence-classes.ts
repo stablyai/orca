@@ -177,7 +177,7 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
  * same story — both numbers move, and both moves are edits here rather than a quiet pass.
  */
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
-  identical: 400,
+  identical: 401,
   // Closed by the `_meta` widening: the page's reader is `isRpcResponse` itself.
   'reply-meta-required': 0,
   // Settling a refused reply moved three goldens here out of `write-ordinal`: a rejection that
@@ -185,13 +185,13 @@ export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'iden
   // identically, and the corpus is a fixed size, so a shuffle between two excluded classes cannot
   // hide one. Two more arrived with Jira: the hydration and workspace-context groups each ask
   // `jira.status`, so each family gained one absent-result partition.
-  'result-absent-settlement': 345,
+  'result-absent-settlement': 350,
   // Four left here and two left `write-ordinal` for the class below, which is the `cancel` a
   // refused stream frame now posts: the run stops at a renamed occurrence before it reaches the
   // checkpoint or the ordinal that used to be what differed first.
   'result-absent-observation': 3,
   'result-absent-stream-release': 6,
-  'params-undefined': 33,
+  'params-undefined': 27,
   'write-ordinal': 8,
   unclassified: 0
 }

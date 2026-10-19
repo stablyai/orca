@@ -1,7 +1,7 @@
 // How a durable session record becomes a Codex process launch.
 //
 // Every input is read back from the record the store already made durable, not
-// from the call that triggered the acquire. A client that attaches twice must
+// from the call that triggered spawn. A client that attaches twice must
 // land in the same working directory under the same account home, and a resume
 // must name the thread this session actually proved — never one a caller asks
 // for, which is how a resume becomes a fork wearing a resume's name.

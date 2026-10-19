@@ -274,7 +274,7 @@ export async function benchmarkWindowsNativePreparation(
     await command('source-clean', 'git', ['diff', '--exit-code', 'HEAD', '--'])
     const tree = (await command('source-tree', 'git', ['rev-parse', 'HEAD^{tree}'])).stdout.trim()
     const pnpmVersion = (await pnpmCommand('pnpm-version', ['--version'], root)).stdout.trim()
-    assert.equal(pnpmVersion, '12.8.1', 'Comparison requires pinned pnpm')
+    assert.equal(pnpmVersion, '12.14.0', 'Comparison requires pinned pnpm')
     const action = readFileSync(
       join(root, '.github/actions/prepare-native-runtime/action.yml'),
       'utf8'

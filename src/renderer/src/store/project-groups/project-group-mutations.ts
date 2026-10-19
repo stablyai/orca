@@ -252,8 +252,9 @@ export function createProjectGroupMutationActions(
     moveProjectToGroup: async (projectId, groupId, order, hostId) => {
       try {
         const repo = findRepoForHost(get().repos, projectId, { settings: get().settings, hostId })
-        const target = repo ? ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo)) : null
-        if (!target) {
+        const repoHostId = repo ? getRepoExecutionHostId(repo) : null
+        const target = repoHostId ? ipcOrRuntimeTargetForHostId(repoHostId) : null
+        if (!repoHostId || !target) {
           return false
         }
         if (groupId && !isProjectGroupJoinableFromCatalog(get().projectGroups, groupId, target)) {
@@ -265,7 +266,8 @@ export function createProjectGroupMutationActions(
             ? await window.api.projectGroups.moveProject({
                 projectId,
                 groupId,
-                order
+                order,
+                hostId: repoHostId
               })
             : (
                 await callRuntimeRpc<{ repo: Repo | null }>(

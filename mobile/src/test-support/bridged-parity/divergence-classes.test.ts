@@ -75,7 +75,7 @@ describe('classifying one diverging golden', () => {
   it('refuses the class to a run where something else moved in the same params', () => {
     // A seeded wire bug — one extra own key on every request's params — throws the same message
     // inside the same ten scenarios. A rule that asked only whether the scenario scripts an
-    // `undefined` key called all 33 of them this class and reported none of them.
+    // `undefined` key called all of them this class and reported none of them.
     expect(
       classifyBridgedParity({
         ...droppedUndefinedKey,
@@ -244,7 +244,7 @@ describe('what the pin still admits', () => {
     expect(drift.join('\n')).toContain(
       `identical: pinned ${tally.identical}, ran ${moved.identical}`
     )
-    expect(drift.join('\n')).toContain('result-absent-settlement: pinned 345, ran 344')
+    expect(drift.join('\n')).toContain('result-absent-settlement: pinned 350, ran 349')
   })
 
   it('goes red on a class that grew and on the corpus losing a golden', () => {

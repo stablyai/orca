@@ -54,6 +54,7 @@
     "../src/main/wsl-exe-process.ts",
     "../src/main/persistence/applying-settings/ui-state-read.ts",
     "../src/main/persistence/tracking-repos/worktree-identity-migration.ts",
+    "../src/main/persistence/tracking-repos/worktree-identity-row-repoint.ts",
     "../src/main/persistence/applying-settings/ui-state-update.ts",
     "../src/main/persistence/applying-settings/ui-selection-normalization.ts",
     "../src/main/persistence/applying-settings/ui-interaction-merge.ts",

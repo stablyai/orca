@@ -38,7 +38,7 @@ async function dispatchUpdatePaneLayout(params: Record<string, unknown>) {
   return { reply, runtimeCalls: updateMobileSessionPaneLayout.mock.calls }
 }
 
-describe('session.tabs.updatePaneLayout intent marker', () => {
+describe('session.tabs.updatePaneLayout retired intent tag', () => {
   it.each([['gesture'], ['some-future-intent'], [42], [null]])(
     'treats a call carrying intent=%j exactly like one without it',
     async (intent) => {
@@ -51,14 +51,9 @@ describe('session.tabs.updatePaneLayout intent marker', () => {
     }
   )
 
-  it('parses an unmarked payload from an older client without adding the field', () => {
-    expect(UpdatePaneLayout.parse(LAYOUT_PARAMS)).not.toHaveProperty('intent')
-  })
-
-  it('reads the gesture marker and degrades any other value to unmarked', () => {
-    expect(UpdatePaneLayout.parse({ ...LAYOUT_PARAMS, intent: 'gesture' }).intent).toBe('gesture')
-    for (const intent of ['some-future-intent', 42, null, { kind: 'gesture' }]) {
-      expect(UpdatePaneLayout.parse({ ...LAYOUT_PARAMS, intent }).intent).toBeUndefined()
+  it('strips any intent an older client sends', () => {
+    for (const intent of [undefined, 'gesture', 'some-future-intent', 42, null]) {
+      expect(UpdatePaneLayout.parse({ ...LAYOUT_PARAMS, intent })).not.toHaveProperty('intent')
     }
   })
 })

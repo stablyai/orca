@@ -1,3 +1,4 @@
+import { FAKE_APP_SERVER } from './__fixtures__/codex-connection-app-server'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import type { EventEmitter } from 'node:events'
 import { realpathSync } from 'node:fs'
@@ -37,36 +38,6 @@ afterEach(() => {
  * a stub, but it is the only thing that proves the spawn, the environment, and
  * both traffic directions actually work end to end.
  */
-const FAKE_APP_SERVER = String.raw`
-  const readline = require('node:readline')
-  const send = (payload) => process.stdout.write(JSON.stringify(payload) + '\n')
-  readline.createInterface({ input: process.stdin }).on('line', (line) => {
-    const message = JSON.parse(line)
-    if (message.method === 'initialize') return send({ id: message.id, result: {} })
-    if (message.method === 'test/env') {
-      return send({ id: message.id, result: { codexHome: process.env.CODEX_HOME ?? null } })
-    }
-    if (message.method === 'test/cwd') {
-      return send({ id: message.id, result: { cwd: process.cwd() } })
-    }
-    if (message.method === 'test/notify') {
-      send({ method: 'turn/started', params: { threadId: 'thread-1', turn: { id: 'turn-7' } } })
-      return send({ id: message.id, result: {} })
-    }
-    if (message.method === 'test/ask') {
-      return send({ id: 99, method: 'item/fileChange/requestApproval', params: { itemId: 'i1' } })
-    }
-    if (message.method === 'test/refuse') {
-      return send({ id: message.id, error: { code: -32602, message: 'bad params' } })
-    }
-    if (message.method === 'test/missing') {
-      return send({ id: message.id, error: { code: -32601, message: 'method not found' } })
-    }
-    if (message.id === 99) {
-      return send({ method: 'test/answered', params: message })
-    }
-  })
-`
 
 async function openFakeServer(
   handlers: CodexAppServerConnectionHandlers = {},
@@ -796,18 +767,14 @@ describe('openCodexAppServerConnection', () => {
       },
       spawnImpl
     )
-    child.kill.mockImplementation(() => {
-      child.emit('exit', null, 'SIGKILL')
-      return true
-    })
-
     const inFlight = rejection(connection.request('turn/start'))
     child.stdout.write(`${JSON.stringify(frame)}\n`)
 
     expect((await inFlight).message).toContain('structured sink failed')
-    expect(exits).toEqual([expect.stringContaining('structured sink failed')])
+    expect(exits).toHaveLength(0)
     expect(connection.closed).toBe(true)
-    await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGKILL'))
+    child.emit('exit', null, 'SIGKILL')
+    expect(exits).toEqual([expect.stringContaining('structured sink failed')])
     await connection.close()
   })
 
@@ -869,20 +836,16 @@ describe('openCodexAppServerConnection', () => {
       { onExit: (error) => exits.push(error.message) },
       spawnImpl
     )
-    child.kill.mockImplementation(() => {
-      child.emit('exit', null, 'SIGKILL')
-      return true
-    })
-
     const inFlight = rejection(connection.request('turn/start'))
     child.stdin.emit('error', new Error('write EPIPE'))
 
     expect((await inFlight).message).toContain('EPIPE')
-    expect(exits).toHaveLength(1)
+    expect(exits).toHaveLength(0)
     // A child nobody can write to is not a live session: the owner must see the
     // connection as gone rather than keep issuing calls that can only time out.
     expect(connection.closed).toBe(true)
-    await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGKILL'))
+    child.emit('exit', null, 'SIGKILL')
+    expect(exits).toHaveLength(1)
     expect((await rejection(connection.request('turn/start'))).message).toContain('EPIPE')
     await connection.close()
   })

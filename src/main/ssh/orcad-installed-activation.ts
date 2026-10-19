@@ -23,6 +23,12 @@ import { planOrcadUpdate } from './orcad-update-plan'
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import { CURRENT_ORCAD_DAEMON_PROTOCOL } from './orcad-daemon-protocol-crossing'
 import { ORCAD_LOG_FILENAME } from '../managed-server/install/orcad-remote-host-support'
+import { orcadSnapshotFailureReason } from '../managed-server/host-state/orcad-state-snapshot-space'
+import {
+  ORCAD_SNAPSHOT_SPACE_INSUFFICIENT_CODE,
+  orcadSnapshotRoomRefusal,
+  orcadSnapshotsRoot
+} from './orcad-snapshot-room'
 import {
   captureOrcadStateSnapshotCommand,
   orcadSnapshotDirName,
@@ -167,6 +173,12 @@ export async function activateInstalledOrcad(
     }
   }
 
+  // Before the recount: a slow scan must not outdate the census that admits the stop.
+  const roomless = await orcadSnapshotRoomRefusal(options, record, fullVersion)
+  if (roomless) {
+    return notActivated(ORCAD_SNAPSHOT_SPACE_INSUFFICIENT_CODE, roomless)
+  }
+
   // Last check before anything stops: the census above may predate a long upload.
   if (incumbent && options.recountCensus && countedLockedRecord(options, record)) {
     const recount = planOrcadUpdate({
@@ -209,26 +221,32 @@ export async function activateInstalledOrcad(
 
   // A live SQLite WAL is not a backup boundary, so the snapshot waits for confirmed exit.
   const snapshotDir = orcadSnapshotPath(options, transaction.snapshot.dirName)
-  const capture = parseOrcadSnapshotCapture(
-    await execOrcadStateMutationOr(
-      options,
-      captureOrcadStateSnapshotCommand(
-        options.host,
-        options.userDataDir,
-        snapshotDir,
-        orcadRemoteBaseDir(options.host, options.remoteHome)
-      ),
-      'FAILED'
-    )
+  const captureOutput = await execOrcadStateMutationOr(
+    options,
+    captureOrcadStateSnapshotCommand(
+      options.host,
+      options.userDataDir,
+      snapshotDir,
+      orcadRemoteBaseDir(options.host, options.remoteHome),
+      {
+        snapshotsRoot: orcadSnapshotsRoot(options),
+        keep: [transaction.snapshot.dirName, ...(record.snapshot ? [record.snapshot.dirName] : [])]
+      }
+    ),
+    'FAILED'
   )
+  const capture = parseOrcadSnapshotCapture(captureOutput)
   if (capture === 'failed') {
+    const reason = orcadSnapshotFailureReason(captureOutput)
     const restarted = incumbent
       ? ` The incumbent was stopped before snapshotting; ${await restartAfterSnapshotFailure(options, incumbent, lock)}`
       : ''
     throw new Error(
-      `Could not snapshot ${options.userDataDir} before activating ${fullVersion}. Orca's ` +
-        'persisted state carries no schema version, so without a snapshot a rollback has no ' +
-        `way back. Refusing to activate.${restarted}`
+      `Could not snapshot ${options.userDataDir} before activating ${fullVersion}` +
+        `${reason ? `: ${reason}` : ''}. Orca's persisted state carries no schema version, so ` +
+        'without a snapshot a rollback has no way back. Refusing to activate. Fix what stops ' +
+        `the copy (often a full disk or quota on ${orcadRemoteBaseDir(options.host, options.remoteHome)}), ` +
+        `then reconnect.${restarted}`
     )
   }
   const snapshot: OrcadStateSnapshot | null =

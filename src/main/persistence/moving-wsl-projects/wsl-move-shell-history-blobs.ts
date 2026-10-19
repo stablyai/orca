@@ -11,7 +11,7 @@ import {
   orcadMigrationBlobIdentity,
   sameOrcadMigrationBlob,
   type OrcadMigrationBlobDescriptor
-} from '../../../shared/orcad-migration-blob-transfer'
+} from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type { OrcadMigrationBlobSource } from '../../ssh/orcad-migration-blob-coordinator'
 import { getHistoryRootWsl } from '../../terminal-history-paths'
 import { hashWorktreeId } from '../../terminal-history-id'

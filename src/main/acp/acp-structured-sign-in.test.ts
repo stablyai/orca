@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { providerDiagnosticOf } from '../../shared/agent-session-failure'
-import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { agentSessionFailureSentence } from '../../shared/agent-session-failure-words'
-import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { AcpAuthRequiredError } from './acp-errors'
+import { AcpSignInPromptError } from './acp-errors'
 import { ACP_LAUNCH_SPECS } from './acp-launch-specs'
 import { AcpSessionRuntime } from './acp-session-runtime'
 import {
@@ -84,7 +82,8 @@ it('ends a running turn signed out when the connection closes for sign-in', asyn
   await sendHello(rig, 'first')
   await rig.frame('session/prompt')
   // The protocol close the real connection makes at a sign-in prompt line on stderr.
-  AcpSessionRuntime.prototype.close.call(rig.child(), new AcpAuthRequiredError('Sign in'))
+  const internal = 'The agent asked to sign in in a browser'
+  AcpSessionRuntime.prototype.close.call(rig.child(), new AcpSignInPromptError(internal))
   await rig.settle()
   expect(rig.settled).toContainEqual(
     expect.objectContaining({
@@ -93,6 +92,23 @@ it('ends a running turn signed out when the connection closes for sign-in', asyn
       rejection: expect.objectContaining({ kind: 'notSignedIn' })
     })
   )
+  // Orca's own words for the prompt are for logs; the chat says only how to sign in.
+  const rejected = rig.settled.find((item) => 'state' in item && item.state === 'rejected')
+  expect(rejected && 'reason' in rejected ? rejected.reason : '').not.toContain(internal)
+})
+
+it('starts signed out without Orca words when the connection closes for sign-in', async () => {
+  const rig = await openAcpAdapterRig({ script: (agent) => agent.on('session/new', () => {}) })
+  // Session setup runs in the start's open, which the rig awaits after the acquire.
+  const starting = rig.acquire()
+  await rig.frame('session/new')
+  const internal = 'The agent asked to sign in in a browser'
+  AcpSessionRuntime.prototype.close.call(rig.child(), new AcpSignInPromptError(internal))
+  await starting
+  const error = rig.openFailure()
+  // Session setup re-types sign-in answers; this close must stay Orca's, words and all.
+  expect(error).toMatchObject({ reason: 'notSignedIn' })
+  expect(providerDiagnosticOf(error)).toBeUndefined()
 })
 
 it.each(ACP_LAUNCH_SPECS)(
@@ -103,13 +119,32 @@ it.each(ACP_LAUNCH_SPECS)(
       spec,
       script: (agent) => agent.on('session/new', (frame) => agent.fail(frame, -32000, detail))
     })
-    const error = await rig.acquire().catch((failure: unknown) => failure)
-    expect(error).toBeInstanceOf(AgentSessionAcquisitionRefusal)
-    expect(error).toMatchObject({ reason: 'notSignedIn' })
-    expect(providerDiagnosticOf(error)).toEqual({ text: detail, audience: 'person' })
-    const fact = providerStartupFailureFact(error)
-    expect(fact.detail?.text).toBe(detail)
+    // The host receives the refusal from open and then closes the child.
+    await rig.acquire()
+    expect(rig.openFailure()).toMatchObject({ reason: 'notSignedIn' })
+    expect(providerDiagnosticOf(rig.openFailure())).toEqual({ text: detail, audience: 'person' })
+    const fact = agentSessionFailureFact('notSignedIn', {
+      detail: providerDiagnosticOf(rig.openFailure())
+    })
     expect(agentSessionFailureSentence(fact, 'row', { agentName: spec.agent })).toContain(detail)
+  }
+)
+
+it.each(ACP_LAUNCH_SPECS)(
+  "keeps $agent's sign-in words over log lines it wrote before refusing its start",
+  async (spec) => {
+    const detail = 'Sign-in credentials are missing.'
+    const rig = await openAcpAdapterRig({
+      spec,
+      script: (agent) =>
+        agent.on('session/new', (frame) => {
+          rig.child().stderr = 'warn: telemetry endpoint unreachable'
+          agent.fail(frame, -32000, detail)
+        })
+    })
+    await rig.acquire()
+    expect(rig.openFailure()).toMatchObject({ reason: 'notSignedIn' })
+    expect(providerDiagnosticOf(rig.openFailure())).toEqual({ text: detail, audience: 'person' })
   }
 )
 

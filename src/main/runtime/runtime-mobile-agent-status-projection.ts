@@ -194,7 +194,8 @@ function toHookLiveAgentRow(row: AgentStatusIpcPayload): HookLiveAgentRow {
     updatedAt: row.receivedAt,
     ...(row.evidenceObservedAt !== undefined ? { evidenceObservedAt: row.evidenceObservedAt } : {}),
     stateStartedAt: row.stateStartedAt ?? row.receivedAt,
-    ...(row.worktreeId ? { worktreeId: row.worktreeId } : {})
+    ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
+    ...(row.programStatus ? { programStatus: row.programStatus } : {})
   }
 }
 

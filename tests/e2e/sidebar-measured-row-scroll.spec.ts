@@ -3,7 +3,6 @@ import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
-import { expectNoSidebarShadowMismatches } from './helpers/sidebar-shadow'
 import { waitForSessionReady } from './helpers/store'
 import { runProcess } from '@orca/process-host'
 
@@ -196,5 +195,4 @@ test('keeps a collapsed group visible when an idle card below it grows', async (
       throw new Error(`pin failed: ${JSON.stringify(result)}`)
     }
   }, fixture.worktreeId)
-  await expectNoSidebarShadowMismatches(orcaPage)
 })

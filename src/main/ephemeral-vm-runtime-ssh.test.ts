@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   remove: vi.fn(async () => {})
 }))
 
-vi.mock('./ssh/ssh-target-registry', () => ({
+vi.mock('./ssh/targets/ssh-target-registry', () => ({
   connectRegisteredSshTarget: mocks.connect
 }))
 vi.mock('./ipc/ssh/ssh', () => ({

@@ -19,8 +19,6 @@ import { useNativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import { useNativeChatSessionOptions } from './use-native-chat-session-options'
 import { useNativeChatDictation } from './use-native-chat-dictation'
 import { useNativeChatSessionOptionCommand } from './use-native-chat-session-option-command'
-import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
-import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import { useNativeChatPickerCommandDispatch } from './use-native-chat-picker-command-dispatch'
 import type {
   NativeChatComposerHandle,
@@ -31,6 +29,7 @@ import { useNativeChatStructuredComposerSend } from './use-native-chat-structure
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
+import { useNativeChatComposerCommandPicker } from './use-native-chat-composer-command-picker'
 
 export type {
   NativeChatComposerHandle,
@@ -115,29 +114,22 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       { inputOwnedByCard, onPendingSendRetired: optimisticSendOutcome?.reject }
     )
 
-    const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(
-      agent,
-      structuredTransport
-    )
     // Why inputOwnedByCard: the hidden field can still hold keyboard focus for a frame.
     const [hasPty, disabled] = structuredTransport
       ? [true, !canSend || unavailableHint !== undefined]
       : [targetPtyId !== null, targetPtyId === null || !canSend || inputOwnedByCard]
 
-    const picker = useNativeChatPickerState({
+    const { picker, resume } = useNativeChatComposerCommandPicker({
       agent,
       terminalTabId,
       draftScopeKey: paneKey,
       draft,
       caret,
-      agentCommands,
       recalledFromHistory: recall.active,
       disabled,
-      sessionSkills,
-      textareaRef,
-      setDraft,
-      setCaret,
-      setActiveSuggestion
+      structuredTransport,
+      editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
+      setNotice
     })
     const {
       autocomplete,
@@ -306,6 +298,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       disabled,
       sendPty,
       sendStructured,
+      consumeOrcaCommand: resume.consume,
       setDraft,
       setCaret
     })
@@ -339,7 +332,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       recall: recall.recall,
       isComposing: imeEnterGesture.isComposing,
       completePickerItem: goalMode.interceptPick(completeItem),
-      dispatchPickerCommand: goalMode.interceptPick(dispatchPickerCommand),
+      dispatchPickerCommand: goalMode.interceptPick(resume.interceptPick(dispatchPickerCommand)),
       dismissPicker: dismiss,
       interrupt,
       send,
@@ -405,7 +398,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         }}
         onPaste={handlePasteEvent}
         pickerListboxId={picker.listboxId}
-        onChoosePickerItem={goalMode.interceptPick(completeItem)}
+        onChoosePickerItem={goalMode.interceptPick(resume.interceptPick(completeItem))}
         goalMode={goalMode}
         onRetrySkills={picker.retrySkills}
         onChooseMentionFile={completeMention}

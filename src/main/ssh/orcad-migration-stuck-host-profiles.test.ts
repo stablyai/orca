@@ -18,15 +18,15 @@ import {
   retireProvenExitedLeases,
   type HostRelayTerminalProof
 } from './orcad-migration-terminal-gate'
-import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-journal'
 import {
   leaveBehindClearsOrcadMigrationBlockers,
   onlyLeavableOrcadMigrationBlockers
-} from './ssh-target-orcad-preflight'
+} from './targets/ssh-target-orcad-preflight'
 import { ownedEditorFileId } from '../../shared/workspace-session-pane-ownership'
-import { allowsDirectSshRelay } from './ssh-connection-store'
+import { allowsDirectSshRelay } from './connection/ssh-connection-store'
 
 // Relay-era profiles as the reporters' builds left them, loaded by the real Store and taken through
 // the conversion's source steps: terminal proof, lease retirement, then the fence and its preflight.
@@ -67,7 +67,12 @@ function relayEraProfile(projects: number): PersistedState {
 }
 
 /** One terminal tab, as the unified model and the legacy map both hold it. */
-function openTerminal(session: WorkspaceSessionState, worktreeId: string, tabId: string): void {
+function openTerminal(
+  session: WorkspaceSessionState,
+  worktreeId: string,
+  tabId: string,
+  leafId = LEAF
+): void {
   session.tabsByWorktree[worktreeId] = [
     {
       id: tabId,
@@ -81,8 +86,8 @@ function openTerminal(session: WorkspaceSessionState, worktreeId: string, tabId:
     }
   ]
   session.terminalLayoutsByTabId[tabId] = {
-    root: { type: 'leaf', leafId: LEAF },
-    activeLeafId: LEAF,
+    root: { type: 'leaf', leafId },
+    activeLeafId: leafId,
     expandedLeafId: null
   }
   session.unifiedTabs = {
@@ -234,10 +239,16 @@ describe('#29083: about 14 projects, folders, a saved session and relay-era leas
       updatedAt: 1
     }))
     const host = state.workspaceSessionsByHostId![HOST]!
+    // Pane ids are unique across tabs; the server refuses a repeat.
     for (const index of [0, 3, 7]) {
-      openTerminal(host, `repo-${index}::/home/dev/src/project-${index}`, `tab-${index}`)
+      openTerminal(
+        host,
+        `repo-${index}::/home/dev/src/project-${index}`,
+        `tab-${index}`,
+        index === 0 ? LEAF : `leaf-${index}`
+      )
     }
-    openTerminal(host, 'folder:folder-notes', 'tab-notes')
+    openTerminal(host, 'folder:folder-notes', 'tab-notes', 'leaf-notes')
     const lease = (ptyId: string, state: SshRemotePtyLease['state']): SshRemotePtyLease => ({
       targetId: TARGET.id,
       ptyId,

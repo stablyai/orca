@@ -38,6 +38,8 @@ type AgentSessionContinuationDialogProps = {
   open: boolean
   request: AgentSessionContinuationRequest | null
   onOpenChange: (open: boolean) => void
+  /** Fires after the new session launched, so a host can step aside for the new tab. */
+  onStarted?: () => void
 }
 
 const EMPTY_DISABLED_AGENTS: TuiAgent[] = []
@@ -45,7 +47,8 @@ const EMPTY_DISABLED_AGENTS: TuiAgent[] = []
 export function AgentSessionContinuationDialog({
   open,
   request,
-  onOpenChange
+  onOpenChange,
+  onStarted
 }: AgentSessionContinuationDialogProps): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const [detectedAgents, setDetectedAgents] = useState<TuiAgent[]>([])
@@ -140,6 +143,7 @@ export function AgentSessionContinuationDialog({
     setStarting(false)
     if (launched) {
       onOpenChange(false)
+      onStarted?.()
     }
   }
 

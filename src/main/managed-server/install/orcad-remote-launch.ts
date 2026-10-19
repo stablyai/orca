@@ -17,7 +17,7 @@ import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME
 } from '../../../shared/orcad-artifacts'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -99,13 +99,15 @@ export function orcadLaunchCommand(
   hostEnv: readonly OrcadLaunchEnvEntry[] = []
 ): string {
   assertPosixHost(host)
-  const dir = shellEscape(spec.remoteInstallDir)
-  const readiness = shellEscape(
+  const dir = quotePosixShell(spec.remoteInstallDir)
+  const readiness = quotePosixShell(
     joinRemotePath(host, spec.remoteInstallDir, ORCAD_READINESS_FILENAME)
   )
-  const log = shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_LOG_FILENAME))
-  const pidFile = shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_PID_FILENAME))
-  const entry = shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_LAUNCHER_FILENAME))
+  const log = quotePosixShell(joinRemotePath(host, spec.remoteInstallDir, ORCAD_LOG_FILENAME))
+  const pidFile = quotePosixShell(joinRemotePath(host, spec.remoteInstallDir, ORCAD_PID_FILENAME))
+  const entry = quotePosixShell(
+    joinRemotePath(host, spec.remoteInstallDir, ORCAD_LAUNCHER_FILENAME)
+  )
   const baseDir = remoteDirname(spec.remoteInstallDir.replace(/\/+$/u, ''), host)
   // Only `~/.orca-remote` itself; never tighten an unrelated parent a custom slot path names.
   const privateDirs = [
@@ -120,7 +122,7 @@ export function orcadLaunchCommand(
     // launch creates must be owner-only from birth, not only the ones after the exec.
     'umask 077 &&',
     // Best effort: directories and files an earlier build left 0755/0644 keep their old modes.
-    `{ chmod 700 ${privateDirs.map(shellEscape).join(' ')} 2>/dev/null || :; } &&`,
+    `{ chmod 700 ${privateDirs.map(quotePosixShell).join(' ')} 2>/dev/null || :; } &&`,
     `cd ${dir} &&`,
     `${selectOrcadSlotRuntimeCommand(host, spec.remoteInstallDir, spec.nodePath)} &&`,
     // Why truncate: a re-launch into a dir that already holds a previous readiness line would
@@ -130,18 +132,18 @@ export function orcadLaunchCommand(
     `chmod 600 ${readiness} &&`,
     `{ chmod 600 ${pidFile} ${log} 2>/dev/null || :; } &&`,
     // A stop request the previous process never consumed must not stop this one.
-    `rm -f ${shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_STOP_REQUEST_FILENAME))} &&`,
+    `rm -f ${quotePosixShell(joinRemotePath(host, spec.remoteInstallDir, ORCAD_STOP_REQUEST_FILENAME))} &&`,
     ...(detach === 'setsid' ? [`rm -f ${pidFile} &&`] : []),
-    `ORCA_VERSION=${shellEscape(spec.fullVersion)}`,
-    `ORCA_USER_DATA=${shellEscape(spec.userDataDir)}`,
-    ...orcadManagedLaunchEnv(spec).map(([name, value]) => `${name}=${shellEscape(value)}`),
+    `ORCA_VERSION=${quotePosixShell(spec.fullVersion)}`,
+    `ORCA_USER_DATA=${quotePosixShell(spec.userDataDir)}`,
+    ...orcadManagedLaunchEnv(spec).map(([name, value]) => `${name}=${quotePosixShell(value)}`),
     ...(detach === 'setsid'
       ? setsidLaunchTail(entry, spec, readiness, log, pidFile, hostEnv)
       : [
           // Keep $! equal to the runtime PID rather than a waiting shell's PID.
           // Older clients identify the live PID by orcad.js; the pinned launcher loads the body in-place.
           `exec nohup "$orcad_runtime" ${entry}`,
-          `--json --bind ${shellEscape(spec.bindHost)} --port ${String(spec.port)}`,
+          `--json --bind ${quotePosixShell(spec.bindHost)} --port ${String(spec.port)}`,
           `> ${readiness} 2>> ${log} < /dev/null &`,
           `echo $! > ${pidFile} &&`,
           ...(recordSession
@@ -168,12 +170,12 @@ function setsidLaunchTail(
   return [
     // Only a setsid (WSL host) launch marks itself; SSH keeps its byte-for-byte command.
     `${ORCAD_WSL_HOST_ENV}=1`,
-    ...hostEnv.map(([name, value]) => `${assertEnvName(name)}=${shellEscape(value)}`),
+    ...hostEnv.map(([name, value]) => `${assertEnvName(name)}=${quotePosixShell(value)}`),
     'sh -c \'orcad_detach() { if setsid -f true >/dev/null 2>&1; then setsid -f "$@"; ' +
       'else setsid "$@" & fi; }; orcad_detach "$@"\' orcad-detach',
     `sh -c 'echo $$ > "$1" && shift && exec "$@"' orcad-launch ${pidFile}`,
     `"$orcad_runtime" ${entry}`,
-    `--json --bind ${shellEscape(spec.bindHost)} --port ${String(spec.port)}`,
+    `--json --bind ${quotePosixShell(spec.bindHost)} --port ${String(spec.port)}`,
     `> ${readiness} 2>> ${log} < /dev/null &&`,
     `orcad_wait=0; while [ ! -s ${pidFile} ] && [ "$orcad_wait" -lt ${ORCAD_SETSID_PID_WAIT_TRIES} ];`,
     'do sleep 0.05; orcad_wait=$((orcad_wait + 1)); done;',
@@ -193,7 +195,9 @@ export function readOrcadReadinessCommand(
   remoteInstallDir: string
 ): string {
   assertPosixHost(host)
-  const readiness = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME))
+  const readiness = quotePosixShell(
+    joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME)
+  )
   // One byte over the cap is enough to tell an oversized payload from a full one.
   return `head -c ${ORCAD_READINESS_MAX_BYTES + 1} ${readiness} 2>/dev/null || true`
 }
@@ -215,10 +219,14 @@ export function orcadLivenessProbeCommand(
     // Windows: PID plus process creation time (PIDs are reused); anything unanswerable is UNKNOWN, never DEAD.
     return orcadWindowsSlotOpCommand(host, remoteInstallDir, 'liveness', [remoteInstallDir])
   }
-  const pidFile = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
-  const readiness = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME))
-  const launcher = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_LAUNCHER_FILENAME))
-  const server = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_SERVER_ENTRY_FILENAME))
+  const pidFile = quotePosixShell(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
+  const readiness = quotePosixShell(
+    joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME)
+  )
+  const launcher = quotePosixShell(joinRemotePath(host, remoteInstallDir, ORCAD_LAUNCHER_FILENAME))
+  const server = quotePosixShell(
+    joinRemotePath(host, remoteInstallDir, ORCAD_SERVER_ENTRY_FILENAME)
+  )
   return [
     posixProcessAliveShellFunction({ refuseUnverifiable: true }),
     // A PID is no identity once reused: a process whose command line does not run this slot's

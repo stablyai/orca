@@ -225,10 +225,11 @@ export function createRemoveWorktree(
       }
 
       const worktreeDisplayName = worktreeBeforeRemoval?.displayName?.trim()
-      if (worktreeDisplayName) {
+      if (worktreeDisplayName && hostId) {
         try {
           await window.api.automations?.snapshotWorkspaceName?.({
             workspaceId: worktreeId,
+            hostId,
             displayName: worktreeDisplayName
           })
         } catch (error) {

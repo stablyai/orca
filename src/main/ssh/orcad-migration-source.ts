@@ -5,12 +5,12 @@
  * through `OrcadMigrationSourceCutoverPort`; the conversion drives the rest. The relay-era SSH
  * target (orcad-migration-ssh-relay-source.ts) is the only implementation.
  */
-import type { OrcadMigrationSourceKind } from '../../shared/orcad-migration-source-kind'
+import type { OrcadMigrationSourceKind } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
-import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration-source-cutover'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { OrcadMigrationManifestExportOptions } from './orcad-migration-manifest-export'
 import type {
   OrcadMigrationFenceResult,

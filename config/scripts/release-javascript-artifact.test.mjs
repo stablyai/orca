@@ -13,7 +13,7 @@ const directories = []
 const configuration = {
   sourceSha: 'a'.repeat(40),
   version: '1.2.3-rc.4',
-  packageManager: 'pnpm@12.8.1',
+  packageManager: 'pnpm@12.14.0',
   identity: 'rc',
   diagnosticsTokenUrl: 'https://example.test/diagnostics',
   telemetryKeySha256: 'b'.repeat(64)

@@ -32,7 +32,7 @@ import {
   type DesktopLayoutView,
   type LayoutContentFacts
 } from '../workspace-layout-beside'
-import { editorTabFile } from '../workspace-layout-editor-tab-file'
+import { editorFileKey, editorTabFile } from '../workspace-layout-editor-tab-file'
 import type {
   LayoutContentTab,
   LayoutTab,
@@ -267,7 +267,8 @@ function editorRow(
     title: file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'File',
     filePath: file.filePath,
     relativePath: file.relativePath,
-    isDirty: scope.view.editorDrafts[scope.key]?.[file.filePath]?.dirtyDraftContent !== undefined,
+    isDirty:
+      scope.view.editorDrafts[scope.key]?.[editorFileKey(file)]?.dirtyDraftContent !== undefined,
     color: tab.color ?? null,
     isPinned: tab.isPinned === true,
     isActive: scope.activeTabId === tab.id

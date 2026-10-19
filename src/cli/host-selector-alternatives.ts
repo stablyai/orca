@@ -1,4 +1,5 @@
 import type { RuntimeClient } from './runtime-client'
+import { normalizeTypedName, stripWrappingQuotes } from '../shared/typed-name-normalization'
 
 export type SshTargetSummary = {
   id: string
@@ -37,16 +38,7 @@ export function findSshTargetByName(
 
 // Why: cmd.exe passes single quotes through literally, so `--host 'my box'` from a POSIX habit
 // arrives quoted; a host or project name never legitimately starts and ends with the same quote.
-export function stripWrappingQuotes(value: string): string {
-  const quote = value[0]
-  return value.length >= 2 && (quote === "'" || quote === '"') && value.at(-1) === quote
-    ? value.slice(1, -1)
-    : value
-}
-
-export function normalizeTypedName(value: string): string {
-  return stripWrappingQuotes(value.trim()).trim().toLowerCase()
-}
+export { normalizeTypedName, stripWrappingQuotes }
 
 function matchesByLabel(targets: readonly SshTargetSummary[], name: string): SshTargetSummary[] {
   const wanted = normalizeTypedName(name)

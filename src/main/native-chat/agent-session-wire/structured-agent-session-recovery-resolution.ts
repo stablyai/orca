@@ -104,6 +104,10 @@ async function stopOwnerAndReprobe(
   const delay = deps.delay ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)))
   let probe: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'owner stop requested' }
   for (const signal of ['SIGTERM', 'SIGKILL'] as const) {
+    // Resolution runs outside the session's serialize: a lease that moved names a pid not ours.
+    if (!leaseStillNamesOwner(deps.store.getRecord(record.sessionId), record)) {
+      return probe
+    }
     stop(pid, signal)
     for (let attempt = 0; attempt < STOP_PROBES[signal]; attempt += 1) {
       probe = await deps.probeRecord(record)
@@ -114,6 +118,19 @@ async function stopOwnerAndReprobe(
     }
   }
   return probe
+}
+
+function leaseStillNamesOwner(
+  current: AgentSessionRecord | null,
+  probed: AgentSessionRecord
+): boolean {
+  const owner = current?.lease.ownerProcess
+  const expected = probed.lease.ownerProcess
+  return (
+    current?.lease.runtimeFence === probed.lease.runtimeFence &&
+    owner?.pid === expected?.pid &&
+    owner?.processStartTimeMs === expected?.processStartTimeMs
+  )
 }
 
 function defaultStopOwnerProcess(pid: number, signal: StructuredSessionRecoveryStopSignal): void {

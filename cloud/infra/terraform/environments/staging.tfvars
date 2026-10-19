@@ -48,8 +48,8 @@ relay_gce_cells = {
     boot_disk_gb      = 30
     boot_image        = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-7"
     capacity_requests = 4000
-    # Step-5 image G (main 2de73812, reports preAuthLatencyMs). Never 2d0f6e6: it cannot report capped telemetry.
-    image = "us-central1-docker.pkg.dev/onorca-cloud-staging/orca-cloud/relay@sha256:07b5bf67a7706b2a61ef5e9a6d8ce85ee37c2a08609496a94eb5254881b5b87d"
+    # Step-6 image J (main 30f5bef9, phonePath). Never 2d0f6e6: it cannot report capped telemetry.
+    image = "us-central1-docker.pkg.dev/onorca-cloud-staging/orca-cloud/relay@sha256:21f1fead4d3b9900d3b1179fd72569dcba548dc0ee29c76c8389fec94f74a7b4"
     # Step-5 staging e2e: c1 is the second US reserve cell, so it needs a cap and rehome trust.
     connection_hard_cap         = 600
     connection_unobserved_bound = 60
@@ -86,7 +86,7 @@ relay_gce_cells = {
     boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
     capacity_requests           = 6000
     database_pool_max           = 10
-    image                       = "us-central1-docker.pkg.dev/onorca-cloud-staging/orca-cloud/relay@sha256:07b5bf67a7706b2a61ef5e9a6d8ce85ee37c2a08609496a94eb5254881b5b87d"
+    image                       = "us-central1-docker.pkg.dev/onorca-cloud-staging/orca-cloud/relay@sha256:21f1fead4d3b9900d3b1179fd72569dcba548dc0ee29c76c8389fec94f74a7b4"
     initially_enabled           = false
     connection_hard_cap         = 3000
     connection_unobserved_bound = 60

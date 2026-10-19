@@ -4,9 +4,11 @@ import {
 } from '../../../../shared/remote-runtime-pty-id'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { AppState } from '../types'
-import { resolveRuntimeOwnerForWorktree } from '@/lib/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
-import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
+import {
+  resolveTerminalHostOwnership,
+  resolveTerminalPtyOwner
+} from '@/lib/terminal-worktree-route'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -61,9 +63,9 @@ export function getTerminalPtyOwnershipIdentity(
     return JSON.stringify(['runtime', scopedEnvironmentId, remote.handle])
   }
   // Why: hydrated legacy runtime IDs omit their owner, but still refer to the same provider
-  // terminal as a scoped ID in the owning worktree. This reads the owner the way teardown's
-  // focus-aware fallback route does, so identity never disagrees with what a close retires.
-  const owner = resolveRuntimeOwnerForWorktree(state, worktreeId)
+  // terminal as a scoped ID in the owning worktree. This reads the owner spawn started it on, as
+  // close does, so identity never disagrees with what a close retires.
+  const owner = resolveTerminalPtyOwner(state, worktreeId, 'spawn')
   // Why: a twin's legacy id can't be pinned to either host, so it matches only its own exact id.
   if (owner.kind === 'ambiguous') {
     return `pty:${ptyId}`

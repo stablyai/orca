@@ -9,19 +9,20 @@ import {
   orcadBunRuntimeFilename
 } from '../../../shared/orcad-artifacts'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
-import {
-  joinRemotePath,
-  remoteDirname,
-  type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+
+/** `orcad_slot=<dir>;`, so the selections below name the long slot path once on the wire. */
+function assignOrcadSlot(directory: string): string {
+  return `orcad_slot=${quotePosixShell(directory.replace(/\/+$/, ''))}; `
+}
 
 /** New slots start the server directly; rollback still accepts older single-entry slots. */
 export function selectOrcadSlotEntryCommand(host: RemoteHostPlatform, directory: string): string {
   assertPosixOrcadHost(host)
-  const server = shellEscape(joinRemotePath(host, directory, ORCAD_SERVER_ENTRY_FILENAME))
-  const launcher = shellEscape(joinRemotePath(host, directory, ORCAD_LAUNCHER_FILENAME))
-  return `if [ -f ${server} ]; then orcad_entry=${server}; else orcad_entry=${launcher}; fi`
+  const server = `"$orcad_slot"/${quotePosixShell(ORCAD_SERVER_ENTRY_FILENAME)}`
+  const launcher = `"$orcad_slot"/${quotePosixShell(ORCAD_LAUNCHER_FILENAME)}`
+  return `${assignOrcadSlot(directory)}if [ -f ${server} ]; then orcad_entry=${server}; else orcad_entry=${launcher}; fi`
 }
 
 /**
@@ -30,20 +31,13 @@ export function selectOrcadSlotEntryCommand(host: RemoteHostPlatform, directory:
  */
 export function orcadNodeSlotRuntimeCommand(host: RemoteHostPlatform, directory: string): string {
   assertPosixOrcadHost(host)
-  const nodeMarker = shellEscape(
-    joinRemotePath(host, directory, ORCAD_NODE_RUNTIME_MARKER_FILENAME)
-  )
-  const nodeRuntimePrefix = shellEscape(
-    joinRemotePath(
-      host,
-      remoteDirname(directory.replace(/\/+$/, ''), host),
-      ORCAD_RUNTIMES_DIRNAME,
-      ORCAD_NODE_RUNTIME_DIR_PREFIX
-    )
-  )
-  const nodeExecutable = shellEscape(`/${ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE}`)
+  const nodeMarker = `"$orcad_slot"/${quotePosixShell(ORCAD_NODE_RUNTIME_MARKER_FILENAME)}`
+  const nodeRuntimePrefix = `"\${orcad_slot%/*}"/${quotePosixShell(
+    `${ORCAD_RUNTIMES_DIRNAME}/${ORCAD_NODE_RUNTIME_DIR_PREFIX}`
+  )}`
+  const nodeExecutable = quotePosixShell(`/${ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE}`)
   return (
-    `orcad_node_sha=$(cat ${nodeMarker}) || exit 78; ` +
+    `${assignOrcadSlot(directory)}orcad_node_sha=$(cat ${nodeMarker}) || exit 78; ` +
     // Why validate: the digest becomes a path segment, so only a bare sha256 may reach it.
     // The leading `(` keeps the pattern parseable when stop embeds this in `$(...)`.
     'case "$orcad_node_sha" in ("" | *[!0-9a-f]*) exit 78;; esac; ' +
@@ -63,15 +57,15 @@ export function selectOrcadSlotRuntimeCommand(
   legacyNodePath: string
 ): string {
   assertPosixOrcadHost(host)
-  const nodeMarker = shellEscape(
+  const nodeMarker = quotePosixShell(
     joinRemotePath(host, directory, ORCAD_NODE_RUNTIME_MARKER_FILENAME)
   )
-  const runtime = shellEscape(joinRemotePath(host, directory, orcadBunRuntimeFilename(host.os)))
-  const target = shellEscape(joinRemotePath(host, directory, ORCAD_BUILD_TARGET_FILENAME))
+  const runtime = quotePosixShell(joinRemotePath(host, directory, orcadBunRuntimeFilename(host.os)))
+  const target = quotePosixShell(joinRemotePath(host, directory, ORCAD_BUILD_TARGET_FILENAME))
   return (
     `if [ -e ${nodeMarker} ]; then ${orcadNodeSlotRuntimeCommand(host, directory)}` +
     `elif [ -e ${target} ] || [ -e ${runtime} ]; then ` +
     `[ -x ${runtime} ] || exit 78; orcad_runtime=${runtime}; ` +
-    `else orcad_runtime=${shellEscape(legacyNodePath)}; fi`
+    `else orcad_runtime=${quotePosixShell(legacyNodePath)}; fi`
   )
 }

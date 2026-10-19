@@ -11,6 +11,9 @@ describe('ACP agents in the runtime registrations', () => {
     expect(
       STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(({ definition }) => definition.agent)
     ).toEqual(['pi', 'codex', 'claude', 'grok', 'opencode', 'opencode2', 'omp', 'antigravity'])
+    expect(structuredAgentRuntimeRegistration('codex')?.definition.capabilities.contextUsage).toBe(
+      true
+    )
     expect(structuredAgentRuntimeRegistration('grok')?.definition).toMatchObject({
       handleTransport: 'acp',
       accountHomeVariable: 'GROK_HOME',

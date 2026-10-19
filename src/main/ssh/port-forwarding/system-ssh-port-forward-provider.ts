@@ -1,4 +1,4 @@
-import type { SshConnection } from '../ssh-connection'
+import type { SshConnection } from '../connection/ssh-connection'
 import type { SystemSshBuildArgsOptions } from '../system-transport/system-ssh-args'
 import {
   startSystemSshPortForwardProcess,

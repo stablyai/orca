@@ -93,6 +93,7 @@ import {
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
 import { sshRemoteRuntimeResolvedSchema } from './telemetry-ssh-runtime-event-schemas'
+import { tabsDirectionalCloseRequestedSchema } from './telemetry-tab-event-schemas'
 import {
   sshHostServerConversionSchema,
   sshHostServerDecidedSchema,
@@ -196,6 +197,7 @@ export const eventSchemas = {
   setup_guide_closed: setupGuideClosedSchema,
   setup_guide_step_completed: setupGuideStepCompletedSchema,
   terminal_pane_split: terminalPaneSplitSchema,
+  tabs_directional_close_requested: tabsDirectionalCloseRequestedSchema,
 
   editor_external_change_conflict_shown: editorExternalChangeConflictShownSchema,
   editor_external_change_conflict_action: editorExternalChangeConflictActionSchema,

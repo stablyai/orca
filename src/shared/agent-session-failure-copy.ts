@@ -46,6 +46,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   codexSystemNotSignedIn: "Codex isn't signed in. Run `{{loginCommand}}`.",
   codexManagedNotSignedIn:
     "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
+  antigravityNotSignedIn:
+    "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity.",
   agentCommandNotSignedIn:
     'Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.',
   interactiveAgentNotSignedIn:

@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { Duplex } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { SshConnection } from './ssh-connection'
+import type { SshConnection } from './connection/ssh-connection'
 import {
   EXEC_STDIN_WRITE_DONE,
   makeExecStdinWriteFileCommand,

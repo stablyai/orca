@@ -7,6 +7,8 @@ vi.mock('./service', () => ({
     start = vi.fn()
     stop = vi.fn()
     markDispatchResult = vi.fn(async () => ({}))
+    runInAutomationLane = <T>(_automationId: string, operation: () => Promise<T>): Promise<T> =>
+      operation()
   }
 }))
 

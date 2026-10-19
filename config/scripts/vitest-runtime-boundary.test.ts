@@ -27,8 +27,7 @@ it('routes native-chat journal and record-store SQLite contracts through Node', 
     expect.arrayContaining([
       'src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.test.ts',
       'src/main/native-chat/agent-session-wire/structured-agent-session-status-first-input-identity.test.ts',
-      'src/main/native-chat/structured-chat-naming-command-first.test.ts',
-      'src/main/native-chat/structured-chat-naming-status-hook.test.ts',
+      'src/main/native-chat/structured-chat-naming.test.ts',
       'src/main/runtime/agent-session-conversation-name-store.test.ts',
       'src/main/runtime/structured-session-mail-redrive-wiring.test.ts'
     ])

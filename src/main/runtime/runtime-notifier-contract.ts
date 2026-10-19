@@ -119,6 +119,8 @@ export type RuntimeNotifier = {
   ): void
   /** `recordInteraction: false` marks a title the host applied, not one the user typed. */
   renameTerminal(tabId: string, title: string | null, options?: { recordInteraction: false }): void
+  /** False when the window could not be reached; absent on notifiers that predate pane titles. */
+  setPaneTitle?(tabId: string, leafId: string, title: string | null): boolean
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   /** Raises the window onto a pane it shows; resolves false when the window does not know the worktree. */
   revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>

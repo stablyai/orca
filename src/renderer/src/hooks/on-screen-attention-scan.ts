@@ -32,6 +32,7 @@ import {
 } from '@/store/slices/workspace-attention/workspace-unread-flag'
 import { paneKeyTabId } from '@/store/slices/workspace-attention/workspace-live-markers'
 import { isOrcaWindowForegroundFocused } from '@/components/terminal-pane/terminal-notification-pane-visibility'
+import type { ClientWorkspaceViewReporter } from './client-workspace-view-report'
 
 type ScanStore = {
   getState: () => AppState
@@ -48,6 +49,8 @@ export type OnScreenAttentionEnvironment = {
   subscribeStructuredViews: (onView: (view: StructuredSubjectRead) => void) => () => void
   /** `onRescan`: visibility/focus changed. `onInput`: trusted input proves presence. */
   subscribePresenceSignals: (onRescan: () => void, onInput: () => void) => () => void
+  /** Where the owning hosts raise the unread flag, they learn what this window shows. */
+  viewReporter?: ClientWorkspaceViewReporter
 }
 
 function hasMarkersOnScreen(s: AppState, targets: readonly AutoAckTabTarget[]): boolean {
@@ -151,12 +154,13 @@ export function startOnScreenAttentionScan(
 
     // Why: tab-active only proxies "seen"; gate on window visible+focused so away-time transitions don't silently clear the bold signal.
     const workspaceIds = isOrcaWindowForegroundFocused() ? onScreenWorkspaceIds(s) : []
+    // An editor, browser or empty workspace has no targets but still reads its flag on arrival.
+    const targets = workspaceIds.length === 0 ? [] : resolveAutoAckTabTargets(s)
+    env.viewReporter?.update(s, workspaceIds, targets)
     if (workspaceIds.length === 0) {
       lastReadScreenKey = null
       return
     }
-    // An editor, browser or empty workspace has no targets but still reads its flag on arrival.
-    const targets = resolveAutoAckTabTargets(s)
     const screenKey = [
       s.activeWorkspaceExecutionHostId,
       ...workspaceIds,
@@ -250,6 +254,7 @@ export function startOnScreenAttentionScan(
     () => maybeAck({ force: true }),
     () => {
       notePresence()
+      env.viewReporter?.renewPresence()
       // Why only while a presence check is parked: input is the hottest path in the app, and an
       // unparked rescan would only re-read the screen that store writes and views already read.
       if (pendingPresenceReads !== undefined) {

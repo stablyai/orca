@@ -41,6 +41,52 @@ export async function retireRuntimeBrowserClientPage(
   return { closed: true }
 }
 
+type LogicalTabQueries = {
+  browserTabList(params: { worktree?: string }): Promise<{ tabs: { browserPageId: string }[] }>
+  browserTabCurrent(params: { worktree?: string }): Promise<{ tab: { browserPageId: string } }>
+}
+
+/**
+ * The client-hosted page a close names, by id, index or as the current tab; undefined when the
+ * target is not one. Index and current resolve against the host's whole logical tab list, so a
+ * client page that leads it is never mistaken for an engine tab.
+ */
+export async function resolveClientPageToClose(
+  host: Pick<
+    BrowserClientPageCloseHost,
+    'getRuntimeBrowserPageRegistry' | 'resolveBrowserWorkspace'
+  >,
+  queries: LogicalTabQueries,
+  params: PageCloseParams & { index?: number }
+): Promise<RuntimeBrowserClientPage | undefined> {
+  const pages = host.getRuntimeBrowserPageRegistry()
+  if (params.page) {
+    const page = pages.getPage(params.page)
+    if (
+      page &&
+      params.worktree &&
+      (await host.resolveBrowserWorkspace(params.worktree)).id !== page.workspaceId
+    ) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${page.browserPageId} was not found in this worktree`
+      )
+    }
+    return page
+  }
+  const workspaceId = params.worktree
+    ? (await host.resolveBrowserWorkspace(params.worktree)).id
+    : undefined
+  if (pages.listPages(workspaceId).length === 0) {
+    return undefined
+  }
+  const tab =
+    params.index !== undefined
+      ? (await queries.browserTabList({ worktree: params.worktree })).tabs[params.index]
+      : (await queries.browserTabCurrent({ worktree: params.worktree })).tab
+  return tab ? pages.getPage(tab.browserPageId) : undefined
+}
+
 /** Closes a named page this runtime's registry holds; null when the registry has no such page. */
 export async function closeRegisteredBrowserClientPage(
   host: BrowserClientPageCloseHost,

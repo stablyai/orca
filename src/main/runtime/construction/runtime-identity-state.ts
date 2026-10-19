@@ -312,12 +312,6 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     }
   >()
 
-  // Why: pointer state is process-local; one harmless replay after restart avoids a wire or schema change.
-  protected readonly lastPointedMessageSequenceByHandle = new Map<string, number>()
-
-  // Why: a waiter can reserve an older row while a newer row advances the sequence watermark.
-  protected readonly pointedMessageIdsByHandle = new Map<string, Set<string>>()
-
   protected readonly mailPointerRepointScheduler = new MailPointerRepointScheduler((handle) =>
     this.repointPendingMessagesForHandle(handle)
   )

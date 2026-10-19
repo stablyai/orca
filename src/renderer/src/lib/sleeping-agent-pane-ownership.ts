@@ -9,7 +9,8 @@ import type {
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import { isPaneSpawnDeferred } from './pane-spawn-deferral-registry'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { isPaneResumingInPlace, isPaneSpawnDeferred } from './pane-spawn-deferral-registry'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -201,6 +202,11 @@ export function recordPaneIsOwnedByPreservedPane(
       layout?.ptyIdsByLeafId?.[stable.leafId] ?? (isSingleLeafLayout ? tab.ptyId : null)
     const sshPty = leafPtyId ? parseAppSshPtyId(leafPtyId) : null
     if (sshPty && state.sshConnectionStates.get(sshPty.connectionId)?.status !== 'connected') {
+      return true
+    }
+    // Switch point: main clears a gone terminal's binding while the pane's own start resumes the
+    // record, so the start, not the binding, says the pane owns it.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && isPaneResumingInPlace(record.paneKey)) {
       return true
     }
     // Why: active sessions rely on pane-level cold restore. A preserved leaf

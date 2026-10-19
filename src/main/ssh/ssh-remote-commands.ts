@@ -6,7 +6,7 @@ import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, joinRemotePath, remoteDirname } from './ssh-remote-platform'
 import { powerShellCommand } from './ssh-remote-powershell'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../shared/powershell-native-argument'
-import { shellEscape } from './ssh-connection-utils'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 
 export function readRemoteHomeCommand(host: RemoteHostPlatform): string {
   if (!isWindowsRemoteHost(host)) {
@@ -17,7 +17,7 @@ export function readRemoteHomeCommand(host: RemoteHostPlatform): string {
 
 export function removeRemoteFileCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
-    return `rm -f ${shellEscape(remotePath)} 2>/dev/null; true`
+    return `rm -f ${quotePosixShell(remotePath)} 2>/dev/null; true`
   }
   return powerShellCommand(
     `Remove-Item -LiteralPath ${powerShellLiteral(remotePath)} -Force -ErrorAction SilentlyContinue`
@@ -26,7 +26,7 @@ export function removeRemoteFileCommand(host: RemoteHostPlatform, remotePath: st
 
 export function removeRemoteTreeCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
-    return `rm -rf ${shellEscape(remotePath)}`
+    return `rm -rf ${quotePosixShell(remotePath)}`
   }
   return powerShellCommand(
     `Remove-Item -LiteralPath ${powerShellLiteral(remotePath)} -Recurse -Force -ErrorAction SilentlyContinue`
@@ -39,7 +39,7 @@ export function moveRemoteTreeCommand(
   destinationPath: string
 ): string {
   if (!isWindowsRemoteHost(host)) {
-    return `mv ${shellEscape(sourcePath)} ${shellEscape(destinationPath)} 2>&1 && echo MOVED || echo BUSY`
+    return `mv ${quotePosixShell(sourcePath)} ${quotePosixShell(destinationPath)} 2>&1 && echo MOVED || echo BUSY`
   }
   return powerShellCommand(
     [
@@ -62,12 +62,12 @@ export function restoreRemoteTreeCommand(
       `if (-not (Test-Path -LiteralPath ${powerShellLiteral(destination)})) { Move-Item -LiteralPath ${powerShellLiteral(source)} -Destination ${powerShellLiteral(destination)} -ErrorAction Stop; 'MOVED' } else { 'BUSY' }`
     )
   }
-  return `if [ ! -e ${shellEscape(destination)} ] && [ ! -L ${shellEscape(destination)} ]; then mv ${shellEscape(source)} ${shellEscape(destination)} && echo MOVED; else echo BUSY; fi`
+  return `if [ ! -e ${quotePosixShell(destination)} ] && [ ! -L ${quotePosixShell(destination)} ]; then mv ${quotePosixShell(source)} ${quotePosixShell(destination)} && echo MOVED; else echo BUSY; fi`
 }
 
 export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
-    return `touch ${shellEscape(remotePath)}`
+    return `touch ${quotePosixShell(remotePath)}`
   }
   return powerShellCommand(
     `Set-Content -LiteralPath ${powerShellLiteral(remotePath)} -Value '' -NoNewline`
@@ -87,8 +87,8 @@ export function probeRemoteInstallCompleteCommand(
     joinRemotePath(host, remoteInstallDir, filename)
   )
   if (!isWindowsRemoteHost(host)) {
-    const fileTests = required.map((path) => `&& test -f ${shellEscape(path)} `).join('')
-    return `test -d ${shellEscape(remoteInstallDir)} ${fileTests}&& echo OK || echo MISSING`
+    const fileTests = required.map((path) => `&& test -f ${quotePosixShell(path)} `).join('')
+    return `test -d ${quotePosixShell(remoteInstallDir)} ${fileTests}&& echo OK || echo MISSING`
   }
   return powerShellCommand(
     [
@@ -119,7 +119,7 @@ export function listRemoteInstallBaseDirsCommand(
   if (!isWindowsRemoteHost(host)) {
     const statusPrefix = '__ORCA_RELAY_GC_FIND_STATUS__'
     return [
-      `base=${shellEscape(baseDir)}; [ -d "$base" ] || exit 0;`,
+      `base=${quotePosixShell(baseDir)}; [ -d "$base" ] || exit 0;`,
       `{ find "$base" -mindepth 1 -maxdepth 1 -type d -name '${model.dirPrefix}-*' -print; status=$?; printf '\n${statusPrefix}%s\n' "$status"; } |`,
       String.raw`awk 'BEGIN { count=0; status=-1 } /^${statusPrefix}[0-9]+$/ { status=substr($0, ${statusPrefix.length + 1}); next } { name=$0; sub(/^.*\//, "", name); if (name ~ /${namePattern}/ && count < ${MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES}) { entries[count++]=name } } END { if (status != 0) exit 1; for (i=0; i<count; i++) print entries[i] }'`
     ].join(' ')
@@ -140,7 +140,7 @@ export function listRemoteInstallBaseDirsCommand(
 
 export function probeFileExistsCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
-    return `test -f ${shellEscape(remotePath)} && echo COMPLETE || echo PARTIAL`
+    return `test -f ${quotePosixShell(remotePath)} && echo COMPLETE || echo PARTIAL`
   }
   return powerShellCommand(
     `if (Test-Path -LiteralPath ${powerShellLiteral(remotePath)} -PathType Leaf) { 'COMPLETE' } else { 'PARTIAL' }`
@@ -155,7 +155,7 @@ export function commandWithNodePath(
 ): string {
   const nodeBinDir = remoteDirname(nodePath, host)
   if (!isWindowsRemoteHost(host)) {
-    return `export PATH=${shellEscape(nodeBinDir)}:$PATH && cd ${shellEscape(remoteDir)} && ${command}`
+    return `export PATH=${quotePosixShell(nodeBinDir)}:$PATH && cd ${quotePosixShell(remoteDir)} && ${command}`
   }
   const windowsNodeBinDir = nodeBinDir.replace(/\//g, '\\')
   return powerShellCommand(

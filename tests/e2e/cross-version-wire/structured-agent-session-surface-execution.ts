@@ -30,6 +30,10 @@ export function runtimeStub(overrides: Record<string, unknown> = {}): unknown {
       return resolved
     },
     publishStructuredAgentSessionTab: () => {},
+    subscribeStructuredAgentAvailability: (read: (agents: unknown[]) => void) => {
+      read([])
+      return () => {}
+    },
     registerSubscriptionCleanup: subscriptions.register.bind(subscriptions),
     registerOwnedSubscriptionCleanup: subscriptions.registerOwned.bind(subscriptions),
     cleanupSubscription: subscriptions.cleanup.bind(subscriptions),

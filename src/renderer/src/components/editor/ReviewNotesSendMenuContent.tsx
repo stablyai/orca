@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -20,11 +20,7 @@ import {
   deriveNotesSendAgentTargets,
   type NotesSendAgentTarget
 } from '@/lib/notes-send-agent-targets'
-import {
-  agentKindForAgentType,
-  formatAgentTypeLabel,
-  agentTypeToIconAgent
-} from '@/lib/agent-status'
+import { agentKindForAgentType, formatAgentTypeLabel } from '@/lib/agent-status'
 import { track } from '@/lib/telemetry'
 import { useNow } from '@/hooks/use-now'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
@@ -283,7 +279,7 @@ function AgentTargetMenuItem({
         className="shrink-0"
         title={disabledReason ? null : undefined}
       />
-      <AgentIcon agent={agentTypeToIconAgent(target.agentType ?? agent?.agentType)} size={14} />
+      <AgentTypeIcon agentType={target.agentType ?? agent?.agentType} size={14} />
       <span className="grid min-w-0 flex-1 text-left">
         <span className="truncate">
           {formatAgentTypeLabel(target.agentType ?? agent?.agentType)}

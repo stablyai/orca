@@ -60,6 +60,12 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2
   },
+  optionPending: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs
+  },
   clearFiltersText: {
     fontSize: 13,
     color: colors.textSecondary

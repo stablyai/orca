@@ -60,12 +60,17 @@ function result(marker: string): AiVaultListResult {
   }
 }
 
-function args(scan: () => Promise<AiVaultListResult>, force = false, depth = 4) {
+function args(
+  scan: () => Promise<AiVaultListResult>,
+  force = false,
+  depth = 4,
+  scopePaths: readonly string[] = ['/workspaces/project']
+) {
   return {
     cacheKey: 'leg',
     depth,
     force,
-    scopePaths: ['/workspaces/project'],
+    scopePaths,
     scan
   }
 }
@@ -185,16 +190,16 @@ describe('host session result cache lifetime', () => {
     expect(scan).toHaveBeenCalledTimes(4)
   })
 
-  it('keeps the refreshed deadline and cached scoped depth when the old timer fires', async () => {
+  it('keeps the refreshed deadline and cached covering depth when the old timer fires', async () => {
     const scan = vi.fn().mockResolvedValue(result('old'))
     const owner = await cacheOwner(() => scanHostLegWithCache(args(scan)))
     await vi.advanceTimersByTimeAsync(4000)
     scan.mockResolvedValue(result('fresh'))
     await scanHostLegWithCache(args(scan, true))
     await vi.advanceTimersByTimeAsync(11000)
-    const narrow = await scanHostLegWithCache(args(scan, false, 2))
+    const narrow = await scanHostLegWithCache(args(scan, false, 2, []))
     expect(narrow.sessions.map((session) => session.id)).toEqual(
-      [0, 1, 2].map((index) => `local:codex:fresh-${index}`)
+      [0, 1].map((index) => `local:codex:fresh-${index}`)
     )
     expect(scan).toHaveBeenCalledTimes(2)
     expect(owner.size).toBe(1)
@@ -254,6 +259,7 @@ describe('host session result cache lifetime', () => {
     expect(scan).toHaveBeenCalledTimes(1)
   })
 
+  // Covering reuse applies to unscoped requests; a scoped request reuses only its own depth.
   it('keeps the first completed covering depth while returning every concurrent result', async () => {
     let finish: (value: AiVaultListResult) => void = () => {
       throw new Error('Scan not started')
@@ -265,16 +271,17 @@ describe('host session result cache lifetime', () => {
             finish = resolve
           }),
         false,
-        2
+        2,
+        []
       )
     )
-    await scanHostLegWithCache(args(async () => result('first')))
+    await scanHostLegWithCache(args(async () => result('first'), false, 4, []))
     finish(result('later'))
     await expect(later).resolves.toEqual(result('later'))
     const unused = vi.fn().mockResolvedValue(result('unused'))
-    expect((await scanHostLegWithCache(args(unused, false, 2))).sessions[0].title).toBe('first')
+    expect((await scanHostLegWithCache(args(unused, false, 2, []))).sessions[0].title).toBe('first')
     expect(unused).not.toHaveBeenCalled()
-    await scanHostLegWithCache(args(unused, false, 5))
+    await scanHostLegWithCache(args(unused, false, 5, []))
     expect(unused).toHaveBeenCalledTimes(1)
   })
 

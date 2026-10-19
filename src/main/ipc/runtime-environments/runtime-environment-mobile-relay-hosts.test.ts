@@ -21,7 +21,7 @@ vi.mock('../../../shared/runtime-environments', async (importOriginal) => ({
 vi.mock('./runtime-environment-managed-tunnel', () => ({
   resolveManagedRuntimeEnvironment: mocks.resolveManaged
 }))
-vi.mock('../../ssh/ssh-target-registry', () => ({
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   listRegisteredSshTargets: () => mocks.sshTargets,
   getRegisteredSshState: (targetId: string) => mocks.sshStates.get(targetId)
 }))

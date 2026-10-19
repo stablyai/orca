@@ -8,6 +8,7 @@ import { ShareUsageButton } from './ShareUsageButton'
 import { StatCard } from './StatCard'
 import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
 import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
+import { unpricedCostLabel } from './unpriced-cost-label'
 import { translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: CodexUsageRange[] = ['7d', '30d', '90d', 'all']
@@ -97,15 +98,10 @@ export function CodexUsagePane(): React.JSX.Element {
   }
 
   const hasAnyData = summary?.hasAnyCodexData ?? scanState.hasAnyCodexData
-  const costLabel = translate(
-    'auto.components.stats.CodexUsagePane.1a18fbd56b',
-    'Est. API-equivalent cost'
+  const costCardLabel = unpricedCostLabel(
+    translate('auto.components.stats.CodexUsagePane.1a18fbd56b', 'Est. API-equivalent cost'),
+    summary
   )
-  // "Excludes" promises a remainder, so it only qualifies a total that exists.
-  const costCardLabel =
-    summary?.hasUnpricedModels && summary.estimatedCostUsd !== null
-      ? `${costLabel} ${translate('auto.components.stats.CodexUsagePane.costExcludesUnpricedModels', '• excludes unpriced models')}`
-      : costLabel
 
   return (
     <UsageTrackingPaneShell

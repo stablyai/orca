@@ -33,6 +33,7 @@ import { codexProviderHandle } from '../../../shared/agent-session-provider-hand
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import {
   THREAD_ID,
+  acquireReadyCodexForTest,
   adapterFor,
   answerWithOpenedTurn,
   fakeCodex,
@@ -99,6 +100,7 @@ beforeEach(async () => {
           }
         }
       },
+      open: async () => ({ reportedOptions: { model: '' } }),
       dispatch,
       closeSession,
       acknowledgeSessionRelease,
@@ -203,7 +205,7 @@ describe('a Stop that names no turn', () => {
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
       modelCatalog: new AgentModelCatalogStore()
     })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor(SESSION),
       fence: 1,
       spawnToken: 'spawn-catalog',
@@ -215,6 +217,11 @@ describe('a Stop that names no turn', () => {
     cancelTurn.mockImplementation((input) => adapter.cancelTurn(input))
     setOption.mockImplementation((input) => adapter.setOption(input))
 
+    const listing = adapter.readOptions({ sessionId: SESSION, fence: 1 })
+    const catalogReads = codex.connections[0].calls.filter(
+      (call) => call.method === 'model/list'
+    ).length
+    await pickOption('serviceTier', 'priority')
     const first = send('first send')
     await first.result
     await eventually(() =>
@@ -225,14 +232,12 @@ describe('a Stop that names no turn', () => {
       value: { options: { model: 'gpt-next' } }
     })
     expect(codex.connections[0].calls.filter((call) => call.method === 'model/list')).toHaveLength(
-      1
+      catalogReads
     )
 
     const followUp = send('follow-up')
     await followUp.result
-    await eventually(() =>
-      expect(codex.connections[0].calls.some((call) => call.method === 'turn/steer')).toBe(true)
-    )
+    expect(codex.connections[0].calls.some((call) => call.method === 'turn/steer')).toBe(false)
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
     codex.connections[0].handlers.onNotification?.('turn/completed', {
       threadId: THREAD_ID,
@@ -250,6 +255,7 @@ describe('a Stop that names no turn', () => {
       codex.connections[0].calls.filter((call) => call.method === 'turn/start')[1]?.params
     ).toMatchObject({ serviceTier: 'priority' })
     pending.resolve({ data: [], nextCursor: null })
+    await expect(listing).rejects.toThrow('no available models')
   })
 
   // Codex can abort a turn before it starts: it answers the interrupt, then ends the turn it never
@@ -275,7 +281,7 @@ describe('a Stop that names no turn', () => {
       return {}
     }
     const adapter = adapterFor(codex, { codexHome: '/codex/home' })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor(SESSION),
       fence: 1,
       spawnToken: 'spawn-unstarted',
@@ -317,7 +323,7 @@ describe('a Stop that names no turn', () => {
       return {}
     }
     const adapter = adapterFor(codex, { codexHome: '/codex/home' })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor(SESSION),
       fence: 1,
       spawnToken: 'spawn-unstarted-item',
@@ -346,7 +352,7 @@ describe('a Stop that names no turn', () => {
     const codex = fakeCodex()
     codex.routes['turn/start'] = () => ({ turn: { id: 'turn-1' } })
     const adapter = adapterFor(codex, { codexHome: '/codex/home' })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor(SESSION),
       fence: 1,
       spawnToken: 'spawn-unstarted-failed',
@@ -386,7 +392,11 @@ describe('a Stop that names no turn', () => {
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
       modelCatalog: new AgentModelCatalogStore()
     })
-    await adapter.acquire({ identity: identityFor(SESSION), fence: 1, spawnToken: 'spawn-bad' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor(SESSION),
+      fence: 1,
+      spawnToken: 'spawn-bad'
+    })
     dispatch.mockImplementation((input) => adapter.dispatch(input))
     setOption.mockImplementation((input) => adapter.setOption(input))
 

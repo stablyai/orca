@@ -14,10 +14,11 @@ import {
 } from '../../shared/automations-types'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
-import { runAutomationPrecheck } from './precheck-runner'
+import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
+import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import { clearAutomationDispatchTokens } from './dispatch-tokens'
 import {
   AutomationRunCompletionWatcher,
@@ -53,6 +54,7 @@ export class AutomationService {
   private readonly codexUsage: CodexUsageStore | null
   private readonly allowRemoteHostScheduling: boolean
   private readonly headlessDispatcher: HeadlessAutomationDispatcher | null
+  private readonly automationLanes = new Map<string, Promise<void>>()
   /** Set on a headless host: closes completed, unused run terminals now; resolves how many. */
   releaseFinishedRunTerminals: (() => Promise<number>) | null = null
   private readonly publish: PublishAutomationsChanged | null
@@ -181,19 +183,7 @@ export class AutomationService {
     }
     const target = this.resolveTarget(automation)
     if (!target.ok) {
-      return {
-        command: automation.precheck.command,
-        exitCode: null,
-        timedOut: false,
-        durationMs: 0,
-        stdout: '',
-        stderr: '',
-        stdoutTruncated: false,
-        stderrTruncated: false,
-        error: target.error,
-        startedAt: Date.now(),
-        completedAt: Date.now()
-      }
+      return failedPrecheckResult(automation.precheck, Date.now(), target.error)
     }
     return await runAutomationPrecheck({
       precheck: automation.precheck,
@@ -314,27 +304,38 @@ export class AutomationService {
     return Boolean(webContents && !webContents.isDestroyed() && this.rendererReady)
   }
 
+  /**
+   * One run of an automation at a time claims, prechecks, picks, prompts and records its agent,
+   * and headless retention closes that automation's terminals in the same lane, so no two ever
+   * claim one pane. Held only until the run is dispatched, never while its agent works.
+   */
+  runInAutomationLane<T>(automationId: string, operation: () => Promise<T>): Promise<T> {
+    return runKeyedSerializedOperation(this.automationLanes, automationId, operation)
+  }
+
   private requestDispatch(
     automation: Automation,
     run: AutomationRun,
     target: AutomationRunTargetResult,
     generation: number
   ): Promise<AutomationRun> {
-    return requestAutomationDispatch(
-      {
-        store: this.store,
-        runs: this.runs,
-        isActive: () => !this.stopped && generation === this.dispatchGeneration,
-        getRenderer: () => (this.canDispatchToRenderer() ? this.webContents : null),
-        headlessDispatcher: this.headlessDispatcher,
-        resolveTarget: (current) => this.resolveTarget(current),
-        runPrecheck: () => this.runPrecheck(automation.id, run.id),
-        markDispatchResult: (result) => this.markDispatchResult(result),
-        watchRun: (dispatched) => this.completionWatcher?.watch(dispatched)
-      },
-      automation,
-      run,
-      target
+    return this.runInAutomationLane(automation.id, () =>
+      requestAutomationDispatch(
+        {
+          store: this.store,
+          runs: this.runs,
+          isActive: () => !this.stopped && generation === this.dispatchGeneration,
+          getRenderer: () => (this.canDispatchToRenderer() ? this.webContents : null),
+          headlessDispatcher: this.headlessDispatcher,
+          resolveTarget: (current) => this.resolveTarget(current),
+          runPrecheck: () => this.runPrecheck(automation.id, run.id),
+          markDispatchResult: (result) => this.markDispatchResult(result),
+          watchRun: (dispatched) => this.completionWatcher?.watch(dispatched)
+        },
+        automation,
+        run,
+        target
+      )
     )
   }
 }

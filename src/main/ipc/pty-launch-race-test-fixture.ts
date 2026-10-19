@@ -141,7 +141,7 @@ export function sleptWorktreeLock() {
     refuse = resolve
   })
   const acquireWorktreeTerminalSpawn = vi.fn(
-    async (_worktreeId?: string, opts?: { refuseSleptWorktree?: boolean }) => {
+    async (_target?: unknown, opts?: { refuseSleptWorktree?: boolean }) => {
       if (opts?.refuseSleptWorktree) {
         await refusal
         throw new Error(WORKTREE_TERMINALS_SLEEPING_ERROR)

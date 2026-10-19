@@ -4,7 +4,7 @@ import {
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   resolveDetectedTuiAgentIds
 } from '../../shared/tui-agent-detection-commands'
-import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { runWslProcess } from '../wsl/wsl-runner'
 
 const PROVIDER_DETECTION_COMMANDS = KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter((command) =>

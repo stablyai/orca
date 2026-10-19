@@ -27,7 +27,8 @@ const {
     settings: {
       activeRuntimeEnvironmentId: null as string | null,
       openInApplications: [] as { id: string; label: string; command: string }[]
-    }
+    },
+    routeState: {}
   },
   openInExternalEditorMock: vi.fn(),
   openInFileManagerMock: vi.fn(),
@@ -44,10 +45,10 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/store', () => {
   const useAppStore = Object.assign(
-    (selector: (state: { settings: typeof mockState.settings }) => unknown) =>
-      selector({ settings: mockState.settings }),
+    (selector: (state: typeof mockState) => unknown) => selector(mockState),
     {
       getState: () => ({
+        ...mockState.routeState,
         settings: mockState.settings,
         openSettingsPage: openSettingsPageMock,
         openSettingsTarget: openSettingsTargetMock
@@ -88,6 +89,7 @@ function findByType(node: unknown, type: unknown): ReactElementLike {
 describe('WorktreeOpenInMenu', () => {
   beforeEach(() => {
     mockState.settings = { activeRuntimeEnvironmentId: null, openInApplications: [] }
+    mockState.routeState = {}
     toastErrorMock.mockReset()
     openInFileManagerMock.mockReset()
     openInExternalEditorMock.mockReset()
@@ -264,11 +266,13 @@ describe('WorktreeOpenInMenu', () => {
     })
     expect(getOpenInEntryAvailability(entries[1], 'ssh-1')).toEqual({
       disabled: true,
-      metadata: 'Local only'
+      metadata: 'Local only',
+      disabledReason: 'Only VS Code can open folders on an SSH host.'
     })
     expect(getOpenInEntryAvailability(entries[2], 'ssh-1')).toEqual({
       disabled: true,
-      metadata: 'Local only'
+      metadata: 'Local only',
+      disabledReason: 'Only VS Code can open folders on an SSH host.'
     })
     expect(getOpenInEntryAvailability(entries[3], 'ssh-1')).toEqual({
       disabled: true,
@@ -348,19 +352,25 @@ describe('WorktreeOpenInMenu', () => {
     const entry = { id: 'zed', label: 'Zed', target: 'external-editor', command: 'zed' } as const
     expect(getOpenInEntryAvailability(entry, null, 'managed-owner')).toEqual({
       disabled: true,
-      metadata: 'Local only'
+      metadata: 'Local only',
+      disabledReason:
+        'Apps on this computer can open this server’s files only when Orca reaches it over SSH.'
     })
   })
 
   it('marks an unresolved owner local-only and never launches the desktop copy', async () => {
     const editor = { id: 'zed', label: 'Zed', target: 'external-editor', command: 'zed' } as const
     const fileManager = { id: 'file-manager', label: 'Finder', target: 'file-manager' } as const
-    for (const entry of [editor, fileManager]) {
-      expect(getOpenInEntryAvailability(entry, null, null, true)).toEqual({
-        disabled: true,
-        metadata: 'Local only'
-      })
-    }
+    expect(getOpenInEntryAvailability(editor, null, null, true)).toEqual({
+      disabled: true,
+      metadata: 'Local only',
+      disabledReason:
+        'Apps on this computer can open this server’s files only when Orca reaches it over SSH.'
+    })
+    expect(getOpenInEntryAvailability(fileManager, null, null, true)).toEqual({
+      disabled: true,
+      metadata: 'Local only'
+    })
     for (const target of ['external-editor', 'file-manager'] as const) {
       await openWorktreePath({
         target,
@@ -373,5 +383,81 @@ describe('WorktreeOpenInMenu', () => {
     }
     expect(openInExternalEditorMock).not.toHaveBeenCalled()
     expect(openInFileManagerMock).not.toHaveBeenCalled()
+  })
+
+  describe('a workspace on a server Orca reaches through an SSH host', () => {
+    const runtimeSshHost = { environmentId: 'managed-owner', sshTargetId: 'ssh-1' }
+    const code = {
+      id: 'code',
+      label: 'VS Code',
+      target: 'external-editor',
+      command: 'code'
+    } as const
+    const zed = { id: 'zed', label: 'Zed', target: 'external-editor', command: 'zed' } as const
+
+    it('enables VS Code over Remote SSH and explains why other apps stay off', () => {
+      expect(
+        getOpenInEntryAvailability(code, null, 'managed-owner', false, runtimeSshHost)
+      ).toEqual({ disabled: false, metadata: 'Remote SSH' })
+      expect(getOpenInEntryAvailability(zed, null, 'managed-owner', false, runtimeSshHost)).toEqual(
+        {
+          disabled: true,
+          metadata: 'Local only',
+          disabledReason: 'Only VS Code can open folders on an SSH host.'
+        }
+      )
+    })
+
+    it('sends the SSH host with the server as the owner', async () => {
+      const worktreeId = 'repo-1::/home/ada/project'
+      mockState.routeState = {
+        runtimeEnvironments: [
+          {
+            id: 'managed-owner',
+            orcadDeployment: {
+              sshTargetId: 'ssh-1',
+              sshTargetGeneration: 1,
+              localPort: 41000,
+              remotePort: 6768
+            }
+          }
+        ],
+        repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'runtime:managed-owner' }],
+        worktreesByRepo: {
+          'repo-1': [
+            {
+              id: worktreeId,
+              repoId: 'repo-1',
+              hostId: 'runtime:managed-owner',
+              runtimeOwnerEnvironmentId: 'managed-owner'
+            }
+          ]
+        }
+      }
+      await openWorktreePath({
+        target: 'external-editor',
+        worktreePath: '/home/ada/project',
+        connectionId: null,
+        runtimeEnvironmentId: 'managed-owner',
+        workspace: { workspaceId: worktreeId, hostId: 'runtime:managed-owner' },
+        command: 'code'
+      })
+
+      expect(openInExternalEditorMock).toHaveBeenCalledWith({
+        path: '/home/ada/project',
+        command: 'code',
+        connectionId: 'ssh-1',
+        ownerHostId: 'runtime:managed-owner'
+      })
+    })
+
+    it('keeps a server workspace with no SSH host local-only, saying why', () => {
+      expect(getOpenInEntryAvailability(code, null, 'managed-owner', false, null)).toEqual({
+        disabled: true,
+        metadata: 'Local only',
+        disabledReason:
+          'Apps on this computer can open this server’s files only when Orca reaches it over SSH.'
+      })
+    })
   })
 })

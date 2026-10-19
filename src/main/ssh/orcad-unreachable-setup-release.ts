@@ -10,7 +10,7 @@ import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-
 import { findOrcadMigrationSourceCutoverForTarget } from './orcad-migration-cutover-journal'
 import { releaseUndeployedMigrationFence } from './orcad-migration-source-fence'
 import { closeOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
-import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 import { withOrcadActivationLock } from '../managed-server/activation/orcad-activation-lock'
 import { withDeactivatedVersionCommitted } from '../managed-server/activation/orcad-activation-record'
 import {
@@ -22,7 +22,7 @@ import { resolveOrcadRemoteContext } from '../managed-server/install/orcad-remot
 import { orcadStopFreedTheHost } from '../managed-server/install/orcad-remote-process-control'
 import { orcadSlotDir, stopOrcadSlot } from './orcad-recovery-slot'
 import { sshOrcadHostTransport } from './orcad-ssh-host-transport'
-import { getSshConnectionManager, getSshTargetRegistryStore } from './ssh-target-registry'
+import { getSshConnectionManager, getSshTargetRegistryStore } from './targets/ssh-target-registry'
 import { errorMessage } from '../../shared/error-message'
 
 export async function releaseUnreachableOrcadSetup(args: {

@@ -7,7 +7,7 @@ import {
 } from '@/components/task-page-github-resume-cache'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import { getTaskPageRepoSourceContext } from './task-page-source-context'
-import { sortWorkItemsByNumber } from '../../../shared/work-items'
+import { sortWorkItemsByNumber, taskPageToGitHubApiPage } from '../../../shared/work-items'
 import {
   materializeTaskPageItemList,
   overlayPendingOnTaskPagePages,
@@ -15,10 +15,7 @@ import {
   reapplyPendingTaskPageGitHubMutationsToCache
 } from '@/components/task-page-github-work-item-mutations'
 import { getOrCreateQuietRevalidateState } from '@/components/task-page-github-work-item-mutation-registry'
-import {
-  taskPageToGitHubApiPage,
-  resolveEmptyPageOutcome
-} from '@/components/task-page-work-item-pagination'
+import { resolveEmptyPageOutcome } from '@/components/task-page-work-item-pagination'
 import {
   deriveTaskPageGitHubWorkItemsFetchOptions,
   shouldReplaceTaskPageItemsAfterRefresh,

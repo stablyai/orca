@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   classifySortStampEvent,
-  hookRowAgentPhase,
+  isUnreadNews,
   nextAgentPaneState,
   RECENT_STAMP_THROTTLE_MS,
   REST_PANE,
-  titleAgentPhase,
   workspaceSmartStamp,
   type AgentPaneState,
-  type AgentPhase,
   type SortStamps
 } from './sort-stamps'
+import { agentPhaseTransition, type AgentPhase } from '../agent-transitions'
 
 const NOW = 1_000_000
 const IDLE: SortStamps = { recentAt: NOW - 60_000 }
@@ -18,30 +17,6 @@ const IDLE: SortStamps = { recentAt: NOW - 60_000 }
 function agentEvent(from: AgentPhase, to: AgentPhase, panes: AgentPaneState[]) {
   return { kind: 'agent' as const, from, to, panes }
 }
-
-describe('hookRowAgentPhase', () => {
-  it('maps hook states to tiers, and a stopped turn to Rest', () => {
-    expect(hookRowAgentPhase({ state: 'working' })).toBe('working')
-    expect(hookRowAgentPhase({ state: 'blocked' })).toBe('needs-you')
-    expect(hookRowAgentPhase({ state: 'waiting' })).toBe('needs-you')
-    expect(hookRowAgentPhase({ state: 'done' })).toBe('done')
-    expect(hookRowAgentPhase({ state: 'done', interrupted: true })).toBe('rest')
-    expect(
-      hookRowAgentPhase({ state: 'done', mainAgent: { state: 'done', outcome: 'cancellation' } })
-    ).toBe('rest')
-    // An error is news: it ranks as Done, like a finish.
-    expect(
-      hookRowAgentPhase({ state: 'done', mainAgent: { state: 'done', outcome: 'failure' } })
-    ).toBe('done')
-  })
-})
-
-describe('titleAgentPhase', () => {
-  it('reads the title heuristic Smart uses', () => {
-    expect(titleAgentPhase('⠋ Codex working')).toBe('working')
-    expect(titleAgentPhase('zsh')).toBe('rest')
-  })
-})
 
 describe('nextAgentPaneState', () => {
   it('enters a phase at now', () => {
@@ -199,4 +174,19 @@ describe('classifySortStampEvent', () => {
       )
     ).toBeNull()
   })
+})
+
+describe('the stamps follow the agent transitions', () => {
+  const phases: readonly AgentPhase[] = ['rest', 'working', 'needs-you', 'done']
+  it.each(phases.flatMap((from) => phases.map((to) => ({ from, to }))))(
+    '$from -> $to',
+    ({ from, to }) => {
+      const transition = agentPhaseTransition(from, to)
+      const event = agentEvent(from, to, [])
+      expect(classifySortStampEvent(IDLE, event, NOW)?.recentAt === NOW).toBe(transition !== null)
+      expect(isUnreadNews(event)).toBe(
+        transition === 'turn-finished' || transition === 'needs-input'
+      )
+    }
+  )
 })

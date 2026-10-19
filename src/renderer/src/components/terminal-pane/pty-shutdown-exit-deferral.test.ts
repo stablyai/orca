@@ -7,7 +7,7 @@ import {
   markCommittedPtyShutdowns,
   settleDeferredPtyShutdownExits
 } from './pty-shutdown-exit-deferral'
-import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import {
   bufferPtyShutdownData,
   bufferPtyShutdownReplayData,

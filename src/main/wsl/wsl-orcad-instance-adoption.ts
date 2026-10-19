@@ -34,7 +34,7 @@ import {
   remoteInstallDirName,
   remoteInstallVersionDirRegex
 } from '../managed-server/install/remote-install-model'
-import { shellEscape } from '../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 
 const LOCK_RECORD_MAX_BYTES = 64 * 1024
@@ -71,7 +71,7 @@ async function readLiveLockHolder(slot: OrcadSlotOptions): Promise<LockHolder | 
 
 async function readSlotPid(slot: OrcadSlotOptions, version: string): Promise<number | null> {
   const pidFile = joinRemotePath(slot.host, orcadSlotDir(slot, version), ORCAD_PID_FILENAME)
-  const raw = await execOrcadRemote(slot, `cat ${shellEscape(pidFile)} 2>/dev/null || true`)
+  const raw = await execOrcadRemote(slot, `cat ${quotePosixShell(pidFile)} 2>/dev/null || true`)
   const pid = Number.parseInt(raw.trim(), 10)
   return Number.isSafeInteger(pid) && pid > 0 ? pid : null
 }
@@ -173,7 +173,7 @@ export async function adoptUnrecordedWslOrcad(
       )
       await execOrcadRemote(
         slot,
-        `(umask 077 && printf '%s\\n' ${String(holder.pid)} > ${shellEscape(pidFile)})`
+        `(umask 077 && printf '%s\\n' ${String(holder.pid)} > ${quotePosixShell(pidFile)})`
       )
       const next = adoptedRecord(current, holder.version, now())
       if (next !== current) {

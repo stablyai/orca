@@ -67,6 +67,7 @@ export async function createReservedBrowserClientPage(
     renderer = dependencies.selectRenderer()
     assertCurrentBrowserClientPageRenderer(renderer)
     routeSession = await dependencies.routeSessions.preparePage({
+      ...(event.command.profile ? { profileMetadata: event.command.profile } : {}),
       identity: {
         orcaProfileId: dependencies.orcaProfileId,
         browserProfileId: event.command.browserProfileId,

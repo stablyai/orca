@@ -3,6 +3,7 @@ import { OrchestrationDb } from './orchestration-db'
 import {
   ATTEMPT_OBSERVATION_FACT_COLUMNS,
   DISPATCH_CONTEXT_COLUMNS,
+  REMOTE_DISPATCH_ATTACHMENT_COLUMNS,
   RUN_COLUMNS,
   selectColumns,
   TASK_COLUMNS
@@ -27,7 +28,8 @@ describe('row column lists', () => {
     ['runs', RUN_COLUMNS],
     ['tasks', TASK_COLUMNS],
     ['dispatch_contexts', DISPATCH_CONTEXT_COLUMNS],
-    ['attempt_observation_facts', ATTEMPT_OBSERVATION_FACT_COLUMNS]
+    ['attempt_observation_facts', ATTEMPT_OBSERVATION_FACT_COLUMNS],
+    ['remote_dispatch_attachments', REMOTE_DISPATCH_ATTACHMENT_COLUMNS]
   ])('projects every %s column the migrated schema declares', (table, columns) => {
     db = new OrchestrationDb(':memory:')
 

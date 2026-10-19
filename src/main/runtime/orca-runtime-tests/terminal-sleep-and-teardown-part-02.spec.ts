@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import {
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
@@ -251,10 +252,12 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ phase: 'started', ptyIds: ['pty-before-sleep'] })
     ])
     let spawnLeaseAcquired = false
-    const spawnLease = runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID).then((release) => {
-      spawnLeaseAcquired = true
-      return release
-    })
+    const spawnLease = runtime
+      .acquireWorktreeTerminalSpawn(spawnWorktreeTarget(TEST_WORKTREE_ID, null))
+      .then((release) => {
+        spawnLeaseAcquired = true
+        return release
+      })
     await Promise.resolve()
     expect(spawnLeaseAcquired).toBe(false)
 
@@ -281,7 +284,9 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses
     })
-    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+    )
 
     const sleep = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     await Promise.resolve()
@@ -305,7 +310,9 @@ describe('OrcaRuntimeService', () => {
         getForegroundProcess: async () => null,
         listProcesses
       })
-      const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+      const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+        spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+      )
 
       const sleep = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
       const rejection = expect(sleep).rejects.toThrow('terminal_worktree_sleep_timeout')
@@ -316,7 +323,9 @@ describe('OrcaRuntimeService', () => {
 
       expect(listProcesses).not.toHaveBeenCalled()
       expect(stopAndWait).not.toHaveBeenCalled()
-      const releaseNextSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+      const releaseNextSpawn = await runtime.acquireWorktreeTerminalSpawn(
+        spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+      )
       releaseNextSpawn()
     } finally {
       vi.useRealTimers()
@@ -351,7 +360,9 @@ describe('OrcaRuntimeService', () => {
     await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
 
     // The wake acquires the mutation and emits 'woken'; a throwing subscriber must not surface.
-    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+    )
     releaseSpawn()
 
     // Isolation: the second subscriber still received the 'woken' event.
@@ -419,7 +430,9 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ phase: 'committed', ptyIds: ['pty-preserved-history'] })
     ])
     await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
-    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+    )
     releaseSpawn()
 
     const sleepEvents = events.filter((event) => event.type === 'worktreeTerminalSleepState')

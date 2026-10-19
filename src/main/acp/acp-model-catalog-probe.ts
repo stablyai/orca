@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { probeAgentCliVersion } from '../agent-cli-version-probe'
 import type {
   AgentModelCatalogProbe,
@@ -12,10 +13,12 @@ import { AgentModelCatalogListingStoppedError } from '../native-chat/agent-model
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
 import { createAcpAgentConnection } from './acp-agent-connection'
+import { acpRunFolder } from './acp-private-temp'
 import {
   acpListingNeedsChatFolder,
   type AcpLaunchSpec,
-  type AcpModelDiscovery
+  type AcpModelDiscovery,
+  type AcpSessionModelDiscovery
 } from './acp-launch-specs'
 import type { AcpSessionStarted, AcpSessionStartOptions } from './acp-session-setup'
 import {
@@ -108,11 +111,22 @@ export function createAcpModelCatalogProbe(
       if (!workspace) {
         throw folderlessListing(spec)
       }
-      models = await runAgentModelCatalogSession(
-        () => (deps.connectSession ?? createAcpAgentConnection)(launch),
-        (connection) => readSessionModels(spec, connection, workspace),
-        run
-      )
+      // Kept out of the agent's own store, and removed once `close` has ended the process.
+      const folderArgs = listing.sessionFolderArgs
+      const folder = folderArgs
+        ? await acpRunFolder(join(deps.dataDirectory, 'acp-listing-sessions', spec.agent))
+        : null
+      try {
+        const args =
+          folderArgs && folder ? [...launch.args, ...folderArgs(folder.path)] : launch.args
+        models = await runAgentModelCatalogSession(
+          () => (deps.connectSession ?? createAcpAgentConnection)({ ...launch, args }),
+          (connection) => readSessionModels(spec, listing, connection, workspace),
+          run
+        )
+      } finally {
+        await folder?.remove()
+      }
     } else {
       models = await runAgentModelCatalogSession(
         () => (deps.connect ?? createAcpAgentConnection)(launch),
@@ -145,21 +159,26 @@ function listingFor(discovery: AcpModelListing, version: string | null): AcpMode
     : null
 }
 
-/** What a new chat in `workspace` offers, read from a session opened only to be deleted. */
+/** What a new chat in `workspace` offers, read from a session opened only to be deleted, or kept
+ *  in a folder the probe removes. */
 async function readSessionModels(
   spec: AcpLaunchSpec,
+  listing: AcpSessionModelDiscovery,
   connection: AcpModelCatalogSessionConnection,
   workspace: string
 ): Promise<AgentSessionModelOption[]> {
   const initialized = await connection.initialize()
-  if (!initialized.agentCapabilities?.sessionCapabilities?.delete) {
+  const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)
+  if (!deletes && !listing.sessionFolderArgs) {
     throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)
   }
   const started = await connection.start({ cwd: workspace, mcpServers: [] })
   // Best effort: a failed delete, or a listing stopped mid-create, leaves one empty conversation.
-  await connection.deleteSession(started.sessionId).catch((error: unknown) => {
-    console.warn(`[acp-model-catalog] ${spec.agent} kept its listing session:`, error)
-  })
+  if (deletes) {
+    await connection.deleteSession(started.sessionId).catch((error: unknown) => {
+      console.warn(`[acp-model-catalog] ${spec.agent} kept its listing session:`, error)
+    })
+  }
   const options = new AcpStructuredOptions(spec.dialect)
   options.adoptSession(started.response, 'new')
   return options.read().models

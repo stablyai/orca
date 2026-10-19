@@ -11,9 +11,8 @@ import { getRuntimeTargetHostId } from '../../../../runtime/runtime-client-targe
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { replaceWorktreeInRepoLists } from '../listing/worktree-owner-settings'
-import { repoHostId, withRepoHostOwnership } from '../listing/worktree-host-ownership'
+import { withRepoHostOwnership } from '../listing/worktree-host-ownership'
 import { mergeLineageForHost, mergeWorkspaceLineageForHost } from './worktree-lineage-host-merge'
 import { beginWorktreeLineageRefresh } from './worktree-lineage-readiness'
 import type {
@@ -190,16 +189,16 @@ export function applyWorktreeLineageUpdate(
     } else {
       delete next[worktreeId]
     }
+    // Why the transport's host: focus can name the local twin of a row a server just answered for.
+    const transportHostId = getRuntimeTargetHostId(result.target)
     const worktreesByRepo =
       result.target.kind === 'local'
         ? projectLocalWorktreeLineageUpdate(s.worktreesByRepo, worktreeId, result.lineage)
         : result.updatedRemoteWorktree
           ? replaceWorktreeInRepoLists(
-              s.worktreesByRepo,
-              withRepoHostOwnership(
-                result.updatedRemoteWorktree,
-                repoHostId(s, getRepoIdFromWorktreeId(result.updatedRemoteWorktree.id))
-              )
+              s,
+              withRepoHostOwnership(result.updatedRemoteWorktree, transportHostId),
+              transportHostId
             )
           : s.worktreesByRepo
     return {

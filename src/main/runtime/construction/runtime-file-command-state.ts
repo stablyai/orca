@@ -22,7 +22,6 @@ import { RuntimeRepositoryIssueCommand } from '../runtime-repository-issue-comma
 import { ClientHostedBrowserRowPublisher } from '../client-hosted-browser-row-publication'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
-import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
 import {
   isChatScratchWorktreeId,
   resolveChatScratchSelectorFolder
@@ -233,10 +232,6 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
 
   protected readonly leafPtyAbsenceProbes = new Map<string, Promise<boolean>>()
 
-  // Why: probe dedupe shares one promise across callers, but each caller's
-  // continuation would re-deliver the same unread rows; arm one per pty.
-  protected readonly probeDeferredDeliveryPtyIds = new Set<string>()
-
   protected readonly hostedReviews = new RuntimeHostedReviewCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     resolveTarget: (args) => this.resolveHostedReviewTarget(args),
@@ -325,18 +320,4 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
 
   /** Worktrees whose persisted client-hosted rows this runtime is responsible for rewriting. */
   protected readonly persistedClientHostedBrowserWorktreeIds = new Set<string>()
-
-  // Why: the whole pointer→Enter span must be single-flight per pty. Triggers
-  // landing mid-flight park their mailbox and re-run once on settle. The
-  // flight object is the settle identity: a stale settle surviving an exit
-  // retire must not clear a newer same-id flight or flush its parked trigger.
-  protected readonly messageDeliveryFlightsByPtyId = new Map<
-    string,
-    { enterTimer: ReturnType<typeof setTimeout> | null }
-  >()
-
-  protected readonly parkedMessageRedeliveriesByPtyId = new Map<
-    string,
-    Map<string, { leaf: RuntimeLeafRecord; reservedTypes?: ReadonlySet<string> }>
-  >()
 }

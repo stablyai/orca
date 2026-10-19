@@ -4,5 +4,5 @@
 # Regenerate/prune: pnpm check:max-lines-ratchet --prune   (removes stale entries only)
 inline src/main/ipc/worktree-remote.ts
 inline src/main/ssh/ssh-channel-multiplexer.ts
-inline src/main/ssh/ssh-connection.ts
+inline src/main/ssh/connection/ssh-connection.ts
 inline src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts

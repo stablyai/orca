@@ -96,7 +96,8 @@ export const SESSION_TAB_MUTATION_METHODS = [
         root: params.root,
         expandedLeafId: params.expandedLeafId ?? null,
         chatLeafId: params.chatLeafId,
-        titlesByLeafId: params.titlesByLeafId
+        titlesByLeafId: params.titlesByLeafId,
+        renamedLeafIds: params.renamedLeafIds
       })
     }
   }),

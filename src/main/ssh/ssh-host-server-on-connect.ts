@@ -28,6 +28,7 @@ import {
 import { managedResultAfterUpdate, unservedManagedResult } from './managed-server-serving-gate'
 import { orcadMigrationConflictGuidance } from './orcad-migration-conflict-guidance'
 import { keptForBridgedTerminals, relayTerminalReason } from './ssh-host-server-bridged-unserved'
+import { boundedDetail, setupFailure, type SetupFailure } from './ssh-host-server-setup-failure'
 import {
   classifyOrcadHostUnavailable,
   ORCAD_TUNNEL_UNAVAILABLE_REASON
@@ -65,6 +66,8 @@ export type HostServerOnConnectResult =
       canLeaveBehind?: true
       /** A move that stopped short kept the host locked; the next connect resumes it. */
       held?: true
+      /** Setup lost contact with the host, so it is not known to have failed there. */
+      contactLost?: true
       /** COMPAT(legacy-relay-bridge): the connect stays up so the bridge serves the terminals. */
       bridged?: true
     }
@@ -114,9 +117,6 @@ export type HostServerOnConnectDeps = {
   /** Receives each decision, conversion and deploy failure as raw codes for telemetry. */
   report: HostServerReport
 } & ManagedServerUpdateDeps
-
-// Bounds a failure's detail; the host log tail inside it is already capped.
-const MAX_FAILURE_DETAIL_CHARS = 16_000
 
 export async function resolveHostServerOnConnect(
   target: SshTarget,
@@ -252,10 +252,9 @@ function setupFailed(
   const unavailable = classifyOrcadHostUnavailable(error)
   const conflict = empty ? null : orcadMigrationConflictGuidance(error)
   if (conflict) {
-    return unfinished(target, deps, unavailable, empty, 'refused', conflict)
+    return unfinished(target, deps, unavailable, empty, 'refused', { detail: conflict })
   }
-  const detail = error instanceof Error ? error.message : String(error)
-  return unfinished(target, deps, unavailable, empty, 'failed', detail)
+  return unfinished(target, deps, unavailable, empty, 'failed', setupFailure(error))
 }
 
 async function afterDeploy(
@@ -315,7 +314,7 @@ function deferred(
 ): Promise<HostServerOnConnectResult> {
   console.warn(`[ssh] Managed Orca server setup deferred (${result.code}):`, result.reason)
   const unavailable = classifyOrcadHostUnavailable({ code: result.code })
-  return unfinished(target, deps, unavailable, empty, 'deferred', result.reason)
+  return unfinished(target, deps, unavailable, empty, 'deferred', { detail: result.reason })
 }
 
 /**
@@ -328,7 +327,7 @@ async function unfinished(
   unavailable: string | null,
   empty: boolean,
   reason: 'deferred' | 'failed' | 'refused',
-  failure: string
+  failure: SetupFailure
 ): Promise<HostServerOnConnectResult> {
   try {
     await (empty ? deps.abandonDeploy(target) : deps.abandonConversion(target))
@@ -343,14 +342,11 @@ async function unfinished(
     return {
       route: 'unserved',
       reason,
-      detail: boundedDetail(failure),
+      detail: boundedDetail(failure.detail),
+      ...(failure.contactLost ? { contactLost: true as const } : {}),
       ...(held ? { held: true as const } : {})
     }
   }
   deps.recordUnavailable(target, unavailable)
   return { route: 'unserved', reason: 'orcad_unavailable', detail: unavailable }
-}
-
-function boundedDetail(text: string): string {
-  return text.length > MAX_FAILURE_DETAIL_CHARS ? `…${text.slice(-MAX_FAILURE_DETAIL_CHARS)}` : text
 }

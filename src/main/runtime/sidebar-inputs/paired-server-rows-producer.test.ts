@@ -119,7 +119,9 @@ describe('PairedServerRowsProducer', () => {
 
   it('populates from a server in contact once its change stream is ready', async () => {
     const { hosts, call, watches } = fakeHosts([{ id: 'box', live: true }])
-    call.mockResolvedValue(psReply([row('repo::/a', { workspaceKind: 'git' })]))
+    call.mockResolvedValue(
+      psReply([row('repo::/a', { workspaceKind: 'git', liveTerminalCount: 1, status: 'active' })])
+    )
     const producer = new PairedServerRowsProducer({
       hasDemand: () => true,
       hostLabelOverrides: () => new Map()
@@ -158,7 +160,9 @@ describe('PairedServerRowsProducer', () => {
           isPinned: false,
           isMainWorktree: false,
           lineage: null,
-          workspaceStatus: 'in-progress'
+          workspaceStatus: 'in-progress',
+          // The server's own terminals and agents.
+          activity: { terminal: 'live', agent: null }
         }
       ]
     })
@@ -405,7 +409,8 @@ describe('PairedServerRowsProducer', () => {
         isPinned: false,
         isMainWorktree: false,
         lineage: null,
-        workspaceStatus: 'in-progress'
+        workspaceStatus: 'in-progress',
+        activity: { terminal: null, agent: null }
       }
     ])
     expect(rowsOf(producer, 'runtime:two')?.rows.map((entry) => [entry.key, entry.kind])).toEqual([

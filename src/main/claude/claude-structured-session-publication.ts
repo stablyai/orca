@@ -63,7 +63,10 @@ export function createClaudeSessionPublication(input: {
       reportedOptions: {},
       reportedModelMutation: 0,
       confirmedOptions: new Set(),
-      restoreSkippedOptions: new Set(),
+      // Only choices carried in this child's launch can skip their first write.
+      reusableOptions: new Map(
+        [...(input.options ?? [])].filter(([key]) => key === 'model' || key === 'effort')
+      ),
       launchedModel: null,
       fastModeAtStart: false,
       translator: input.translator,

@@ -13,7 +13,7 @@ export const makeStore = (overrides?: { isUnread?: boolean }) => ({
     }
   ],
   addRepo: () => {},
-  updateRepo: (id: string, updates: Record<string, unknown>) =>
+  updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) =>
     ({
       ...makeStore(overrides).getRepo(id),
       ...updates

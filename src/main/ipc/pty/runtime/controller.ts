@@ -62,8 +62,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     // attach. Attach-only and false-on-doubt: never creates or resizes.
     attach: (ptyId) => attachPtyFromRuntimeController(deps, ptyId),
     kill: (ptyId) => killPtyFromRuntimeController(deps, ptyId),
-    retireRejectedPty: (ptyId, stopConfirmed) =>
-      retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed),
+    retireRejectedPty: (ptyId, stopConfirmed, incarnationId) =>
+      retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed, incarnationId),
     stopAndWait: (ptyId, opts) => stopAndWaitPtyFromRuntimeController(deps, ptyId, opts),
     getForegroundProcess: (ptyId) => getForegroundProcessFromRuntimeController(ptyId),
     inspectProcess: (ptyId, options) => inspectProcessFromRuntimeController(ptyId, options),

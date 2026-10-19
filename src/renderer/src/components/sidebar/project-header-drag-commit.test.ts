@@ -94,7 +94,7 @@ describe('commitProjectHeaderDragDrop', () => {
     const repos = [
       makeRepo('a', { projectGroupId: 'group-1' }),
       makeRepo('b', { projectGroupId: 'group-1' }),
-      makeRepo('c', { projectGroupId: 'group-1' })
+      makeRepo('c', { projectGroupId: 'group-1', connectionId: 'ssh-1' })
     ]
     const repoById = new Map(repos.map((repo) => [repo.id, repo]))
 
@@ -108,6 +108,6 @@ describe('commitProjectHeaderDragDrop', () => {
       onCommitProjectGroupOrder
     })
 
-    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('c', 'group-1', -1)
+    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('c', 'group-1', -1, 'ssh:ssh-1')
   })
 })

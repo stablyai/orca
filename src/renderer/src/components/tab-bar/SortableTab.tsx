@@ -29,9 +29,9 @@ import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
 import {
   isTerminalTabActivityLive,
-  resolveTerminalTabActivityStatus,
   terminalTabHasUnreadActivity
 } from './terminal-tab-activity-status'
+import { useTerminalTabActivity } from './use-terminal-tab-activity'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import type { NativeChatTabSession } from './tab-session-history-switch'
 
@@ -115,17 +115,7 @@ export default function SortableTab({
       unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
     })
   )
-  // Why: resolver returns a primitive so unrelated agent updates can't repaint this tab (pane bucketing memoized per snapshot).
-  const activityStatus = useAppStore((s) =>
-    resolveTerminalTabActivityStatus({
-      tab,
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
-      agentStatusEpoch: s.agentStatusEpoch,
-      runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
-      ptyIdsByTabId: s.ptyIdsByTabId,
-      terminalLayout: s.terminalLayoutsByTabId?.[tab.id]
-    })
-  )
+  const { activityStatus, programProgress } = useTerminalTabActivity(tab)
 
   // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
   const shellForIcon = tab.shellOverride
@@ -253,6 +243,7 @@ export default function SortableTab({
         shell={shellForIcon}
         showUnreadActivity={showUnreadActivity}
         isActive={isActive}
+        progress={programProgress}
       />
       {isPinned && !isEditing && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
@@ -392,6 +383,7 @@ export default function SortableTab({
                 shell={shellForIcon}
                 showUnreadActivity={false}
                 isActive
+                progress={programProgress}
               />
             }
           >

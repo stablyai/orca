@@ -10,6 +10,7 @@ import {
   type Applied
 } from './workspace-layout-command-steps'
 import type { CommandOf, LayoutContext } from './workspace-layout-command-types'
+import { sameEditorFile } from './workspace-layout-editor-tab-file'
 import type { LayoutTab, WorkspaceLayout, WorkspaceLayoutModel } from './workspace-layout-model'
 import { removeTabFromWorkspace, withWorkspace } from './workspace-layout-removal'
 import { withoutKey } from './stored-record-fields'
@@ -105,7 +106,7 @@ function moveEditorFile(
   file: NonNullable<CommandOf<'moveTabToWorkspace'>['file']>
 ): { source: WorkspaceLayout; target: WorkspaceLayout } {
   const others = (files: WorkspaceLayout['editorFiles']) =>
-    files?.filter((entry) => entry.filePath !== file.filePath)
+    files?.filter((entry) => !sameEditorFile(entry, file))
   const sourceFiles = others(source.editorFiles)
   return {
     source: sourceFiles ? { ...source, editorFiles: sourceFiles } : source,

@@ -10,7 +10,7 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   execCommand: vi.fn()
 }))
 
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { gcRemoteNodeRuntimeStore, parseSweptRuntimeStages } from './remote-node-runtime-store-gc'
 import { RUNTIME_STORE_LOCK_NAME } from './remote-node-runtime-store-lock'
 import { parseRuntimeStoreInventory } from './remote-node-runtime-store-inventory'

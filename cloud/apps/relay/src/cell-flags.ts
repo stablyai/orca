@@ -19,6 +19,8 @@ export type CellFlags = {
   reserveDryRun: boolean
   // Flip-back leases in flight at once; absent is a third of the pool. Speeds up one cell.
   reregisterInFlight?: number
+  // Step 6: `memory` resumes paired phones from one device read; it acts only in reserve mode.
+  phonePath: 'db' | 'memory'
 }
 
 export const CELL_FLAG_DEFAULTS: CellFlags = {
@@ -26,7 +28,8 @@ export const CELL_FLAG_DEFAULTS: CellFlags = {
   ticketCheck: 'off',
   rejectionFence: true,
   admitMode: 'db',
-  reserveDryRun: false
+  reserveDryRun: false,
+  phonePath: 'db'
 }
 
 export const READ_TIMEOUT_MARGIN_MIN_MS = 1_000
@@ -52,7 +55,8 @@ const CellFlagsSchema = z.object({
   admitMode: z.enum(['db', 'reserve']).default(CELL_FLAG_DEFAULTS.admitMode),
   intakePerSec: z.number().positive().max(1_000).optional(),
   reserveDryRun: z.boolean().default(CELL_FLAG_DEFAULTS.reserveDryRun),
-  reregisterInFlight: z.number().int().min(1).max(16).optional()
+  reregisterInFlight: z.number().int().min(1).max(16).optional(),
+  phonePath: z.enum(['db', 'memory']).default(CELL_FLAG_DEFAULTS.phonePath)
 })
 const KNOWN_FLAG_KEYS = new Set(Object.keys(CellFlagsSchema.shape))
 

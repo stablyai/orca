@@ -34,7 +34,7 @@ import {
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
 import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { FileExplorerRowProps } from './FileExplorerRow'
 import {
   shouldShowCollapseFolderAction,
@@ -123,7 +123,7 @@ export function FileExplorerRowContextMenu({
   const revealOwner = useAppStore((s) =>
     getWorkspaceFileRevealOwner(s, s.activeWorktreeId, {
       connectionId,
-      runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(s, s.activeWorktreeId)
+      runtimeEnvironmentId: runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, s.activeWorktreeId)
     })
   )
   const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)

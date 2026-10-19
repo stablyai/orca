@@ -4,7 +4,7 @@ import {
   resolveExplicitFileLinkTarget,
   resolveExplicitFileLinkTargetPath
 } from '@/lib/explicit-file-link-target'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import { resolveNativeChatTabDirectory } from './native-chat-tab-directory'
 
@@ -122,7 +122,7 @@ function resolveNativeChatFileLinkContextForOwner(
   return {
     worktreeId,
     worktreePath,
-    runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId),
+    runtimeEnvironmentId: runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId),
     sourceTabId: terminalTabId
   }
 }

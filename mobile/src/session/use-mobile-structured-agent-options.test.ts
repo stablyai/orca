@@ -158,7 +158,7 @@ function Probe(props: ProbeProps): null {
       enabled: true,
       fence: props.fence,
       mutate: props.mutate,
-      hostSupport: { sendOptions: true, permissionModes: true }
+      hostSupport: { permissionModes: true }
     })
   )
   return null

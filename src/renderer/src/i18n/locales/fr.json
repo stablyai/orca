@@ -143,7 +143,8 @@
       },
       "providers": {
         "title": "Fournisseurs",
-        "antigravityDescription": "Les chats Antigravity utilisent un serveur qu’Orca télécharge sur cet hôte, distinct de la CLI agy."
+        "antigravityDescription": "Les chats Antigravity utilisent un serveur qu’Orca télécharge sur cet hôte, distinct de la CLI agy.",
+        "antigravityNotSignedIn": "Non connecté. Les discussions nécessitent une connexion Antigravity, distincte de votre compte agy du terminal."
       }
     },
     "terminal": {
@@ -686,7 +687,8 @@
             "76deec8f58": "Échec du changement d'organisation",
             "7d4bc516ee": "Échec du changement de profil",
             "f518e89aa5": "Le projet existe déjà dans ce profil",
-            "f03ae7f27b": "Échec du transfert du projet"
+            "f03ae7f27b": "Échec du transfert du projet",
+            "signInTimedOut": "La connexion a expiré"
           }
         },
         "runtime": {
@@ -3361,6 +3363,7 @@
             "retry": "Réessayer",
             "retrying": "Nouvelle tentative…",
             "retryUnavailable": "Réessayez mais impossible de vous reconnecter pour l'instant. Réessayez sous peu.",
+            "openNewTerminal": "Ouvrir un nouveau terminal",
             "ownerUnknown": "Orca n'a pas pu vérifier le propriétaire de ce terminal.",
             "42b283ecfc": "Orca n'a pas pu reconnecter ce terminal en toute sécurité car l'hôte n'a pas pu vérifier sa session enregistrée. Orca a laissé la session enregistrée inchangée. Cliquez sur Réessayer pour essayer de vous reconnecter maintenant. S'il ne parvient toujours pas à se reconnecter, ouvrez un nouveau terminal.",
             "sourceRestoring": "Reconnexion de ce terminal - sa sortie est en cours de rétablissement. La session est toujours en cours.",
@@ -3604,7 +3607,7 @@
         "bar": {
           "BrowserTab": {
             "6e0bc8f3a8": "Ouvrir dans le navigateur",
-            "9dd880bd56": "Fermer les onglets à droite",
+            "9dd880bd56": "Fermer tous les onglets à droite",
             "1611a1324b": "Fermer",
             "5d6e89891f": "Dupliquer l'onglet",
             "966feb9ad5": "Scinder vers la droite",
@@ -3621,7 +3624,7 @@
             "52ce4f4605": "Copier le chemin relatif",
             "5b85754786": "Copier le chemin",
             "bfd5797ef4": "Ouvrir l'aperçu Markdown",
-            "e5ff31ccaf": "Fermer les onglets à droite",
+            "e5ff31ccaf": "Fermer tous les onglets à droite",
             "ba1369dd24": "Fermer tous les onglets de l'éditeur",
             "1ba8492c5b": "Fermer",
             "68cc610e7f": "Renommer",
@@ -3654,7 +3657,7 @@
           "SortableTabContextMenu": {
             "35e8892fd0": "Couleur de l'onglet",
             "2f697b3c31": "Modifier le titre",
-            "c1ee099c7e": "Fermer les onglets à droite",
+            "c1ee099c7e": "Fermer tous les onglets à droite",
             "8d16f9cd30": "Fermer les autres",
             "89359a36f7": "Fermer",
             "21132389e9": "Scinder vers la droite",
@@ -18052,6 +18055,14 @@
         "a62f9db53d": "Annuler",
         "c77189bc0c": "Mettre à jour le filtre",
         "19af906d12": "Enregistrer le filtre"
+      },
+      "OrcaSignInProgress": {
+        "waiting": "En attente de la connexion dans votre navigateur",
+        "copyLink": "Copier le lien de connexion",
+        "copied": "Lien de connexion copié",
+        "copyFailed": "Impossible de copier le lien.",
+        "signingIn": "Connexion…",
+        "cancel": "Annuler"
       }
     },
     "i18n": {
@@ -18160,6 +18171,7 @@
         "claudeManagedNotSignedIn": "Ce compte Claude n’est pas connecté. Reconnectez-vous dans les paramètres des Comptes Claude.",
         "codexSystemNotSignedIn": "Codex n’est pas connecté. Exécutez `{{loginCommand}}`.",
         "codexManagedNotSignedIn": "Ce compte Codex n’est pas connecté. Reconnectez-vous dans les paramètres des Comptes Codex.",
+        "antigravityNotSignedIn": "Antigravity n’est pas connecté. Connectez-vous dans Paramètres → Comptes → Antigravity.",
         "cliMissing": "{{agent}} est introuvable sur l’ordinateur qui exécute cette conversation. Installez-le ou vérifiez sa Commande dans Paramètres → Agents.",
         "signInFirst": "Connectez-vous d'abord.",
         "signInThenRunCommand": "Connectez-vous, puis relancez /{{command}}.",
@@ -18518,7 +18530,7 @@
         "stopping": "Arrêt en cours…",
         "queueAfterStop": "Mettez un message en file d'attente pour l'exécuter après l'arrêt",
         "sendAfterStop": "Envoyez un message pour l'exécuter après l'arrêt",
-        "thinking": "Réflexion",
+        "thinking": "Réflexion en cours",
         "workingFor": "En cours depuis {{value0}}",
         "workedFor": "A travaillé pendant {{value0}}",
         "interruptedAfter": "Interrompu après {{value0}}",
@@ -18858,6 +18870,14 @@
       "visualUnavailable": "Visualisation indisponible",
       "visualLoading": "Chargement de la visualisation",
       "visualOpenInNewTab": "Ouvrir dans un nouvel onglet",
+      "resumeCommand": {
+        "description": "Ouvrir l'historique des sessions d'agent",
+        "argumentHint": "[recherche]",
+        "workspaceUnavailable": "L'espace de travail de ce chat n'est pas encore chargé. Réessayez /resume dans un instant.",
+        "replaceTitle": "Remplacer ce chat ?",
+        "replaceDescription": "Reprendre « {{title}} » ici arrêtera ce que {{agent}} fait dans ce chat.",
+        "replace": "Remplacer"
+      },
       "claudeSignIn": {
         "signingIn": "Connexion…"
       }
@@ -18867,20 +18887,28 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "Passer à la vue terminal",
           "switchToChatView": "Passer à la vue chat",
-          "closeTabsToLeft": "Fermer les onglets à gauche"
+          "closeTabsToLeft": "Fermer tous les onglets à gauche"
         },
         "BrowserTab": {
           "closeOthers": "Fermer les autres",
-          "closeTabsToLeft": "Fermer les onglets à gauche"
+          "closeTabsToLeft": "Fermer tous les onglets à gauche"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Fermer les autres",
-          "closeTabsToLeft": "Fermer les onglets à gauche"
+          "closeTabsToLeft": "Fermer tous les onglets à gauche"
         },
         "CopyTabIdMenuItem": {
           "copied": "ID de l'onglet copié",
           "failed": "Impossible de copier l'ID de l'onglet",
           "copy": "Copier l'ID de l'onglet"
+        },
+        "bulkClose": {
+          "others": "Fermer les autres onglets ?",
+          "right": "Fermer les onglets à droite ?",
+          "left": "Fermer les onglets à gauche ?",
+          "editors": "Fermer tous les onglets de l’éditeur ?",
+          "description": "Les onglets sélectionnés seront fermés. Les onglets épinglés resteront ouverts.",
+          "confirm": "Fermer les onglets"
         }
       }
     },
@@ -19339,12 +19367,14 @@
       "cancelFailed": "Impossible d'annuler l'installation. Réessayez.",
       "install": "Installer {{agent}}",
       "installManaged": "Installer la copie d'Orca",
-      "installed": "Installé.",
+      "installed": "Installé",
       "notInstalled": "Non installé.",
       "progress": "Téléchargement de {{agent}}",
       "readFailed": "Impossible de vérifier {{agent}} sur cet hôte. Nouvel essai en cours.",
-      "reinstall": "Réinstaller",
+      "reinstall": "Réinstaller {{agent}}",
+      "reinstallShort": "Réinstaller",
       "remove": "Supprimer le runtime téléchargé",
+      "moreActions": "Plus d'actions pour {{agent}}",
       "removeConfirm": "Supprimer",
       "removeDescription": "Les chats {{agent}} en cours s'arrêtent. Leur historique est conservé.",
       "removeKeep": "Annuler",
@@ -19723,6 +19753,10 @@
       "openInSidebarCopy": "Tapez ce dont vous vous souvenez ou demandez à un agent : « recherchez la session où nous avons corrigé le délai d'expiration de la connexion ».",
       "open": "Ouvrir",
       "enableOnAll": "Activer sur tous les ordinateurs"
+    },
+    "dialog": {
+      "select": "Sélectionner",
+      "open": "Ouvrir"
     }
   },
   "aiVault": {
@@ -19819,6 +19853,27 @@
       "cancel": "Annuler"
     },
     "antigravity": {
+      "chatTitle": "Discussions Antigravity",
+      "chatDescription": "Les discussions utilisent leur propre connexion Antigravity, distincte de votre compte agy ci-dessus. Connectez-vous une seule fois sur cet appareil.",
+      "chatSignIn": "Se connecter",
+      "chatChangeAccount": "Changer de compte",
+      "chatRetry": "Réessayer la connexion",
+      "chatCancel": "Annuler",
+      "chatCopyLink": "Copier le lien de connexion",
+      "chatCopyFailed": "Impossible de copier le lien.",
+      "chatStarting": "Démarrage de la connexion…",
+      "chatWaiting": "Terminez la connexion dans votre navigateur.",
+      "chatOpenFailed": "Copiez le lien et ouvrez-le dans votre navigateur.",
+      "chatVerifying": "Finalisation de la connexion…",
+      "chatPasteHelp": "Si la dernière page après la connexion ne se charge pas, copiez son adresse complète depuis votre navigateur et collez-la ici.",
+      "chatContinue": "Continuer",
+      "chatSignedInOn": "Connecté sur {{host}}.",
+      "chatCancelled": "Connexion annulée.",
+      "chatExpired": "La connexion a expiré. Réessayez.",
+      "chatFailed": "La connexion a échoué. Réessayez.",
+      "chatNotSignedIn": "Non connecté sur {{host}}.",
+      "chatOtherClient": "Une connexion est en cours dans un autre client.",
+      "chatReadFailed": "Impossible de vérifier la connexion sur {{host}}.",
       "scope": "Gérez le compte agy natif sur {{host}}.",
       "signIn": "Démarrez agy sur cet hôte et complétez la connexion au navigateur, puis enregistrez le compte actuel. Pour ajouter un autre compte, utilisez /logout dans agy et reconnectez-vous.",
       "docs": "Instructions de connexion",

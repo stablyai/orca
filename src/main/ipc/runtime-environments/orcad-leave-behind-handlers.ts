@@ -1,6 +1,6 @@
 /** IPC for "Move anyway": the user confirms that saved state a move can't carry stays on this desktop. */
 import { ipcMain } from 'electron'
-import { getSshTargetRegistryStore } from '../../ssh/ssh-target-registry'
+import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { requiredString } from './orcad-runtime-lifecycle-handlers'
 
 export function registerOrcadLeaveBehindHandlers(): void {

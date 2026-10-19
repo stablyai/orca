@@ -149,6 +149,15 @@ describe('SSH host server status line', () => {
     expect(line?.text).not.toContain('relay')
   })
 
+  it('tells a noexec host what to change, not to install an older Orca', () => {
+    const line = sshHostServerStatusLine(plain, {
+      managedServer: { kind: 'relay', reason: 'orcad_unavailable', detail: 'runtime_noexec' }
+    })
+    expect(line).toMatchObject({ tone: 'destructive', text: expect.stringContaining('noexec') })
+    expect(line?.text).toContain('connect again')
+    expect(line?.text).not.toContain('older version')
+  })
+
   it('says plainly when neither port forwarding nor the SSH session reaches the server', () => {
     const live = sshHostServerStatusLine(plain, {
       managedServer: {
@@ -219,6 +228,19 @@ describe('SSH host server status line', () => {
       text: expect.stringContaining('Try connecting again'),
       detail
     })
+  })
+
+  it('says contact was lost, not that the server failed, when setup lost the host', () => {
+    const line = sshHostServerStatusLine(plain, {
+      managedServer: {
+        kind: 'relay',
+        reason: 'failed',
+        contactLost: true,
+        detail: 'The SSH connection closed before the transfer finished'
+      }
+    })
+    expect(line).toMatchObject({ tone: 'warning', text: expect.stringContaining('lost contact') })
+    expect(line?.text).not.toContain('couldn’t start')
   })
 
   it('says a move that stopped short is paused and kept, not a plain try-again', () => {

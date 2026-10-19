@@ -22,6 +22,7 @@
 // sent-message kind.
 
 import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import {
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
   type AgentJournalDispatchState,
@@ -177,9 +178,9 @@ export type JournalSubmissionRow = JournalRowBase & {
   /** Who it is from: its `AgentSessionMessageSource`'s kind only (`AgentJournalSubmission`).
    *  Absent on rows from before it was recorded. Older readers keep the key and ignore it. */
   source?: { kind: string }
-  /** The model and effort the person's composer sent it with, applied when it is handed over.
-   *  Older readers keep the key and ignore it. */
-  options?: Readonly<Record<string, string>>
+  /** The choices it was accepted with, applied when the agent is handed it. A row from an older
+   *  build may carry other keys, which a read ignores. Older readers keep the key and ignore it. */
+  options?: AgentSessionExecutionOptions
 }
 
 export type JournalSubmissionOrigin = 'client' | 'host'

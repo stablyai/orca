@@ -1,5 +1,4 @@
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { formatShutdownCheckpointFailureReason } from '../../../shared/renderer-shutdown-events'
 import type { WorkspaceSessionHostSnapshot } from '../lib/workspace-session-host-persistence'
 import { recordRendererCrashBreadcrumb } from '../lib/crash-breadcrumb-recorder'
@@ -7,18 +6,13 @@ import { recordRendererCrashBreadcrumb } from '../lib/crash-breadcrumb-recorder'
 export type ShutdownCheckpointStageArgs = {
   sessions: WorkspaceSessionHostSnapshot[]
   ui: Partial<PersistedUIState>
-  /** Layout-owner builds: the resume records the quit capture changed, which main records. */
-  sleepRecords?: SleepingAgentSessionRecord[]
 }
 
 export type ShutdownCheckpointPersistDeps = {
   shouldCaptureSession: () => boolean
   /** Per-pane failures are already swallowed inside the capture loop. */
   captureTerminalBuffers: () => void
-  /** Returns the records it changed when main records them (a layout-owner build). */
-  captureSleepingAgentSessions: () => SleepingAgentSessionRecord[] | void
-  /** The stage carried the capture's records: a retry's capture may diff from here. */
-  onSleepRecordsStaged?: () => void
+  captureSleepingAgentSessions: () => void
   buildSessionSnapshots: () => WorkspaceSessionHostSnapshot[]
   buildUiPatch: () => Partial<PersistedUIState>
   hasDirtyOpenFiles: () => boolean
@@ -47,11 +41,10 @@ export function createShutdownCheckpointPersist(
   let fullStagingFailedOnPriorAttempt = false
   const run = (): void => {
     const shouldCaptureSession = deps.shouldCaptureSession()
-    let sleepRecords: SleepingAgentSessionRecord[] | void = undefined
     if (shouldCaptureSession) {
       deps.captureTerminalBuffers()
       try {
-        sleepRecords = deps.captureSleepingAgentSessions()
+        deps.captureSleepingAgentSessions()
       } catch (error) {
         // Why: blocking the shutdown here is what stranded STA-5505. The cost of
         // continuing is real but bounded — done panes keep their weaker live-origin
@@ -81,12 +74,8 @@ export function createShutdownCheckpointPersist(
     try {
       deps.stageBeforeUnloadSync({
         sessions: degraded ? [] : sessionSnapshots,
-        ui: deps.buildUiPatch(),
-        ...(sleepRecords && sleepRecords.length > 0 && !degraded ? { sleepRecords } : {})
+        ui: deps.buildUiPatch()
       })
-      if (!degraded) {
-        deps.onSleepRecordsStaged?.()
-      }
     } catch (error) {
       // A durable-only stage has nothing safer left to fall back to.
       if (degraded) {

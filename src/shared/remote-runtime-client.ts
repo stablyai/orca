@@ -10,13 +10,6 @@ import type {
 import type { RuntimeOrchestrationEnvelope, RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type { RuntimeStatus } from './runtime-types'
 
-export { RemoteRuntimeClientError } from './remote-runtime-client-error'
-export type {
-  RemoteRuntimeOutboundMemoryBudget,
-  RemoteRuntimeOutboundSocketMemory
-} from './remote-runtime-subscription-outbound'
-export type { RemoteRuntimeSubscriptionOptions } from './remote-runtime-subscription-contract'
-
 export type RemoteRuntimeSubscription = {
   requestId: string
   close: () => void

@@ -177,6 +177,16 @@ export const uiTerminalAndSessionTabsApi = {
     ipcRenderer.on('ui:renameTerminal', listener)
     return () => ipcRenderer.removeListener('ui:renameTerminal', listener)
   },
+  onSetPaneTitle: (
+    callback: (data: { tabId: string; leafId: string; title: string | null }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { tabId: string; leafId: string; title: string | null }
+    ) => callback(data)
+    ipcRenderer.on('ui:setPaneTitle', listener)
+    return () => ipcRenderer.removeListener('ui:setPaneTitle', listener)
+  },
   onFocusTerminal: (
     callback: (data: {
       tabId: string

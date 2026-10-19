@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('./ssh-target-registry', () => ({
+vi.mock('./targets/ssh-target-registry', () => ({
   getSshConnectionManager: () => ({ connect: async () => ({}) }),
   getSshTargetRegistryStore: () => mocks.state.store
 }))
@@ -145,6 +145,21 @@ describe('updateManagedOrcadEnvironment', () => {
     expect(status.deferredUpdate).toBeNull()
   })
 
+  it('forwards anew after an activation, since the new slot may bind another port', async () => {
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
+    await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    expect(mocks.rebuildTunnel).toHaveBeenCalledWith(harness.userDataPath, 'environment-1')
+  })
+
+  it('still reports the activation when the new forward cannot be built yet', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
+    mocks.rebuildTunnel.mockRejectedValueOnce(new Error('ssh connect failed'))
+    await expect(
+      updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    ).resolves.toMatchObject({ outcome: 'updated', activeVersion: 'v3' })
+  })
+
   it('re-pairs through the same tunnel, keeping the deployment link, when the offer changed', async () => {
     mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
     mocks.probe.mockResolvedValueOnce(managedReadiness('rotated-token'))
@@ -257,6 +272,7 @@ describe('rollbackManagedOrcadEnvironment', () => {
       buildHash: 'previous-hash',
       fullVersion: MANAGED_PREVIOUS_VERSION
     })
+    expect(mocks.rebuildTunnel).toHaveBeenCalledWith(harness.userDataPath, 'environment-1')
   })
 })
 
@@ -274,7 +290,7 @@ describe('recoverManagedOrcadEnvironment', () => {
     expect(listEnvironments(harness.userDataPath)).toHaveLength(1)
   })
 
-  it('re-ensures the tunnel once a serving slot is restored', async () => {
+  it('forwards anew once a serving slot is restored, which may have bound another port', async () => {
     mocks.recover.mockResolvedValueOnce({
       outcome: 'recovered',
       resolution: 'restored-incumbent',
@@ -284,6 +300,6 @@ describe('recoverManagedOrcadEnvironment', () => {
     await expect(
       recoverManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
     ).resolves.toMatchObject({ outcome: 'recovered', activeVersion: MANAGED_VERSION })
-    expect(mocks.ensureTunnel).toHaveBeenCalledWith(harness.userDataPath, 'environment-1')
+    expect(mocks.rebuildTunnel).toHaveBeenCalledWith(harness.userDataPath, 'environment-1')
   })
 })

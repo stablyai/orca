@@ -1,3 +1,4 @@
+import type { ProjectGroup } from './project-group-types'
 import type { ProjectHostSetupProjection } from './project-host-setup-projection'
 import type { ProjectSectionProject, ProjectSectionSetup } from './project-section-grouping'
 import type { RepoIcon } from './repo-icon'
@@ -17,6 +18,8 @@ export type MobileProjectSectionCatalog = {
   projects: ProjectSectionProject[]
   setups: ProjectSectionSetup[]
   projectOrderBy: ProjectOrderBy
+  /** Every host's project groups, which a feed reader lists folder workspaces under; older desktops omit it. */
+  projectGroups?: ProjectGroup[]
 }
 
 /** Null until a desktop window has published its sidebar catalog. */
@@ -42,7 +45,8 @@ function sectionRepo(repo: Repo): MobileProjectSectionRepo {
 export function buildMobileProjectSectionCatalog(
   repos: readonly Repo[],
   projection: ProjectHostSetupProjection,
-  projectOrderBy: ProjectOrderBy
+  projectOrderBy: ProjectOrderBy,
+  projectGroups?: readonly ProjectGroup[]
 ): MobileProjectSectionCatalog {
   return {
     repos: repos.map(sectionRepo),
@@ -59,6 +63,7 @@ export function buildMobileProjectSectionCatalog(
       ...(setup.connectionId !== undefined ? { connectionId: setup.connectionId } : {}),
       ...(setup.executionHostId ? { executionHostId: setup.executionHostId } : {})
     })),
-    projectOrderBy
+    projectOrderBy,
+    ...(projectGroups ? { projectGroups: [...projectGroups] } : {})
   }
 }

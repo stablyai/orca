@@ -34,6 +34,8 @@ const entryPoint = join(mobileDir, 'web-entry', 'index.tsx')
 const { MOBILE_WEB_BUNDLE_DIR: defaultOutDir } = createRequire(import.meta.url)(
   './verify-packaged-mobile-web-bundle.cjs'
 )
+// The desktop serves this page, so a dark switch the desktop was built with reaches it too.
+const { turnedOnDarkBuildDefines } = createRequire(import.meta.url)('../dark-build-switches.cjs')
 
 /**
  * Every shim the app bundle needs, each one a documented Metro/RN-Web gap. `appliesTo` reads the
@@ -347,7 +349,9 @@ export function mobileWebAppBuildOptions(routes) {
       __DEV__: 'false',
       'process.env.NODE_ENV': '"production"',
       'process.env.EXPO_OS': '"web"',
-      'process.env.EXPO_ROUTER_IMPORT_MODE': '"sync"'
+      'process.env.EXPO_ROUTER_IMPORT_MODE': '"sync"',
+      // Only a switch asked for: an off build stays byte-identical, and its switch reads off.
+      ...turnedOnDarkBuildDefines()
     }
   }
 }

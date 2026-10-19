@@ -6,10 +6,15 @@ import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { admitRuntimePane } from '../../runtime-pane-admission'
+import { admitRuntimePane, withdrawAdmittedPane } from '../../runtime-pane-admission'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { isPaneSpawnInFlight } from '../../../ipc/pty/pane/spawn-reservation'
+import { SPLIT_PANE_WAIT_TIMEOUT_MESSAGE } from './terminal-split-wait-timeout'
+
+const SPLIT_PANE_START_TIMEOUT_MS = 10_000
 
 export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyClosedTabPtys {
   protected abstract splitPtyBackedTerminal(
@@ -52,8 +57,8 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
       const [hostId] = this.getWorkspaceSessionHostIdsForTab(leaf.worktreeId, leaf.tabId)
       if (hostId && parseExecutionHostId(hostId)?.kind !== 'runtime') {
         const newLeafId = randomUUID()
-        // Main keeps the pane however its start goes: one whose terminal never starts is a dead
-        // pane, as any. No pane written, no split: nothing else would put it in main's copy.
+        // No pane written, no split: nothing else would put it in main's copy. A pane whose
+        // terminal never starts is taken back below, so the CLI's failure is the truth.
         const outcome = await admitRuntimePane(
           this.store,
           {
@@ -82,8 +87,50 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
           () => this.getWorkspaceSessionHostIdsForTab(leaf.worktreeId, leaf.tabId),
           leaf.tabId,
           newLeafId,
-          this.waitForLeafInTab(leaf.tabId, newLeafId)
-        )
+          this.waitForLeafInTab(leaf.tabId, newLeafId, SPLIT_PANE_START_TIMEOUT_MS)
+        ).catch(async (error: unknown) => {
+          if (
+            outcome !== 'admitted' ||
+            !(error instanceof Error) ||
+            error.message !== SPLIT_PANE_WAIT_TIMEOUT_MESSAGE
+          ) {
+            throw error
+          }
+          const taken = await withdrawAdmittedPane(
+            this.store,
+            {
+              type: 'splitPane',
+              workspace: leaf.worktreeId,
+              tabId: leaf.tabId,
+              leafId: leaf.leafId,
+              direction,
+              newLeafId
+            },
+            hostId,
+            // Read in the write queue: a start under way (a slow SSH host) keeps its pane.
+            () => isPaneSpawnInFlight(leaf.worktreeId, makePaneKey(leaf.tabId, newLeafId))
+          ).catch((withdrawError: unknown) => {
+            console.warn('[layout] an unstarted split pane stayed in main:', withdrawError)
+            return 'threw' as const
+          })
+          if (taken === 'bound') {
+            // Bound just before the take-back: the window's late report brings its handle.
+            return settledByPaneClose(
+              this.store,
+              () => this.getWorkspaceSessionHostIdsForTab(leaf.worktreeId, leaf.tabId),
+              leaf.tabId,
+              newLeafId,
+              this.waitForLeafInTab(leaf.tabId, newLeafId, SPLIT_PANE_START_TIMEOUT_MS)
+            )
+          }
+          if (taken !== null) {
+            throw error
+          }
+          this.notifier?.closeTerminalPane?.(leaf.tabId, newLeafId)
+          throw new Error(
+            `split_pane_not_started: the new pane's terminal did not start within ${SPLIT_PANE_START_TIMEOUT_MS / 1000} s, so the pane was closed${opts.command ? ' and its command was not run' : ''}`
+          )
+        })
         return {
           handle: newHandle,
           tabId: leaf.tabId,

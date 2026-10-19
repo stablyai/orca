@@ -5,16 +5,15 @@ import { join } from 'node:path'
 import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
-import {
-  AGENT_STATUS_MAX_SUBAGENTS,
-  AGENT_STATUS_STALE_AFTER_MS
-} from '../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
+
+const CHILD_COUNT = 32
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -58,7 +57,7 @@ describe('nested agent hooks preserve the owning pane', () => {
         await post('claude', {
           hook_event_name: 'Stop',
           session_id: 'claude-parent',
-          background_tasks: Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS }, (_, i) => ({
+          background_tasks: Array.from({ length: CHILD_COUNT }, (_, i) => ({
             id: `child${i}`,
             type: 'subagent',
             status: 'running',
@@ -72,7 +71,7 @@ describe('nested agent hooks preserve the owning pane', () => {
           mainAgent: { state: 'done' },
           providerSession: { id: 'claude-parent' }
         })
-        expect(before[0]?.subagents).toHaveLength(AGENT_STATUS_MAX_SUBAGENTS)
+        expect(before[0]?.subagents).toHaveLength(CHILD_COUNT)
         pushed.mockClear()
         for (const hook_event_name of [
           'SessionStart',
@@ -111,9 +110,7 @@ describe('nested agent hooks preserve the owning pane', () => {
           session_id: 'claude-parent',
           agent_id: 'child0'
         })
-        expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(
-          AGENT_STATUS_MAX_SUBAGENTS - 1
-        )
+        expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(CHILD_COUNT - 1)
         await post('claude', {
           hook_event_name: 'Stop',
           session_id: 'claude-parent',

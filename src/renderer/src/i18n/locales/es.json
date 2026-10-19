@@ -39,7 +39,8 @@
       },
       "providers": {
         "title": "Proveedores",
-        "antigravityDescription": "Los chats de Antigravity usan un servidor que Orca descarga en este host, independiente de la CLI de agy."
+        "antigravityDescription": "Los chats de Antigravity usan un servidor que Orca descarga en este host, independiente de la CLI de agy.",
+        "antigravityNotSignedIn": "No has iniciado sesión. Los chats necesitan un inicio de sesión de Antigravity, independiente de tu cuenta de agy en la terminal."
       }
     },
     "terminal": {
@@ -581,7 +582,8 @@
             "76deec8f58": "Error al cambiar organización",
             "7d4bc516ee": "Error al cambiar perfil",
             "f518e89aa5": "El proyecto ya existe en ese perfil",
-            "f03ae7f27b": "Error al transferir proyecto"
+            "f03ae7f27b": "Error al transferir proyecto",
+            "signInTimedOut": "Se agotó el tiempo de inicio de sesión"
           }
         },
         "runtime": {
@@ -3250,6 +3252,7 @@
             "retry": "Reintentar",
             "retrying": "Reintentando…",
             "retryUnavailable": "Reintentar no pudo volver a conectarse todavía. Vuelve a intentarlo en breve.",
+            "openNewTerminal": "Abrir terminal nueva",
             "ownerUnknown": "Orca no pudo verificar el propietario de esta terminal.",
             "42b283ecfc": "Orca no pudo volver a conectar de manera segura esta terminal porque el host no pudo verificar su sesión guardada. Orca dejó la sesión guardada sin cambios. Haga clic en Reintentar para intentar volver a conectarse ahora. Si aún no puede volver a conectarse, abra una nueva terminal.",
             "e16012e31e": "El demonio de terminal propietario de esta sesión salió, por lo que no se pudo recuperar la sesión y su desplazamiento hacia atrás. Abra una nueva terminal para continuar.",
@@ -3491,7 +3494,7 @@
         "bar": {
           "BrowserTab": {
             "6e0bc8f3a8": "Abrir en el navegador",
-            "9dd880bd56": "Cerrar pestañas a la derecha",
+            "9dd880bd56": "Cerrar todas las pestañas a la derecha",
             "1611a1324b": "Cerrar",
             "5d6e89891f": "Duplicar pestaña",
             "966feb9ad5": "Dividir a la derecha",
@@ -3508,7 +3511,7 @@
             "52ce4f4605": "Copiar ruta relativa",
             "5b85754786": "Copiar ruta",
             "bfd5797ef4": "Abrir vista previa de Markdown",
-            "e5ff31ccaf": "Cerrar pestañas a la derecha",
+            "e5ff31ccaf": "Cerrar todas las pestañas a la derecha",
             "ba1369dd24": "Cerrar todas las pestañas del editor",
             "1ba8492c5b": "Cerrar",
             "68cc610e7f": "Renombrar",
@@ -3541,7 +3544,7 @@
           "SortableTabContextMenu": {
             "35e8892fd0": "Color de pestaña",
             "2f697b3c31": "Cambiar título",
-            "c1ee099c7e": "Cerrar pestañas a la derecha",
+            "c1ee099c7e": "Cerrar todas las pestañas a la derecha",
             "8d16f9cd30": "Cerrar otras",
             "89359a36f7": "Cerrar",
             "21132389e9": "Dividir a la derecha",
@@ -17943,6 +17946,14 @@
         "a62f9db53d": "Cancel",
         "c77189bc0c": "Update filter",
         "19af906d12": "Save filter"
+      },
+      "OrcaSignInProgress": {
+        "waiting": "Esperando el inicio de sesión en tu navegador",
+        "copyLink": "Copiar enlace de inicio de sesión",
+        "copied": "Enlace de inicio de sesión copiado",
+        "copyFailed": "No se pudo copiar el enlace.",
+        "signingIn": "Iniciando sesión…",
+        "cancel": "Cancelar"
       }
     },
     "i18n": {
@@ -18051,6 +18062,7 @@
         "claudeManagedNotSignedIn": "Esta cuenta de Claude no ha iniciado sesión. Vuelve a iniciar sesión en la configuración de Cuentas de Claude.",
         "codexSystemNotSignedIn": "Codex no ha iniciado sesión. Ejecuta `{{loginCommand}}`.",
         "codexManagedNotSignedIn": "Esta cuenta de Codex no ha iniciado sesión. Vuelve a iniciar sesión en la configuración de Cuentas de Codex.",
+        "antigravityNotSignedIn": "Antigravity no ha iniciado sesión. Inicia sesión en Ajustes → Cuentas → Antigravity.",
         "cliMissing": "No se encontró {{agent}} en el equipo que ejecuta este chat. Instálelo o revise su Comando en Ajustes → Agentes.",
         "signInFirst": "Inicie sesión primero.",
         "signInThenRunCommand": "Inicie sesión y vuelva a ejecutar /{{command}}.",
@@ -18749,6 +18761,14 @@
       "visualUnavailable": "Visualización no disponible",
       "visualLoading": "Cargando visualización",
       "visualOpenInNewTab": "Abrir en una pestaña nueva",
+      "resumeCommand": {
+        "description": "Abrir el historial de sesiones de agentes",
+        "argumentHint": "[búsqueda]",
+        "workspaceUnavailable": "El workspace de este chat aún no se ha cargado. Vuelve a probar /resume en un momento.",
+        "replaceTitle": "¿Reemplazar este chat?",
+        "replaceDescription": "Reanudar “{{title}}” aquí detendrá lo que {{agent}} está haciendo en este chat.",
+        "replace": "Reemplazar"
+      },
       "claudeSignIn": {
         "signingIn": "Iniciando sesión…"
       }
@@ -18758,20 +18778,28 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "Cambiar a la vista de terminal",
           "switchToChatView": "Cambiar a vista de chat",
-          "closeTabsToLeft": "Cerrar pestañas a la izquierda"
+          "closeTabsToLeft": "Cerrar todas las pestañas a la izquierda"
         },
         "BrowserTab": {
           "closeOthers": "Cerrar otras",
-          "closeTabsToLeft": "Cerrar pestañas a la izquierda"
+          "closeTabsToLeft": "Cerrar todas las pestañas a la izquierda"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Cerrar otras",
-          "closeTabsToLeft": "Cerrar pestañas a la izquierda"
+          "closeTabsToLeft": "Cerrar todas las pestañas a la izquierda"
         },
         "CopyTabIdMenuItem": {
           "copied": "ID de pestaña copiado",
           "failed": "No se pudo copiar el ID de pestaña",
           "copy": "Copiar ID de pestaña"
+        },
+        "bulkClose": {
+          "others": "¿Cerrar las otras pestañas?",
+          "right": "¿Cerrar las pestañas de la derecha?",
+          "left": "¿Cerrar las pestañas de la izquierda?",
+          "editors": "¿Cerrar todas las pestañas del editor?",
+          "description": "Se cerrarán las pestañas seleccionadas. Las pestañas fijadas permanecerán abiertas.",
+          "confirm": "Cerrar pestañas"
         }
       }
     },
@@ -19223,12 +19251,14 @@
       "cancelFailed": "No se pudo cancelar la instalación. Inténtalo de nuevo.",
       "install": "Instalar {{agent}}",
       "installManaged": "Instalar la copia de Orca",
-      "installed": "Instalado.",
+      "installed": "Instalado",
       "notInstalled": "No instalado.",
       "progress": "Descarga de {{agent}}",
       "readFailed": "No se pudo comprobar {{agent}} en este host. Reintentando.",
-      "reinstall": "Reinstalar",
+      "reinstall": "Reinstalar {{agent}}",
+      "reinstallShort": "Reinstalar",
       "remove": "Quitar el runtime descargado",
+      "moreActions": "Más acciones para {{agent}}",
       "removeConfirm": "Quitar",
       "removeDescription": "Los chats de {{agent}} en curso se detienen. Su historial se conserva.",
       "removeKeep": "Cancelar",
@@ -19666,6 +19696,27 @@
       "cancel": "Cancelar"
     },
     "antigravity": {
+      "chatTitle": "Chats de Antigravity",
+      "chatDescription": "Los chats usan su propio inicio de sesión de Antigravity, independiente de tu cuenta de agy de arriba. Inicia sesión una vez en este dispositivo.",
+      "chatSignIn": "Iniciar sesión",
+      "chatChangeAccount": "Cambiar de cuenta",
+      "chatRetry": "Reintentar inicio de sesión",
+      "chatCancel": "Cancelar",
+      "chatCopyLink": "Copiar enlace de inicio de sesión",
+      "chatCopyFailed": "No se pudo copiar el enlace.",
+      "chatStarting": "Iniciando sesión…",
+      "chatWaiting": "Termina de iniciar sesión en tu navegador.",
+      "chatOpenFailed": "Copia el enlace y ábrelo en tu navegador.",
+      "chatVerifying": "Finalizando el inicio de sesión…",
+      "chatPasteHelp": "Si la última página después de iniciar sesión no carga, copia su dirección completa desde el navegador y pégala aquí.",
+      "chatContinue": "Continuar",
+      "chatSignedInOn": "Sesión iniciada en {{host}}.",
+      "chatCancelled": "Inicio de sesión cancelado.",
+      "chatExpired": "El inicio de sesión caducó. Inténtalo de nuevo.",
+      "chatFailed": "No se pudo iniciar sesión. Inténtalo de nuevo.",
+      "chatNotSignedIn": "No has iniciado sesión en {{host}}.",
+      "chatOtherClient": "Hay un inicio de sesión en curso en otro cliente.",
+      "chatReadFailed": "No se pudo comprobar el inicio de sesión en {{host}}.",
       "retry": "Reintentar",
       "remove": "Eliminar",
       "usage": "Actualizar uso",
@@ -19818,6 +19869,10 @@
       "openInSidebar": "Abrir en la barra lateral",
       "openInSidebarCopy": "Escribe lo que recuerdes o pídele a un agente: «encuentra la sesión donde arreglamos el tiempo de espera de inicio de sesión».",
       "enableOnAll": "Activar en todas las computadoras"
+    },
+    "dialog": {
+      "select": "Seleccionar",
+      "open": "Abrir"
     }
   },
   "common": {

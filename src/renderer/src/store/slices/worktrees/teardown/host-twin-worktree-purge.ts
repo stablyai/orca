@@ -95,6 +95,11 @@ function resolvePurgedPublishers(
   }
 }
 
+/** Every host whose listing publishes this id; empty when no row names it. */
+export function workspacePublishingHosts(s: AppState, workspaceId: string): ExecutionHostId[] {
+  return resolvePurgedPublishers(s, workspaceId, new Set()).survivors
+}
+
 /** Per attributed host, its twin ids with the hosts that still publish them. */
 export type HostTwinPurgeScopes = Map<ExecutionHostId, Map<string, ExecutionHostId[]>>
 

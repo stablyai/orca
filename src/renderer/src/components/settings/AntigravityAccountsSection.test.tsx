@@ -10,7 +10,9 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { AntigravityAccountState } from '../../../../shared/antigravity-account-types'
 
 vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({
-  callAntigravityAccounts: vi.fn()
+  callAntigravityAccounts: vi.fn(),
+  callAntigravityChatSignIn: vi.fn(),
+  subscribeAntigravityChatSignIn: vi.fn()
 }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))

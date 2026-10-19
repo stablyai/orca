@@ -16,6 +16,7 @@ import { ShareUsageButton } from './ShareUsageButton'
 import { StatCard } from './StatCard'
 import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
 import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
+import { unpricedCostLabel } from './unpriced-cost-label'
 import { translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: ClaudeUsageRange[] = ['7d', '30d', '90d', 'all']
@@ -220,9 +221,12 @@ export function ClaudeUsagePane(): React.JSX.Element {
             icon={<FolderKanban className="size-4" />}
           />
           <StatCard
-            label={translate(
-              'auto.components.stats.ClaudeUsagePane.b26d4ddb58',
-              'Est. API-equivalent cost'
+            label={unpricedCostLabel(
+              translate(
+                'auto.components.stats.ClaudeUsagePane.b26d4ddb58',
+                'Est. API-equivalent cost'
+              ),
+              summary
             )}
             value={formatCost(summary?.estimatedCostUsd ?? null)}
             icon={<Coins className="size-4" />}

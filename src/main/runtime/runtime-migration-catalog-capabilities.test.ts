@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
 import { store } from './orca-runtime-test-fixtures.spec'
-import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration-manifest-validation'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type {
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 
 const manifest: OrcadMigrationManifest = {
   version: ORCAD_MIGRATION_MANIFEST_VERSION,

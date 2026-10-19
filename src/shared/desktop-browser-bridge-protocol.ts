@@ -9,6 +9,11 @@
 import { z } from 'zod'
 
 export const DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY = 'browser.desktopBridge.v1'
+/**
+ * Declared by a desktop that understands a `cancel` event. orcad never sends one to a desktop
+ * without it: an older desktop drops its whole attachment on an event type it cannot parse.
+ */
+export const DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY = 'browser.desktopBridge.cancel.v1'
 
 export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE = 'desktop_browser_bridge_unavailable'
 export const DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE = 'desktop_browser_bridge_not_forwarded'
@@ -120,7 +125,9 @@ export type DesktopBrowserBridgeRequest = z.infer<typeof DesktopBrowserBridgeReq
 
 export const DesktopBrowserBridgeEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready'), attachmentId: Identity }),
-  DesktopBrowserBridgeRequest
+  DesktopBrowserBridgeRequest,
+  /** orcad stopped waiting for this request; the desktop must not start or continue it. */
+  z.object({ type: z.literal('cancel'), requestId: Identity })
 ])
 export type DesktopBrowserBridgeEvent = z.infer<typeof DesktopBrowserBridgeEvent>
 

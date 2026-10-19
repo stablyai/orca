@@ -198,7 +198,7 @@ describe('close records on workspace removal', () => {
       ])
     })
 
-    store.removeProjectForHost('repo-a', 'local')
+    store.removeProjectForHost({ id: 'repo-a', executionHostId: 'local' })
 
     expect(
       Object.keys(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId ?? {})

@@ -24,7 +24,7 @@ import {
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import { getTaskPageRepoSourceContext } from './task-page-source-context'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import { taskPageToGitHubApiPage } from '@/components/task-page-work-item-pagination'
+import { taskPageToGitHubApiPage } from '../../../shared/work-items'
 import { useAppStore } from '@/store'
 export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshPreludeModel) {
   const {

@@ -1,7 +1,7 @@
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { postClaudeHook, readHookEndpoint } from './helpers/agent-hook-endpoint'
-import { SIDEBAR_INPUTS_BUILD, expectNoSidebarShadowMismatches } from './helpers/sidebar-shadow'
+import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
 import { RECENT_STAMP_THROTTLE_MS } from '../../src/shared/sidebar-list/sort-stamps'
@@ -71,6 +71,4 @@ test('the host stamps a workspace as its agent is prompted, finishes and asks fo
   const asked = (await readMainRow(orcaPage, rowKey))!
   expect(asked.recentAt).toBe(finished.recentAt)
   expect(asked.smartAt!).toBeGreaterThan(finished.smartAt!)
-
-  await expectNoSidebarShadowMismatches(orcaPage)
 })

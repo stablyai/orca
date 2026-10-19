@@ -31,10 +31,10 @@ describe('execCommand transport routing', () => {
     await execCommand(conn, 'uname -sm', { signal })
     expect(exec).toHaveBeenCalledTimes(1)
     const [command, options] = exec.mock.calls[0] ?? ['', null]
-    expect(options).toEqual({ signal })
+    expect(options).toEqual({ signal, compressCommand: true })
     expect(command.split('\n').slice(1, -3)).toEqual(['uname -sm'])
     await execCommand(conn, 'true', { wrapCommand: false })
-    expect(exec).toHaveBeenLastCalledWith('true', { wrapCommand: false })
+    expect(exec).toHaveBeenLastCalledWith('true', { wrapCommand: false, compressCommand: true })
   })
 
   it('uses a closed-stdin exec only when the caller has no stdin to send', async () => {
@@ -47,7 +47,8 @@ describe('execCommand transport routing', () => {
     }
     await expect(execCommand(conn, 'probe', { wrapCommand: false })).resolves.toBe('pooled')
     expect(execWithClosedStdin).toHaveBeenCalledWith('probe', {
-      wrapCommand: false
+      wrapCommand: false,
+      compressCommand: true
     })
     await expect(
       execCommand(conn, 'cat', {
@@ -55,6 +56,7 @@ describe('execCommand transport routing', () => {
         stdin: Readable.from(['x'])
       })
     ).resolves.toBe('direct')
-    expect(exec).toHaveBeenCalledWith('cat', { wrapCommand: false })
+    // A stdin command stays plain: its bytes could not be resent after a decoder miss.
+    expect(exec).toHaveBeenCalledWith('cat', { wrapCommand: false, compressCommand: false })
   })
 })

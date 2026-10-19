@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({ state: {} as Record<string, unknown> }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => RUNTIME_ID
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => RUNTIME_ID
 }))
 vi.mock('@/components/sidebar/delete-worktree-flow', () => ({ runWorktreeDelete: vi.fn() }))
 

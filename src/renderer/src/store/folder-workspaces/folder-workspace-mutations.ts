@@ -21,6 +21,7 @@ import {
 import { FolderWorkspaceUpdateCoordinator } from '../slices/folder-workspace-update-coordinator'
 import type { FolderWorkspaceUpdates, RepoSlice } from '../repos/repo-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
+import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
 import {
   folderWorkspaceOwnerTarget,
   folderWorkspaceUpdateInvalidatesPathStatus,
@@ -102,6 +103,7 @@ export function createFolderWorkspaceMutationActions(
           folderWorkspaces: [ownedWorkspace, ...s.folderWorkspaces],
           folderWorkspacePathStatuses: {}
         }))
+        holdCreatedSidebarWorkspace({ folderWorkspace: ownedWorkspace })
         return ownedWorkspace
       } catch (err) {
         console.error('Failed to create folder workspace:', err)
@@ -291,7 +293,7 @@ export function createFolderWorkspaceMutationActions(
         if (!get().folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
           // Folder workspaces use the same browser registry key as worktrees;
           // tear down Chromium guests before purging the remaining renderer state.
-          await get().shutdownWorktreeBrowsers(workspaceKey)
+          await Promise.resolve(get().shutdownWorktreeBrowsers(workspaceKey))
           get().purgeWorktreeTerminalState([workspaceKey])
           deleteWorkspaceChatDrafts(chatDraftKeys)
         }

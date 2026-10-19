@@ -1,5 +1,5 @@
 import { connect } from 'node:net'
-import { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
+import { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
 import { readNetworkProxySettings } from './browser-network-proxy-settings-source'

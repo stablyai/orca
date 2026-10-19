@@ -8,7 +8,7 @@ import {
   execCommand,
   isUnconfirmedSshCommandTermination
 } from '../../ssh/remote-exec/remote-exec-command'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
@@ -125,7 +125,7 @@ export async function installOrcadBundle(
   }
 }
 
-function executablePermissionsCommand(
+export function executablePermissionsCommand(
   host: RemoteHostPlatform,
   directory: string,
   target: NodeRuntimeTarget
@@ -135,14 +135,14 @@ function executablePermissionsCommand(
     .map((artifact) => joinRemotePath(host, directory, ...artifact.split('/')))
   const browsers = new Set(
     (['glibc', 'musl'] as const).map((libc) =>
-      shellEscape(
+      quotePosixShell(
         joinRemotePath(host, directory, orcadAgentBrowserNativeName(host.os, host.arch, libc))
       )
     )
   )
   // SFTP drops executable modes; missing optional browser binaries remain a supported install.
   return (
-    `chmod 755 ${required.map(shellEscape).join(' ')} && ` +
+    `chmod 755 ${required.map(quotePosixShell).join(' ')} && ` +
     `for executable in ${[...browsers].join(' ')}; do ` +
     'if [ -f "$executable" ]; then chmod 755 "$executable" || exit $?; fi; done'
   )

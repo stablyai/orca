@@ -25,6 +25,7 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   // Why global: keyed by runtime environment rather than by worktree, and it is this client's
   // record of what it owes those environments — the same reason SSH connection state stays local.
   clientHostedBrowserCloseIntentsByEnvironment: 'global',
+  pairedTerminalTabCloseIntentsByEnvironment: 'global',
   tabsByWorktree: 'worktreeKeyed',
   openFilesByWorktree: 'worktreeKeyed',
   activeFileIdByWorktree: 'worktreeKeyed',

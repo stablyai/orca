@@ -6,9 +6,9 @@ import { backgroundOf, SHADOW_GATE_THRESHOLDS } from './relay-same-cap-shadow-ga
 const MINUTE_MS = 60_000
 
 export const RESERVE_WATCH_RULES = {
-  // The roll ladder's warn line: max(1.5x, background + 20), so a zero background is not tripped
-  // by one 503. Three complete minutes in a row, not two. The read spans more minutes than that so
-  // a late publishing front still leaves three published minutes to judge.
+  // The roll ladder's warn line on non-drain 503s: max(1.5x, background + 20), so a zero background
+  // is not tripped by one 503. Three complete minutes in a row, not two. The read spans more minutes
+  // than that so a late publishing front still leaves three published minutes to judge.
   director503: {
     multiple: SHADOW_GATE_THRESHOLDS.nonDrain503Budget.warnMultiple,
     marginPerMinute: SHADOW_GATE_THRESHOLDS.nonDrain503Budget.warnMarginPerMinute,
@@ -33,6 +33,80 @@ export const RESERVE_WATCH_RULES = {
 // sample line's `rules` keys follow this order too.
 export const RULE_NAMES = ['deadMan', 'overrun', 'director503', 'duplicateSeat', 'hostDrop', 'ledgerDrift']
 
+// Step 6 design §7: judged only while the cell's switch file says phonePath=memory, against the
+// cell's own runtime metrics for the 10 minutes before phonePath went memory. A trip turns the
+// phone path off (phonePath=db) and the watch goes on with the reserve rules.
+export const PHONE_WATCH_RULES = {
+  // Each rule trips on three complete minutes in a row over its line.
+  consecutiveMinutes: 3,
+  readMinutes: 10,
+  // Judged as a share of the minute's phone attempts (the signal plus completed accepts; for
+  // confirm failures, the accepts), not a count: a count line false-tripped 33/121 5-hour watches
+  // on busy c28 (10-18/19), where bursts of refusals arrive with the evening rise in accepts. A
+  // minute with fewer attempts is not judged, so low-volume c7 (~2 accepts/min) is mostly unjudged.
+  minAttemptsPerMinute: 4,
+  // Over half of the minute's attempts, and 0.25 above the share before the flip, capped so two
+  // failures per accept always trips. Exactly half is not enough: c28 (04:08Z) and c7 (09:13Z)
+  // both show 3 minutes at 50% of host-and-phone auth failures.
+  shareFloor: 0.5,
+  shareOverBackground: 0.25,
+  shareCeiling: 0.6,
+  // Page only: confirms still work, only their audit rows or renewals are lost.
+  pageAfterMs: 5 * MINUTE_MS
+}
+export const PHONE_RULE_NAMES = [
+  'phoneCredentialRefusals',
+  'phoneConfirmFailures',
+  'phoneAttachDeadlines',
+  'phoneAcceptDatabaseErrors'
+]
+const PHONE_RULE_SIGNALS = {
+  phoneCredentialRefusals: 'credentialRefusals',
+  phoneConfirmFailures: 'confirmFailures',
+  phoneAttachDeadlines: 'attachDeadlines',
+  phoneAcceptDatabaseErrors: 'acceptDatabaseErrors'
+}
+
+const sum = (values) => values.reduce((total, value) => total + value, 0)
+
+// The share line for a signal whose share of attempts before the flip was `backgroundShare`.
+export function phoneShareLine(backgroundShare) {
+  const { shareFloor, shareOverBackground, shareCeiling } = PHONE_WATCH_RULES
+  return Math.min(shareCeiling, Math.max(shareFloor, backgroundShare + shareOverBackground))
+}
+
+// A completed accept makes one confirm, so confirm failures are a share of accepts (capped at
+// all of them); every other signal is an attempt that did not complete.
+function attemptsAndShare(signal, count, completedAccepts) {
+  if (signal === 'confirmFailures') {
+    return { attempts: completedAccepts, share: completedAccepts === 0 ? 0 : Math.min(count, completedAccepts) / completedAccepts }
+  }
+  const attempts = count + completedAccepts
+  return { attempts, share: attempts === 0 ? 0 : count / attempts }
+}
+
+// Over the line: enough attempts that minute, and strictly more than the line refused or failed.
+export function phoneMinuteOver(signal, count, completedAccepts, line) {
+  const { attempts, share } = attemptsAndShare(signal, count, completedAccepts)
+  return attempts >= PHONE_WATCH_RULES.minAttemptsPerMinute && share > line
+}
+
+// The 10 minutes before phonePath went memory, from `readCellPhoneMinutes`: each signal's share of
+// attempts. Null until every minute is metered.
+export function measuredPhoneBackground(read) {
+  if (!read.ok || read.unmetered.length > 0 || read.minutes.length === 0) return null
+  const accepted = sum(read.series.completedAccepts)
+  return {
+    share: Object.fromEntries(
+      Object.values(PHONE_RULE_SIGNALS).map((signal) => {
+        const count = sum(read.series[signal])
+        return [signal, attemptsAndShare(signal, count, accepted).share]
+      })
+    ),
+    minutes: read.minutes.length
+  }
+}
+
 export function initialWatchState({ cellId, startedAt, durationMinutes, background503PerMinute, flippedAt }) {
   return {
     v: 1,
@@ -50,16 +124,34 @@ export function initialWatchState({ cellId, startedAt, durationMinutes, backgrou
     hosts: [],
     reserveSeenAt: null,
     ledgerAboveSince: null,
-    seatBehindRowFirstSeen: {}
+    seatBehindRowFirstSeen: {},
+    // Step 6: what a trip writes back, and the phone rules' state. `phoneSince` is when the switch
+    // file went phonePath=memory (flippedAt if it already said so); `phoneOffAt` when the watch
+    // turned it off; `phoneTrip` a phone verdict the segment has yet to write.
+    flip: null,
+    lastSampleAt: null,
+    phoneSince: null,
+    phoneBackground: null,
+    phoneOffAt: null,
+    phoneTrip: null,
+    phoneOffFailures: 0,
+    phoneUnverifiableStreak: 0,
+    auditDropsLast: null,
+    auditDropsSince: null,
+    renewalFailuresSince: null,
+    paged: []
   }
 }
 
-// The background from the per-minute 503 counts before the flip. `publishedThrough` is the newest
-// minute any response code has a point for: a 503 minute at or before it with no point had none,
-// and the background waits (null) until it covers the last minute.
-export function measuredBackground(perMinute, minutes, publishedThrough) {
+// The background from the per-minute non-drain 503s before the flip, the live samples' measure.
+// `publishedThrough` is the newest minute any response code has a point for: a 503 minute at or
+// before it with no point had none, and the background waits (null) until it covers the last
+// minute. Unmetered minutes are left out; under half the minutes metered is no background.
+export function measuredBackground({ perMinute, minutes, publishedThrough, unmetered }) {
   if (minutes.length === 0 || publishedThrough === null || publishedThrough < minutes.at(-1)) return null
-  const background = backgroundOf({ minutes, series: minutes.map((minute) => perMinute[minute] ?? 0), unverified: false })
+  const metered = minutes.filter((minute) => !unmetered.includes(minute))
+  if (metered.length * 2 < minutes.length) return null
+  const background = backgroundOf({ minutes: metered, series: metered.map((minute) => perMinute[minute] ?? 0), unverified: false })
   return { medianPerMinute: background.medianPerMinute, minutes: background.minutes, source: 'measured' }
 }
 
@@ -68,6 +160,8 @@ const trip = (reason, detail = {}) => ({ status: 'trip', reason, ...detail })
 const unverifiable = (reason) => ({ status: 'unverifiable', reason })
 // Not readable yet by design, so it does not count toward the unverifiable streak.
 const pending = (reason) => ({ status: 'pending', reason })
+const failedPhoneRead = { ok: false, error: 'no cell phone metrics read' }
+const minuteFloor = (at) => Math.floor(at / MINUTE_MS) * MINUTE_MS
 
 function judgeDeadMan(cell) {
   if (!cell.ok) return unverifiable(cell.error)
@@ -96,8 +190,8 @@ function judgeOverrun(cell) {
   return pass({ enforcedUnits: cell.enforcedUnits, hardCap: cell.hardCap })
 }
 
-// Fleet-wide director 503s: no existing signal attributes a 503 to the cell a host was bound for,
-// so a problem local to one cell can stay under the fleet's line. This proxy can miss.
+// Fleet-wide non-drain director 503s: no existing signal attributes a 503 to the cell a host was
+// bound for, so a problem local to one cell can stay under the fleet's line. This proxy can miss.
 function judgeDirector503(read, state, at) {
   const { multiple, marginPerMinute, consecutiveMinutes, publishDelayMs } = RESERVE_WATCH_RULES.director503
   const { background } = state
@@ -116,6 +210,8 @@ function judgeDirector503(read, state, at) {
   if (recent.length < consecutiveMinutes) {
     return unverifiable(`director requests are published only through ${read.publishedThrough}`)
   }
+  const unmetered = recent.filter((minute) => read.unmetered.includes(minute))
+  if (unmetered.length > 0) return unverifiable(`no director runtime metrics for ${unmetered.join(', ')}`)
   const counts = recent.map((minute) => read.perMinute[minute] ?? 0)
   const detail = { backgroundPerMinute: perMinute, above, recent: Object.fromEntries(recent.map((m, i) => [m, counts[i]])) }
   if (counts.every((count) => count > above)) {
@@ -181,9 +277,78 @@ function judgeLedgerDrift(cell, ledger, aboveSince, at) {
   return { verdict: pass({ ...detail, aboveForMs: at - since }), aboveSince: since }
 }
 
+// A counter still rising (or failing) every sample for 5 minutes pages once; a single drop does not.
+function judgeSustained(rising, since, at) {
+  const next = rising ? (since ?? at) : null
+  return { since: next, sustained: next !== null && at - next >= PHONE_WATCH_RULES.pageAfterMs }
+}
+
+export function phoneSinceOf(cell, state) {
+  if (state.phoneSince !== null || !cell.ok || cell.phonePathConfigured !== 'memory') return state.phoneSince
+  // Memory from the first sample: the operator's flipped-at. Later: the sample before this one.
+  return state.lastSampleAt === null ? state.flippedAt : state.lastSampleAt
+}
+
+// The phone rules for one sample, or none while the switch file does not say phonePath=memory.
+function judgePhoneRules(cell, phone, state, at) {
+  if (!cell.ok || cell.phonePathConfigured !== 'memory' || state.phoneOffAt !== null) return {}
+  const background = state.phoneBackground
+  if (!background) {
+    const verdict =
+      state.phoneSince === null
+        ? unverifiable('the phone rules need --flipped-at: their background is the 10 minutes before it')
+        : at < minuteFloor(state.phoneSince) + RESERVE_WATCH_RULES.director503.publishDelayMs
+          ? pending('the phone background before phonePath went memory is not published yet')
+          : unverifiable('no phone background yet')
+    return Object.fromEntries(PHONE_RULE_NAMES.map((name) => [name, verdict]))
+  }
+  if (!phone.ok) return Object.fromEntries(PHONE_RULE_NAMES.map((name) => [name, unverifiable(phone.error)]))
+  const { consecutiveMinutes } = PHONE_WATCH_RULES
+  // Only the judged minutes need metrics; a gap earlier in the read changes nothing.
+  const judged = phone.minutes.slice(-consecutiveMinutes)
+  const gaps = phone.unmetered.filter((minute) => judged.includes(minute))
+  if (gaps.length > 0) {
+    const gap = unverifiable(`no cell runtime metrics for ${gaps.join(', ')}`)
+    return Object.fromEntries(PHONE_RULE_NAMES.map((name) => [name, gap]))
+  }
+  const accepts = phone.series.completedAccepts.slice(-consecutiveMinutes)
+  return Object.fromEntries(
+    PHONE_RULE_NAMES.map((name) => {
+      const signal = PHONE_RULE_SIGNALS[name]
+      const line = phoneShareLine(background.share[signal])
+      const recent = phone.series[signal].slice(-consecutiveMinutes)
+      const detail = { backgroundShare: background.share[signal], line, recent, accepts }
+      const over =
+        recent.length === consecutiveMinutes && recent.every((count, index) => phoneMinuteOver(signal, count, accepts[index], line))
+      return [
+        name,
+        over ? trip(`${signal} over ${Math.round(line * 100)}% of attempts for ${consecutiveMinutes} min (${recent.join(', ')} against ${accepts.join(', ')} accepts)`, detail) : pass(detail)
+      ]
+    })
+  )
+}
+
+// Page-only signals: audit rows dropped since the previous sample, and renewal writes failing in
+// every one of the last 5 published minutes.
+function judgePhonePages(cell, phone, state, at) {
+  const dropped = cell.ok && Number.isInteger(cell.resumeAuditDropped) ? cell.resumeAuditDropped : null
+  const audit = judgeSustained(
+    dropped !== null && state.auditDropsLast !== null && dropped > state.auditDropsLast,
+    state.auditDropsSince,
+    at
+  )
+  const renewals = phone?.ok ? (phone.series.renewalFailures ?? []).slice(-PHONE_WATCH_RULES.pageAfterMs / MINUTE_MS) : []
+  const renewal = judgeSustained(renewals.length > 0 && renewals.every((count) => count > 0), state.renewalFailuresSince, at)
+  const pages = []
+  if (audit.sustained && !state.paged.includes('audit-drops')) pages.push('audit-drops')
+  if (renewal.sustained && !state.paged.includes('renewal-failures')) pages.push('renewal-failures')
+  return { auditDropsLast: dropped ?? state.auditDropsLast, auditDropsSince: audit.since, renewalFailuresSince: renewal.since, pages }
+}
+
 /**
  * One sample. `sample.cell` is the cell's runtime-status, `director503` the complete minutes of
- * director 503s with the request series' publishing front (`publishedThrough`), `ledger` the placing directors' newest ledger summaries, `seatBehindRow` this
+ * non-drain director 503s with the request series' publishing front (`publishedThrough`) and the
+ * minutes no runtime metrics cover (`unmetered`), `ledger` the placing directors' newest ledger summaries, `seatBehindRow` this
  * cell's reconcile reports in the lookback. Each is `{ ok: false, error }` when it could not be read.
  */
 export function evaluateWatchSample(state, sample, { unverifiableLimit }) {
@@ -214,34 +379,63 @@ export function evaluateWatchSample(state, sample, { unverifiableLimit }) {
   next.seatBehindRowFirstSeen = duplicate.firstSeen
   const ledger = judgeLedgerDrift(cell, sample.ledger, state.ledgerAboveSince, at)
   next.ledgerAboveSince = ledger.aboveSince
+  next.lastSampleAt = at
+  next.phoneSince = phoneSinceOf(cell, state)
+  const phoneState = { ...state, phoneSince: next.phoneSince }
+  const pageCheck = judgePhonePages(cell, sample.phone, state, at)
+  next.auditDropsLast = pageCheck.auditDropsLast
+  next.auditDropsSince = pageCheck.auditDropsSince
+  next.renewalFailuresSince = pageCheck.renewalFailuresSince
+  next.paged = [...state.paged, ...pageCheck.pages]
+  const pages = pageCheck.pages
   const rules = {
     deadMan: judgeDeadMan(cell),
     overrun: judgeOverrun(cell),
     director503: judgeDirector503(sample.director503, state, at),
     duplicateSeat: duplicate.verdict,
     hostDrop: cell.ok ? judgeHostDrop(next.hosts) : unverifiable(cell.error),
-    ledgerDrift: ledger.verdict
+    ledgerDrift: ledger.verdict,
+    ...judgePhoneRules(cell, sample.phone ?? failedPhoneRead, phoneState, at)
   }
   const tripped = RULE_NAMES.find((name) => rules[name].status === 'trip')
   if (tripped) {
     next.state = 'tripped'
+    next.flip = 'admitMode'
     next.verdict = `flip back ${state.cellId}: ${tripped}: ${rules[tripped].reason}`
-    return { state: next, rules, line: sampleLine(next, sample, rules) }
+    return { state: next, rules, line: sampleLine(next, sample, rules), pages }
+  }
+  // A phone trip turns off only the phone path; the segment writes it and the watch goes on.
+  const phoneNames = PHONE_RULE_NAMES.filter((name) => name in rules)
+  const phoneTripped = phoneNames.find((name) => rules[name].status === 'trip')
+  const phoneMissing = phoneNames.filter((name) => rules[name].status === 'unverifiable')
+  next.phoneUnverifiableStreak = phoneMissing.length > 0 ? state.phoneUnverifiableStreak + 1 : 0
+  if (phoneTripped) {
+    next.phoneTrip = `turn off the phone path on ${state.cellId}: ${phoneTripped}: ${rules[phoneTripped].reason}`
+  } else if (next.phoneUnverifiableStreak >= unverifiableLimit) {
+    next.phoneTrip =
+      `turn off the phone path on ${state.cellId}: unverifiable: ${next.phoneUnverifiableStreak} samples ` +
+      `in a row could not read ${phoneMissing.join(', ')}`
   }
   const missing = RULE_NAMES.filter((name) => rules[name].status === 'unverifiable')
-  const waiting = RULE_NAMES.some((name) => rules[name].status === 'pending')
+  const waiting = [...RULE_NAMES, ...phoneNames].some((name) => rules[name].status === 'pending')
   // A pending rule holds the streak where it was: neither evidence of health nor a gap.
   next.unverifiableStreak = missing.length > 0 ? state.unverifiableStreak + 1 : waiting ? state.unverifiableStreak : 0
   if (next.unverifiableStreak >= unverifiableLimit) {
     next.state = 'tripped'
+    next.flip = 'admitMode'
     next.verdict =
       `flip back ${state.cellId}: unverifiable: ${next.unverifiableStreak} samples in a row could not ` +
       `read ${missing.join(', ')}`
+  } else if (at >= state.deadlineAt && next.phoneTrip) {
+    // Still unwritten at the end: the workflow's flip back writes it, and pages if that fails too.
+    next.state = 'tripped'
+    next.flip = 'phonePath'
+    next.verdict = `${next.phoneTrip}; phonePath=db did not land before the watch ended`
   } else if (at >= state.deadlineAt) {
     next.state = 'completed'
     next.verdict = `${state.cellId} stayed healthy in reserve mode for the whole watch`
   }
-  return { state: next, rules, line: sampleLine(next, sample, rules) }
+  return { state: next, rules, line: sampleLine(next, sample, rules), pages }
 }
 
 function sampleLine(state, sample, rules) {
@@ -253,6 +447,7 @@ function sampleLine(state, sample, rules) {
     state: state.state,
     unverifiableStreak: state.unverifiableStreak,
     rules,
+    ...(state.phoneTrip ? { phoneTrip: state.phoneTrip } : {}),
     ...(state.verdict ? { verdict: state.verdict } : {})
   })
 }

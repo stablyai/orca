@@ -166,7 +166,7 @@ export class RuntimeRepositoryCloneController {
         isFolderRepo(current) &&
         runtimeRepoMatchesExecutionHost(current, executionHostId)
       ) {
-        const updated = store.updateRepo(current.id, { kind: 'git', ...conversion })
+        const updated = store.updateRepo(current, { kind: 'git', ...conversion })
         if (updated) {
           await prepareLocalWorktreeRootForRepo(store, updated)
           invalidateAuthorizedRootsCache()

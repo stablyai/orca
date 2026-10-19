@@ -19,6 +19,7 @@ import type { AgentSessionContextUsage } from './agent-session-context-usage'
 import type { AgentSessionProviderHandle } from './agent-session-provider-handle'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
 import type { AgentMessageSource } from './agent-session-message-source'
+import type { AgentSessionExecutionOptions } from './agent-session-execution-options'
 
 export { type AgentType }
 
@@ -517,9 +518,9 @@ export type AgentJournalSubmission = {
    *  card, so no surface draws this send, before or after the card is sent, edited or deleted.
    *  Recorded in the rejection's own transaction (`journal-unsent-send-hold.ts`). */
   keptAsQueuedMessageId?: string
-  /** The model and effort the person's composer sent it with, applied when it is handed over.
-   *  The host's alone: clients ignore it. */
-  options?: Readonly<Record<string, string>>
+  /** Immutable choices captured on acceptance and applied when the agent is handed the message;
+   *  absent on older submissions. The host's alone: clients ignore it. */
+  options?: AgentSessionExecutionOptions
 }
 
 /** Durable answer to "did my send land?", keyed by client message id. Only an

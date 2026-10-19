@@ -39,7 +39,8 @@
       },
       "providers": {
         "title": "提供方",
-        "antigravityDescription": "Antigravity 聊天运行在 Orca 下载到此主机的服务器上，与 agy CLI 相互独立。"
+        "antigravityDescription": "Antigravity 聊天运行在 Orca 下载到此主机的服务器上，与 agy CLI 相互独立。",
+        "antigravityNotSignedIn": "未登录。聊天需要单独的 Antigravity 登录，与终端中的 agy 帐户分开。"
       }
     },
     "terminal": {
@@ -582,7 +583,8 @@
             "76deec8f58": "切换组织失败",
             "7d4bc516ee": "切换配置文件失败",
             "f518e89aa5": "该项目已存在于那个配置文件中",
-            "f03ae7f27b": "转移项目失败"
+            "f03ae7f27b": "转移项目失败",
+            "signInTimedOut": "登录超时"
           }
         },
         "runtime": {
@@ -3252,6 +3254,7 @@
             "retry": "重试",
             "retrying": "正在重试...",
             "retryUnavailable": "重试仍无法重新连接。稍后再试。",
+            "openNewTerminal": "打开新终端",
             "ownerUnknown": "Orca 无法验证该终端的所有者。",
             "42b283ecfc": "Orca 无法安全地重新连接此终端，因为主机无法验证其保存的会话。 Orca 保持保存的会话不变。单击“重试”立即尝试重新连接。如果仍然无法重新连接，请打开一个新终端。",
             "e16012e31e": "拥有该会话的终端守护程序已退出，因此该会话及其回滚无法恢复。打开新终端以继续。",
@@ -3496,7 +3499,7 @@
         "bar": {
           "BrowserTab": {
             "6e0bc8f3a8": "在浏览器中打开",
-            "9dd880bd56": "关闭右侧的选项卡",
+            "9dd880bd56": "关闭右侧的所有选项卡",
             "1611a1324b": "关闭",
             "5d6e89891f": "复制选项卡",
             "966feb9ad5": "向右拆分",
@@ -3513,7 +3516,7 @@
             "52ce4f4605": "复制相对路径",
             "5b85754786": "复制路径",
             "bfd5797ef4": "打开 Markdown 预览",
-            "e5ff31ccaf": "关闭右侧的选项卡",
+            "e5ff31ccaf": "关闭右侧的所有选项卡",
             "ba1369dd24": "关闭所有编辑器选项卡",
             "1ba8492c5b": "关闭",
             "68cc610e7f": "重命名",
@@ -3546,7 +3549,7 @@
           "SortableTabContextMenu": {
             "35e8892fd0": "标签颜色",
             "2f697b3c31": "更改标题",
-            "c1ee099c7e": "关闭右侧的选项卡",
+            "c1ee099c7e": "关闭右侧的所有选项卡",
             "8d16f9cd30": "关闭其他",
             "89359a36f7": "关闭",
             "21132389e9": "向右拆分",
@@ -15002,7 +15005,7 @@
             "61ffda7601": "创建工作区"
           },
           "WorkbenchAnimatedVisual": {
-            "633a91e358": "思维…",
+            "633a91e358": "思考中…",
             "932c4b3a97": ">",
             "ca2cfbf188": "向下拆分终端",
             "e370fa8c2b": "向右拆分终端",
@@ -17948,6 +17951,14 @@
         "a62f9db53d": "Cancel",
         "c77189bc0c": "Update filter",
         "19af906d12": "Save filter"
+      },
+      "OrcaSignInProgress": {
+        "waiting": "正在等待在浏览器中登录",
+        "copyLink": "复制登录链接",
+        "copied": "已复制登录链接",
+        "copyFailed": "无法复制链接。",
+        "signingIn": "正在登录…",
+        "cancel": "取消"
       }
     },
     "i18n": {
@@ -18056,6 +18067,7 @@
         "claudeManagedNotSignedIn": "此 Claude 账户尚未登录。请在 Claude 账户设置中重新登录。",
         "codexSystemNotSignedIn": "Codex 尚未登录。请运行 `{{loginCommand}}`。",
         "codexManagedNotSignedIn": "此 Codex 账户尚未登录。请在 Codex 账户设置中重新登录。",
+        "antigravityNotSignedIn": "Antigravity 尚未登录。请在设置 → 账户 → Antigravity 中登录。",
         "cliMissing": "在运行此聊天的计算机上找不到 {{agent}}。请安装它，或检查设置 → 智能体中的命令。",
         "signInFirst": "请先登录。",
         "signInThenRunCommand": "请登录，然后重新运行 /{{command}}。",
@@ -18414,7 +18426,7 @@
         "stopping": "正在停止…",
         "queueAfterStop": "将消息加入队列，在停止后运行",
         "sendAfterStop": "发送消息，在停止后运行",
-        "thinking": "思维",
+        "thinking": "思考中",
         "workingFor": "已工作 {{value0}}",
         "workedFor": "工作了 {{value0}}",
         "interruptedAfter": "{{value0}} 后中断",
@@ -18754,6 +18766,14 @@
       "visualUnavailable": "可视化不可用",
       "visualLoading": "正在加载可视化",
       "visualOpenInNewTab": "在新标签页中打开",
+      "resumeCommand": {
+        "description": "打开智能体会话历史",
+        "argumentHint": "[搜索]",
+        "workspaceUnavailable": "此聊天的工作区尚未加载。请稍后再试一次 /resume。",
+        "replaceTitle": "替换此聊天？",
+        "replaceDescription": "在此恢复“{{title}}”将停止 {{agent}} 在此聊天中正在进行的工作。",
+        "replace": "替换"
+      },
       "claudeSignIn": {
         "signingIn": "正在登录…"
       }
@@ -18763,20 +18783,28 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "切换到终端视图",
           "switchToChatView": "切换到聊天视图",
-          "closeTabsToLeft": "关闭左侧的选项卡"
+          "closeTabsToLeft": "关闭左侧的所有选项卡"
         },
         "BrowserTab": {
           "closeOthers": "关闭其他",
-          "closeTabsToLeft": "关闭左侧的选项卡"
+          "closeTabsToLeft": "关闭左侧的所有选项卡"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "关闭其他",
-          "closeTabsToLeft": "关闭左侧的选项卡"
+          "closeTabsToLeft": "关闭左侧的所有选项卡"
         },
         "CopyTabIdMenuItem": {
           "copied": "已复制标签页 ID",
           "failed": "无法复制标签页 ID",
           "copy": "复制标签页 ID"
+        },
+        "bulkClose": {
+          "others": "关闭其他标签页？",
+          "right": "关闭右侧标签页？",
+          "left": "关闭左侧标签页？",
+          "editors": "关闭所有编辑器标签页？",
+          "description": "选中的标签页将关闭。固定的标签页将保持打开。",
+          "confirm": "关闭标签页"
         }
       }
     },
@@ -19235,12 +19263,14 @@
       "cancelFailed": "无法取消安装。请重试。",
       "install": "安装 {{agent}}",
       "installManaged": "安装 Orca 的副本",
-      "installed": "已安装。",
+      "installed": "已安装",
       "notInstalled": "未安装。",
       "progress": "{{agent}} 下载",
       "readFailed": "无法检查此主机上的 {{agent}}。正在重试。",
-      "reinstall": "重新安装",
+      "reinstall": "重新安装 {{agent}}",
+      "reinstallShort": "重新安装",
       "remove": "移除已下载的运行时",
+      "moreActions": "{{agent}} 的更多操作",
       "removeConfirm": "移除",
       "removeDescription": "正在运行的 {{agent}} 聊天会停止。其历史记录会保留。",
       "removeKeep": "取消",
@@ -19723,6 +19753,10 @@
       "openInSidebarCopy": "输入您记得的内容，或询问智能体：“找到我们修复登录超时的会话。”",
       "open": "打开",
       "enableOnAll": "在所有计算机上启用"
+    },
+    "dialog": {
+      "select": "选择",
+      "open": "打开"
     }
   },
   "aiVault": {
@@ -19819,6 +19853,27 @@
       "cancel": "取消"
     },
     "antigravity": {
+      "chatTitle": "Antigravity 聊天",
+      "chatDescription": "聊天使用自己的 Antigravity 登录，与上方的 agy 帐户分开。在此设备上登录一次即可。",
+      "chatSignIn": "登录",
+      "chatChangeAccount": "更换帐户",
+      "chatRetry": "重试登录",
+      "chatCancel": "取消",
+      "chatCopyLink": "复制登录链接",
+      "chatCopyFailed": "无法复制链接。",
+      "chatStarting": "正在开始登录…",
+      "chatWaiting": "请在浏览器中完成登录。",
+      "chatOpenFailed": "复制链接并在浏览器中打开。",
+      "chatVerifying": "正在完成登录…",
+      "chatPasteHelp": "如果登录后的最后一个页面无法加载，请从浏览器复制它的完整地址并粘贴到这里。",
+      "chatContinue": "继续",
+      "chatSignedInOn": "已在 {{host}} 上登录。",
+      "chatCancelled": "已取消登录。",
+      "chatExpired": "登录超时。请重试。",
+      "chatFailed": "登录失败。请重试。",
+      "chatNotSignedIn": "未在 {{host}} 上登录。",
+      "chatOtherClient": "另一个客户端正在登录。",
+      "chatReadFailed": "无法检查 {{host}} 上的登录。",
       "scope": "管理 {{host}} 上的本机 agy 帐户。",
       "signIn": "在此主机上启动 agy 并完成其浏览器登录，然后保存当前帐户。要添加其他帐户，请在 agy 中使用 /logout 并再次登录。",
       "docs": "登录说明",

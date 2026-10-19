@@ -11,6 +11,7 @@ import {
 } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
+import { exposeLocalLayoutStreamE2EEnd } from './local-layout-stream-e2e-end'
 
 /** `lost`: the stream ended without a refusal and the client stopped. `refused`: the host answered
  *  that it will never serve this stream, so the client stopped. */
@@ -84,6 +85,9 @@ export function subscribeRuntimeLayout(
   const receive = (streamGeneration: number, value: unknown): void => {
     if (streamGeneration !== generation) {
       return
+    }
+    if (import.meta.env.MODE === 'e2e' && target.kind === 'local') {
+      exposeLocalLayoutStreamE2EEnd(value)
     }
     const seq = readWorkspaceLayoutFramePosition(value)
     try {

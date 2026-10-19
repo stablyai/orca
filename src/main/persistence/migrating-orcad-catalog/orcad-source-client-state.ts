@@ -3,11 +3,11 @@ import { parsePersistedAutomationHostFilter } from '../../../shared/automation-h
 import type {
   OrcadMigrationClientStatePayload,
   OrcadMigrationUiRoutingState
-} from '../../../shared/orcad-migration-client-state'
+} from '../../../shared/orcad-migration/orcad-migration-client-state'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type {
   PersistedMobileClientTabSelection,
   PersistedState

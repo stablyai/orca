@@ -3,9 +3,11 @@ import {
   adapterAtPublishFor,
   fakeClaude,
   identityFor,
-  claudeOpened
+  claudeOpened,
+  USER_MESSAGE
 } from './claude-structured-session-test-support'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import { CLAUDE_INITIALIZE_TIMEOUT_MS } from './claude-structured-session-startup'
 
 const ACQUIRE = { identity: identityFor(), fence: 7, spawnToken: 'spawn-9' }
 
@@ -22,7 +24,7 @@ describe('Claude host-awaited open', () => {
     const claude = fakeClaude({ initDelayMs: 12_000 })
     const { adapter, events } = adapterFor(claude)
     const acquisition = await adapter.acquire(ACQUIRE)
-    expect(acquisition).toMatchObject({ providerChildPhase: 'starting', process: { pid: 4321 } })
+    expect(acquisition).toMatchObject({ process: { pid: 4321 } })
     expect(acquisition.link).toBeUndefined()
     expect(claude.connections[0].calls).toEqual([])
     expect(events.some((event) => event.type === 'options')).toBe(false)
@@ -60,6 +62,47 @@ describe('Claude host-awaited open', () => {
     await adapter.closeAll()
   })
 
+  it('applies a Fast choice at message input when launch settings cannot carry it', async () => {
+    let fastMode = false
+    const claude = fakeClaude({
+      initModels: [{ value: 'claude-sonnet-5', displayName: 'Sonnet', supportsFastMode: true }],
+      routes: {
+        apply_flag_settings: () => {
+          fastMode = true
+        }
+      }
+    })
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = adapterAtPublishFor(
+      claude,
+      { options: { extraArgs: { settings: '/repo/claude.json' } } },
+      events
+    )
+    await adapter.acquire({ ...ACQUIRE, options: { fastMode: 'true' } })
+    await claudeOpened(adapter, 'session-1')
+    await vi.waitFor(() =>
+      expect(events.some((event) => event.type === 'options-reported')).toBe(true)
+    )
+    const connection = claude.connections[0]!
+    expect(connection.calls.filter((call) => call.subtype === 'apply_flag_settings')).toEqual([])
+    connection.getSettings = async () => ({ effective: { effortLevel: 'high', fastMode } })
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'fast-choice',
+        body: USER_MESSAGE,
+        executionOptions: { fastMode: 'true' },
+        fence: 7
+      })
+    ).resolves.toEqual({ state: 'admitted' })
+    expect(connection.calls.filter((call) => call.subtype === 'apply_flag_settings')).toEqual([
+      { subtype: 'apply_flag_settings', params: { settings: { effortLevel: 'high' } } },
+      { subtype: 'apply_flag_settings', params: { settings: { fastMode: true } } }
+    ])
+    expect(connection.sent).toHaveLength(1)
+    await adapter.closeAll()
+  })
+
   it('rejects an advertised signed-out initialize answer for the host to close once', async () => {
     const claude = fakeClaude({ initAccount: { tokenSource: 'none', apiKeySource: 'none' } })
     const { adapter } = adapterFor(claude)
@@ -79,6 +122,19 @@ describe('Claude host-awaited open', () => {
     expect(claude.connections[0].closeCount).toBe(1)
   })
 
+  it('fails open when initialize does not answer within its own bound', async () => {
+    const claude = fakeClaude({ initDelayMs: 10 * 60_000 })
+    const { adapter } = adapterFor(claude)
+    await adapter.acquire(ACQUIRE)
+    const open = expect(claudeOpened(adapter, 'session-1')).rejects.toThrow(
+      'did not answer initialize'
+    )
+    await vi.advanceTimersByTimeAsync(CLAUDE_INITIALIZE_TIMEOUT_MS)
+    await open
+    await adapter.closeSession('session-1')
+    expect(claude.connections[0].closeCount).toBe(1)
+  })
+
   it('lets the host abort a silent initialize wait and close the owned process', async () => {
     const claude = fakeClaude({ initDelayMs: 12_000 })
     const { adapter } = adapterFor(claude)
@@ -87,7 +143,7 @@ describe('Claude host-awaited open', () => {
     const open = adapter.open({
       sessionId: 'session-1',
       fence: 7,
-      acquisitionGeneration: acquisition.acquisitionGeneration ?? null,
+      acquisitionGeneration: acquisition.acquisitionGeneration,
       signal: controller.signal
     })
     controller.abort(new Error('host start expired'))

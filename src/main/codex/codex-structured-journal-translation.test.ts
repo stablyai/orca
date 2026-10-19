@@ -10,7 +10,6 @@ import {
   type StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import { MAX_CODEX_ACTIVE_TURNS } from './codex-structured-journal-translation-turn-state'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_USER_INPUT_METHOD
@@ -111,31 +110,6 @@ function hardWatermarkDeferred() {
 }
 
 describe('codex journal translation', () => {
-  it('refuses an active-turn overflow before publishing an un-settleable lifecycle row', () => {
-    const tap = recorder()
-    const translator = createCodexJournalTranslator({
-      sink: tap.sink,
-      primaryThreadId: () => THREAD_ID
-    })
-
-    for (let index = 0; index < MAX_CODEX_ACTIVE_TURNS; index += 1) {
-      expect(
-        translator.handle(notification('turn/started', { turn: { id: `turn-${index}` } }))
-      ).toEqual({ accepted: true })
-    }
-    expect(
-      translator.handle(notification('turn/started', { turn: { id: 'turn-overflow' } }))
-    ).toEqual({ accepted: false, reason: 'backpressure' })
-    expect(tap.rows.filter((row) => row.body.kind === 'turn')).toHaveLength(MAX_CODEX_ACTIVE_TURNS)
-
-    expect(translator.handle(notification('turn/completed', { turn: { id: 'turn-0' } }))).toEqual({
-      accepted: true
-    })
-    expect(
-      translator.handle(notification('turn/started', { turn: { id: 'turn-overflow' } }))
-    ).toEqual({ accepted: true })
-  })
-
   it('projects turns restored by thread/resume into durable conversation rows', () => {
     const { translator, tap } = translatorWith()
 

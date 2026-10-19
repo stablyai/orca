@@ -6,6 +6,8 @@ import { createAgentQuestionAnsweredInference } from '../agent-question-answered
 import type { AgentInterruptInputIntent } from '../../../../../shared/agent-interrupt-intent'
 import { markTerminalBracketedPasteInterrupted } from '../terminal-bracketed-paste'
 import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
+import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
+import { isRetainedProgramResult } from '@/lib/program-status/row'
 
 import { REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS } from './foreground-output-scan'
 
@@ -102,7 +104,9 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
     if (!unchanged && !inferredFromEntry) {
       return
     }
-    state.dropAgentStatus(session.cacheKey)
+    if (!isRetainedProgramResult(current)) {
+      state.dropAgentStatus(session.cacheKey)
+    }
   }
   session.pendingTerminalInputIntent = null
   session.clearPendingTerminalInputIntentTimer = null
@@ -157,6 +161,9 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
     // submit keystroke into a waiting AskUserQuestion pane becomes the
     // "question answered" signal no hook will ever deliver.
     session.questionAnsweredInference.observeSentTerminalInput(data)
+    if (!isPassiveTerminalInputReport(data)) {
+      dismissRetainedProgramResult(session.cacheKey, useAppStore.getState())
+    }
   }
   session.pendingTerminalInputWrite = null
   // Why: an unset baseline must differ from the first `?? null` snapshot so the

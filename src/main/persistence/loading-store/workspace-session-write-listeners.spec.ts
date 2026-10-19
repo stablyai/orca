@@ -1,3 +1,4 @@
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
@@ -100,7 +101,9 @@ export function registerWorkspaceSessionWriteListenersTests(): void {
         .catch((error: unknown) => error instanceof ProfileStateWriterError || error)
     })
     await step(() => store.retirePtyBinding(binding))
-    await step(() => store.removeWorkspaceSessionStateForWorktree(WT))
+    await step(() =>
+      store.removeWorkspaceSessionStateForWorktree(hostWorktreeTarget({ id: WT, hostId: 'local' }))
+    )
     return {
       saved: withStableFixtureIds({
         captures: authority.captures,

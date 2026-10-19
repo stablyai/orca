@@ -12,6 +12,7 @@ import {
   makeTerminalTab
 } from './persistence-test-harness'
 import { TEST_LEAF_1 } from './persistence-session-fixtures'
+import { PtyExitProof } from './pty-exit-proof'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -87,7 +88,7 @@ describe('a pane whose SSH lease expired can still be re-adopted', () => {
   it('drops the persisted owner after the lease is terminated', () => {
     const store = storeWithBoundRemotePane()
 
-    store.markSshRemotePtyLease(TARGET, APP_PTY_ID, 'terminated')
+    store.markSshRemotePtyLease(TARGET, APP_PTY_ID, PtyExitProof.from('exit-observed', undefined))
 
     expect(
       resolvePersistedStablePaneOwner(store, makePaneKey(TAB, TEST_LEAF_1), WORKTREE, TARGET)

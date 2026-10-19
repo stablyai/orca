@@ -14,6 +14,7 @@ import {
   isSandboxedSftpNamespaceError
 } from '../../ssh/sftp-stream-late-error'
 import { isSftpHandshakeCorruption } from '../../ssh/sftp-handshake-corruption'
+import { explainRemoteInstallWriteFailure, localTreeBytes } from './remote-install-out-of-space'
 
 export type RelayTransferOptions = {
   signal?: AbortSignal
@@ -32,6 +33,7 @@ export async function uploadRelayDirectory(
     hostPlatform,
     shellRemoteDir,
     options?.signal,
+    () => localTreeBytes(localRelayDir),
     () =>
       conn.uploadDirectory(localRelayDir, shellRemoteDir, {
         hostPlatform,
@@ -57,6 +59,7 @@ export async function writeRelayFile(
     hostPlatform,
     shellRemotePath,
     options?.signal,
+    async () => Buffer.byteLength(contents),
     () =>
       conn.writeFile(shellRemotePath, contents, {
         hostPlatform,
@@ -113,6 +116,29 @@ function connectGeneration(conn: RemoteInstallTransport): number {
 }
 
 async function transferWithExecStdinFallback(
+  conn: RemoteInstallTransport,
+  hostPlatform: RemoteHostPlatform,
+  remotePath: string,
+  signal: AbortSignal | undefined,
+  neededBytes: () => Promise<number>,
+  sftpTransfer: () => Promise<void>,
+  execStdinTransfer: () => Promise<void>
+): Promise<void> {
+  try {
+    await transferOnce(conn, hostPlatform, remotePath, signal, sftpTransfer, execStdinTransfer)
+  } catch (error) {
+    throw await explainRemoteInstallWriteFailure(
+      conn,
+      hostPlatform,
+      remotePath,
+      neededBytes,
+      error,
+      signal
+    )
+  }
+}
+
+async function transferOnce(
   conn: RemoteInstallTransport,
   hostPlatform: RemoteHostPlatform,
   remotePath: string,

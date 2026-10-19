@@ -406,7 +406,7 @@ const store = {
   getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
   mergeRetiredWorktreeNames: () => false,
   addRepo: () => {},
-  updateRepo: (id: string, updates: Record<string, unknown>) =>
+  updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) =>
     ({
       ...store.getRepo(id),
       ...updates

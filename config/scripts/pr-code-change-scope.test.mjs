@@ -203,6 +203,15 @@ describe('per-job path classification', () => {
     })
   })
 
+  it('runs dependency isolation only when what packages may resolve changes', () => {
+    expectClassification(['config/scripts/undeclared-dependency-resolution.test.ts'], {
+      dependency_isolation: true
+    })
+    expect(classifyPrJobs(['pnpm-workspace.yaml']).dependency_isolation).toBe(true)
+    expect(classifyPrJobs(['config/pnpmfile.cjs']).dependency_isolation).toBe(true)
+    expect(classifyPrJobs(['src/renderer/src/App.tsx']).dependency_isolation).toBe(false)
+  })
+
   it('runs native package jobs only for the platform that ships the changed native', () => {
     expectClassification(['native/windows-cli-launcher/src/main.rs'], { package_windows: true })
     expectClassification(['native/computer-use-linux/runtime.py'], { package: true })

@@ -468,7 +468,7 @@ describe('orcad-e2e-routing', () => {
           'src/main/ipc/ssh/ssh-connection-handlers.ts',
           'src/main/ipc/runtime-environments/runtime-environment-connectivity-handlers.ts',
           'src/main/ipc/runtime-environments/runtime-environment-manual-disconnect.ts',
-          'src/main/ssh/ssh-connection-manager.ts',
+          'src/main/ssh/connection/ssh-connection-manager.ts',
           'src/main/ssh/ssh-user-disconnect.ts',
           'src/renderer/src/runtime/web-session-close-intent.ts',
           'src/renderer/src/runtime/web-session-close-replay.ts'
@@ -503,7 +503,7 @@ describe('managed-SSH remote sources routing', () => {
       'src/main/ipc/ssh/ssh.ts',
       'src/cli/runtime/serve-orcad-launch.ts',
       'src/main/orcad/orcad-entry.ts',
-      'src/main/ssh/ssh-connection.ts',
+      'src/main/ssh/connection/ssh-connection.ts',
       'src/main/ipc/runtime-environments/runtime-environment-status-probe.ts',
       'src/main/ipc/runtime-environments/orcad-runtime-lifecycle-handlers.ts',
       'src/shared/protocol-version.ts',
@@ -520,7 +520,7 @@ describe('managed-SSH remote sources routing', () => {
 
   it('leaves unit tests and local-only sources alone', () => {
     for (const file of [
-      'src/main/ssh/ssh-connection.test.ts',
+      'src/main/ssh/connection/ssh-connection.test.ts',
       'src/main/ipc/ssh/ssh.test.ts',
       'src/main/daemon/daemon-server.ts',
       'src/main/runtime/rpc/methods/accounts.ts',

@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../../store', () => ({
   useAppStore: { getState: () => ({}) }
 }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({ getRuntimeEnvironmentIdForWorktree: () => null }))
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null
+}))
 vi.mock('@/components/browser-pane/describe-page/live-browser-url-registry', () => ({
   rememberLiveBrowserUrl: vi.fn()
 }))

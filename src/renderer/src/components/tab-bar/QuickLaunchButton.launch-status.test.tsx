@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { ReactNode } from 'react'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredLaunchState } from '@/lib/structured-agent-session-launch-registry'
 import type { StructuredLaunchAttempt } from '@/lib/structured-agent-session-launch-request'
@@ -60,13 +60,84 @@ vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: launchMoc
 
 type DivProps = { disabled?: boolean; title?: string; onSelect?: () => void }
 
-import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
+import { QuickLaunchAgentMenuItems, ProjectedAgentMenuItems } from './QuickLaunchButton'
+import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
+import * as menuRows from './use-new-tab-agent-menu-rows'
 import {
   resetStructuredAgentLaunchRegistryForTests,
   setStructuredLaunchState
 } from '@/lib/structured-agent-session-launch-registry'
 
 const WORKTREE_ID = 'worktree-1'
+
+it('gives static/search no agent actions while loading, retaining settings and generic terminal', () => {
+  const model = vi
+    .spyOn(menuRows, 'useNewTabAgentMenuRows')
+    .mockReturnValue({ state: 'loading', placeholderCount: 2 })
+  render(
+    <QuickLaunchAgentMenuItems
+      worktreeId={WORKTREE_ID}
+      groupId="group-1"
+      onFocusTerminal={vi.fn()}
+    />
+  )
+  const controller = renderHook(() =>
+    useTabBarCreateMenuController({
+      worktreeId: WORKTREE_ID,
+      resolvedGroupId: 'group-1',
+      terminalOnly: false,
+      mobileEmulatorEnabled: false,
+      managedBrowserCreationEnabled: false,
+      mobileEmulatorCreationEnabled: false,
+      workspaceHasSimulatorTab: false,
+      showWindowsShellMenu: false,
+      projectRuntimeShellMenuMode: null,
+      defaultWindowsShell: 'powershell',
+      defaultWindowsPowerShellImplementation: 'auto',
+      agentDetectionTarget: { kind: 'local' },
+      windowsTerminalCapabilities: {
+        wslAvailable: false,
+        wslDistros: [],
+        pwshAvailable: false,
+        gitBashAvailable: false,
+        hostPlatform: null,
+        isLoading: false
+      },
+      onNewTerminalTab: vi.fn(),
+      onNewBrowserTab: vi.fn()
+    })
+  )
+  expect(controller.result.current.agentLaunchOptions).toEqual([])
+  expect(
+    controller.result.current.createMenuOptions.some((option) => option.kind === 'new-terminal')
+  ).toBe(true)
+  expect(document.querySelector('[title]')).toBeNull()
+  expect(document.body.textContent).toContain('Agent settings')
+  model.mockRestore()
+})
+
+it('shows the existing inventory failure alongside truthful disabled chat rows', () => {
+  render(
+    <ProjectedAgentMenuItems
+      runLaunch={vi.fn()}
+      model={{
+        state: 'settled',
+        rows: [{ kind: 'chat-unavailable', agent: 'claude', reason: 'check-failed' }],
+        detection: {
+          detectedIds: null,
+          detectionFailed: true,
+          needsServerUpdate: false,
+          isLoading: false,
+          isRefreshing: false,
+          refresh: async () => []
+        }
+      }}
+    />
+  )
+  expect(document.body.textContent).toContain('reach this workspace')
+  expect(document.body.textContent).toContain('Couldn’t check chat availability')
+  expect(document.querySelector('[title]')).toBeNull()
+})
 
 function registerLaunch(
   agent: 'claude' | 'codex',
@@ -177,7 +248,20 @@ describe('QuickLaunchAgentMenuItems launches', () => {
   })
 
   // Why: the notes menu holds what it sent until this result, so a second send leaves them out.
-  it("hands the launch's own delivery outcome to the notes menu", async () => {
+  it('opens the CLI once with notes from the row button, then the row itself starts a chat', async () => {
+    const model = vi.spyOn(menuRows, 'useNewTabAgentMenuRows').mockReturnValueOnce({
+      state: 'settled',
+      rows: [{ kind: 'chat', agent: 'codex', executionHostId: 'runtime:server' }],
+      detection: {
+        detectedIds: ['codex'],
+        detectionFailed: false,
+        needsServerUpdate: false,
+        isLoading: false,
+        isRefreshing: false,
+        refresh: async () => ['codex']
+      }
+    })
+    launchMock.mockReset()
     const delivery = Promise.resolve({ delivered: true, failureNotified: false })
     launchMock.mockReturnValue({
       surface: { kind: 'host-published' },
@@ -195,10 +279,31 @@ describe('QuickLaunchAgentMenuItems launches', () => {
         onPromptHandedOff={onPromptHandedOff}
       />
     )
-    fireEvent.click(document.querySelector('[title="Launch Codex in a new terminal"]')!)
+    model.mockRestore()
+    const terminalButton = document.querySelector<HTMLButtonElement>(
+      'button[title="Launch Codex in a new terminal"]'
+    )!
+    terminalButton.focus()
+    fireEvent.click(terminalButton)
+    terminalButton.blur()
 
+    expect(launchMock).toHaveBeenCalledOnce()
+    expect(launchMock.mock.calls[0][0]).toMatchObject({
+      requestedSurface: 'terminal',
+      selectedExecutionHostId: 'runtime:server'
+    })
+    expect(launchMock.mock.calls.at(-1)?.[0].prompt).toBe('review notes')
+    expect(launchMock.mock.calls.at(-1)?.[0].promptDelivery).toBe('submit-after-ready')
+    expect(launchMock.mock.calls.at(-1)?.[0].promptKeptByCaller).toBe(true)
+    expect(launchMock.mock.calls.at(-1)?.[0].groupId).toBe('group-1')
     expect(onPromptHandedOff).toHaveBeenCalledOnce()
     await expect(onPromptHandedOff.mock.calls[0][0]).resolves.toEqual({ delivered: true })
+    fireEvent.click(document.querySelector('[title="Start a chat with Codex"]')!)
+    expect(launchMock).toHaveBeenCalledTimes(2)
+    expect(launchMock.mock.calls[1][0]).toMatchObject({
+      requestedSurface: 'chat',
+      selectedExecutionHostId: 'runtime:server'
+    })
   })
 
   // The notes keep their text, so they are the one place that says it did not go.

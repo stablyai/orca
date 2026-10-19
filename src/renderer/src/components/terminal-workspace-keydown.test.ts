@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleSwitchTabAcrossAllTypes } from '../hooks/ipc-tab-switch'
 import { switchFloatingWorkspaceTab } from '@/lib/floating-workspace-terminal-actions'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
@@ -12,6 +13,13 @@ import {
 } from './editor/editor-autosave'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
+import { useTerminalBulkCloseActions } from './use-terminal-bulk-close-actions'
+import { makeOpenFile, makeUnifiedTab } from '../store/slices/store-session-test-harness'
+
+const confirmBulkClose = vi.hoisted(() => vi.fn<() => Promise<boolean>>())
+vi.mock('./confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => confirmBulkClose
+}))
 
 const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
@@ -54,7 +62,6 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRunti
 vi.mock('@/lib/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({ getRuntimeEnvironmentIdForWorktree: () => null }))
 vi.mock('@/runtime/runtime-worktree-selector', () => ({
   toRuntimeWorktreeSelector: (id: string) => `id:${id}`
 }))
@@ -325,5 +332,114 @@ describe('shared tab navigation routing', () => {
     expect(switchFloatingWorkspaceTab).toHaveBeenCalledTimes(2)
     expect(switchFloatingWorkspaceTab).toHaveBeenLastCalledWith(mocks.state, 1, 'all-types')
     expect(handleSwitchTabAcrossAllTypes).not.toHaveBeenCalled()
+  })
+})
+
+describe('tab.closeAll confirmation', () => {
+  const worktreeId = controller.activeWorktreeId!
+  const closeFile = vi.fn()
+  const queueEditorCloseRequests = vi.fn()
+  let settle: (confirmed: boolean) => void
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.floatingFocused = false
+    mocks.targetInsideFloatingPanel = false
+    mocks.state = {
+      activeView: 'terminal',
+      activeTabType: 'editor',
+      openFiles: [makeOpenFile({ id: 'file-1', worktreeId })],
+      unifiedTabsByWorktree: { [worktreeId]: [] },
+      getActiveTab: () => null
+    }
+    confirmBulkClose.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          settle = resolve
+        })
+    )
+  })
+  afterEach(cleanup)
+
+  function closeAll(platform: NodeJS.Platform = 'darwin') {
+    const { result } = renderHook(() =>
+      useTerminalBulkCloseActions({
+        activeWorktreeId: worktreeId,
+        closeFile,
+        queueEditorCloseRequests,
+        closeTab: vi.fn(),
+        closeBrowserTab: vi.fn()
+      })
+    )
+    const event = new KeyboardEvent('keydown', {
+      key: 'w',
+      code: 'KeyW',
+      altKey: true,
+      cancelable: true,
+      metaKey: platform === 'darwin',
+      ctrlKey: platform !== 'darwin'
+    })
+    act(() => handleTerminalWorkspaceKeyDown(event, { ...controller, ...result.current }, platform))
+    return result
+  }
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'waits for confirmation before closing files from the %s shortcut',
+    async (platform) => {
+      closeAll(platform)
+      expect(confirmBulkClose).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          title: 'Close all editor tabs?'
+        })
+      )
+      expect(closeFile).not.toHaveBeenCalled()
+      await act(async () => {
+        settle(true)
+      })
+      expect(closeFile).toHaveBeenCalledExactlyOnceWith('file-1')
+    }
+  )
+
+  it('does not close files when the shortcut confirmation is cancelled', async () => {
+    closeAll()
+    await act(async () => {
+      settle(false)
+    })
+    expect(closeFile).not.toHaveBeenCalled()
+    expect(queueEditorCloseRequests).not.toHaveBeenCalled()
+  })
+
+  it('queues newly dirty files without closing files created after the request', async () => {
+    closeAll()
+    mocks.state.openFiles = [
+      makeOpenFile({ id: 'file-1', worktreeId, isDirty: true }),
+      makeOpenFile({ id: 'new-file', worktreeId })
+    ]
+    await act(async () => {
+      settle(true)
+    })
+    expect(closeFile).not.toHaveBeenCalled()
+    expect(queueEditorCloseRequests).toHaveBeenCalledExactlyOnceWith(['file-1'])
+  })
+
+  it('skips files pinned while shortcut confirmation is pending', async () => {
+    closeAll()
+    mocks.state.unifiedTabsByWorktree = {
+      [worktreeId]: [
+        makeUnifiedTab({
+          id: 'pinned-view',
+          entityId: 'file-1',
+          worktreeId,
+          groupId: 'group',
+          contentType: 'editor',
+          isPinned: true
+        })
+      ]
+    }
+    await act(async () => {
+      settle(true)
+    })
+    expect(queueEditorCloseRequests).not.toHaveBeenCalled()
+    expect(closeFile).not.toHaveBeenCalled()
   })
 })

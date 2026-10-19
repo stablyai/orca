@@ -13,7 +13,7 @@ import type {
   AgentStatusTombstoneRecord
 } from './agent-status-store-contract'
 import {
-  AGENT_STATUS_STORE_LIMITS,
+  AGENT_STATUS_STORE_TOMBSTONE_LIMIT,
   AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS
 } from './agent-status-store-contract'
 import { parseAgentStatusFactRecord } from './agent-status-store-fact-codec'
@@ -63,7 +63,7 @@ function addTombstone(
 function compactTombstones(state: Tables): void {
   for (const [key, tombstone] of state.tombstones.entries()) {
     if (
-      state.tombstones.size <= AGENT_STATUS_STORE_LIMITS.tombstones &&
+      state.tombstones.size <= AGENT_STATUS_STORE_TOMBSTONE_LIMIT &&
       state.revision - tombstone.revision < AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS
     ) {
       break

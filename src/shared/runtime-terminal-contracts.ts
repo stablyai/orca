@@ -224,6 +224,13 @@ export type RuntimeTerminalRename = {
   title: string | null
 }
 
+export type RuntimeTerminalSetPaneTitle = {
+  handle: string
+  tabId: string
+  leafId: string
+  title: string | null
+}
+
 export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null
 
 export type RuntimeTerminalAgentStatus = {

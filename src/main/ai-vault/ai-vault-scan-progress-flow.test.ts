@@ -1,4 +1,4 @@
-import { link, mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { link, mkdir, mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -35,11 +35,14 @@ afterEach(async () => {
 })
 
 /** Runs a real scan in this process the way the scanner child does, keeping every report. */
-async function scanInChild(): Promise<{ reports: AiVaultScanWork[]; final: AiVaultScanWork }> {
+async function scanInChild(
+  limit = 20
+): Promise<{ reports: AiVaultScanWork[]; final: AiVaultScanWork }> {
   tempRoot = await mkdtemp(join(tmpdir(), 'orca-scan-strip-'))
   const roots = isolatedScanRoots(tempRoot)
-  for (const name of ['a', 'b', 'c']) {
-    await writeJsonlFile(join(roots.claudeProjectsDir, 'project', `${name}.jsonl`), [
+  for (const [index, name] of ['a', 'b', 'c'].entries()) {
+    const path = join(roots.claudeProjectsDir, 'project', `${name}.jsonl`)
+    await writeJsonlFile(path, [
       {
         type: 'user',
         sessionId: name,
@@ -48,6 +51,7 @@ async function scanInChild(): Promise<{ reports: AiVaultScanWork[]; final: AiVau
         message: { role: 'user', content: `ask ${name}` }
       }
     ])
+    await utimes(path, 1_000 + index, 1_000 + index)
   }
   // A second path to one transcript, as Codex homes and linked profiles produce: still one file.
   await mkdir(join(roots.claudeProjectsDir, 'linked'))
@@ -63,7 +67,7 @@ async function scanInChild(): Promise<{ reports: AiVaultScanWork[]; final: AiVau
     (work) => reports.push(work),
     () => (now += 1_000)
   )
-  await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20, signal })
+  await scanAiVaultSessions({ ...roots, platform: 'darwin', limit, signal })
   return { reports, final: aiVaultScanWork(signal)! }
 }
 
@@ -127,6 +131,12 @@ describe('Session History scan progress, scanner child to window', () => {
       startedAt: 5_000,
       settledAt: 5_000
     })
+  })
+
+  it('reaches its total when the first pass stops before reading every file it planned', async () => {
+    // The newest file fills a limit of 1, so the pass never reads the older ones it announced.
+    const { final } = await scanInChild(1)
+    expect(final.read).toEqual({ done: 1, total: 1 })
   })
 
   it('keeps a replacement entry when the scan it replaced fails late', () => {

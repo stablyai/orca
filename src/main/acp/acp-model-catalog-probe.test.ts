@@ -1,3 +1,6 @@
+import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
 import {
@@ -283,6 +286,39 @@ describe('ACP model catalog probes', () => {
       )
     ).rejects.toThrow(/cannot delete a session/)
     expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize'])
+  })
+
+  // `omp acp` advertises no delete, so its listing session goes to a folder the probe removes.
+  it('lists OMP from a session kept in a folder it removes, in the chat folder', async () => {
+    const { agent, deps, launches } = scriptedOpenCode2(false)
+    const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-omp-listing-'))
+    try {
+      const success = await createAcpModelCatalogProbe(acpLaunchSpecFor('omp')!, {
+        ...deps,
+        dataDirectory,
+        resolveCommand: () => '/opt/omp/bin/omp',
+        probeVersion: async (_launch, supports) => supports('18.12.2')
+      })(
+        { variable: 'PI_CODING_AGENT_DIR', path: '/homes/omp' },
+        { workspacePath: '/work/project' }
+      )
+      expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize', 'session/new'])
+      expect(agent.frames[1]!.params).toMatchObject({ cwd: '/work/project' })
+      const root = join(dataDirectory, 'acp-listing-sessions', 'omp')
+      expect(launches).toEqual([
+        expect.objectContaining({
+          args: ['acp', '--session-dir', expect.stringMatching(/run-/)]
+        })
+      ])
+      expect(dirname(launches[0]!.args[2]!)).toBe(root)
+      expect(await readdir(root)).toEqual([])
+      expect(success.models.map((model) => model.id)).toEqual([
+        'opencode/big-pickle',
+        'opencode/exo-free'
+      ])
+    } finally {
+      await rm(dataDirectory, { recursive: true, force: true })
+    }
   })
 
   it('opens no session on OpenCode 2.x without a chat folder, as at a prewarm', async () => {

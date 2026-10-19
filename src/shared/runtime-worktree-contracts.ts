@@ -1,6 +1,7 @@
 import type { SmartTier } from './sidebar-list/sort-stamps'
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
 import type { AgentMainAgentStatus } from './main-agent-status'
+import type { ProgramStatusFacet } from './program-status/facet'
 import type { CheckStatus } from './github/pull-request-types'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type { AgentSubagentSnapshot } from './agent-status-subagent-snapshot'
@@ -49,6 +50,8 @@ export type RuntimeWorktreeAgentRow = {
   /** The structured session host still runs this row's provider child, so it is fresh regardless
    *  of age. Optional on the wire: old hosts never send it. */
   structuredHostOwned?: true
+  /** The program's own OSC 7501 report; never decides `state`. Optional: old hosts never send it. */
+  programStatus?: ProgramStatusFacet
 }
 
 export type RuntimeWorktreePsSummary = {

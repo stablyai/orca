@@ -296,7 +296,8 @@ export async function createWebRuntimeSessionTerminalResult(
     // to retry with a new operation ID and can duplicate a fresh agent.
     return {
       outcome: hostCreated ? { status: 'created' } : { status: 'failed', message },
-      ...(createdTabId ? { hostTabId: createdTabId } : {})
+      ...(createdTabId ? { hostTabId: createdTabId } : {}),
+      ...(hostCreated ? {} : { hostFailed: true as const })
     }
   }
 }

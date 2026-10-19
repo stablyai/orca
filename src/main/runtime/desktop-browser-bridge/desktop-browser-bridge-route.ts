@@ -25,6 +25,7 @@ export async function routeDesktopBrowserBridgeRpc(options: {
   caller: RpcCallerIdentity | undefined
   hostEnabled: boolean
   registry: DesktopBrowserBridgeRegistry
+  /** This host serves browser commands itself: its own engine, or a desktop hosting its pages. */
   localBrowserAvailable: boolean
   resolveWorkspace(selector: string): Promise<{ id: string }>
   signal?: AbortSignal

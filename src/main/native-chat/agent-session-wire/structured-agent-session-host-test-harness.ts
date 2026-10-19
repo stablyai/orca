@@ -87,6 +87,9 @@ function adapter(): StructuredAgentSessionAdapter {
   return startsWhenPublished(
     {
       acquire,
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       releaseAcquisition,
       dispatch: async (input) => {
         await input.beforeDispatch?.()
@@ -139,6 +142,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   ordinal = 0
   acquire = vi.fn(async ({ fence }) => ({
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
     process: {
       hostId: 'local',
       pid: 4242,

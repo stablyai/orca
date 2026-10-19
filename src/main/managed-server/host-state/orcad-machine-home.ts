@@ -11,7 +11,7 @@
  * can see, so a store shared across machines could be collected under another machine's server.
  */
 import { createHash } from 'node:crypto'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
 import { ORCAD_ACTIVATION_FILENAME } from '../activation/orcad-activation-record'
 import { parseDarwinPlatformUuid } from '../../persistence/profile-state/profile-state-access-identity'
@@ -101,10 +101,10 @@ export type OrcadMachineOwnershipUnresolvedCause = 'stopped-install' | 'unattrib
  * in one exec. Identity sources match `profile-state-access-identity.ts`, so the two agree.
  */
 export function orcadMachineHomeProbeCommand(host: RemoteHostPlatform): string {
-  const claim = `"$HOME"/${shellEscape(`${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_CLAIM_FILENAME}`)}`
-  const access = `"$HOME"/${shellEscape(ACCESS_ROOT)}`
-  const homes = `"$HOME"/${shellEscape(`${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_HOMES_DIRNAME}`)}`
-  const activation = `"$HOME"/${shellEscape(`${RELAY_REMOTE_DIR}/${ORCAD_ACTIVATION_FILENAME}`)}`
+  const claim = `"$HOME"/${quotePosixShell(`${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_CLAIM_FILENAME}`)}`
+  const access = `"$HOME"/${quotePosixShell(ACCESS_ROOT)}`
+  const homes = `"$HOME"/${quotePosixShell(`${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_HOMES_DIRNAME}`)}`
+  const activation = `"$HOME"/${quotePosixShell(`${RELAY_REMOTE_DIR}/${ORCAD_ACTIVATION_FILENAME}`)}`
   return [
     `printf '%s\\n' "$HOME"; echo ${SECTION};`,
     host.os === 'darwin'

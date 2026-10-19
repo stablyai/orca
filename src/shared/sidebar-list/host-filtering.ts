@@ -1,5 +1,6 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
+  getWorktreeExecutionHostId,
   normalizeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId,
@@ -7,6 +8,7 @@ import {
 } from '../execution-host'
 import type { FolderWorkspace } from '../folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
+import type { Repo } from '../repo-types'
 
 /** null means "no host filter" — every host is visible. */
 export function getVisibleSidebarHostIdSet(
@@ -32,6 +34,18 @@ export function filterProjectGroupsForVisibleHosts(
   return projectGroups.filter((group) =>
     visibleHostIdSet.has(getProjectGroupExecutionHostIdForRows(group, defaultHostId))
   )
+}
+
+export function filterReposForVisibleHosts(
+  repos: readonly Repo[],
+  visibleHostIdSet: ReadonlySet<ExecutionHostId> | null,
+  defaultHostId: ExecutionHostId
+): readonly Repo[] {
+  return visibleHostIdSet
+    ? repos.filter((repo) =>
+        visibleHostIdSet.has(getWorktreeExecutionHostId({}, repo, defaultHostId))
+      )
+    : repos
 }
 
 export function filterFolderWorkspacesForVisibleHosts(

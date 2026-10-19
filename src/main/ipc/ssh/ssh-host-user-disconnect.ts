@@ -11,7 +11,7 @@ import {
   isSshUserDisconnected,
   recordSshUserDisconnected
 } from '../../ssh/ssh-user-disconnect'
-import { connectRegisteredSshTarget } from '../../ssh/ssh-target-registry'
+import { connectRegisteredSshTarget } from '../../ssh/targets/ssh-target-registry'
 import {
   clearRuntimeEnvironmentManualDisconnect,
   isRuntimeEnvironmentManuallyDisconnected,

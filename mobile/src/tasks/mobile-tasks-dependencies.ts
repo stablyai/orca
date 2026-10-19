@@ -137,9 +137,13 @@ export { colors, radii, spacing, typography } from '../theme/mobile-theme'
 export { triggerMediumImpact } from '../platform/haptics'
 export {
   CROSS_REPO_DISPLAY_LIMIT,
+  getTaskPagePerRepoLimit,
+  getWorkItemCountedTotalPages,
   isGitHubWorkItemsSshRemoteRequiredError,
-  PER_REPO_FETCH_LIMIT
-} from './mobile-work-items'
+  PER_REPO_FETCH_LIMIT,
+  sortWorkItemsByNumber,
+  taskPageToGitHubApiPage
+} from '../../../src/shared/work-items'
 export {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,

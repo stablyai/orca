@@ -10,6 +10,7 @@ import type {
 } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
+import type { SidebarInputsChangedEvent } from '../../shared/sidebar-list/sidebar-inputs-feed-contract'
 import type { PublicKnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
 import type {
@@ -79,6 +80,7 @@ export type RuntimeApi = {
     onClientHostedBrowserRowsChanged: (
       callback: (event: ClientHostedBrowserRowsEvent) => void
     ) => () => void
+    onSidebarInputsChanged: (callback: (event: SidebarInputsChangedEvent) => void) => () => void
   }
   runtimeEnvironments: {
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>

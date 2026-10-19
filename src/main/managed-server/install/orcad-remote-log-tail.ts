@@ -4,7 +4,7 @@
  * telemetry. Best-effort: a host that can't answer leaves the error as it was.
  */
 import { redactString } from '../../observability/redactor'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { ORCAD_LOG_FILENAME } from './orcad-remote-host-support'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import {
@@ -32,7 +32,7 @@ export function orcadLogTailCommand(host: RemoteHostPlatform, slotDir: string): 
       String(ORCAD_LOG_TAIL_MAX_BYTES)
     ])
   }
-  return `tail -c ${ORCAD_LOG_TAIL_MAX_BYTES} ${shellEscape(log)} 2>/dev/null || true`
+  return `tail -c ${ORCAD_LOG_TAIL_MAX_BYTES} ${quotePosixShell(log)} 2>/dev/null || true`
 }
 
 /** The last lines of what the host printed, redacted; null when the log is empty or absent. */

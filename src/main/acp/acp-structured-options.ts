@@ -2,14 +2,14 @@
 // effort), the older model list, and its `/` commands — as Orca's option and command surfaces.
 // Kept as the agent last reported it; nothing here is guessed or listed by Orca itself.
 
+import { abortSignalReason } from '../../shared/abort-signal-reason'
+
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice,
   AgentSessionOptionsResult,
   AgentSessionSlashCommand
 } from '../../shared/agent-session-wire'
-import { isAcpStructuredOptionKey } from './acp-structured-agent-definitions'
-import { AcpRpcError } from './acp-errors'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
@@ -65,7 +65,10 @@ export class AcpStructuredOptions {
   private commands: AgentSessionSlashCommand[] | undefined
   // A loaded session keeps the model it ran; only a new one resolves the agent's own config.
   private resolvesConfig = false
-  private readonly picked = new Set<string>()
+  readonly picked = new Set<string>()
+  private initialChoice: Readonly<Record<string, string>> = {}
+  currentProof = new Set<string>()
+  writeRevision = 0
 
   /** The session state a new, load or resume response reported. */
   adoptSession(
@@ -78,6 +81,13 @@ export class AcpStructuredOptions {
     this.configOptions = response.configOptions ?? []
     this.models = response.models ?? null
     this.resolvesConfig = origin === 'new'
+    this.initialChoice = this.reported()
+    this.currentProof = new Set(Object.keys(this.initialChoice))
+  }
+
+  /** The native selection before any message changed this child. */
+  messageDefault(): Readonly<Record<string, string>> {
+    return this.initialChoice
   }
 
   /** Orca sent `key` to the session, or the chat's saved options hold a value for it. */
@@ -238,30 +248,50 @@ export async function readAcpLiveOptions(
   return { ...withLiveCatalogListing(session.options.read()), acceptsImages }
 }
 
-/** Sends a pick and adopts the agent's answer, even one that lands after the wait gave up: that is
- *  still what the agent runs. The wait fails at `timeoutMs`, or once `signal` aborts. */
+/** Only the current, still-awaited write may establish reusable option proof. */
 export function writeAcpSessionOption(
   connection: Pick<AcpStructuredConnection, 'setConfigOption' | 'setModel'>,
   options: AcpStructuredOptions,
   write: AcpOptionWrite,
-  bound: { agent: string; timeoutMs: number; signal?: AbortSignal }
+  bound: { agent: string; timeoutMs: number; signal?: AbortSignal; key: string }
 ): Promise<void> {
   const { agent, timeoutMs, signal } = bound
   if (signal?.aborted) {
-    return Promise.reject(new Error(`${agent} option write abandoned before it was sent`))
+    return Promise.reject(abortSignalReason(signal))
+  }
+  const revision = ++options.writeRevision
+  options.currentProof.delete(bound.key)
+  if (bound.key === 'model') {
+    options.currentProof.delete('effort')
+  }
+  const adopt = (apply: () => void): void => {
+    if (options.writeRevision !== revision) {
+      throw new Error(`${agent} option write was superseded`)
+    }
+    apply()
+    options.currentProof.add(bound.key)
   }
   const applied =
     write.method === 'config'
       ? connection
           .setConfigOption(write.configId, write.value)
-          .then((result) => options.adoptConfigOptions(result.configOptions))
-      : connection.setModel(write.modelId).then(() => options.adoptModel(write.modelId))
+          .then((result) => adopt(() => options.adoptConfigOptions(result.configOptions)))
+      : connection
+          .setModel(write.modelId)
+          .then(() => adopt(() => options.adoptModel(write.modelId)))
   return new Promise<void>((resolve, reject) => {
     const fail = (error: Error): void => {
+      if (options.writeRevision === revision) {
+        options.writeRevision += 1
+      }
       settle()
       reject(error)
     }
-    const onAbort = (): void => fail(new Error(`${agent} option write abandoned`))
+    const onAbort = (): void => {
+      if (signal) {
+        fail(abortSignalReason(signal))
+      }
+    }
     const timer = setTimeout(
       () => fail(new Error(`${agent} did not answer an option write within ${timeoutMs}ms`)),
       timeoutMs
@@ -276,42 +306,4 @@ export function writeAcpSessionOption(
       resolve()
     }, fail)
   })
-}
-
-/** Re-applies the chat's saved picks to the agent's new session; a pick it refuses is skipped and
- *  reported, never retried. */
-export async function restoreAcpSessionOptions(
-  connection: Pick<AcpStructuredConnection, 'setConfigOption' | 'setModel'>,
-  options: AcpStructuredOptions,
-  saved: Readonly<Record<string, string>> | undefined
-): Promise<string[]> {
-  const skipped: string[] = []
-  for (const [key, value] of Object.entries(saved ?? {})) {
-    if (!isAcpStructuredOptionKey(key)) {
-      continue
-    }
-    options.notePick(key)
-    if (options.reported()[key] === value) {
-      continue
-    }
-    const write = options.write(key, value)
-    try {
-      if (write?.method === 'config') {
-        options.adoptConfigOptions(
-          (await connection.setConfigOption(write.configId, value)).configOptions
-        )
-      } else if (write?.method === 'model') {
-        await connection.setModel(write.modelId)
-        options.adoptModel(write.modelId)
-      } else {
-        skipped.push(key)
-      }
-    } catch (error) {
-      if (!(error instanceof AcpRpcError)) {
-        throw error
-      }
-      skipped.push(key)
-    }
-  }
-  return skipped
 }

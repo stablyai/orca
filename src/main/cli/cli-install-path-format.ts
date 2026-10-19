@@ -73,10 +73,6 @@ export function escapeWindowsBatchValue(value: string): string {
   return value.replaceAll('"', '""')
 }
 
-export function quoteShell(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`
-}
-
 export function isAbsoluteForPlatform(platform: NodeJS.Platform, value: string): boolean {
   if (platform === 'win32') {
     return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\')

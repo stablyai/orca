@@ -10,15 +10,17 @@ import { assessOrcadRollback } from '../../ssh/orcad-update-plan'
 import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'
 import {
   captureOrcadStateSnapshotCommand,
-  newestStateMtimeCommand,
   orcadRollbackRescueDirName,
-  parseNewestStateMtimeSeconds,
   parseOrcadSnapshotCapture,
   parseOrcadSnapshotPresence,
   parseOrcadSnapshotRestore,
   probeOrcadStateSnapshotCommand,
   restoreOrcadStateSnapshotCommand
 } from '../host-state/orcad-state-snapshot'
+import {
+  newestStateMtimeCommand,
+  parseNewestStateMtimeSeconds
+} from '../host-state/orcad-state-newest-mtime'
 import { joinRemotePath } from '../../ssh/ssh-remote-platform'
 import type { OrcadActivationLockControl } from '../activation/orcad-activation-lock'
 import {

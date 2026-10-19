@@ -26,7 +26,7 @@ import {
 
 type PanZoomImageDialogProps = Omit<
   React.ComponentProps<typeof DialogContent>,
-  'children' | 'className' | 'showCloseButton' | 'onOpenAutoFocus' | 'onCloseAutoFocus'
+  'children' | 'className' | 'showCloseButton' | 'onOpenAutoFocus' | 'onCloseAutoFocus' | 'size'
 > & {
   open: boolean
   onOpenChange: (open: boolean) => void

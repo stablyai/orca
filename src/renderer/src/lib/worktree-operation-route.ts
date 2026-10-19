@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
@@ -136,7 +137,8 @@ export function resolveWorktreeOperationRouteForHost(
 
 /**
  * Strict variant of the host-qualified resolver for callers that treat a null runtime as local:
- * rival HUBs projecting the same host report `ambiguous` instead of a transport-less route.
+ * rival HUBs projecting the same host, or rows that contradict each other about its transport,
+ * report `ambiguous` instead of a transport-less route.
  */
 export function resolveStrictWorktreeOperationRouteResultForHost(
   state: WorktreeOperationRouteState,
@@ -149,11 +151,32 @@ export function resolveStrictWorktreeOperationRouteResultForHost(
   }
   if (host.kind === 'ssh') {
     const hubOwners = collectHubOwnerEnvironmentIds(state, worktreeId, host.id)
-    if (hubOwners.hasAmbiguousOwner || hubOwners.environmentIds.size > 1) {
+    if (
+      hubOwners.environmentIds.size > 1 ||
+      (hubOwners.hasAmbiguousOwner && !isDirectListing(state, worktreeId, host.id, hubOwners))
+    ) {
       return { kind: 'ambiguous' }
     }
   }
   return { kind: 'resolved', route: resolveSelectedHostRoute(state, worktreeId, host) }
+}
+
+/** A direct repo row backs a listing no row ties to a server, so a same-id proxy cannot claim it. */
+function isDirectListing(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  executionHostId: ExecutionHostId,
+  hubOwners: { environmentIds: Set<string> }
+): boolean {
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  return (
+    hubOwners.environmentIds.size === 0 &&
+    Boolean(
+      state.repos?.some(
+        (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === executionHostId
+      )
+    )
+  )
 }
 
 function collectHubOwnerEnvironmentIds(

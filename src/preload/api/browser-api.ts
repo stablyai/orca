@@ -13,6 +13,11 @@ import type {
   BrowserWebAuthnAccountResponse
 } from '../../shared/browser-webauthn-account'
 import type {
+  BrowserExternalAppRequest,
+  BrowserExternalAppResponse,
+  BrowserExternalAppResponseResult
+} from '../../shared/browser-external-app'
+import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
   BrowserAwaitGrabSelectionArgs,
@@ -78,6 +83,11 @@ export type BrowserApi = {
   ) => () => void
   onWebAuthnAccountRequestClosed: (callback: (event: { requestId: string }) => void) => () => void
   respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse) => Promise<boolean>
+  onExternalAppRequest: (callback: (request: BrowserExternalAppRequest) => void) => () => void
+  onExternalAppRequestClosed: (callback: (event: { requestId: string }) => void) => () => void
+  respondExternalApp: (
+    response: BrowserExternalAppResponse
+  ) => Promise<BrowserExternalAppResponseResult>
   openDevTools: (args: { browserPageId: string }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string
@@ -127,7 +137,7 @@ export type BrowserApi = {
   onAgentInputFocusGuard: (
     callback: (data: { browserPageId: string; token: string; active: boolean }) => void
   ) => () => void
-  agentInputFocusGuardReady: (token: string) => void
+  agentInputFocusGuardReady: (token: string, composing: boolean) => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void

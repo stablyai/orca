@@ -7,6 +7,7 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { afterLayoutFrame } from '@/runtime/layout-frame-position'
 import { holdTabPaneTree } from '@/runtime/layout-owner-pane-intents'
 import { holdDrawnTabs, type DrawnTabHold } from '@/runtime/layout-owner-drawn-tab-holds'
+import { releaseLayoutApplyHolds } from '@/runtime/layout-apply-hold-release'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
@@ -240,16 +241,7 @@ export function sendLayoutApply(
     PANE_COMMANDS.has(command.type) && 'tabId' in command ? holdTabPaneTree(command.tabId) : null
   const tabHolds = handlers.drawn ? drawnTabHolds(worktreeId, command) : []
   const tabHold = tabHolds.length > 0 ? holdDrawnTabs(tabHolds) : null
-  // Why a task later: a handler that resolves a promise (drag-out) acts in its awaiting caller,
-  // microtasks after the handler returns.
-  const release = (): void => {
-    if (hold) {
-      setTimeout(hold, 0)
-    }
-    if (tabHold) {
-      setTimeout(tabHold, 0)
-    }
-  }
+  const release = releaseLayoutApplyHolds(command.type, [hold, tabHold])
   void callRuntimeRpc<LayoutApplyReply>({ kind: 'local' }, 'layout.apply', {
     command: { ...command, workspace: worktreeId }
   })

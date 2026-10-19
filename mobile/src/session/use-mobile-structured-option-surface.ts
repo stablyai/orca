@@ -13,9 +13,8 @@ export function useMobileStructuredOptionSurface(args: {
   setStructuredOption: (id: string, value: SessionOptionValue) => Promise<boolean>
   /** The latest option state, which a settled pick's snapshot is read from. */
   optionStateRef: RefObject<StructuredAgentSessionOptionState>
-  takesSendOptions: boolean
 }) {
-  const { optionSnapshot, optionStateRef, setStructuredOption, takesSendOptions } = args
+  const { optionSnapshot, optionStateRef, setStructuredOption } = args
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string
     sequence: number
@@ -35,11 +34,9 @@ export function useMobileStructuredOptionSurface(args: {
   const setOption = useCallback(
     async (id: string, value: SessionOptionValue) => {
       await setStructuredOption(id, value)
-      return {
-        snapshot: structuredAgentSessionShownSnapshot(optionStateRef.current, takesSendOptions)
-      }
+      return { snapshot: structuredAgentSessionShownSnapshot(optionStateRef.current) }
     },
-    [optionStateRef, setStructuredOption, takesSendOptions]
+    [optionStateRef, setStructuredOption]
   )
 
   const optionSurface = useMemo<SessionOptionsSurface>(

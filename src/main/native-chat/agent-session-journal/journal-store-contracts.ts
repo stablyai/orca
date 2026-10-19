@@ -12,6 +12,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
@@ -132,8 +133,8 @@ export type JournalSubmissionInput = {
   origin?: 'client' | 'host'
   /** Who it is from (`JournalSubmissionRow.source`); the row keeps the kind only. */
   source?: Pick<AgentSessionMessageSource, 'kind'>
-  /** The model and effort it runs on (`JournalSubmissionRow.options`). */
-  options?: Readonly<Record<string, string>>
+  /** The choices it runs on (`JournalSubmissionRow.options`). */
+  options?: AgentSessionExecutionOptions
 }
 
 /** A submission append that converts a queued draft, in one transaction. */

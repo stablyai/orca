@@ -171,6 +171,18 @@ export async function installBrowserSessionPartitionPolicies(
         )
         return
       }
+      if (
+        permission === 'openExternal' &&
+        browserManager.requestExternalAppLaunch(
+          webContents,
+          'externalURL' in details ? details.externalURL : undefined,
+          () => resolvePermissionNoticeUrl(webContents, details) || null
+        )
+      ) {
+        // Why: Orca launches the app itself after the user says yes, so Chromium's own launch stays denied.
+        callback(false)
+        return
+      }
       const allowed =
         isAutoGrantedBrowserSessionPermission(permission) &&
         !deniesRemoteCliDrivenClipboardRead(permission, webContents?.id)

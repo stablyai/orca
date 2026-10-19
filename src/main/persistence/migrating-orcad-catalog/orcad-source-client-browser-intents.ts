@@ -1,4 +1,4 @@
-import type { OrcadMigrationClientHostedBrowserCloseIntent } from '../../../shared/orcad-migration-client-state'
+import type { OrcadMigrationClientHostedBrowserCloseIntent } from '../../../shared/orcad-migration/orcad-migration-client-state'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import {

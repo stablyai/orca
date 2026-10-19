@@ -38,7 +38,8 @@ export class RemoteRuntimeSharedControlConnection {
   private readonly retiredRequestIds = new SharedControlRetiredRequestIds()
   private readonly readyWaiters: SharedControlTypes.SharedControlReadyWaiter[] = []
   private everReady = false
-  private readonly socketGeneration = new SharedControlSocketGeneration()
+  /** Changes whenever the socket does, so two calls can prove they shared one socket. */
+  readonly socketGeneration = new SharedControlSocketGeneration()
 
   constructor(
     private readonly connection: PairedRuntimeConnection,
@@ -54,9 +55,11 @@ export class RemoteRuntimeSharedControlConnection {
     params: unknown,
     timeoutMs: number,
     envelope?: Parameters<typeof requestSharedControl>[0]['envelope'],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    beforeSend?: () => void
   ): ReturnType<typeof requestSharedControl<TResult>> {
     return requestSharedControl<TResult>({
+      beforeSend,
       pendingRequests: this.pendingRequests,
       deviceToken: this.connection.credential.deviceToken,
       method,
@@ -120,22 +123,19 @@ export class RemoteRuntimeSharedControlConnection {
   }
 
   private publishDiagnostics(): void {
-    this.diagnostics.publish({
-      state: this.state,
-      reconnecting: this.reconnect.isScheduled,
-      pendingRequestCount: this.pendingRequests.size,
-      subscriptionCount: this.subscriptions.size,
-      reconnectAttempt: this.reconnect.attemptCount
-    })
+    this.diagnostics.publish(this.diagnosticsCounts())
   }
   getDiagnostics(): SharedControlTypes.RemoteRuntimeSharedConnectionDiagnostics {
-    return this.diagnostics.get({
+    return this.diagnostics.get(this.diagnosticsCounts())
+  }
+  private diagnosticsCounts() {
+    return {
       state: this.state,
       reconnecting: this.reconnect.isScheduled,
       pendingRequestCount: this.pendingRequests.size,
       subscriptionCount: this.subscriptions.size,
       reconnectAttempt: this.reconnect.attemptCount
-    })
+    }
   }
   reconnectNow(): void {
     refreshRemoteRuntimeSharedControl({

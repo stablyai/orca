@@ -45,7 +45,7 @@ export async function parseGrokSessionFile(
   const info = asRecord(record.info)
   const sessionId = extractString(info?.id) ?? sessionIdFromFileName(dirname(file.path))
   const accumulator = createAccumulator({ agent: 'grok', file, sessionId, messages })
-  accumulator.cwd = extractString(info?.cwd)
+  accumulator.cwd = grokSessionCwd(record)
   accumulator.title =
     normalizeTitleText(extractString(record.generated_title) ?? '') ??
     normalizeTitleText(extractString(record.session_summary) ?? '')
@@ -58,6 +58,11 @@ export async function parseGrokSessionFile(
   updateTimeline(accumulator, extractString(record.last_active_at))
   await consumeGrokChatHistory(accumulator, dirname(file.path))
   return finalizeSession(accumulator, platform)
+}
+
+/** The session's cwd; a scope walk reads it from summary.json without the history. */
+export function grokSessionCwd(summary: Record<string, unknown>): string | null {
+  return extractString(asRecord(summary.info)?.cwd)
 }
 
 async function consumeGrokChatHistory(

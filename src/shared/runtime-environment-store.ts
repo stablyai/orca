@@ -16,6 +16,7 @@ import {
   writeEnvironmentStore
 } from './runtime-environment-store-file'
 import { writeRuntimeEnvironmentSidecarEntry } from './runtime-environment-sidecar'
+import { findCollidingEnvironmentName } from './runtime-environment-name-collision'
 
 export {
   getEnvironmentStorePath,
@@ -44,11 +45,11 @@ export function addEnvironmentFromPairingCode(
   const offer = parseRemotePairingCode(userDataPath, args.pairingCode)
   const store = readPersistedEnvironmentStore(userDataPath)
   const now = args.now ?? Date.now()
-  const existing = store.environments.find((entry) => entry.name === args.name)
+  const existing = findCollidingEnvironmentName(store.environments, args.name)
   if (existing) {
     throw new RuntimeEnvironmentStoreError(
       'invalid_argument',
-      `A server named "${args.name}" already exists.`
+      `A server named "${existing.name}" already exists.`
     )
   }
   const environment = createEnvironmentFromPairingOffer({

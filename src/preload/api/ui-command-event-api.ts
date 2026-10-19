@@ -235,6 +235,9 @@ export type UiCommandEventApi = {
   onRenameTerminal: (
     callback: (data: { tabId: string; title: string | null; recordInteraction?: false }) => void
   ) => () => void
+  onSetPaneTitle?: (
+    callback: (data: { tabId: string; leafId: string; title: string | null }) => void
+  ) => () => void
   onFocusTerminal: (
     callback: (data: {
       tabId: string

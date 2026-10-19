@@ -127,7 +127,15 @@ function referenceAgentStatusProjection(map: AppState['agentStatusByPaneKey']): 
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
         interrupted: entry.interrupted ?? null,
-        mainAgent: mainAgentKey(entry.mainAgent)
+        mainAgent: mainAgentKey(entry.mainAgent),
+        programStatus: entry.programStatus
+          ? [
+              entry.programStatus.state,
+              entry.programStatus.kind ?? null,
+              entry.programStatus.progress ?? null,
+              entry.programStatus.message ?? null
+            ]
+          : null
       }))
   )
 }

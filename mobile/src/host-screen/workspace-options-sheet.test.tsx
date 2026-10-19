@@ -57,7 +57,8 @@ function buildController(options: SheetOptions) {
     setFilter: vi.fn(),
     setProjectOrderBy: vi.fn(),
     toggleCardProperty: vi.fn(),
-    toggleRepoFilter: vi.fn()
+    toggleRepoFilter: vi.fn(),
+    pendingViewChanges: { pending: [], stale: false }
   }
   const controller = {
     activeFilterCount: 0,

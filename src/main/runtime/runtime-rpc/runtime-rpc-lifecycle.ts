@@ -263,6 +263,13 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         if (socket.clientCapabilities.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)) {
           this.runtime.noteAgentLaunchClientReady?.()
         }
+        // Why once per socket: only phones send runtime.clientCapabilities.update.
+        if (socket.device.scope === 'runtime') {
+          this.runtime.sidebarFacts?.noteRuntimeClient(
+            socket.connectionId,
+            socket.clientCapabilities
+          )
+        }
       },
       onClose: (socket, hasOtherConnections) => {
         if (!socket) {

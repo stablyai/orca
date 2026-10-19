@@ -31,6 +31,7 @@ describe('Pi execution host support', () => {
         },
         onLifecycle: vi.fn(),
         onSettled: vi.fn(),
+        onIdle: vi.fn(),
         logger: { warn: vi.fn(), error: vi.fn() }
       })
       expect(structuredAgentRuntimeRegistration('pi')?.supportsLocation(local)).toBe(proof)

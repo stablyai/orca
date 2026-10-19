@@ -32,7 +32,7 @@ import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import {
   resetSshConnectionGenerations,
   setSshConnectionGeneration
-} from '../ssh/ssh-connection-generation'
+} from '../ssh/connection/ssh-connection-generation'
 
 // Why: paths are resolved via path.resolve() in production code, so test
 // data must use resolved paths to avoid Unix-vs-Windows mismatches.

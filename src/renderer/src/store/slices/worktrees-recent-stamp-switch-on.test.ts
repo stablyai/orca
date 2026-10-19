@@ -26,7 +26,8 @@ vi.mock('@/components/worktree-base-fallback-notice', () => ({
 
 beforeEach(resetWorktreeSliceModuleMemory)
 
-// With the switch on, the owning host writes every Recent stamp; the window writes none.
+// With the switch on, the owning host writes every Recent stamp and the unread flag; the window
+// writes neither.
 describe('window-side Recent stamps with the sidebar-inputs switch on', () => {
   const wt = makeWorktree({
     id: 'repo1::/path/wt1',
@@ -61,7 +62,12 @@ describe('window-side Recent stamps with the sidebar-inputs switch on', () => {
     expect(persistedStamp()).toBe(false)
   })
 
-  it('a bell or finish raises the unread flag but writes no stamp', () => {
+  const persistedUnread = () =>
+    mockApi.worktrees.updateMeta.mock.calls.some(
+      ([args]: [{ updates: Record<string, unknown> }]) => 'isUnread' in args.updates
+    )
+
+  it('a bell or finish writes no stamp and leaves the unread flag to the host', () => {
     const store = storeWith()
     store.getState().markAgentAttentionUnread({
       workspaceId: wt.id,
@@ -69,7 +75,8 @@ describe('window-side Recent stamps with the sidebar-inputs switch on', () => {
       groupId: null,
       reason: 'agent-completion'
     })
-    expect(store.getState().worktreesByRepo.repo1[0].isUnread).toBe(true)
+    expect(store.getState().worktreesByRepo.repo1[0].isUnread).toBe(false)
+    expect(persistedUnread()).toBe(false)
     expect(lastActivityAt(store)).toBe(5)
     expect(persistedStamp()).toBe(false)
   })
@@ -82,7 +89,7 @@ describe('window-side Recent stamps with the sidebar-inputs switch on', () => {
     expect(persistedStamp()).toBe(false)
   })
 
-  it('a folder workspace’s terminal activity and unread mark write no stamp', async () => {
+  it('a folder workspace’s terminal activity and finish write no stamp and no flag', async () => {
     const store = createTestStore()
     const folder = makeFolderWorkspace({ id: 'folder-1', lastActivityAt: 5 })
     store.setState({ folderWorkspaces: [folder], projectGroups: [] })
@@ -95,10 +102,12 @@ describe('window-side Recent stamps with the sidebar-inputs switch on', () => {
     })
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(store.getState().folderWorkspaces[0]).toMatchObject({
-      isUnread: true,
+      isUnread: false,
       lastActivityAt: 5
     })
     const folderWrites = vi.mocked(store.getState().updateFolderWorkspace).mock.calls
-    expect(folderWrites.some(([, updates]) => 'lastActivityAt' in updates)).toBe(false)
+    expect(
+      folderWrites.some(([, updates]) => 'lastActivityAt' in updates || 'isUnread' in updates)
+    ).toBe(false)
   })
 })

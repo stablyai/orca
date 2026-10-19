@@ -51,12 +51,25 @@ export function createQueuedRigProvider(
   const cancelTurn: Mock<StructuredAgentSessionAdapter['cancelTurn']> = vi.fn(async () => ({
     cancelled: true
   }))
+  const setOption: Mock<StructuredAgentSessionAdapter['setOption']> = vi.fn(async () => undefined)
   const closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>> = vi.fn(
     async () => true
   )
   let events: StructuredAgentSessionEventSink | undefined
+  let proveOpen: (() => void) | null = null
 
   const scripted: StructuredAgentSessionAdapter = {
+    open: () =>
+      options.starting
+        ? new Promise((resolve) => {
+            proveOpen = () =>
+              resolve({
+                reportedOptions: { model: 'default' }
+              })
+          })
+        : Promise.resolve({
+            reportedOptions: { model: 'default' }
+          }),
     acquire: async ({ identity, fence, spawnToken, events: sink }) => {
       starts()
       const hold = startHold
@@ -75,7 +88,6 @@ export function createQueuedRigProvider(
         ? `${THREAD}-context-${record!.providerContextBoundary!.operationId}`
         : (context?.head?.handle.nativeId ?? THREAD)
       return {
-        providerChildPhase: 'starting' as const,
         process: {
           hostId: 'local',
           pid: 4242,
@@ -101,7 +113,7 @@ export function createQueuedRigProvider(
     ...(options.stopEndsSession ? { stopEndsSession: () => true } : {}),
     ...(options.startUnanswered ? { startAnswered: () => false } : {}),
     answerPrompt: vi.fn(async ({ commit }) => commit()),
-    setOption: vi.fn(async () => undefined),
+    setOption,
     ...(options.rewind
       ? { rewind: options.rewind, rewindSupport: () => ({ supported: true as const }) }
       : {}),
@@ -149,12 +161,14 @@ export function createQueuedRigProvider(
 
   return {
     adapter,
+    proveOpen: () => proveOpen?.(),
     dispatch,
     starts,
     holdNextStart,
     failNextStart,
     compact,
     cancelTurn,
+    setOption,
     closeSession,
     finishCompact,
     providerEvents

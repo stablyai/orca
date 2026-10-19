@@ -47,6 +47,7 @@ export type BrowserClientPageCommandExecutorDependencies = BrowserClientPageAuth
     signal: AbortSignal
   ): Promise<unknown>
   retireAutomation(input: {
+    keepGuestBinding?: boolean
     browserPageId: string
     pageHostGeneration: number
     registration: BrowserClientRetainedPage['registration']

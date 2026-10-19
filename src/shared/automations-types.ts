@@ -246,6 +246,8 @@ export type AutomationDispatchResult = {
   precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null
   error?: string | null
+  /** With `dispatched`: when the agent was handed the run, if not now. */
+  dispatchedAt?: number
 }
 
 export type ExternalAutomationProvider = 'openclaw'

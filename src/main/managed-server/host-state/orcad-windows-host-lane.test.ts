@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from
 
 vi.mock('electron', () => ({ app: { getAppPath: () => process.cwd() } }))
 
-import { SshConnection } from '../../ssh/ssh-connection'
+import { SshConnection } from '../../ssh/connection/ssh-connection'
 import {
   connectHostileHost,
   installHostileHostAppEnvironment

@@ -1,3 +1,4 @@
+import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
 import type {
   RestoreSpawnIntent,
   SpawnDeferralReason
@@ -321,7 +322,7 @@ export type IpcPtyTransportOptions = {
   /** Rebind an existing pane after its provider replaces the PTY identity. */
   onPtyRebind?: (ptyId: string, replacedPtyId: string, incarnationId?: string | null) => void
   onBell?: () => void
-  onAgentBecameIdle?: (title: string) => void
+  onAgentBecameIdle?: (title: string, meta?: AgentIdleEdgeMeta) => void
   onAgentBecameWorking?: () => void
   onAgentExited?: () => void
   onAgentStatus?: (payload: ParsedAgentStatusPayload) => void

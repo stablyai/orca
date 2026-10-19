@@ -1,8 +1,8 @@
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
-import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../../shared/orcad-migration-scrollback'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { keepUnsavedDrafts } from '../../../shared/workspace-session-draft-retention'

@@ -31,7 +31,7 @@ export function isAgentStatusForRecentlyClosedTab(
 /** A host replay the renderer has already seen; a replayed `done` that differs from the current row
  *  ended while the host was unreachable, so it is not a replay of anything this renderer saw. */
 export function isSeenHostReplay(
-  data: Pick<AgentStatusIpcPayload, 'isReplay' | 'stateStartedAt'>,
+  data: Pick<AgentStatusIpcPayload, 'isReplay' | 'stateStartedAt' | 'turnCompletedAt'>,
   state: string,
   existing: Pick<AppState['agentStatusByPaneKey'][string], 'state' | 'stateStartedAt'> | undefined
 ): boolean {
@@ -39,9 +39,15 @@ export function isSeenHostReplay(
     return false
   }
   // Why: with no row there is no proof the turn was unseen, so keep seeding (no reload re-fires).
+  if (existing === undefined) {
+    return true
+  }
+  // Why: rows don't keep the stamp; the completion observer dedupes the ones it already handled.
+  if (state === 'working' && Number.isFinite(data.turnCompletedAt)) {
+    return false
+  }
   return (
     state !== 'done' ||
-    existing === undefined ||
     (existing.state === 'done' && existing.stateStartedAt === data.stateStartedAt)
   )
 }

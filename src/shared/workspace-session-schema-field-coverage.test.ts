@@ -38,6 +38,7 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   activeBrowserTabIdByWorktree: true,
   clientHostedBrowserPagesByWorktree: true,
   clientHostedBrowserCloseIntentsByEnvironment: true,
+  pairedTerminalTabCloseIntentsByEnvironment: true,
   activeTabTypeByWorktree: true,
   browserUrlHistory: true,
   workspaceDocHistory: true,

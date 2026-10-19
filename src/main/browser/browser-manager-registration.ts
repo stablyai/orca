@@ -3,17 +3,21 @@ import { browserDownloadDestinationReservations } from './browser-download-desti
 import { isWorkspaceDocPageId } from './doc-preview-guest-policy'
 import type { BrowserGuestRegistration } from './browser-manager-types'
 import { BrowserManagerGuestPolicy } from './browser-manager-guest-policy'
+import { cancelBrowserExternalAppRequests } from './browser-external-app-launch'
 
 export abstract class BrowserManagerRegistration extends BrowserManagerGuestPolicy {
-  registerGuest({
-    browserPageId,
-    browserTabId: legacyBrowserTabId,
-    workspaceId,
-    worktreeId,
-    sessionProfileId,
-    webContentsId,
-    rendererWebContentsId
-  }: BrowserGuestRegistration): boolean {
+  registerGuest(
+    {
+      browserPageId,
+      browserTabId: legacyBrowserTabId,
+      workspaceId,
+      worktreeId,
+      sessionProfileId,
+      webContentsId,
+      rendererWebContentsId
+    }: BrowserGuestRegistration,
+    options?: { retainPreviousGuestPolicies?: boolean }
+  ): boolean {
     const browserTabId = browserPageId ?? legacyBrowserTabId
     // Why refuse rather than overwrite: the two halves of the registry must stay disjoint, or one
     // id resolves in both and the tool door silently prefers the document guest over the page.
@@ -45,7 +49,12 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
 
     const previousWebContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (previousWebContentsId !== undefined && previousWebContentsId !== webContentsId) {
-      this.retireStaleGuestWebContents(previousWebContentsId)
+      if (options?.retainPreviousGuestPolicies) {
+        // A staged swap must be able to restore this still-live guest on failure.
+        this.tabIdByWebContentsId.delete(previousWebContentsId)
+      } else {
+        this.retireStaleGuestWebContents(previousWebContentsId)
+      }
       this.viewportPresetByTabId.delete(browserTabId)
       this.viewportScrollStateByTabId.delete(browserTabId)
     }
@@ -84,6 +93,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     }
     // Why: teardown mid-grab must cancel it so the renderer gets a signal, not a dangling Promise.
     this.cancelGrabOp(browserTabId, 'evicted')
+    cancelBrowserExternalAppRequests(browserTabId)
 
     // Why: remove attachGuestPolicies listeners so their guest-WebContents closures don't block GC.
     const guestWebContentsId = this.webContentsIdByTabId.get(browserTabId)

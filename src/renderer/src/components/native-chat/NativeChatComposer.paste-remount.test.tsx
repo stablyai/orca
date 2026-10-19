@@ -14,6 +14,7 @@ import type {
   NativeChatComposerFieldProps,
   NativeChatComposerImageAttachment
 } from './NativeChatComposerField'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 type FieldProps = {
   imageAttachments?: readonly NativeChatComposerImageAttachment[]
@@ -51,8 +52,11 @@ vi.mock('../../store', () => {
   return { useAppStore }
 })
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  isRemoteRuntimePtyId: () => false,
   sendRuntimePtyInput: vi.fn()
+}))
+vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => false
 }))
 vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),

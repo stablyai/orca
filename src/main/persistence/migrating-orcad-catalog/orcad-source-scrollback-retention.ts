@@ -1,4 +1,4 @@
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import {
   readTerminalScrollbackStoredBytesSync,

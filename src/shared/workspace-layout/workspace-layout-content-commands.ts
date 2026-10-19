@@ -4,6 +4,7 @@ import type { EditorTabView } from '../editor-tab-view-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { applied, refuse, workspaceOrEmpty, type Applied } from './workspace-layout-command-steps'
 import type { CommandOf, LayoutContext } from './workspace-layout-command-types'
+import { sameEditorFile } from './workspace-layout-editor-tab-file'
 import { admitsInitialSurface } from './workspace-layout-initial-surface'
 import type {
   LayoutContentTab,
@@ -88,7 +89,7 @@ export function openEditorTab(
   })
 }
 
-/** The file's record, replacing any held for its path. */
+/** The file's record, replacing any held for its path and owner. */
 function withEditorFile(
   model: WorkspaceLayoutModel,
   key: string,
@@ -98,7 +99,7 @@ function withEditorFile(
     return model
   }
   const workspace = model.workspaces[key]!
-  const files = (workspace.editorFiles ?? []).filter((entry) => entry.filePath !== file.filePath)
+  const files = (workspace.editorFiles ?? []).filter((entry) => !sameEditorFile(entry, file))
   return withWorkspace(model, key, { ...workspace, editorFiles: [...files, file] })
 }
 

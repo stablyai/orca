@@ -93,6 +93,7 @@
   --color-ring: var(--ring);
   --color-editor-surface: var(--editor-surface);
   --color-agent-question: var(--agent-question);
+  --color-agent-working: var(--agent-working);
   --color-agent-question-text: var(--agent-question-text);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -232,6 +233,8 @@
      it (sidebar, tabs, dashboard, kanban). Orange, not amber: it has to stay
      separable from working-yellow at a glance. */
   --agent-question: var(--color-orange-600);
+  /* The working-state yellow every agent working/monitoring glyph paints. */
+  --agent-working: var(--color-yellow-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
   /* Workspace PR-state tones: same hue in both themes so a status keeps its
@@ -1347,11 +1350,13 @@ html.native-shell .app-layout {
 
 /* Why the extra qualifier: CommandItem also sets data-[selected=true]:bg-accent;
    this selector must beat that utility so light-mode selection is actually visible.
-   The role='option' arm covers virtualized rows that render outside cmdk. */
+   The role='option' arm covers virtualized rows that render outside cmdk; the
+   session-row arm is Session History's keyboard cursor, which has no cmdk either. */
 [data-slot='command-item'].jump-palette-item[data-selected='true'],
 [role='option'].jump-palette-item[data-selected='true'],
 .jump-palette-command [data-slot='command-item'][data-selected='true'],
-.jump-palette-command [role='option'][data-selected='true'] {
+.jump-palette-command [role='option'][data-selected='true'],
+.ai-vault-session-row[data-selected='true'] {
   /* Why: flat --accent (#f5f5f5) on the palette surface (#fff) is nearly invisible
      in light mode — the keyboard cursor has to read as a solid selected row.
      Mix foreground into background and draw an inset ring; expose the surface
@@ -1366,7 +1371,8 @@ html.native-shell .app-layout {
 .dark [data-slot='command-item'].jump-palette-item[data-selected='true'],
 .dark [role='option'].jump-palette-item[data-selected='true'],
 .dark .jump-palette-command [data-slot='command-item'][data-selected='true'],
-.dark .jump-palette-command [role='option'][data-selected='true'] {
+.dark .jump-palette-command [role='option'][data-selected='true'],
+.dark .ai-vault-session-row[data-selected='true'] {
   /* Why accent, not the light-mode mix: --accent (#404040) already reads clearly on
      dark surfaces; a low-%% foreground mix was a visible step down from the old row. */
   --jump-palette-selection-surface: var(--accent);

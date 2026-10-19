@@ -359,10 +359,10 @@ describe('SortableTabContextMenu', () => {
     act(() => getButton(container, 'Close Others').click())
     expect(onCloseOthers).toHaveBeenCalledWith('term-1')
 
-    act(() => getButton(container, 'Close Tabs To The Right').click())
+    act(() => getButton(container, 'Close All Tabs To The Right').click())
     expect(onCloseToRight).toHaveBeenCalledWith('term-1')
 
-    act(() => getButton(container, 'Close Tabs To The Left').click())
+    act(() => getButton(container, 'Close All Tabs To The Left').click())
     expect(onCloseToLeft).toHaveBeenCalledWith('term-1')
   })
 
@@ -372,8 +372,8 @@ describe('SortableTabContextMenu', () => {
       hasTabsToRight: false
     })
 
-    expect(getButton(container, 'Close Tabs To The Left').disabled).toBe(true)
-    expect(getButton(container, 'Close Tabs To The Right').disabled).toBe(true)
+    expect(getButton(container, 'Close All Tabs To The Left').disabled).toBe(true)
+    expect(getButton(container, 'Close All Tabs To The Right').disabled).toBe(true)
   })
 
   it('hides move-tab split actions for a single-tab group', () => {

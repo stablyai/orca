@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import {
@@ -100,7 +100,7 @@ async function writeRelayGcClaimOwner(
     ? powerShellCommand(
         `Set-Content -LiteralPath ${powerShellLiteral(ownerPath)} -Value ${powerShellLiteral(token)} -NoNewline -ErrorAction Stop`
       )
-    : `printf %s ${shellEscape(token)} > ${shellEscape(ownerPath)}`
+    : `printf %s ${quotePosixShell(token)} > ${quotePosixShell(ownerPath)}`
   try {
     await execHostCommand(conn, host, command, { signal })
     return token
@@ -126,7 +126,7 @@ export async function isRelayGcClaimOwned(
     ? powerShellCommand(
         `if ((Get-Content -LiteralPath ${powerShellLiteral(ownerPath)} -Raw -ErrorAction SilentlyContinue) -ceq ${powerShellLiteral(token)}) { 'OWNED' } else { 'LOST' }`
       )
-    : `test "$(cat ${shellEscape(ownerPath)} 2>/dev/null)" = ${shellEscape(token)} && echo OWNED || echo LOST`
+    : `test "$(cat ${quotePosixShell(ownerPath)} 2>/dev/null)" = ${quotePosixShell(token)} && echo OWNED || echo LOST`
   const output = await execHostCommand(conn, host, command).catch((error) => {
     if (isUnconfirmedSshCommandTermination(error)) {
       throw error
@@ -155,10 +155,10 @@ export async function releaseRelayGcClaim(
           "if (Test-Path -LiteralPath $claim) { 'UNKNOWN' } else { 'RELEASED' } }"
       )
     : [
-        `if ! test -e ${shellEscape(claimPath)}; then echo RELEASED;`,
-        `elif test "$(cat ${shellEscape(ownerPath)} 2>/dev/null)" != ${shellEscape(token)}; then echo LOST;`,
+        `if ! test -e ${quotePosixShell(claimPath)}; then echo RELEASED;`,
+        `elif test "$(cat ${quotePosixShell(ownerPath)} 2>/dev/null)" != ${quotePosixShell(token)}; then echo LOST;`,
         `else ${removeRemoteTreeCommand(host, claimPath)} 2>/dev/null;`,
-        `if test -e ${shellEscape(claimPath)}; then echo UNKNOWN; else echo RELEASED; fi; fi`
+        `if test -e ${quotePosixShell(claimPath)}; then echo UNKNOWN; else echo RELEASED; fi; fi`
       ].join(' ')
   const output = await execHostCommand(conn, host, command).catch((error) => {
     if (isUnconfirmedSshCommandTermination(error)) {

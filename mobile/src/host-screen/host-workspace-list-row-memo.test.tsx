@@ -88,7 +88,11 @@ function listProps(worktrees: Worktree[]) {
     reconnectAttempts: 0,
     relayRecovery: { pairingRejected: false },
     sectionsResult: { rawSections: sections, sections, repoById: stable.repoById },
-    settings: { activeFilterCount: 0, toggleWorktreeLineage: noop },
+    settings: {
+      activeFilterCount: 0,
+      toggleWorktreeLineage: noop,
+      pendingViewChanges: { pending: [], stale: false }
+    },
     state: {
       actionError: '',
       setActionTarget: noop,

@@ -12,20 +12,14 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from './use-type-ahead-combobox'
 import { COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
 import {
-  ConnectHostButton,
-  HostRowIcon,
-  NeedsSetupHostIcon,
-  RunTargetRow,
-  SetLocationButton
-} from './RunTargetComboboxRow'
-import {
   buildRunTargetRows,
   getEphemeralVmLabel,
   getRecipeDetail,
   RUN_TARGET_ADD_HOST_KEY,
   type EphemeralVmRecipeOption
 } from './run-target-options'
-import { AddHostSubmenuRow, RecipesSubmenuRow } from './RunTargetSubmenus'
+import { AddHostSubmenuRow } from './RunTargetSubmenus'
+import RunTargetRowList from './RunTargetRowList'
 import RunTargetField from './RunTargetField'
 
 type RunTargetComboboxProps = {
@@ -292,91 +286,27 @@ export default function RunTargetCombobox({
                 )}
               </p>
             ) : null}
-            {rows.map((row) => {
-              if (row.kind === 'add-host') {
-                return null
-              }
-              const isArmed = armedRow?.key === row.key
-              const optionId = isArmed ? `${listId}-armed` : undefined
-              if (row.kind === 'ready') {
-                return (
-                  <RunTargetRow
-                    key={row.key}
-                    icon={<HostRowIcon hostId={row.option.hostId} />}
-                    label={row.option.label}
-                    detail={row.option.path}
-                    armed={isArmed}
-                    current={selectedRecipe === null && row.option === selectedHost}
-                    optionId={optionId}
-                    onArm={() => {
-                      arm(row.key)
-                      setSubmenu(null)
-                    }}
-                    onCommit={() => selectHost(row.option)}
-                  />
-                )
-              }
-              if (row.kind === 'needs-setup') {
-                const connecting = connectingHostIds.has(row.option.hostId)
-                const hasConnect = Boolean(row.option.connectAction && onConnectHost)
-                const hasSetLocation = Boolean(row.option.canSetLocation && onSetLocation)
-                return (
-                  <RunTargetRow
-                    key={row.key}
-                    icon={
-                      <NeedsSetupHostIcon
-                        hostId={row.option.hostId}
-                        connecting={connecting}
-                        attention={row.option.attention}
-                      />
-                    }
-                    label={row.option.label}
-                    // Why: Connect / Set project location already say the next
-                    // step, so the detail line would only repeat that.
-                    detail={hasConnect || hasSetLocation ? '' : row.option.detail}
-                    armed={isArmed}
-                    current={false}
-                    dimmed
-                    optionId={optionId}
-                    onArm={() => {
-                      arm(row.key)
-                      setSubmenu(null)
-                    }}
-                    onCommit={() => setLocation(row.option)}
-                    trailing={
-                      hasConnect ? (
-                        <ConnectHostButton
-                          connecting={connecting}
-                          onConnect={() => void connectHost(row.option)}
-                        />
-                      ) : hasSetLocation ? (
-                        <SetLocationButton
-                          hostLabel={row.option.label}
-                          onSetLocation={() => setLocation(row.option)}
-                        />
-                      ) : undefined
-                    }
-                  />
-                )
-              }
-              // Recipes submenu row.
-              return (
-                <RecipesSubmenuRow
-                  key={row.key}
-                  open={submenu === 'recipes'}
-                  onOpenChange={(next) => setSubmenu(next ? 'recipes' : null)}
-                  armed={isArmed}
-                  optionId={optionId}
-                  recipes={matchedRecipes}
-                  selectedRecipeId={selectedRecipe?.id ?? null}
-                  onArm={() => {
-                    arm(row.key)
-                    setSubmenu('recipes')
-                  }}
-                  onSelectRecipe={selectRecipe}
-                />
-              )
-            })}
+            <RunTargetRowList
+              rows={rows}
+              armedKey={armedRow?.key ?? null}
+              listId={listId}
+              selectedHost={selectedRecipe === null ? selectedHost : null}
+              selectedRecipeId={selectedRecipe?.id ?? null}
+              matchedRecipes={matchedRecipes}
+              recipesOpen={submenu === 'recipes'}
+              connectingHostIds={connectingHostIds}
+              canConnect={Boolean(onConnectHost)}
+              canSetLocation={Boolean(onSetLocation)}
+              onArm={(key, nextSubmenu) => {
+                arm(key)
+                setSubmenu(nextSubmenu)
+              }}
+              onRecipesOpenChange={(next) => setSubmenu(next ? 'recipes' : null)}
+              onSelectHost={selectHost}
+              onSelectRecipe={selectRecipe}
+              onConnectHost={(option) => void connectHost(option)}
+              onSetLocation={setLocation}
+            />
           </div>
           {hasAddHost ? (
             <AddHostSubmenuRow

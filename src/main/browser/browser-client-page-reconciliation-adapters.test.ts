@@ -46,7 +46,10 @@ function command(
       browserProfileId: 'profile-a',
       executionHostKey: 'execution-host-a'
     },
-    closePage: { type: 'closePage' as const, targetAuthority: previousAuthority },
+    closePage: {
+      type: 'closePage' as const,
+      targetAuthority: previousAuthority
+    },
     restorePage: {
       type: 'restorePage' as const,
       browserProfileId: 'profile-a',
@@ -242,6 +245,32 @@ describe('browser client page reconciliation adapters', () => {
         state: 'active'
       })
     ])
+  })
+
+  it('restores a host-owned profile with the metadata the host sent', async () => {
+    const { executor, dependencies } = createHarness()
+    const profile = {
+      id: 'remote-profile',
+      label: 'Remote profile',
+      scope: 'isolated' as const
+    }
+    const restore = command('restorePage', {
+      command: {
+        type: 'restorePage',
+        browserProfileId: profile.id,
+        profile,
+        executionHostKey: 'execution-host-a'
+      }
+    })
+    await expect(executor.handle(restore, new AbortController().signal)).resolves.toEqual({
+      status: 'completed'
+    })
+    expect(dependencies.routeSessions.preparePage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identity: expect.objectContaining({ browserProfileId: profile.id }),
+        profileMetadata: profile
+      })
+    )
   })
 
   it('destroys a rekeyed guest instead of restoring authority after renderer failure', async () => {

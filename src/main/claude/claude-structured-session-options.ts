@@ -53,6 +53,22 @@ export function observeClaudeSettingsApplied(session: ClaudeSession, settings: u
   }
 }
 
+/** Applied effort describes execution; effective effort describes the underlying settings. */
+export function observeClaudeSettingsExecutionEffort(
+  session: ClaudeSession,
+  settings: unknown
+): void {
+  const applied = readClaudeSettingsApplied(settings)
+  const effort = applied ? applied.effort : readClaudeSettingsEffort(settings)
+  if (session.reusableOptions.get('effort') !== 'max') {
+    if (effort) {
+      session.reusableOptions.set('effort', effort)
+    } else if (applied) {
+      session.reusableOptions.delete('effort')
+    }
+  }
+}
+
 export function readClaudeSettingsFastMode(settings: unknown): boolean | null {
   const value = record(record(settings)?.effective)?.fastMode
   return typeof value === 'boolean' ? value : null
@@ -236,10 +252,12 @@ function observeClaudeSettingsReadback(
     const fastMode = readClaudeSettingsFastMode(settings)
     const perSessionOptIn = readClaudeSettingsFastModePerSessionOptIn(settings)
     observeClaudeSettingsApplied(session, settings)
+    observeClaudeSettingsExecutionEffort(session, settings)
     if (effort) {
       session.reportedOptions.effort = effort
     }
     if (fastMode !== null) {
+      session.reusableOptions.set('fastMode', String(fastMode))
       session.reportedOptions.fastMode = fastMode
       if (decodedFastMode(session) !== undefined) {
         session.options.set('fastMode', String(fastMode))
@@ -293,6 +311,7 @@ export function claudeStructuredSessionOptionsFrom(
     readMutationSequence === session.optionMutationSequence
   ) {
     session.options.set('fastMode', 'false')
+    session.reusableOptions.delete('fastMode')
     session.confirmedOptions.delete('fastMode')
     desiredFastMode = false
   }

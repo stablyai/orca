@@ -155,6 +155,9 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
   fill(loaded, 'carried.clientHostedBrowserCloseIntentsByEnvironment', {
     env: ['page-1', 'page-2']
   })
+  fill(loaded, 'carried.pairedTerminalTabCloseIntentsByEnvironment', {
+    env: ['host-tab-1', 'host-tab-2']
+  })
   const sleeping = (field: keyof LayoutSleepingRecord, value: unknown) =>
     fill(loaded, `leaf.sleeping.${field}` as const, value)
   sleeping('terminalTitle', 'claude')

@@ -32,3 +32,8 @@ export function structuredAgentSessionStatusSubscriptionId(ctx: RpcContext): str
 export function structuredAgentSessionTurnCompletionSubscriptionId(ctx: RpcContext): string {
   return withFrameId(ctx, `${SUBSCRIPTION_PREFIX}.turn-completion:${ctx.connectionId ?? 'local'}`)
 }
+
+/** The availability feed, per connection like the status feed. */
+export function structuredAgentSessionAvailabilitySubscriptionId(ctx: RpcContext): string {
+  return withFrameId(ctx, `${SUBSCRIPTION_PREFIX}.availability:${ctx.connectionId ?? 'local'}`)
+}

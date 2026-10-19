@@ -82,6 +82,9 @@ import {
 } from './session-scanner-parse-cache'
 import {
   getSessionParseCacheEntry,
+  lookupSessionScopeCwds,
+  resolveSessionScopeCwd,
+  scopeCwdStampOf,
   peekSessionParseCacheEntry,
   type PersistedSessionParseCacheEntry,
   setSessionParseCacheColdTier
@@ -615,6 +618,16 @@ it('recovers a cold Cursor session when its sidecar appears without a transcript
   const read = vi.fn((key: string) => rows.get(key))
   const tier = {
     read,
+    readScopeCwds: (paths: readonly string[]) => ({
+      found: new Map(
+        paths.flatMap((key) => {
+          const row = rows.get(key)
+          return row === undefined ? [] : [[key, { parsed: scopeCwdStampOf(row) }] as const]
+        })
+      ),
+      parsed: true,
+      read: true
+    }),
     stored: (key: string, row: PersistedSessionParseCacheEntry) => rows.set(key, row),
     deleted: (key: string) => rows.delete(key)
   }
@@ -644,4 +657,31 @@ it('recovers a cold Cursor session when its sidecar appears without a transcript
   const found = (await scan()).sessions.filter((row) => row.filePath === path)
   expect(found.map((row) => row.cwd)).toEqual(['/repo'])
   expect(await stat(path)).toMatchObject({ mtimeMs: file.mtimeMs, size: file.sizeBytes })
+})
+
+it('lists a Cursor session once meta.json names the scope after a scan stored it as cwd-less', async () => {
+  const cursorHome = await createCursorHome()
+  const path = await writeTranscript(cursorHome, 'slug', 'chat-1', [
+    JSON.stringify({ role: 'user', message: { content: 'Find the bug' } })
+  ])
+  await utimes(path, 1, 1)
+  for (const chatId of ['busy-1', 'busy-2']) {
+    await writeTranscript(cursorHome, 'slug', chatId, [
+      JSON.stringify({ role: 'user', message: { content: chatId } })
+    ])
+  }
+  const scan = () =>
+    scanAiVaultSessions({
+      ...isolatedScanRoots(join(cursorHome, '..')),
+      cursorProjectsDir: join(cursorHome, 'projects'),
+      platform: 'darwin',
+      limit: 1,
+      scopePaths: ['/repo']
+    })
+  expect((await scan()).sessions.some((row) => row.filePath === path)).toBe(false)
+  lookupSessionScopeCwds([path])
+  expect(resolveSessionScopeCwd(path, () => true)).toEqual({ cwd: null })
+  await writeChatMeta(cursorHome, 'workspace-hash', 'chat-1', { cwd: '/repo' })
+  const found = (await scan()).sessions.filter((row) => row.filePath === path)
+  expect(found.map((row) => row.cwd)).toEqual(['/repo'])
 })

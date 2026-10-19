@@ -21,7 +21,7 @@ import {
 } from '../../managed-server/install/orcad-remote-launch'
 import { execOrcadRemote } from '../../managed-server/install/orcad-remote-runtime-control'
 import { decommissionRemoteOrcad } from '../../managed-server/install/orcad-remote-decommission'
-import { shellEscape } from '../ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   forbiddenToolActions,
   type HostileHostCellCore,
@@ -62,7 +62,7 @@ export async function proveManagedOrcadCell(
     }
     const toolLog = await hostExec(
       target,
-      `cat ${shellEscape(target.forbiddenToolLog)} 2>/dev/null || true`
+      `cat ${quotePosixShell(target.forbiddenToolLog)} 2>/dev/null || true`
     )
     expect(forbiddenToolActions(toolLog)).toEqual([])
   } finally {

@@ -8,7 +8,7 @@
  * launching, mutating state, or deleting the successor's fence and journal.
  */
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { isSshCommandExitError } from '../../ssh/remote-exec/remote-exec-command'
 
 export const ORCAD_FENCE_OWNER_FILENAME = '.orca-fence-owner'
@@ -39,8 +39,10 @@ export class OrcadFenceLostError extends Error {
 
 /** A POSIX test that succeeds only while the lock still carries this run's token. */
 export function posixOrcadFenceOwnedTest(fence: OrcadFence): string {
-  const owner = shellEscape(`${fence.lockDir.replace(/\/+$/u, '')}/${ORCAD_FENCE_OWNER_FILENAME}`)
-  return `[ "$(cat ${owner} 2>/dev/null)" = ${shellEscape(fence.token)} ]`
+  const owner = quotePosixShell(
+    `${fence.lockDir.replace(/\/+$/u, '')}/${ORCAD_FENCE_OWNER_FILENAME}`
+  )
+  return `[ "$(cat ${owner} 2>/dev/null)" = ${quotePosixShell(fence.token)} ]`
 }
 
 export function posixOrcadFenceGuard(fence: OrcadFence): string {

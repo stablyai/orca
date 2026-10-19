@@ -1,5 +1,4 @@
 import type { AppIdentity } from '../../shared/app-identity'
-import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
 import type { E2EConfig } from '../../shared/e2e-config'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
@@ -39,8 +38,6 @@ export type AppApi = {
   stageBeforeUnloadSync: (args: {
     sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
     ui: Partial<PersistedUIState>
-    /** Layout-owner builds: the resume records the quit capture changed. */
-    sleepRecords?: SleepingAgentSessionRecord[]
   }) => void
   /** Resolves once the last staged checkpoint is durably written; rejects if that
    *  write failed, so a reload/restart can abort instead of losing the snapshot. */

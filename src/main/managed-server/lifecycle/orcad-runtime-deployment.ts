@@ -41,6 +41,7 @@ import { pruneManagedOrcadVersions } from './orcad-managed-version-gc'
 import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
 import { resolveOrcadMigrationFence } from '../../ssh/orcad-migration-source-fence'
 import type { SshTarget } from '../../../shared/ssh-types'
+import { findCollidingEnvironmentName } from '../../../shared/runtime-environment-name-collision'
 import { deployedOrcadTunnelChecks } from './orcad-managed-tunnel-identity'
 import {
   isForceableOrcadDeferral,
@@ -73,8 +74,12 @@ export async function createManagedOrcadEnvironment(
         throw new Error('The SSH target is owned by a server that is not deployed on it.')
       }
     }
-    if (environments.some((entry) => entry.id !== environmentId && entry.name === args.name)) {
-      throw new Error(`A server named "${args.name}" already exists.`)
+    const namesake = findCollidingEnvironmentName(
+      environments.filter((entry) => entry.id !== environmentId),
+      args.name
+    )
+    if (namesake) {
+      throw new Error(`A server named "${namesake.name}" already exists.`)
     }
     const current = targetStore.getTarget(args.sshTargetId)
     if (args.migration) {

@@ -62,12 +62,7 @@ function structuredLaunchCreateOptions(
     seedsModel: intent.seedOptions?.model !== undefined
   })
   // Create has always carried options, so any host takes what the chat shows.
-  const view = structuredAgentSessionOptionView(
-    firstFrame,
-    intent.seedOptions,
-    selection.held,
-    true
-  )
+  const view = structuredAgentSessionOptionView(firstFrame, intent.seedOptions, selection.held)
   const options = {
     ...selection.held,
     ...structuredAgentSessionSendSelection(intent.agent, structuredAgentSessionOptionSnapshot(view))

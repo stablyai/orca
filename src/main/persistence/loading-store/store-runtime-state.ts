@@ -74,6 +74,11 @@ export class StoreRuntimeState {
   quitFlushPromise: Promise<void> | null = null
   lastWrittenStateHash: string | null = null
   lastDurableWriteGeneration = -1
+  /**
+   * The write generation each migration committed by this process needs on disk before its
+   * received blobs may be consumed; a receipt missing here was read from disk.
+   */
+  readonly orcadMigrationCommitWriteGenerations = new Map<string, number>()
   firstPendingSaveAt: number | null = null
   /** Known dirty domains, or null when a caller requires a complete-document fallback. */
   dirtyProfileStateDomains: Set<string> | null = new Set()

@@ -224,7 +224,12 @@ async function resolveTiered(
   agent: SessionIdLookupAgent,
   sessionId: string,
   hostDirs: readonly string[],
-  options: { wslTier: boolean; accountDirs?: () => readonly string[]; signal?: AbortSignal; strictErrors?: boolean }
+  options: {
+    wslTier: boolean
+    accountDirs?: () => readonly string[]
+    signal?: AbortSignal
+    strictErrors?: boolean
+  }
 ): Promise<string | null> {
   const { signal } = options
   const hit = await findFirstInDirs(agent, sessionId, hostDirs, signal, options.strictErrors)
@@ -232,7 +237,13 @@ async function resolveTiered(
     return hit
   }
   const accountDirs = (options.accountDirs?.() ?? []).filter((dir) => !hostDirs.includes(dir))
-  const accountHit = await findFirstInDirs(agent, sessionId, accountDirs, signal, options.strictErrors)
+  const accountHit = await findFirstInDirs(
+    agent,
+    sessionId,
+    accountDirs,
+    signal,
+    options.strictErrors
+  )
   if (accountHit || !options.wslTier) {
     return accountHit
   }

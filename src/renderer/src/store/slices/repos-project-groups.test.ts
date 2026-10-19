@@ -856,7 +856,8 @@ describe('project group store routing', () => {
     expect(projectGroupsMoveProject).toHaveBeenCalledWith({
       projectId: remoteRepo.id,
       groupId: projectGroup.id,
-      order: 3
+      order: 3,
+      hostId: 'local'
     })
     // Why: the repos slice stamps updated repos with their owning execution
     // host so multi-host routing never has to guess (multi-host design).

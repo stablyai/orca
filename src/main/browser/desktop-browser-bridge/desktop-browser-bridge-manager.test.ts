@@ -315,4 +315,44 @@ describe('DesktopBrowserBridgeManager', () => {
     expect(seen!.aborted).toBe(false)
     await vi.waitFor(() => expect(seen!.aborted).toBe(true))
   })
+
+  it('stops a queued or running command when orcad cancels it, and stays attached', async () => {
+    const h = harness()
+    let seen: AbortSignal | null = null
+    let finish = (): void => {}
+    h.execute.mockImplementationOnce(async (_candidate, _request, signal) => {
+      seen = signal
+      await new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      return { ok: true, result: {} }
+    })
+    h.manager.reconcile()
+    await vi.waitFor(() => expect(h.subscriptions).toHaveLength(1))
+    const socket = h.subscriptions[0]!
+    socket.callbacks.onResponse(event({ type: 'ready', attachmentId: 'att-1' }))
+    socket.callbacks.onResponse(
+      event({ type: 'request', requestId: 'r', method: 'browser.click', params: {} })
+    )
+    await vi.waitFor(() => expect(seen).not.toBeNull())
+    expect(seen!.aborted).toBe(false)
+
+    socket.callbacks.onResponse(event({ type: 'cancel', requestId: 'r' }))
+
+    expect(seen!.aborted).toBe(true)
+    expect(h.manager.isAttached('env-a')).toBe(true)
+    finish()
+  })
+
+  it('ignores a cancel for a request it is not running', async () => {
+    const h = harness()
+    h.manager.reconcile()
+    await vi.waitFor(() => expect(h.subscriptions).toHaveLength(1))
+    const socket = h.subscriptions[0]!
+    socket.callbacks.onResponse(event({ type: 'ready', attachmentId: 'att-1' }))
+
+    socket.callbacks.onResponse(event({ type: 'cancel', requestId: 'unknown' }))
+
+    expect(h.manager.isAttached('env-a')).toBe(true)
+  })
 })

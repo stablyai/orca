@@ -10,7 +10,7 @@ import { open } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { parseWslUncPath, toLinuxPath } from '../../shared/wsl-paths'
 import type { RemoteInstallTransport } from '../managed-server/install/remote-install-transport'
-import { shellEscape } from '../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { execCommand } from '../ssh/remote-exec/remote-exec-command'
 import { RELAY_DEPLOY_TIMEOUT_MS } from '../managed-server/install/remote-deploy-timing'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
@@ -39,7 +39,7 @@ export function wslGuestSourcePath(localDir: string, distro: string): string | n
 // Success paths never `exit`: execCommand's stdout fence must still print its end marker.
 function stageFromGuestPathCommand(source: string, stage: string): string {
   return [
-    `source=${shellEscape(source)}; stage=${shellEscape(stage)}`,
+    `source=${quotePosixShell(source)}; stage=${quotePosixShell(stage)}`,
     'if [ -d "$source" ]; then',
     '  { mkdir -p "$stage" && cp -R "$source/." "$stage/"; } || { rm -rf "$stage"; false; }',
     'else',
@@ -50,7 +50,7 @@ function stageFromGuestPathCommand(source: string, stage: string): string {
 
 function stageFromTarCommand(stage: string): string {
   return [
-    `stage=${shellEscape(stage)}`,
+    `stage=${quotePosixShell(stage)}`,
     // `-o`: files belong to whoever extracts them, not to the archive's uid 0.
     '{ mkdir -p "$stage" && tar -x -o -f - -C "$stage"; } || { rm -rf "$stage"; false; }'
   ].join('\n')
@@ -59,7 +59,7 @@ function stageFromTarCommand(stage: string): string {
 /** Reads the digest manifest from stdin; the stage is removed whatever the outcome. */
 function verifyAndPromoteCommand(stage: string, dest: string, hasFiles: boolean): string {
   return [
-    `stage=${shellEscape(stage)}; dest=${shellEscape(dest)}`,
+    `stage=${quotePosixShell(stage)}; dest=${quotePosixShell(dest)}`,
     `trap 'rm -rf "$stage"' EXIT`,
     // GNU sha256sum rejects an empty manifest.
     ...(hasFiles

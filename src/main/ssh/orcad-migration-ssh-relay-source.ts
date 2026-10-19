@@ -1,5 +1,5 @@
 /** The relay-era SSH target as a migration source: keyed by its target id, paths unchanged. */
-import { ORCAD_MIGRATION_SSH_RELAY_SOURCE_KIND } from '../../shared/orcad-migration-source-kind'
+import { ORCAD_MIGRATION_SSH_RELAY_SOURCE_KIND } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import type { SshTarget } from '../../shared/ssh-types'
 import { collectOrcadMigrationSourceCatalog } from '../persistence/migrating-orcad-catalog/orcad-source-catalog'
 import type { Store } from '../persistence'
@@ -21,8 +21,8 @@ import {
   retireProvenExitedLeases,
   type CensusHostRelayTerminals
 } from './orcad-migration-terminal-gate'
-import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
-import type { OrcadMigrationPreflightStore } from './ssh-target-orcad-preflight'
+import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
+import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-preflight'
 
 type SshRelayCutoverDeps = {
   userDataPath: string

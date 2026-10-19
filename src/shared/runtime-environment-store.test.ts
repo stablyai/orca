@@ -110,6 +110,26 @@ describe('runtime environment store', () => {
     expect(listEnvironments(userDataPath)).toEqual([first])
   })
 
+  it('rejects a name that differs only in case or surrounding spaces, as --environment resolves it', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+
+    const first = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'build',
+      pairingCode: pairingCode('ws://127.0.0.1:6768')
+    })
+
+    for (const name of ['Build', ' build ', '"build"']) {
+      expect(() =>
+        addEnvironmentFromPairingCode(userDataPath, {
+          name,
+          pairingCode: pairingCode('ws://192.0.2.10:6768')
+        })
+      ).toThrow('A server named "build" already exists.')
+    }
+    expect(listEnvironments(userDataPath)).toEqual([first])
+  })
+
   it('advances pairing revisions across equal and backward clock readings', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
     tempDirs.push(userDataPath)

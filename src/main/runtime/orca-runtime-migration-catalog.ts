@@ -2,16 +2,16 @@ import type {
   OrcadMigrationCatalogAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 import type {
   OrcadMigrationSnapshotChunkRequest,
   OrcadMigrationSnapshotChunkResult
-} from '../../shared/orcad-migration-scrollback'
+} from '../../shared/orcad-migration/orcad-migration-scrollback'
 import type {
   OrcadMigrationBlobChunkRequest,
   OrcadMigrationBlobChunkResult,
   OrcadMigrationBlobDescriptor
-} from '../../shared/orcad-migration-blob-transfer'
+} from '../../shared/orcad-migration/orcad-migration-blob-transfer'
 import {
   abortStagedOrcadMigrationCatalogDurably,
   commitStagedOrcadMigrationCatalogDurably,

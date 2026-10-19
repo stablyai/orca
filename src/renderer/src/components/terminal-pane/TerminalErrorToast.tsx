@@ -203,7 +203,8 @@ export function TerminalErrorToast({
   paneOnClient = true,
   onDismiss,
   onRestartDaemon,
-  onRetry
+  onRetry,
+  onOpenNewTerminal
 }: {
   error: string
   /** False for a pane on an SSH or remote host, or one whose host is not yet known. */
@@ -211,6 +212,8 @@ export function TerminalErrorToast({
   onDismiss: () => void
   onRestartDaemon?: () => void
   onRetry?: () => Promise<boolean>
+  /** Leaves this pane and its saved session untouched. */
+  onOpenNewTerminal?: () => void
 }): React.JSX.Element {
   const ssh = isSshHostStateTerminalError(error)
   // Why: the client's OS and shell describe neither the host nor its shell, and the renderer knows neither.
@@ -371,6 +374,15 @@ export function TerminalErrorToast({
             {retrying
               ? translate('auto.components.terminal.pane.TerminalErrorToast.retrying', 'Retrying…')
               : translate('auto.components.terminal.pane.TerminalErrorToast.retry', 'Retry')}
+          </Button>
+        ) : null}
+        {/* Why: an owner can stay unverifiable, so Retry alone can loop forever. */}
+        {paneOwnerUnverified && onOpenNewTerminal ? (
+          <Button variant="outline" size="xs" onClick={onOpenNewTerminal} className="ml-2">
+            {translate(
+              'auto.components.terminal.pane.TerminalErrorToast.openNewTerminal',
+              'Open new terminal'
+            )}
           </Button>
         ) : null}
         <button

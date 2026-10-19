@@ -18,7 +18,11 @@ export class LegacyDaemonExitProof {
   // Why: a refused or missing socket is loss of contact, not death; only a vanished pid proves the
   // daemon exited. Windows is excluded like probeDaemonProcessIdentity, so it keeps failing closed.
   hasExited(adapter: DaemonPtyAdapter): boolean {
-    const pid = this.pids.get(adapter)
+    // Why the last authenticated pid first: a replacement daemon must not be judged by its predecessor's pid.
+    const pid =
+      (typeof adapter.getLastAuthenticatedDaemonIdentity === 'function'
+        ? adapter.getLastAuthenticatedDaemonIdentity()?.pid
+        : undefined) ?? this.pids.get(adapter)
     return (
       process.platform !== 'win32' && pid !== undefined && inspectProcessSignal(pid) === 'missing'
     )

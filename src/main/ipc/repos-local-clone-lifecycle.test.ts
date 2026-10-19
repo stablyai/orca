@@ -38,6 +38,7 @@ import {
   resetLocalRepoMocks,
   waitForAssertion
 } from './repos-remote-test-harness'
+import { repoTarget } from '../persistence/repo-host-target-matcher.test-fixture'
 
 const {
   handleMock,
@@ -197,7 +198,7 @@ describe('repos:add + repos:clone', () => {
       expect(mockStore.updateRepo).not.toHaveBeenCalled()
       expect(result).toEqual(current)
     } else {
-      expect(mockStore.updateRepo).toHaveBeenCalledWith(current.id, {
+      expect(mockStore.updateRepo).toHaveBeenCalledWith(repoTarget(current.id), {
         kind: 'git',
         folderUpgradeGitRootPath: clonePath,
         projectHostSetupMethod: 'cloned'

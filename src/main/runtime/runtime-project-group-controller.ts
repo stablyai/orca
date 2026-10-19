@@ -135,7 +135,7 @@ export class RuntimeProjectGroupController {
     }
     const repo = await this.deps.resolveRepo(repoSelector)
     assertWslMoveRepoWritable(store, repo)
-    const moved = store.moveProjectToGroup(repo.id, groupId, order)
+    const moved = store.moveProjectToGroup(repo, groupId, order)
     if (!moved) {
       throw new Error('repo_not_found')
     }

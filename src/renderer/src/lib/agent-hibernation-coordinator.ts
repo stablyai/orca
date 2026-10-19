@@ -22,7 +22,7 @@ import {
   observeHibernationPtyBindings
 } from './agent-hibernation-pane-age'
 import { mergePendingTerminalInputActivity } from './terminal-input-activity-coalescing'
-import { resolveRuntimeOwnerForWorktree } from './worktree-runtime-owner'
+import { resolveTerminalPtyOwner } from './terminal-worktree-route'
 import { toAgentHibernationRuntimeOwner } from './agent-hibernation-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -111,7 +111,7 @@ function snapshotFromState(
 function resolveAgentHibernationRuntimeOwner(state: AppState, worktreeId: string) {
   const tabs = state.tabsByWorktree[worktreeId] ?? []
   const ptyIds = tabs.flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
-  return toAgentHibernationRuntimeOwner(resolveRuntimeOwnerForWorktree(state, worktreeId), ptyIds)
+  return toAgentHibernationRuntimeOwner(resolveTerminalPtyOwner(state, worktreeId), ptyIds)
 }
 
 /** Worktree → owning runtime; `null` means liveness is required but no host can be asked. */

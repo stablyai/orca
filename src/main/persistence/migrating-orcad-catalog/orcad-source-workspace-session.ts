@@ -1,10 +1,10 @@
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../../shared/orcad-migration-scrollback'
+import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import {
   extractSessionOwnersForTransfer,
   hasTransferredSessionState
@@ -39,6 +39,7 @@ import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
 import { orcadMigrationSessionPartitions } from './orcad-source-session-partitions'
+import { collectDuplicateOrcadMigrationSessionIdentities } from './orcad-source-duplicate-session-identities'
 import {
   hasDuplicateOrcadMigrationScrollbackDescriptors,
   projectOrcadMigrationSessionScrollback
@@ -232,6 +233,12 @@ function collectWorkspaceSession(
       blockedItems: ['terminal history saved twice for one pane'],
       leftBehindItems
     }
+  }
+  const duplicates = merged.session
+    ? collectDuplicateOrcadMigrationSessionIdentities(merged.session)
+    : []
+  if (duplicates.length > 0) {
+    return { payload: undefined, snapshots: [], blockedItems: duplicates, leftBehindItems }
   }
   return merged.session
     ? { payload: merged.session, snapshots, blockedItems: [], leftBehindItems }

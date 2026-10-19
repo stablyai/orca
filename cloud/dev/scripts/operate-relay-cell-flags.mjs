@@ -43,7 +43,9 @@ export const CELL_FLAG_SPECS = {
   // Absent keeps the cell's boot value.
   readTimeoutMarginMs: { parse: numberIn(1_000, 60_000, true) },
   // Flip-back leases in flight; absent is a third of the cell's pool.
-  reregisterInFlight: { parse: numberIn(1, 16, true) }
+  reregisterInFlight: { parse: numberIn(1, 16, true) },
+  // Step 6: acts only while the cell is reserve.
+  phonePath: { parse: enumOf('db', 'memory'), default: 'db' }
 }
 
 export const RESERVE_CONFIRMATION = 'RESERVE'
@@ -136,6 +138,24 @@ export function assertReserveKeepsLocalReadiness(flags, changes) {
   )
 }
 
+// The cell ignores phonePath=memory outside reserve, so writing it there only arms a later
+// admitMode=reserve flip to turn phones over unnamed. Rolling back with admitMode=db stays allowed.
+export function assertPhonePathNeedsReserve(flags, changes) {
+  if ((flags.phonePath ?? 'db') !== 'memory') return
+  if ((flags.admitMode ?? 'db') === 'reserve') {
+    if (changes.admitMode === 'reserve' && !('phonePath' in changes)) {
+      throw new Error(
+        'the object still says phonePath=memory: name phonePath in the same write ' +
+          '(e.g. --set admitMode=reserve,phonePath=default), so a reserve flip never turns phones over unnamed'
+      )
+    }
+    return
+  }
+  if ('phonePath' in changes) {
+    throw new Error("phonePath=memory requires admitMode=reserve on the cell, already written or in the same write")
+  }
+}
+
 // `key=value,key=value`; `key=default` removes the key so the cell uses its default.
 export function parseFlagChanges(text) {
   const changes = {}
@@ -152,7 +172,8 @@ export function parseFlagChanges(text) {
     }
     const value = spec.parse(raw)
     if (value === undefined) throw new Error(`switch ${key} cannot be ${JSON.stringify(raw)}`)
-    changes[key] = value
+    // phonePath=db is the default, stored as no key: an image without the switch refuses the key.
+    changes[key] = key === 'phonePath' && value === 'db' ? null : value
   }
   if (Object.keys(changes).length === 0) throw new Error('set names no switch to change')
   return changes
@@ -418,7 +439,8 @@ async function breakGlassToDatabase(request, dependencies, { fetchImpl, log, sle
   if (current.generation !== request.expectedGeneration) {
     throw generationConflict(current.generation, request.expectedGeneration)
   }
-  const object = desiredObject(request, current.object)
+  // phonePath goes too: a dead cell comes back with phones on the database path as well.
+  const object = desiredObject({ ...request, changes: { ...request.changes, phonePath: null } }, current.object)
   const generation = await writeObject(fetchImpl, request, object, accessToken, audit)
   await directorAdmitMode(fetchImpl, request, idToken, sleep, 'db')
   const result = { event: 'orca_relay_cell_admit_mode_break_glass', cellId: request.cellId, generation, audit }
@@ -453,6 +475,7 @@ export async function operateCellFlags(request, dependencies) {
     )
   }
   assertReserveKeepsLocalReadiness(object.flags, request.changes)
+  assertPhonePathNeedsReserve(object.flags, request.changes)
   const plan = {
     event: 'orca_relay_cell_flags_plan',
     mode: request.mode,

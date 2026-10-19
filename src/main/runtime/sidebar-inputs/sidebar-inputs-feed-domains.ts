@@ -1,4 +1,7 @@
-import { getRegisteredSshState, listRegisteredSshTargets } from '../../ssh/ssh-target-registry'
+import {
+  getRegisteredSshState,
+  listRegisteredSshTargets
+} from '../../ssh/targets/ssh-target-registry'
 import { getWslHostService } from '../../wsl/wsl-host-service-instance'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/desktop-sidebar-facts'
@@ -7,9 +10,12 @@ import type { OrcaRuntimeWithSidebarTemporal } from './orca-runtime-sidebar-temp
 import type { PairedServerRowsProducer } from './paired-server-rows-producer'
 import type { WorkspaceCreationRegistry } from './workspace-creation-registry'
 import type { WorkspaceRowsProducer } from './workspace-rows-producer'
+import type { RepoIconDataUrls } from './repo-icon-data-urls'
 import type { SidebarInputsFeedDomain } from './sidebar-inputs-feed'
 import { readDesktopSidebarFacts } from './desktop-sidebar-facts'
 import { buildPairedServerReviewFacts } from '../../../shared/sidebar-list/workspace-review-facts'
+import { buildPairedServerActivityFacts } from '../../../shared/sidebar-list/paired-server-activity-facts'
+import { parseExecutionHostId } from '../../../shared/execution-host'
 
 /** This host's store and connection registries, read the way sidebarInputs.desktopFacts reads them. */
 export function readRuntimeDesktopSidebarFacts(store: RuntimeStore): DesktopSidebarFacts {
@@ -34,6 +40,7 @@ export type SidebarInputsFeedSources = {
   pairedServerRows: PairedServerRowsProducer
   workspaceCreations: WorkspaceCreationRegistry
   workspaceRows: WorkspaceRowsProducer
+  repoIcons: Pick<RepoIconDataUrls, 'idsByRepo'>
   store: () => RuntimeStore | null
   onClientEvent: (
     listener: (event: RuntimeClientEvent) => void,
@@ -65,8 +72,27 @@ export function sidebarInputsFeedDomains(
   return [
     {
       name: 'activity',
-      read: () => facts.getWorkspaceActivityFacts().facts,
-      watch: (changed) => facts.workspaceActivityFacts.revision.onChange(changed)
+      read: () => ({
+        // A paired server's rows too; this host's own rows win an id both list.
+        ...buildPairedServerActivityFacts(
+          pairedServerRows.snapshot().servers,
+          (hostId) => sources.store()?.getWorkspaceSession?.(hostId) ?? null
+        ),
+        ...facts.getWorkspaceActivityFacts().facts
+      }),
+      watch: (changed) => {
+        const detaches = [
+          facts.workspaceActivityFacts.revision.onChange(changed),
+          pairedServerRows.revision.onChange(changed),
+          // This desktop's saved session for a paired server holds its browser and chat tabs there.
+          sources.store()?.onWorkspaceSessionWritten?.((hostId) => {
+            if (hostId === null || parseExecutionHostId(hostId)?.kind === 'runtime') {
+              changed()
+            }
+          })
+        ]
+        return () => detaches.forEach((detach) => detach?.())
+      }
     },
     {
       name: 'temporal',
@@ -102,7 +128,10 @@ export function sidebarInputsFeedDomains(
         Object.fromEntries(
           pairedServerRows
             .snapshot()
-            .servers.flatMap(({ rows }) => rows.map((row) => [row.key, row]))
+            // Activity goes out in its own domain, so a terminal count does not resend the row.
+            .servers.flatMap(({ rows }) =>
+              rows.map(({ activity: _activity, ...row }) => [row.key, row])
+            )
         ),
       watch: (changed) => pairedServerRows.revision.onChange(changed)
     },
@@ -115,11 +144,18 @@ export function sidebarInputsFeedDomains(
         const detaches = [
           watchCatalog(changed),
           store?.onUIChanged?.(changed),
-          store?.onWorkspaceSessionWritten?.(changed)
+          store?.onWorkspaceSessionWritten?.(changed),
+          store?.onSettingsChanged?.(changed)
         ]
         return () => detaches.forEach((detach) => detach?.())
       },
       rereadOnRead: true
+    },
+    {
+      // Ids only: a reader fetches the images through sidebarInputs.repoIcons.
+      name: 'repoIcons',
+      read: () => sources.repoIcons.idsByRepo(),
+      watch: watchCatalog
     },
     {
       name: 'review',

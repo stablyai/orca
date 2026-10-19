@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import { findCollidingEnvironmentName } from '../../../../shared/runtime-environment-name-collision'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { isRuntimeEnvironmentRemovalBlocked } from './runtime-environment-host-details'
 import type { RuntimeHostAccessFailure } from './RuntimeHostAccessFailureAlert'
@@ -58,9 +59,7 @@ export function useRuntimeEnvironmentMutationActions({
       )
       return
     }
-    const duplicate = environments.find(
-      (environment) => environment.name.trim().toLowerCase() === trimmedName.toLowerCase()
-    )
+    const duplicate = findCollidingEnvironmentName(environments, trimmedName)
     if (duplicate) {
       toast.error(
         translate(

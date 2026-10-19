@@ -1,4 +1,7 @@
 export const PROJECT_HOST_SETUP_RUNTIME_CAPABILITY = 'project-host-setup.v1' as const
+// Why: older hosts strip `hostId` from setup update/delete and act on the first same-id twin.
+export const PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY =
+  'project-host-setup.host-target.v1' as const
 export const TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY = 'task-source-context.v1' as const
 export const WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY = 'workspace-run-context.v1' as const
 export const WORKTREE_PROVISIONED_ROOT_RUNTIME_CAPABILITY = 'worktree.provisioned-root.v1' as const

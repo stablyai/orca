@@ -508,6 +508,8 @@ describe('relay observability', () => {
     observability.recordControlClose(1006)
     observability.recordControlClose(1006)
     observability.recordControlClose(4402)
+    observability.recordPostProofClose('relay draining')
+    observability.recordPostProofClose('relay draining')
     observability.recordSpliceClose('host-oversize-frame')
     observability.recordSpliceClose('queue-limit')
     observability.recordClientAcceptAbandoned('activity', 14_250.4)
@@ -518,15 +520,52 @@ describe('relay observability', () => {
 
     expect(entries[0]).toMatchObject({
       controlClosesByCodeDelta: { 1006: 2, 4402: 1 },
+      postProofClosesByReasonDelta: { 'relay draining': 2 },
       spliceClosesByTriggerDelta: { 'host-oversize-frame': 1, 'queue-limit': 1 },
       clientAcceptsAbandonedByStageDelta: { activity: 2, credential: 1 },
       clientAcceptAbandonedMsMax: 14_250.4
     })
     expect(entries[1]).toMatchObject({
       controlClosesByCodeDelta: {},
+      postProofClosesByReasonDelta: {},
       spliceClosesByTriggerDelta: {},
       clientAcceptsAbandonedByStageDelta: {},
       clientAcceptAbandonedMsMax: 0
+    })
+  })
+
+  it('counts the phone path, phone refusals by code and the step-6 failures per window', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'cell', cellId: 'production-gce-c28', region: 'asia-east2' },
+      (entry) => entries.push(entry)
+    )
+    const stageMs = { assignment: 0, credential: 170, activity: 0, attach: 300, basis: 0 }
+    observability.recordClientAcceptCompleted({ totalMs: 470, stageMs, phonePath: 'memory' })
+    observability.recordClientAcceptCompleted({ totalMs: 3_600, stageMs, phonePath: 'db' })
+    observability.recordPhoneRejection(4401)
+    observability.recordPhoneRejection(4404)
+    observability.recordPhoneRejection(4404)
+    observability.recordPhoneAttachDeadline()
+    observability.recordPhoneAcceptDatabaseError()
+    observability.recordResumeConfirmFailure('reject-revoked')
+    observability.recordResumeRenewalFailure()
+    observability.flush({ ...counts, resumeAuditDropped: 3 })
+    observability.flush(counts)
+    expect(entries[0]).toMatchObject({
+      clientAcceptsByPhonePathDelta: { memory: 1, db: 1 },
+      phoneRejectionsByCodeDelta: { '4401': 1, '4404': 2 },
+      phoneAttachDeadlinesDelta: 1,
+      phoneAcceptDatabaseErrorsDelta: 1,
+      resumeConfirmFailuresByCodeDelta: { 'reject-revoked': 1 },
+      resumeRenewalFailuresDelta: 1,
+      resumeAuditDropped: 3
+    })
+    expect(entries[1]).toMatchObject({
+      phoneRejectionsByCodeDelta: {},
+      phoneAttachDeadlinesDelta: 0,
+      phoneAcceptDatabaseErrorsDelta: 0,
+      resumeConfirmFailuresByCodeDelta: {}
     })
   })
 
@@ -572,6 +611,7 @@ describe('relay observability', () => {
       clientAcceptsAbandonedByStageDelta: {},
       clientAcceptAbandonedMsMax: 0
     })
+    expect(entries[0]).toMatchObject({ clientAcceptsByPhonePathDelta: {} })
     // An empty window publishes counts only: a zero percentile point is
     // indistinguishable from a real zero once Cloud Logging aggregates it.
     expect(entries[1]).toMatchObject({ clientAcceptCompletedDelta: 0, controlRttSamplesDelta: 0 })

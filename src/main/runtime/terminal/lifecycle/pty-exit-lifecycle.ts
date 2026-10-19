@@ -83,6 +83,10 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     }
     const processDeathCertified =
       exitCode >= 0 || options.hostExitConfirmed === true || options.providerExitObserved === true
+    if (processDeathCertified) {
+      // An unverifiable exit keeps the facet tracked until a certified exit or prune.
+      this.clearLiveProgramStatusFacet(ptyId)
+    }
     if (processDeathCertified && exitPaneKeys.size > 0) {
       this.reconcileAgentStatusForEndedProcessFn?.(exitPaneKeys)
     }
@@ -168,6 +172,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.agentPromptExplicitStatusFloorByPtyId.delete(ptyId)
       this.ptyLifecycleGenerationById.delete(ptyId)
       this.agentStatusOscProcessorsByPtyId.delete(ptyId)
+      this.liveProgramStatusFacetPtyIds.delete(ptyId)
       this.terminalSpawnCommandsByPtyId.delete(ptyId)
       this.disposePtyTitleTracker(ptyId)
       this.oscTitleScanTailByPtyId.delete(ptyId)

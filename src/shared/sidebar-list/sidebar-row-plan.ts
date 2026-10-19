@@ -21,7 +21,7 @@ import {
 } from '../worktree-occurrence-plan'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
-import type { ProjectGroupingModel } from '../project-section-grouping'
+import type { ProjectSectionModel } from '../project-section-grouping'
 import {
   appendProjectGroupSections,
   getProjectGroupOccurrencePaths
@@ -70,7 +70,7 @@ export type SidebarRowPlanInputs = {
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
   newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
   pendingCreations: readonly PendingCreationRef[]
-  projectGrouping?: ProjectGroupingModel
+  projectGrouping?: ProjectSectionModel
   folderWorkspaces: readonly FolderWorkspace[]
   hostLabelById?: ReadonlyMap<string, string>
   defaultHostId: ExecutionHostId

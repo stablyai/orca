@@ -1,14 +1,15 @@
-import { describe, expect, it, vi } from 'vitest'
-import { AgentSessionPromptAnswerRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import {
+  acquireReadyCodexForTest,
   THREAD_ID,
   acquired,
   adapterFor,
   fakeCodex,
   identityFor
 } from './codex-structured-session-adapter-fixture'
+import { describe, expect, it, vi } from 'vitest'
+import { AgentSessionPromptAnswerRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 
 describe('CodexStructuredSessionAdapter prompts', () => {
   function askApproval(codex: ReturnType<typeof fakeCodex>): void {
@@ -61,7 +62,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'closed' as const }))
     }
     const adapter = adapterFor(codex, {}, events)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -101,7 +102,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'backpressure' as const }))
     }
     const adapter = adapterFor(codex, {}, events)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -126,7 +127,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'failed' as const }))
     }
     const adapter = adapterFor(codex, {}, events)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',

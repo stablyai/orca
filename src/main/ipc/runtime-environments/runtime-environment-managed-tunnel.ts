@@ -25,7 +25,7 @@ import {
   updateManagedOrcadOnRestore
 } from '../../managed-server/lifecycle/orcad-managed-update-on-restore'
 import { getSshHostServerStatus, setSshHostServerStatus } from '../../ssh/ssh-host-server-status'
-import { getSshTargetRegistryStore } from '../../ssh/ssh-target-registry'
+import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { connectionManager, getCurrentMainWindow } from '../ssh/ssh-ipc-context'
 import { getWslHostService } from '../../wsl/wsl-host-service-instance'
 import { assertWslHostReachable } from '../../wsl/wsl-host-gate'

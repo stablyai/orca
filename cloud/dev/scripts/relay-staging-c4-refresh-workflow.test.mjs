@@ -42,9 +42,9 @@ const asiaCells = ['production-gce-c27', 'production-gce-c28', 'production-gce-c
 const c30Digest = '4158d8a2e18e9caec439d257f0c1e45d92ffea8c0262f057b2f08c76a134bcf0'
 // C31 launches on the digest the director served when it was declared.
 const c31Digest = 'f30b5cb1ec52b6b6145efecfa1b8be9e3d309403beffd8abcc64197a2087e269'
-// Staging C4 is declared on image G (main 2de73812, E-pre with the t_preauth metric); the staging
+// Staging C4 is declared on image J (main 30f5bef9, step-6 phonePath staging test); the staging
 // director deploy binds its digest to this line.
-const stagingC4Digest = '07b5bf67a7706b2a61ef5e9a6d8ce85ee37c2a08609496a94eb5254881b5b87d'
+const stagingC4Digest = '21f1fead4d3b9900d3b1179fd72569dcba548dc0ee29c76c8389fec94f74a7b4'
 
 function cellBlock(tfvars, cellId) {
   const start = tfvars.indexOf(`"${cellId}"`)

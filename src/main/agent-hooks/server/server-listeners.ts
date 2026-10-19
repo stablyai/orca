@@ -1,3 +1,4 @@
+import { cliWriterExecutionMatcher, type CliWriterExecutionMatches } from './cli-writer-observation'
 import { isTmuxInnerSubject } from '../../../shared/tmux-agent-hook-owner'
 import type {
   AgentStatusClearIpcPayload,
@@ -21,11 +22,25 @@ import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerState } from './server-state'
 import { serializeAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
+import { PaneTimers } from './program-status/pane-timers'
+import { ProgramStatusFacetStore } from './program-status/facet-store'
 
 // Why: the listing counter starts at 1, so an unassigned row must sort last — never above every ordered row.
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
+  protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
+
+  setCliWriterExecutionMatcher(...args: Parameters<typeof cliWriterExecutionMatcher>): void {
+    this.cliWriterExecutionMatches = cliWriterExecutionMatcher(...args)
+  }
+  // Why here: every publish below stitches from it, and all later layers manage its lifecycle.
+  protected readonly programStatusFacets = new ProgramStatusFacetStore()
+  /** Yielded OSC 7501 reports, re-offered when hook precedence lapses: programs never resend a state. */
+  protected readonly hookSilenceRechecks = new PaneTimers()
+  /** Trailing facet-only republishes: progress and message ticks can arrive at PTY chunk rate. */
+  protected readonly programStatusFacetRepublishes = new PaneTimers()
+
   setStartupPromptClaimListener(
     listener: (body: unknown) => boolean | 'pending',
     clear: () => void
@@ -34,7 +49,8 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     this.clearStartupPromptClaims = clear
   }
 
-  protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
+  protected emitEnrichedStatus(row: EnrichedAgentHookEventPayload): void {
+    const enriched = this.programStatusFacets.stitch(row)
     this.onAgentStatus?.(enriched)
     for (const listener of this.enrichedStatusListeners) {
       try {
@@ -58,7 +74,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
       rows.push({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; shared listeners expose only the base event type.
-        entry: entry as EnrichedAgentHookEventPayload,
+        entry: this.programStatusFacets.stitch(entry as EnrichedAgentHookEventPayload),
         order: getLegacyStatusListingOrder(this.state, paneKey) ?? UNORDERED_STATUS_ROW
       })
     }
@@ -222,7 +238,8 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     const legacy = this.state.lastStatusByPaneKey.get(paneKey)
     if (legacy) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
-      return [toAgentStatusIpcPayload(legacy as EnrichedAgentHookEventPayload)]
+      const row = legacy as EnrichedAgentHookEventPayload
+      return [toAgentStatusIpcPayload(this.programStatusFacets.stitch(row))]
     }
     const rows: AgentStatusIpcPayload[] = []
     for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {

@@ -71,5 +71,5 @@
 4 src/main/runtime/workspace-session-worktree-id.ts
 1 src/main/runtime/workspaces/session-hosts/get-runtime-id.ts
 2 src/main/runtime/workspaces/workspace-file-session-targets.ts
-1 src/main/ssh/ssh-target-id-migration.ts
+1 src/main/ssh/targets/ssh-target-id-migration.ts
 2 src/main/terminal-scrollback-snapshots.ts

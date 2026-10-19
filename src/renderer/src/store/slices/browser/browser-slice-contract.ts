@@ -155,7 +155,7 @@ export type BrowserSlice = {
   shutdownWorktreeBrowsers: (
     worktreeId: string,
     options?: { preserveWorktreeSelection?: boolean }
-  ) => Promise<void>
+  ) => void
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
   /** Activation uses the tab's workspace unless a target is supplied; global selection
    *  moves only when that workspace is active. */

@@ -45,3 +45,23 @@ describe('agentStatusEntryEqual', () => {
     expect(agentStatusEntryEqual(entry, { ...entry, turnStartedAt: 1_500 })).toBe(false)
   })
 })
+
+describe('agentStatusEntryEqual program-status facet', () => {
+  it('compares facet content and ignores observedAt', () => {
+    const entry: AgentStatusEntry = {
+      state: 'working',
+      prompt: 'ship it',
+      updatedAt: 2_000,
+      stateStartedAt: 1_000,
+      paneKey: 'tab-1:leaf-1',
+      stateHistory: [],
+      programStatus: { state: 'working', progress: 10, observedAt: 1 }
+    }
+    const reobserved = { state: 'working' as const, progress: 10, observedAt: 2 }
+    expect(agentStatusEntryEqual(entry, { ...entry, programStatus: reobserved })).toBe(true)
+    expect(
+      agentStatusEntryEqual(entry, { ...entry, programStatus: { ...reobserved, progress: 11 } })
+    ).toBe(false)
+    expect(agentStatusEntryEqual(entry, { ...entry, programStatus: undefined })).toBe(false)
+  })
+})

@@ -191,10 +191,12 @@ export async function main(
     })
   } catch (error) {
     const worktreeSelector = parsed.flags.get('worktree')
+    const repoSelector = parsed.flags.get('repo')
     const hostFlag = parsed.flags.get('host')
     reportCliError(error, json, {
       commandPath: parsed.commandPath,
       ...(typeof worktreeSelector === 'string' ? { worktreeSelector } : {}),
+      ...(typeof repoSelector === 'string' ? { repoSelector } : {}),
       remoteServerSelected:
         parsed.flags.has('environment') ||
         parsed.flags.has('pairing-code') ||

@@ -19,7 +19,7 @@ import {
   writeSync
 } from 'node:fs'
 import { join } from 'node:path'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { syncDirectoryDurablySync } from '../../durable-file-write'
 
 export const ORCAD_MIGRATION_STAGING_DIRECTORY = '.orcad-migration-staging'

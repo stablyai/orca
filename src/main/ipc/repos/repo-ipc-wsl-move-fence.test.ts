@@ -112,7 +112,7 @@ describe('projects:update under a WSL move', () => {
     store.addRepo(repo('repo-1'))
     store.addRepo(repo('repo-2'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
-    registerRepoCatalogHandlers(new BrowserWindow(), store)
+    registerRepoCatalogHandlers(new BrowserWindow(), store, { removeProject: vi.fn() })
     const projectFor = (repoId: string) =>
       store.getProjects().find((project) => project.sourceRepoIds.includes(repoId))
     const updates = { localWindowsRuntimePreference: { kind: 'windows-host' } }

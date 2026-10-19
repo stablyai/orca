@@ -6,7 +6,9 @@ const mocks = vi.hoisted(() => ({
   noticeDocPreviewDownloadBlocked: vi.fn(),
   clearBrowserWebAuthnAccessHandlers: vi.fn(),
   installBrowserWebAuthnAccessHandlers: vi.fn(),
-  isRemoteCliDrivenGuest: vi.fn((_webContentsId?: number) => false)
+  isRemoteCliDrivenGuest: vi.fn((_webContentsId?: number) => false),
+  requestExternalAppLaunch: vi.fn(),
+  notifyPermissionDenied: vi.fn()
 }))
 
 type WillDownloadListener = (
@@ -75,7 +77,8 @@ vi.mock('./browser-manager', () => ({
     handleGuestWillDownload: mocks.handleGuestWillDownload,
     installCertificateRequestGuard: vi.fn(),
     removeCertificateRequestGuard: vi.fn(),
-    notifyPermissionDenied: vi.fn()
+    notifyPermissionDenied: mocks.notifyPermissionDenied,
+    requestExternalAppLaunch: mocks.requestExternalAppLaunch
   }
 }))
 vi.mock('./doc-preview-download-block-notice', () => ({
@@ -228,6 +231,45 @@ describe('partition permission policy', () => {
     expect(decisions).toEqual([false, true, true])
     expect(checkHandler({ id: 7 }, 'clipboard-read')).toBe(false)
     expect(checkHandler({ id: 8 }, 'clipboard-read')).toBe(true)
+  })
+
+  it('hands a link to another app to the open-app prompt instead of denying it', async () => {
+    const install = await loadInstaller()
+    install(profileFor('persist:browsing-4'))
+    const sess = sessionsByPartition.get('persist:browsing-4')
+    if (!sess) {
+      throw new Error('Expected the browsing session')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+    const requestHandler = sess.setPermissionRequestHandler.mock.calls[0]?.[0] as (
+      webContents: { id: number; getURL: () => string },
+      permission: string,
+      callback: (allowed: boolean) => void,
+      details: { externalURL?: string; requestingUrl?: string }
+    ) => void
+    const guest = { id: 9, getURL: () => 'https://acme.okta.com/signin' }
+    const details = {
+      externalURL: 'com-okta-authenticator:/deviceChallenge',
+      requestingUrl: 'https://login.acme.okta.com/frame'
+    }
+    const decisions: boolean[] = []
+
+    mocks.requestExternalAppLaunch.mockReturnValueOnce(true)
+    requestHandler(guest, 'openExternal', (allowed) => decisions.push(allowed), details)
+    const [launchGuest, launchUrl, requestingUrl] = mocks.requestExternalAppLaunch.mock.calls[0]
+    expect([launchGuest, launchUrl]).toEqual([guest, 'com-okta-authenticator:/deviceChallenge'])
+    // The frame that asked, not the top page.
+    expect(requestingUrl()).toBe('https://login.acme.okta.com/frame')
+    expect(mocks.notifyPermissionDenied).not.toHaveBeenCalled()
+
+    // A link Orca refuses to ask about keeps the denial notice.
+    mocks.requestExternalAppLaunch.mockReturnValueOnce(false)
+    requestHandler(guest, 'openExternal', (allowed) => decisions.push(allowed), details)
+    expect(mocks.notifyPermissionDenied).toHaveBeenCalledWith(
+      expect.objectContaining({ guestWebContentsId: 9, permission: 'openExternal' })
+    )
+    // Chromium's own launch stays denied either way; Orca opens the app after the user says yes.
+    expect(decisions).toEqual([false, false])
   })
 
   it('cancels a download from a page an SSH host drives (#29145)', async () => {

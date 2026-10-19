@@ -154,6 +154,13 @@ describe('Claude child-work decoder', () => {
         status: 'completed'
       })
     )
+    // However many other children ended meanwhile, the wake still reads as this run's restart.
+    for (let index = 0; index < 300; index += 1) {
+      const id = `other-${index}`
+      decoder.observe({ ...backgroundAgent, task_id: id, tool_use_id: `toolu_${index}` })
+      decoder.observe(system('task_notification', { task_id: id, status: 'completed' }))
+    }
+    decoder.drain(400)
     decoder.observe(backgroundAgent)
     decoder.observe(system('task_progress', { task_id: 'agent-bg', last_tool_name: 'Read' }))
     expect(decoder.drain(500)).toEqual([
@@ -208,7 +215,7 @@ describe('Claude child-work decoder', () => {
     expect(decoder.drain(500)).toEqual([])
   })
 
-  it('admits every live child: only the host store bounds them', () => {
+  it('admits every live child', () => {
     const decoder = new ClaudeChildWorkDecoder()
     for (let index = 0; index < 300; index += 1) {
       decoder.observe({ ...backgroundAgent, task_id: `agent-${index}` })

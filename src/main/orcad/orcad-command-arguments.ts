@@ -1,4 +1,4 @@
-import type { OrcadOptions } from './orcad-entry'
+import type { OrcadOptions } from './orcad-start-contract'
 import { DEFAULT_WS_PORT } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
 import { ORCAD_LOOPBACK_BIND_HOST } from './orcad-bind-address'
 import { getServeOptionValidationError } from '../../shared/serve-option-validation'

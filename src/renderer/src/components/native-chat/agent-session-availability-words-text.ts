@@ -13,6 +13,7 @@ type AvailabilityCopyId = Extract<
   | 'claudeManagedNotSignedIn'
   | 'codexSystemNotSignedIn'
   | 'codexManagedNotSignedIn'
+  | 'antigravityNotSignedIn'
   | 'agentCommandNotSignedIn'
   | 'interactiveAgentNotSignedIn'
   | 'agentNotSignedIn'
@@ -67,6 +68,12 @@ export const AVAILABILITY_PIECES: Record<
     translate(
       'components.native-chat.failureWords.codexManagedNotSignedIn',
       COPY.codexManagedNotSignedIn,
+      values
+    ),
+  antigravityNotSignedIn: (values) =>
+    translate(
+      'components.native-chat.failureWords.antigravityNotSignedIn',
+      COPY.antigravityNotSignedIn,
       values
     ),
   cliMissing: (values) =>

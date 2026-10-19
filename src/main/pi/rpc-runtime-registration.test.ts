@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
+import { observeAgentCliVersion } from '../agent-cli-version-probe'
 import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import { PI_RPC_RUNTIME_REGISTRATION } from './rpc-runtime-registration'
@@ -20,7 +21,12 @@ async function supportsLaunch({ cwd, env, commandSettings }: LaunchInput): Promi
   if (!check) {
     throw new Error('Pi registers a launch check')
   }
-  return check.supportsVersion({ ...check.resolveLaunch(env, commandSettings), cwd })
+  const { command, env: launchEnv } = check.resolveLaunch(env, commandSettings)
+  const seen = await observeAgentCliVersion(
+    { program: command, cwd, env: launchEnv },
+    check.supportsVersion
+  )
+  return seen === 'supported'
 }
 let root: string
 let stockPi: string

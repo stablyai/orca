@@ -7,7 +7,7 @@ import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-act
 import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from './worktree-runtime-owner'
 import {
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
@@ -324,9 +324,9 @@ describe('preserved-pane replacement contract on workspace activation', () => {
       }
     }))
 
-    expect(getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktree.id)).toBe(
-      RUNTIME_ENV_ID
-    )
+    expect(
+      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(useAppStore.getState(), worktree.id)
+    ).toBe(RUNTIME_ENV_ID)
 
     activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
     await waitForWorktreeAgentActivationGateForTests(worktree.id)

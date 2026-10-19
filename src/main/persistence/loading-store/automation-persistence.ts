@@ -1,3 +1,4 @@
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import type {
   Automation,
   AutomationCreateInput,
@@ -188,10 +189,13 @@ export class AutomationPersistence {
     return updateAutomationRunOperation(getAutomationRunOperations(this), result)
   }
 
-  snapshotAutomationRunWorkspaceDisplayName(workspaceId: string, displayName: string): number {
+  snapshotAutomationRunWorkspaceDisplayName(
+    target: HostWorktreeTarget,
+    displayName: string
+  ): number {
     return snapshotAutomationRunWorkspaceDisplayNameOperation(
       getAutomationRunOperations(this),
-      workspaceId,
+      target,
       displayName
     )
   }

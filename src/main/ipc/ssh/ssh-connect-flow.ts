@@ -6,8 +6,11 @@ import {
   isCurrentSshProviderAuthority,
   rotateSshProviderAuthority
 } from '../../ssh/ssh-provider-authority'
-import { adoptSshConnection, runAttributedToSshOwner } from '../../ssh/ssh-connection-attribution'
-import { getSshTargetRegistryStore } from '../../ssh/ssh-target-registry'
+import {
+  adoptSshConnection,
+  runAttributedToSshOwner
+} from '../../ssh/connection/ssh-connection-attribution'
+import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import {
   decideHostServer,
   recheckWhenManagedFenceClears,

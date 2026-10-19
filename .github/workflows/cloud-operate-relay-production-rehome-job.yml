@@ -134,9 +134,9 @@ jobs:
             --drain-grace-ms "${DRAIN_GRACE_MS}" --confirmation "${CONFIRMATION}" \
             | tee "${RUNNER_TEMP}/relay-rehome-control.json"
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/setup@v2
         if: ${{ inputs.mode == 'enable' }}
-        with: { package_json_file: cloud/package.json }
+        with: { package-json-file: cloud/package.json, install: false }
 
       - run: pnpm install --frozen-lockfile
         if: ${{ inputs.mode == 'enable' }}

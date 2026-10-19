@@ -13,6 +13,7 @@ import {
   clearNativeChatAttachmentCacheForTests,
   useNativeChatComposerAttachments
 } from './use-native-chat-composer-attachments'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 const mocks = vi.hoisted(() => {
   const state: {
@@ -36,7 +37,8 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ tabsByWorktree: mocks.tabsByWorktree }) }
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => mocks.remoteTarget
 }))
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({

@@ -503,7 +503,9 @@ describe('OrcaRuntimeService', () => {
 
   it.each([
     ['the named group', { targetGroupId: 'group-named' }, { cols: 90, rows: 30 }],
-    ['the active group when none is named', {}, { cols: 63, rows: 60 }]
+    ['the active group when none is named', {}, { cols: 63, rows: 60 }],
+    // A caller that measured its own pane beats any group size.
+    ["the caller's own pane", { initialSize: { cols: 101, rows: 33 } }, { cols: 101, rows: 33 }]
   ])('starts a host terminal at the measured size of %s', async (_case, opts, expected) => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-cli' })
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({

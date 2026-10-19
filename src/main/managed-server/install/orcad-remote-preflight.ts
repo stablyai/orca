@@ -16,7 +16,7 @@ import { readWindowsOrcadSlotEntry } from './orcad-remote-launch-windows'
 import { ORCAD_WINDOWS_RUNTIME_MARKER } from '../host-state/orcad-windows-host-script'
 import { orcadNodeSlotRuntimeCommand, selectOrcadSlotEntryCommand } from './orcad-remote-runtime'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -31,13 +31,15 @@ export function orcadProfilePreflightCommand(
 ): string {
   assertPosixOrcadHost(host)
   // Why no host-Node fallback: a candidate this client installed is always a Node slot.
-  const marker = shellEscape(joinRemotePath(host, directory, ORCAD_NODE_RUNTIME_MARKER_FILENAME))
+  const marker = quotePosixShell(
+    joinRemotePath(host, directory, ORCAD_NODE_RUNTIME_MARKER_FILENAME)
+  )
   const launch = [
     'ORCA_BACKGROUND_LAUNCH=1',
     '"$orcad_runtime"',
     '"$orcad_entry"',
     ORCAD_PROFILE_PREFLIGHT_FLAG,
-    shellEscape(nonce)
+    quotePosixShell(nonce)
   ].join(' ')
   return `[ -e ${marker} ] || exit 78; ${orcadNodeSlotRuntimeCommand(host, directory)}${selectOrcadSlotEntryCommand(host, directory)}; ${launch}`
 }

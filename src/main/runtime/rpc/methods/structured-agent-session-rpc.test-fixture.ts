@@ -176,6 +176,7 @@ export function hostStub(): StructuredAgentSessionHost {
     waitForSendSettlement: vi.fn(),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
+    sleepWorkspace: vi.fn(async () => ({ stoppedSessionIds: [SESSION] })),
     revealSession: vi.fn(async () => ({
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -324,6 +325,4 @@ export function installStructuredHostStub(): void {
   setStructuredAgentSessionHost(hostStub())
 }
 
-export function clearStructuredHostStub(): void {
-  setStructuredAgentSessionHost(null)
-}
+export const clearStructuredHostStub = (): void => setStructuredAgentSessionHost(null)

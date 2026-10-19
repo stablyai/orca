@@ -132,7 +132,11 @@ export function applyWebSessionTabsStorePatch(
             allowCompletionNotification ||
             (!clientOwnedNotification &&
               !isSeenHostReplay(
-                { isReplay: true, stateStartedAt: notificationStatus.stateStartedAt },
+                {
+                  isReplay: true,
+                  stateStartedAt: notificationStatus.stateStartedAt,
+                  turnCompletedAt
+                },
                 notificationStatus.state,
                 state.agentStatusByPaneKey[notificationStatus.paneKey]
               ))

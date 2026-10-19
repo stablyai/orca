@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import type { Page } from '@stablyai/playwright-test'
@@ -137,4 +137,70 @@ test('a CLI split whose tab closes before it mounts answers promptly', async ({
   // Failed because of the close, not some earlier CLI failure.
   expect(outcome.ok ? '' : outcome.error).toContain('split_pane_closed')
   expect(elapsedMs).toBeLessThan(6_000)
+})
+
+// The window is too busy to start the split's terminal within the CLI's 10 s: main takes the
+// pane back, so the CLI's failure is the truth and the startup command never runs.
+test('a CLI split whose terminal does not start within 10 s leaves no pane', async ({
+  electronApp,
+  orcaPage
+}, testInfo) => {
+  test.skip(!LAYOUT_OWNER_BUILD, 'layout-owner build only')
+  test.setTimeout(180_000)
+  await waitForSessionReady(orcaPage)
+  const worktreeId = await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+  await waitForActiveTerminalManager(orcaPage, 30_000)
+  const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+  const client = new RuntimeClient(userDataDir, 30_000)
+  const tabId = await createActiveTab(orcaPage, worktreeId)
+  const source = await handleFor(client, worktreeId, tabId)
+  await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, { parkDelayMs: PARKING_DELAY_MS })
+  await orcaPage.evaluate(() => {
+    window.addEventListener(
+      'orca-background-mount-terminal-worktree',
+      () => {
+        const until = performance.now() + 11_000
+        while (performance.now() < until) {
+          // Busy renderer.
+        }
+      },
+      { once: true, capture: true }
+    )
+  })
+  // A file the command writes: a terminal that ran it and was then killed still leaves it.
+  const marker = testInfo.outputPath(`split-ran-${Date.now()}`)
+  mkdirSync(path.dirname(marker), { recursive: true })
+  const outcome = await runCliSplit(userDataDir, source, `touch '${marker}'`)
+  // Past the stall: the window has handled the split and main's take-back.
+  await new Promise((resolve) => setTimeout(resolve, 5_000))
+  const tabTerminals = await client
+    .call<RuntimeTerminalListResult>('terminal.list', { worktree: `id:${worktreeId}`, limit: 200 })
+    .then((listed) => listed.result.terminals.filter((t) => t.tabId === tabId))
+  const windowLeafIds = await orcaPage.evaluate((id) => {
+    const collect = (node: unknown): string[] => {
+      if (typeof node !== 'object' || node === null) {
+        return []
+      }
+      if ('leafId' in node && typeof node.leafId === 'string') {
+        return [node.leafId]
+      }
+      return [
+        ...('first' in node ? collect(node.first) : []),
+        ...('second' in node ? collect(node.second) : [])
+      ]
+    }
+    return collect(window.__store?.getState().terminalLayoutsByTabId[id]?.root)
+  }, tabId)
+  const report = { outcome, tabTerminals: tabTerminals.map((t) => t.leafId), windowLeafIds }
+  await testInfo.attach('split-taken-back.json', {
+    body: JSON.stringify(report, null, 2),
+    contentType: 'application/json'
+  })
+  expect(outcome.ok ? '' : outcome.error).toContain(
+    "split_pane_not_started: the new pane's terminal did not start within 10 s, so the pane was closed and its command was not run"
+  )
+  expect(tabTerminals).toHaveLength(1)
+  expect(windowLeafIds).toEqual([tabTerminals[0]!.leafId])
+  expect(existsSync(marker)).toBe(false)
 })

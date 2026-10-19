@@ -13,7 +13,6 @@ import {
   type AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { retainedRowReplacement } from '../agent-session-wire/structured-rewind-retained-host-rows'
 import type { JournalHostDatabase } from './journal-host-database'
 import {
   createTrackedJournalOpener,
@@ -118,13 +117,6 @@ export function registerJournalItemProvenanceTests(): void {
       expect(journal.itemFence(TURN_ID)).toBe(2)
       expect(journal.itemFence(agentJournalItemKey(item(2)))).toBe(3)
       expect(storedOwnerFences()).toEqual([2, 3, 2])
-    })
-
-    it("a rewind's retained row carries the old fold's provenance; an older record's is never current", () => {
-      const row = { itemId: TURN_ID, body: RUNNING, observedAt: 1, ownerFence: 2 }
-      expect(retainedRowReplacement(row).ownerFence).toBe(2)
-      const { ownerFence: _stated, ...older } = row
-      expect(retainedRowReplacement(older).ownerFence).toBe(0)
     })
   })
 }

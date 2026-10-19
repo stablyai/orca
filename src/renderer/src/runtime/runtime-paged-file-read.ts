@@ -1,10 +1,14 @@
 import { basename } from '@/lib/path'
 import { BINARY_PROBE_BYTES } from '../../../shared/binary-buffer'
 import { IMAGE_FILE_MIME_TYPES } from '../../../shared/image-file-extensions'
-import type { RuntimeFilePreviewResult } from '../../../shared/runtime-types'
+import type {
+  RuntimeFilePreviewResult,
+  RuntimeFileReadChunkResult
+} from '../../../shared/runtime-types'
 import {
   readRemoteRuntimeFileChunk,
   statRemoteRuntimeFile,
+  type RuntimeFileSnapshot,
   type RuntimeRemoteFileAddress
 } from './runtime-file-range-client'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
@@ -44,7 +48,21 @@ export async function readRemoteFileInChunks(
   address: RuntimeRemoteFileAddress
 ): Promise<PagedRemoteFileRead> {
   const remote = pinRemoteFileAddress(address)
-  const before = await nullWhenUnsupported(() => statRemoteRuntimeFile(remote))
+  return readFileInChunks({
+    stat: () => statRemoteRuntimeFile(remote),
+    readChunk: (offset, length) => readRemoteRuntimeFileChunk(remote, offset, length)
+  })
+}
+
+/** Host calls for one file; a paired web client binds them to its own session. */
+export type ChunkedFileReader = {
+  stat: () => Promise<RuntimeFileSnapshot>
+  readChunk: (offset: number, length: number) => Promise<RuntimeFileReadChunkResult>
+}
+
+/** The paging loop behind `readRemoteFileInChunks`, over any way of calling the host. */
+export async function readFileInChunks(reader: ChunkedFileReader): Promise<PagedRemoteFileRead> {
+  const before = await nullWhenUnsupported(() => reader.stat())
   if (!before) {
     return { kind: 'unsupported' }
   }
@@ -57,9 +75,7 @@ export async function readRemoteFileInChunks(
   const bytes = new Uint8Array(before.size)
   let offset = 0
   for (;;) {
-    const chunk = await nullWhenUnsupported(() =>
-      readRemoteRuntimeFileChunk(remote, offset, PAGED_READ_CHUNK_BYTES)
-    )
+    const chunk = await nullWhenUnsupported(() => reader.readChunk(offset, PAGED_READ_CHUNK_BYTES))
     if (!chunk) {
       return { kind: 'unsupported' }
     }
@@ -76,7 +92,7 @@ export async function readRemoteFileInChunks(
   }
   // Why: chunks are separate reads, so a rewrite between them (a PDF rebuild) would splice two
   // versions into one corrupt file.
-  const after = await statRemoteRuntimeFile(remote)
+  const after = await reader.stat()
   if (
     offset !== before.size ||
     after.size !== before.size ||

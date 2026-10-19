@@ -15,7 +15,7 @@ import {
   resolveOrcadMigrationFence
 } from './orcad-migration-source-fence'
 import type { OrcadMigrationTerminalVerdict } from './orcad-migration-terminal-gate'
-import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',

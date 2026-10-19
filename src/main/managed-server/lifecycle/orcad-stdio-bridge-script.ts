@@ -13,7 +13,7 @@ import {
   ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE,
   ORCAD_RUNTIMES_DIRNAME
 } from '../../../shared/orcad-artifacts'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
 import { ORCAD_MACHINE_HOMES_DIRNAME } from '../host-state/orcad-machine-home'
 
@@ -87,10 +87,10 @@ export function orcadPosixStdioBridgeCommand(port: number): string {
   const executable = `/${ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE}`
   const machineStores = `${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_HOMES_DIRNAME}/`
   return [
-    `for runtime in "$HOME"/${shellEscape(store)}*${shellEscape(executable)}`,
-    `"$HOME"/${shellEscape(machineStores)}*/${shellEscape(store)}*${shellEscape(executable)}; do`,
+    `for runtime in "$HOME"/${quotePosixShell(store)}*${quotePosixShell(executable)}`,
+    `"$HOME"/${quotePosixShell(machineStores)}*/${quotePosixShell(store)}*${quotePosixShell(executable)}; do`,
     `if [ -x "$runtime" ] && "$runtime" -e 0 >/dev/null 2>&1; then`,
-    `exec "$runtime" -e ${shellEscape(script)} ${String(port)}; fi;`,
-    `done; echo ${shellEscape(ORCAD_STDIO_BRIDGE_NO_NODE)}; exit 127`
+    `exec "$runtime" -e ${quotePosixShell(script)} ${String(port)}; fi;`,
+    `done; echo ${quotePosixShell(ORCAD_STDIO_BRIDGE_NO_NODE)}; exit 127`
   ].join(' ')
 }

@@ -21,7 +21,7 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
 import {
   operationDidNotRun,
   type ReadyOperationSelection
-} from './structured-agent-session-ready-operation'
+} from './structured-agent-session-operation-child'
 import {
   AGENT_SESSION_NOT_ATTACHED,
   type AgentSessionMutationSessionPreparation
@@ -119,8 +119,7 @@ async function recoverRewindOnLiveChild(
       sessionId,
       journal,
       structuredAgentSessionConversationFence(context.deps.store, sessionId),
-      context.deps.adapter,
-      context.now
+      context.deps.adapter
     )
   } catch (error) {
     context.deps.logger.warn('settling a rewind in doubt before a send failed', {

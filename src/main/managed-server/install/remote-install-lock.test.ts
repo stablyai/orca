@@ -1,6 +1,6 @@
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),

@@ -18,7 +18,7 @@ import {
   orphanInstallLockCommand,
   probeInstallLockExistsCommand
 } from '../install/remote-install-lock-commands'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   ORCAD_FENCE_OWNER_FILENAME,
   posixOrcadFenceOwnedTest,
@@ -272,10 +272,14 @@ async function releaseActivationFence(
  * Each piece is renamed aside first and kept only if it is ours, else put straight back: a release
  * that stalls after its token check can then never delete a successor's journal or lock.
  */
-function posixReleaseFenceCommand(fence: OrcadFence, journal: string, lockRoot: string): string {
-  const lock = shellEscape(fence.lockDir)
-  const journalPath = shellEscape(journal)
-  const stamp = shellEscape(journalFenceStamp(fence.token))
+export function posixReleaseFenceCommand(
+  fence: OrcadFence,
+  journal: string,
+  lockRoot: string
+): string {
+  const lock = quotePosixShell(fence.lockDir)
+  const journalPath = quotePosixShell(journal)
+  const stamp = quotePosixShell(journalFenceStamp(fence.token))
   return [
     `${posixOrcadFenceOwnedTest(fence)} || { echo SUPERSEDED; exit 0; };`,
     `ja=${journalPath}.release.$$;`,
@@ -283,9 +287,9 @@ function posixReleaseFenceCommand(fence: OrcadFence, journal: string, lockRoot: 
     `grep -qF ${stamp} "$ja" || mv -n "$ja" ${journalPath} 2>/dev/null; rm -f "$ja"; fi;`,
     `la=${lock}.released.$$;`,
     `if mv ${lock} "$la" 2>/dev/null; then`,
-    `if [ "$(cat "$la"/${ORCAD_FENCE_OWNER_FILENAME} 2>/dev/null)" = ${shellEscape(fence.token)} ]; then rm -rf "$la";`,
+    `if [ "$(cat "$la"/${ORCAD_FENCE_OWNER_FILENAME} 2>/dev/null)" = ${quotePosixShell(fence.token)} ]; then rm -rf "$la";`,
     `else mv -n "$la" ${lock} 2>/dev/null; fi; fi;`,
-    `rmdir ${shellEscape(lockRoot)} 2>/dev/null; echo RELEASED`
+    `rmdir ${quotePosixShell(lockRoot)} 2>/dev/null; echo RELEASED`
   ].join(' ')
 }
 

@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ownedEditorFileId } from '../../workspace-session-pane-ownership'
+import { editorFileKey } from '../workspace-layout-editor-tab-file'
 import { projectSessionTabs, type SessionTabsFacts } from './old-client-session-tabs-projection'
 import { build, testContext, WS } from '../workspace-layout-command.test-fixture'
 
@@ -39,7 +40,13 @@ function projectOwnedReadme() {
   const view = {
     groups: {},
     panes: {},
-    editorDrafts: { [WS]: { [FILE]: { dirtyDraftContent: '# draft' } } }
+    editorDrafts: {
+      [WS]: {
+        [editorFileKey({ filePath: FILE, runtimeEnvironmentId: 'env-1' })]: {
+          dirtyDraftContent: '# draft'
+        }
+      }
+    }
   }
   return {
     tabId: results[0]!.tabId!,

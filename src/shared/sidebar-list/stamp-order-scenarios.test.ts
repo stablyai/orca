@@ -8,9 +8,9 @@ import {
   nextAgentPaneState,
   REST_PANE,
   type AgentPaneState,
-  type AgentPhase,
   type SortStamps
 } from './sort-stamps'
+import type { AgentPhase } from '../agent-transitions'
 import { compareSmartStamps, recentStamp } from './stamp-order'
 
 /**

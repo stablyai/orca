@@ -48,6 +48,7 @@ export type FolderHostCatalog<R extends FolderHostRepo = Repo> = {
   projectGroups: readonly (Pick<ProjectGroup, 'id'> & {
     parentGroupId: string | null
     connectionId?: string | null
+    executionHostId?: string | null
   })[]
   repos: readonly R[]
 }

@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   openNewBrowserTabInActiveWorkspace: vi.fn(),
   openNewMarkdownInActiveWorkspace: vi.fn(),
   openNewTerminalTabInActiveWorkspace: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
   runtimeCall: vi.fn()
 }))
@@ -21,7 +21,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('react', async () => await stubHeadlessReact())
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin:
+    mocks.runtimeEnvironmentIdWithLegacyFallbackUnlessTwin
 }))
 vi.mock('@/lib/runtime-session-mirror-owners', () => ({
   getRuntimeSessionMirrorEnvironmentIds: () => []
@@ -76,7 +77,7 @@ describe('tab group "+" menu shell launch on a locally-owned workspace', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     storeState.activeWorkspaceExecutionHostId = 'local'
-    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
+    mocks.runtimeEnvironmentIdWithLegacyFallbackUnlessTwin.mockReturnValue(null)
     stubRuntimeEnvironmentBridge({ call: mocks.runtimeCall })
   })
 

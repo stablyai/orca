@@ -72,7 +72,8 @@ const SeatFeedReplySchema = z.object({
         ticketCheck: z.enum(['off', 'shadow', 'enforce']),
         rejectionFence: z.boolean(),
         admitMode: z.enum(['db', 'reserve']),
-        reserveDryRun: z.boolean()
+        reserveDryRun: z.boolean(),
+        phonePath: z.enum(['db', 'memory'])
       }),
       ignoredKeys: z.array(z.string()).optional()
     })
@@ -200,6 +201,7 @@ function createCell(relayConfig = config(), cellFlags?: () => AppliedControlFlag
     cellIncarnation: incarnation,
     cellSeatFeed: (sinceSeq) => registry.seatFeed(sinceSeq),
     cellFlags,
+    cellPhonePathEffective: () => registry.phonePathEffective(),
     isDraining: () => registry.isDraining(),
     runtimeCounts: () => ({
       totalConnections: 0,
@@ -349,6 +351,8 @@ describe('cell seat feed', () => {
     })
     expect(await runtime.json()).toMatchObject({
       flagsApplied: applied,
+      // Not reserve mode, so db whatever the switch says.
+      phonePathEffective: 'db',
       databasePoolMax: expect.any(Number),
       // What the flag tool checks a write against before it writes.
       supportedFlags: {
@@ -359,7 +363,8 @@ describe('cell seat feed', () => {
         admitMode: { type: 'enum', values: ['db', 'reserve'] },
         intakePerSec: { type: 'number', max: 1_000 },
         reserveDryRun: { type: 'boolean' },
-        reregisterInFlight: { type: 'number', min: 1, max: 16, integer: true }
+        reregisterInFlight: { type: 'number', min: 1, max: 16, integer: true },
+        phonePath: { type: 'enum', values: ['db', 'memory'] }
       }
     })
   })

@@ -1,3 +1,4 @@
+import type { AgentPaneWorkspace } from '../../agent-hooks/agent-transition-detector'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type {
   SmartStampFields,
@@ -6,7 +7,7 @@ import type {
 } from '../../../shared/sidebar-list/sort-stamps'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 
-type StampedRecord = { lastActivityAt: number } & SmartStampFields
+type StampedRecord = { lastActivityAt: number; isUnread?: boolean } & SmartStampFields
 type StampUpdates = {
   lastActivityAt: number
   smartTier: SmartTier | undefined
@@ -27,19 +28,18 @@ export type WorkspaceRecordStore<TRecord, TUpdates> = {
   updateFolderWorkspace?: (folderWorkspaceId: string, updates: TUpdates) => unknown
 }
 
-/** The record reads and writes stamping needs. */
-export type SortStampsStore = WorkspaceRecordStore<StampedRecord, StampUpdates> & {
+type UnreadUpdate = { isUnread: boolean }
+
+/** The record reads and writes stamping and the unread flag need. */
+export type SortStampsStore = WorkspaceRecordStore<StampedRecord, StampUpdates | UnreadUpdate> & {
   getAllWorktreeMeta?: () => Record<string, StampedRecord>
   getFolderWorkspaces?: () => readonly (StampedRecord & { id: string })[]
 }
 
-/** A workspace record: its id, and the SSH host whose record it is (null reads by id alone). */
-export type WorkspaceRef = { worktreeId: string; sshHostId: ExecutionHostId | null }
-
 /** The workspace's own record: folder, SSH host, or local. */
 export function readWorkspaceRecord<TRecord>(
   store: WorkspaceRecordStore<TRecord, never> | null,
-  { worktreeId, sshHostId }: WorkspaceRef
+  { worktreeId, sshHostId }: AgentPaneWorkspace
 ): TRecord | undefined {
   const scope = parseWorkspaceKey(worktreeId)
   return scope?.type === 'folder'
@@ -51,7 +51,7 @@ export function readWorkspaceRecord<TRecord>(
 
 export function writeWorkspaceRecord<TUpdates>(
   store: WorkspaceRecordStore<unknown, TUpdates> | null,
-  { worktreeId, sshHostId }: WorkspaceRef,
+  { worktreeId, sshHostId }: AgentPaneWorkspace,
   updates: TUpdates
 ): void {
   const scope = parseWorkspaceKey(worktreeId)
@@ -64,10 +64,25 @@ export function writeWorkspaceRecord<TUpdates>(
   }
 }
 
+/** Sets the workspace's unread flag; true when its record held the other value. */
+export function writeUnreadFlag(
+  store: SortStampsStore | null,
+  workspace: AgentPaneWorkspace,
+  isUnread: boolean
+): boolean {
+  const record = readWorkspaceRecord(store, workspace)
+  // Only a workspace with a record is written; writing would create one for a stale id.
+  if (!record || Boolean(record.isUnread) === isUnread) {
+    return false
+  }
+  writeWorkspaceRecord<UnreadUpdate>(store, workspace, { isUnread })
+  return true
+}
+
 // Only a workspace with a record is stamped; writing would create one for a stale id.
 export function readSortStamps(
   store: SortStampsStore | null,
-  workspace: WorkspaceRef
+  workspace: AgentPaneWorkspace
 ): SortStamps | null {
   const record = readWorkspaceRecord(store, workspace)
   if (!record) {
@@ -83,7 +98,7 @@ export function readSortStamps(
 
 export function writeSortStamps(
   store: SortStampsStore | null,
-  workspace: WorkspaceRef,
+  workspace: AgentPaneWorkspace,
   stamps: SortStamps
 ): void {
   // Both tier keys are always written, so Rest clears them.

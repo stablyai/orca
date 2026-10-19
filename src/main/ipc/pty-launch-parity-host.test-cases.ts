@@ -182,6 +182,8 @@ const FOLDER_ENV_KEYS = ['ORCA_WORKSPACE_ID', 'ORCA_PROJECT_GROUP_ID', 'ORCA_WOR
 
 /** What main hands the provider for a host-lane case. */
 export function expectedHostProvider(c: HostLaunchCase): Record<string, unknown> {
+  // Both lanes send the Windows shell facts only to a Windows main, the one that reads them.
+  const { terminalWindowsWslDistro, ...provider } = c.provider
   return {
     cwd: c.workspace.path.replaceAll('\\', '/'),
     cols: 120,
@@ -189,7 +191,8 @@ export function expectedHostProvider(c: HostLaunchCase): Record<string, unknown>
     commandDelivery: 'provider',
     hidden: true,
     env: {},
-    ...c.provider,
+    ...provider,
+    ...(c.os === 'win32' ? { terminalWindowsWslDistro } : {}),
     // main today: the host lane stamps ORCA_WORKSPACE_ID on folders only.
     orcaEnv: c.workspace.kind === 'folder' ? [...FOLDER_ENV_KEYS, ...HOST_ENV_KEYS] : HOST_ENV_KEYS
   }

@@ -2,7 +2,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { PtyListedSession, PtySessionListScope } from '../../../shared/pty-listed-session'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from './worktree-runtime-owner'
 import {
   resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
@@ -21,7 +21,10 @@ export function resolveActivationPtyListScope(
     return { connectionId: null }
   }
   const resolution = resolveWorktreeOperationRouteResult(state, worktreeId)
-  if (resolution.kind === 'missing' && !getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
+  if (
+    resolution.kind === 'missing' &&
+    !runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+  ) {
     const repo = resolveIndexedRepoOwner(state.repos, getRepoIdFromWorktreeId(worktreeId))
     const worktree = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
     // A known native repo remains usable while the unrelated runtime catalog hydrates.

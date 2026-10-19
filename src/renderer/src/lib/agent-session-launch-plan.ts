@@ -37,6 +37,8 @@ import { awaitLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilit
 export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
   /** The user action this launch serves, minted where that action is handled. */
   requestId: AgentLaunchRequestId
+  requestedSurface?: 'chat' | 'terminal'
+  selectedExecutionHostId?: ExecutionHostId
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
   /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
@@ -50,6 +52,7 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
  */
 export type AgentSessionLaunchVerdict = {
   route: AgentLaunchRoute
+  requestedSurface?: 'chat' | 'terminal'
   /** The user action this launch serves; a re-entry with this verdict is that same action. */
   requestId: AgentLaunchRequestId
   agent: TuiAgent
@@ -283,12 +286,21 @@ export function planAgentSessionLaunch(
   request: AgentSessionLaunchRequest
 ): AgentSessionLaunchPlan {
   const input = buildAgentLaunchRouteInput(store, request)
-  const route = resolveAgentLaunchRoute(input)
-  reportStructuredLaunchDowngrade(store, input, route)
+  const route = request.requestedSurface
+    ? request.requestedSurface === 'chat'
+      ? 'structured-native-chat'
+      : 'terminal-tui'
+    : resolveAgentLaunchRoute(input)
+  if (!request.requestedSurface) {
+    reportStructuredLaunchDowngrade(store, input, route)
+  }
   const executionHostId =
-    route === 'structured-native-chat' ? parseExecutionHostId(input.executionHostId)?.id : undefined
+    route === 'structured-native-chat'
+      ? (request.selectedExecutionHostId ?? parseExecutionHostId(input.executionHostId)?.id)
+      : undefined
   return adoptAgentSessionLaunchVerdict({
     route,
+    ...(request.requestedSurface ? { requestedSurface: request.requestedSurface } : {}),
     requestId: request.requestId,
     agent: request.agent,
     ...(executionHostId ? { executionHostId } : {}),

@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { decideHostKey, type HostKeyDecisionInput } from './ssh-host-key-decision'
+import {
+  decideHostKey,
+  hostKeyPolicyForOwner,
+  type HostKeyDecisionInput
+} from './ssh-host-key-decision'
 
 function input(overrides: Partial<HostKeyDecisionInput> = {}): HostKeyDecisionInput {
   return {
     knownHostsOutcome: 'unknown',
     storeOutcome: 'unknown',
     strictHostKeyChecking: 'ask',
-    isEphemeralRuntimeTarget: false,
+    policy: { kind: 'standard' },
     siteConfigSuppressed: false,
     knownHostsUnreadable: false,
     displayHost: 'build-01',
@@ -311,12 +315,12 @@ describe('deciding what to do with a presented host key', () => {
     // A fresh VM presents a new key every launch, so recording one would accumulate a row per
     // launch and eventually turn a stale record into a spurious mismatch.
     it('accepts an ephemeral runtime target without remembering it', () => {
-      expect(decideHostKey(input({ isEphemeralRuntimeTarget: true })).action).toBe('accept')
+      expect(decideHostKey(input({ policy: { kind: 'ephemeral' } })).action).toBe('accept')
     })
 
     it('still rejects a changed key for an ephemeral target', () => {
       const decision = decideHostKey(
-        input({ isEphemeralRuntimeTarget: true, knownHostsOutcome: 'mismatch' })
+        input({ policy: { kind: 'ephemeral' }, knownHostsOutcome: 'mismatch' })
       )
       expect(decision.action).toBe('reject')
     })
@@ -341,7 +345,7 @@ describe('deciding what to do with a presented host key', () => {
     // runtimes off for everyone whose HOME diverges from their passwd home.
     it('still accepts an ephemeral target when a source could not be read', () => {
       const decision = decideHostKey(
-        input({ isEphemeralRuntimeTarget: true, siteConfigSuppressed: true })
+        input({ policy: { kind: 'ephemeral' }, siteConfigSuppressed: true })
       )
       expect(decision.action).toBe('accept')
     })
@@ -350,7 +354,7 @@ describe('deciding what to do with a presented host key', () => {
     // actually read and the user actually asked for, so it outranks the carve-out.
     it('denies an ephemeral target under an explicit StrictHostKeyChecking=yes', () => {
       const decision = decideHostKey(
-        input({ isEphemeralRuntimeTarget: true, strictHostKeyChecking: 'yes' })
+        input({ policy: { kind: 'ephemeral' }, strictHostKeyChecking: 'yes' })
       )
       expect(decision.action).toBe('reject')
     })
@@ -359,7 +363,7 @@ describe('deciding what to do with a presented host key', () => {
     it('still rejects a changed key for an ephemeral target with sources incomplete', () => {
       const decision = decideHostKey(
         input({
-          isEphemeralRuntimeTarget: true,
+          policy: { kind: 'ephemeral' },
           siteConfigSuppressed: true,
           storeOutcome: 'mismatch'
         })
@@ -382,12 +386,24 @@ describe('deciding what to do with a presented host key', () => {
       { storeOutcome: 'mismatch' },
       { strictHostKeyChecking: 'yes' },
       { strictHostKeyChecking: 'no' },
-      { isEphemeralRuntimeTarget: true },
+      { policy: { kind: 'ephemeral' } },
       { siteConfigSuppressed: true },
       { knownHostsUnreadable: true }
     ]
     for (const overrides of cases) {
       expect(decideHostKey(input(overrides)).action).not.toBe('prompt')
     }
+  })
+})
+
+describe('hostKeyPolicyForOwner', () => {
+  it('trusts first contact only for ephemeral runtime VMs', () => {
+    expect(hostKeyPolicyForOwner({ type: 'on-demand-runtime', runtimeId: 'vm-1' })).toEqual({
+      kind: 'ephemeral'
+    })
+    expect(
+      hostKeyPolicyForOwner({ type: 'on-demand-runtime', runtimeId: 'managed-orcad:env-1' })
+    ).toEqual({ kind: 'standard' })
+    expect(hostKeyPolicyForOwner(undefined)).toEqual({ kind: 'standard' })
   })
 })

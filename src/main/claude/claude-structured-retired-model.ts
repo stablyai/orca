@@ -8,9 +8,9 @@ import type {
 } from './claude-structured-session-state'
 
 /** The launched model, once, when a root reply says it does not exist and the chat still has it
- *  picked: the session stops holding it, so the record drops it. Null otherwise. */
+ *  picked: the live session stops holding it. Saved picks remain the user's. */
 export function retireClaudeLaunchedModel(
-  session: Pick<ClaudeSession, 'launchedModel' | 'options' | 'restoreSkippedOptions'>,
+  session: Pick<ClaudeSession, 'launchedModel' | 'options' | 'retiredModel'>,
   message: Record<string, unknown>
 ): string | null {
   const launched = session.launchedModel
@@ -24,7 +24,7 @@ export function retireClaudeLaunchedModel(
     return null
   }
   session.options.delete('model')
-  session.restoreSkippedOptions.add('model')
+  session.retiredModel = launched
   return launched
 }
 

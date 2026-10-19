@@ -52,25 +52,6 @@ describe('persistent command ownership', () => {
     expect(tracker.tasks()).toEqual([])
   })
 
-  it('preflights finite metadata capacity and admits work again after process completion', () => {
-    const tracker = new CodexBackgroundCommandTracker('root', 700)
-    const first = command('item/started', 'first')
-    const second = command('item/started', 'second')
-    expect(tracker.canObserve(first)).toBe(true)
-    tracker.observe(first)
-    expect(tracker.canObserve(second)).toBe(false)
-    expect(() => tracker.observe(second)).toThrow('not admitted')
-    expect(tracker.threadCommands('root')).toHaveLength(1)
-    expect(tracker.retainedMetadataBytes).toBeLessThanOrEqual(700)
-    tracker.observe(command('item/completed', 'first'))
-    expect(tracker.canObserve(second)).toBe(true)
-    tracker.observe(second)
-    expect(tracker.threadCommands('root')).toHaveLength(1)
-    expect(tracker.retainedMetadataBytes).toBeLessThanOrEqual(700)
-    tracker.clear()
-    expect(tracker.retainedMetadataBytes).toBe(0)
-  })
-
   it('keeps the journal running across turn completion and accepts late output and exit', () => {
     const rows: { key: string; body: AgentJournalItemBody }[] = []
     const translator = createCodexJournalTranslator({

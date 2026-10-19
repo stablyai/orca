@@ -4,6 +4,10 @@ import type { SharedControlLogicalSubscription } from './remote-runtime-shared-c
 export class SharedControlSocketGeneration {
   private current = 0
 
+  peek(): number {
+    return this.current
+  }
+
   isCurrent(generation: number): boolean {
     return generation === this.current
   }

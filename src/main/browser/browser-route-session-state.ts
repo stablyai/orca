@@ -1,3 +1,4 @@
+import type { BrowserClientProfileMetadata } from '../../shared/browser-client-profile-switch-protocol'
 import type { BrowserRoutePartitionIdentity } from './browser-route-identity'
 import type { BrowserRoutePreparedPageLedger } from './browser-route-prepared-page-ledger'
 import type { BrowserRoutePageAuthority } from './browser-route-page-authority'
@@ -12,6 +13,7 @@ export type BrowserRouteSessionHandle = Readonly<{
 }>
 
 export type BrowserRoutePreparePageInput = Readonly<{
+  profileMetadata?: BrowserClientProfileMetadata
   identity: BrowserRoutePartitionIdentity
   /** Pre-migration identity, so an existing partition keeps serving this route. */
   legacyIdentity?: BrowserRoutePartitionIdentity

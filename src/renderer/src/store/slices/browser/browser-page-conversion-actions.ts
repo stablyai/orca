@@ -8,7 +8,7 @@ import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
 import { planBrowserPageConversion } from '../browser-page-conversion'
 import { findPage, findWorkspace, mirrorWorkspaceFromActivePage } from '../browser-page-records'
 import { assertManagedBrowserMaterializationAllowed } from '@/lib/client-creation-action-policy'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-close'
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
 import { isLocalBrowserPageOwner } from './browser-host-state'
@@ -37,7 +37,10 @@ export function createBrowserPageConversionActions(
         declaredOwnership !== undefined
           ? declaredOwnership
           : oldPageForOwnership
-            ? (getRuntimeEnvironmentIdForWorktree(get(), oldPageForOwnership.worktreeId) ?? null)
+            ? runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+                get(),
+                oldPageForOwnership.worktreeId
+              )
             : null
       )
       let converted: BrowserPage | null = null

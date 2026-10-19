@@ -19,11 +19,17 @@ nobody is prompted.
 - A dropped connection, or a disconnect that hangs the bridge up, is `unverifiable` and reattaches
   later; removing the target is what empties its panes. A pane retires (lease `terminated`)
   only when its relay reports the exit, or every relay for the target answered without it.
+- Closing a bridged tab, by any stop route, sends the relay's own `pty.shutdown`. A stop the relay
+  can't take yet is kept on the lease as `pendingKill`, so it survives a restart; that lease is
+  listed for the stop but never served as a pane again. A stop no later run could fence to the same
+  process (a legacy `pty-N` id with no incarnation) gets one try, then the lease ends.
+- Sleeping a bridged pane is refused (the pane stays live): its stop would be durable, so it would
+  outlive the sleep. A stop-and-wait caller succeeds only on the relay's exit proof.
 
 **Touches** `ipc/ssh.ts`, `ipc/ssh-connect-flow.ts`, `ipc/ssh-host-server-on-connect-wiring.ts`,
 `ipc/ssh-session-teardown.ts`, the conversion gate's `bridged` verdict
 (`orcad-migration-terminal-gate.ts`, `-source-fence.ts`, `-source-assertions.ts`,
-`orcad-runtime-conversion.ts`, `shared/orcad-migration-source-cutover.ts`), the preload
+`orcad-runtime-conversion.ts`, `shared/orcad-migration/orcad-migration-source-cutover.ts`), the preload
 `legacy-relay-bridge-api.ts`, and the renderer's `pty-input-recovery.ts` and
 `deferred-session-attach.ts`.
 

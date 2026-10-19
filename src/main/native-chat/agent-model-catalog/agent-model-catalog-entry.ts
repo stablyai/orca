@@ -66,7 +66,7 @@ export type AgentModelCatalogConfiguredDefault = {
  *  session can't say (it listed or runs no model); null when it runs a model it didn't list. */
 export function unpickedSessionConfiguredChoice(session: {
   resolvesConfig: boolean
-  picked: ReadonlySet<string>
+  picked?: ReadonlySet<string>
   models: readonly { id: string }[]
   current: { model?: string; effort?: string }
 }): AgentModelCatalogConfiguredChoice | null | undefined {
@@ -74,7 +74,7 @@ export function unpickedSessionConfiguredChoice(session: {
   // An empty listing (a signed-out agent) is doubt, not a catalog.
   if (
     !session.resolvesConfig ||
-    session.picked.has('model') ||
+    session.picked?.has('model') ||
     !current.model ||
     models.length === 0
   ) {
@@ -86,7 +86,7 @@ export function unpickedSessionConfiguredChoice(session: {
   return {
     modelId: current.model,
     // An effort this session picked is its own and says nothing of the config's.
-    ...(session.picked.has('effort') ? {} : { effort: current.effort ?? null })
+    ...(session.picked?.has('effort') ? {} : { effort: current.effort ?? null })
   }
 }
 

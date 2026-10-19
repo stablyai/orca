@@ -76,6 +76,7 @@ export function structuredHostStub(
       value: { itemId: 'item-1', epoch: 'rewound-epoch' }
     })),
     close: vi.fn(async () => undefined),
+    sleepWorkspace: vi.fn(async () => ({ stoppedSessionIds: [] })),
     revealSession: vi.fn(async () => ({
       sessionId,
       workspaceId,
@@ -185,6 +186,7 @@ export function readyCodexProviderAdapter(input: {
   return startsWhenPublished(
     {
       acquire: async ({ fence }) => ({
+        acquisitionGeneration: `wire-host-${fence}`,
         process: {
           hostId: 'local',
           pid: 4242,

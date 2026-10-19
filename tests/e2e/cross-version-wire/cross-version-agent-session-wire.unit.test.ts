@@ -704,7 +704,7 @@ describe('cross-version structured agent sessions', () => {
             starts += 1
             await startGate
             return {
-              providerChildPhase: 'starting' as const,
+              acquisitionGeneration: `cursor-${fence}`,
               process: {
                 hostId: 'local',
                 pid: 4242,
@@ -743,7 +743,7 @@ describe('cross-version structured agent sessions', () => {
 
     /** Reopens the store from disk and installs a fresh host over the same journal
      *  root — what a process restart actually leaves behind. */
-    async function bootHost(generation: string, startupLimits?: { silenceMs: number }) {
+    async function bootHost(generation: string, startupLimits?: { ceilingMs: number }) {
       store = await openTestAgentSessionRecordStore(root)
       const host: StructuredAgentSessionHost = new StructuredAgentSessionHost({
         agents: NO_STRUCTURED_AGENTS,
@@ -943,7 +943,9 @@ describe('cross-version structured agent sessions', () => {
         (capability) => capability !== AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
       )
       const created = await answer('agentSession.create', createIntentParams())
-      await bootHost('b', { silenceMs: 200 })
+      // The ceiling counts from the start's registration, so a short one ends a start whose
+      // handshake never answers without waiting out the real ten minutes.
+      await bootHost('b', { ceilingMs: 200 })
       handshake = new Promise(() => undefined)
 
       const params = sendParams('never started', created.fence)

@@ -17,7 +17,7 @@ import {
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
 import { restoreManagedHostPortForwards } from './ssh-managed-port-forward-restore'
 import { broadcastSshState, getPublicSshState } from './ssh-renderer-broadcast'
-import { isAuthError } from '../../ssh/ssh-connection-utils'
+import { isAuthError } from '../../ssh/ssh-reconnect-error-classification'
 
 export async function decideHostServer(target: SshTarget): Promise<HostServerOnConnectResult> {
   // Why lazy: the managed-server graph (deploy, migration, tunnel) loads only when a host connects.

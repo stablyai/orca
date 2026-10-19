@@ -144,8 +144,8 @@ export const SendParams = z
      *  older host refuses it: clients send it only when `agent-session.queued-messages.v1` is
      *  advertised. Participates in the operation fingerprint, never the body fingerprint. */
     delivery: z.literal('queue-if-active').optional(),
-    /** The composer's model and effort for the turn this send starts; the host records them on the
-     *  chat. Sent only when `agent-session.send-options.v1` is advertised. Operation fingerprint only. */
+    /** The composer's choices for the turn this message starts, kept with the message until it is
+     *  dispatched. Sent only when `agent-session.send-options.v1` is advertised. Operation fingerprint only. */
     options: AgentSessionOptions.optional(),
     body: SendBody
   })
@@ -277,10 +277,14 @@ export const SetOptionParams = z
   .strict()
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const SleepWorkspaceParams = z.object({ workspaceId: z.string().min(1) }).strict()
 export const AcknowledgeAttentionParams = OptionsParams.extend({ observedCursor: JournalCursor })
 
 /** `agentSession.agents` takes nothing: the list is the host's, whichever client asks. */
 export const AgentsParams = z.object({}).strict()
+
+/** `agentSession.subscribeAvailability` takes nothing: the snapshot is the host's. */
+export const AvailabilityParams = z.strictObject({})
 
 /** `sessionId` scopes the catalog to that session's pinned account; without a
  *  session record the host keys it by the account a new launch would pin.

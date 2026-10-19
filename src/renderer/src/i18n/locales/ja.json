@@ -39,7 +39,8 @@
       },
       "providers": {
         "title": "プロバイダー",
-        "antigravityDescription": "Antigravity チャットは、Orca がこのホストにダウンロードするサーバーで動作します。agy CLI とは別です。"
+        "antigravityDescription": "Antigravity チャットは、Orca がこのホストにダウンロードするサーバーで動作します。agy CLI とは別です。",
+        "antigravityNotSignedIn": "サインインしていません。チャットには、ターミナルの agy アカウントとは別の Antigravity サインインが必要です。"
       }
     },
     "terminal": {
@@ -582,7 +583,8 @@
             "76deec8f58": "組織の切り替えに失敗しました",
             "7d4bc516ee": "プロファイルの切り替えに失敗しました",
             "f518e89aa5": "プロジェクトはそのプロファイルに既に存在します",
-            "f03ae7f27b": "プロジェクトの転送に失敗しました"
+            "f03ae7f27b": "プロジェクトの転送に失敗しました",
+            "signInTimedOut": "サインインがタイムアウトしました"
           }
         },
         "runtime": {
@@ -3252,6 +3254,7 @@
             "retry": "再試行",
             "retrying": "再試行中…",
             "retryUnavailable": "再試行はまだ再接続できませんでした。しばらくしてからもう一度お試しください。",
+            "openNewTerminal": "新しいターミナルを開く",
             "ownerUnknown": "Orca はこのターミナルの所有者を確認できませんでした。",
             "42b283ecfc": "ホストが保存されたセッションを確認できなかったため、Orca はこのターミナルを安全に再接続できませんでした。 Orca は保存されたセッションを変更せずに残しました。今すぐ再接続を試みるには、「再試行」をクリックします。それでも再接続できない場合は、新規ターミナルを開きます。",
             "e16012e31e": "このセッションを所有していたターミナルデーモンが終了したため、セッションとそのスクロールバックを回復できませんでした。続行するには、新規ターミナルを開いてください。",
@@ -3496,7 +3499,7 @@
         "bar": {
           "BrowserTab": {
             "6e0bc8f3a8": "ブラウザで開く",
-            "9dd880bd56": "右側のタブを閉じる",
+            "9dd880bd56": "右側のすべてのタブを閉じる",
             "1611a1324b": "閉じる",
             "5d6e89891f": "タブの複製",
             "966feb9ad5": "右に分割",
@@ -3513,7 +3516,7 @@
             "52ce4f4605": "相対パスをコピー",
             "5b85754786": "パスのコピー",
             "bfd5797ef4": "Markdown プレビューを開く",
-            "e5ff31ccaf": "右側のタブを閉じる",
+            "e5ff31ccaf": "右側のすべてのタブを閉じる",
             "ba1369dd24": "すべてのエディターのタブを閉じる",
             "1ba8492c5b": "閉じる",
             "68cc610e7f": "名前を変更する",
@@ -3546,7 +3549,7 @@
           "SortableTabContextMenu": {
             "35e8892fd0": "タブの色",
             "2f697b3c31": "タイトルの変更",
-            "c1ee099c7e": "右側のタブを閉じる",
+            "c1ee099c7e": "右側のすべてのタブを閉じる",
             "8d16f9cd30": "その他を閉じる",
             "89359a36f7": "閉じる",
             "21132389e9": "右に分割",
@@ -17948,6 +17951,14 @@
         "a62f9db53d": "Cancel",
         "c77189bc0c": "Update filter",
         "19af906d12": "Save filter"
+      },
+      "OrcaSignInProgress": {
+        "waiting": "ブラウザでのサインインを待っています",
+        "copyLink": "サインインリンクをコピー",
+        "copied": "サインインリンクをコピーしました",
+        "copyFailed": "リンクをコピーできませんでした。",
+        "signingIn": "サインイン中…",
+        "cancel": "キャンセル"
       }
     },
     "i18n": {
@@ -18091,6 +18102,7 @@
         "claudeManagedNotSignedIn": "この Claude アカウントにサインインしていません。設定の Claude アカウントで再度サインインしてください。",
         "codexSystemNotSignedIn": "Codex にサインインしていません。`{{loginCommand}}` を実行してください。",
         "codexManagedNotSignedIn": "この Codex アカウントにサインインしていません。設定の Codex アカウントで再度サインインしてください。",
+        "antigravityNotSignedIn": "Antigravity にサインインしていません。[設定] → [アカウント] → [Antigravity] でサインインしてください。",
         "cliMissing": "このチャットを実行しているコンピューターで {{agent}} が見つかりませんでした。インストールするか、[設定] → [Agent] の [コマンド] を確認してください。",
         "signInFirst": "先にサインインしてください。",
         "signInThenRunCommand": "サインインしてから、/{{command}} をもう一度実行してください。",
@@ -18449,7 +18461,7 @@
         "stopping": "停止中…",
         "queueAfterStop": "停止後に実行するメッセージをキューに追加",
         "sendAfterStop": "停止後に実行するメッセージを送信",
-        "thinking": "考え",
+        "thinking": "思考中",
         "workingFor": "{{value0}} 処理中",
         "workedFor": "{{value0}} で完了",
         "interruptedAfter": "{{value0}} 後に中断",
@@ -18789,6 +18801,14 @@
       "visualUnavailable": "ビジュアライゼーションを利用できません",
       "visualLoading": "ビジュアライゼーションを読み込み中",
       "visualOpenInNewTab": "新しいタブで開く",
+      "resumeCommand": {
+        "description": "Agent セッション履歴を開く",
+        "argumentHint": "[検索]",
+        "workspaceUnavailable": "このチャットのワークスペースはまだ読み込まれていません。少し待ってからもう一度 /resume を実行してください。",
+        "replaceTitle": "このチャットを置き換えますか？",
+        "replaceDescription": "ここで「{{title}}」を再開すると、このチャットで {{agent}} が行っている処理が停止します。",
+        "replace": "置き換える"
+      },
       "claudeSignIn": {
         "signingIn": "サインイン中…"
       }
@@ -18798,20 +18818,28 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "ターミナルビューに切り替える",
           "switchToChatView": "チャットビューに切り替える",
-          "closeTabsToLeft": "左側のタブを閉じる"
+          "closeTabsToLeft": "左側のすべてのタブを閉じる"
         },
         "BrowserTab": {
           "closeOthers": "その他を閉じる",
-          "closeTabsToLeft": "左側のタブを閉じる"
+          "closeTabsToLeft": "左側のすべてのタブを閉じる"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "その他を閉じる",
-          "closeTabsToLeft": "左側のタブを閉じる"
+          "closeTabsToLeft": "左側のすべてのタブを閉じる"
         },
         "CopyTabIdMenuItem": {
           "copied": "タブ ID をコピーしました",
           "failed": "タブ ID をコピーできませんでした",
           "copy": "タブ ID をコピー"
+        },
+        "bulkClose": {
+          "others": "他のタブを閉じますか？",
+          "right": "右側のタブを閉じますか？",
+          "left": "左側のタブを閉じますか？",
+          "editors": "すべてのエディタータブを閉じますか？",
+          "description": "選択したタブを閉じます。ピン留めしたタブは開いたままになります。",
+          "confirm": "タブを閉じる"
         }
       }
     },
@@ -19235,12 +19263,14 @@
       "cancelFailed": "インストールをキャンセルできませんでした。もう一度お試しください。",
       "install": "{{agent}} をインストール",
       "installManaged": "Orca のコピーをインストール",
-      "installed": "インストール済みです。",
+      "installed": "インストール済み",
       "notInstalled": "インストールされていません。",
       "progress": "{{agent}} のダウンロード",
       "readFailed": "このホストの {{agent}} を確認できませんでした。再試行しています。",
-      "reinstall": "再インストール",
+      "reinstall": "{{agent}} を再インストール",
+      "reinstallShort": "再インストール",
       "remove": "ダウンロードしたランタイムを削除",
+      "moreActions": "{{agent}}の追加操作",
       "removeConfirm": "削除",
       "removeDescription": "実行中の {{agent}} チャットは停止します。履歴は保持されます。",
       "removeKeep": "キャンセル",
@@ -19723,6 +19753,10 @@
       "openInSidebarCopy": "覚えていることを入力するか、Agent に「ログインタイムアウトを修正したセッションを見つけてください」と尋ねます。",
       "open": "オープン",
       "enableOnAll": "すべてのコンピュータで有効にする"
+    },
+    "dialog": {
+      "select": "選択",
+      "open": "開く"
     }
   },
   "aiVault": {
@@ -19819,6 +19853,27 @@
       "cancel": "キャンセル"
     },
     "antigravity": {
+      "chatTitle": "Antigravity チャット",
+      "chatDescription": "チャットは上の agy アカウントとは別の、独自の Antigravity サインインを使用します。このデバイスで一度サインインしてください。",
+      "chatSignIn": "サインイン",
+      "chatChangeAccount": "アカウントを変更",
+      "chatRetry": "サインインを再試行",
+      "chatCancel": "キャンセル",
+      "chatCopyLink": "サインインリンクをコピー",
+      "chatCopyFailed": "リンクをコピーできませんでした。",
+      "chatStarting": "サインインを開始しています…",
+      "chatWaiting": "ブラウザーでサインインを完了してください。",
+      "chatOpenFailed": "リンクをコピーしてブラウザーで開いてください。",
+      "chatVerifying": "サインインを完了しています…",
+      "chatPasteHelp": "サインイン後の最後のページが読み込まれない場合は、ブラウザーからそのページの完全なアドレスをコピーしてここに貼り付けてください。",
+      "chatContinue": "続行",
+      "chatSignedInOn": "{{host}} でサインイン済みです。",
+      "chatCancelled": "サインインをキャンセルしました。",
+      "chatExpired": "サインインがタイムアウトしました。もう一度お試しください。",
+      "chatFailed": "サインインに失敗しました。もう一度お試しください。",
+      "chatNotSignedIn": "{{host}} でサインインしていません。",
+      "chatOtherClient": "別のクライアントでサインインが進行中です。",
+      "chatReadFailed": "{{host}} のサインインを確認できませんでした。",
       "scope": "{{host}} でネイティブ agy アカウントを管理します。",
       "signIn": "このホストで agy を起動し、ブラウザのサインインを完了して、現在のアカウントを保存します。別のアカウントを追加するには、agy で /logout を使用し、再度サインインします。",
       "docs": "サインイン手順",

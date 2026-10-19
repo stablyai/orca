@@ -3,12 +3,15 @@ import {
   type PtySideEffectGauge
 } from './pty-side-effect-pending-census'
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
+import type { AgentStatus } from '../../../../shared/agent-title-core'
 
 const MAX_PTY_SIDE_EFFECTS_PER_DRAIN = 64
 export const MAX_PENDING_PTY_SIDE_EFFECTS = 512
 export const MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY = 16
 
 export type PendingPtySideEffect = {
+  /** OSC 7501 activity applied before this effect's titles, already in byte order. */
+  programActivity?: (AgentStatus | null)[]
   payloads: ProcessedAgentStatusChunk['payloads']
   titles: string[]
   titleScanEffect: 'none' | 'stale-probe' | 'ignored-cursor-native'
@@ -89,6 +92,11 @@ export function createPtyOutputSideEffectQueue({
         if (evicted.containsBell) {
           survivor.containsBell = true
         }
+        // Activity is a state, so only the evicted entry's last value must survive.
+        const evictedActivity = evicted.programActivity?.at(-1)
+        if (evictedActivity !== undefined) {
+          survivor.programActivity = [evictedActivity, ...(survivor.programActivity ?? [])]
+        }
         if (evicted.payloads.length > 0) {
           const merged = evicted.payloads.concat(survivor.payloads)
           survivor.payloads =
@@ -106,6 +114,8 @@ export function createPtyOutputSideEffectQueue({
     const prior = pendingEffects.at(-1)
     if (
       prior &&
+      prior.programActivity === undefined &&
+      effect.programActivity === undefined &&
       prior.titles.length === 0 &&
       prior.payloads.length === 0 &&
       !prior.containsBell &&
