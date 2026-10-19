@@ -10,7 +10,7 @@ describe('folder Explorer verbs', () => {
     const label = 'Open with ${PRODUCT_NAME}'
     for (const [key, argument] of [
       ['Directory', '%1'],
-      [String.raw`Directory\Background`, '%V']
+      [String.raw`Directory\Background`, '%V.']
     ]) {
       const registryPath = `Software\\Classes\\${key}\\shell\\Orca`
       expect(hooks).toContain(`WriteRegStr SHELL_CONTEXT "${registryPath}" "" "${label}"`)

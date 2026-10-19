@@ -68,6 +68,11 @@ describe('OS-opened folders', () => {
     ])
   })
 
+  it('accepts a drive root passed as C:\\. and rejects the quote-mangled C:"', () => {
+    expect(folderPathsFromArguments(['C:\\.', 'd:\\.'], 'win32')).toEqual(['C:\\', 'd:\\'])
+    expect(folderPathsFromArguments(['C:"'], 'win32')).toEqual([])
+  })
+
   it('caps buffered paths and restores undelivered paths first', () => {
     const state = new OsOpenedFolderState()
     const paths = Array.from({ length: 40 }, (_, i) => path.resolve(`folder-${i}`))
