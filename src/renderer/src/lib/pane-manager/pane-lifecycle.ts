@@ -23,6 +23,7 @@ import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
 import { attachInlineImages, detachInlineImages } from './pane-inline-images'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
 import { cancelPendingTerminalViewportPresents } from './pane-viewport-present'
+import { releaseReplayGuardsForDisposedTerminal } from '@/components/terminal-pane/replay-guard'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
@@ -286,5 +287,7 @@ export function disposePane(
   } catch {
     /* ignore */
   }
+  // Why: the disposed xterm will never complete its queued replays; settle their guards now.
+  releaseReplayGuardsForDisposedTerminal(pane.terminal)
   panes.delete(pane.id)
 }
