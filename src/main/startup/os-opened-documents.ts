@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { localPathFromArgument } from './os-opened-path-argument'
 import type { FileDocument } from '../../shared/filesystem-entry-types'
 import { ensureDefaultFloatingWorkspacePath } from '../ipc/floating-workspace-directory'
 import {
@@ -16,30 +16,6 @@ export function isOsOpenedDocumentName(name: string): boolean {
 // Why: a shell can only ever hand over the files the user selected; anything past this is a
 // runaway argv, and buffering it unbounded would pin the paths for the whole session.
 export const MAX_PENDING_OS_OPENED_DOCUMENTS = 32
-
-/**
- * Resolves one argv entry to a local absolute path, or null if it is not one.
- *
- * Why file:// is accepted defensively: electron-builder appends the `%U` field code to the
- * generated Linux `Exec=` line, and `%U` is specified as "URLs". GLib turns out to decode a
- * local `file://` URI back to a plain path before spawning (measured on Ubuntu 24.04, via
- * the same `launch_uris` call a file manager makes), so the branch below is not what fires
- * there today — but the spec permits a URI, and a launcher that honours it literally would
- * otherwise be silently dropped. macOS `open-file` and the Windows shell `%1` pass paths.
- */
-function localPathFromArgument(argument: string, platform: NodeJS.Platform): string | null {
-  const pathApi = platform === 'win32' ? path.win32 : path.posix
-  if (argument.startsWith('file://')) {
-    try {
-      // Why the explicit windows flag: this must decode the same way on any host so the
-      // behaviour is testable, and it is what turns `file://server/share` back into a UNC path.
-      return fileURLToPath(argument, { windows: platform === 'win32' })
-    } catch {
-      return null
-    }
-  }
-  return pathApi.isAbsolute(argument) ? argument : null
-}
 
 /**
  * Absolute document paths an OS "Open With" put on a launch or second-instance argv.

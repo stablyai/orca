@@ -36,6 +36,13 @@ export const uiStateAndMenuCommandsApi = {
   },
   consumePendingSkillShare: (): Promise<string | null> =>
     ipcRenderer.invoke('ui:consumePendingSkillShare'),
+  onOpenFolders: (callback: (paths: string[]) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, paths: string[]): void => callback(paths)
+    ipcRenderer.on('ui:openFolders', listener)
+    return () => ipcRenderer.removeListener('ui:openFolders', listener)
+  },
+  consumePendingFolderOpens: (): Promise<string[]> =>
+    ipcRenderer.invoke('ui:consumePendingFolderOpens'),
   onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, documents: MarkdownDocument[]): void =>
       callback(documents)
