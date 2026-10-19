@@ -56,6 +56,15 @@
     }
   },
   "browser": {
+    "notice": {
+      "opened": "A browser was opened in this workspace.",
+      "show": "Show in Orca",
+      "openDefault": "Open site in default browser",
+      "unavailable": "This browser is no longer available."
+    },
+    "automation": {
+      "active": "Browser automation active"
+    },
     "loadFailure": {
       "connectionNotSecure": "Connection isn't secure",
       "cantReachHost": "Can't reach {{value0}}",

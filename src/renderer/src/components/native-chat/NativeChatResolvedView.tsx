@@ -60,6 +60,7 @@ import { useNativeChatLocalCommandAnswer } from './use-native-chat-local-command
 import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
+import { NativeChatBrowserNotice } from './NativeChatBrowserNotice'
 
 /** Renders the bridge UI after NativeChatSessionGate resolves its agent session. */
 export function NativeChatResolvedView({
@@ -397,6 +398,7 @@ export function NativeChatResolvedView({
           />
         )}
       </div>
+      <NativeChatBrowserNotice tabId={terminalTabId} />
       {/* A collapsed card stays mounted but hidden, so a partly answered question survives. */}
       {mountedPromptCard ? (
         <div hidden={collapsedCard !== null} inert={collapsedCard !== null} className="contents">

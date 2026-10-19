@@ -58,6 +58,7 @@ import { useNativeChatHostPermissionGate } from './use-native-chat-host-permissi
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
+import { NativeChatBrowserNotice } from './NativeChatBrowserNotice'
 import {
   isClaudeSignInFailureKind,
   NativeChatClaudeSignInContext,
@@ -67,15 +68,13 @@ import {
 export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
 ): React.JSX.Element {
+  const { tabId, sessionId } = props
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const provisionalLaunch = useNativeChatProvisionalLaunch(ownerWorktreeId, props.sessionId)
   // The host's own word on whether the provider child has answered startup yet.
   const hostExecution = useStructuredAgentSessionHostExecution(props.sessionId, props.target)
-  const paneKey = useMemo(
-    () => structuredAgentSessionPaneKey(props.tabId, props.sessionId),
-    [props.sessionId, props.tabId]
-  )
+  const paneKey = useMemo(() => structuredAgentSessionPaneKey(tabId, sessionId), [sessionId, tabId])
   // Chat-wide: absent means on; only an explicit off keeps mid-turn sends immediate.
   const queueFollowUps = useAppStore((store) => store.settings?.nativeChatQueueFollowUps !== false)
   const composerRef = useRef<NativeChatComposerHandle>(null)
@@ -336,6 +335,7 @@ export function NativeChatStructuredSession(
           </NativeChatRewindContext.Provider>
         )}
       </div>
+      <NativeChatBrowserNotice tabId={props.tabId} />
       {readFailedFinally ? null : (
         <>
           {/* Host-held drafts, never transcript rows. Above the status area, so running shells and agents sit next to the composer. */}

@@ -7,6 +7,7 @@ import { destroyPersistentWebview } from '../host-guest/webview-registry'
 import { useBrowserAutomationVisiblePageIds } from '../host-guest/browser-automation-visibility'
 import { getBrowserPagesForWorkspace } from './browser-pane-page-selection'
 import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
+import { BrowserAutomationIndicator } from './BrowserAutomationIndicator'
 import {
   IDLE_BROWSER_DRIVER,
   useBrowserDriverForPage,
@@ -125,35 +126,42 @@ export default function BrowserPane({
     const clientHosted = environmentHandle
       ? isClientHostedBrowserPageHandle(environmentHandle)
       : false
-    return activeBrowserPage ? (
-      clientHosted ? (
-        <ClientHostedBrowserPagePane
-          key={`${activeBrowserRuntimeEnvironmentId}:${activeBrowserPage.id}`}
-          browserTab={activeBrowserPage}
-          workspaceId={browserTab.id}
-          runtimeEnvironmentId={activeBrowserRuntimeEnvironmentId}
-          worktreeId={browserTab.worktreeId}
-          placement={clientPlacement}
-          isActive={isActive}
-          chromeShortcutScope={resolvedChromeShortcutScope}
-          onUpdatePageState={updateBrowserPageState}
-          onSetUrl={setBrowserPageUrl}
-        />
-      ) : (
-        <RemoteBrowserPagePane
-          key={`${activeBrowserRuntimeEnvironmentId}:${activeBrowserPage.id}`}
-          browserTab={activeBrowserPage}
-          workspaceId={browserTab.id}
-          runtimeEnvironmentId={activeBrowserRuntimeEnvironmentId}
-          worktreeId={browserTab.worktreeId}
-          isActive={isActive}
-          chromeShortcutScope={resolvedChromeShortcutScope}
-          onUpdatePageState={updateBrowserPageState}
-          onSetUrl={setBrowserPageUrl}
-        />
-      )
-    ) : (
-      <div className="flex h-full min-h-0 flex-1 bg-background" />
+    return (
+      <div className="relative flex h-full min-h-0 flex-1 flex-col">
+        {activeBrowserPage ? (
+          clientHosted ? (
+            <ClientHostedBrowserPagePane
+              key={`${activeBrowserRuntimeEnvironmentId}:${activeBrowserPage.id}`}
+              browserTab={activeBrowserPage}
+              workspaceId={browserTab.id}
+              runtimeEnvironmentId={activeBrowserRuntimeEnvironmentId}
+              worktreeId={browserTab.worktreeId}
+              placement={clientPlacement}
+              isActive={isActive}
+              chromeShortcutScope={resolvedChromeShortcutScope}
+              onUpdatePageState={updateBrowserPageState}
+              onSetUrl={setBrowserPageUrl}
+            />
+          ) : (
+            <RemoteBrowserPagePane
+              key={`${activeBrowserRuntimeEnvironmentId}:${activeBrowserPage.id}`}
+              browserTab={activeBrowserPage}
+              workspaceId={browserTab.id}
+              runtimeEnvironmentId={activeBrowserRuntimeEnvironmentId}
+              worktreeId={browserTab.worktreeId}
+              isActive={isActive}
+              chromeShortcutScope={resolvedChromeShortcutScope}
+              onUpdatePageState={updateBrowserPageState}
+              onSetUrl={setBrowserPageUrl}
+            />
+          )
+        ) : (
+          <div className="flex h-full min-h-0 flex-1 bg-background" />
+        )}
+        {isActive && !activeBrowserPage?.docLocation ? (
+          <BrowserAutomationIndicator browserPageId={activeBrowserPageId} />
+        ) : null}
+      </div>
     )
   }
 
@@ -213,6 +221,9 @@ export default function BrowserPane({
             </div>
           )}
         </SshRoutedBrowserPageGate>
+      ) : null}
+      {isActive && !activeBrowserPage?.docLocation ? (
+        <BrowserAutomationIndicator browserPageId={activeBrowserPageId} />
       ) : null}
     </div>
   )

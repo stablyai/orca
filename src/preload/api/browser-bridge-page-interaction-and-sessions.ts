@@ -2,6 +2,10 @@ import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 import type { BrowserUserAgentMode } from '../../shared/browser-user-agent-mode'
 import type { GrabIntent } from '../../shared/browser-grab-types'
+import {
+  BROWSER_AUTOMATION_ACTIVITY_CHANNEL,
+  type BrowserAutomationActivityEvent
+} from '../../shared/browser-automation-activity'
 
 export const browserPageInteractionAndSessionsApi = {
   onContextMenuRequested: (
@@ -71,6 +75,14 @@ export const browserPageInteractionAndSessionsApi = {
     ) => callback(data)
     ipcRenderer.on('browser:capturePaintHold', listener)
     return () => ipcRenderer.removeListener('browser:capturePaintHold', listener)
+  },
+  onAutomationActivity: (
+    callback: (event: BrowserAutomationActivityEvent) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: BrowserAutomationActivityEvent) =>
+      callback(data)
+    ipcRenderer.on(BROWSER_AUTOMATION_ACTIVITY_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(BROWSER_AUTOMATION_ACTIVITY_CHANNEL, listener)
   },
   onAgentInputFocusGuard: (
     callback: (data: { browserPageId: string; token: string; active: boolean }) => void

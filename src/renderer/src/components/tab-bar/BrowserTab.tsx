@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
+import { BrowserAutomationTabIndicator } from '../browser-pane/assemble-chrome/BrowserAutomationIndicator'
 
 export function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -203,6 +204,9 @@ export default function BrowserTab({
       />
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
+      <BrowserAutomationTabIndicator
+        browserPageIds={tab.pageIds?.length ? tab.pageIds : [tab.activePageId ?? tab.id]}
+      />
       {!isPinned && (
         <button
           className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${

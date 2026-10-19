@@ -1,10 +1,34 @@
+import { webContents } from 'electron'
 import { rendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import { BrowserManagerState } from './browser-manager-state'
 import { focusGuardUnavailableError, guardPaneFocusForAgentInput } from './agent-input-focus-guard'
+import { holdBrowserAutomationActivity } from './browser-automation-activity-lease'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
   // Why: page id -> active capture count; the renderer hears only the first hold and the last release.
   private readonly capturePaintHolds = new Map<string, number>()
+
+  holdAutomationActivity(guestWebContentsId: number): () => void {
+    try {
+      const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+      const renderer = browserPageId ? this.resolveRendererForBrowserTab(browserPageId) : null
+      const guest = webContents.fromId(guestWebContentsId)
+      if (!browserPageId || !renderer || !guest || guest.isDestroyed()) {
+        return () => {}
+      }
+      return holdBrowserAutomationActivity(
+        browserPageId,
+        guest,
+        renderer,
+        () =>
+          this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId) === browserPageId &&
+          this.resolveRendererForBrowserTab(browserPageId)?.id === renderer.id
+      )
+    } catch {
+      // Why: an unavailable status surface must never interrupt a browser command.
+      return () => {}
+    }
+  }
 
   // Why: only pixel capture needs a drawn guest. One-way so a minimized or throttled desktop renderer
   // can't stall the capture; the capture itself retries until the page produces a frame.

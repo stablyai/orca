@@ -40,6 +40,7 @@ vi.mock('./popup-origin-bar-window', () => ({
 }))
 
 import { browserManager } from './browser-manager'
+import { BROWSER_AUTOMATION_ACTIVITY_CHANNEL } from '../../shared/browser-automation-activity'
 import {
   rendererWebContentsId,
   resetBrowserManagerMocks,
@@ -131,5 +132,65 @@ describe('browserManager', () => {
   it('returns a no-op capture hold for a guest no page owns', () => {
     const release = browserManager.holdPaintForCapture(424242)
     expect(() => release()).not.toThrow()
+  })
+
+  it('sends automation activity to the owning renderer without changing guest visibility', () => {
+    vi.useFakeTimers()
+    const guest = {
+      id: 1708,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      once: vi.fn(),
+      removeListener: vi.fn(),
+      openDevTools: guestOpenDevToolsMock
+    }
+    const renderer = {
+      id: rendererWebContentsId,
+      isDestroyed: vi.fn(() => false),
+      send: vi.fn(),
+      once: vi.fn(),
+      removeListener: vi.fn(),
+      setBackgroundThrottling: vi.fn()
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      return id === renderer.id ? renderer : null
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The guest double supplies the policy and visibility members exercised here.
+    browserManager.attachGuestPolicies(guest as never)
+    expect(
+      browserManager.registerGuest({
+        browserPageId: 'page-automation',
+        workspaceId: 'workspace-1',
+        worktreeId: 'wt-1',
+        webContentsId: guest.id,
+        rendererWebContentsId
+      })
+    ).toBe(true)
+    guest.setBackgroundThrottling.mockClear()
+
+    const release = browserManager.holdAutomationActivity(guest.id)
+    expect(renderer.send).toHaveBeenLastCalledWith(
+      BROWSER_AUTOMATION_ACTIVITY_CHANNEL,
+      expect.objectContaining({ browserPageId: 'page-automation', active: true })
+    )
+    release()
+    expect(renderer.send).toHaveBeenLastCalledWith(
+      BROWSER_AUTOMATION_ACTIVITY_CHANNEL,
+      expect.objectContaining({ browserPageId: 'page-automation', active: false })
+    )
+    expect(guest.setBackgroundThrottling).not.toHaveBeenCalled()
+    expect(renderer.setBackgroundThrottling).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('ignores automation activity for guests without an owning renderer', () => {
+    expect(() => browserManager.holdAutomationActivity(424242)()).not.toThrow()
   })
 })

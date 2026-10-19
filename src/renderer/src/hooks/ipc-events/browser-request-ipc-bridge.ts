@@ -7,6 +7,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import { rememberAutomationBrowserPage } from '@/lib/browser-automation-activity'
 import {
   findBrowserTabWorktreeId,
   isBrowserWorkspaceOwnedByPairedServer,
@@ -83,6 +84,9 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
         const pages = useAppStore.getState().browserPagesByWorkspace[workspace.id] ?? []
         const browserPageId = pages[0]?.id ?? workspace.id
         acquireBrowserAutomationBootstrapLease(worktreeId, browserPageId)
+        if (!data.activate) {
+          rememberAutomationBrowserPage(browserPageId)
+        }
         window.api.ui.replyTabCreate({ requestId: data.requestId, browserPageId })
       } catch (err) {
         window.api.ui.replyTabCreate({

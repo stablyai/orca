@@ -8,6 +8,7 @@ import {
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/host-guest/browser-automation-visibility'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import { registerBrowserAutomationActivityIpcBridge } from './browser-automation-activity-ipc-bridge'
 import {
   beginAgentInputFocusGuard,
   clearAgentInputFocusGuards,
@@ -31,6 +32,7 @@ export function registerBrowserStateIpcBridge(
   unsubs: (() => void)[],
   isRuntimeEnvironmentActive: () => boolean
 ): void {
+  registerBrowserAutomationActivityIpcBridge(unsubs)
   unsubs.push(
     window.api.ui.onFullscreenChanged((isFullScreen) => {
       useAppStore.getState().setIsFullScreen(isFullScreen)

@@ -19376,6 +19376,15 @@
     }
   },
   "browser": {
+    "notice": {
+      "opened": "Se abrió un navegador en este espacio de trabajo.",
+      "show": "Ver en Orca",
+      "openDefault": "Abrir sitio en el navegador predeterminado",
+      "unavailable": "Este navegador ya no está disponible."
+    },
+    "automation": {
+      "active": "Actividad automatizada en el navegador"
+    },
     "loadFailure": {
       "connectionNotSecure": "La conexión no es segura",
       "cantReachHost": "No se puede acceder a {{value0}}",

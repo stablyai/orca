@@ -21,43 +21,41 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserTabSwitchResult> {
-    return this.enqueueCommand(worktreeId, async () => {
-      const tabs = this.getRegisteredTabs(worktreeId)
-      // Why: queue delay can change the tab list before execution — recompute against live webContents so no vanished index is activated.
-      const liveEntries = [...tabs.entries()].filter(([, wcId]) => this.getWebContents(wcId))
-      let switchedIndex = index ?? -1
-      let resolvedPageId = browserPageId
-      if (resolvedPageId) {
-        switchedIndex = liveEntries.findIndex(([tabId]) => tabId === resolvedPageId)
-      }
-      if (switchedIndex < 0 || switchedIndex >= liveEntries.length) {
-        const targetLabel =
-          resolvedPageId != null ? `Browser page ${resolvedPageId}` : `Tab index ${index}`
-        throw new BrowserError(
-          'browser_tab_not_found',
-          `${targetLabel} out of range (0-${liveEntries.length - 1})`
-        )
-      }
-      const [tabId, wcId] = liveEntries[switchedIndex]
-      this.activeWebContentsId = wcId
-      // Why: resolveActiveTab prefers the per-worktree map, so update it or later commands keep routing to the old tab.
-      const owningWorktreeId = worktreeId ?? this.browserManager.getWorktreeIdForTab(tabId)
-      // Why: `tab switch --page` may omit --worktree, so still update the owning worktree's active slot for later scoped commands.
-      if (owningWorktreeId) {
-        this.activeWebContentsPerWorktree.set(owningWorktreeId, wcId)
-      }
-      this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
-      return { switched: switchedIndex, browserPageId: tabId }
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      undefined,
+      async () => {
+        const tabs = this.getRegisteredTabs(worktreeId)
+        // Why: queue delay can change the tab list before execution — recompute against live webContents so no vanished index is activated.
+        const liveEntries = [...tabs.entries()].filter(([, wcId]) => this.getWebContents(wcId))
+        let switchedIndex = index ?? -1
+        let resolvedPageId = browserPageId
+        if (resolvedPageId) {
+          switchedIndex = liveEntries.findIndex(([tabId]) => tabId === resolvedPageId)
+        }
+        if (switchedIndex < 0 || switchedIndex >= liveEntries.length) {
+          const targetLabel =
+            resolvedPageId != null ? `Browser page ${resolvedPageId}` : `Tab index ${index}`
+          throw new BrowserError(
+            'browser_tab_not_found',
+            `${targetLabel} out of range (0-${liveEntries.length - 1})`
+          )
+        }
+        const [tabId, wcId] = liveEntries[switchedIndex]
+        this.activeWebContentsId = wcId
+        // Why: resolveActiveTab prefers the per-worktree map, so update it or later commands keep routing to the old tab.
+        const owningWorktreeId = worktreeId ?? this.browserManager.getWorktreeIdForTab(tabId)
+        // Why: `tab switch --page` may omit --worktree, so still update the owning worktree's active slot for later scoped commands.
+        if (owningWorktreeId) {
+          this.activeWebContentsPerWorktree.set(owningWorktreeId, wcId)
+        }
+        this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
+        return { switched: switchedIndex, browserPageId: tabId }
+      },
+      { trackActivity: false }
+    )
   }
   // ── Internal ──
-
-  protected async enqueueCommand<T>(
-    worktreeId: string | undefined,
-    execute: (sessionName: string) => Promise<T>
-  ): Promise<T> {
-    return this.enqueueTargetedCommand(worktreeId, undefined, execute)
-  }
 
   protected async enqueueTargetedCommand<T>(
     worktreeId: string | undefined,
@@ -119,10 +117,18 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
     // Why: the page's guest can change while queued; bind to the one current at execution.
     const target = this.resolveCommandTarget(worktreeId, browserPageId)
-    if (options.ensureSession !== false) {
-      await this.ensureSession(sessionName, browserPageId, target.webContentsId)
+    const releaseActivity =
+      options.trackActivity === false
+        ? () => {}
+        : (this.browserManager.holdAutomationActivity?.(target.webContentsId) ?? (() => {}))
+    try {
+      if (options.ensureSession !== false) {
+        await this.ensureSession(sessionName, browserPageId, target.webContentsId)
+      }
+      return await execute(sessionName, target)
+    } finally {
+      releaseActivity()
     }
-    return execute(sessionName, target)
   }
 
   /** Holds the page for a host's command, so a revocation stops every later step of it. */

@@ -7,6 +7,11 @@ const reactHookRuntime = vi.hoisted(() => ({
   index: 0
 }))
 
+vi.mock('@/lib/browser-automation-activity', () => ({
+  useBrowserAutomationActive: () => false,
+  useBrowserAutomationActiveForAny: () => false
+}))
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   return {

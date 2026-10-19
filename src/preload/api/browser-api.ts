@@ -1,4 +1,5 @@
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
+import type { BrowserAutomationActivityEvent } from '../../shared/browser-automation-activity'
 import type {
   BrowserIdentityModeSetResult,
   BrowserIdentityModeStatus,
@@ -133,6 +134,7 @@ export type BrowserApi = {
   onCapturePaintHold: (
     callback: (data: { browserPageId: string; held: boolean }) => void
   ) => () => void
+  onAutomationActivity?: (callback: (event: BrowserAutomationActivityEvent) => void) => () => void
   /** Main asks the pane to keep the user's focus through an agent press; `ready` answers it. */
   onAgentInputFocusGuard: (
     callback: (data: { browserPageId: string; token: string; active: boolean }) => void

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 
@@ -79,6 +79,10 @@ import {
 } from '../host-guest/browser-automation-visibility'
 import { hydrateBrowserDrivers } from '@/lib/pane-manager/browser-mobile-driver-state'
 import { hydrateBrowserRemoteViewerPages } from '@/lib/pane-manager/browser-remote-viewer-state'
+import {
+  applyBrowserAutomationActivity,
+  clearBrowserAutomationActivity
+} from '@/lib/browser-automation-activity'
 import BrowserPane from './browser-workspace-pane'
 
 const WORKSPACE_ID = 'ws-1'
@@ -145,8 +149,30 @@ describe('browser workspace pane retention props', () => {
 
   afterEach(() => {
     cleanup()
+    clearBrowserAutomationActivity()
     hydrateBrowserDrivers([])
     hydrateBrowserRemoteViewerPages([])
+  })
+
+  it('shows activity only for the selected page and only in a visible browser workspace', () => {
+    const workspace = createWorkspace()
+    const view = render(<BrowserPane browserTab={workspace} isActive />)
+    act(() => {
+      applyBrowserAutomationActivity({
+        browserPageId: 'page-b',
+        token: 'automation-b',
+        active: true,
+        expiresAt: Date.now() + 5000
+      })
+    })
+    expect(screen.queryByRole('status')).toBeNull()
+
+    const selectedWorkspace = { ...workspace, activePageId: 'page-b' }
+    view.rerender(<BrowserPane browserTab={selectedWorkspace} isActive />)
+    expect(screen.getByRole('status').textContent).toBe('Browser automation active')
+
+    view.rerender(<BrowserPane browserTab={selectedWorkspace} isActive={false} />)
+    expect(screen.queryByRole('status')).toBeNull()
   })
 
   it('defers unopened pages out of 200 and retains opened pages until unmount', () => {
