@@ -1,3 +1,49 @@
+diff --git a/src/SearchAddon.ts b/src/SearchAddon.ts
+index e5fd31cfb0d6c0267278daaf459b32e47b5f854f..532fc6ba636318dc00d3dc441a0e3bde8d82fe49 100644
+--- a/src/SearchAddon.ts
++++ b/src/SearchAddon.ts
+@@ -35,6 +35,7 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+   private _highlightLimit: number;
+   private _highlightTimeout = this._register(new MutableDisposable<IDisposable>());
+   private _lineCache = this._register(new MutableDisposable<SearchLineCache>());
++  private _selectionChangedByUser = false;
+ 
+   // Component instances
+   private _state = new SearchState();
+@@ -64,6 +65,7 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+     this._decorationManager = new DecorationManager(terminal);
+     this._register(this._terminal.onWriteParsed(() => this._updateMatches()));
+     this._register(this._terminal.onResize(() => this._updateMatches()));
++    this._register(this._terminal.onSelectionChange(() => this._selectionChangedByUser = true));
+     this._register(toDisposable(() => this.clearDecorations()));
+   }
+ 
+@@ -71,6 +73,9 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+     this._highlightTimeout.clear();
+     if (this._state.cachedSearchTerm && this._state.lastSearchOptions?.decorations) {
+       this._highlightTimeout.value = disposableTimeout(() => {
++        if (this._terminal?.hasSelection() && (this._selectionChangedByUser || !this._resultTracker.selectedDecoration)) {
++          return;
++        }
+         const term = this._state.cachedSearchTerm;
+         this._state.clearCachedTerm();
+         this.findPrevious(term!, { ...this._state.lastSearchOptions, incremental: true }, { noScroll: true });
+@@ -112,6 +117,7 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+     }
+ 
+     const found = this._findNextAndSelect(term, searchOptions, internalSearchOptions);
++    this._selectionChangedByUser = false;
+     this._fireResults(searchOptions);
+     this._state.cachedSearchTerm = term;
+ 
+@@ -193,6 +199,7 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+     }
+ 
+     const found = this._findPreviousAndSelect(term, searchOptions, internalSearchOptions);
++    this._selectionChangedByUser = false;
+     this._fireResults(searchOptions);
+     this._state.cachedSearchTerm = term;
+ 
 diff --git a/src/SearchEngine.ts b/src/SearchEngine.ts
 index 1760bc2bd1fd274d23e2032fde631b39c739f0d9..5b3c5cc5e861356b87e8a15c55797f45bac20a5c 100644
 --- a/src/SearchEngine.ts
