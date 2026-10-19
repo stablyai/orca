@@ -10,6 +10,7 @@ import {
   type ParkedTerminalTabWatcherSyncEntry
 } from './terminal-pane/terminal-parked-tab-watchers'
 import { useAppStore } from '@/store'
+import { isWorktreeSurfaceShown } from '@/store/slices/worktree-split-view'
 import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../shared/closed-terminal-tab-tombstones'
 import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
@@ -45,6 +46,7 @@ type TerminalWatcherController = Pick<
   | 'pendingStartupByTabId'
   | 'reconcileWorktreeTabModel'
   | 'renderedActiveWorktreeId'
+  | 'splitPartnerWorktreeId'
   | 'startupTerminalTabHold'
   | 'tabsByWorktree'
   | 'terminalParkingEnabled'
@@ -78,6 +80,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     pendingStartupByTabId,
     reconcileWorktreeTabModel,
     renderedActiveWorktreeId,
+    splitPartnerWorktreeId,
     startupTerminalTabHold,
     tabsByWorktree,
     terminalParkingEnabled,
@@ -106,7 +109,10 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       if (!anyMountedWorktreeHasLayout && mountedWorktreeIdsRef.current.has(workspaceId)) {
         const mountedParkedTabIds = new Set<string>()
         parkedTabIds = mountedParkedTabIds
-        const isVisible = activeView === 'terminal' && workspaceId === renderedActiveWorktreeId
+        const isVisible = isWorktreeSurfaceShown(
+          { activeView, renderedActiveWorktreeId, splitPartnerWorktreeId },
+          workspaceId
+        )
         const shouldMeasureHiddenWorktree =
           !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspaceId)
         const parked =
@@ -182,6 +188,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
+    splitPartnerWorktreeId,
     startupTerminalTabHold,
     tabsByWorktree,
     terminalParkingEnabled,

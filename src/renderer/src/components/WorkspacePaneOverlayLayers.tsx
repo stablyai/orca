@@ -22,7 +22,8 @@ export function WorkspacePaneOverlayLayers({
   activationDeferredMountTabIds,
   mountRetainedBrowserOverlay,
   mountEmulatorOverlay,
-  ownsNativeChatToggleShortcut = true
+  ownsNativeChatToggleShortcut = true,
+  ownsWorkspaceInput = true
 }: {
   worktreeId: string
   worktreePath: string
@@ -38,6 +39,9 @@ export function WorkspacePaneOverlayLayers({
   /** False for overlay hosts (the floating panel): the active workspace's listener already owns
    *  the chord, and two live listeners would both toggle. */
   ownsNativeChatToggleShortcut?: boolean
+  /** False for a split-view partner: painted beside the active worktree but not owning focus,
+   *  shortcuts or the focused-group chrome. */
+  ownsWorkspaceInput?: boolean
 }): React.JSX.Element {
   return (
     <>
@@ -51,11 +55,13 @@ export function WorkspacePaneOverlayLayers({
         activityTerminalPortals={activityTerminalPortals}
         backgroundMountTabIds={backgroundMountTabIds}
         activationDeferredMountTabIds={activationDeferredMountTabIds}
-        ownsNativeChatToggleShortcut={ownsNativeChatToggleShortcut}
+        ownsNativeChatToggleShortcut={ownsNativeChatToggleShortcut && ownsWorkspaceInput}
+        ownsWorkspaceInput={ownsWorkspaceInput}
       />
       <RetainedBrowserPaneOverlayLayer
         worktreeId={worktreeId}
         isWorktreeActive={isVisible}
+        ownsWorkspaceInput={ownsWorkspaceInput}
         mountEligible={mountRetainedBrowserOverlay}
       />
       {mountEmulatorOverlay ? (
@@ -64,6 +70,7 @@ export function WorkspacePaneOverlayLayers({
       <StructuredAgentSessionPaneOverlayLayer
         worktreeId={worktreeId}
         isWorktreeActive={isVisible}
+        ownsWorkspaceInput={ownsWorkspaceInput}
       />
       <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isVisible} />
     </>

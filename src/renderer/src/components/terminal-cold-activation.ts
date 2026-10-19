@@ -36,6 +36,7 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
+    splitPartnerWorktreeId,
     startupTerminalTabHoldRef,
     startupWorktreeRefreshCompleted,
     tabsByWorktree,
@@ -167,6 +168,12 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
     mountedWorktreeIdsRef.current.add(renderedActiveWorktreeId)
   } else {
     lastActivationWorktreeIdRef.current = null
+  }
+  if (splitPartnerWorktreeId && !startupHeldWorktreeId) {
+    // Why mount every tab: the deferred-tab drain only runs for the active worktree.
+    backgroundMountTabIdsByWorktreeRef.current.delete(splitPartnerWorktreeId)
+    activationDeferredMountTabIdsByWorktreeRef.current.delete(splitPartnerWorktreeId)
+    mountedWorktreeIdsRef.current.add(splitPartnerWorktreeId)
   }
   pruneClosedBackgroundMountTabs(
     backgroundMountTabIdsByWorktreeRef.current,

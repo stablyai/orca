@@ -27,6 +27,7 @@ import {
   retirePurgedTabLaunches
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
+import { splitViewPairAfterHostTwinPurge } from '../../worktree-split-view'
 
 type PublisherRow = {
   id: string
@@ -241,6 +242,7 @@ export function buildHostTwinPurgeState(
       ...tabPrefixedSleeping,
       ...omitSleepingAgentSessionsForWorktrees(tabPrefixedSleeping, new Set(), sshRecordPaneKeys)
     }),
-    ...twinSelectionPatch(s, twinHostIds, hostId)
+    ...twinSelectionPatch(s, twinHostIds, hostId),
+    ...splitViewPairAfterHostTwinPurge(s, twinIds, hostId)
   }
 }

@@ -145,6 +145,7 @@ function SplitNode({
   worktreeId,
   focusedGroupId,
   isWorktreeActive,
+  ownsWorkspaceInput,
   hasSplitGroups,
   tabStrip,
   markdownAnnotationsEnabled,
@@ -163,6 +164,7 @@ function SplitNode({
   worktreeId: string
   focusedGroupId?: string
   isWorktreeActive: boolean
+  ownsWorkspaceInput: boolean
   hasSplitGroups: boolean
   tabStrip: TabGroupPanelTabStrip
   markdownAnnotationsEnabled: boolean
@@ -189,7 +191,7 @@ function SplitNode({
         // survive worktree switches, but only the visible worktree may own the
         // global terminal shortcuts. If an offscreen group's pane stays
         // "focused", Cmd/Ctrl+W and split shortcuts can hit the wrong worktree.
-        isFocused={isWorktreeActive && node.groupId === focusedGroupId}
+        isFocused={isWorktreeActive && ownsWorkspaceInput && node.groupId === focusedGroupId}
         hasSplitGroups={hasSplitGroups}
         tabStrip={tabStrip}
         markdownAnnotationsEnabled={markdownAnnotationsEnabled}
@@ -224,6 +226,7 @@ function SplitNode({
           worktreeId={worktreeId}
           focusedGroupId={focusedGroupId}
           isWorktreeActive={isWorktreeActive}
+          ownsWorkspaceInput={ownsWorkspaceInput}
           hasSplitGroups={hasSplitGroups}
           tabStrip={tabStrip}
           markdownAnnotationsEnabled={markdownAnnotationsEnabled}
@@ -257,6 +260,7 @@ function SplitNode({
           worktreeId={worktreeId}
           focusedGroupId={focusedGroupId}
           isWorktreeActive={isWorktreeActive}
+          ownsWorkspaceInput={ownsWorkspaceInput}
           hasSplitGroups={hasSplitGroups}
           tabStrip={tabStrip}
           markdownAnnotationsEnabled={markdownAnnotationsEnabled}
@@ -288,6 +292,7 @@ export function TabGroupSplitNodeTree({
   worktreeId,
   focusedGroupId,
   isWorktreeActive,
+  ownsWorkspaceInput = true,
   isTabDragActive,
   hoveredTabInsertion,
   tabStrip = 'attached',
@@ -298,6 +303,8 @@ export function TabGroupSplitNodeTree({
   worktreeId: string
   focusedGroupId?: string
   isWorktreeActive: boolean
+  /** False for a split-view partner: painted, but no group of it is the focused one. */
+  ownsWorkspaceInput?: boolean
   isTabDragActive: boolean
   hoveredTabInsertion: HoveredTabInsertion | null
   tabStrip?: TabGroupPanelTabStrip
@@ -313,6 +320,7 @@ export function TabGroupSplitNodeTree({
       worktreeId={worktreeId}
       focusedGroupId={focusedGroupId}
       isWorktreeActive={isWorktreeActive}
+      ownsWorkspaceInput={ownsWorkspaceInput}
       hasSplitGroups={layout.type === 'split'}
       tabStrip={tabStrip}
       markdownAnnotationsEnabled={markdownAnnotationsEnabled}

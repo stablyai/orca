@@ -3,6 +3,7 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '../store'
 import { useWorktreeMap } from '../store/selectors'
+import { selectWorktreeSplitPartnerId } from '../store/slices/worktree-split-view'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import type { WorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
@@ -63,6 +64,14 @@ export function useTerminalWorkspaceFoundation() {
     [workspaceSurfaceIds]
   )
   const activeView = useAppStore((state) => state.activeView)
+  const storedSplitPartnerWorktreeId = useAppStore(selectWorktreeSplitPartnerId)
+  // Why: the partner is painted beside the active worktree, so it is exempt from parking like it.
+  const splitPartnerWorktreeId =
+    activeView === 'terminal' &&
+    storedSplitPartnerWorktreeId !== null &&
+    workspaceSurfaceIdSet.has(storedSplitPartnerWorktreeId)
+      ? storedSplitPartnerWorktreeId
+      : null
   // Why: terminal titles are leaf chrome. The root host only subscribes to
   // mount/parking semantics; a real transition publishes fresh tab objects,
   // while LiveTerminalTabBar reads title-only updates from the active bucket.
@@ -108,6 +117,7 @@ export function useTerminalWorkspaceFoundation() {
     workspaceSurfaceIdSet,
     activeWorktreeId,
     renderedActiveWorktreeId,
+    splitPartnerWorktreeId,
     activeWorktreeDeferralHostId,
     activeView,
     tabsByWorktree,

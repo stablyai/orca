@@ -36,7 +36,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   activityTerminalPortals = EMPTY_ACTIVITY_PORTALS,
   backgroundMountTabIds = null,
   activationDeferredMountTabIds = null,
-  ownsNativeChatToggleShortcut = true
+  ownsNativeChatToggleShortcut = true,
+  ownsWorkspaceInput = true
 }: {
   worktreeId: string
   worktreePath: string
@@ -53,6 +54,9 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   /** False for overlay hosts whose workspace is visible while another owns global keyboard
    *  chords — the toggle listener is gated to one live workspace at a time. */
   ownsNativeChatToggleShortcut?: boolean
+  /** False for a split-view partner: painted beside the active worktree but not owning focus,
+   *  shortcuts or the focused-group chrome. */
+  ownsWorkspaceInput?: boolean
 }): React.JSX.Element | null {
   const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
     useShallow((state) => ({
@@ -148,7 +152,9 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             </RetainedPaneHost>
           ) : null
         }
-        const isActive = Boolean(isVisible && assignment?.groupId === activeGroupId)
+        const isActive = Boolean(
+          isVisible && ownsWorkspaceInput && assignment?.groupId === activeGroupId
+        )
         const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
           worktreeId,
           tabId: terminalTab.id

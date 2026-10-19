@@ -8,15 +8,18 @@ export default function TabGroupSplitLayout({
   layout,
   worktreeId,
   focusedGroupId,
-  isWorktreeActive
+  isWorktreeActive,
+  ownsWorkspaceInput = true
 }: {
   layout: TabGroupLayoutNode
   worktreeId: string
   focusedGroupId?: string
   isWorktreeActive: boolean
+  /** False for a split-view partner; see WorktreeSplitSurface. */
+  ownsWorkspaceInput?: boolean
 }): React.JSX.Element {
   return (
-    <WorkspaceTabDragLayer worktreeId={worktreeId} enabled={isWorktreeActive}>
+    <WorkspaceTabDragLayer worktreeId={worktreeId} enabled={isWorktreeActive && ownsWorkspaceInput}>
       {({ isTabDragActive, hoveredTabInsertion, setDragRootNode }) => (
         /* Why: the 10px drag strip sits ABOVE the split layout — lifted out of
           each pane — so vertical split resize handles don't extend into the
@@ -45,6 +48,7 @@ export default function TabGroupSplitLayout({
               worktreeId={worktreeId}
               focusedGroupId={focusedGroupId}
               isWorktreeActive={isWorktreeActive}
+              ownsWorkspaceInput={ownsWorkspaceInput}
               isTabDragActive={isTabDragActive}
               hoveredTabInsertion={hoveredTabInsertion}
             />

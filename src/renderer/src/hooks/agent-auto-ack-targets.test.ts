@@ -7,7 +7,11 @@ import {
   makeTabGroup,
   makeUnifiedTab
 } from '@/store/slices/store-test-helpers'
-import { isTabOnScreen, resolveAutoAckTabTargets } from './agent-auto-ack-targets'
+import {
+  isTabOnScreen,
+  onScreenWorkspaceIds,
+  resolveAutoAckTabTargets
+} from './agent-auto-ack-targets'
 
 // The user is present unless a test says otherwise.
 beforeEach(() => setPresenceGated(false))
@@ -85,6 +89,33 @@ describe('visible agent acknowledgement target', () => {
     expect(isTabOnScreen(state, FLOATING, TERMINAL, 'terminal')).toBe(false)
     notePresence()
     expect(isTabOnScreen(state, FLOATING, TERMINAL, 'terminal')).toBe(true)
+  })
+
+  it('counts the split-view partner beside the active worktree as on screen', () => {
+    const store = createTestStore()
+    store.setState({
+      activeView: 'terminal',
+      activeWorktreeId: 'wt-a',
+      worktreeSplitViewPair: {
+        leftWorktreeId: 'wt-a',
+        leftExecutionHostId: null,
+        rightWorktreeId: 'wt-b',
+        rightExecutionHostId: null
+      },
+      activeGroupIdByWorktree: { 'wt-b': GROUP },
+      unifiedTabsByWorktree: {
+        'wt-b': [makeUnifiedTab({ id: TERMINAL, worktreeId: 'wt-b', groupId: GROUP })]
+      },
+      groupsByWorktree: {
+        'wt-b': [makeTabGroup({ id: GROUP, worktreeId: 'wt-b', activeTabId: TERMINAL })]
+      }
+    })
+
+    expect(onScreenWorkspaceIds(store.getState())).toEqual(['wt-a', 'wt-b'])
+    expect(isTabOnScreen(store.getState(), 'wt-b', TERMINAL, 'terminal')).toBe(true)
+    store.setState({ activeWorktreeId: 'wt-c' })
+    expect(onScreenWorkspaceIds(store.getState())).toEqual(['wt-c'])
+    expect(isTabOnScreen(store.getState(), 'wt-b', TERMINAL, 'terminal')).toBe(false)
   })
 
   it('acknowledges the active terminal in the focused group', () => {

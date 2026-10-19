@@ -35,6 +35,8 @@ import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
+import { WorktreeSplitViewMenuItems } from './WorktreeSplitViewMenuItems'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import {
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
@@ -189,6 +191,13 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                   'Copy Worktree Name'
                 )}
               </DropdownMenuItem>
+              <WorktreeSplitViewMenuItems
+                worktreeId={worktree.id}
+                executionHostId={
+                  worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
+                }
+                disabled={isDeleting}
+              />
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={handleTogglePin} disabled={isDeleting}>
                 {worktree.isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}

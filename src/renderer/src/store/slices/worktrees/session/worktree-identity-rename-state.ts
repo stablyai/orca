@@ -13,6 +13,7 @@ import {
 } from '../../recently-closed-tabs'
 import { renameWorktreeLayoutKeys } from '../../tabs/worktree-layout-lifecycle'
 import { renameCombinedDiffViewOwner } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
+import { splitViewPairAfterRename } from '../../worktree-split-view'
 
 // Every worktree-id-keyed store map the rename path re-keys, so a new `*ByWorktree` map isn't silently missed.
 // Layout maps are re-keyed by renameWorktreeLayoutKeys. Tab-id/file-id-keyed maps are deliberately
@@ -261,6 +262,7 @@ export function buildWorktreeRenameState(
       ? { pairedTerminalTabCloseIntentsByEnvironment }
       : {}),
     ...(s.activeWorktreeId === oldWorktreeId ? { activeWorktreeId: newWorktreeId } : {}),
+    ...splitViewPairAfterRename(s, oldWorktreeId, newWorktreeId),
     // The active workspace key derives from the worktree id, so keep it in sync when the active worktree is renamed.
     ...(s.activeWorkspaceKey === worktreeWorkspaceKey(oldWorktreeId)
       ? { activeWorkspaceKey: worktreeWorkspaceKey(newWorktreeId) }

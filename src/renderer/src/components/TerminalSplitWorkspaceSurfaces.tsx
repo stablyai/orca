@@ -1,5 +1,14 @@
+import { useCallback } from 'react'
+import { useAppStore } from '../store'
+import {
+  getWorktreeSplitViewSideHostId,
+  isWorktreeSurfaceShown,
+  WORKTREE_SPLIT_LEFT_FLEX_VAR
+} from '../store/slices/worktree-split-view'
+import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/browser-guest-paint-retention'
 import { WorktreeSplitSurface } from './TerminalWorktreeSplitSurface'
+import { WorktreeSplitViewDivider } from './worktree-split-view-divider'
 import { selectParkedEquivalentMountTabIds } from './terminal/startup-terminal-tab-hold'
 import type { TerminalController } from './use-terminal-controller'
 
@@ -22,16 +31,42 @@ export function TerminalSplitWorkspaceSurfaces({
     measurableBackgroundWorktreeIdsRef,
     mountedWorktreeIdsRef,
     renderedActiveWorktreeId,
+    splitPartnerWorktreeId,
     startupTerminalTabHold,
     workspaceSurfaces
   } = controller
+  const splitViewPair = useAppStore((state) => state.worktreeSplitViewPair)
+  const splitViewRatio = useAppStore((state) => state.worktreeSplitViewRatio)
+  const setWorktreeSplitViewRatio = useAppStore((state) => state.setWorktreeSplitViewRatio)
   // Why: this and TerminalSurface are both strict ancestors of every browser <webview>, so a
   // remote controller needs each to drop `hidden` — the per-worktree surface hatch below cannot
   // override an ancestor that stopped compositing.
   const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(!effectiveActiveLayout)
+  const activateSplitPartner = useCallback((worktreeId: string) => {
+    const pair = useAppStore.getState().worktreeSplitViewPair
+    if (!pair) {
+      return
+    }
+    void activateWorktreeFromSidebar(
+      worktreeId,
+      getWorktreeSplitViewSideHostId(pair, worktreeId) ?? undefined
+    )
+  }, [])
   if (!anyMountedWorktreeHasLayout) {
     return null
   }
+  // Why both layouts: a half without a group tree would leave a blank column beside the other.
+  const isSplitShown =
+    splitViewPair !== null &&
+    splitPartnerWorktreeId !== null &&
+    effectiveActiveLayout !== undefined &&
+    mountedWorktreeIdsRef.current.has(splitPartnerWorktreeId) &&
+    getEffectiveLayoutForWorktree(splitPartnerWorktreeId) !== undefined
+  const shownPartnerWorktreeId = isSplitShown ? splitPartnerWorktreeId : null
+  const splitRatioStyle: React.CSSProperties & Record<typeof WORKTREE_SPLIT_LEFT_FLEX_VAR, number> =
+    {
+      [WORKTREE_SPLIT_LEFT_FLEX_VAR]: splitViewRatio
+    }
   return (
     <div
       className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${
@@ -41,6 +76,7 @@ export function TerminalSplitWorkspaceSurfaces({
             ? ' opacity-0 pointer-events-none'
             : ' hidden'
       }`}
+      style={isSplitShown ? splitRatioStyle : undefined}
     >
       {workspaceSurfaces
         .filter((workspace) => mountedWorktreeIdsRef.current.has(workspace.id))
@@ -49,13 +85,28 @@ export function TerminalSplitWorkspaceSurfaces({
           if (!layout) {
             return null
           }
-          const isVisible = activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+          const isVisible = isWorktreeSurfaceShown(
+            {
+              activeView,
+              renderedActiveWorktreeId,
+              splitPartnerWorktreeId: shownPartnerWorktreeId
+            },
+            workspace.id
+          )
           const shouldMeasureHiddenWorktree =
             !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
           const shouldColdParkTerminalPanes =
             !isVisible &&
             !shouldMeasureHiddenWorktree &&
             effectiveParkedTerminalWorktreeIds.has(workspace.id)
+          const splitSide =
+            isSplitShown && splitViewPair
+              ? splitViewPair.leftWorktreeId === workspace.id
+                ? 'left'
+                : splitViewPair.rightWorktreeId === workspace.id
+                  ? 'right'
+                  : null
+              : null
           return (
             <WorktreeSplitSurface
               key={`tab-groups-${workspace.id}`}
@@ -76,9 +127,13 @@ export function TerminalSplitWorkspaceSurfaces({
                 startupTerminalTabHold,
                 workspace.id
               )}
+              splitSide={splitSide}
+              ownsWorkspaceInput={workspace.id === renderedActiveWorktreeId}
+              onActivateSplitPartner={activateSplitPartner}
             />
           )
         })}
+      {isSplitShown ? <WorktreeSplitViewDivider onRatioCommit={setWorktreeSplitViewRatio} /> : null}
     </div>
   )
 }
