@@ -2,15 +2,18 @@ import type { WaitBlockedCheckState } from '../../wait-blocked-check-state'
 import { OrcaRuntimeWithStopRequestedPtyIds } from '../../construction/runtime-service-state'
 import { RuntimeSubscriptionRegistry } from '../../runtime-subscription-registry'
 import { RuntimeMobileNotificationController } from '../../runtime-mobile-notification-controller'
+import { notifyRuntimeListeners } from '../../runtime-async-boundaries'
 import type {
   ProviderBufferAcquisition,
   RuntimeHeadlessTerminal,
+  RuntimeLeafRecord,
   RuntimePtyTitleTrackerEntry,
   RuntimePtyWorktreeRecord,
   RuntimeVisibleTerminalState
 } from '../../runtime-terminal-state-records'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type { AgentIdleEdgeEvent } from '../../runtime-agent-idle-edge-contracts'
 import type { createAgentStatusOscProcessor } from '../../../../shared/agent-status-osc'
 import { RuntimeTerminalViewSubscribers } from '../../runtime-terminal-view-subscribers'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
@@ -31,6 +34,28 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
       }) => void
     >
   >()
+
+  protected agentIdleEdgeListeners = new Set<(event: AgentIdleEdgeEvent) => void>()
+
+  /** Rides the same transition as orchestration push delivery, not a second detector. */
+  subscribeAgentIdleEdge(listener: (event: AgentIdleEdgeEvent) => void): () => void {
+    this.agentIdleEdgeListeners.add(listener)
+    return () => {
+      this.agentIdleEdgeListeners.delete(listener)
+    }
+  }
+
+  protected emitAgentIdleEdge(leaf: RuntimeLeafRecord): void {
+    const { ptyId, worktreeId, leafId, tabId } = leaf
+    if (ptyId === null) {
+      return
+    }
+    notifyRuntimeListeners(
+      this.agentIdleEdgeListeners,
+      (listener) => listener({ ptyId, worktreeId, leafId, tabId }),
+      'agent-idle-edge'
+    )
+  }
 
   protected readonly subscriptions = new RuntimeSubscriptionRegistry()
 

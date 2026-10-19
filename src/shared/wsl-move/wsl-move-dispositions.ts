@@ -91,6 +91,11 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   automationRuns: moveDisposition(19, {
     note: 'An in-flight run in scope blocks the move.'
   }),
+  scheduledMessages: {
+    disposition: 'rewrite-desktop',
+    item: 18,
+    note: 'The desktop scheduler delivers them, not the host; only their worktree ids change.'
+  },
   orcadMigrationImportReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationEvictedReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationStagedCatalogs: notApplicableDisposition(68, 'Mover-owned.'),

@@ -140,6 +140,7 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
       ['ui.onOpenSettings', 'ui.consumePendingOpenSettings'],
       ['ui.onOpenSkillShare', 'ui.consumePendingSkillShare'],
       ['rateLimits.onUpdate', 'rateLimits.get'],
+      ['scheduledMessages.onUpdate', 'scheduledMessages.get'],
       ['agentStatus.onSet', 'agentStatus.getSnapshot'],
       ['agentStatus.onClear', 'agentStatus.getSnapshot'],
       ['runtime.onTerminalFitOverrideChanged', 'runtime.getTerminalFitOverrides'],

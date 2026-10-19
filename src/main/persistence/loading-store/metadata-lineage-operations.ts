@@ -11,6 +11,7 @@ import {
   workspaceSessionOwnerPartitionForHost,
   workspaceSessionPartitionIdsForHost
 } from '../restoring-sessions/session-owner-removal'
+import { dropScheduledMessagesForWorktree } from '../scheduled-message-worktree-sweep'
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import type { SessionHostPartitionOperations } from './session-host-partitions'
@@ -188,11 +189,11 @@ export class MetadataLineageOperations {
       )
     )
     if (!preservesDifferentPersistedOwner) {
-      delete this[metadataLineageOperationsContext].runtime.state.worktreeMeta[worktreeId]
-      delete this[metadataLineageOperationsContext].runtime.state.worktreeLineageById[worktreeId]
-      delete this[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey[
-        worktreeWorkspaceKey(worktreeId)
-      ]
+      const { state } = this[metadataLineageOperationsContext].runtime
+      delete state.worktreeMeta[worktreeId]
+      delete state.worktreeLineageById[worktreeId]
+      delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+      dropScheduledMessagesForWorktree(state, worktreeId)
     }
     for (const partition of partitions) {
       removeWorkspaceSessionOwnerInPartition(

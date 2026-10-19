@@ -18,6 +18,7 @@ import type { DesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay
 import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
 import type { AgentAwakeService } from '../agent-awake-service'
+import type { ScheduledMessageService } from '../scheduled-message-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import type { AutomationService } from '../automations/service'
 import type { PluginService } from '../plugins/plugin-service'
@@ -98,6 +99,10 @@ export const mainProcessState = {
   headlessBrowserDisplayAvailable: false,
   starNag: null as StarNagService | null,
   agentAwakeService: null as AgentAwakeService | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an empty composition-root slot filled during startup, declared the way every other slot in this object is.
+  scheduledMessageService: null as ScheduledMessageService | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the same empty-slot declaration, for the idle-edge subscription torn down with that service.
+  unsubscribeAgentIdleEdge: null as (() => void) | null,
   uninstallRepoMaintenanceIdleGate: null as (() => Promise<void>) | null,
   repoMaintenanceShutdown: Promise.resolve() as Promise<void>,
   crashReports: null as CrashReportStore | null,

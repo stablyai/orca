@@ -104,6 +104,9 @@ vi.mock('./branch-rename-hook', () => ({ installFirstWorkRenameHookSubscription:
 vi.mock('./main-process-account-services', () => ({
   initializeMainProcessAccountServices: vi.fn()
 }))
+vi.mock('./main-process-scheduled-messages', () => ({
+  initializeMainProcessScheduledMessages: vi.fn()
+}))
 vi.mock('./main-process-automations', () => ({ initializeMainProcessAutomations: vi.fn() }))
 vi.mock('./main-process-plugins', () => ({ initializeMainProcessPlugins: vi.fn() }))
 vi.mock('../worktree-trash', () => ({

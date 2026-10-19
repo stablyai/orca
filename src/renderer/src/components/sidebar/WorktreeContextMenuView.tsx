@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils'
 import { WorktreeRowOpenInSubMenu } from './WorktreeRowOpenInSubMenu'
 import { WorktreeDeveloperMenu } from './WorktreeDeveloperMenu'
 import { WorkspaceSleepMenuItems } from './WorkspaceSleepMenuItems'
+import { WorkspaceScheduledMessagesMenuItem } from './WorkspaceScheduledMessagesMenuItem'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -71,6 +72,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleMoveProjectToGroup,
     handleOpenParent,
     handleOpenParentPicker,
+    handleOpenScheduleDialog,
     handleRemoveParentLink,
     handleRemoveProjectFromGroup,
     handleRename,
@@ -85,6 +87,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     menuOpen,
     menuPoint,
     onContextMenuSelect,
+    pendingScheduledCount,
     projectGroups,
     removesProject,
     repo,
@@ -209,6 +212,13 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                       'Mark Unread'
                     )}
               </DropdownMenuItem>
+              {folderWorkspaceId === null ? (
+                <WorkspaceScheduledMessagesMenuItem
+                  pendingCount={pendingScheduledCount}
+                  disabled={isDeleting}
+                  onSelect={handleOpenScheduleDialog}
+                />
+              ) : null}
               {repo ? (
                 <>
                   <DropdownMenuSeparator />

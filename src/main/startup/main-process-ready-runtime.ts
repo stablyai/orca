@@ -26,6 +26,7 @@ import {
   initializeMainProcessRuntime,
   configureRuntimeServices
 } from './main-process-runtime-service'
+import { initializeMainProcessScheduledMessages } from './main-process-scheduled-messages'
 import { initializeMainProcessAutomations } from './main-process-automations'
 import { initializeMainProcessPlugins } from './main-process-plugins'
 import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from '../worktree-trash'
@@ -50,6 +51,9 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   initializeMainProcessObservers()
   initializeMainProcessAccountServices()
   const runtime = initializeMainProcessRuntime()
+  // Subscribes to runtime idle events, so it must exist before any pane can
+  // start emitting — and before registerCoreHandlers reads it.
+  initializeMainProcessScheduledMessages(runtime)
   initializeMainProcessAutomations()
   configureRuntimeServices(runtime)
   installFirstWorkRenameHookSubscription()

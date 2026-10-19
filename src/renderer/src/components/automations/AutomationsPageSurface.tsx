@@ -12,6 +12,7 @@ import { AutomationRunsDashboardSurface } from './AutomationRunsDashboardSurface
 import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
 import { AutomationsPageDeleteDialogs } from './AutomationsPageDeleteDialogs'
 import { AutomationsPageListPanel } from './AutomationsPageListPanel'
+import { ScheduledMessagesSection } from '@/components/scheduled-messages/ScheduledMessagesSection'
 export function AutomationsPageSurface({
   controller
 }: {
@@ -300,10 +301,13 @@ export function AutomationsPageSurface({
           }}
         />
       ) : (
-        <AutomationsPageListPanel
-          controller={controller}
-          onOpenDetail={() => setIsDetailOpen(true)}
-        />
+        <>
+          <ScheduledMessagesSection relativeNow={relativeNow} />
+          <AutomationsPageListPanel
+            controller={controller}
+            onOpenDetail={() => setIsDetailOpen(true)}
+          />
+        </>
       )}
     </main>
   )
