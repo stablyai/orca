@@ -84,6 +84,19 @@ export function getLinkedGitHubPRRepository(
 }
 
 /**
+ * The row's link as a request through `requestRepo` asks for it. A pre-host row
+ * whose repo id spans hosts has no Repo of its own, so it is read under the
+ * request's; request builders and their stale checks must share this rule.
+ */
+export function getRequestedLinkedGitHubPRRepository(
+  repos: readonly Repo[] | undefined,
+  worktree: Worktree,
+  requestRepo: Repo | undefined
+): GitHubOwnerRepo | null {
+  return getLinkedGitHubPRRepository(worktree, findWorktreeRepo(repos, worktree) ?? requestRepo)
+}
+
+/**
  * Branch-keyed lookups are shared by every caller, so each one resolves the
  * linked PR's repository from the row on that branch rather than trusting the
  * caller to pass it; a caller that forgot would cache a miss for everyone.
@@ -107,7 +120,9 @@ export function findLinkedGitHubPRRepository(
       worktree.branch.replace(/^refs\/heads\//, '') === branchName &&
       worktreeMatchesHost(worktree, hostId, hostMatch)
   )
-  return owners.length === 1 ? getLinkedGitHubPRRepository(owners[0], repo) : null
+  return owners.length === 1
+    ? getRequestedLinkedGitHubPRRepository(state.repos, owners[0], repo)
+    : null
 }
 
 export function withLinkedGitHubPRRepository<T extends LinkedReviewHints>(

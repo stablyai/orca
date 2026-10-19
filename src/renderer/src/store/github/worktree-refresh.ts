@@ -15,7 +15,7 @@ import { prCacheKey } from './cache-identity'
 import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from './pr-result-routing'
 import type { GitHubPRFallbackSource } from './cache-model'
-import { findWorktreeRepo, getLinkedGitHubPRRepository } from './linked-pr-repository'
+import { getRequestedLinkedGitHubPRRepository } from './linked-pr-repository'
 
 export function findWorktreeById(state: AppState, worktreeId: string): Worktree | null {
   return getWorktreeLookupIndex(state).byId.get(worktreeId)?.first ?? null
@@ -108,7 +108,8 @@ export function isStaleExactLinkedPRLookup(
   state: AppState,
   worktreeId: string | undefined,
   linkedPRNumber: number | null | undefined,
-  linkedPRRepository: GitHubOwnerRepo | null = null,
+  linkedPRRepository: GitHubOwnerRepo | null,
+  requestRepo: Repo | undefined,
   lookupIndex?: WorktreeLookupIndex
 ): boolean {
   if (!worktreeId || linkedPRNumber == null) {
@@ -119,13 +120,13 @@ export function isStaleExactLinkedPRLookup(
     return true
   }
   // Why: relinking the same number to another repository makes the older lookup stale too;
-  // each same-id row is read against its own host's Repo.
+  // each same-id row is read as the request read it.
   const repositoryKey = (repository: GitHubOwnerRepo | null) =>
     repository ? githubRepoIdentityKey(repository) : null
   return !entry.owners.some(
     (owner) =>
       owner.linkedPR === linkedPRNumber &&
-      repositoryKey(getLinkedGitHubPRRepository(owner, findWorktreeRepo(state.repos, owner))) ===
+      repositoryKey(getRequestedLinkedGitHubPRRepository(state.repos, owner, requestRepo)) ===
         repositoryKey(linkedPRRepository)
   )
 }
@@ -266,10 +267,7 @@ export function buildPRRefreshCandidate(
   const sshStatus = repo.connectionId
     ? state.sshConnectionStates.get(repo.connectionId)?.status
     : null
-  const linkedPRRepository = getLinkedGitHubPRRepository(
-    worktree,
-    findWorktreeRepo(state.repos, worktree) ?? repo
-  )
+  const linkedPRRepository = getRequestedLinkedGitHubPRRepository(state.repos, worktree, repo)
   return {
     repoId: repo.id,
     repoPath: repoPath ?? repo.path,

@@ -155,7 +155,77 @@ describe('findWorktreeRepo', () => {
     expect(buildPRRefreshCandidate(store.getState(), remoteRow)).not.toHaveProperty(
       'linkedPRRepository'
     )
-    expect(isStaleExactLinkedPRLookup(store.getState(), remoteRow.id, 2383, null)).toBe(false)
+    expect(isStaleExactLinkedPRLookup(store.getState(), remoteRow.id, 2383, null, frontend)).toBe(
+      false
+    )
+  })
+})
+
+describe('a pre-host row whose repo id spans hosts', () => {
+  const DOCKER_URL = 'https://github.com/relayto/relayto-docker/pull/2383'
+  const dockerPR = makePR({ number: 2383, url: DOCKER_URL })
+  const local = { ...repo, executionHostId: 'local' as const }
+  const remote = { ...repo, path: '/remote/docker', connectionId: 'box' }
+  // An SSH clone not probed yet cannot tell its own PR URLs from another repository's.
+  const unprobedRemote = { ...remote, gitRemoteIdentity: null }
+  const store = createTestStore()
+  const show = (repos: Repo[], url = DOCKER_URL) =>
+    store.setState({
+      repos,
+      worktreesByRepo: { [repo.id]: [linkedRow(url)] },
+      prCache: {},
+      hostedReviewCache: {},
+      settings: null
+    })
+  const refreshFor = (requestRepo: Repo) => {
+    const candidate = buildPRRefreshCandidate(
+      store.getState(),
+      linkedRow(DOCKER_URL),
+      undefined,
+      requestRepo
+    )
+    if (!candidate) {
+      throw new Error('expected a refresh candidate')
+    }
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      reason: 'swr',
+      aliases: [candidate],
+      outcome: { kind: 'found', pr: dockerPR, fetchedAt: 1 }
+    })
+    return store.getState().prCache[candidate.cacheKey]?.data
+  }
+  const fetchFor = (requestRepo: Repo) =>
+    store.getState().fetchPRForBranch(requestRepo.path, 'main', {
+      worktreeId: linkedRow(DOCKER_URL).id,
+      linkedPRNumber: 2383,
+      force: true
+    })
+
+  beforeEach(() => {
+    mockApi.gh.refreshPRNow.mockReset().mockResolvedValue({
+      kind: 'found',
+      pr: dockerPR,
+      fetchedAt: 1
+    })
+  })
+
+  it.each([
+    ['both hosts probed, the first one requesting', [local, remote], local],
+    ['the requesting host listed after an unprobed one', [unprobedRemote, local], local]
+  ])('keeps the row’s own PR fresh (%s)', async (_label, repos, requestRepo) => {
+    show(repos)
+    expect(refreshFor(requestRepo)).toEqual(dockerPR)
+
+    show(repos)
+    await expect(fetchFor(requestRepo)).resolves.toEqual(dockerPR)
+  })
+
+  it('still discards the row’s own PR once the link moved to another repository', () => {
+    show([local, remote], FRONTEND_URL)
+    expect(
+      isStaleExactLinkedPRLookup(store.getState(), linkedRow(DOCKER_URL).id, 2383, null, local)
+    ).toBe(true)
   })
 })
 
@@ -184,10 +254,10 @@ describe('cross-repository PR links in renderer refreshes', () => {
 
   it('treats a lookup for the same number in another repository as stale', () => {
     const id = linkedRow(FRONTEND_URL).id
-    expect(isStaleExactLinkedPRLookup(store.getState(), id, 2383, FRONTEND)).toBe(false)
+    expect(isStaleExactLinkedPRLookup(store.getState(), id, 2383, FRONTEND, repo)).toBe(false)
     // A result for the row's own #2383, or another repository's, must not land on this link.
-    expect(isStaleExactLinkedPRLookup(store.getState(), id, 2383, null)).toBe(true)
-    expect(isStaleExactLinkedPRLookup(store.getState(), id, 2383, API)).toBe(true)
+    expect(isStaleExactLinkedPRLookup(store.getState(), id, 2383, null, repo)).toBe(true)
+    expect(isStaleExactLinkedPRLookup(store.getState(), id, 2383, API, repo)).toBe(true)
   })
 
   it('every branch review lookup for the row asks the linked repository', async () => {
