@@ -254,20 +254,31 @@ describe('account select and rm for every provider', () => {
     })
   })
 
-  it('targets the bridge distro for Antigravity from WSL', async () => {
+  it('surfaces the host refusal for Antigravity from WSL without selecting', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     process.env.ORCA_CLI_WSL_DISTRO = 'Ubuntu'
+    // Why: the host refuses every client-selected WSL target, reads included
+    // (getAntigravityAccountService), so the CLI must stop at the list call.
+    const respond = callMock.getMockImplementation()!
+    callMock.mockImplementation((method: string, params: unknown) =>
+      method.startsWith('accounts.antigravity')
+        ? Promise.reject(
+            new Error(
+              'Antigravity account management for a client-selected WSL distro is not supported yet.'
+            )
+          )
+        : respond(method, params)
+    )
 
-    await ACCOUNT_HANDLERS['account select'](context('antigravity', 'agy-1'))
+    await expect(
+      ACCOUNT_HANDLERS['account select'](context('antigravity', 'agy-1'))
+    ).rejects.toThrow('client-selected WSL distro is not supported yet')
 
     expect(callMock).toHaveBeenCalledWith('accounts.antigravityList', {
       runtime: 'wsl',
       wslDistro: 'Ubuntu'
     })
-    expect(callMock).toHaveBeenCalledWith('accounts.antigravitySelect', {
-      target: { runtime: 'wsl', wslDistro: 'Ubuntu' },
-      accountId: 'agy-1'
-    })
+    expect(mutatingCalls()).toEqual([])
   })
 
   it('refuses the Claude system default from WSL rather than resetting the Windows host', async () => {
