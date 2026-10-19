@@ -11,7 +11,10 @@ export function cellToViewportPx(scope: TerminalDocumentScope, col: number, absR
   const sx = col * cellW
   const sy = viewportRow * cellH
   const total = getTotalScale(scope)
-  return { x: sx * total + scope.panX, y: sy * total + scope.panY }
+  return {
+    x: sx * total + scope.panX,
+    y: sy * total + scope.panY + (scope.pixelScrollActive ? scope.smoothScrollOffsetY : 0)
+  }
 }
 
 export function getLineText(scope: TerminalDocumentScope, absRow: number) {
