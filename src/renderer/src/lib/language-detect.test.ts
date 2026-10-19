@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectLanguage } from './language-detect'
+import { detectLanguage, detectShebangLanguage } from './language-detect'
 
 describe('detectLanguage', () => {
   it('maps .vue files to the custom vue language id', () => {
@@ -220,6 +220,49 @@ describe('detectLanguage', () => {
     ['/home/me/.zlogout', 'shell']
   ])('maps shell startup dotfiles to shell: %s', (filePath, expected) => {
     expect(detectLanguage(filePath)).toBe(expected)
+  })
+
+  describe('shebang fallback', () => {
+    it('detects a direct interpreter path', () => {
+      expect(detectLanguage('bin/omarchy-agent-usage-pi', '#!/usr/bin/python3\n')).toBe('python')
+    })
+
+    it('detects the /usr/bin/env form', () => {
+      expect(detectLanguage('bin/script', '#!/usr/bin/env bash\necho hi')).toBe('shell')
+    })
+
+    it('skips env options and assignments', () => {
+      expect(detectLanguage('bin/script', '#!/usr/bin/env -S FOO=1 node --flag')).toBe('javascript')
+    })
+
+    it('strips version suffixes', () => {
+      expect(detectLanguage('bin/tool', '#!/usr/bin/env python3.12')).toBe('python')
+    })
+
+    it('handles CRLF line endings', () => {
+      expect(detectLanguage('bin/tool', '#!/usr/bin/ruby\r\nputs 1')).toBe('ruby')
+    })
+
+    it('returns plaintext for unknown interpreters', () => {
+      expect(detectLanguage('bin/tool', '#!/usr/bin/env awk')).toBe('plaintext')
+    })
+
+    it.each(['toString', 'constructor', '__proto__', 'hasOwnProperty'])(
+      'ignores inherited object keys like %s',
+      (name) => {
+        expect(detectShebangLanguage(`#!/usr/bin/env ${name}`)).toBeNull()
+        expect(detectLanguage('bin/tool', `#!/usr/bin/${name}`)).toBe('plaintext')
+      }
+    )
+
+    it('returns plaintext when there is no shebang', () => {
+      expect(detectLanguage('bin/tool', 'echo hi\n')).toBe('plaintext')
+      expect(detectLanguage('bin/tool')).toBe('plaintext')
+    })
+
+    it('never overrides a name-based match', () => {
+      expect(detectLanguage('script.rb', '#!/usr/bin/env python3')).toBe('ruby')
+    })
   })
 
   it.each([

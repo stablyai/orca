@@ -54,10 +54,12 @@ export function getEditorPanelRenderModel({
       activeFile.diffSource === 'combined-uncommitted' ||
       activeFile.diffSource === 'combined-branch' ||
       activeFile.diffSource === 'combined-commit')
-  const resolvedLanguage =
-    activeFile.mode === 'diff'
-      ? detectLanguage(activeFile.relativePath)
-      : detectLanguage(activeFile.filePath)
+  // Why: extensionless scripts only reveal their language through the loaded text's shebang.
+  const loadedText = editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content
+  const resolvedLanguage = detectLanguage(
+    activeFile.mode === 'diff' ? activeFile.relativePath : activeFile.filePath,
+    loadedText
+  )
   // Why: an AI Vault View Log tab must show the exact raw bytes read-only. A
   // rich/preview/mermaid/csv/notebook renderer would depart from raw text (and
   // can look editable), so neutralize specialized viewers + view-mode chrome
