@@ -19,7 +19,10 @@ type Agent = {
   otherId: string
 }
 
-const acp = (agent: 'opencode' | 'grok' | 'omp', nativeId: string): AgentSessionProviderHandle => ({
+const acp = (
+  agent: 'opencode' | 'grok' | 'omp' | 'copilot',
+  nativeId: string
+): AgentSessionProviderHandle => ({
   transport: 'acp',
   agent,
   nativeId
@@ -59,6 +62,13 @@ const AGENTS: Agent[] = [
     own: () => installOwnership({ handle: acp('omp', UUID) }),
     resumeArgs: `--resume ${UUID}`,
     inlineFlags: ['--resume=', '-r=', '--session='],
+    otherId: OTHER_UUID
+  },
+  {
+    name: 'copilot',
+    own: () => installOwnership({ handle: acp('copilot', UUID) }),
+    resumeArgs: `--resume ${UUID}`,
+    inlineFlags: ['--resume='],
     otherId: OTHER_UUID
   },
   {

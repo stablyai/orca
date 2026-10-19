@@ -44,7 +44,7 @@ export type LaunchTestSources = Pick<StructuredAgentLaunchSources, 'store'> & {
   refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
 }
 
-function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+export function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return Object.fromEntries(
     Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined)
   )

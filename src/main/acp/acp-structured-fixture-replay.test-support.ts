@@ -1,7 +1,7 @@
 // Plays a recorded Grok session back as the agent behind the real adapter. Orca's own frames
 // advance the recording: the agent's lines after each one are sent until the recording waits on
-// Orca again. The recording's prompt ids and session id are rewritten to the ones this run uses,
-// as the real agent echoes the prompt id it was sent.
+// Orca again. The recording's prompt and load ids and session id are rewritten to the ones this
+// run uses, as the real agent echoes the prompt id it was sent.
 
 import { expect } from 'vitest'
 import { z } from 'zod'
@@ -37,6 +37,7 @@ export class GrokFixtureReplay {
   attach(agent: AcpScriptedAgent): void {
     this.agent = agent
     agent.on('session/prompt', (frame) => this.orcaSent('session/prompt', frame))
+    agent.on('session/load', (frame) => this.orcaSent('session/load', frame))
     agent.on('session/cancel', (frame) => this.orcaSent('session/cancel', frame))
   }
 
@@ -53,12 +54,14 @@ export class GrokFixtureReplay {
     const recorded = this.frames[this.cursor]
     expect(recorded?.direction).toBe('out')
     expect(recorded?.message.method).toBe(method)
-    if (method === 'session/prompt' && recorded) {
+    if (recorded && method === 'session/prompt') {
       const recordedId = promptIdOf(recorded.message.params)
       const sentId = promptIdOf(frame.params)
       if (recordedId && sentId) {
         this.promptIds.set(recordedId, sentId)
       }
+    }
+    if (recorded && (method === 'session/prompt' || method === 'session/load')) {
       this.requestIds.set(recorded.message.id ?? '', frame.id)
     }
     this.cursor += 1

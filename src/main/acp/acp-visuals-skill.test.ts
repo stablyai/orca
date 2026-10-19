@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  loadCopilotVisualsSkill,
   loadGrokVisualsSkill,
   loadOmpVisualsSkill,
   loadOpenCodeVisualsSkill,
@@ -76,5 +77,11 @@ describe('OMP visuals skill', () => {
         input({ version: '17.0.5', env: { PI_CONFIG_FILES: '/user/overlay.yml' } })
       )
     ).resolves.toEqual({ pluginDir: '/app/plugin' })
+  })
+})
+
+describe('Copilot visuals skill', () => {
+  it('names the plugin folder without a version check of its own', async () => {
+    await expect(loadCopilotVisualsSkill(input())).resolves.toEqual({ pluginDir: '/app/plugin' })
   })
 })

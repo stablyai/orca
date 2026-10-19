@@ -1,0 +1,4 @@
+{"direction":"out","process":"A","message":{"jsonrpc":"2.0","id":4,"method":"session/prompt","params":{"sessionId":"session-1","prompt":[{"type":"text","text":"/compact"}]}}}
+{"direction":"in","process":"A","message":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"session-1","update":{"sessionUpdate":"usage_update","used":13345,"size":272000}}}}
+{"direction":"in","process":"A","message":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"session-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Compacted conversation history and removed 1 message and -230 tokens."}}}}}
+{"direction":"in","process":"A","message":{"jsonrpc":"2.0","id":4,"result":{"stopReason":"end_turn","usage":{"inputTokens":12830,"outputTokens":6,"totalTokens":12836,"thoughtTokens":0,"cachedReadTokens":8028,"cachedWriteTokens":4799}}}}
