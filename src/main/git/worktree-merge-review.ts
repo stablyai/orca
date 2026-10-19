@@ -63,7 +63,7 @@ export async function getWorktreeMergeReviewState(
   options: WorktreeMergeReviewGitOptions = {}
 ): Promise<WorktreeMergeReviewState> {
   if (!(await isMergePending(mainWorktreePath, options))) {
-    return { phase: 'idle' }
+    return { phase: 'idle', syncSupported: !options.wslDistro }
   }
   const git = createMergeReviewGit(mainWorktreePath, options)
   const [conflicts, mergeMessage] = await Promise.all([

@@ -324,7 +324,8 @@ describe('getWorktreeMergeReviewMenuMode', () => {
     isMainWorktree: false,
     worktreeBranch: 'refs/heads/feature',
     mainWorktreeBranch: 'refs/heads/main',
-    phase: 'idle' as const
+    phase: 'idle' as const,
+    syncSupported: true
   }
 
   it('offers sync only on a task worktree with a branch on both sides', () => {
@@ -339,6 +340,14 @@ describe('getWorktreeMergeReviewMenuMode', () => {
     expect(getWorktreeMergeReviewMenuMode({ ...task, isFolderWorkspace: true })).toBe('none')
     // Why: the merge-review IPC handlers require a local Git route.
     expect(getWorktreeMergeReviewMenuMode({ ...task, isRemote: true })).toBe('none')
+  })
+
+  it('withholds sync where the host cannot snapshot, but still ends a pending review', () => {
+    // Why: WSL has no connectionId, so `isRemote` cannot stand in for "sync unsupported".
+    expect(getWorktreeMergeReviewMenuMode({ ...task, syncSupported: false })).toBe('none')
+    expect(
+      getWorktreeMergeReviewMenuMode({ ...task, syncSupported: false, phase: 'pending' })
+    ).toBe('pending')
   })
 
   // Why: a review belongs to the main checkout, so the main row has to offer the

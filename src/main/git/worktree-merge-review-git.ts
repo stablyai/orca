@@ -142,12 +142,9 @@ async function stagedEditsBeyondMerge(
     capabilities.rememberUnsupported('merge-tree-write-tree')
     return stagedEditsOutsideMergeFiles(git)
   }
-  // Why: exit 1 means the merge conflicts, and a marker-laden tree cannot be
-  // compared with resolutions the user staged. unmergedFiles already covers the
-  // unresolved case; fall back for the rest.
-  if (!result.ok) {
-    return stagedEditsOutsideMergeFiles(git)
-  }
+  // Why not gate on the exit code: a conflicted merge exits 1 but still prints
+  // its result tree, whose conflicted blobs carry markers. A staged resolution
+  // differs from those blobs, so the comparison still finds it.
   const tree = result.stdout.split('\n', 1)[0]?.trim() ?? ''
   if (!/^[0-9a-f]{40,64}$/.test(tree)) {
     return stagedEditsOutsideMergeFiles(git)

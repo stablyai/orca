@@ -271,7 +271,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     // Why: merge review is desktop-only for now — the snapshot step needs a local temp index,
     // which the runtime wire has no primitive for. Report idle state so no menu item appears,
     // and answer the actions with an explicit refusal rather than a silent no-op.
-    worktreeMergeReviewState: async () => ({ phase: 'idle' }),
+    worktreeMergeReviewState: async () => ({ phase: 'idle', syncSupported: false }),
     worktreeMergeReviewSync: async () => {
       throw new Error(WORKTREE_MERGE_REVIEW_UNSUPPORTED_MESSAGE)
     },

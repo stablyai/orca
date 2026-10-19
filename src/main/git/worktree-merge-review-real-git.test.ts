@@ -348,6 +348,25 @@ describe('rejectWorktreeMerge', () => {
     expect(outcome.paths).toContain('notes.md')
   })
 
+  it('asks before discarding a staged conflict resolution', async () => {
+    const { repo, worktree } = await fixture()
+    await write(repo, 'base.txt', 'main side\n')
+    git(repo, ['commit', '--quiet', '-am', 'main side'])
+    await write(worktree, 'base.txt', 'feature side\n')
+    git(worktree, ['commit', '--quiet', '-am', 'feature side'])
+    await syncWorktreeToMain({ worktreePath: worktree, mainWorktreePath: repo })
+    await write(repo, 'base.txt', 'resolved by hand\n')
+    git(repo, ['add', 'base.txt'])
+
+    const outcome = await rejectWorktreeMerge(repo)
+
+    // Why: merge --abort discards the staged resolution, so the prompt is the only warning.
+    if (outcome.kind !== 'needs-confirmation') {
+      throw new Error(`expected a confirmation prompt, got ${outcome.kind}`)
+    }
+    expect(outcome.paths).toContain('base.txt')
+  })
+
   it('refuses when nothing is awaiting review', async () => {
     const { repo } = await fixture()
     await expect(rejectWorktreeMerge(repo)).rejects.toThrow(/no merge awaiting review/)
@@ -355,9 +374,20 @@ describe('rejectWorktreeMerge', () => {
 })
 
 describe('getWorktreeMergeReviewState', () => {
+  it('reports sync as unsupported for a WSL project', async () => {
+    const { repo } = await fixture()
+    expect(await getWorktreeMergeReviewState(repo, { wslDistro: 'Ubuntu' })).toEqual({
+      phase: 'idle',
+      syncSupported: false
+    })
+  })
+
   it('is idle for a main checkout with no pending merge', async () => {
     const { repo } = await fixture()
-    expect(await getWorktreeMergeReviewState(repo)).toEqual({ phase: 'idle' })
+    expect(await getWorktreeMergeReviewState(repo)).toEqual({
+      phase: 'idle',
+      syncSupported: true
+    })
   })
 
   it('reads state a terminal `wf sync` left behind', async () => {

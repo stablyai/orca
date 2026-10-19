@@ -244,6 +244,8 @@ export function getWorktreeMergeReviewMenuMode(args: {
   worktreeBranch: string
   mainWorktreeBranch: string | null
   phase: 'idle' | 'pending'
+  /** False where the host cannot snapshot a worktree (WSL). Pending review still works. */
+  syncSupported: boolean
 }): WorktreeMergeReviewMenuMode {
   if (args.isMultiContext || args.isFolderWorkspace || args.isRemote || !args.mainWorktreeBranch) {
     return 'none'
@@ -251,7 +253,7 @@ export function getWorktreeMergeReviewMenuMode(args: {
   if (args.phase === 'pending') {
     return 'pending'
   }
-  return args.isMainWorktree || !args.worktreeBranch ? 'none' : 'sync'
+  return args.isMainWorktree || !args.worktreeBranch || !args.syncSupported ? 'none' : 'sync'
 }
 
 export type WorkspaceStatusAssignmentPlan =

@@ -28,6 +28,7 @@ import {
   selectMenuScopedMap,
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useWorktreeMergeReviewState } from './use-worktree-merge-review-state'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
 import { useWorktreeParentPickerTransition } from './use-worktree-parent-picker-transition'
@@ -200,11 +201,14 @@ export function useWorktreeContextMenuModel({
   const mergeReviewMode = getWorktreeMergeReviewMenuMode({
     isMultiContext,
     isFolderWorkspace: folderWorkspaceId !== null,
-    isRemote: repo?.connectionId != null,
+    // Why the execution host and not connectionId: runtime-hosted repos carry
+    // connectionId: null and would otherwise look local.
+    isRemote: repo ? getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID : false,
     isMainWorktree: worktree.isMainWorktree,
     worktreeBranch: worktree.branch,
     mainWorktreeBranch: mainWorktree?.branch || null,
-    phase: mergeReview.phase
+    phase: mergeReview.phase,
+    syncSupported: mergeReview.syncSupported
   })
   const sleepLabel =
     isMultiContext && sleepableWorktrees.length > 0

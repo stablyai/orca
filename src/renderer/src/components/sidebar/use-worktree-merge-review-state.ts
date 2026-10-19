@@ -32,9 +32,12 @@ export function useWorktreeMergeReviewState(args: {
   /** Resolves the owning host so a remote probe is not answered by the local machine. */
   worktreeId: string | null
   enabled: boolean
-}): { phase: WorktreeMergeReviewPhase; refresh: () => void } {
+}): { phase: WorktreeMergeReviewPhase; syncSupported: boolean; refresh: () => void } {
   const { enabled, worktreeId, worktreePath } = args
   const [phase, setPhase] = useState<WorktreeMergeReviewPhase>('idle')
+  // Why true before the probe answers: an idle card already offered sync before
+  // this flag existed, and the probe corrects it on the same menu open.
+  const [syncSupported, setSyncSupported] = useState(true)
   const [refreshToken, setRefreshToken] = useState(0)
   const refresh = useCallback(() => setRefreshToken((value) => value + 1), [])
 
@@ -60,6 +63,7 @@ export function useWorktreeMergeReviewState(args: {
       .then((state) => {
         if (!cancelled) {
           setPhase(state.phase)
+          setSyncSupported(state.phase === 'idle' ? state.syncSupported : true)
         }
       })
       .catch(() => {
@@ -73,5 +77,5 @@ export function useWorktreeMergeReviewState(args: {
     }
   }, [enabled, refreshToken, worktreeId, worktreePath])
 
-  return { phase, refresh }
+  return { phase, syncSupported, refresh }
 }

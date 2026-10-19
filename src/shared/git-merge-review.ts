@@ -21,7 +21,9 @@ export function worktreeMergeReviewSnapshotMessage(branch: string): string {
 }
 
 export type WorktreeMergeReviewState =
-  | { phase: 'idle' }
+  /** `syncSupported` is false where the snapshot's temp index cannot cross into
+   *  the Git runtime (WSL), so the menu can withhold an action that would fail. */
+  | { phase: 'idle'; syncSupported: boolean }
   | { phase: 'pending'; branch: string | null; conflicts: string[] }
 
 export type WorktreeMergeReviewSyncOutcome =

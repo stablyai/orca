@@ -174,7 +174,7 @@ function itemLabels(container: HTMLElement): string[] {
 describe('WorktreeContextMenu merge review rows', () => {
   beforeEach(() => {
     stateMock.mockReset()
-    stateMock.mockResolvedValue({ phase: 'idle' })
+    stateMock.mockResolvedValue({ phase: 'idle', syncSupported: true })
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { git: { worktreeMergeReviewState: stateMock } }
@@ -224,6 +224,15 @@ describe('WorktreeContextMenu merge review rows', () => {
     const mainContainer = renderAndOpen(mainWorktreeRow)
     await act(async () => {})
     expect(itemLabels(mainContainer)).toContain('Accept Merge')
+  })
+
+  it('hides sync where the host cannot snapshot', async () => {
+    stateMock.mockResolvedValue({ phase: 'idle', syncSupported: false })
+
+    const container = renderAndOpen(makeWorktree({}))
+    await act(async () => {})
+
+    expect(itemLabels(container)).not.toContain('Merge into Main Worktree')
   })
 
   it('hides the rows on the main checkout while nothing is pending', async () => {
