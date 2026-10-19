@@ -37,6 +37,7 @@ import {
   trimRetainedItems
 } from './structured-agent-session-item-retention'
 import { readAgentJournalTurn } from './agent-session-turn-record'
+import { agentSessionHasOlderTranscript } from './agent-session-context-clear'
 import { queuePublicationField } from './structured-agent-session-queue-publication-field'
 import {
   actionablePromptIdsAfterStructuredAgentSessionBatch,
@@ -199,7 +200,7 @@ export function reduceStructuredAgentSession(
       retainedItemCap: Math.max(state.retainedItemCap, items.length),
       subagentRoster: foldStructuredAgentSubagentRosterPage(state.subagentRoster, action.page),
       submissions: mergeSubmissions(state.submissions, action.page.submissions, items),
-      hasOlder: action.page.hasOlder,
+      hasOlder: agentSessionHasOlderTranscript(items, action.page.hasOlder),
       ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
   }
@@ -290,7 +291,7 @@ export function reduceStructuredAgentSession(
     items,
     subagentRoster,
     // A trim leaves older items behind the cursor, so paging must stay offered.
-    hasOlder: items.length < merged.length ? true : state.hasOlder,
+    hasOlder: agentSessionHasOlderTranscript(items, items.length < merged.length || state.hasOlder),
     submissions:
       event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
         ? state.submissions

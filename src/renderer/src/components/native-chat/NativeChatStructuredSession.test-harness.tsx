@@ -190,6 +190,7 @@ export function createStructuredSessionMocks() {
         }) => {
           mocks.controllerProps = props
           return {
+            contextClear: { clearing: false, clears: 0 },
             journalItems: mocks.journalItems,
             messages: mocks.messages ?? [
               {

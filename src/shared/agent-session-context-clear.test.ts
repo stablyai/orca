@@ -7,6 +7,8 @@ import type {
 } from './agent-session-journal-types'
 import {
   agentSessionCurrentContextRows,
+  agentSessionHasOlderTranscript,
+  agentSessionTranscriptRows,
   isAgentSessionContextClear,
   isNativeChatContextClear,
   latestAgentSessionContextClearSequence
@@ -111,6 +113,22 @@ describe('completed context clear projections', () => {
       blocks: [{ text: 'Localized fallback', contextClear: boundary }]
     })
     expect(isNativeChatContextClear(message)).toBe(true)
+  })
+
+  it('starts the transcript at the latest divider, which also ends paging', () => {
+    const rows = [
+      user,
+      running,
+      clear,
+      row(7, { kind: 'turn', turnId: 'new-turn', state: 'running' })
+    ]
+    expect(agentSessionTranscriptRows(rows, latestAgentSessionContextClearSequence(rows))).toEqual([
+      clear,
+      rows[3]
+    ])
+    expect(agentSessionTranscriptRows([user, running], 0)).toEqual([user, running])
+    expect(agentSessionHasOlderTranscript(rows, true)).toBe(false)
+    expect(agentSessionHasOlderTranscript([rows[3]], true)).toBe(true)
   })
 
   it('leaves earlier rows and uncertainty visible while clearing current work and prompts', () => {
