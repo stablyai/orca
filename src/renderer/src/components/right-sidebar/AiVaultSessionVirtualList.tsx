@@ -1,5 +1,8 @@
 import { SubagentExpansionProvider } from './ai-vault-subagent-expansion'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import {
+  measureElement as measureVirtualElementSize,
+  useVirtualizer
+} from '@tanstack/react-virtual'
 import { useCallback, useMemo, useRef, useState, type Ref } from 'react'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -15,10 +18,11 @@ import type {
 } from './ai-vault-session-resume'
 import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import {
+  estimateVaultVirtualRowSize,
   extractVaultVirtualRowIndexes,
   getVaultStickyHeaderIndexes,
-  VAULT_GROUP_HEADER_ROW_HEIGHT,
-  VAULT_SESSION_ROW_HEIGHT
+  getVaultVirtualRowKey,
+  VAULT_GROUP_HEADER_ROW_HEIGHT
 } from './ai-vault-virtual-rows'
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
 import { AiVaultVirtualRow, type AiVaultListRow } from './AiVaultVirtualRow'
@@ -32,7 +36,6 @@ import {
 } from './use-ai-vault-session-keyboard-navigation'
 
 const VAULT_ROW_OVERSCAN = 8
-const VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT = 420
 
 export function AiVaultSessionVirtualList({
   groups,
@@ -137,19 +140,25 @@ export function AiVaultSessionVirtualList({
   const stickyHeaderIndexes = useMemo(() => getVaultStickyHeaderIndexes(vaultRows), [vaultRows])
   const selection = useAiVaultSessionSelection(vaultRows, keyboardRef !== undefined, query)
   const { selectedIndex } = selection
+  const getItemKey = useCallback(
+    (index: number) => getVaultVirtualRowKey(vaultRows[index], index),
+    [vaultRows]
+  )
 
   const virtualizer = useVirtualizer({
     count: vaultRows.length,
     getScrollElement: () => listScrollRef.current,
-    estimateSize: (index) => {
-      const row = vaultRows[index]
-      if (row?.type === 'group') {
-        return VAULT_GROUP_HEADER_ROW_HEIGHT
+    estimateSize: (index) => estimateVaultVirtualRowSize(vaultRows[index], expandedSessionIds),
+    measureElement: (element, entry, instance) => {
+      const measured = measureVirtualElementSize(element, entry, instance)
+      if (measured > 0) {
+        return measured
       }
-      if (row?.type === 'session' && expandedSessionIds.has(row.session.id)) {
-        return VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT
-      }
-      return VAULT_SESSION_ROW_HEIGHT
+      const index = Number.parseInt(element.getAttribute('data-index') ?? '', 10)
+      return estimateVaultVirtualRowSize(
+        Number.isNaN(index) ? undefined : vaultRows[index],
+        expandedSessionIds
+      )
     },
     overscan: VAULT_ROW_OVERSCAN,
     // Why: the pinned group header covers the list's top, so a row scrolled into view stops below it.
@@ -163,13 +172,7 @@ export function AiVaultSessionVirtualList({
       },
       [stickyHeaderIndexes]
     ),
-    getItemKey: (index) => {
-      const row = vaultRows[index]
-      if (!row) {
-        return `missing:${index}`
-      }
-      return row.type === 'group' ? `group:${row.group.key}` : `session:${row.session.id}`
-    }
+    getItemKey
   })
 
   const toggleSessionDetails = useCallback((sessionId: string) => {
