@@ -2,6 +2,7 @@ import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-em
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
+import { supportsAppOsc133Zones } from './daemon-protocol-version'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { DeveloperPermissionStatus } from '../../shared/developer-permissions-types'
@@ -117,6 +118,13 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
             : { sequenceChars: event.payload.sequenceChars })
         })
       } else if (event.event === 'transientFact') {
+        // A preserved daemon can still emit a queued OMP bubble as a command exit during attach.
+        if (
+          event.payload.kind === 'command-finished' &&
+          !supportsAppOsc133Zones(this.protocolVersion)
+        ) {
+          return
+        }
         // Why (#9993): a preserved pre-v29 daemon can retain a stale relay tracker. Its
         // unretractable subscribe is harmful; an unsubscribe is always safe to forward.
         if (

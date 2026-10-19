@@ -6,7 +6,10 @@ import type {
   DaemonAuditTrigger
 } from './daemon-audit-classifier'
 import { CheckpointSessionQueue } from './daemon-checkpoint-session-queue'
-import { SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
+import {
+  SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
+  supportsAppOsc133Zones
+} from './daemon-protocol-version'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-incarnation-evidence'
 import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
@@ -255,7 +258,8 @@ export abstract class DaemonPtyRuntimeState {
   protected get canDelegateBackgroundToDaemon(): boolean {
     return (
       this.supportsAuthoritativeBufferSnapshots &&
-      supportsMode2031UnsubscribeFact(this.protocolVersion)
+      supportsMode2031UnsubscribeFact(this.protocolVersion) &&
+      supportsAppOsc133Zones(this.protocolVersion)
     )
   }
 
