@@ -1,3 +1,4 @@
+import { normalizeBitbucketRemoteHost } from '../../../../../../shared/git-remote-host-alias'
 import type { HostedReviewProvider } from '../../../../../../shared/hosted-review'
 
 export type ManualReviewProvider = Exclude<HostedReviewProvider, 'unsupported'>
@@ -54,7 +55,7 @@ function providerForHost(host: string): ManualReviewProvider | null {
   if (normalized === 'gitlab.com') {
     return 'gitlab'
   }
-  if (normalized === 'bitbucket.org') {
+  if (normalizeBitbucketRemoteHost(normalized) === 'bitbucket.org') {
     return 'bitbucket'
   }
   if (
@@ -162,7 +163,7 @@ export function parseRemoteRepo(
     return {
       provider: hintedProvider ?? providerForHost(host) ?? null,
       path,
-      webBaseUrl: `https://${host}/${encodePath(path)}`
+      webBaseUrl: `https://${normalizeBitbucketRemoteHost(host)}/${encodePath(path)}`
     }
   }
 
@@ -183,7 +184,9 @@ export function parseRemoteRepo(
     const webOrigin =
       host === 'ssh.github.com'
         ? 'https://github.com'
-        : buildWebOrigin(protocol, url.host, url.hostname).replace(/\/+$/, '')
+        : host === 'ssh.bitbucket.org'
+          ? 'https://bitbucket.org'
+          : buildWebOrigin(protocol, url.host, url.hostname).replace(/\/+$/, '')
     return {
       provider,
       path,
