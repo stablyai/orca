@@ -19,6 +19,7 @@ import {
 } from './MobileTerminalInputActions'
 import { MobileNativeChatStopButton } from './native-chat/input/MobileNativeChatStopButton'
 import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
+import { commandDockBottomPadding } from './command-dock-bottom-padding'
 import { MobileTerminalMoreKeysSheet } from './MobileTerminalMoreKeysSheet'
 import { sessionCommandDockShown } from './mobile-session-command-dock-shown'
 import { useSessionTerminalKeyRail } from './use-session-terminal-key-rail'
@@ -108,7 +109,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     <View
       style={[
         dockStyles.dock,
-        { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
+        { paddingBottom: commandDockBottomPadding(insets.bottom, keyboardLift), transform: [{ translateY: -keyboardLift }] }
       ]}
     >
       <View>
