@@ -57,12 +57,13 @@ export function sendNativeChatMessage(
   text: string,
   options?: NativeChatSendOptions
 ): NativeChatSendHandle {
+  const submitBytes = options?.submitBytes ?? NATIVE_CHAT_SUBMIT
   if (options?.onWriteRejected || options?.onDeliverySettled) {
     return sendNativeChatObservedWrites(
       ptyId,
       [
         { data: buildNativeChatPasteBytes(text), delayBeforeMs: 0 },
-        { data: NATIVE_CHAT_SUBMIT, delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS }
+        { data: submitBytes, delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS }
       ],
       options
     )
@@ -82,7 +83,7 @@ export function sendNativeChatMessage(
         // Schedule from the actual body write: an overdue clear-confirm callback
         // must not collapse the required body-to-Enter gap after a renderer stall.
         delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(ptyId, options?.submitBytes ?? NATIVE_CHAT_SUBMIT, 'driving')
+          sendRuntimePtyInput(ptyId, submitBytes, 'driving')
           markSubmitted()
         })
       })

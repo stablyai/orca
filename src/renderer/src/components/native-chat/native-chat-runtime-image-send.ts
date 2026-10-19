@@ -43,6 +43,9 @@ export function sendNativeChatMessageWithImageAttachments(
     return sendNativeChatMessage(ptyId, text, options)
   }
   const trimmedText = text.trim()
+  // Honor the user's resolved chat:submit gesture; a remapped Enter would read
+  // the default CR as a newline and never submit the image message.
+  const submitBytes = options?.submitBytes ?? NATIVE_CHAT_SUBMIT
   if (options?.onWriteRejected) {
     const writes = agentImagePasteWrites(
       agent,
@@ -55,7 +58,7 @@ export function sendNativeChatMessageWithImageAttachments(
         delayBeforeMs: NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS
       })
     }
-    writes.push({ data: NATIVE_CHAT_SUBMIT, delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS })
+    writes.push({ data: submitBytes, delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS })
     return sendNativeChatObservedWrites(ptyId, writes, options)
   }
   const durationMs =
@@ -82,9 +85,6 @@ export function sendNativeChatMessageWithImageAttachments(
         )) {
           sendRuntimePtyInput(ptyId, payload, 'driving')
         }
-        // Honor the user's resolved chat:submit gesture; a remapped Enter would read
-        // the default CR as a newline and never submit the image message.
-        const submitBytes = options?.submitBytes ?? NATIVE_CHAT_SUBMIT
         if (trimmedText.length > 0) {
           delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
             sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
