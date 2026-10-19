@@ -18522,6 +18522,7 @@
         "cancelledBy": "Cancelled on {{device}}"
       },
       "notices": {
+        "autoApprovalGranted": "Automatic approval granted",
         "contextCleared": "Context cleared",
         "compaction": "Context compacted",
         "details": "Details",

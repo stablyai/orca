@@ -28,6 +28,10 @@ import {
 import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
+import {
+  isNativeChatAutoApprovalNotice,
+  NativeChatAutoApprovalNotice
+} from './NativeChatAutoApprovalNotice'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -60,6 +64,9 @@ export function NativeChatNoticeRow({
   const orcaStopView = useNativeChatOrcaStopView()
   const claudeSignIn = useNativeChatClaudeSignInView()
   const look = nativeChatNoticeLook(block)
+  if (isNativeChatAutoApprovalNotice(block)) {
+    return <NativeChatAutoApprovalNotice block={block} messageId={messageId} />
+  }
   if (look.kind === 'divider') {
     const label =
       look.label === 'contextCleared'
