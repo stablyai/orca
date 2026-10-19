@@ -11,9 +11,9 @@ import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared
 import {
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
-  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-  WORKTREE_TAGS_RUNTIME_CAPABILITY
+  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
+import { assertWorkspaceTagWriteCapability } from '../../../../runtime/rpc/compatibility/runtime-workspace-tag-capabilities'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -134,15 +134,8 @@ async function persistWorktreeMetaUntracked(
       )
     )
   }
-  if (target.kind === 'environment' && 'tags' in updates) {
-    await assertRuntimeEnvironmentCapability(
-      target.environmentId,
-      WORKTREE_TAGS_RUNTIME_CAPABILITY,
-      translate(
-        'auto.store.slices.worktrees.metadata.worktree.meta.persist.tags',
-        'Update the remote runtime to tag workspaces'
-      )
-    )
+  if ('tags' in updates) {
+    await assertWorkspaceTagWriteCapability(target)
   }
   let compatibleUpdates = updates
   const legacySelection = getLegacyWorkspaceReviewSelectionUpdates(updates)
