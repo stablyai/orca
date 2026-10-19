@@ -79,7 +79,10 @@ function renderOverlay({
   canContinueAgentSessionInNewSession = false,
   onContinueAgentSessionInNewSession = vi.fn(),
   canShowTerminal = false,
+  canShowTerminalForPane,
+  onShowTerminal = vi.fn(),
   canResumeInNewNativeChat = false,
+  canResumeInNewNativeChatForPane,
   renameValue = '',
   renamingPaneId = null,
   dropSetup
@@ -95,7 +98,10 @@ function renderOverlay({
   canContinueAgentSessionInNewSession?: boolean
   onContinueAgentSessionInNewSession?: ReturnType<typeof vi.fn>
   canShowTerminal?: boolean
+  canShowTerminalForPane?: (pane: ManagedPane) => boolean
+  onShowTerminal?: (pane?: ManagedPane) => void
   canResumeInNewNativeChat?: boolean
+  canResumeInNewNativeChatForPane?: (pane: ManagedPane) => boolean
   renameValue?: string
   renamingPaneId?: number | null
   dropSetup?: {
@@ -145,8 +151,10 @@ function renderOverlay({
           onContinueAgentSessionInNewSession as (pane: ManagedPane) => void
         }
         canShowTerminal={canShowTerminal}
-        onShowTerminal={vi.fn()}
+        canShowTerminalForPane={canShowTerminalForPane}
+        onShowTerminal={onShowTerminal}
         canResumeInNewNativeChat={canResumeInNewNativeChat}
+        canResumeInNewNativeChatForPane={canResumeInNewNativeChatForPane}
         onSplitPane={vi.fn()}
         onBeginPaneDrag={vi.fn()}
         onActivatePaneTitleInteraction={dropSetup?.activate ?? vi.fn()}
@@ -202,6 +210,25 @@ describe('TerminalPaneHeaderOverlay', () => {
       true
     )
     expect(container.querySelector('button[aria-label="Show chat view"]')).toBeNull()
+  })
+
+  it('renders Resume in New Native Chat and Show terminal on eligible split panes even while a sibling is active', () => {
+    const onShowTerminal = vi.fn()
+    const { container } = renderOverlay({
+      paneTitles: { 1: '', 2: '' },
+      canResumeInNewNativeChatForPane: (pane) => pane.id === 2,
+      canShowTerminalForPane: (pane) => pane.id === 1,
+      onShowTerminal
+    })
+    const inactiveResume = [
+      ...container.querySelectorAll('.pane-title-bar:not([data-active-pane]) button')
+    ].find((button) => button.textContent === 'Resume in New Native Chat')
+    expect(inactiveResume).not.toBeUndefined()
+    const showTerminal = container.querySelector<HTMLButtonElement>(
+      '.pane-title-bar[data-active-pane] button[aria-label="Show terminal"]'
+    )
+    act(() => showTerminal?.click())
+    expect(onShowTerminal).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }))
   })
 
   it('keeps Show terminal as the way back from chat view', () => {

@@ -46,6 +46,8 @@ export function TerminalPaneSurface({
     agentSessionContinuation,
     agentSessionFork,
     beginPaneDragFromHeader,
+    canResumeInChatForLeaf,
+    chatLeafId,
     closeTerminalLinkActions,
     contextMenu,
     contextMenuCanContinueInNewSession,
@@ -116,6 +118,7 @@ export function TerminalPaneSurface({
     terminalContentVisible,
     terminalLinkActionRequest,
     titleUsesLightSurface,
+    toggleNativeChatForLeaf,
     visibleQuickCommandHosts,
     visibleLaunchRefusal,
     visibleTerminalError,
@@ -357,8 +360,12 @@ export function TerminalPaneSurface({
         managerRef={managerRef}
         paneTransportsRef={paneTransportsRef}
         canShowTerminal={activePaneIsChatLeaf}
-        onShowTerminal={handleToggleNativeChat}
+        canShowTerminalForPane={(pane) => effectiveChatViewMode && pane.leafId === chatLeafId}
+        onShowTerminal={(pane) =>
+          pane ? toggleNativeChatForLeaf(pane.leafId) : handleToggleNativeChat()
+        }
         canResumeInNewNativeChat={activePaneCanResumeInChat}
+        canResumeInNewNativeChatForPane={(pane) => canResumeInChatForLeaf(pane.leafId)}
         canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
         onContinueAgentSessionInNewSession={(pane) =>
           contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)

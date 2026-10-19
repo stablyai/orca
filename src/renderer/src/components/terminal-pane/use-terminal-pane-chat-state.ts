@@ -54,7 +54,8 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     selectTerminalTabAgentTypesByLeaf(
       store.agentStatusByPaneKey,
       tabId,
-      store.paneForegroundAgentByPaneKey
+      store.paneForegroundAgentByPaneKey,
+      store.agentLaunchConfigByPaneKey
     )
   )
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
@@ -78,9 +79,12 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     if (tabWideAgentHintLeafId !== undefined) {
       return tabWideAgentHintLeafId
     }
+    if (terminalTab?.agentLaunchPane?.leafId) {
+      return terminalTab.agentLaunchPane.leafId
+    }
     const leafIds = getNativeChatLeafIds()
     return leafIds.length === 1 ? leafIds[0] : null
-  }, [getNativeChatLeafIds, tabWideAgentHintLeafId])
+  }, [getNativeChatLeafIds, tabWideAgentHintLeafId, terminalTab?.agentLaunchPane?.leafId])
   const getTabWideAgentHintLeafIdRef = useRef(getTabWideAgentHintLeafId)
   useEffect(() => {
     getTabWideAgentHintLeafIdRef.current = getTabWideAgentHintLeafId
@@ -93,9 +97,16 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     if (leafIds.length === 0) {
       return
     }
-    setTabWideAgentHintLeafId(leafIds.length === 1 ? leafIds[0] : null)
+    setTabWideAgentHintLeafId(
+      terminalTab?.agentLaunchPane?.leafId ?? (leafIds.length === 1 ? leafIds[0] : null)
+    )
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [getNativeChatLeafIds, paneCount, tabWideAgentHintLeafId])
+  }, [
+    getNativeChatLeafIds,
+    paneCount,
+    tabWideAgentHintLeafId,
+    terminalTab?.agentLaunchPane?.leafId
+  ])
   const resolveTitleAgentForLeaf = useCallback(
     (leafId: string | null) => {
       const hasSingleKnownLeaf =
@@ -120,12 +131,15 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   const isChatEligibleForLeaf = useCallback(
     (leafId: string | null): boolean => {
       const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
-      const launchAgent = nativeChatLaunchAgentForLeaf({
-        launchAgent: terminalTab?.launchAgent,
-        launchAgentLeafId: getTabWideAgentHintLeafId(),
-        leafId,
-        leafIds: getNativeChatLeafIds()
-      })
+      const launchAgent =
+        leafId && terminalTab?.agentLaunchPane?.leafId === leafId
+          ? (terminalTab.launchAgent ?? null)
+          : nativeChatLaunchAgentForLeaf({
+              launchAgent: terminalTab?.launchAgent,
+              launchAgentLeafId: getTabWideAgentHintLeafId(),
+              leafId,
+              leafIds: getNativeChatLeafIds()
+            })
       return canToggleNativeChat({
         contentType: 'terminal',
         launchAgent: detectedAgent ? null : launchAgent,
@@ -137,6 +151,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     [
       tabAgentTypeByLeaf,
       nativeChatTranscriptIsLocalReadable,
+      terminalTab?.agentLaunchPane?.leafId,
       terminalTab?.launchAgent,
       getNativeChatLeafIds,
       getTabWideAgentHintLeafId,

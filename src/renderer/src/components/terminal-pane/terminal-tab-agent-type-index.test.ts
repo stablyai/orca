@@ -97,4 +97,36 @@ describe('createTerminalTabAgentTypeSelector', () => {
       })
     ).toEqual({})
   })
+
+  it('uses pane-keyed launch config identity in split tabs until foreground shell or hook overrides it', () => {
+    const select = createTerminalTabAgentTypeSelector()
+    const launchConfigs = {
+      'tab-1:leaf-a': { identity: { agentType: 'claude' as const } }
+    }
+
+    expect(select({}, 'tab-1', {}, launchConfigs)).toEqual({ 'leaf-a': 'claude' })
+    expect(
+      select(
+        {},
+        'tab-1',
+        { 'tab-1:leaf-a': { agent: null, shellForeground: true, routingTrusted: false } },
+        launchConfigs
+      )
+    ).toEqual({})
+    expect(
+      select(
+        {},
+        'tab-1',
+        {
+          'tab-1:leaf-a': {
+            agent: 'claude',
+            shellForeground: false,
+            routingTrusted: false,
+            routingRevoked: true
+          }
+        },
+        launchConfigs
+      )
+    ).toEqual({})
+  })
 })

@@ -2,6 +2,10 @@ import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-statu
 import type { PaneForegroundAgentEntry } from '../../store/slices/pane-foreground-agent'
 
 export type TerminalTabAgentTypeState = Record<string, AgentStatusEntry>
+export type TerminalTabAgentLaunchConfigState = Record<
+  string,
+  { identity?: { agentType?: AgentType } } | undefined
+>
 export type TerminalTabAgentTypesByLeaf = Readonly<Record<string, AgentType>>
 
 type SelectorDependencies = {
@@ -12,6 +16,7 @@ const EMPTY_AGENT_TYPES_BY_LEAF: TerminalTabAgentTypesByLeaf = Object.freeze({})
 const EMPTY_FOREGROUND_AGENT_BY_PANE_KEY: Record<string, PaneForegroundAgentEntry> = Object.freeze(
   {}
 )
+const EMPTY_LAUNCH_CONFIG_BY_PANE_KEY: TerminalTabAgentLaunchConfigState = Object.freeze({})
 
 function reuseRecordIfEqual(
   previous: TerminalTabAgentTypesByLeaf | undefined,
@@ -32,16 +37,27 @@ export function createTerminalTabAgentTypeSelector(
 ): (
   state: TerminalTabAgentTypeState,
   tabId: string,
-  foreground?: Record<string, PaneForegroundAgentEntry>
+  foreground?: Record<string, PaneForegroundAgentEntry>,
+  launchConfigs?: TerminalTabAgentLaunchConfigState
 ) => TerminalTabAgentTypesByLeaf {
   let cachedState: WeakRef<TerminalTabAgentTypeState> | null = null
   let cachedForeground: WeakRef<Record<string, PaneForegroundAgentEntry>> | null = null
+  let cachedLaunchConfigs: WeakRef<TerminalTabAgentLaunchConfigState> | null = null
   let cachedByTabId = new Map<string, TerminalTabAgentTypesByLeaf>()
 
-  return (state, tabId, foreground = EMPTY_FOREGROUND_AGENT_BY_PANE_KEY) => {
+  return (
+    state,
+    tabId,
+    foreground = EMPTY_FOREGROUND_AGENT_BY_PANE_KEY,
+    launchConfigs = EMPTY_LAUNCH_CONFIG_BY_PANE_KEY
+  ) => {
     // Why: production writes replace this map. Its identity lets unrelated
     // Zustand notifications skip the global scan entirely.
-    if (state !== cachedState?.deref() || foreground !== cachedForeground?.deref()) {
+    if (
+      state !== cachedState?.deref() ||
+      foreground !== cachedForeground?.deref() ||
+      launchConfigs !== cachedLaunchConfigs?.deref()
+    ) {
       const previousByTabId = cachedByTabId
       const nextByTabId = new Map<string, Record<string, AgentType>>()
       for (const [paneKey, entry] of Object.entries(state)) {
@@ -79,6 +95,25 @@ export function createTerminalTabAgentTypeSelector(
           nextByTabId.set(entryTabId, { [leafId]: entry.agent })
         }
       }
+      for (const [paneKey, entry] of Object.entries(launchConfigs)) {
+        const agentType = entry?.identity?.agentType
+        const foregroundEntry = foreground[paneKey]
+        if (!agentType || foregroundEntry?.shellForeground || foregroundEntry?.routingRevoked) {
+          continue
+        }
+        const separator = paneKey.indexOf(':')
+        if (separator <= 0) {
+          continue
+        }
+        const entryTabId = paneKey.slice(0, separator)
+        const leafId = paneKey.slice(separator + 1)
+        const byLeaf = nextByTabId.get(entryTabId)
+        if (byLeaf) {
+          byLeaf[leafId] ??= agentType
+        } else {
+          nextByTabId.set(entryTabId, { [leafId]: agentType })
+        }
+      }
 
       const stabilizedByTabId = new Map<string, TerminalTabAgentTypesByLeaf>()
       for (const [entryTabId, byLeaf] of nextByTabId) {
@@ -91,6 +126,7 @@ export function createTerminalTabAgentTypeSelector(
       // Identity checks must not keep dropped payloads alive after the last pane parks.
       cachedState = new WeakRef(state)
       cachedForeground = new WeakRef(foreground)
+      cachedLaunchConfigs = new WeakRef(launchConfigs)
     }
     return cachedByTabId.get(tabId) ?? EMPTY_AGENT_TYPES_BY_LEAF
   }

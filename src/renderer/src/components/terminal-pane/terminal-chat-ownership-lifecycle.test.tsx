@@ -14,6 +14,10 @@ const LEFT = '11111111-1111-4111-8111-111111111111'
 const RIGHT = '22222222-2222-4222-8222-222222222222'
 const mocks = vi.hoisted(() => {
   const layouts: Record<string, TerminalLayoutSnapshot> = {}
+  const launchConfigs: Record<string, { identity: { agentType: string } }> = {}
+  const runtimePaneTitles: Record<string, Record<number, string>> = {
+    tab: { 1: 'codex', 2: 'codex' }
+  }
   const tab = { id: 'tab', entityId: 'tab', contentType: 'terminal', viewMode: 'chat' }
   const state = {
     terminalLayoutsByTabId: layouts,
@@ -21,9 +25,10 @@ const mocks = vi.hoisted(() => {
     tabsByWorktree: {},
     settings: { experimentalNativeChat: true },
     pendingPaneAccountRestarts: [],
-    runtimePaneTitlesByTabId: { tab: { 1: 'codex', 2: 'codex' } },
+    runtimePaneTitlesByTabId: runtimePaneTitles,
     agentStatusByPaneKey: {},
     paneForegroundAgentByPaneKey: {},
+    agentLaunchConfigByPaneKey: launchConfigs,
     setTabLayout: (_id: string, layout: TerminalLayoutSnapshot) => {
       layouts.tab = layout
     },
@@ -37,7 +42,16 @@ const mocks = vi.hoisted(() => {
       )
     }
   }
-  return { state }
+  let setStoreState: (partial: Partial<typeof state>) => void = () => {}
+  return {
+    state,
+    bindSetStoreState: (setter: (partial: Partial<typeof state>) => void) => {
+      setStoreState = setter
+    },
+    setStoreState: (partial: Partial<typeof state>) => {
+      setStoreState(partial)
+    }
+  }
 })
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
@@ -56,6 +70,7 @@ vi.mock('../../store', async () => {
     useAppStore.setState({ unifiedTabsByWorktree: mocks.state.unifiedTabsByWorktree })
   }
   const useAppStore = create(() => mocks.state)
+  mocks.bindSetStoreState((partial) => useAppStore.setState(partial))
   return { useAppStore }
 })
 vi.mock('@/runtime/web-runtime-terminal-buffer-actions', () => ({
@@ -276,5 +291,23 @@ describe('terminal chat ownership lifecycle', () => {
     expect(restored.managerRef.current.getPanes().map((pane) => pane.leafId)).toEqual([LEFT])
     expect(hook.result.current.chatLeafId).toBeNull()
     expect(mocks.state.unifiedTabsByWorktree.wt[0].viewMode).toBe('terminal')
+  })
+
+  it('keeps a split pane eligible for Chat UI via pane-keyed launch config without making its shell sibling eligible', () => {
+    mocks.state.setTabViewMode('tab', 'terminal')
+    mocks.setStoreState({
+      runtimePaneTitlesByTabId: { tab: {} },
+      agentLaunchConfigByPaneKey: {
+        [`tab:${LEFT}`]: { identity: { agentType: 'claude' } }
+      }
+    })
+    const fixture = makeFixture()
+    const hook = renderHook(() => useFixture(fixture, null))
+    expect(hook.result.current.canToggleChatForLeaf(LEFT)).toBe(true)
+    expect(hook.result.current.canToggleChatForLeaf(RIGHT)).toBe(false)
+    mocks.setStoreState({
+      runtimePaneTitlesByTabId: { tab: { 1: 'codex', 2: 'codex' } },
+      agentLaunchConfigByPaneKey: {}
+    })
   })
 })

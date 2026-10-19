@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { PaneForegroundAgentEntry } from '../../store/slices/pane-foreground-agent'
 import { resolveNativeChatTabAgentEvidence } from '../tab-bar/native-chat-tab-agent-evidence'
 import { canToggleNativeChat } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
@@ -16,15 +17,25 @@ import {
 export function resolveNativeChatToggleShortcutDetectedAgent({
   terminalTabId,
   terminalLayout,
-  agentStatusByPaneKey
+  agentStatusByPaneKey,
+  paneForegroundAgentByPaneKey,
+  agentLaunchConfigByPaneKey
 }: {
   terminalTabId: string
   terminalLayout?: TerminalLayoutSnapshot | null
   agentStatusByPaneKey: Record<string, { agentType?: AgentType }>
+  paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
+  agentLaunchConfigByPaneKey?: Record<string, { identity?: { agentType?: AgentType } } | undefined>
 }): AgentType | null {
   const activeLeafId = resolveNativeChatActiveLayoutLeafId(terminalLayout)
   if (activeLeafId) {
-    return agentStatusByPaneKey[`${terminalTabId}:${activeLeafId}`]?.agentType ?? null
+    const paneKey = `${terminalTabId}:${activeLeafId}`
+    const foreground = paneForegroundAgentByPaneKey?.[paneKey]
+    const foregroundOrLaunchAgent =
+      foreground?.shellForeground || foreground?.routingRevoked
+        ? null
+        : (foreground?.agent ?? agentLaunchConfigByPaneKey?.[paneKey]?.identity?.agentType ?? null)
+    return agentStatusByPaneKey[paneKey]?.agentType ?? foregroundOrLaunchAgent
   }
   if (!isNativeChatTabWideFallbackSafe(terminalLayout)) {
     return null
@@ -76,12 +87,22 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       // Pane keys are `${entityId}:${leafId}` — the backing terminal tab id, not
       // the unified tab id.
       const terminalLayout = state.terminalLayoutsByTabId[tab.entityId]
+      const activeLeafId = resolveNativeChatActiveLayoutLeafId(terminalLayout)
       const tabWideFallbackSafe = isNativeChatTabWideFallbackSafe(terminalLayout)
       const detectedAgent = resolveNativeChatToggleShortcutDetectedAgent({
         terminalTabId: tab.entityId,
         terminalLayout,
-        agentStatusByPaneKey: state.agentStatusByPaneKey
+        agentStatusByPaneKey: state.agentStatusByPaneKey,
+        paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
+        agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey
       })
+      const launchAgent = detectedAgent
+        ? null
+        : activeLeafId && terminalTab?.agentLaunchPane?.leafId === activeLeafId
+          ? terminalTab.launchAgent
+          : tabWideFallbackSafe
+            ? terminalTab?.launchAgent
+            : null
       const titleFallbackAgent =
         tabWideFallbackSafe && terminalTab
           ? resolveNativeChatTabAgentEvidence(terminalTab, tab)
@@ -89,7 +110,7 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       if (
         !canToggleNativeChat({
           contentType: 'terminal',
-          launchAgent: detectedAgent || !tabWideFallbackSafe ? null : terminalTab?.launchAgent,
+          launchAgent,
           detectedAgent,
           resolvedAgent: detectedAgent ? null : titleFallbackAgent,
           nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(

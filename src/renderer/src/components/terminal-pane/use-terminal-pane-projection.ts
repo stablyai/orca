@@ -20,6 +20,7 @@ import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-ac
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { canPaneOfferResumeInNewChat } from '../tab-bar/tab-session-history-switch'
 
@@ -139,13 +140,20 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const chatPanePtyId = chatPane
     ? (paneTransportsRef.current.get(chatPane.id)?.getPtyId() ?? null)
     : null
-  const chatPaneResolvedAgent = chatPane ? resolveTitleAgentForLeaf(chatPane.leafId) : null
-  const chatPaneLaunchAgent = nativeChatLaunchAgentForLeaf({
-    launchAgent: terminalTab?.launchAgent,
-    launchAgentLeafId: getTabWideAgentHintLeafId(),
-    leafId: chatPane?.leafId ?? null,
-    leafIds: getNativeChatLeafIds()
-  })
+  const chatPaneDetectedAgent = chatPane ? (tabAgentTypeByLeaf[chatPane.leafId] ?? null) : null
+  const chatPaneResolvedAgent = chatPane
+    ? ((isTuiAgent(chatPaneDetectedAgent) ? chatPaneDetectedAgent : null) ??
+      resolveTitleAgentForLeaf(chatPane.leafId))
+    : null
+  const chatPaneLaunchAgent =
+    chatPane && terminalTab?.agentLaunchPane?.leafId === chatPane.leafId
+      ? (terminalTab.launchAgent ?? null)
+      : nativeChatLaunchAgentForLeaf({
+          launchAgent: terminalTab?.launchAgent,
+          launchAgentLeafId: getTabWideAgentHintLeafId(),
+          leafId: chatPane?.leafId ?? null,
+          leafIds: getNativeChatLeafIds()
+        })
   const chatPaneOwnsTabWideLaunchDraft = nativeChatLeafOwnsTabWideEvidence({
     ownerLeafId: getTabWideAgentHintLeafId(),
     leafId: chatPane?.leafId ?? null,
@@ -159,14 +167,16 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     if (detectedAgent) {
       return detectedAgent
     }
-    return (
-      nativeChatLaunchAgentForLeaf({
-        launchAgent: terminalTab?.launchAgent,
-        launchAgentLeafId: getTabWideAgentHintLeafId(),
-        leafId,
-        leafIds: getNativeChatLeafIds()
-      }) ?? resolveTitleAgentForLeaf(leafId)
-    )
+    const paneLaunchAgent =
+      leafId && terminalTab?.agentLaunchPane?.leafId === leafId
+        ? (terminalTab.launchAgent ?? null)
+        : nativeChatLaunchAgentForLeaf({
+            launchAgent: terminalTab?.launchAgent,
+            launchAgentLeafId: getTabWideAgentHintLeafId(),
+            leafId,
+            leafIds: getNativeChatLeafIds()
+          })
+    return paneLaunchAgent ?? resolveTitleAgentForLeaf(leafId)
   }
   const activePaneCanContinueInNewSession = canContinueAgentSessionInNewSession(
     resolveAgentForLeaf(activePane?.leafId ?? null)
@@ -178,22 +188,34 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   const activeLeafId = activePane?.leafId ?? null
   // One subscription for both reads keeps the pane inside its store listener budget.
-  const { menuAgentSessionId, activePaneCanResumeInChat } = useAppStore(
+  const { menuAgentSessionId, resumableChatLeafIds } = useAppStore(
     useShallow((state) => ({
       menuAgentSessionId:
         contextMenu.open && contextMenuLeafId
           ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
           : null,
-      // Cheap stand-in for the tab menu's gate, on this pane's own conversation; the click looks it up.
-      activePaneCanResumeInChat:
-        !activePaneIsChatLeaf &&
-        activeLeafId !== null &&
-        canPaneOfferResumeInNewChat(state, {
-          worktreeId,
-          paneKey: makePaneKey(tabId, activeLeafId)
-        })
+      // Cheap stand-in for the tab menu's gate, on each pane's own conversation; the click looks it up.
+      resumableChatLeafIds: managedPanes
+        .map((pane) => pane.leafId)
+        .filter(
+          (leafId) =>
+            !(isChatViewMode && leafId === chatLeafId) &&
+            canPaneOfferResumeInNewChat(state, {
+              worktreeId,
+              paneKey: makePaneKey(tabId, leafId)
+            })
+        )
+        .join(',')
     }))
   )
+  const canResumeInChatForLeaf = useCallback(
+    (leafId: string | null): boolean =>
+      leafId !== null &&
+      resumableChatLeafIds.length > 0 &&
+      resumableChatLeafIds.split(',').includes(leafId),
+    [resumableChatLeafIds]
+  )
+  const activePaneCanResumeInChat = canResumeInChatForLeaf(activeLeafId)
   const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
   const handleContextMenuToggleNativeChat = useCallback(() => {
     const leafId = getContextMenuLeafId()
@@ -228,6 +250,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     activePaneCanContinueInNewSession,
     contextMenuCanContinueInNewSession,
     activePaneCanResumeInChat,
+    canResumeInChatForLeaf,
     contextMenuCanToggleChat,
     contextMenuIsChatView,
     handleContextMenuToggleNativeChat

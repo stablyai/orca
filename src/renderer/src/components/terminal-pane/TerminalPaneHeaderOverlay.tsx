@@ -39,13 +39,11 @@ type TerminalPaneHeaderOverlayProps = {
   hiddenStartupStyle: CSSProperties
   managerRef: RefObject<PaneManager | null>
   paneTransportsRef: RefObject<Map<number, PtyTransport>>
-  /** True when the active pane shows the native chat view; renders its way back to the terminal.
-   *  Switching into chat view is no longer offered here. */
   canShowTerminal?: boolean
-  /** Flip the active pane from the native chat view back to the terminal. */
-  onShowTerminal?: () => void
-  /** Offers the tab menu's "Resume in New Native Chat" for the active pane's own conversation. */
+  canShowTerminalForPane?: (pane: ManagedPane) => boolean
+  onShowTerminal?: (pane?: ManagedPane) => void
   canResumeInNewNativeChat?: boolean
+  canResumeInNewNativeChatForPane?: (pane: ManagedPane) => boolean
   canContinueAgentSessionInNewSession?: boolean
   onContinueAgentSessionInNewSession?: (pane: ManagedPane) => void
   onSplitPane: (pane: ManagedPane, direction: 'vertical' | 'horizontal') => void
@@ -83,8 +81,10 @@ export default function TerminalPaneHeaderOverlay({
   managerRef,
   paneTransportsRef,
   canShowTerminal,
+  canShowTerminalForPane,
   onShowTerminal,
   canResumeInNewNativeChat,
+  canResumeInNewNativeChatForPane,
   canContinueAgentSessionInNewSession,
   onContinueAgentSessionInNewSession,
   onSplitPane,
@@ -119,6 +119,12 @@ export default function TerminalPaneHeaderOverlay({
         const isEditing = renamingPaneId === pane.id
         const overlayRect = paneTitleOverlayRects[pane.id]
         const isActivePane = activePaneId === pane.id
+        const paneCanShowTerminal = canShowTerminalForPane
+          ? canShowTerminalForPane(pane)
+          : Boolean(canShowTerminal && isActivePane)
+        const paneCanResumeInNewNativeChat = canResumeInNewNativeChatForPane
+          ? canResumeInNewNativeChatForPane(pane)
+          : Boolean(canResumeInNewNativeChat && isActivePane)
         const isChromeless = showAlwaysOnHeaders && !title && !isEditing
         const showHeader = overlayRect && (showAlwaysOnHeaders || Boolean(title) || isEditing)
         const closeLabel =
@@ -246,7 +252,7 @@ export default function TerminalPaneHeaderOverlay({
                       </TooltipContent>
                     </Tooltip>
                   ) : null}
-                  {canShowTerminal && isActivePane ? (
+                  {paneCanShowTerminal ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -261,7 +267,7 @@ export default function TerminalPaneHeaderOverlay({
                           )}
                           onClick={(event) => {
                             event.stopPropagation()
-                            onShowTerminal?.()
+                            onShowTerminal?.(pane)
                           }}
                         >
                           <SquareTerminal className="size-3" />
@@ -271,7 +277,7 @@ export default function TerminalPaneHeaderOverlay({
                         {translate('components.native-chat.toggle.showTerminal', 'Show terminal')}
                       </TooltipContent>
                     </Tooltip>
-                  ) : canResumeInNewNativeChat && isActivePane ? (
+                  ) : paneCanResumeInNewNativeChat ? (
                     <TerminalPaneResumeInChatButton
                       tabId={tabId}
                       worktreeId={worktreeId}
