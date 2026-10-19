@@ -43,6 +43,7 @@ type UsageProviderId = ProviderRateLimits['provider']
 
 export function hasUsageData(provider: ProviderRateLimits): boolean {
   return Boolean(
+    provider.isUnlimited ||
     provider.session ||
     provider.weekly ||
     provider.fableWeekly ||

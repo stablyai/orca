@@ -30,6 +30,7 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
     }
 
     const previousHasData = Boolean(
+      previous?.isUnlimited ||
       previous?.session ||
       previous?.weekly ||
       previous?.fableWeekly ||
