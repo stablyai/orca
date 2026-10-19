@@ -15,6 +15,7 @@ import {
 import { exchangeRealtimeSdpOffer } from './openai-realtime-sdp-exchange'
 import { RealtimeResponseGate, type ResponseGateObserver } from './realtime-response-gate'
 import { RealtimeSidebandSocket } from './realtime-sideband-socket'
+import type { ControlMailboxMessage } from './voice-control-reply-pump'
 import { VoiceControlRealtimeError } from './voice-control-realtime-error'
 import { buildCoordinatorInstructions } from './voice-control-coordinator-prompt'
 import { formatVoiceRosterForInstructions, projectVoiceRoster } from './voice-control-roster'
@@ -48,7 +49,21 @@ export type VoiceControlServiceDeps = {
     sessionId: string
     gate: RealtimeResponseGate
     send: (event: Record<string, unknown>) => void
+    /** Replies that arrived while no session was live — spoken on start. */
+    wakeMessages?: ControlMailboxMessage[]
   }) => VoiceControlSessionBackend
+  /**
+   * Watches an ended session's run mailbox so follow-through mail (an agent finishing
+   * after the user stopped or the session idle-suspended) still surfaces. The mailbox
+   * outlives the audio session; the watcher is what makes "I'll let you know when it's
+   * done" survive the hangup.
+   */
+  openDormantWatcher?: (
+    runId: string,
+    onMessages: (messages: ControlMailboxMessage[]) => void
+  ) => { stop(): void }
+  /** Asks the owner window to restart voice control so a pending reply gets spoken. */
+  emitWakeForReply?: () => void
   /** CLI binary name the coordinator prompt advertises (`orca`, or `orca-dev` in dev). */
   cliCommand: string
   /** Tail of the durable transcript — baked into the session as the coordinator's memory. */
@@ -93,6 +108,10 @@ export class VoiceControlService {
   private live: LiveSession | null = null
   /** Bumped by stop(); an async step that wakes up behind a stop must not touch state. */
   private generation = 0
+  /** The watched mailbox of an ended session with outstanding work; one at a time. */
+  private dormant: { runId: string; watcher: { stop(): void } } | null = null
+  /** Dormant-mailbox replies awaiting the woken session's start — kept until consumed. */
+  private pendingWake: ControlMailboxMessage[] = []
 
   constructor(private readonly deps: VoiceControlServiceDeps) {}
 
@@ -130,7 +149,8 @@ export class VoiceControlService {
           recentHistory: this.deps.readRecentTranscript()
         }),
         tools: COORDINATOR_TOOLS,
-        voice: settings.coordinatorVoice
+        voice: settings.coordinatorVoice,
+        speed: settings.voiceSpeed
       })
       if (generation !== this.generation) {
         // Stopped mid-mint; the stop already published idle. Drop the late mint.
@@ -219,6 +239,9 @@ export class VoiceControlService {
       return
     }
     this.generation += 1
+    // Read the ledger before the teardown disposes the backend that owns it.
+    const outstandingRunId =
+      this.live && this.live.backend.hasOutstandingWork() ? this.live.backend.runId() : null
     // Synchronous, so nothing interleaves between the teardown and the transition.
     this.teardownLive()
     this.transition('stopping')
@@ -231,6 +254,44 @@ export class VoiceControlService {
     // Autonomous ends name themselves so the pill can say why the session is gone;
     // a user-initiated stop needs no explanation.
     this.transition('idle', reason === 'idle-suspend' || reason === 'max-session-minutes' ? reason : undefined)
+    if (outstandingRunId) {
+      this.watchDormant(outstandingRunId)
+    }
+  }
+
+  /** Follow-through survives the hangup: watch the dead session's mailbox for replies. */
+  private watchDormant(runId: string): void {
+    if (!this.deps.openDormantWatcher) {
+      return
+    }
+    this.dormant?.watcher.stop()
+    const watcher = this.deps.openDormantWatcher(runId, (messages) =>
+      this.onDormantMail(runId, messages)
+    )
+    this.dormant = { runId, watcher }
+  }
+
+  private onDormantMail(runId: string, messages: ControlMailboxMessage[]): void {
+    if (this.dormant?.runId !== runId) {
+      return
+    }
+    this.dormant.watcher.stop()
+    this.dormant = null
+    if (this.state === 'live') {
+      // A session is already running — record the replies so its memory has them; its
+      // own pump and watchdog carry the follow-through from here.
+      for (const message of messages) {
+        this.deps.recordTranscript({
+          ts: Date.now(),
+          kind: 'update',
+          spokenName: message.fromHandle,
+          text: message.body
+        })
+      }
+      return
+    }
+    this.pendingWake.push(...messages)
+    this.deps.emitWakeForReply?.()
   }
 
   private async openSideband(sessionId: string, callId: string, generation: number): Promise<void> {
@@ -290,7 +351,8 @@ export class VoiceControlService {
     const backend = this.deps.createBackend({
       sessionId,
       gate,
-      send: (event) => sideband.send(event)
+      send: (event) => sideband.send(event),
+      ...(this.pendingWake.length > 0 ? { wakeMessages: this.pendingWake.splice(0) } : {})
     })
     this.live = { sessionId, callId, sideband, gate, backend, hangupTimer, idleTimer: null }
     this.pending = null
@@ -355,6 +417,9 @@ export class VoiceControlService {
   }
 
   private async fail(kind: VoiceControlErrorKind, message: string): Promise<void> {
+    // An error-killed session with outstanding dispatches still owes follow-through.
+    const outstandingRunId =
+      this.live && this.live.backend.hasOutstandingWork() ? this.live.backend.runId() : null
     this.teardownLive()
     this.state = 'error'
     this.deps.emitState({
@@ -363,6 +428,9 @@ export class VoiceControlService {
       errorKind: kind,
       error: message
     })
+    if (outstandingRunId) {
+      this.watchDormant(outstandingRunId)
+    }
   }
 
   /** Drops the live session: hangup timer, backend, sideband — plus any pending mint. */

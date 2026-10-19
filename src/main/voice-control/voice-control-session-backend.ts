@@ -46,6 +46,10 @@ export type VoiceControlSessionBackend = {
   start: () => void
   dispatchToolCall: (name: string, argumentsJson: string, toolCallId: string) => Promise<void>
   observeEvent: (event: Record<string, unknown>) => void
+  /** True while the coordinator owes the user follow-through — gates the dormant watcher. */
+  hasOutstandingWork: () => boolean
+  /** The session's orchestration run id — its mailbox outlives the audio session. */
+  runId: () => string
   dispose: () => void
 }
 
@@ -85,6 +89,11 @@ export type VoiceControlSessionBackendDeps = {
   readTerminal: () => Promise<string | null>
   /** open_url: a foreground browser tab at the URL in the user's window; throws the reason. */
   openUrl: (url: string) => Promise<void>
+  /**
+   * Mail that arrived while no session was live (the dormant watcher drained the old
+   * run's mailbox). Spoken and recorded on start exactly like live mail.
+   */
+  wakeMessages?: ControlMailboxMessage[]
 }
 
 /** How often the watchdog re-checks outstanding work. Local roster reads; no API cost. */
@@ -124,6 +133,11 @@ export class VoiceControlSessionBackendImpl implements VoiceControlSessionBacken
       run.runId
     )
     this.pump.start()
+    // Replies that arrived while no session was live ride the normal mail path so they
+    // are recorded and spoken exactly as if they had landed mid-session.
+    if (this.deps.wakeMessages && this.deps.wakeMessages.length > 0) {
+      void this.handleMail(this.deps.wakeMessages)
+    }
     this.watchdogTimer = setInterval(() => void this.watchdogTick(), WATCHDOG_INTERVAL_MS)
     this.deps.emitToolActivity({
       sessionId: this.deps.sessionId,
@@ -134,6 +148,10 @@ export class VoiceControlSessionBackendImpl implements VoiceControlSessionBacken
 
   observeEvent(event: Record<string, unknown>): void {
     this.sequencer?.observe(event)
+  }
+
+  hasOutstandingWork(): boolean {
+    return this.outstanding.size > 0
   }
 
   dispose(): void {
@@ -329,7 +347,7 @@ export class VoiceControlSessionBackendImpl implements VoiceControlSessionBacken
     return this.roster
   }
 
-  private runId(): string {
+  runId(): string {
     return this.activeRunId
   }
 

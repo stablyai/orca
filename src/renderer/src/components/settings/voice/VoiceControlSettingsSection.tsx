@@ -21,6 +21,7 @@ type VoiceControlSettingsSectionProps = {
 
 const MAX_SESSION_MINUTE_OPTIONS = [0, 15, 30, 60, 120] as const
 const IDLE_SUSPEND_MINUTE_OPTIONS = [0, 2, 5, 15] as const
+const VOICE_SPEED_OPTIONS = [1, 1.25, 1.5] as const
 
 function formatCoordinatorVoiceName(voice: OpenAiRealtimeVoice): string {
   return voice.slice(0, 1).toUpperCase() + voice.slice(1)
@@ -69,6 +70,20 @@ function idleSuspendMinutesLabel(minutes: number): string {
       )
     default:
       return translate('auto.components.settings.VoiceControlSettingsSection.f6ba2a270c', 'Off')
+  }
+}
+
+function voiceSpeedLabel(speed: number): string {
+  switch (speed) {
+    case 1.25:
+      return translate(
+        'auto.components.settings.VoiceControlSettingsSection.2620edd21a',
+        '1.25×'
+      )
+    case 1.5:
+      return translate('auto.components.settings.VoiceControlSettingsSection.d6e8e02d37', '1.5×')
+    default:
+      return translate('auto.components.settings.VoiceControlSettingsSection.60021885d3', '1×')
   }
 }
 
@@ -148,6 +163,45 @@ export function VoiceControlSettingsSection({
             {OPENAI_REALTIME_VOICES.map((voice) => (
               <SelectItem key={voice} value={voice}>
                 {formatCoordinatorVoiceName(voice)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center justify-between gap-4 py-2">
+        <div className="min-w-0 space-y-0.5">
+          <Label>
+            {translate(
+              'auto.components.settings.VoiceControlSettingsSection.4f9b393144',
+              'Speech speed'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.VoiceControlSettingsSection.13f55eb2b7',
+              'How fast the coordinator speaks. Applies to new sessions.'
+            )}
+          </p>
+        </div>
+        <Select
+          value={String(control.voiceSpeed)}
+          onValueChange={(value) => updateControl({ voiceSpeed: Number(value) })}
+        >
+          <SelectTrigger
+            size="sm"
+            className="w-52 shrink-0"
+            aria-label={translate(
+              'auto.components.settings.VoiceControlSettingsSection.4f9b393144',
+              'Speech speed'
+            )}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {VOICE_SPEED_OPTIONS.map((speed) => (
+              <SelectItem key={speed} value={String(speed)}>
+                {voiceSpeedLabel(speed)}
               </SelectItem>
             ))}
           </SelectContent>

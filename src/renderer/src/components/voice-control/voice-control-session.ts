@@ -13,6 +13,8 @@ import {
 
 export type VoiceControlSession = {
   localStream: MediaStream
+  /** Mutes the mic without ending the session — pauses input-audio billing while the coordinator can still speak. */
+  setMuted: (muted: boolean) => void
   /** Closes the peer connection and mic tracks only — for when main already ended. */
   teardownLocal: () => void
   /** teardownLocal plus the main-process stop IPC. */
@@ -131,6 +133,19 @@ export async function createVoiceControlSession(
     }
   })
 
+  let muted = false
+  const setMuted = (next: boolean): void => {
+    if (stopped || muted === next) {
+      return
+    }
+    muted = next
+    // Why: a disabled track sends silence and drops off the input-audio billing meter;
+    // stopping it would end the session. teardownLocal still stops every track.
+    for (const track of localStream.getAudioTracks()) {
+      track.enabled = !next
+    }
+  }
+
   const teardownLocal = (): void => {
     if (stopped) {
       return
@@ -175,5 +190,5 @@ export async function createVoiceControlSession(
     throw error
   }
 
-  return { localStream, teardownLocal, stop }
+  return { localStream, setMuted, teardownLocal, stop }
 }

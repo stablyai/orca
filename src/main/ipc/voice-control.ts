@@ -22,6 +22,7 @@ import type {
 } from '../../shared/voice-control-types'
 import { VoiceControlService } from '../voice-control/voice-control-service'
 import { createVoiceControlBackendFactory } from '../voice-control/voice-control-backend-wiring'
+import { VoiceControlReplyPump } from '../voice-control/voice-control-reply-pump'
 import { VoiceScreenDriver } from '../voice-control/voice-control-screen-driver'
 import { createVoiceOwnerDebuggerCache } from '../voice-control/voice-control-owner-debugger'
 import {
@@ -130,6 +131,24 @@ export function registerVoiceControlHandlers(store: Store, runtime: OrcaRuntimeS
     cliCommand: localOrchestrationCliCommand(),
     recordTranscript,
     readRecentTranscript: () => transcriptLog.read(),
+    // The ended session's run mailbox keeps receiving its agents' reports; a dormant
+    // pump (same deps as the live one) wakes the owner window so the reply is spoken.
+    openDormantWatcher: (runId, onMessages) => {
+      const db = runtime.getOrchestrationDb()
+      const pump = new VoiceControlReplyPump(
+        {
+          waitForMessage: (handle, options) => runtime.waitForMessage(handle, options),
+          getRunConsumerGeneration: (id) => db.getRun(id)?.consumer_generation ?? null,
+          getRunDelivery: (params) => db.getOrCreateRunDelivery(params),
+          acknowledgeRunDelivery: (params) => db.acknowledgeRunDelivery(params),
+          onMessages
+        },
+        runId
+      )
+      pump.start()
+      return pump
+    },
+    emitWakeForReply: () => sendToOwner('voice-control:wakeForReply', {}),
     createBackend: createVoiceControlBackendFactory({
       store,
       runtime,

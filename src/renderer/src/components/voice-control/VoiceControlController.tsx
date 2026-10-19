@@ -12,6 +12,7 @@ import { useVoiceControlTranscriptToasts } from './voice-control-transcript-toas
 import {
   getVoiceControlUiState,
   publishVoiceControlAgentActivity,
+  publishVoiceControlMicMuted,
   publishVoiceControlState,
   publishVoiceControlToolActivity,
   publishVoiceControlTranscript,
@@ -189,6 +190,12 @@ export function VoiceControlController() {
       // read the already-idle store and skip the restart.
       void stopControl().then(() => startControl())
     })
+    // An agent reply landed on an ended session's mailbox (wake-on-reply): restart so the
+    // coordinator speaks it. Same hot-reload guard as the snapshot bridge above.
+    const cleanupWake =
+      window.api.voiceControl.onWakeForReply?.(() => {
+        void startControl()
+      }) ?? (() => {})
     return () => {
       cleanupState()
       cleanupTool()
@@ -196,6 +203,7 @@ export function VoiceControlController() {
       cleanupTranscript()
       cleanupScreenSnapshot()
       cleanupResume()
+      cleanupWake()
     }
   }, [startControl, stopControl])
 
@@ -210,13 +218,24 @@ export function VoiceControlController() {
     const handleControl = (event: Event): void => {
       const action: VoiceControlAction | null =
         event instanceof CustomEvent &&
-        (event.detail === 'start' || event.detail === 'stop' || event.detail === 'toggle')
+        (event.detail === 'start' ||
+          event.detail === 'stop' ||
+          event.detail === 'toggle' ||
+          event.detail === 'toggle-mute')
           ? event.detail
           : null
       if (action === 'start') {
         void startControl()
       } else if (action === 'stop') {
         void stopControl()
+      } else if (action === 'toggle-mute') {
+        const session = sessionRef.current
+        if (!session || getVoiceControlUiState().state !== 'live') {
+          return
+        }
+        const muted = !getVoiceControlUiState().micMuted
+        session.setMuted(muted)
+        publishVoiceControlMicMuted(muted)
       } else if (
         getVoiceControlUiState().state === 'live' ||
         getVoiceControlUiState().state === 'minting'

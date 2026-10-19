@@ -28,4 +28,6 @@ export type VoiceControlApi = {
   sendScreenSnapshot: (requestId: string, snapshot: VoiceScreenSnapshot) => void
   /** Main detected a system resume mid-session; the renderer must restart the WebRTC side. */
   onSystemResume: (callback: () => void) => () => void
+  /** An agent reply landed on an ended session's mailbox; restart so it gets spoken. */
+  onWakeForReply: (callback: () => void) => () => void
 }
