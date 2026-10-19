@@ -11,6 +11,7 @@ export type VoiceControlTranscriptLine = {
 const USER_TRANSCRIPT_EVENT = 'conversation.item.input_audio_transcription.completed'
 const COORDINATOR_TRANSCRIPT_EVENT = 'response.output_audio_transcript.done'
 const RESPONSE_SETTLED_EVENT = 'response.done'
+const INPUT_AUDIO_COMMITTED_EVENT = 'input_audio_buffer.committed'
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' ? value : null
@@ -27,6 +28,19 @@ export function isResponseSettledEvent(event: unknown): boolean {
     event !== null &&
     'type' in event &&
     event.type === RESPONSE_SETTLED_EVENT
+  )
+}
+
+/**
+ * server_vad commits the input buffer exactly when it holds a complete user turn — the
+ * voice-activity gate's normal close signal.
+ */
+export function isInputAudioCommittedEvent(event: unknown): boolean {
+  return (
+    typeof event === 'object' &&
+    event !== null &&
+    'type' in event &&
+    event.type === INPUT_AUDIO_COMMITTED_EVENT
   )
 }
 

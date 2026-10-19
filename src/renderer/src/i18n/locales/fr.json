@@ -9487,6 +9487,8 @@
           "f6ba2a270c": "Désactivé",
           "0605aacbb4": "Suspendre en l'absence de parole",
           "22db9fce48": "Met fin à la session après ce nombre de minutes sans parole ni activité d'outil. L'audio en temps réel est facturé à la minute de connexion : une session silencieuse raccroche au lieu de rester inactive.",
+          "511efa618c": "Ne diffuser que lorsque je parle",
+          "59440347d8": "Un détecteur de parole sur cet appareil n'ouvre le micro vers le cloud que lorsque vous parlez — les silences restent locaux et hors facturation.",
           "4f9b393144": "Vitesse de la voix",
           "13f55eb2b7": "Vitesse à laquelle parle le coordinateur. S'applique aux nouvelles sessions.",
           "60021885d3": "1x",

@@ -68,6 +68,7 @@ allowBuilds:
   ssh2: false
   '@orca/windows-registry': false
   '@orca/windows-security': false
+  protobufjs: false
 
 # Link @types/<peer> beside peer dependents (e.g. React/lucide) for global-virtual-store resolution.
 addMissingPeerTypes: true

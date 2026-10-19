@@ -9171,6 +9171,8 @@
           "f6ba2a270c": "Desactivado",
           "0605aacbb4": "Suspender cuando no se hable",
           "22db9fce48": "Termina la sesión tras estos minutos sin voz ni actividad de herramientas. El audio en tiempo real se factura por minuto conectado, así que una sesión en silencio cuelga en lugar de quedar inactiva.",
+          "511efa618c": "Transmitir solo cuando hablo",
+          "59440347d8": "Un detector de voz en este dispositivo abre el micrófono a la nube solo mientras hablas: los silencios se quedan en local y fuera de la factura.",
           "4f9b393144": "Velocidad de la voz",
           "13f55eb2b7": "Velocidad a la que habla el coordinador. Se aplica a las sesiones nuevas.",
           "60021885d3": "1x",

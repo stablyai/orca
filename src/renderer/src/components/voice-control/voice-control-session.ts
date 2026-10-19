@@ -7,13 +7,15 @@
 import { e2eConfig } from '@/lib/e2e-config'
 import {
   classifyControlTranscriptEvent,
+  isInputAudioCommittedEvent,
   isResponseSettledEvent,
   type VoiceControlTranscriptLine
 } from './voice-control-transcript-events'
+import { createVoiceActivityGate, type VoiceActivityGate } from './voice-control-vad-gate'
 
 export type VoiceControlSession = {
   localStream: MediaStream
-  /** Mutes the mic without ending the session — pauses input-audio billing while the coordinator can still speak. */
+  /** Mutes the mic without ending the session — halts mic RTP (pausing input-audio billing) while the coordinator can still speak. */
   setMuted: (muted: boolean) => void
   /** Closes the peer connection and mic tracks only — for when main already ended. */
   teardownLocal: () => void
@@ -33,6 +35,8 @@ export type VoiceControlSessionOptions = {
   onTurnSettled?: () => void
   /** Fires when the coordinator's audio track arrives (after the SDP answer). */
   onRemoteStream: (stream: MediaStream) => void
+  /** Gate mic transmission behind local VAD so silence is never streamed to the provider. */
+  voiceGating?: boolean
 }
 
 const ICE_GATHER_BUDGET_MS = 5_000
@@ -94,6 +98,11 @@ export async function createVoiceControlSession(
     pc.addTrack(track, localStream)
   }
 
+  // Captured once: after replaceTrack(null) the sender's track is null, so a
+  // track-kind lookup would no longer find it. The sender itself persists.
+  const audioSender = pc.getSenders().find((sender) => sender.track?.kind === 'audio') ?? null
+  const micTrack = localStream.getAudioTracks()[0] ?? null
+
   // The provider's event channel also carries server events to us; the sideband in main
   // owns control traffic, we only read completed transcripts off it.
   const events = pc.createDataChannel('oai-events')
@@ -109,6 +118,9 @@ export async function createVoiceControlSession(
       }
       if (isResponseSettledEvent(parsed)) {
         options.onTurnSettled?.()
+      }
+      if (isInputAudioCommittedEvent(parsed)) {
+        gate?.notifyServerCommit()
       }
     } catch {
       // A malformed frame is the sideband's problem to log; transcripts are best-effort.
@@ -134,16 +146,19 @@ export async function createVoiceControlSession(
   })
 
   let muted = false
+  let gate: VoiceActivityGate | null = null
   const setMuted = (next: boolean): void => {
     if (stopped || muted === next) {
       return
     }
     muted = next
-    // Why: a disabled track sends silence and drops off the input-audio billing meter;
-    // stopping it would end the session. teardownLocal still stops every track.
-    for (const track of localStream.getAudioTracks()) {
-      track.enabled = !next
+    if (gate) {
+      gate.setMuted(next)
+      return
     }
+    // replaceTrack(null) halts RTP entirely (no renegotiation) — that is what actually
+    // pauses input-audio billing; track.enabled = false still transmits silence RTP.
+    void audioSender?.replaceTrack(next ? null : micTrack).catch(() => {})
   }
 
   const teardownLocal = (): void => {
@@ -151,6 +166,8 @@ export async function createVoiceControlSession(
       return
     }
     stopped = true
+    gate?.dispose()
+    gate = null
     if (e2eWindow) {
       delete e2eWindow.__voiceControlE2E
     }
@@ -188,6 +205,25 @@ export async function createVoiceControlSession(
       track.stop()
     }
     throw error
+  }
+
+  if (options.voiceGating && audioSender && micTrack && !stopped) {
+    try {
+      gate = await createVoiceActivityGate({
+        sender: audioSender,
+        track: micTrack,
+        stream: localStream,
+        isMuted: () => muted
+      })
+    } catch {
+      // Ungated is always viable; a VAD model that failed to load must not fail the session.
+      gate = null
+    }
+    if (stopped && gate) {
+      // stop() landed while the model loaded — don't leak the engine.
+      gate.dispose()
+      gate = null
+    }
   }
 
   return { localStream, setMuted, teardownLocal, stop }

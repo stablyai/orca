@@ -48,6 +48,7 @@ describe('VoiceControlSettingsSection', () => {
     expect(screen.getByRole('combobox', { name: 'Suspend when quiet' })).toHaveTextContent(
       '5 minutes'
     )
+    expect(screen.getByRole('switch', { name: 'Only stream when I speak' })).toBeChecked()
     expect(screen.getByText('Realtime audio is billed per minute of session time.')).toBeVisible()
   })
 
@@ -139,6 +140,22 @@ describe('VoiceControlSettingsSection', () => {
 
     expect(onUpdateVoiceSettings).toHaveBeenCalledWith({
       control: { ...getDefaultVoiceControlSettings(), idleSuspendMinutes: 0 }
+    })
+  })
+
+  it('reflects control.voiceGating and merges the flip onto the control', async () => {
+    const gatedOff: VoiceSettings = {
+      ...getDefaultVoiceSettings(),
+      control: { ...getDefaultVoiceControlSettings(), voiceGating: false }
+    }
+    const { user, onUpdateVoiceSettings } = renderSection(gatedOff)
+
+    const gatingSwitch = screen.getByRole('switch', { name: 'Only stream when I speak' })
+    expect(gatingSwitch).not.toBeChecked()
+    await user.click(gatingSwitch)
+
+    expect(onUpdateVoiceSettings).toHaveBeenCalledWith({
+      control: { ...getDefaultVoiceControlSettings(), voiceGating: true }
     })
   })
 

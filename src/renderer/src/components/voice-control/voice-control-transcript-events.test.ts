@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   classifyControlTranscriptEvent,
+  isInputAudioCommittedEvent,
   isResponseSettledEvent
 } from './voice-control-transcript-events'
 
@@ -71,5 +72,20 @@ describe('isResponseSettledEvent', () => {
     expect(isResponseSettledEvent('response.done')).toBe(false)
     expect(isResponseSettledEvent(null)).toBe(false)
     expect(isResponseSettledEvent(undefined)).toBe(false)
+  })
+})
+
+describe('isInputAudioCommittedEvent', () => {
+  it('matches input_audio_buffer.committed', () => {
+    expect(isInputAudioCommittedEvent({ type: 'input_audio_buffer.committed' })).toBe(true)
+  })
+
+  it('ignores other events, garbage, and null', () => {
+    expect(isInputAudioCommittedEvent({ type: 'input_audio_buffer.speech_started' })).toBe(false)
+    expect(isInputAudioCommittedEvent({ type: 'response.done' })).toBe(false)
+    expect(isInputAudioCommittedEvent({})).toBe(false)
+    expect(isInputAudioCommittedEvent('input_audio_buffer.committed')).toBe(false)
+    expect(isInputAudioCommittedEvent(null)).toBe(false)
+    expect(isInputAudioCommittedEvent(undefined)).toBe(false)
   })
 })
