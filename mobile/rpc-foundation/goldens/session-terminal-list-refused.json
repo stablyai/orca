@@ -4,10 +4,10 @@
   "family": "session.terminal-inventory",
   "namedDeltas": [],
   "values": {
-    "475f23d61c0e": {
+    "45f44db37595": {
       "name": "terminal.list#1",
       "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":false,\"includePreview\":false}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":true,\"includePreview\":false}}"
     },
     "6aa9d70c1c82": {
       "known": [],
@@ -19,7 +19,7 @@
       "settledAt": 0,
       "value": false
     },
-    "af74332c1c73": {
+    "c4a67805de43": {
       "name": "terminal.list#1",
       "ordinal": 1,
       "args": [
@@ -31,7 +31,7 @@
           "name": "params",
           "value": {
             "includePreview": false,
-            "includeVisualLayouts": false,
+            "includeVisualLayouts": true,
             "worktree": "id:workspace-1"
           }
         },
@@ -63,8 +63,8 @@
       {
         "id": "refused",
         "observation": {
-          "sender": ["af74332c1c73"],
-          "payloads": ["475f23d61c0e"],
+          "sender": ["c4a67805de43"],
+          "payloads": ["45f44db37595"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
