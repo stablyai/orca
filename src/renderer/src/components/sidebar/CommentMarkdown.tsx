@@ -82,8 +82,7 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
 // remark-breaks converts single newlines to <br>, keeping backward compat
 // with existing plain-text comments that rely on newline formatting.
 const remarkPlugins = [remarkGfm, remarkGitHubCallouts, remarkBreaks]
-// Why before remark-breaks: newlines inside literal HTML still become line breaks.
-const literalHtmlRemarkPlugins = [remarkGfm, remarkGitHubCallouts, remarkLiteralHtml, remarkBreaks]
+const literalHtmlRemarkPlugins = [...remarkPlugins, remarkLiteralHtml]
 
 const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
 

@@ -27,10 +27,22 @@ describe('CommentMarkdown literalHtml', () => {
     expect(markup).toContain('&lt;details&gt;&lt;summary&gt;More&lt;/summary&gt;')
   })
 
-  it('keeps line breaks inside a typed HTML block', () => {
-    const markup = render('<div>\none\n</div>')
+  it('renders markdown on the lines right after a tag', () => {
+    const markup = render('<se-tabs>\n**important**: fix this\n\n- item one')
 
-    expect(markup).toContain('&lt;div&gt;<br/>')
+    expect(markup).toContain('&lt;se-tabs&gt;')
+    expect(markup).toContain('<strong')
+    expect(markup).toContain('<li')
+  })
+
+  it('keeps consecutive lines in one paragraph', () => {
+    const markup = render('see below\n<div>\nmore text')
+
+    expect(markup).toContain('see below<br/>\n&lt;div&gt;<br/>\nmore text')
+  })
+
+  it('still links an autolink in angle brackets', () => {
+    expect(render('<https://example.com>')).toContain('href="https://example.com"')
   })
 
   it('leaves the rest of the markdown rendered', () => {
