@@ -24,7 +24,7 @@ describe('first account push on a fresh WSL host', () => {
   it('holds an immediate agent launch until the desktop pushes, then uses the pushed account', async () => {
     const accounts = freshWslHost()
     let launched = false
-    const launch = accounts.awaitHostLaunchEnv().then(() => {
+    const launch = accounts.prepareHostAgentLaunch(null).then(() => {
       launched = true
       return accounts.hostLaunchEnvFor('claude')
     })
@@ -41,13 +41,13 @@ describe('first account push on a fresh WSL host', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const accounts = freshWslHost()
 
-    const first = accounts.awaitHostLaunchEnv()
+    const first = accounts.prepareHostAgentLaunch(null)
     await vi.advanceTimersByTimeAsync(FIRST_HOST_LAUNCH_ENV_WAIT_MS)
     await first
     expect(accounts.hostLaunchEnvFor('claude')).toEqual({})
 
     let second = false
-    void accounts.awaitHostLaunchEnv().then(() => {
+    void accounts.prepareHostAgentLaunch(null).then(() => {
       second = true
     })
     await Promise.resolve()
@@ -63,7 +63,7 @@ describe('first account push on a fresh WSL host', () => {
 
     for (const accounts of [saved, other]) {
       let done = false
-      void accounts.awaitHostLaunchEnv().then(() => {
+      void accounts.prepareHostAgentLaunch(null).then(() => {
         done = true
       })
       await Promise.resolve()

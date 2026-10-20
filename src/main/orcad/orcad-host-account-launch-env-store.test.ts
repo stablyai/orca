@@ -55,7 +55,7 @@ describe('orcad host account launch env store', () => {
         () => isWslHost
       )
       let launched = false
-      void accounts.awaitHostLaunchEnv().then(() => {
+      void accounts.prepareHostAgentLaunch(null).then(() => {
         launched = true
       })
       await Promise.resolve()

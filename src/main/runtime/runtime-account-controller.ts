@@ -59,6 +59,7 @@ export class RuntimeAccountController {
   private hostLaunchEnv: HostAccountLaunchEnv | null = null
   private persistHostLaunchEnv: ((launchEnv: HostAccountLaunchEnv) => void) | null = null
   private readonly firstHostLaunchEnv = new FirstHostLaunchEnvGate()
+  private refreshClaudeProfile: ((launchEnv: HostAccountLaunchEnv) => Promise<void>) | null = null
 
   setServices(services: RuntimeAccountServices): void {
     this.services = services
@@ -75,15 +76,15 @@ export class RuntimeAccountController {
     if (!this.hostLaunchEnv && !this.firstHostLaunchEnv.armed) {
       return undefined
     }
-    const currentHostLaunchEnv = async (): Promise<HostAccountLaunchEnv | null> => {
-      await this.firstHostLaunchEnv.wait()
+    const currentHostLaunchEnv = async (agent: string): Promise<HostAccountLaunchEnv | null> => {
+      await this.prepareHostAgentLaunch(agent)
       return this.hostLaunchEnv
     }
     return {
       prepareForCodexLaunch: async () =>
-        (await currentHostLaunchEnv())?.terminal.CODEX_HOME ?? null,
+        (await currentHostLaunchEnv('codex'))?.terminal.CODEX_HOME ?? null,
       prepareForClaudeLaunch: async () => {
-        const claude = (await currentHostLaunchEnv())?.claude ?? {}
+        const claude = (await currentHostLaunchEnv('claude'))?.claude ?? {}
         return {
           configDir: claude.CLAUDE_CONFIG_DIR ?? '',
           envPatch: { ...claude },
@@ -112,12 +113,16 @@ export class RuntimeAccountController {
   restoreHostLaunchEnv(
     saved: HostAccountLaunchEnv | null,
     persist: (launchEnv: HostAccountLaunchEnv) => void,
-    options: { expectDesktopPush?: boolean } = {}
+    options: {
+      expectDesktopPush?: boolean
+      refreshClaudeProfile?: (launchEnv: HostAccountLaunchEnv) => Promise<void>
+    } = {}
   ): void {
     this.persistHostLaunchEnv = persist
     if (this.services) {
       return
     }
+    this.refreshClaudeProfile = options.refreshClaudeProfile ?? null
     if (saved) {
       this.hostLaunchEnv = saved
       return
@@ -127,9 +132,21 @@ export class RuntimeAccountController {
     }
   }
 
-  /** Waits, once and briefly, for a fresh WSL host's first account push before an agent launch. */
-  awaitHostLaunchEnv(): Promise<void> {
-    return this.firstHostLaunchEnv.wait()
+  /** Before a launch for `agent` this host starts: a fresh WSL host's first account push (once,
+   *  briefly), then a refresh of the selected Claude folder, as the desktop's launches do. */
+  async prepareHostAgentLaunch(agent: string | null | undefined): Promise<void> {
+    await this.firstHostLaunchEnv.wait()
+    if (agent !== 'claude' || !this.refreshClaudeProfile) {
+      return
+    }
+    // Why twice at most: a switch during the refresh would launch on a folder never refreshed.
+    for (let pass = 0, env = this.hostLaunchEnv; env && pass < 2; pass++) {
+      await this.refreshClaudeProfile(env)
+      if (this.hostLaunchEnv === env) {
+        return
+      }
+      env = this.hostLaunchEnv
+    }
   }
 
   /** The desktop-selected account env for a process `agent` starts here; empty when none. */
