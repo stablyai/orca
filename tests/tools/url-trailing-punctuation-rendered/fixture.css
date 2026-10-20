@@ -1,0 +1,5 @@
+@import '../../../src/renderer/src/assets/main.css';
+@import '@xterm/xterm/css/xterm.css';
+@import '../../../src/renderer/src/assets/terminal.css';
+@source './fixture.tsx';
+@source '../../../src/renderer/src/components/sidebar';
