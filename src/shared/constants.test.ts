@@ -16,6 +16,13 @@ describe('getDefaultSettings', () => {
   it('asks before closing terminals with running processes by default', () => {
     expect(getDefaultSettings('/tmp').skipCloseTerminalWithRunningProcessConfirm).toBe(false)
   })
+
+  // ADB connection state is derived live from `adb devices -l` and must never
+  // be persisted — only the configured address is a setting, and it defaults
+  // unset like mobileEmulatorDefaultDeviceUdid.
+  it('has no saved ADB device address by default', () => {
+    expect(getDefaultSettings('/tmp').mobileEmulatorAdbAddress).toBeNull()
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {

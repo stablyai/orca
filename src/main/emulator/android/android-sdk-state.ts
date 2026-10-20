@@ -2,7 +2,8 @@ import { discoverAndroidSdkFromHost } from './android-sdk-host-discovery'
 import { EmulatorError } from '../emulator-errors'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 
-const SDK_MISSING = 'Android SDK not found. Install Android Studio and set ANDROID_HOME.'
+const SDK_MISSING =
+  'Android platform-tools (adb) not found. Install Android Studio or standalone platform-tools, then set ANDROID_HOME.'
 
 // Resolves the backend's Android SDK. An injected SDK (tests, or an explicit
 // null) is fixed; for the real host it re-runs discovery on every call so a

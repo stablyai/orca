@@ -170,6 +170,8 @@ import {
   TypeText
 } from './computer-schemas-params'
 import {
+  AdbAddressOptionalParams,
+  AdbConnectParams,
   AttachParams as AttachParamsOfEmulatorParams,
   AxParams,
   ButtonParams,
@@ -863,6 +865,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
   'diagnostics.memory': null,
+  'emulator.adbConnect': AdbConnectParams,
+  'emulator.adbConnectionStatus': AdbAddressOptionalParams,
+  'emulator.adbDisconnect': AdbAddressOptionalParams,
   'emulator.attach': AttachParamsOfEmulatorParams,
   'emulator.availability': EmulatorAvailabilityParams,
   'emulator.ax': AxParams,

@@ -10248,7 +10248,17 @@
               "c5eca29310": "simulador de iOS",
               "25159de808": "emulador móvil",
               "9595354cff": "Configura la compatibilidad con el emulador móvil para Orca y agentes de codificación.",
-              "cdd3c31918": "Emulador móvil"
+              "cdd3c31918": "Emulador móvil",
+              "252f15438e": "adb",
+              "4551927ee8": "connect",
+              "5a84794ca0": "cloud phone",
+              "7878a18ec0": "device",
+              "78a62cc352": "disconnect",
+              "849bb5184b": "ADB Device Connection",
+              "a7b8188acc": "Connect an Android device or cloud phone over ADB by address.",
+              "badd8f59c3": "address",
+              "ceceed63a7": "tcp",
+              "ded8cfc31c": "network"
             }
           },
           "pane": {
@@ -12670,6 +12680,24 @@
           "submit": "Re-pair",
           "success": "Re-paired with {{name}}",
           "failed": "Re-pair failed"
+        },
+        "MobileEmulatorAdbConnection": {
+          "05a99b8deb": "ADB device connection is not available from this client.",
+          "215612d345": "Connect",
+          "24e04bcc2d": "Unauthorized",
+          "40a48c3a86": "Enter a device address first.",
+          "429d1ea0c4": "Connect an Android device or cloud phone over ADB (host:port). The address must already be reachable from this computer; VPN/tunnel setup is a separate step.",
+          "4f9f7d7949": "ADB Device Connection",
+          "4fdad1ea69": "Unavailable",
+          "6f152886ba": "Disconnect",
+          "87f10ea8c7": "Offline",
+          "8c92f2f5f2": "Device address",
+          "bb9d5d8810": "Connected",
+          "bff8b67049": "Could not reach the ADB connection.",
+          "d92278bd52": "ADB grants shell, install, and debug access to the device — never expose it to an untrusted network.",
+          "ddc15ee405": "Failed",
+          "e2763f4f83": "Not connected",
+          "f227da109f": "Connecting…"
         }
       },
       "right": {

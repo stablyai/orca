@@ -56,11 +56,14 @@ export async function listAndroidDevices(
   runner: AndroidCommandRunner,
   sdk: AndroidSdkPaths
 ): Promise<EmulatorDevice[]> {
+  const avdTools = sdk.avdTools
+  // Platform-tools-only hosts (no emulator binary) can't list/boot AVDs; still
+  // return connected devices without invoking the missing binary.
   const [running, avdsResult] = await Promise.all([
     listRunningAdbDevices(runner, sdk),
-    runner(sdk.emulator, listAvdsArgs)
+    avdTools ? runner(avdTools.emulator, listAvdsArgs) : Promise.resolve(null)
   ])
-  const avds = parseAvdList(avdsResult.stdout)
+  const avds = avdsResult ? parseAvdList(avdsResult.stdout) : []
   const runningAvdBySerial = await resolveRunningAvdNames(runner, sdk, running)
   return mergeAndroidDevices(running, avds, runningAvdBySerial)
 }

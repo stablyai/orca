@@ -8,6 +8,7 @@ import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { AndroidLogo, IosBrandIcon } from '../mobile/MobileBrandIcons'
+import { MobileEmulatorAdbConnection } from './MobileEmulatorAdbConnection'
 import { MobileEmulatorAgentControlRow } from './MobileEmulatorAgentControlRow'
 import { MobileEmulatorAvailabilityDetails } from './MobileEmulatorAvailabilityDetails'
 import { SearchableSetting } from './SearchableSetting'
@@ -253,6 +254,13 @@ export function MobileEmulatorSettingsPane({
             />
           ) : null}
         </div>
+
+        <MobileEmulatorAdbConnection
+          settings={settings}
+          updateSettings={updateSettings}
+          disabled={!enabled}
+          onAfterConnectionChange={refreshAvailability}
+        />
 
         <SettingsRow
           alignTop
