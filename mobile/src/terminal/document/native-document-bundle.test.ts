@@ -298,7 +298,12 @@ describe('the bundled native document', () => {
     )
     const here = createHash('sha256').update(TERMINAL_DOCUMENT_SCRIPT).digest('hex')
     expect(bundleDigestBuiltFrom(tmpdir(), generator, 'terminalDocumentBundle')).toBe(here)
-    expect(machinePathCommentsIn(TERMINAL_DOCUMENT_SCRIPT)).toEqual([])
+    expect(
+      machinePathCommentsIn(TERMINAL_DOCUMENT_SCRIPT, [
+        '../src/shared/terminal-cursor-line-context.ts',
+        '../src/shared/claude-terminal-prompt-suggestion.ts'
+      ])
+    ).toEqual([])
   }, 30_000)
 
   it('carries the document and nothing else: no dependency rides into the WebView', async () => {
@@ -314,7 +319,8 @@ describe('the bundled native document', () => {
     // 50: `laid-out-cell-box` reads the cell box xterm laid out, for web-ready and each render;
     // `terminal-grid-fit` is the one fit of that box and `terminal-cell-box` its one comparison,
     // both shared with the app. 52: `cell-metrics` and `selection-mode` split out to break cycles.
-    expect(inputs).toHaveLength(52)
+    // 55: the suggestion reader reuses the two desktop terminal parser modules.
+    expect(inputs).toHaveLength(55)
     expect(script).not.toContain('__commonJS')
     // `__esm` wrappers are esbuild's answer to a cycle, and a cycle would make a module's top level
     // run at first import rather than where the bundle places it.

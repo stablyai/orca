@@ -288,6 +288,7 @@ export function useMobileNativeChatController(args: {
     nativeChatSession,
     /** Structured lane: drives the per-turn status row and live tool progress. */
     nativeChatStructured: activeChatStructured,
+    nativeChatPromptSuggestion: activeChatStructured ? structuredNativeChat.promptSuggestion : null,
     nativeChatVisualSource: activeChatStructured ? structuredNativeChat.visualSource : null,
     nativeChatItemSource:
       activeChatStructured && agentSessionHostSupport?.itemDetail === true

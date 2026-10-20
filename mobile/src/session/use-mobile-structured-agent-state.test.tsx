@@ -119,8 +119,33 @@ describe('useMobileStructuredAgentState older history', () => {
       })
     })
     await vi.waitFor(() => expect(hook.current!.state.status).toBe('ready'))
-    return { hook, historyCursors }
+    return { hook, historyCursors, emit: (value: unknown) => act(() => onFrame!(value)) }
   }
+
+  it('retains host suggestions across omitted batches and clears them on null or old-host snapshots', async () => {
+    const { hook, emit } = await mountWithOlderPages({})
+    const snapshot = {
+      type: 'snapshot',
+      sessionId: 'session-1',
+      fence: 1,
+      page: page([said(1_000)], false)
+    }
+    emit({ ...snapshot, promptSuggestion: 'Write tests' })
+    expect(hook.current!.state.promptSuggestion).toBe('Write tests')
+    const batch = {
+      type: 'batch',
+      sessionId: 'session-1',
+      fence: 1,
+      batch: { items: [], removedItemIds: [], submissions: [], cursor: cursorAt(1_000) }
+    }
+    emit(batch)
+    expect(hook.current!.state.promptSuggestion).toBe('Write tests')
+    emit({ ...batch, promptSuggestion: null })
+    expect(hook.current!.state.promptSuggestion).toBeNull()
+    emit({ ...snapshot, promptSuggestion: 'Review changes' })
+    emit(snapshot)
+    expect(hook.current!.state.promptSuggestion).toBeUndefined()
+  })
 
   it("reads past pages of a subagent's rows to the session's own older rows", async () => {
     const { hook, historyCursors } = await mountWithOlderPages({

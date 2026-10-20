@@ -5,6 +5,7 @@ import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link
 export type TerminalFrame = { width: number; height: number }
 
 export type TerminalWebViewCommand =
+  | { type: 'read-prompt-suggestion'; id?: number; requestId: number }
   | { type: 'ping'; id?: number }
   | { type: 'write'; id?: number; data: string }
   | {

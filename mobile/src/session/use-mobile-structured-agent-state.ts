@@ -12,10 +12,10 @@ import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-a
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
-  reduceStructuredAgentSession,
   type StructuredAgentSessionAction,
   type StructuredAgentSessionState
 } from '../../../src/shared/structured-agent-session-reducer'
+import { reduceWithPromptSuggestion } from '../../../src/shared/structured-agent-session-prompt-suggestion-reducer'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   agentSessionReadFailureRefusal,
@@ -84,7 +84,7 @@ export function useMobileStructuredAgentState(args: {
       }
       setSessionStates((current) => {
         const previous = current.get(sessionKey) ?? EMPTY_STRUCTURED_AGENT_SESSION
-        const next = reduceStructuredAgentSession(previous, action, Date.now())
+        const next = reduceWithPromptSuggestion(previous, action, Date.now())
         if (next === previous) {
           return current
         }

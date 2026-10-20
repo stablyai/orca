@@ -15,6 +15,7 @@ import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promises'
 import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
 import { isTerminalGestureInput } from './terminal-gesture-input'
+import { createTerminalPromptSuggestionReads } from './terminal-prompt-suggestion-reads'
 
 /**
  * Everything `TerminalWebView` does that is not about `react-native-webview`.
@@ -73,6 +74,8 @@ export function useTerminalWebViewController(
   const { pingsOnForegroundRecovery, post } = transport
   const isWebReadyRef = useRef(false)
   const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
+  const suggestionReads = useMemo(() => createTerminalPromptSuggestionReads(), [])
+  useEffect(() => () => suggestionReads.clear(), [suggestionReads])
   const messageIdRef = useRef(0)
   const pendingPingIdRef = useRef<number | null>(null)
   const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
@@ -154,6 +157,9 @@ export function useTerminalWebViewController(
   /** One notify from the document, already parsed. */
   const receive = useCallback(
     (msg: Record<string, unknown>) => {
+      if (suggestionReads.receive(msg)) {
+        return
+      }
       routeTerminalQueryReply(msg, onTerminalQueryReply)
       if (
         msg.type === 'terminal-input' &&
@@ -217,7 +223,8 @@ export function useTerminalWebViewController(
       onOpenUrl,
       onTextScaleChange,
       onCellBoxChange,
-      writeCoalescer
+      writeCoalescer,
+      suggestionReads
     ]
   )
 
@@ -228,13 +235,14 @@ export function useTerminalWebViewController(
    * replaying terminal chunks before the next init snapshot.
    */
   const resetReadiness = useCallback(() => {
+    suggestionReads.clear()
     isWebReadyRef.current = false
     pendingPingIdRef.current = null
     pendingMessages.clear()
     writeCoalescer.clear()
     cellBoxRef.current = null
     armWebReadyWatchdog()
-  }, [armWebReadyWatchdog, pendingMessages, writeCoalescer])
+  }, [armWebReadyWatchdog, pendingMessages, writeCoalescer, suggestionReads])
 
   useEffect(() => {
     postMessage({ type: 'set-theme', terminalTheme })
@@ -259,10 +267,20 @@ export function useTerminalWebViewController(
 
   const handle = useMemo<TerminalWebViewHandle>(
     () => ({
+      readPromptSuggestion() {
+        if (!isWebReadyRef.current) {
+          return Promise.resolve(null)
+        }
+        writeCoalescer.flushNow()
+        return suggestionReads.read((requestId) =>
+          sendToDocument({ type: 'read-prompt-suggestion', requestId })
+        )
+      },
       prepareForForegroundRecovery() {
         if (!pingsOnForegroundRecovery()) {
           return
         }
+        suggestionReads.clear()
         // Why: direct ping is the only command allowed through while readiness is
         // invalid; init/write commands queue until this exact document answers.
         isWebReadyRef.current = false
@@ -273,6 +291,7 @@ export function useTerminalWebViewController(
         writeCoalescer.write(data)
       },
       init({ cols, rows, initialData, preserveScroll, oscLinks, frame }: TerminalInit) {
+        suggestionReads.clear()
         // Why: arm a fresh ready promise BEFORE posting init. The document resolves it via the
         // 'ready' notify at the end of its rAF chain.
         promises.armReady()
@@ -301,6 +320,7 @@ export function useTerminalWebViewController(
         postMessage({ type: 'reflow', cols, rows, frame })
       },
       clear() {
+        suggestionReads.clear()
         writeCoalescer.clear()
         postMessage({ type: 'clear' })
       },
@@ -322,6 +342,7 @@ export function useTerminalWebViewController(
       armWebReadyWatchdog,
       fitDimensions,
       pingsOnForegroundRecovery,
+      suggestionReads,
       postMessage,
       promises,
       sendToDocument,

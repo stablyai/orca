@@ -19,6 +19,11 @@ import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-compos
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import { MobileNativeChatStopButton } from './MobileNativeChatStopButton'
+import { MobileNativeChatPromptSuggestion } from './MobileNativeChatPromptSuggestion'
+import {
+  useMobilePromptSuggestion,
+  type MobilePromptSuggestionSource
+} from './use-mobile-prompt-suggestion'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
 
 const NO_FILE_PATHS: string[] = []
@@ -38,6 +43,8 @@ export type MobileNativeChatStructuredComposer = {
 }
 
 type Props = {
+  promptSuggestion?: MobilePromptSuggestionSource
+  suggestionBlocked?: boolean
   /** Lets the owner focus the field, e.g. after Edit moves a queued message into it. */
   inputRef?: React.RefObject<TextInput | null>
   /** Absent on a terminal-backed chat, whose + only adds photos and whose menu keeps its curated
@@ -80,6 +87,8 @@ type Props = {
 }
 
 export function MobileNativeChatComposer({
+  promptSuggestion,
+  suggestionBlocked = false,
   inputRef,
   value,
   onChangeText,
@@ -142,6 +151,26 @@ export function MobileNativeChatComposer({
   const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
   const filesUploading = files.some((file) => file.path === null)
   const attachmentCount = attachments.length + files.length
+  const suggestion = useMobilePromptSuggestion({
+    source: promptSuggestion,
+    scopeKey: promptSuggestion?.scopeKey ?? sendSurfaceId,
+    enabled:
+      !suggestionBlocked &&
+      !disabled &&
+      !sendDisabled &&
+      !sending &&
+      !isAttaching &&
+      !micActive &&
+      !attachmentCount &&
+      !sessionOptionDispatching,
+    value,
+    getEditGeneration: getComposerEditGeneration,
+    getFocusGeneration: getSendCompletionGeneration,
+    onAccept: (text) => {
+      menu.onFieldChange(text)
+      fieldRef.current?.focus()
+    }
+  })
   // An attachment alone is a valid send (desktop parity), so it rides even with no text.
   const canSend =
     (value.trim().length > 0 || attachmentCount > 0) &&
@@ -216,25 +245,34 @@ export function MobileNativeChatComposer({
             onRemoveImage={onRemoveAttachment}
             onRemoveFile={structured?.onRemoveFile}
           />
-          <MobileNativeChatComposerField
-            ref={fieldRef}
-            value={value}
-            skillToken={menu.skillToken}
-            onChangeText={menu.onFieldChange}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            // Controlled only transiently right after an autocomplete insert.
-            selection={menu.pendingSelection ?? undefined}
-            onSelectionChange={(e) => menu.onSelectionChange(e.nativeEvent.selection)}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.accentBlue}
-            multiline
-            // Why: never revoke `editable` — iOS resigns first responder on a focused
-            // field, so a transient lock would yank the keyboard mid-typing (#10681).
-            // The lock gates sending; the draft survives and rides the next send.
-            textAlignVertical="top"
-          />
+          <View style={styles.field}>
+            <MobileNativeChatComposerField
+              ref={fieldRef}
+              value={value}
+              skillToken={menu.skillToken}
+              onChangeText={menu.onFieldChange}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              // Controlled only transiently right after an autocomplete insert.
+              selection={menu.pendingSelection ?? undefined}
+              onSelectionChange={(e) => menu.onSelectionChange(e.nativeEvent.selection)}
+              placeholder={suggestion.text ? '' : placeholder}
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accentBlue}
+              multiline
+              // Why: never revoke `editable` — iOS resigns first responder on a focused
+              // field, so a transient lock would yank the keyboard mid-typing (#10681).
+              // The lock gates sending; the draft survives and rides the next send.
+              textAlignVertical="top"
+            />
+            {suggestion.text ? (
+              <MobileNativeChatPromptSuggestion
+                text={suggestion.text}
+                onAccept={() => void suggestion.accept()}
+                onDismiss={suggestion.dismiss}
+              />
+            ) : null}
+          </View>
           <View style={styles.actionRow} testID="native-chat-composer-actions">
             {attachPress ? (
               <Pressable

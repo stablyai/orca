@@ -20,6 +20,7 @@ import { MobileNativeChatRowOverlaysHost } from './MobileNativeChatRowOverlaysHo
 
 type Props = {
   controller: MobileNativeChatController
+  readTerminalPromptSuggestion?: () => Promise<string | null>
   /** Opens a tapped file reference (worktree-relative or absolute, optional
    *  :line(:col) suffix) through the shared tap-to-open flow. */
   onOpenFile: (pathText: string) => void
@@ -53,6 +54,7 @@ type Props = {
  *  the chat list below it does not. */
 export function MobileNativeChatOverlay({
   controller,
+  readTerminalPromptSuggestion,
   onOpenFile,
   images,
   structuredComposer = null,
@@ -70,6 +72,20 @@ export function MobileNativeChatOverlay({
   keyboardInset
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
+  const promptSuggestion = useMemo(
+    () => ({
+      scopeKey: controller.nativeChatStreamScopeKey,
+      ...(controller.nativeChatStructured
+        ? { text: controller.nativeChatPromptSuggestion }
+        : { read: readTerminalPromptSuggestion })
+    }),
+    [
+      controller.nativeChatStructured,
+      controller.nativeChatPromptSuggestion,
+      controller.nativeChatStreamScopeKey,
+      readTerminalPromptSuggestion
+    ]
+  )
   // The chat is drawn only with a resolved agent; the fallback never reaches the screen.
   const agent = controller.nativeChatAgent ?? ''
   const fullContent = useMobileNativeChatMessageDetail(
@@ -188,6 +204,7 @@ export function MobileNativeChatOverlay({
                 onNeedFiles={controller.loadNativeChatFiles}
                 sessionOptions={controller.nativeChatSessionOptions}
                 structuredComposer={structuredComposer}
+                promptSuggestion={promptSuggestion}
                 keyboardInset={keyboardInset}
               />
             </MobileNativeChatReplyRevealsContext.Provider>

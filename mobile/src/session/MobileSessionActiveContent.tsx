@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
@@ -24,6 +25,7 @@ export function MobileSessionActiveContent({
     terminalTextScale,
     setTerminalTextScale,
     activeHandle,
+    terminalRefs,
     markdownDocs,
     fileDocs,
     diffComments,
@@ -83,6 +85,14 @@ export function MobileSessionActiveContent({
     toastAnimatedStyle,
     createTabBusy
   } = controller
+  const readTerminalPromptSuggestion = useCallback(
+    () =>
+      activeHandle
+        ? (terminalRefs.current.get(activeHandle)?.readPromptSuggestion?.() ??
+          Promise.resolve(null))
+        : Promise.resolve(null),
+    [activeHandle, terminalRefs]
+  )
   const content = showLoadingState ? (
     <View style={styles.emptyState}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -228,6 +238,7 @@ export function MobileSessionActiveContent({
       ))}
       <MobileNativeChatOverlay
         controller={nativeChatController}
+        readTerminalPromptSuggestion={readTerminalPromptSuggestion}
         onOpenFile={handleNativeChatFileTap}
         images={nativeChatImages}
         structuredComposer={nativeChatStructuredComposer}

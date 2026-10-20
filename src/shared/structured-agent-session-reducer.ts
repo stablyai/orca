@@ -84,6 +84,7 @@ export type StructuredAgentSessionState = AgentSessionCurrentRequestsState & {
   /** Published with the list: the card the queue sends next once nothing runs, else null. */
   nextQueuedMessageId?: string | null
   commands?: AgentSessionSlashCommand[] | null
+  promptSuggestion?: string | null
   activity?: AgentSessionTurnActivity | null
   /** Absent until a frame from a host that stamps `hostNow` has been applied. */
   hostClock?: StructuredAgentHostClock

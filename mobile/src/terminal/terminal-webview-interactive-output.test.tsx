@@ -42,14 +42,43 @@ function mountController() {
       .map(([command]) => command)
       .filter((command) => command.type === 'write')
       .map((command) => command.data)
-  return { controller, onTerminalInput, writes }
+  return { controller, onTerminalInput, writes, post }
 }
 
-describe('terminal scroll response batching', () => {
+describe('terminal document requests and output batching', () => {
   afterEach(() => {
     act(() => root?.unmount())
     root = undefined
     vi.useRealTimers()
+  })
+
+  it('flushes queued output before a suggestion read and resolves its document reply', async () => {
+    const { controller, post } = mountController()
+    controller.handle.write('queued output')
+    const pending = controller.handle.readPromptSuggestion!()
+    const request = post.mock.calls.at(-1)![0]
+    expect(request.type).toBe('read-prompt-suggestion')
+    if (request.type !== 'read-prompt-suggestion') {
+      throw new Error('Expected suggestion request')
+    }
+    controller.receive({
+      type: 'prompt-suggestion',
+      requestId: request.requestId,
+      text: 'Write tests'
+    })
+    expect(await pending).toBe('Write tests')
+    expect(post.mock.calls.some(([message]) => message.type === 'write')).toBe(true)
+  })
+
+  it('invalidates pending suggestion reads on clear and document replacement', async () => {
+    const { controller } = mountController()
+    const pending = controller.handle.readPromptSuggestion!()
+    controller.handle.clear()
+    expect(await pending).toBeNull()
+    const replaced = controller.handle.readPromptSuggestion!()
+    controller.resetReadiness()
+    expect(await replaced).toBeNull()
+    expect(await controller.handle.readPromptSuggestion!()).toBeNull()
   })
 
   it.each(['\x1b[<64;2;2M', '\x1b[A'])('shortens pending output for gesture %j', (bytes) => {

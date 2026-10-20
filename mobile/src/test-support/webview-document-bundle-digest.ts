@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { pathToFileURL } from 'node:url'
 
 /**
  * A WebView document bundle, built from somewhere else entirely, as a digest.
@@ -17,7 +18,7 @@ export function bundleDigestBuiltFrom(cwd: string, generator: string, member: st
     process.execPath,
     [
       '-e',
-      `Promise.all([import('node:crypto'), import(${JSON.stringify(generator)})]).then(` +
+      `Promise.all([import('node:crypto'), import(${JSON.stringify(pathToFileURL(generator).href)})]).then(` +
         `async ([crypto, generator]) => {` +
         `const { script } = await generator.${member}();` +
         `process.stdout.write(crypto.createHash('sha256').update(script).digest('hex'))` +
@@ -33,8 +34,12 @@ export function bundleDigestBuiltFrom(cwd: string, generator: string, member: st
  * Both shapes esbuild can emit when the working directory is not the one the sources live under: a
  * comment that is an absolute path, and one that climbs out with `../`.
  */
-export function machinePathCommentsIn(script: string): string[] {
+export function machinePathCommentsIn(
+  script: string,
+  allowedRelativePaths: string[] = []
+): string[] {
   return script
     .split('\n')
     .filter((line) => /^\s*\/\/ (\/|\.\.\/)/.test(line) || line.includes('/Users/'))
+    .filter((line) => !allowedRelativePaths.some((path) => line.trim() === `// ${path}`))
 }

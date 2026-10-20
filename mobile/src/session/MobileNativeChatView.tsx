@@ -39,6 +39,7 @@ import {
   useSettledMobileNativeChatInputLock
 } from './use-mobile-native-chat-input-lease'
 import { MobileNativeChatLiveLine } from './MobileNativeChatLiveLine'
+import type { MobilePromptSuggestionSource } from './use-mobile-prompt-suggestion'
 import { MobileNativeChatFloatingControls } from './MobileNativeChatFloatingControls'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import {
@@ -134,6 +135,7 @@ type Props = ComposerTrayProps & {
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
   /** A structured chat's + sheet, files and skills; absent on a terminal-backed chat. */
   structuredComposer?: MobileNativeChatStructuredComposer | null
+  promptSuggestion?: MobilePromptSuggestionSource
   /** A pending agent question/permission detected from live status, shown as a
    *  native card above the composer; answering sends text to the agent. */
   /** Structured AskUserQuestion prompt parsed from the transcript (preferred over
@@ -210,6 +212,7 @@ export function MobileNativeChatView({
   onNeedFiles,
   sessionOptions,
   structuredComposer = null,
+  promptSuggestion,
   ask,
   askKey,
   onDismissAsk,
@@ -416,6 +419,16 @@ export function MobileNativeChatView({
       {trayContent}
       <MobileNativeChatComposer
         structured={structuredActivityUi ? structuredComposer : null}
+        promptSuggestion={promptSuggestion}
+        suggestionBlocked={
+          agentWorking === true ||
+          !!ask ||
+          !!question ||
+          !!permission ||
+          !!collapsedPrompt ||
+          status !== 'ready' ||
+          (agent !== 'claude' && !(structuredActivityUi && agent === 'codex'))
+        }
         value={composerText}
         onChangeText={onComposerTextChange}
         onSend={handleSend}

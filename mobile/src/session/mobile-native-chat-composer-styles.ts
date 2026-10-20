@@ -15,6 +15,7 @@ const roundControl = {
 } as const
 
 export const mobileNativeChatComposerStyles = StyleSheet.create({
+  field: { position: 'relative' },
   composerInset: {
     paddingHorizontal: 10,
     paddingTop: COMPOSER_INSET_TOP,

@@ -65,6 +65,31 @@ describe('MobileNativeChatComposer', () => {
     renderer = null
   })
 
+  it('accepts a suggestion into the controlled draft without sending or dismissing the keyboard', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    const onChangeText = vi.fn()
+    vi.mocked(Keyboard.dismiss).mockClear()
+    const props = {
+      value: '',
+      onSend,
+      onChangeText,
+      sendSurfaceId: 'tab-a',
+      getSendCompletionGeneration: () => 0,
+      promptSuggestion: { text: 'Write tests' }
+    }
+    await act(async () => {
+      renderer = create(createElement(MobileNativeChatComposer, props))
+    })
+    const accept = renderer!.root.findByProps({ accessibilityLabel: 'Use suggestion: Write tests' })
+    await act(async () => accept.props.onPress())
+    expect(onChangeText).toHaveBeenCalledWith('Write tests')
+    expect(onSend).not.toHaveBeenCalled()
+    expect(Keyboard.dismiss).not.toHaveBeenCalled()
+    expect(
+      renderer!.root.findAllByProps({ accessibilityLabel: 'Use suggestion: Write tests' })
+    ).toHaveLength(0)
+  })
+
   async function render(
     onSend: (text: string) => Promise<boolean>,
     onChangeText: (text: string) => void,

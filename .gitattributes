@@ -45,6 +45,8 @@
 # these carry real CR and CRLF bytes as the terminal emitted them, and line-ending
 # normalisation on a Windows checkout would rewrite the evidence the fixture exists to be.
 /src/main/runtime/__fixtures__/*.txt -text
+# This captured terminal frame includes painted spaces and original CRLF bytes.
+/src/main/runtime/__fixtures__/claude-prompt-suggestion.txt whitespace=-blank-at-eol,cr-at-eol
 /src/main/daemon/__fixtures__/pty-transcripts/*.txt -text
 /src/renderer/src/components/terminal-pane/terminal-link-transcripts/*.txt -text whitespace=cr-at-eol
 # Generated runtime English subset: compared byte-for-byte by

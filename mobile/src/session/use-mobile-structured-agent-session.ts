@@ -300,6 +300,7 @@ export function useMobileStructuredAgentSession(
     },
     isWorking,
     turnId,
+    promptSuggestion: connected && !isWorking ? state.promptSuggestion : null,
     turnIndicator,
     ...turnTiming,
     sendWithOutcome,

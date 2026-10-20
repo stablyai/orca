@@ -106,6 +106,7 @@ export type TerminalInit = {
 }
 
 export type TerminalWebViewHandle = {
+  readPromptSuggestion?: () => Promise<string | null>
   // Why: iOS can preserve the native view while discarding its JS/backing-store
   // state; foreground recovery must wait for the document to answer before replay.
   prepareForForegroundRecovery: () => void
