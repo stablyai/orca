@@ -14,15 +14,6 @@ const CLAUDE_COMMAND_LIST_STDIN = `${JSON.stringify({
   request: { subtype: 'initialize' }
 })}\n`
 
-// Hooks and MCP servers only slow the answer: a SessionStart hook would run on every refresh,
-// and every configured MCP server would start just to be stopped.
-const CLAUDE_COMMAND_LIST_ARGS = [
-  ...CLAUDE_MODEL_LIST_ARGS,
-  '--strict-mcp-config',
-  '--settings',
-  JSON.stringify({ disableAllHooks: true })
-]
-
 const INITIALIZE_JSON_LIMITS = { structuralTokens: 64 * 1024, nestingDepth: 16 } as const
 
 export type ClaudeCommandCatalogProbe = (request: {
@@ -38,7 +29,7 @@ export function createClaudeCommandCatalogProbe(
     const stdout = await runClaudeListing(deps, {
       accountHomePath,
       cwd,
-      args: CLAUDE_COMMAND_LIST_ARGS,
+      args: CLAUDE_MODEL_LIST_ARGS,
       stdin: CLAUDE_COMMAND_LIST_STDIN,
       site: 'claude-command-catalog-probe'
     })

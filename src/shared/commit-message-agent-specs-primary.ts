@@ -35,6 +35,9 @@ export function buildPrimaryCommitMessageAgentSpecs({
       // Why: diffs can be large and `claude -p` reads from stdin natively when no
       // positional prompt is provided.
       promptDelivery: 'stdin',
+      // Why: a one-shot commit-message or chat-naming run has no reason to load the user's
+      // MCP servers; a recipe that needs one can still pass --mcp-config in its CLI
+      // arguments, which strict mode loads (#30411).
       buildArgs: ({ model, thinkingLevel }) => [
         '-p',
         '--output-format',
@@ -43,6 +46,7 @@ export function buildPrimaryCommitMessageAgentSpecs({
         model,
         '--permission-mode',
         'plan',
+        '--strict-mcp-config',
         ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
       ],
       modelSource: 'dynamic',

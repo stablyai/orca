@@ -218,7 +218,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
 describe('buildArgs (Claude)', () => {
   const spec = getCommitMessageAgentSpec('claude')!
 
-  it('passes -p, output format, and model on every call', () => {
+  it('passes -p, output format, model, and strict MCP config on every call', () => {
     const args = spec.buildArgs({ prompt: '', model: 'haiku' })
     expect(args).toEqual([
       '-p',
@@ -227,7 +227,8 @@ describe('buildArgs (Claude)', () => {
       '--model',
       'haiku',
       '--permission-mode',
-      'plan'
+      'plan',
+      '--strict-mcp-config'
     ])
   })
 
@@ -245,6 +246,7 @@ describe('buildArgs (Claude)', () => {
       'sonnet',
       '--permission-mode',
       'plan',
+      '--strict-mcp-config',
       '--effort',
       'high'
     ])
@@ -395,7 +397,10 @@ describe('model discovery parsers', () => {
       'stream-json',
       '--output-format',
       'stream-json',
-      '--verbose'
+      '--verbose',
+      '--strict-mcp-config',
+      '--settings',
+      '{"disableAllHooks":true}'
     ])
     const payload = JSON.parse(discovery?.stdinPayload ?? '') as {
       type?: string

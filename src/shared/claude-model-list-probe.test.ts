@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseClaudeModelList } from './claude-model-list-probe'
+import { CLAUDE_MODEL_LIST_ARGS, parseClaudeModelList } from './claude-model-list-probe'
 
 function controlResponseLine(models: unknown[]): string {
   return JSON.stringify({
@@ -157,5 +157,18 @@ describe('parseClaudeModelList', () => {
       ])
     )
     expect(parsed[0]?.effortLevels).toEqual([])
+  })
+})
+
+describe('CLAUDE_MODEL_LIST_ARGS', () => {
+  // Why (#30411): a background probe has no reason to load the user's MCP servers or run
+  // SessionStart hooks; every caller of this constant inherits the fix for free.
+  it('disables MCP servers and hooks', () => {
+    expect(CLAUDE_MODEL_LIST_ARGS).toContain('--strict-mcp-config')
+    const settingsIndex = CLAUDE_MODEL_LIST_ARGS.indexOf('--settings')
+    expect(settingsIndex).toBeGreaterThanOrEqual(0)
+    expect(JSON.parse(CLAUDE_MODEL_LIST_ARGS[settingsIndex + 1])).toEqual({
+      disableAllHooks: true
+    })
   })
 })

@@ -11,14 +11,19 @@ export const CLAUDE_MODEL_LIST_STDIN = `${JSON.stringify({
   request: { subtype: 'list_models' }
 })}\n`
 
-// Why: --print rejects stream-json output unless --verbose is also set.
+// Why: --print rejects stream-json output unless --verbose is also set. Hooks and MCP servers
+// only slow a background probe: a SessionStart hook would run on every refresh, and every
+// configured MCP server would start just to be stopped (#30411).
 export const CLAUDE_MODEL_LIST_ARGS = [
   '-p',
   '--input-format',
   'stream-json',
   '--output-format',
   'stream-json',
-  '--verbose'
+  '--verbose',
+  '--strict-mcp-config',
+  '--settings',
+  JSON.stringify({ disableAllHooks: true })
 ]
 
 export type ClaudeListedModel = {
