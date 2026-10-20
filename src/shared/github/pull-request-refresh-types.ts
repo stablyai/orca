@@ -1,5 +1,11 @@
 import type { RepoKind } from '../repo-types'
-import type { CheckStatus, PRInfo, PRMergeableState, PRState } from './pull-request-types'
+import type {
+  CheckStatus,
+  GitHubRepositoryIdentity,
+  PRInfo,
+  PRMergeableState,
+  PRState
+} from './pull-request-types'
 
 /**
  * Discriminates a classified GitHub PR-refresh failure. The renderer maps these
@@ -52,6 +58,8 @@ export type GitHubPRRefreshAlias = {
   connectionId?: string | null
   executionHostId?: string | null
   linkedPRNumber?: number | null
+  /** Repository of a URL-linked PR outside the worktree's repo; absent keeps the repo's remotes. */
+  linkedPRRepository?: GitHubRepositoryIdentity | null
   fallbackPRNumber?: number | null
   fallbackPRSource?: 'explicit' | 'pr-cache' | 'hosted-review' | null
   // Why: request-time worktree HEAD. Merged branch-matched PRs are only visible

@@ -48,10 +48,13 @@ export function useWorkspaceReferenceDetails(
     }
     return () => controller.abort()
   }, [requests, hoverOpen])
+  // Why: the host resolved this PR in the attachment's own repository, not the row's.
+  const resolvedInOtherRepository =
+    review !== null && 'linkedFromOtherRepository' in review && review.linkedFromOtherRepository
   const matching = requests.filter(
     (request) =>
       matchWorkspaceReferenceReview(request.item, review) &&
-      canReadWorkspaceReferenceReview(request, review?.provider)
+      (resolvedInOtherRepository || canReadWorkspaceReferenceReview(request, review?.provider))
   )
   return Object.fromEntries(
     requests.map((request) => {

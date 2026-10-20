@@ -5,6 +5,7 @@ import {
   hostedReviewPushTargetLookupsInFlight
 } from './hosted-review-push-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { findWorktreeRepo } from '../../../github/linked-pr-repository'
 
 export function createEnsureHostedReviewPushTarget(
   _set: WorktreeSliceSet,
@@ -15,7 +16,8 @@ export function createEnsureHostedReviewPushTarget(
     if (!worktree || worktree.pushTarget) {
       return
     }
-    const lookup = getHostedReviewPushTargetLookup(worktree)
+    const repo = findWorktreeRepo(get().repos, worktree)
+    const lookup = getHostedReviewPushTargetLookup(worktree, repo)
     if (!lookup || hostedReviewPushTargetLookupsInFlight.has(lookup.key)) {
       return
     }
@@ -34,7 +36,8 @@ export function createEnsureHostedReviewPushTarget(
       if (!current || current.pushTarget) {
         return
       }
-      const currentLookup = getHostedReviewPushTargetLookup(current)
+      // Why: the link may have moved to another repository's PR with the same number meanwhile.
+      const currentLookup = getHostedReviewPushTargetLookup(current, repo)
       if (currentLookup?.key !== lookup.key) {
         return
       }

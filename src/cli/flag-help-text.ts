@@ -55,7 +55,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'parent-worktree':
     '--parent-worktree <selector> Parent worktree selector such as identity:<identity>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current',
   path: '--path <path>          Path argument for the command',
-  pr: '--pr <number|null>     Linked GitHub pull request number; null clears on set',
+  pr: '--pr <number|url|null> Linked GitHub pull request number, or its URL in any repository on the origin/upstream GitHub host; null clears on set',
   prompt: '--prompt <text>        Prompt text for agent-backed commands',
   query: '--query <text>        Search text for matching refs',
   ref: '--ref <ref>            Base ref to persist for the repo',

@@ -13,7 +13,8 @@ import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
   normalizeExecutionHostId,
-  parseExecutionHostId
+  parseExecutionHostId,
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
 
 /** The server-side repo for a request already routed to `target`; `null` when it runs here. */
@@ -86,7 +87,7 @@ export function enqueueLocalGitHubPRRefresh(
       console.warn('Failed to enqueue PR refresh:', err)
     })
 }
-export function getRefreshAliasExecutionHostId(alias: GitHubPRRefreshAlias): string {
+export function getRefreshAliasExecutionHostId(alias: GitHubPRRefreshAlias): ExecutionHostId {
   const explicitHostId = normalizeExecutionHostId(alias.executionHostId)
   if (explicitHostId) {
     return explicitHostId

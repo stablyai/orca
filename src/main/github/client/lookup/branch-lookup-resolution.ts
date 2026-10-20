@@ -24,6 +24,7 @@ import {
 } from './pull-request-lookup-data'
 import { lookupPRByBranchName } from './pr-branch-lookup'
 import { lookupPRByNumber } from './pr-number-lookup'
+import { linkedPRLookupRepository } from './linked-pr-repository'
 import { derivePRRefreshData } from './branch-lookup-derived-data'
 import { assemblePRRefreshFoundOutcome } from './pr-refresh-outcome-assembly'
 import { shouldRetryTrackedUpstreamBranch } from './tracked-upstream-cache'
@@ -64,6 +65,10 @@ export async function resolvePRForBranchOutcome(input: {
   // Why: connection-backed gh runs without a repository cwd. A bare lookup
   // here can honor process GH_REPO/GH_HOST and return an unrelated PR.
   if (connectionId && candidates.length === 0) {
+    return { kind: 'no-pr', fetchedAt: Date.now() }
+  }
+  const otherRepository = linkedPRLookupRepository(linkedPRNumber, options, candidates)
+  if (otherRepository === 'refused') {
     return { kind: 'no-pr', fetchedAt: Date.now() }
   }
   // Why (#11532): account every lookup, not just the coordinator's queue —
@@ -141,7 +146,7 @@ export async function resolvePRForBranchOutcome(input: {
   if (typeof linkedPRNumber === 'number') {
     usedExactNumberLookup = true
     const exactLookup = await lookupPRByNumber({
-      candidates,
+      candidates: otherRepository ? [otherRepository] : candidates,
       number: linkedPRNumber,
       ghOptions,
       executionScope
@@ -240,11 +245,13 @@ export async function resolvePRForBranchOutcome(input: {
         : {})
     }
   }
-  dataHeadRepo = pullRequestHeadRepository(data, dataRepo) ?? dataHeadRepo
+  dataHeadRepo =
+    pullRequestHeadRepository(data, dataRepo) ?? (otherRepository ? null : dataHeadRepo)
   const headDivergedFromMergedPRAtOid = await linkedMergedPRDivergedHeadOid(
     data,
     linkedPRNumber,
-    explicitCurrentHeadOid,
+    // Why: another repository's PR head is never this worktree's line of work.
+    otherRepository ? null : explicitCurrentHeadOid,
     (candidate, headOid) =>
       mergedPRContainsHead(
         candidate,
@@ -294,7 +301,8 @@ export async function resolvePRForBranchOutcome(input: {
     localGitOptions,
     ghOptions,
     executionScope,
-    usedExactNumberLookup
+    usedExactNumberLookup,
+    linkedFromOtherRepository: otherRepository !== null
   })
 
   return assemblePRRefreshFoundOutcome({
@@ -306,6 +314,7 @@ export async function resolvePRForBranchOutcome(input: {
     stackMergeQueueRequired,
     confirmedContainedHeadOid,
     headDivergedFromMergedPRAtOid,
-    conflictSummary
+    conflictSummary,
+    linkedFromOtherRepository: otherRepository !== null
   })
 }

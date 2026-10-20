@@ -153,6 +153,46 @@ describe('getHostedReviewForBranch', () => {
     })
   })
 
+  it('asks GitHub for a URL-linked PR in its own repository', async () => {
+    getProjectSlugMock.mockResolvedValue(null)
+    getRepoSlugMock.mockResolvedValue({ owner: 'relayto', repo: 'relayto-docker' })
+    getPRForBranchOutcomeMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: 1 })
+    const linkedGitHubPRRepository = { owner: 'relayto', repo: 'relayto-frontend' }
+
+    await getHostedReviewForBranch({
+      executionHostId: 'local',
+      repoPath: '/repo',
+      branch: 'feature',
+      linkedGitHubPR: 2383,
+      linkedGitHubPRRepository
+    })
+    // A fallback number is a branch guess, never a cross-repository link.
+    await getHostedReviewForBranch({
+      executionHostId: 'local',
+      repoPath: '/repo',
+      branch: 'other',
+      fallbackGitHubPR: 7,
+      linkedGitHubPRRepository
+    })
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenNthCalledWith(
+      1,
+      '/repo',
+      'feature',
+      2383,
+      null,
+      null,
+      {
+        currentHeadOid: null,
+        linkedPRRepository: linkedGitHubPRRepository
+      }
+    )
+    expect(getPRForBranchOutcomeMock).toHaveBeenNthCalledWith(2, '/repo', 'other', null, null, 7, {
+      acceptMergedFallbackPR: true,
+      currentHeadOid: null
+    })
+  })
+
   it('routes local WSL project branch lookup through provider detection and the selected provider', async () => {
     getProjectSlugMock.mockResolvedValue(null)
     getRepoSlugMock.mockResolvedValue(null)

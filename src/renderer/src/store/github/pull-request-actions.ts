@@ -18,6 +18,7 @@ import {
   shouldClearDivergedLinkedMergedPR
 } from './worktree-refresh'
 import { startPullRequestLookup } from './pull-request-execution'
+import { findLinkedGitHubPRRepository, isCachedPRForLinkedRepository } from './linked-pr-repository'
 
 export const createPullRequestActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -51,6 +52,7 @@ export const createPullRequestActions = (
     )
     // Why: a prior linkedPR-less caller may have cached null for this branch; refetch so the cached miss can now resolve via the linkedPR path.
     const linkedPRNumber = options?.linkedPRNumber ?? null
+    const linkedPRRepository = findLinkedGitHubPRRepository(get(), repo, branch, linkedPRNumber)
     const explicitFallbackPRNumber = options?.fallbackPRNumber ?? null
     const hostedReviewFallbackPRNumber = githubHostedReviewFallbackPRNumber(
       get(),
@@ -68,9 +70,10 @@ export const createPullRequestActions = (
         ? null
         : (options?.fallbackPRSource ??
           (explicitFallbackPRNumber != null ? 'explicit' : 'hosted-review'))
-    const lookupHintKey = prLookupHintKey(linkedPRNumber, fallbackPRNumber)
+    const lookupHintKey = prLookupHintKey(linkedPRNumber, fallbackPRNumber, linkedPRRepository)
     const linkedRefetch =
-      cached?.data === null && (linkedPRNumber !== null || fallbackPRNumber !== null)
+      (cached?.data === null && (linkedPRNumber !== null || fallbackPRNumber !== null)) ||
+      !isCachedPRForLinkedRepository(cached?.data, linkedPRNumber, linkedPRRepository)
     if (!options?.force && !linkedRefetch && isFresh(cached)) {
       // Why: even a fresh cache hit carries the head-scoped divergence signal; if a prior clear was declined for a mid-request head move and we're back on that head, clear the durable link.
       if (
@@ -138,6 +141,7 @@ export const createPullRequestActions = (
       cacheKey,
       cached,
       linkedPRNumber,
+      linkedPRRepository,
       fallbackPRNumber,
       fallbackPRSource,
       generation,

@@ -11,7 +11,8 @@ import {
   CLEARED_HOSTED_REVIEW_LINK_UPDATES,
   getHostedReviewLinkMutationGeneration,
   getHostedReviewLinkUpdates,
-  hasBranchScopedHostedReviewContext,
+  getBranchSwitchHostedReviewClear,
+  type HostedReviewLinkClear,
   hostedReviewLinkClearTombstonesByWorktreeId,
   hostedReviewLinksAreCleared,
   rememberHostedReviewLinkClear,
@@ -19,6 +20,7 @@ import {
 } from './hosted-review-link-mutation'
 import { persistWorktreeMeta } from './worktree-meta-persist'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
+import { findWorktreeRepo } from '../../../github/linked-pr-repository'
 
 export function createUpdateWorktreeGitIdentity(
   set: WorktreeSliceSet,
@@ -27,6 +29,7 @@ export function createUpdateWorktreeGitIdentity(
   return (worktreeId, identity) => {
     let shouldPersistHostedReviewClear = false
     let clearedBranch: string | null = null
+    let cleared: HostedReviewLinkClear = CLEARED_HOSTED_REVIEW_LINK_UPDATES
     let clearGeneration = getHostedReviewLinkMutationGeneration(worktreeId)
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     const existing = get().worktreesByRepo[repoId]?.find((worktree) => worktree.id === worktreeId)
@@ -59,13 +62,15 @@ export function createUpdateWorktreeGitIdentity(
         const hostedReviewBranchChanged =
           canonicalHostedReviewBranchIdentity(nextBranch) !==
           canonicalHostedReviewBranchIdentity(worktree.branch)
-        const shouldClearHostedReviewContext =
-          hostedReviewBranchChanged && hasBranchScopedHostedReviewContext(worktree)
-        if (shouldClearHostedReviewContext) {
+        const branchSwitchClear = hostedReviewBranchChanged
+          ? getBranchSwitchHostedReviewClear(worktree, findWorktreeRepo(s.repos, worktree))
+          : null
+        if (branchSwitchClear) {
           shouldPersistHostedReviewClear = true
           clearedBranch = nextBranch
+          cleared = branchSwitchClear
           clearGeneration = getHostedReviewLinkMutationGeneration(worktreeId)
-          rememberHostedReviewLinkClear(worktreeId, nextBranch, clearGeneration, nextHead)
+          rememberHostedReviewLinkClear(worktreeId, nextBranch, clearGeneration, nextHead, cleared)
         } else {
           const tombstone = hostedReviewLinkClearTombstonesByWorktreeId.get(worktreeId)
           if (tombstone) {
@@ -79,6 +84,7 @@ export function createUpdateWorktreeGitIdentity(
             if (hostedReviewBranchChanged) {
               shouldPersistHostedReviewClear = true
               clearedBranch = nextBranch
+              cleared = tombstone.cleared
               clearGeneration = tombstone.generation
             }
           }
@@ -109,7 +115,7 @@ export function createUpdateWorktreeGitIdentity(
           branch: nextBranch,
           displayName: nextDisplayName,
           // Why: linked reviews are branch-scoped; keeping the old link on a branch switch would refresh the old PR.
-          ...(shouldClearHostedReviewContext ? CLEARED_HOSTED_REVIEW_LINK_UPDATES : {})
+          ...branchSwitchClear
         }
       })
 
@@ -144,9 +150,9 @@ export function createUpdateWorktreeGitIdentity(
           ) {
             return
           }
-          if (!hostedReviewLinksAreCleared(current as Worktree)) {
+          if (!hostedReviewLinksAreCleared(current, cleared)) {
             // Why: a refetch can rehydrate stale linked-review metadata before this async clear starts; clear it again.
-            applyHostedReviewLinkClear(set, currentWorktreeId)
+            applyHostedReviewLinkClear(set, currentWorktreeId, cleared)
             current = get().getKnownWorktreeById(currentWorktreeId)
             if (!current || current.branch !== clearedBranch) {
               return
@@ -155,7 +161,7 @@ export function createUpdateWorktreeGitIdentity(
           await persistWorktreeMeta(
             runtimeTargetForWorktreeOwner(get(), currentWorktreeId),
             currentWorktreeId,
-            CLEARED_HOSTED_REVIEW_LINK_UPDATES
+            cleared
           )
           const migratedWorktreeId = resolveHostedReviewLinkWorktreeId(currentWorktreeId)
           if (migratedWorktreeId === currentWorktreeId) {
@@ -168,7 +174,7 @@ export function createUpdateWorktreeGitIdentity(
         if (
           !latest ||
           latest.branch !== clearedBranch ||
-          hostedReviewLinksAreCleared(latest as Worktree)
+          hostedReviewLinksAreCleared(latest, cleared)
         ) {
           return
         }
@@ -182,7 +188,7 @@ export function createUpdateWorktreeGitIdentity(
           return
         }
         // Why: a refetch can rehydrate old metadata before the branch-switch clear reaches disk; don't write the stale link back.
-        applyHostedReviewLinkClear(set, currentWorktreeId)
+        applyHostedReviewLinkClear(set, currentWorktreeId, cleared)
       })
       .catch((err) => {
         if (isRuntimeSelectorNotFoundError(err)) {

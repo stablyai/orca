@@ -6,6 +6,9 @@ import type {
   GitPushTarget,
   Worktree
 } from '../../../../../../shared/worktree/types'
+import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
+import type { Repo } from '../../../../../../shared/repo-types'
+import { findWorktreeRepo, getLinkedGitHubPRRepository } from '../../../github/linked-pr-repository'
 
 export const hostedReviewPushTargetLookupsInFlight = new Set<string>()
 
@@ -67,12 +70,56 @@ export async function resolveGitLabReviewPushTarget(
   }
 }
 
-export function getHostedReviewPushTargetLookup(worktree: Worktree): {
+/**
+ * Push targets resolve a linked PR by number in this worktree's repository, so a
+ * PR linked from another repository would name this repository's unrelated PR.
+ */
+function isLinkedFromOtherRepository(worktree: Worktree, repo: Repo | undefined): boolean {
+  return getLinkedGitHubPRRepository(worktree, repo) !== null
+}
+
+/** The PR number an update links, when Push should target that PR's head branch. */
+export function pushTargetPR(
+  worktree: Worktree | undefined,
+  updates: Partial<WorktreeMeta>,
+  repos: readonly Repo[]
+): number | null {
+  const linkedPR = updates.linkedPR
+  if (!isPositiveHostedReviewNumber(linkedPR)) {
+    return null
+  }
+  return worktree &&
+    isLinkedFromOtherRepository({ ...worktree, ...updates }, findWorktreeRepo(repos, worktree))
+    ? null
+    : linkedPR
+}
+
+/** Whether an update leaves the push target of a review that is no longer the selected one. */
+export function isHostedReviewPushTargetStale(
+  worktree: Worktree,
+  updates: Partial<WorktreeMeta>,
+  repos: readonly Repo[]
+): boolean {
+  const repo = findWorktreeRepo(repos, worktree)
+  const existing = getHostedReviewPushTargetLookup(worktree, repo)
+  return (
+    existing !== null &&
+    existing.key !== getHostedReviewPushTargetLookup({ ...worktree, ...updates }, repo)?.key
+  )
+}
+
+export function getHostedReviewPushTargetLookup(
+  worktree: Worktree,
+  repo: Repo | undefined
+): {
   key: string
   resolve: (target: RuntimeClientTarget) => Promise<GitPushTarget | undefined>
 } | null {
   const hostScope = worktree.hostId ?? ''
-  if (isPositiveHostedReviewNumber(worktree.linkedPR)) {
+  if (
+    isPositiveHostedReviewNumber(worktree.linkedPR) &&
+    !isLinkedFromOtherRepository(worktree, repo)
+  ) {
     const prNumber = worktree.linkedPR
     return {
       key: `${worktree.id}:${hostScope}:github:${prNumber}`,

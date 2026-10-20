@@ -43,6 +43,7 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import { buildWorktree, okFixture, queueFixtures } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
+import { WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY } from '../shared/workspace-attachment-capabilities'
 
 const LINK_FLAGS = [
   { flag: 'pr', field: 'linkedPR', value: '42', number: 42 },
@@ -194,7 +195,7 @@ describe('worktree issue and review metadata flags', () => {
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
       await main(['worktree', command, '--help'])
       const output = logSpy.mock.calls.flat().join('\n')
-      expect(output).toContain(command === 'create' ? '--pr <number>' : '--pr <number|null>')
+      expect(output).toContain(command === 'create' ? '--pr <number>' : '--pr <number|url|null>')
       for (const flag of ['gitlab-issue', 'gitlab-mr']) {
         expect(output).toContain(
           command === 'create' ? `--${flag} <number|url>` : `--${flag} <number|url|null>`
@@ -203,4 +204,101 @@ describe('worktree issue and review metadata flags', () => {
       expect(callMock).not.toHaveBeenCalled()
     }
   )
+
+  describe('set --pr <url> links a PR from any repository', () => {
+    const crossRepoPR = {
+      provider: 'github',
+      type: 'pr',
+      number: 2383,
+      url: 'https://github.com/relayto/relayto-frontend/pull/2383'
+    }
+
+    function routeCalls(capabilities: string[], linkedItems: unknown[] = []) {
+      const worktree = { ...buildWorktree('/tmp/repo/child', 'linked-task'), linkedItems }
+      callMock.mockImplementation(async (method: string) =>
+        method === 'status.get'
+          ? okFixture('status', { capabilities })
+          : okFixture(method, { worktree })
+      )
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+    }
+
+    it('adds the PR reference beside existing links and selects it', async () => {
+      routeCalls([WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY])
+
+      await main(
+        [
+          'worktree',
+          'set',
+          ...targetArgs('set'),
+          '--pr',
+          `${crossRepoPR.url}/files?diff=split#top`,
+          '--json'
+        ],
+        '/tmp/repo'
+      )
+
+      const set = callMock.mock.calls.find(([method]) => method === 'worktree.set')?.[1]
+      expect(set).toMatchObject({
+        worktree: 'id:repo::/tmp/repo/child',
+        linkedPR: 2383,
+        linkedItemsBase: [],
+        linkedItems: [crossRepoPR]
+      })
+      expect(set).not.toHaveProperty('linkedPRReference')
+    })
+
+    it('refuses to hide the requested PR behind another linked URL with its number', async () => {
+      const other = { ...crossRepoPR, url: 'https://github.com/relayto/relayto-api/pull/2383' }
+      routeCalls([WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY], [other])
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(
+        ['worktree', 'set', ...targetArgs('set'), '--pr', crossRepoPR.url, '--json'],
+        '/tmp/repo'
+      )
+
+      expect(callMock).not.toHaveBeenCalledWith('worktree.set', expect.anything())
+      expect(logSpy.mock.calls.flat().join('\n')).toContain(`orca reference remove ${other.url}`)
+      expect(process.exitCode).toBe(1)
+    })
+
+    it('refuses a host that would replace every link instead of merging one in', async () => {
+      routeCalls([])
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(
+        ['worktree', 'set', ...targetArgs('set'), '--pr', crossRepoPR.url, '--json'],
+        '/tmp/repo'
+      )
+
+      expect(callMock).not.toHaveBeenCalledWith('worktree.set', expect.anything())
+      expect(logSpy.mock.calls.flat().join('\n')).toContain('incompatible_runtime')
+      expect(process.exitCode).toBe(1)
+    })
+
+    it.each([
+      'https://gitlab.com/group/project/-/merge_requests/2383',
+      'https://github.com/relayto/relayto-frontend/issues/2383',
+      'https://linear.app/acme/issue/STA-1'
+    ])('refuses a non-GitHub-PR URL %s before any RPC', async (url) => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      await main(['worktree', 'set', ...targetArgs('set'), '--pr', url, '--json'], '/tmp/repo')
+      expect(callMock).not.toHaveBeenCalled()
+      expect(logSpy.mock.calls.flat().join('\n')).toContain('invalid_argument')
+      expect(process.exitCode).toBe(1)
+    })
+
+    it('create points a PR URL at --reference instead of dropping its repository', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      await main(
+        ['worktree', 'create', ...targetArgs('create'), '--pr', crossRepoPR.url, '--json'],
+        '/tmp/repo'
+      )
+      expect(callMock).not.toHaveBeenCalled()
+      expect(logSpy.mock.calls.flat().join('\n')).toContain('--reference <url>')
+      expect(process.exitCode).toBe(1)
+    })
+  })
 })

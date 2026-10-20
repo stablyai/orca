@@ -183,3 +183,66 @@ describe('registerGitHubHandlers', () => {
     expect(reportVisiblePRRefreshCandidatesMock).toHaveBeenCalledWith([], 2, 8)
   })
 })
+
+describe('linked PR repositories at the GitHub IPC boundary', () => {
+  const harness = createGitHubIpcHarness(mocks)
+  const { handlers, store, stats } = harness
+
+  beforeEach(harness.reset)
+
+  const candidate = (linkedPRRepository: unknown) => ({
+    cacheKey: '/workspace/repo::feature/live',
+    repoPath: '/workspace/repo',
+    repoId: 'repo-1',
+    branch: 'feature/live',
+    repoKind: 'git',
+    linkedPRNumber: 2383,
+    linkedPRRepository
+  })
+
+  it('forwards string-shaped linked repositories for the lookup to vet, dropping non-objects', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+
+    for (const linked of [
+      { owner: 'relayto', repo: 'relayto-frontend', token: 'x' },
+      { owner: 'not an owner', repo: 'x' },
+      'relayto/relayto-frontend'
+    ]) {
+      await handlers['gh:enqueuePRRefresh'](null, {
+        candidate: candidate(linked),
+        reason: 'active'
+      })
+    }
+
+    const forwarded = enqueuePRRefreshMock.mock.calls.map(([sent]) => sent.linkedPRRepository)
+    // The lookup refuses the malformed owner instead of querying this repository's #2383.
+    expect(forwarded).toEqual([
+      { owner: 'relayto', repo: 'relayto-frontend' },
+      { owner: 'not an owner', repo: 'x' },
+      undefined
+    ])
+  })
+
+  it('passes the linked repository to the direct PR lookup', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:prForBranch'](null, {
+      repoPath: '/workspace/repo',
+      repoId: 'repo-1',
+      branch: 'feature/live',
+      linkedPRNumber: 2383,
+      linkedPRRepository: { owner: 'relayto', repo: 'relayto-frontend' }
+    })
+
+    expect(mocks.client.getPRForBranch).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'feature/live',
+      2383,
+      null,
+      null,
+      expect.objectContaining({
+        linkedPRRepository: { owner: 'relayto', repo: 'relayto-frontend' }
+      })
+    )
+  })
+})

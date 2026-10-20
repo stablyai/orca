@@ -1,6 +1,7 @@
 import type { AppState } from '../types'
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-request-refresh-types'
-import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { GitHubOwnerRepo, PRInfo } from '../../../../shared/github/pull-request-types'
+import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
@@ -14,6 +15,7 @@ import { prCacheKey } from './cache-identity'
 import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from './pr-result-routing'
 import type { GitHubPRFallbackSource } from './cache-model'
+import { getRequestedLinkedGitHubPRRepository } from './linked-pr-repository'
 
 export function findWorktreeById(state: AppState, worktreeId: string): Worktree | null {
   return getWorktreeLookupIndex(state).byId.get(worktreeId)?.first ?? null
@@ -106,15 +108,27 @@ export function isStaleExactLinkedPRLookup(
   state: AppState,
   worktreeId: string | undefined,
   linkedPRNumber: number | null | undefined,
+  linkedPRRepository: GitHubOwnerRepo | null,
+  requestRepo: Repo | undefined,
   lookupIndex?: WorktreeLookupIndex
 ): boolean {
   if (!worktreeId || linkedPRNumber == null) {
     return false
   }
-  const worktree = lookupIndex
-    ? (lookupIndex.byId.get(worktreeId)?.first ?? null)
-    : findWorktreeById(state, worktreeId)
-  return worktree?.linkedPR !== linkedPRNumber
+  const entry = (lookupIndex ?? getWorktreeLookupIndex(state)).byId.get(worktreeId)
+  if (entry?.first.linkedPR !== linkedPRNumber) {
+    return true
+  }
+  // Why: relinking the same number to another repository makes the older lookup stale too;
+  // each same-id row is read as the request read it.
+  const repositoryKey = (repository: GitHubOwnerRepo | null) =>
+    repository ? githubRepoIdentityKey(repository) : null
+  return !entry.owners.some(
+    (owner) =>
+      owner.linkedPR === linkedPRNumber &&
+      repositoryKey(getRequestedLinkedGitHubPRRepository(state.repos, owner, requestRepo)) ===
+        repositoryKey(linkedPRRepository)
+  )
 }
 
 export function shouldClearDivergedLinkedMergedPR(args: {
@@ -167,6 +181,8 @@ export function shouldClearBranchMismatchedLinkedOpenPR(args: {
   return (
     linkedPRNumber != null &&
     pr?.number === linkedPRNumber &&
+    // Why: another repository's PR branch never names this worktree's branch.
+    pr.linkedFromOtherRepository !== true &&
     // Draft reviews are open PRs too; don't let their distinct renderer state leave a stale durable link wedged after a branch switch.
     (pr.state === 'open' || pr.state === 'draft') &&
     requestHeadOid !== null &&
@@ -251,6 +267,7 @@ export function buildPRRefreshCandidate(
   const sshStatus = repo.connectionId
     ? state.sshConnectionStates.get(repo.connectionId)?.status
     : null
+  const linkedPRRepository = getRequestedLinkedGitHubPRRepository(state.repos, worktree, repo)
   return {
     repoId: repo.id,
     repoPath: repoPath ?? repo.path,
@@ -263,6 +280,7 @@ export function buildPRRefreshCandidate(
     isSelected: state.activeWorktreeId === worktree.id,
     // Why: persisted linked PR metadata is exact; PR cache numbers are only fallback hints after branch-lookup misses.
     linkedPRNumber: worktree.linkedPR ?? null,
+    ...(linkedPRRepository ? { linkedPRRepository } : {}),
     fallbackPRNumber,
     fallbackPRSource,
     isBare: worktree.isBare,

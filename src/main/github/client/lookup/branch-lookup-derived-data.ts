@@ -14,6 +14,7 @@ export async function derivePRRefreshData(args: {
   ghOptions: ReturnType<typeof ghRepoExecOptions>
   executionScope: string
   usedExactNumberLookup: boolean
+  linkedFromOtherRepository?: boolean
 }): Promise<{
   mergeable: ReturnType<typeof derivePullRequestMergeable>
   stack: PullRequestLookupData['stack']
@@ -58,8 +59,10 @@ export async function derivePRRefreshData(args: {
           )
         ).mergeQueueRequired
       : undefined
+  // Why: another repository's PR commits are not in this checkout, so local merge-tree can't probe them.
   const conflictSummary =
     !connectionId &&
+    !args.linkedFromOtherRepository &&
     mergeable === 'CONFLICTING' &&
     data.baseRefName &&
     data.baseRefOid &&

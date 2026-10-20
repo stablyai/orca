@@ -11,7 +11,6 @@ import { normalizeGitHubPRSuppressionUpdate } from '../../../../../../shared/wor
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { translate } from '@/i18n/i18n'
-import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
 import { displayNameUpdatePinsLabel } from '../../../../../../shared/worktree/display-name-provenance'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
@@ -29,7 +28,8 @@ import {
   hasHostedReviewLinkUpdates
 } from './hosted-review-link-mutation'
 import {
-  getHostedReviewPushTargetLookup,
+  isHostedReviewPushTargetStale,
+  pushTargetPR,
   resolveGitHubReviewPushTarget
 } from './hosted-review-push-target'
 import { persistWorktreeMeta } from './worktree-meta-persist'
@@ -94,9 +94,7 @@ export function createUpdateWorktreeMeta(
     }
     let normalizedUpdates = normalizeWorkspaceAttachmentUpdate(existingWorktree, mutationUpdates)
     // Why: manual PR linking supplies only the number; resolve the head branch so Push targets the review branch.
-    const linkedPrForPushTarget = isPositiveHostedReviewNumber(normalizedUpdates.linkedPR)
-      ? normalizedUpdates.linkedPR
-      : null
+    const linkedPrForPushTarget = pushTargetPR(existingWorktree, normalizedUpdates, get().repos)
     // Why: an ambiguous owner must not throw past this update's { ok, error } contract — skip the lookup instead.
     const pushTargetOwner =
       linkedPrForPushTarget !== null &&
@@ -123,21 +121,18 @@ export function createUpdateWorktreeMeta(
     normalizedUpdates = normalizeGitHubPRSuppressionUpdate(
       normalizeWorkspaceAttachmentUpdate(worktreeForUpdate, mutationUpdates)
     )
+    // Why: the link may have moved to another repository's PR with the same number meanwhile.
     const currentResolvedPushTarget =
-      normalizedUpdates.linkedPR === linkedPrForPushTarget ? resolvedPushTarget : undefined
-    const existingHostedReviewPushTargetLookup = worktreeForUpdate
-      ? getHostedReviewPushTargetLookup(worktreeForUpdate)
-      : null
-    const nextHostedReviewPushTargetLookup = worktreeForUpdate
-      ? getHostedReviewPushTargetLookup({ ...worktreeForUpdate, ...normalizedUpdates })
-      : null
+      pushTargetPR(worktreeForUpdate, normalizedUpdates, get().repos) === linkedPrForPushTarget
+        ? resolvedPushTarget
+        : undefined
     // A lookup can finish after another editor changes the selected review.
     const shouldClearStaleHostedReviewPushTarget =
       Boolean(worktreeForUpdate?.pushTarget) &&
       normalizedUpdates.pushTarget === undefined &&
       currentResolvedPushTarget === undefined &&
-      existingHostedReviewPushTargetLookup !== null &&
-      existingHostedReviewPushTargetLookup.key !== nextHostedReviewPushTargetLookup?.key
+      worktreeForUpdate !== undefined &&
+      isHostedReviewPushTargetStale(worktreeForUpdate, normalizedUpdates, get().repos)
     const shouldRefreshHostedReview = Boolean(
       worktreeForUpdate && hasChangedHostedReviewLinkUpdates(normalizedUpdates, worktreeForUpdate)
     )

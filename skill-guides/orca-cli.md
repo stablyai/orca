@@ -94,6 +94,7 @@ ORCA worktree set --worktree active --workspace-status in-review --json
 ORCA worktree set --worktree active --unread --json
 ORCA worktree create --repo id:<repoId> --name review-task --pr 123 --json
 ORCA worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --json
+ORCA worktree set --worktree active --pr https://github.com/acme/web/pull/88 --json
 ORCA worktree set --worktree active --pr null --gitlab-mr null --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
@@ -149,7 +150,7 @@ ORCA reference find STA-1234 --json
 ```
 
 - Add/remove require explicit `--worktree`, including `current` or a folder selector. Add and create accept full URLs or bare Jira keys. Keys resolve on the selected execution-host Jira site; use `--reference-site <id>` from `ORCA jira connection` to choose one. Other providers require full URLs, which need no Jira authentication. Every input must validate and each Jira key must resolve before writing. `remove --key` also accepts opaque keys from list for URL-less entries. Source-unknown legacy links cannot match exact URLs; stored native issue keys remain searchable. Duplicate adds and absent removals do nothing; unrelated links and selection survive concurrent edits. Unsupported older hosts refuse writes.
-- Repeat create `--reference` to seed links before setup/agent startup. Do not combine it with legacy `--pr`, `--issue`, `--linear-issue`, `--gitlab-issue`, or `--gitlab-mr` flags. Legacy `worktree set --pr` still appends/selects; `linkedItems` remains the worktree output field.
+- Repeat create `--reference` to seed links before setup/agent startup. Do not combine it with legacy `--pr`, `--issue`, `--linear-issue`, `--gitlab-issue`, or `--gitlab-mr` flags. Legacy `worktree set --pr` still appends/selects (a URL is attached like `reference add`, then selected); `linkedItems` remains the worktree output field.
 - Find accepts a full URL or native issue key such as `STA-1234`; no bare numbers or custom shorthand. It searches stored links across sources, not conversation text (`ORCA search`). Narrow with `--worktree` or `--repo`; optionally `--include-archived`, `--limit` (default 50 workspaces). Check `truncated` before assuming complete coverage. Remote selectors refer to the execution host; never use local `current` for a paired host.
 - Find returns all known agents in each matching workspace. `linked: true` requires recorded reference/session evidence; `linked: false` means ownership is unknown. Check `liveness` (`live`, `unverifiable`, `exited`) and choose the intended agent; never infer ownership merely from workspace membership.
 - Send through the returned exact `terminal` handle or `mailbox` (`dispatch:<id>` / `orca_session_id:<id>`). A `run:<id>` targets a coordinator. Find does not send, and adding links from a shell records no agent ownership.
@@ -171,7 +172,11 @@ Update after a repro, fix, validation, handoff, or blocker. Keep it short and cu
 
 Card status uses `--workspace-status <id>`; defaults are `todo`, `in-progress`, `in-review`, `completed`. `--unread` puts the workspace's unread dot in the sidebar to ask for a person's attention; `--read` clears it.
 
-Issue/review links: `--pr` writes the GitHub pull request number; `--gitlab-issue` and
+Issue/review links: `--pr` writes the GitHub pull request number. On `set` it also takes
+a full PR URL from any repository (for example a submodule's or a code repo's PR); the
+row then shows that PR's own state, checks, and merge when the URL's GitHub host is the
+host of the workspace's `origin` or `upstream` GitHub remote. A URL on another host, or
+on a workspace with no GitHub remote, is stored but shows no PR. `--gitlab-issue` and
 `--gitlab-mr` write separate GitLab numbers and accept `#42` / `!77` respectively.
 All numbers must be positive safe integers. The GitLab flags also accept HTTP(S) URLs
 whose host/project match the workspace's stored GitLab source context or the repo's

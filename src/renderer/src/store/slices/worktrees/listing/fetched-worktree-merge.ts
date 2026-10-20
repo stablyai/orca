@@ -35,6 +35,7 @@ import {
   rememberAuthoritativelyRemovedWorktrees
 } from './authoritative-worktree-removal-memory'
 import type { FencedWorktreeMergeArgs } from './worktree-slice-types'
+import { findWorktreeRepo } from '../../../github/linked-pr-repository'
 
 export function preserveConcurrentManualOrder<T extends Worktree>(
   incoming: readonly T[],
@@ -182,7 +183,8 @@ export function mergeFetchedWorktrees(
       current: s.worktreesByRepo[args.repoId],
       incoming,
       matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, args.hostId, matchOptions),
-      hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
+      hasBranchScopedReviewContext: (worktree) =>
+        hasBranchScopedHostedReviewContext(worktree, findWorktreeRepo(s.repos, worktree)),
       updateWorktreeGitIdentity: s.updateWorktreeGitIdentity
     })
     const worktrees = sanitizeHostedReviewLinksForBranchClears(

@@ -15,6 +15,7 @@ import {
 } from '../source-control/hosted-review-creation'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
+import { linkedPRRepositoryHint } from '../github/client/lookup/linked-pr-repository'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { listRepoWorktreeGraph } from '../repo-worktrees'
 import {
@@ -113,11 +114,14 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       ...getLocalProjectGhExecOptions(store, repo),
       admissionTier: args.admissionTier ?? ('background' as const)
     }
+    const linkedGitHubPRRepository =
+      args.linkedGitHubPR != null ? linkedPRRepositoryHint(args.linkedGitHubPRRepository) : null
     const review = await getHostedReviewForBranch({
       repoPath: repo.path,
       executionHostId: getRepoHostedReviewExecutionHostId(repo),
       branch: args.branch,
       linkedGitHubPR: args.linkedGitHubPR ?? null,
+      ...(linkedGitHubPRRepository ? { linkedGitHubPRRepository } : {}),
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,
@@ -128,7 +132,11 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       ...(args.force === true ? { force: true } : {}),
       localGitExecOptions: localGitOptions
     })
-    if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {
+    if (
+      review?.provider === 'github' &&
+      !review.linkedFromOtherRepository &&
+      !stats.hasCountedPR(review.url)
+    ) {
       stats.record({
         type: 'pr_created',
         at: Date.now(),

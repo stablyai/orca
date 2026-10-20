@@ -3,7 +3,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { GitHubOwnerRepo, PRInfo } from '../../../../shared/github/pull-request-types'
 import type { CacheEntry, GitHubPRFallbackSource } from './cache-model'
 import type { PRRefreshStateClearToken } from './pr-refresh-state'
 
@@ -16,6 +16,7 @@ import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../sha
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { inflightPRRequests, prRequestGenerations } from './request-coordination'
 import { getRuntimeRepoTarget } from './repository-routing'
+import { foundPRForLinkedRepository } from './linked-pr-repository'
 import { applyCachedChecksStatus } from './pr-check-status-cache'
 import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from './pr-result-cache'
 import {
@@ -40,6 +41,7 @@ export function startPullRequestLookup(args: {
   cacheKey: string
   cached: CacheEntry<PRInfo> | undefined
   linkedPRNumber: number | null
+  linkedPRRepository: GitHubOwnerRepo | null
   fallbackPRNumber: number | null
   fallbackPRSource: GitHubPRFallbackSource | null
   generation: number
@@ -60,6 +62,7 @@ export function startPullRequestLookup(args: {
     cacheKey,
     cached,
     linkedPRNumber,
+    linkedPRRepository: linkedRepo,
     fallbackPRNumber,
     fallbackPRSource,
     generation,
@@ -67,6 +70,7 @@ export function startPullRequestLookup(args: {
     requestStartedHostedReviewEntry,
     requestStartedPRRefreshToken
   } = args
+  const requestHostId = repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
   const request = (async () => {
     try {
       const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestTarget)
@@ -82,6 +86,7 @@ export function startPullRequestLookup(args: {
               repo: runtimeRepo.repo.id,
               branch,
               linkedPRNumber,
+              ...(linkedRepo ? { linkedPRRepository: linkedRepo } : {}),
               currentHeadOid: requestHeadOid,
               ...(options?.reason ? { reason: options.reason } : {}),
               ...(fallbackPRNumber !== null
@@ -100,6 +105,7 @@ export function startPullRequestLookup(args: {
               worktreeId: options?.worktreeId,
               currentHeadOid: requestHeadOid,
               linkedPRNumber,
+              ...(linkedRepo ? { linkedPRRepository: linkedRepo } : {}),
               fallbackPRNumber,
               fallbackPRSource,
               connectionId: repo?.connectionId ?? null,
@@ -123,13 +129,14 @@ export function startPullRequestLookup(args: {
                   repoId,
                   branch,
                   linkedPRNumber,
+                  ...(linkedRepo ? { linkedPRRepository: linkedRepo } : {}),
                   fallbackPRNumber,
                   acceptMergedFallbackPR: fallbackPRNumber !== null && fallbackPRSource !== null,
                   currentHeadOid: requestHeadOid
                 })
             return normalizeGitHubPRForBranchOutcome(response)
           })()
-      const pr = outcome.kind === 'found' ? outcome.pr : null
+      const pr = foundPRForLinkedRepository(outcome, linkedRepo)
       if (outcome.kind === 'upstream-error') {
         // Why: the runtime RPC path skips the coordinator broadcast that fills prRefreshStates on native, so record the classified error here for Checks parity with native (design criterion 2).
         if (runtimeRepo && prRequestGenerations.get(cacheKey) === generation) {
@@ -154,7 +161,9 @@ export function startPullRequestLookup(args: {
         let skippedStaleLinkedPRLookup = false
         set((s) => {
           // Why: unlinking a PR mid exact-linked-PR-lookup must stop the older result from restoring the manual link UI.
-          if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber)) {
+          if (
+            isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber, linkedRepo, repo)
+          ) {
             skippedStaleLinkedPRLookup = true
             return s
           }
@@ -174,7 +183,7 @@ export function startPullRequestLookup(args: {
                     { cacheKey, repoPath, branch, repoId, connectionId: repo?.connectionId },
                     pr,
                     outcome.fetchedAt,
-                    repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+                    requestHostId
                   )
                 : pr,
             fetchedAt: outcome.fetchedAt,
@@ -194,11 +203,7 @@ export function startPullRequestLookup(args: {
         }
         const linkedPRWorktree =
           options?.worktreeId && linkedPRNumber != null
-            ? findUniqueWorktreeById(
-                get(),
-                options.worktreeId,
-                repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
-              )
+            ? findUniqueWorktreeById(get(), options.worktreeId, requestHostId)
             : null
         if (
           options?.worktreeId &&
@@ -214,11 +219,7 @@ export function startPullRequestLookup(args: {
               shouldApply: () =>
                 shouldApplyDivergedLinkedPRClear({
                   worktree:
-                    findUniqueWorktreeById(
-                      get(),
-                      options.worktreeId!,
-                      repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
-                    ) ?? undefined,
+                    findUniqueWorktreeById(get(), options.worktreeId!, requestHostId) ?? undefined,
                   linkedPRNumber,
                   branch,
                   requestHeadOid
@@ -247,11 +248,7 @@ export function startPullRequestLookup(args: {
               shouldApply: () =>
                 shouldApplyBranchMismatchedLinkedPRClear({
                   worktree:
-                    findUniqueWorktreeById(
-                      get(),
-                      options.worktreeId!,
-                      repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
-                    ) ?? undefined,
+                    findUniqueWorktreeById(get(), options.worktreeId!, requestHostId) ?? undefined,
                   linkedPRNumber,
                   branch,
                   requestHeadOid

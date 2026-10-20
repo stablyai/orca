@@ -11,6 +11,7 @@ import {
   type PRRefreshValidationDenialReason
 } from '../github/pr-refresh-validation-backoff'
 import type { Store } from '../persistence'
+import { linkedPRRepositoryHint } from '../github/client/lookup/linked-pr-repository'
 import {
   getLocalProjectGhExecOptions,
   type LocalProjectGhExecOptions
@@ -111,8 +112,11 @@ export function applyRegisteredRepoToPRRefreshCandidate(
   delete appliedCandidate.connectionId
   delete appliedCandidate.executionHostId
   delete appliedCandidate.connectionState
+  delete appliedCandidate.linkedPRRepository
+  const linkedPRRepository = linkedPRRepositoryHint(candidate.linkedPRRepository)
   return {
     ...appliedCandidate,
+    ...(linkedPRRepository ? { linkedPRRepository } : {}),
     repoPath: repo.path,
     repoId: repo.id,
     ...(localGitOptions ? { localGitOptions } : {}),

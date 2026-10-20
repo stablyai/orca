@@ -16,6 +16,7 @@ import {
 } from './pr-result-cache'
 import { prRefreshStartedHostedReviewEntries } from './request-coordination'
 import { getRefreshAliasExecutionHostId } from './repository-routing'
+import { findIndexedRepoOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 import {
   buildWorktreeLookupIndex,
   findUniqueWorktreeById,
@@ -110,7 +111,18 @@ export const createRefreshEventActions = (
               : undefined
           // Why: a queued refresh finishing after the user unlinks an exact PR must not restore the manual-link UI.
           if (
-            isStaleExactLinkedPRLookup(s, alias.worktreeId, linkedPRNumber, worktreeLookupIndex)
+            isStaleExactLinkedPRLookup(
+              s,
+              alias.worktreeId,
+              linkedPRNumber,
+              alias.linkedPRRepository ?? null,
+              // The candidate's Repo, which judged pre-host rows when the request was built.
+              worktreeLookupIndex && alias.repoId
+                ? (findIndexedRepoOwnerForHost(s.repos, alias.repoId, aliasExecutionHostId) ??
+                    undefined)
+                : undefined,
+              worktreeLookupIndex
+            )
           ) {
             continue
           }
