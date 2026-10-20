@@ -1,6 +1,10 @@
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
+import { escapeCssAttrValue } from '@/components/tab-group/tab-group-panel-split-target'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { Tab } from '../../../shared/tab-types'
@@ -16,16 +20,12 @@ export const EDITOR_SURFACE_FOCUS_SELECTORS: readonly string[] = [
   '.markdown-preview'
 ]
 
-function cssAttributeString(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-}
-
 function focusGroupEditorSurface(groupId: string): void {
   // Why: double rAF lets the store-driven render settle before looking for the editor DOM.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       const body = document.querySelector(
-        `[data-tab-group-body-id="${cssAttributeString(groupId)}"]`
+        `[data-tab-group-body-id="${escapeCssAttrValue(groupId)}"]`
       )
       for (const selector of EDITOR_SURFACE_FOCUS_SELECTORS) {
         const target = body?.querySelector<HTMLElement>(selector)
@@ -50,12 +50,21 @@ function moveDomFocusToGroup(state: AppState, groupId: string, tab: Tab | null):
     return
   }
   switch (tab.contentType) {
-    case 'terminal':
+    case 'terminal': {
+      const environmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, tab.worktreeId)
+      if (isWebRuntimeSessionActive(environmentId)) {
+        void activateWebRuntimeSessionTab({
+          worktreeId: tab.worktreeId,
+          tabId: tab.entityId,
+          environmentId
+        })
+      }
       focusTerminalTabSurface(
         tab.entityId,
         state.terminalLayoutsByTabId[tab.entityId]?.activeLeafId ?? null
       )
       break
+    }
     case 'agent-session':
       requestNativeChatComposerFocus(tab.id)
       break

@@ -3,18 +3,33 @@ import type { TabGroupLayoutNode } from '../tab-types'
 
 export type TabGroupFocusDirection = 'left' | 'right' | 'up' | 'down'
 
-const TAB_GROUP_FOCUS_ACTIONS: readonly [TabGroupFocusDirection, KeybindingActionId][] = [
-  ['left', 'tab.focusGroupLeft'],
-  ['down', 'tab.focusGroupDown'],
-  ['up', 'tab.focusGroupUp'],
-  ['right', 'tab.focusGroupRight']
+const TAB_GROUP_FOCUS_ACTION_IDS: Readonly<Record<TabGroupFocusDirection, KeybindingActionId>> = {
+  left: 'tab.focusGroupLeft',
+  down: 'tab.focusGroupDown',
+  up: 'tab.focusGroupUp',
+  right: 'tab.focusGroupRight'
+}
+
+const TAB_GROUP_FOCUS_DIRECTIONS: readonly TabGroupFocusDirection[] = [
+  'left',
+  'down',
+  'up',
+  'right'
 ]
+
+export function tabGroupFocusActionId(direction: TabGroupFocusDirection): KeybindingActionId {
+  return TAB_GROUP_FOCUS_ACTION_IDS[direction]
+}
 
 /** The direction whose focus-group shortcut `matches` accepts, if any. */
 export function matchTabGroupFocusDirection(
   matches: (actionId: KeybindingActionId) => boolean
 ): TabGroupFocusDirection | null {
-  return TAB_GROUP_FOCUS_ACTIONS.find(([, actionId]) => matches(actionId))?.[0] ?? null
+  return (
+    TAB_GROUP_FOCUS_DIRECTIONS.find((direction) =>
+      matches(TAB_GROUP_FOCUS_ACTION_IDS[direction])
+    ) ?? null
+  )
 }
 
 type GroupRect = { left: number; top: number; right: number; bottom: number }

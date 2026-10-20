@@ -255,15 +255,14 @@ export async function useIpcEventsForCloseRouting({
         onSwitchTabAcrossAllTypes: () => () => {},
         onSwitchRecentTab: () => () => {},
         onSwitchTerminalTab: () => () => {},
+        onFocusTabGroup: () => () => {},
         onToggleStatusBar: () => () => {},
         onFullscreenChanged: () => () => {},
         onTerminalZoom: () => () => {},
         getZoomLevel: () => 0,
         set: vi.fn()
       },
-      settings: {
-        onChanged: () => () => {}
-      },
+      settings: { onChanged: () => () => {} },
       updater: {
         getStatus: () => Promise.resolve({ state: 'idle' }),
         onStatus: () => () => {},

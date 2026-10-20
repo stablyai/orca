@@ -5,6 +5,11 @@ import { focusTabGroupInDirection } from './tab-group-directional-focus'
 const focusTerminalTabSurface = vi.hoisted(() => vi.fn())
 const requestBrowserFocus = vi.hoisted(() => vi.fn())
 const requestNativeChatComposerFocus = vi.hoisted(() => vi.fn())
+const activateWebRuntimeSessionTab = vi.hoisted(() => vi.fn())
+const webRuntime = vi.hoisted(() => {
+  const holder: { active: boolean } = { active: false }
+  return holder
+})
 const store = vi.hoisted(() => {
   const holder: { state: Record<string, unknown> } = { state: {} }
   return holder
@@ -16,6 +21,13 @@ vi.mock('@/components/native-chat/use-native-chat-composer-reveal-focus', () => 
   requestNativeChatComposerFocus
 }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store.state } }))
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => 'env-1'
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: () => webRuntime.active
+}))
+vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({ activateWebRuntimeSessionTab }))
 
 function tab(id: string, groupId: string, overrides: Partial<Tab> = {}): Tab {
   return {
@@ -66,6 +78,7 @@ describe('focusTabGroupInDirection', () => {
   beforeEach(() => {
     vi.stubGlobal('document', { activeElement: null })
     vi.stubGlobal('HTMLElement', class {})
+    webRuntime.active = false
   })
 
   afterEach(() => {
@@ -88,6 +101,23 @@ describe('focusTabGroupInDirection', () => {
       preservePreview: true
     })
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('right-tab-entity', 'leaf-2')
+  })
+
+  it('activates the terminal on the web runtime like a click when a session is active', () => {
+    webRuntime.active = true
+    setupStore(
+      sideBySide,
+      [group('left', 'left-tab'), group('right', 'right-tab')],
+      [tab('left-tab', 'left'), tab('right-tab', 'right')],
+      'left'
+    )
+
+    expect(focusTabGroupInDirection('right')).toBe(true)
+    expect(activateWebRuntimeSessionTab).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'right-tab-entity',
+      environmentId: 'env-1'
+    })
   })
 
   it('does nothing at the layout edge', () => {

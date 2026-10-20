@@ -204,6 +204,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onSwitchTabAcrossAllTypes: () => () => {},
           onSwitchRecentTab: () => () => {},
           onSwitchTerminalTab: () => () => {},
+          onFocusTabGroup: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},
