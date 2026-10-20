@@ -52,6 +52,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   settings: ReturnType<typeof getWorktreePathSettings> & {
     branchPrefix: string
     branchPrefixCustom?: string
+    asciiOnlyBranchNames?: boolean
   }
   worktreePathSettings: ReturnType<typeof getWorktreePathSettings>
   workspaceRoot: string
@@ -61,7 +62,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   localWorktreeGitOptions: { wslDistro?: string }
   hostedReviewExecutionContext?: HostedReviewExecutionOptions
 }): Promise<RuntimeLocalWorktreeCreateCandidate> {
-  const sanitizedName = sanitizeWorktreeName(args.request.name)
+  const sanitizedName = sanitizeWorktreeName(args.request.name, args.settings)
   let effectiveRequestedName = args.request.name
   let effectiveSanitizedName = sanitizedName
   let branchName = ''

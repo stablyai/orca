@@ -35,6 +35,29 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.git.search.asciiOnlyBranchNamesTitle',
+      'ASCII-only branch names'
+    ),
+    description: translate(
+      'auto.components.settings.git.search.asciiOnlyBranchNamesDescription',
+      'Fold branch and workspace folder names to ASCII so they survive remotes, CI job names, review URLs, and Windows paths. A workspace named entirely in a non-Latin script gets a short generated branch name instead. The workspace keeps its original name in the sidebar either way.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.git.search.ascii', 'ascii'),
+      ...translateSearchKeyword('auto.components.settings.git.search.unicode', 'unicode'),
+      ...translateSearchKeyword('auto.components.settings.git.search.nonAscii', 'non-ascii'),
+      ...translateSearchKeyword('auto.components.settings.git.search.f83c8937c4', 'branch naming'),
+      ...translateSearchKeyword('auto.components.settings.git.search.cjk', 'cjk'),
+      ...translateSearchKeyword('auto.components.settings.git.search.japanese', 'japanese'),
+      ...translateSearchKeyword('auto.components.settings.git.search.chinese', 'chinese'),
+      ...translateSearchKeyword('auto.components.settings.git.search.korean', 'korean'),
+      ...translateSearchKeyword('auto.components.settings.git.search.cyrillic', 'cyrillic'),
+      ...translateSearchKeyword('auto.components.settings.git.search.accents', 'accents'),
+      ...translateSearchKeyword('auto.components.settings.git.search.folderName', 'folder name')
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.git.search.f8bda25f29',
       'Keep Local Main Up to Date'
     ),

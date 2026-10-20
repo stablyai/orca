@@ -9,6 +9,7 @@ import {
   setEmojiShortcodeDatasetLoader
 } from '../../shared/emoji-shortcode-catalog'
 import { requireEmojiShortcodeDataset } from './deferred-emoji-shortcode-dataset'
+import { creatureNameForUnsanitizableName } from '../../shared/worktree/creature-name-fallback'
 import { getWslHome, getWslHomeAsync, parseWslPath } from '../wsl'
 
 setEmojiShortcodeDatasetLoader(requireEmojiShortcodeDataset)
@@ -24,15 +25,24 @@ type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
  * Strips unsafe characters and collapses runs of special chars to a single hyphen.
+ *
+ * `asciiOnlyBranchNames` folds the result to ASCII. Off (the default), Unicode
+ * letters and numbers are kept so users can name workspaces in their own
+ * language; on, the name travels safely through remotes, CI job names, review
+ * URLs, and Windows paths. Either way the original label is preserved as the
+ * workspace displayName (see `resolveWorktreeCreateDisplayNameMeta`).
  */
-export function sanitizeWorktreeName(input: string): string {
-  // Why: keep Unicode letters/numbers (CJK, accented Latin, etc.) so users can
-  // name workspaces in their own language. Git ref-format permits non-ASCII
-  // bytes, and modern filesystems handle UTF-8 paths. Only strip characters
-  // git or the filesystem actually rejects.
-  const sanitized = replaceKnownEmojiWithShortcodes(input)
+export function sanitizeWorktreeName(
+  input: string,
+  settings?: { asciiOnlyBranchNames?: GlobalSettings['asciiOnlyBranchNames'] }
+): string {
+  const asciiOnly = settings?.asciiOnlyBranchNames === true
+  const folded = asciiOnly
+    ? stripCombiningMarks(replaceKnownEmojiWithShortcodes(input))
+    : replaceKnownEmojiWithShortcodes(input)
+  const sanitized = folded
     .trim()
-    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
+    .replace(asciiOnly ? /[^A-Za-z0-9._-]+/g : /[^\p{L}\p{N}._-]+/gu, '-')
     .replace(/-+/g, '-')
     // Why: git check-ref-format rejects any ref containing `..`, so a prompt
     // like "../../foo" that survives slugification as `..-..-foo` would
@@ -42,15 +52,28 @@ export function sanitizeWorktreeName(input: string): string {
     .replace(/\.{2,}/g, '.')
     .replace(/^[.-]+|[.-]+$/g, '')
 
-  if (!sanitized && containsEmoji(input)) {
+  if (sanitized && sanitized !== '.' && sanitized !== '..') {
+    return sanitized
+  }
+
+  if (containsEmoji(input)) {
     return 'workspace'
   }
 
-  if (!sanitized || sanitized === '.' || sanitized === '..') {
-    throw new Error('Invalid worktree name')
+  // Why: in ASCII mode a name written entirely in a non-Latin script has no
+  // ASCII to keep. Name it after a creature rather than failing the create,
+  // which is what stripping to ASCII used to do on every non-Latin keyboard.
+  if (asciiOnly && /[\p{L}\p{N}]/u.test(input)) {
+    return creatureNameForUnsanitizableName(input.trim())
   }
 
-  return sanitized
+  throw new Error('Invalid worktree name')
+}
+
+// Why: `café` should branch as `cafe`, not `caf`. NFD splits the accent into a
+// combining mark, which leaves a plain ASCII base letter behind.
+function stripCombiningMarks(input: string): string {
+  return input.normalize('NFD').replace(/\p{M}+/gu, '')
 }
 
 function containsEmoji(input: string): boolean {

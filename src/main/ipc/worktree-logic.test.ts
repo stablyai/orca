@@ -28,6 +28,8 @@ import {
 } from './worktree-branch-name'
 import { mergeWorktree } from './worktree-metadata-merge'
 import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
+import { creatureNameForUnsanitizableName } from '../../shared/worktree/creature-name-fallback'
+import { MARINE_CREATURES } from '../../shared/marine-creatures'
 
 describe('sanitizeWorktreeName', () => {
   it('replaces spaces with hyphens', () => {
@@ -108,6 +110,47 @@ describe('sanitizeWorktreeName', () => {
 
   it('throws for whitespace-only name', () => {
     expect(() => sanitizeWorktreeName('   ')).toThrow('Invalid worktree name')
+  })
+})
+
+describe('sanitizeWorktreeName with asciiOnlyBranchNames', () => {
+  const asciiOnly = { asciiOnlyBranchNames: true }
+
+  it('folds accented Latin to its ASCII base instead of dropping the letter', () => {
+    expect(sanitizeWorktreeName('café-déjà', asciiOnly)).toBe('cafe-deja')
+    expect(sanitizeWorktreeName('Münchner Straße', asciiOnly)).toBe('Munchner-Stra-e')
+  })
+
+  it('keeps only the ASCII part of a mixed-script name', () => {
+    expect(sanitizeWorktreeName('feat: 中文 (v2)', asciiOnly)).toBe('feat-v2')
+    expect(sanitizeWorktreeName('worktree毎に通知をoffにする', asciiOnly)).toBe('worktree-off')
+    expect(sanitizeWorktreeName('Board view 並び替え', asciiOnly)).toBe('Board-view')
+  })
+
+  it('names an all-non-Latin workspace after a creature rather than failing', () => {
+    // Why: stripping to ASCII leaves nothing, and throwing "Invalid worktree
+    // name" would block every create from a non-Latin keyboard.
+    expect(sanitizeWorktreeName('中文', asciiOnly)).toBe(creatureNameForUnsanitizableName('中文'))
+    expect(sanitizeWorktreeName('Привет мир', asciiOnly)).toBe(
+      creatureNameForUnsanitizableName('Привет мир')
+    )
+  })
+
+  it('gives the same non-Latin name the same creature every time', () => {
+    const name = sanitizeWorktreeName('ブランチ名がおかしい', asciiOnly)
+    expect(sanitizeWorktreeName('ブランチ名がおかしい', asciiOnly)).toBe(name)
+    expect(MARINE_CREATURES.map((creature) => creature.toLowerCase())).toContain(name)
+  })
+
+  it('leaves ASCII names and emoji handling unchanged', () => {
+    expect(sanitizeWorktreeName('my feature', asciiOnly)).toBe('my-feature')
+    expect(sanitizeWorktreeName('Ship it 🚀', asciiOnly)).toBe('Ship-it-rocket')
+    expect(sanitizeWorktreeName('\u{1faeb}', asciiOnly)).toBe('workspace')
+  })
+
+  it('still rejects names with no letters or numbers at all', () => {
+    expect(() => sanitizeWorktreeName('!!!', asciiOnly)).toThrow('Invalid worktree name')
+    expect(() => sanitizeWorktreeName('   ', asciiOnly)).toThrow('Invalid worktree name')
   })
 })
 

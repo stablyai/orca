@@ -33,6 +33,34 @@ import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 
 export { getGitPaneSearchEntries }
 
+// Why: resolved per render (like getKeepLocalMainUpToDateTitle) so switching the
+// UI language re-translates instead of freezing the import-time locale.
+function getAsciiOnlyBranchNamesTitle(): string {
+  return translate(
+    'auto.components.settings.GitPane.asciiOnlyBranchNamesTitle',
+    'ASCII-only branch names'
+  )
+}
+function getAsciiOnlyBranchNamesDescription(): string {
+  return translate(
+    'auto.components.settings.GitPane.asciiOnlyBranchNamesDescription',
+    'Fold branch and workspace folder names to ASCII so they survive remotes, CI job names, review URLs, and Windows paths. A workspace named entirely in a non-Latin script gets a short generated branch name instead. The workspace keeps its original name in the sidebar either way.'
+  )
+}
+const ASCII_ONLY_BRANCH_NAMES_KEYWORDS = [
+  'ascii',
+  'unicode',
+  'non-ascii',
+  'branch naming',
+  'cjk',
+  'japanese',
+  'chinese',
+  'korean',
+  'cyrillic',
+  'accents',
+  'transliterate',
+  'folder name'
+]
 const KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION =
   'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as main or master. This keeps commands like git diff main...HEAD from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.'
 const KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS = [
@@ -154,6 +182,8 @@ export function GitPane({
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle()
+  const asciiOnlyBranchNamesTitle = getAsciiOnlyBranchNamesTitle()
+  const asciiOnlyBranchNamesDescription = getAsciiOnlyBranchNamesDescription()
 
   const isBranchPrefixInputMode = settings.branchPrefix !== 'none'
   // Local draft for the editable custom prefix: updateSettings persists through
@@ -258,6 +288,30 @@ export function GitPane({
         settings={settings}
         updateSettings={updateSettings}
       />
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
+      title: asciiOnlyBranchNamesTitle,
+      description: asciiOnlyBranchNamesDescription,
+      keywords: ASCII_ONLY_BRANCH_NAMES_KEYWORDS
+    }) ? (
+      <SearchableSetting
+        key="ascii-only-branch-names"
+        id="ascii-only-branch-names"
+        title={asciiOnlyBranchNamesTitle}
+        description={asciiOnlyBranchNamesDescription}
+        keywords={ASCII_ONLY_BRANCH_NAMES_KEYWORDS}
+        className="flex items-center justify-between gap-4 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label>{asciiOnlyBranchNamesTitle}</Label>
+          <p className="text-xs text-muted-foreground">{asciiOnlyBranchNamesDescription}</p>
+        </div>
+        <Switch
+          aria-label={asciiOnlyBranchNamesTitle}
+          checked={settings.asciiOnlyBranchNames}
+          onCheckedChange={(checked) => updateSettings({ asciiOnlyBranchNames: checked })}
+        />
+      </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {
       title: keepLocalMainUpToDateTitle,

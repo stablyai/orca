@@ -1061,7 +1061,7 @@ async function performLocalWorktreeCreate(
   })
 
   const requestedName = args.name
-  const sanitizedName = sanitizeWorktreeName(args.name)
+  const sanitizedName = sanitizeWorktreeName(args.name, settings)
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
     args.displayName,
     args.displayNameKind,

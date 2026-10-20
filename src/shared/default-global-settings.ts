@@ -41,6 +41,7 @@ export function buildDefaultSettings(args: {
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     jiraIssueKeyCasing: 'lowercase',
+    asciiOnlyBranchNames: false,
     theme: 'system',
     leftSidebarAppearanceMode: 'default',
     leftSidebarTintColor: DEFAULT_LEFT_SIDEBAR_TINT_COLOR,

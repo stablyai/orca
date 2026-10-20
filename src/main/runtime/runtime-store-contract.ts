@@ -118,6 +118,7 @@ export type RuntimeStore = {
     localBaseRefSuggestionDismissed?: boolean
     branchPrefix: string
     branchPrefixCustom: string
+    asciiOnlyBranchNames?: GlobalSettings['asciiOnlyBranchNames']
     defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
     newWorkspaceSetupOnly?: GlobalSettings['newWorkspaceSetupOnly']
     disabledTuiAgents?: GlobalSettings['disabledTuiAgents']
