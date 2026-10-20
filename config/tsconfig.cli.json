@@ -6,6 +6,7 @@
     "../src/shared/editor-language/monaco-language-associations.json",
     "../src/packages/process-host/src/__fixtures__/**/*",
     "../src/main/agent-state-file-reader.ts",
+    "../src/main/updater/serve-supervisor-install-park.ts",
     "../src/main/gitlab/project-ref-parser.ts",
     "../src/main/agent-hooks/grok-replay-guard.ts",
     "../src/main/claude/hook-script.ts",

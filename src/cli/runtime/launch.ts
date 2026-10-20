@@ -277,6 +277,8 @@ function spawnElectronServe(
   if (isSupervisedSpawnHeld()) {
     return Promise.resolve(0)
   }
+  // Why every attempt: a desktop install swaps the app under a parked service without a handoff.
+  restartIfReplaced?.()
   const child = spawnServeChild(spec)
   const spawnedAt = Date.now()
 

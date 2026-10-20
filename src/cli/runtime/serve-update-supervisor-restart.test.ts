@@ -264,7 +264,8 @@ describe('supervisor restart after a macOS update', () => {
 
     it('restarts a supervisor running on the updated app', async () => {
       await expect((await serveThroughUpdate()).code).resolves.toBe(1)
-      expect(restartMock).toHaveBeenCalledOnce()
+      // Before the first server, then again once the install has landed.
+      expect(restartMock).toHaveBeenCalledTimes(2)
       expect(restartMock).toHaveBeenCalledWith(expect.any(String))
     })
 
