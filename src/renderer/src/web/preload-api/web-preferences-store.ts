@@ -23,7 +23,8 @@ import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import {
   mergeSettings,
   mergeWebUIState,
-  runtimeChatPermissionSetting
+  runtimeChatPermissionSetting,
+  runtimeReplyForLocalMerge
 } from './web-preference-normalization'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './web-runtime-session'
@@ -256,8 +257,7 @@ export async function syncRuntimeBackedSettings(
       webRuntimeState.worktreeVisibilityDefaultsRuntimeEnvironmentId = requestedEnvironment.id
       webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = updatedVisibilityDefaults
     }
-    delete runtimeSettings.worktreeVisibilityDefaults
-    const next = mergeSettings(localNext, runtimeSettings)
+    const next = mergeSettings(localNext, runtimeReplyForLocalMerge(localNext, runtimeSettings))
     writeStoredSettings(next)
     return next
   } catch (error) {
