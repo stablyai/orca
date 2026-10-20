@@ -20,6 +20,7 @@ import {
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 import { isEditableTarget } from '@/lib/editable-target'
+import { openExplorerFileInOrcaBrowser } from './file-explorer-open-in-browser'
 
 export function shouldIgnoreFileExplorerKeyTarget(target: EventTarget | null): boolean {
   return (
@@ -51,6 +52,7 @@ export function useFileExplorerKeys(opts: {
   requestDeleteAll: (nodes: TreeNode[]) => void
   scrollToIndex: (index: number) => void
   activeWorktreeId: string | null
+  canOpenInOrcaBrowser: (filePath: string) => boolean
 }): void {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
@@ -85,6 +87,8 @@ export function useFileExplorerKeys(opts: {
   scrollToIndexRef.current = opts.scrollToIndex
   const activeWorktreeIdRef = useRef(opts.activeWorktreeId)
   activeWorktreeIdRef.current = opts.activeWorktreeId
+  const canOpenInOrcaBrowserRef = useRef(opts.canOpenInOrcaBrowser)
+  canOpenInOrcaBrowserRef.current = opts.canOpenInOrcaBrowser
 
   useEffect(() => {
     // Find the row index whose button is currently focused. Each virtualized
@@ -258,7 +262,13 @@ export function useFileExplorerKeys(opts: {
         platform,
         keybindings
       )
-      if (!wantsCopyRelativePath && !wantsCopyPath) {
+      const wantsOpenInOrcaBrowser = keybindingMatchesAction(
+        'fileExplorer.openInOrcaBrowser',
+        e,
+        platform,
+        keybindings
+      )
+      if (!wantsCopyRelativePath && !wantsCopyPath && !wantsOpenInOrcaBrowser) {
         return
       }
 
@@ -266,6 +276,15 @@ export function useFileExplorerKeys(opts: {
       const node =
         (focused !== null ? rowProjectionRef.current.getRowAtIndex(focused) : null) ??
         selectedNodeRef.current
+      if (wantsOpenInOrcaBrowser) {
+        const worktreeId = activeWorktreeIdRef.current
+        // Why the menu's condition: the shortcut must open exactly what the menu item would.
+        if (node && !node.isDirectory && worktreeId && canOpenInOrcaBrowserRef.current(node.path)) {
+          e.preventDefault()
+          openExplorerFileInOrcaBrowser(node.path, worktreeId)
+        }
+        return
+      }
       const selectedNodes = rowProjectionRef.current.getRowsByPaths(selectedPathsRef.current)
       const fallbackNodes = selectedNodes.length > 0 ? selectedNodes : node ? [node] : []
       if (fallbackNodes.length === 0) {

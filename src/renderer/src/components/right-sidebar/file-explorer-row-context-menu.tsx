@@ -15,7 +15,6 @@ import {
   SquareTerminal,
   Trash2
 } from 'lucide-react'
-import { toast } from 'sonner'
 import {
   ContextMenuContent,
   ContextMenuItem,
@@ -25,7 +24,6 @@ import {
 import { useAppStore } from '@/store'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { detectLanguage } from '@/lib/language-detect'
-import { openFileInBrowserTab } from '@/lib/file-preview'
 import { translate } from '@/i18n/i18n'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {
@@ -45,6 +43,7 @@ import {
   shouldShowViewFileAction
 } from './file-explorer-row-action-visibility'
 import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
+import { openExplorerFileInOrcaBrowser } from './file-explorer-open-in-browser'
 
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -113,6 +112,7 @@ export function FileExplorerRowContextMenu({
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
+  const openInOrcaBrowserShortcutLabel = useShortcutLabel('fileExplorer.openInOrcaBrowser')
   const showRemoteDownloadAction = shouldShowRemoteDownloadAction(
     node,
     connectionId,
@@ -131,10 +131,7 @@ export function FileExplorerRowContextMenu({
     if (!activeWorktreeId) {
       return
     }
-    const result = openFileInBrowserTab({ filePath: node.path, worktreeId: activeWorktreeId })
-    if (result.status === 'unsupported') {
-      toast.error(result.message)
-    }
+    openExplorerFileInOrcaBrowser(node.path, activeWorktreeId)
   }, [activeWorktreeId, node.path])
   const handleDownload = useCallback(() => {
     const downloadTarget = connectionId || runtimeDownloadContext
@@ -229,6 +226,9 @@ export function FileExplorerRowContextMenu({
             'auto.components.right.sidebar.FileExplorerRow.dd112c81d2',
             'Open in Orca Browser'
           )}
+          {openInOrcaBrowserShortcutLabel !== 'Unassigned' ? (
+            <ContextMenuShortcut>{openInOrcaBrowserShortcutLabel}</ContextMenuShortcut>
+          ) : null}
         </ContextMenuItem>
       )}
       {!node.isDirectory && activeWorktreeId && detectLanguage(node.path) === 'markdown' && (
