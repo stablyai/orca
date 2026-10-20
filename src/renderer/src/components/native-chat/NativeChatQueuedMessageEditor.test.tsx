@@ -32,6 +32,7 @@ import { handleAppMenuPasteRequest } from '@/lib/app-menu-paste'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import { routeNativeChatRootKeyToInput } from './native-chat-root-key-routing'
+import * as OsFileDropOwner from '@/hooks/use-os-file-drop-owner'
 
 const externalAttachments = ExternalAttachments.useNativeChatExternalAttachments
 let chips: Parameters<typeof externalAttachments>[0]['pendingChips']
@@ -274,10 +275,12 @@ const write = writeSpy as StructuredAgentSessionWrite
 
 function EditedCard({
   imagesCapable,
-  acceptsImages = true
+  acceptsImages = true,
+  runtimeEnvironmentId = null
 }: {
   imagesCapable: boolean
   acceptsImages?: boolean
+  runtimeEnvironmentId?: string | null
 }): React.JSX.Element | null {
   const messages = [card]
   const { editor, begin } = useStructuredAgentSessionQueuedEdit({
@@ -291,7 +294,7 @@ function EditedCard({
   useEffect(() => void begin('card'), [begin])
   const attachTo = {
     terminalTabId: 'tab',
-    transport: { sessionId: 's', worktreeId: 'wt', runtimeEnvironmentId: null, acceptsImages }
+    transport: { sessionId: 's', worktreeId: 'wt', runtimeEnvironmentId, acceptsImages }
   }
   return editor ? (
     <TooltipProvider>
@@ -330,6 +333,24 @@ function PastePane({
 }
 
 describe('queued card image edit', () => {
+  it.each([null, 'paired'])(
+    'prepares for the captured queued owner %s',
+    async (runtimeEnvironmentId) => {
+      const owner = vi.spyOn(OsFileDropOwner, 'useOsFileDropOwner')
+      try {
+        render(<EditedCard imagesCapable runtimeEnvironmentId={runtimeEnvironmentId} />)
+        await waitFor(() => expect(screen.getByRole('textbox')).toHaveProperty('readOnly', false))
+        const options = owner.mock.calls.at(-1)![1]
+        const destination = options.captureDestination?.(new DragEvent('drop'))
+        const consumer =
+          typeof options.consumer === 'function' ? options.consumer(destination) : options.consumer
+        expect(consumer).toBe(runtimeEnvironmentId ? 'agent' : 'local-chat')
+      } finally {
+        owner.mockRestore()
+      }
+    }
+  )
+
   it('pastes into the owning queued edit through native key and menu delivery', async () => {
     let field: HTMLElement
     const ui = {
