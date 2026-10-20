@@ -35,6 +35,7 @@ async function openChat(page: Page, claudeCommand: string) {
   const composer = chat.getByRole('textbox')
   await composer.click()
   return {
+    chat,
     composer,
     send: chat.getByRole('button', { name: 'Send', exact: true }),
     stop: chat.getByRole('button', { name: 'Stop the agent' }),
@@ -62,5 +63,42 @@ test.describe('a click on the native chat composer button keeps focus in the com
     await stop.click()
     await expect(stop).toHaveCount(0, { timeout: 30_000 })
     await expect.poll(() => focusIsIn(composer)).toBe(true)
+  })
+
+  test('Enter and the arrow queue follow-ups while an empty composer keeps Stop', async ({
+    orcaPage: page,
+    claudeStub
+  }, testInfo) => {
+    const { chat, composer, send, stop } = await openChat(page, claudeStub.command)
+    await page.keyboard.type('slow')
+    await page.keyboard.press('Enter')
+    await expect(stop).toBeVisible()
+
+    await page.keyboard.type('First queued message')
+    await expect(send).toBeEnabled()
+    await expect(stop).toHaveCount(0)
+    await page.keyboard.press('Enter')
+    const queue = chat.getByRole('list', { name: 'Queued messages' })
+    const first = queue.getByRole('listitem').filter({ hasText: 'First queued message' })
+    await expect(first).toBeVisible()
+    await expect(stop).toBeVisible()
+    await expect(composer).toHaveText('')
+    await expect.poll(() => focusIsIn(composer)).toBe(true)
+
+    await page.keyboard.type('Second queued message')
+    await send.click()
+    const second = queue.getByRole('listitem').filter({ hasText: 'Second queued message' })
+    await expect(first).toBeVisible()
+    await expect(second).toBeVisible()
+    await expect(queue.getByRole('listitem')).toHaveCount(2)
+    await expect(stop).toBeVisible()
+    await expect.poll(() => focusIsIn(composer)).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath('queued-composer.png') })
+
+    await first.getByRole('button', { name: 'Delete', exact: true }).click()
+    await expect(first).toHaveCount(0)
+    await expect(second).toBeVisible()
+    await second.getByRole('button', { name: 'Steer', exact: true }).click()
+    await expect(second).toHaveCount(0)
   })
 })

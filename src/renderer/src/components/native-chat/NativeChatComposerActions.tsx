@@ -22,6 +22,8 @@ export type NativeChatComposerActionsProps = {
   /** Storage refused this draft; it is held in memory only. */
   draftNotSaved?: boolean
   isWorking: boolean
+  /** Text or attachments are ready to send, even while the agent works. */
+  hasContent: boolean
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */
   isStopping?: boolean
   isDictating: boolean
@@ -51,6 +53,7 @@ export function NativeChatComposerActions({
   sendBlockedReason,
   draftNotSaved,
   isWorking,
+  hasContent,
   isStopping = false,
   isDictating,
   isDictationHoldMode,
@@ -68,7 +71,7 @@ export function NativeChatComposerActions({
   focusComposer,
   agent
 }: NativeChatComposerActionsProps): React.JSX.Element {
-  const stops = isWorking
+  const stops = isWorking && !hasContent
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
     // A double-click commonly lands after the first send has started and the button has
     // changed to Stop; ignore the second click instead of cancelling the new turn.
@@ -96,7 +99,7 @@ export function NativeChatComposerActions({
             : translate('components.native-chat.stop', 'Stop the agent')
           : (sendReason ?? translate('components.native-chat.composer.send', 'Send'))
       }
-      disabled={sendDisabled || (isWorking && isStopping)}
+      disabled={sendDisabled || (stops && isStopping)}
       // A press keeps focus where it was; a focused button drops it to <body> when it disables.
       onMouseDown={(event) => event.preventDefault()}
       onClick={handleCriticalAction}

@@ -7,7 +7,8 @@ export function useNativeChatQuestionKeys(
   cardRef: RefObject<HTMLElement | null>,
   enabled: boolean,
   optionCount: number,
-  onPick: (optionIndex: number) => void
+  onPick: (optionIndex: number) => void,
+  onTypeAnswer?: () => void
 ): void {
   const onKeyDown = useEffectEvent((event: KeyboardEvent): void => {
     const target = event.target instanceof Element ? event.target : null
@@ -45,6 +46,9 @@ export function useNativeChatQuestionKeys(
       }
       event.preventDefault()
       onPick(optionIndex)
+    } else if (event.key === 'Tab' && (focusedIndex !== -1 || target === card) && onTypeAnswer) {
+      event.preventDefault()
+      onTypeAnswer()
     } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       if (rows.length === 0) {
         return

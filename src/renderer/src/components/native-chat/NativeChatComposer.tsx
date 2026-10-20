@@ -177,9 +177,9 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       structuredTransport?.sendOut === true ||
       imageBlock.holdsSend ||
       structuredTransport?.sendBlockedReason !== undefined
-    const sendButtonDisabled = isWorking
-      ? !hasPty || !onStop
-      : sendHeld || (draft.trim() === '' && imageAttachments.length === 0)
+    const hasContent = draft.trim() !== '' || imageAttachments.length > 0
+    const sendButtonDisabled =
+      isWorking && !hasContent ? !hasPty || !onStop : sendHeld || !hasContent
 
     const { pickAttachments, attachExternalPaths, captureCopiedFiles, resolveAttachmentOwner } =
       useNativeChatFileDrops({

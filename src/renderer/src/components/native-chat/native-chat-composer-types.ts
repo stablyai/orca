@@ -90,7 +90,7 @@ export type NativeChatComposerProps = {
   /** The chat can't take input yet (a program it needs isn't installed): the composer is disabled
    *  and this is its placeholder. */
   unavailableHint?: string | undefined
-  /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
+  /** True while the agent works; an empty composer shows Stop, a draft shows Send. */
   isWorking?: boolean
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */
   isStopping?: boolean

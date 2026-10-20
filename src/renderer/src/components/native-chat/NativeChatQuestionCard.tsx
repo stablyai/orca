@@ -169,7 +169,19 @@ export function NativeChatQuestionCard({
       autoAdvance.schedule(() => advanceOrSubmit(next, otherText))
     }
   }
-  useNativeChatQuestionKeys(cardRef, shouldFocus && !isSubmitting, q.options.length, pickOption)
+  const focusTypedAnswer = (): void => {
+    autoAdvance.cancel()
+    cardRef.current
+      ?.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea')
+      ?.focus()
+  }
+  useNativeChatQuestionKeys(
+    cardRef,
+    shouldFocus && !isSubmitting,
+    q.options.length,
+    pickOption,
+    questionAllowsOther ? focusTypedAnswer : undefined
+  )
 
   // Trailing action (also fired by Enter). On any non-final question this just
   // advances — "Next" when answered, "Skip" when not — so skipping one question

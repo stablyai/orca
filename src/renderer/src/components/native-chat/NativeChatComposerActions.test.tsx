@@ -51,6 +51,50 @@ afterEach(() => {
 })
 
 describe('NativeChatComposerActions', () => {
+  it.each([false, true])(
+    'sends a draft while working, then shows Stop after it clears (stopping: %s)',
+    (isStopping) => {
+      const onSend = vi.fn()
+      const onStop = vi.fn()
+      const props = {
+        attachDisabled: false,
+        dictationDisabled: false,
+        sendDisabled: false,
+        isWorking: true,
+        isStopping,
+        isDictating: false,
+        isDictationHoldMode: false,
+        onAttach: vi.fn(),
+        onDictationToggle: vi.fn(),
+        onDictationHoldStart: vi.fn(),
+        onDictationHoldEnd: vi.fn(),
+        onSend,
+        onStop,
+        sessionOptionsSurface: null,
+        sessionOptionsSnapshot: []
+      }
+      const view = render(<NativeChatComposerActions {...props} hasContent />)
+      const send = screen.getByRole('button', { name: 'Send' })
+      expect(send.hasAttribute('disabled')).toBe(false)
+      expect(send.hasAttribute('data-native-chat-critical-action')).toBe(false)
+      fireEvent.click(send)
+      expect(onSend).toHaveBeenCalledOnce()
+      expect(onStop).not.toHaveBeenCalled()
+
+      view.rerender(<NativeChatComposerActions {...props} hasContent={false} />)
+      const stop = screen.getByRole('button', {
+        name: isStopping ? 'Stopping…' : 'Stop the agent'
+      })
+      expect(stop.getAttribute('data-native-chat-critical-action')).toBe('stop')
+      expect(stop.hasAttribute('disabled')).toBe(isStopping)
+      // A second click from the original double-click must not stop the turn.
+      fireEvent.click(stop, { detail: 2 })
+      expect(onStop).not.toHaveBeenCalled()
+      fireEvent.click(stop, { detail: 1 })
+      expect(onStop).toHaveBeenCalledTimes(isStopping ? 0 : 1)
+    }
+  )
+
   it.each(['starting', 'listening'])('blocks new dictation but preserves %s Stop', (state) => {
     const input = document.createElement('textarea')
     const focus = vi.spyOn(input, 'focus')
@@ -80,6 +124,7 @@ describe('NativeChatComposerActions', () => {
 
   it("disables the Stop control and names it Stopping while a person's Stop is ending the turn", () => {
     const props = {
+      hasContent: false,
       attachDisabled: false,
       dictationDisabled: false,
       isWorking: true,
@@ -104,6 +149,7 @@ describe('NativeChatComposerActions', () => {
   it('marks the streaming Stop control as the critical hit target', () => {
     render(
       <NativeChatComposerActions
+        hasContent={false}
         attachDisabled={false}
         dictationDisabled={false}
         sendDisabled={false}
@@ -133,6 +179,7 @@ describe('NativeChatComposerActions', () => {
     const onStop = vi.fn()
     render(
       <NativeChatComposerActions
+        hasContent={false}
         attachDisabled={false}
         dictationDisabled={false}
         sendDisabled={false}
@@ -161,6 +208,7 @@ describe('NativeChatComposerActions', () => {
     (isWorking) => {
       render(
         <NativeChatComposerActions
+          hasContent={false}
           attachDisabled={false}
           dictationDisabled={false}
           sendDisabled={false}
@@ -187,6 +235,7 @@ describe('NativeChatComposerActions', () => {
   it('says on the disabled send button what to do to send', () => {
     render(
       <NativeChatComposerActions
+        hasContent={false}
         attachDisabled={false}
         dictationDisabled={false}
         sendDisabled
@@ -212,6 +261,7 @@ describe('NativeChatComposerActions', () => {
 
   it('marks a draft that could not be saved only after storage refused it', () => {
     const props = {
+      hasContent: false,
       attachDisabled: false,
       dictationDisabled: false,
       sendDisabled: false,
