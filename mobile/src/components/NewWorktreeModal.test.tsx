@@ -322,6 +322,45 @@ describe('NewWorktreeModal project targets', () => {
     expect(renderer.root.findAll((node) => node.props.label === 'Workspace name')).toHaveLength(1)
     expect(sendRequest).toHaveBeenCalledWith('preflight.detectAgents')
     expect(sendRequest).not.toHaveBeenCalledWith('ssh.getState', expect.anything())
+    expect(sendRequest.mock.calls.map(([method]) => method)).not.toContain(
+      'worktree.prefetchCreateBase'
+    )
+  })
+
+  it("warms the host's create for the picked repo as soon as the form opens", async () => {
+    const sendRequest = vi.fn().mockImplementation((method: string) => {
+      if (method === 'repo.list') {
+        return Promise.resolve({ ok: true, result: { repos } })
+      }
+      if (method === 'status.get') {
+        return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
+      }
+      if (method === 'repo.hooks') {
+        return Promise.resolve({ ok: true, result: { hooks: null, source: null } })
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client: requestsOnly(sendRequest),
+          hostId: 'host-1',
+          onCreated: () => {},
+          onClose: () => {},
+          openExternalUrl: () => {}
+        })
+      )
+    })
+    await flushUpdates()
+
+    // Without this the host fetches the base and checks out every file inside worktree.create.
+    const prefetches = sendRequest.mock.calls.filter(
+      ([method]) => method === 'worktree.prefetchCreateBase'
+    )
+    expect(prefetches).toHaveLength(1)
+    expect(prefetches[0]?.[1]).toEqual({ repo: 'id:repo-1' })
   })
 
   it("creates a server repo's workspace on that server and names it for the route", async () => {
