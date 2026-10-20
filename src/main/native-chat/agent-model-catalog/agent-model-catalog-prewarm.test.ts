@@ -431,4 +431,30 @@ describe('one account, one catalog key', () => {
     const read = await service.read({ agent: 'codex' })
     expect(read.origin !== 'unknown' && read.models.map((model) => model.id)).toEqual(['gpt-live'])
   })
+
+  it('a chat that moved accounts lists under the account it runs on, never its first one', async () => {
+    const store = new AgentModelCatalogStore()
+    const founded = record('/accounts/a')
+    let live: AgentSessionAccountHome | undefined = HOME('CODEX_HOME', '/accounts/b')
+    const service = createAgentModelCatalogService({
+      store,
+      getRecord: () => founded,
+      drivesRecord: () => true,
+      resolveAccountHome: async () => HOME('CODEX_HOME', '/accounts/c'),
+      liveAccountHome: () => live,
+      launchAccountHome: async () => HOME('CODEX_HOME', '/accounts/c')
+    })
+    service.recordLiveListing('session-1', { models: listing('on-b').models })
+    const keyOf = (path: string) => agentModelCatalogFingerprintForRecord(record(path))
+    expect(store.get(keyOf('/accounts/a'))).toBeNull()
+    expect(store.get(keyOf('/accounts/b'))?.models.map((model) => model.id)).toEqual(['on-b'])
+    const ids = async () => {
+      const read = await service.read({ agent: 'codex', sessionId: 'session-1', savedOnly: true })
+      return read.origin === 'unknown' ? null : read.models.map((model) => model.id)
+    }
+    expect(await ids()).toEqual(['on-b'])
+    // At rest, the chat reads the account its next start launches under.
+    live = undefined
+    expect(await ids()).toBeNull()
+  })
 })

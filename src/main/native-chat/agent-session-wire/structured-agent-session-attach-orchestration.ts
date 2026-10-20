@@ -271,7 +271,7 @@ async function runAttachUnderAbort(
       onAcquisitionReleased: (cause, verdict) =>
         endStructuredAgentSessionReleasedChild(context, sessionId, cause, verdict),
       // The commit before the drain: stale rows settle, and the sink binds to the journal.
-      onAttached: async (attached, acquisitionGeneration, owner) => {
+      onAttached: async (attached, acquisitionGeneration, owner, accountHome) => {
         const fence = structuredAgentSessionConversationFence(context.deps.store, sessionId)
         const current = context.sessions.get(sessionId)?.child ?? null
         // A re-attach to a live child keeps the sink that child already writes through.
@@ -297,7 +297,8 @@ async function runAttachUnderAbort(
           publish: (activity) => context.subscribers.publish(sessionId, attached.journal, activity)
         })
         const { journal } = attached
-        attempt.bound = { acquisitionGeneration, owner, fence, journal, current, eventSink }
+        const bound = { acquisitionGeneration, owner, fence, journal, current, eventSink }
+        attempt.bound = accountHome ? { ...bound, accountHome } : bound
       },
       // Outside the commits: the barrier the host publishes behind, and for a proven child the
       // provider's word on a rewind in doubt (a starting one recovers in its open step).

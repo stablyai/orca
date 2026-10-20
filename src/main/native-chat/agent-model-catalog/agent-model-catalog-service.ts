@@ -20,6 +20,11 @@ import type {
 } from './agent-model-catalog-store'
 import { AgentModelCatalogListingStoppedError } from './agent-model-catalog-failures'
 import {
+  onLiveAccount,
+  onRunningAccount,
+  type AgentModelCatalogRunningAccountDeps
+} from './agent-model-catalog-running-account'
+import {
   catalogFolder,
   recordConfiguredDefault,
   sessionWorkspacePath,
@@ -27,24 +32,25 @@ import {
   type AgentModelCatalogWorkspaceDeps
 } from './agent-model-catalog-workspace'
 
-export type AgentModelCatalogServiceDeps = AgentModelCatalogWorkspaceDeps & {
-  getRecord: (sessionId: string) => AgentSessionRecord | undefined
-  /** Whether this build can start the record's agent as the record pins it; a record it cannot
-   *  names no account a probe may start that agent's CLI under. */
-  drivesRecord: (record: AgentSessionRecord) => boolean
-  /** The account home a structured launch for this agent would pin right now —
-   *  the SAME resolver the create path fills `record.accountHome` with, so a
-   *  record-less read can never answer from another account's listing. */
-  resolveAccountHome: (agent: string) => Promise<AgentSessionAccountHome>
-  /** Session-less listers, one per agent that has one on this host. */
-  probes?: Readonly<Partial<Record<string, AgentModelCatalogProbe>>>
-  /** Agents whose listing marks the model the account is configured to run as its default. */
-  listingNamesConfiguredModel?: ReadonlySet<string>
-  /** False for an agent whose model no project config can pick; its default holds everywhere. */
-  agentReadsProjectModelConfig?: (agent: string) => boolean
-  /** Whether this host keeps any chat of the agent; with a saved catalog, what marks it in use. */
-  hasChatRecords?: (agent: string) => boolean
-}
+export type AgentModelCatalogServiceDeps = AgentModelCatalogWorkspaceDeps &
+  AgentModelCatalogRunningAccountDeps & {
+    getRecord: (sessionId: string) => AgentSessionRecord | undefined
+    /** Whether this build can start the record's agent as the record pins it; a record it cannot
+     *  names no account a probe may start that agent's CLI under. */
+    drivesRecord: (record: AgentSessionRecord) => boolean
+    /** The account home a structured launch for this agent would pin right now —
+     *  the SAME resolver the create path fills `record.accountHome` with, so a
+     *  record-less read can never answer from another account's listing. */
+    resolveAccountHome: (agent: string) => Promise<AgentSessionAccountHome>
+    /** Session-less listers, one per agent that has one on this host. */
+    probes?: Readonly<Partial<Record<string, AgentModelCatalogProbe>>>
+    /** Agents whose listing marks the model the account is configured to run as its default. */
+    listingNamesConfiguredModel?: ReadonlySet<string>
+    /** False for an agent whose model no project config can pick; its default holds everywhere. */
+    agentReadsProjectModelConfig?: (agent: string) => boolean
+    /** Whether this host keeps any chat of the agent; with a saved catalog, what marks it in use. */
+    hasChatRecords?: (agent: string) => boolean
+  }
 
 export type AgentModelCatalogService = {
   read: (params: {
@@ -176,7 +182,8 @@ export function createAgentModelCatalogService(
     }
   }
   return {
-    providerStarted(record) {
+    providerStarted(started) {
+      const record = onLiveAccount(deps, started)
       if (!deps.listsInChatFolder?.has(record.provider)) {
         deps.store.expireFailure(agentModelCatalogFingerprintForRecord(record))
         return
@@ -188,7 +195,9 @@ export function createAgentModelCatalogService(
     async read(params) {
       const record = params.sessionId ? deps.getRecord(params.sessionId) : undefined
       const scoped =
-        record && record.provider === params.agent && deps.drivesRecord(record) ? record : undefined
+        record && record.provider === params.agent && deps.drivesRecord(record)
+          ? await onRunningAccount(deps, record)
+          : undefined
       const workspacePath = params.inSessionWorkspace
         ? record
           ? await sessionWorkspacePath(deps, record)
@@ -291,15 +300,16 @@ export function createAgentModelCatalogService(
       const record = deps.getRecord(sessionId)
       const entry =
         record && deps.drivesRecord(record)
-          ? deps.store.get(await sessionCatalogKey(record))
+          ? deps.store.get(await sessionCatalogKey(onLiveAccount(deps, record)))
           : undefined
       return retainedAgentModelCatalogModels(entry, listing).map((model) => model.id)
     },
     recordLiveListing(sessionId, listing) {
-      const record = deps.getRecord(sessionId)
-      if (!record || !deps.drivesRecord(record)) {
+      const stored = deps.getRecord(sessionId)
+      if (!stored || !deps.drivesRecord(stored)) {
         return
       }
+      const record = onLiveAccount(deps, stored)
       if (!deps.listsInChatFolder?.has(record.provider)) {
         saveLiveListing(record, listing, agentModelCatalogFingerprintForRecord(record))
         return

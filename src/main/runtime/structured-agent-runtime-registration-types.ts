@@ -92,6 +92,9 @@ export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {
     request: StructuredAgentAccountHomeRequest,
     services: StructuredAgentAccountHomeServices
   ) => Promise<AgentSessionAccountHome>
+  /** Whether a start of an existing chat launches under the account `resolveAccountHome` picks now
+   *  rather than the one its record pins; absent keeps the record's. */
+  launchFollowsSelection?: () => boolean
 }
 
 export type StructuredAgentRuntimeRegistration = StructuredAgentRuntimeMetadata & {

@@ -2,6 +2,8 @@ import type { StructuredAgentId } from '../../../shared/agent-session-provider-h
 import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithStructuredSessionCliWriterHost } from './structured-session-cli-writer-host'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 
 export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRuntimeWithStructuredSessionCliWriterHost {
   /** Where a launch of `agent` finds its account, resolved on this host by the agent's own
@@ -38,5 +40,19 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
           stateDirectory: getProfileUserDataPath()
         }
       )
+  }
+
+  /** The account home a start of this chat would launch under now, read without side effects; null
+   *  for an agent whose chats keep the account they were created on. */
+  async resolveStructuredAgentLaunchAccountHome(
+    record: AgentSessionRecord
+  ): Promise<AgentSessionAccountHome | null> {
+    const { provider, location } = record
+    if (!structuredAgentRuntimeMetadata(provider)?.launchFollowsSelection?.()) {
+      return null
+    }
+    const read = this.structuredAgentAccountHomeResolver(provider, '', 'read')
+    const launchEnv = this.structuredAgentLaunchEnv(provider, this.requireStore().getSettings())
+    return (await read?.({ launchEnv, location })) ?? null
   }
 }

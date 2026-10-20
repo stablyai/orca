@@ -1,6 +1,7 @@
 // A child the chat outgrew is replaced before the next send: one that reported it is not signed in,
-// so a sign-in made since reaches a new child, and one launched with a permission mode the chat no
-// longer has, so the new mode reaches a new child.
+// so a sign-in made since reaches a new child; one launched with a permission mode the chat no
+// longer has, so the new mode reaches a new child; and one launched under an account no longer
+// selected, so the switch reaches a new child.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
@@ -29,6 +30,53 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { JournalItemLinkageVisitor } from '../agent-session-journal/journal-store-contracts'
+import type { LegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+
+const accountHome = (path: string): LegacyAgentSessionAccountHome => ({
+  variable: 'CODEX_HOME',
+  path
+})
+
+describe('a send after the account was switched', () => {
+  let rig: RestTestRig
+  let selected = accountHome('/accounts/a')
+
+  beforeEach(async () => {
+    selected = accountHome('/accounts/a')
+    rig = await createRestTestRig({ launchAccountHome: async () => selected })
+    const acquire = rig.adapter.acquire.getMockImplementation()
+    if (!acquire) {
+      throw new Error('the rig acquires through a mock implementation')
+    }
+    rig.adapter.acquire.mockImplementation(async (request) => ({
+      ...(await acquire(request)),
+      accountHome: selected
+    }))
+  })
+
+  afterEach(async () => {
+    await rig.dispose()
+  })
+
+  const fence = () => rig.store.getRecord(SESSION)?.lease.runtimeFence ?? 1
+
+  it('goes to a new agent on the new account, and that agent is kept for the sends after it', async () => {
+    await foundRestTestChat(rig)
+    expect((await rig.host.send(CALLER, restTestSend('on a', fence()))).ok).toBe(true)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2))
+    expect(rig.adapter.acquire).toHaveBeenCalledTimes(1)
+
+    selected = accountHome('/accounts/b')
+    expect((await rig.host.send(CALLER, restTestSend('on b', fence()))).ok).toBe(true)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(3))
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
+    expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
+
+    expect((await rig.host.send(CALLER, restTestSend('still b', fence()))).ok).toBe(true)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(4))
+    expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
+  })
+})
 
 describe('a send after the agent said it is not signed in', () => {
   let rig: RestTestRig
@@ -253,6 +301,49 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
       'replacing an outgrown agent failed',
       expect.objectContaining({ sessionId: 'session' })
     )
+  })
+
+  describe('a child launched under another account', () => {
+    const onA = { child: childAt({ accountHome: accountHome('/accounts/a') }) }
+    const stops = async (
+      input: Parameters<typeof conversation>[0],
+      now: () => Promise<LegacyAgentSessionAccountHome | null>,
+      work: Partial<typeof idle> = {}
+    ) => {
+      const stopAgent = vi.fn(async () => undefined)
+      await retireOutgrownStructuredAgentSessionChild('session', conversation(input), {
+        work: { ...idle, ...work },
+        launchAccountHome: now,
+        stopAgent,
+        logger: { warn: vi.fn(), error: vi.fn() }
+      })
+      return stopAgent.mock.calls.length > 0
+    }
+
+    it('is stopped when a start would launch under another account, and kept under the same one', async () => {
+      expect(await stops(onA, async () => accountHome('/accounts/b'))).toBe(true)
+      expect(await stops(onA, async () => accountHome('/accounts/a'))).toBe(false)
+    })
+
+    it('is kept mid-reply, with work open, or while starting', async () => {
+      const onB = async () => accountHome('/accounts/b')
+      expect(await stops(onA, onB, owing('turn-1', false))).toBe(false)
+      expect(await stops(onA, onB, { childWorkOpen: () => true })).toBe(false)
+      const starting = {
+        child: childAt({ accountHome: accountHome('/accounts/a'), phase: 'starting' })
+      }
+      expect(await stops(starting, onB)).toBe(false)
+    })
+
+    it('is kept when the account cannot be read, or the agent keeps its own', async () => {
+      expect(
+        await stops(onA, async () => {
+          throw new Error('account folder is being set up')
+        })
+      ).toBe(false)
+      expect(await stops(onA, async () => null)).toBe(false)
+      expect(await stops({ child: childAt() }, async () => accountHome('/accounts/b'))).toBe(false)
+    })
   })
 
   describe('a child launched with another permission mode', () => {

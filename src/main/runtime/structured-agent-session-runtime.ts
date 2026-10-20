@@ -135,6 +135,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** The account home a structured launch would pin right now, for catalog
    *  reads with no session record. Absent disables the catalog surface. */
   resolveAgentAccountHome?: RuntimeAgentAccountHomeResolver
+  /** See `StructuredAgentSessionHostDeps.launchAccountHome`. */
+  launchAccountHome?: StructuredAgentSessionHostDeps['launchAccountHome']
 }
 
 let installing: Promise<InstalledRuntime> | null = null
@@ -316,6 +318,7 @@ async function installOnJournal(
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
     ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
+    ...(deps.launchAccountHome ? { launchAccountHome: deps.launchAccountHome } : {}),
     ...(await modelCatalogHostDeps({
       store,
       agents,

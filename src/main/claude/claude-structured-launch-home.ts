@@ -51,6 +51,7 @@ export async function claudeLaunchResumesTranscript(input: {
   leafUuid: string | null
   providerSessionId: string
   claudeConfigDir: string
+  recordHome: string
   hasTranscript?: typeof claudeTranscriptExists
 }): Promise<boolean> {
   const { router, providerSessionId, claudeConfigDir } = input
@@ -64,7 +65,9 @@ export async function claudeLaunchResumesTranscript(input: {
   if (input.leafUuid === null) {
     return false
   }
-  const otherHomes = router ? [...router.accountHomes(), router.systemDefaultHome()] : []
+  const otherHomes = router
+    ? [input.recordHome, ...router.accountHomes(), router.systemDefaultHome()]
+    : []
   for (const home of otherHomes.filter((home) => home !== claudeConfigDir)) {
     if (await hasTranscript({ providerSessionId, claudeConfigDir: home })) {
       throw new AgentSessionPreSpawnError(

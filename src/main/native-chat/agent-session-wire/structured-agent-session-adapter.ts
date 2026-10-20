@@ -120,6 +120,8 @@ export type AgentSessionAcquisition = {
   /** Host-local identity for this exact provider child, distinct even when the durable fence is
    *  reused by a superseding acquisition. */
   acquisitionGeneration: string
+  /** The account home this child launched under, when its launch follows the selection. */
+  accountHome?: AgentSessionAccountHome
 }
 
 /** A refusal before spawn that a person can act on; the site that refused names it. */

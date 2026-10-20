@@ -3,6 +3,7 @@ import type { SubmissionRejectionFact } from '../../../shared/agent-session-fail
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type {
   AgentSessionStatusSummary,
   AgentSessionWireRefusal
@@ -77,6 +78,8 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   readonly startedFor?: string
   /** The permission mode it was launched with, in memory only; absent for an agent with none. */
   readonly permissionMode?: AgentChatPermissionMode
+  /** The account home it was launched under, in memory only; absent when its adapter reports none. */
+  readonly accountHome?: AgentSessionAccountHome
   /** The adapter's `heldSends` for this conversation, read at each decision. */
   readonly heldSends?: () => ReadonlySet<string> | undefined
   close?: StructuredAgentSessionChildClose
@@ -175,4 +178,7 @@ export type StructuredAgentSessionHostDeps = {
   statusSink?: StructuredAgentSessionStatusSink
   /** Host model catalog surface; absent means every catalog read answers `unknown`. */
   modelCatalog?: AgentModelCatalogService
+  /** The account home a start of this chat would launch under now, read without side effects;
+   *  null for an agent whose chats keep the account they were created on. May throw. */
+  launchAccountHome?: (record: AgentSessionRecord) => Promise<AgentSessionAccountHome | null>
 }

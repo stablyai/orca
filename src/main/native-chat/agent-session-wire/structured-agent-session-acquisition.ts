@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
 import { abortSignalReason } from '../../../shared/abort-signal-reason'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type {
   AgentSessionProcessIdentity,
   AgentSessionRecord
@@ -32,6 +33,7 @@ export async function acquireOwner(
 ): Promise<{
   record: AgentSessionRecord
   acquisitionGeneration: string
+  accountHome?: AgentSessionAccountHome
 }> {
   const fence = record.lease.runtimeFence
   const spawnToken = record.lease.reservedSpawnToken
@@ -91,7 +93,11 @@ export async function acquireOwner(
       ...(acquired.link ? { link: acquired.link } : {}),
       now: input.now()
     })
-    return { record: proved, acquisitionGeneration: acquired.acquisitionGeneration }
+    return {
+      record: proved,
+      acquisitionGeneration: acquired.acquisitionGeneration,
+      ...(acquired.accountHome ? { accountHome: acquired.accountHome } : {})
+    }
   } catch (error) {
     if (isAgentSessionPreSpawnError(error)) {
       throw error

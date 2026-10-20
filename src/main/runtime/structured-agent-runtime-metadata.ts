@@ -11,6 +11,7 @@ import { supportsCodexStructuredLocation } from '../codex/codex-structured-locat
 import { supportsClaudeStructuredLocation } from '../claude/claude-structured-location-support'
 import { supportsAcpStructuredLocation } from '../acp/acp-structured-location-support'
 import { PI_RPC_RUNTIME_METADATA } from '../pi/rpc-runtime-metadata'
+import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import {
   resolveStructuredClaudeAccountHomePath,
   resolveStructuredCodexAccountHomePath
@@ -101,6 +102,8 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
       modelCatalog: claudeModelCatalogDiscovery,
       ...CLAUDE_CLI_CONVERSATIONS,
       supportsLocation: supportsClaudeStructuredLocation,
+      // Without a router a launch keeps the record's home (resolveClaudeStructuredLaunchHome).
+      launchFollowsSelection: () => getClaudeProfileRouter() !== undefined,
       resolveAccountHome: async ({ launchEnv, location }, services) =>
         agentSessionAccountHome(
           CLAUDE_STRUCTURED_AGENT,

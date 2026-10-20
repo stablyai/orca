@@ -178,6 +178,8 @@ export class StructuredAgentSessionHost {
     [...this.sessions].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
   hasLoadedProviders = (): boolean => this.loadedSessionIds().length > 0
   sessionAgent = (sessionId: string) => this.deps.store.getRecord(sessionId)?.provider ?? null
+  /** The account the chat's running agent launched under, when its adapter reports one. */
+  childAccountHome = (sessionId: string) => this.sessions.get(sessionId)?.child?.accountHome
 
   handleAdapterEvent = (event: Parameters<StructuredAgentSessionEventRecovery['handle']>[0]) =>
     this.eventRecovery.handle(event)

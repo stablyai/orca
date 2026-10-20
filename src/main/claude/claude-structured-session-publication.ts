@@ -28,6 +28,7 @@ export function createClaudeSessionPublication(input: {
   observedAt: number
   options?: ReadonlyMap<string, string>
   initialization: ClaudeSession['initialization']
+  accountHome: NonNullable<AgentSessionAcquisition['accountHome']>
 }): { acquisition: AgentSessionAcquisition; session: ClaudeSession } {
   const link = claudeProviderHandleLink({
     sessionId: input.providerSessionId,
@@ -41,7 +42,8 @@ export function createClaudeSessionPublication(input: {
   return {
     acquisition: {
       process: input.process,
-      acquisitionGeneration: input.acquisitionGeneration
+      acquisitionGeneration: input.acquisitionGeneration,
+      accountHome: input.accountHome
     },
     session: {
       connection: input.connection,

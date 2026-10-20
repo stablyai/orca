@@ -227,6 +227,7 @@ export function claudeStructuredLaunchPart(
         leafUuid,
         providerSessionId,
         claudeConfigDir,
+        recordHome: accountHome.path,
         hasTranscript: deps.hasTranscript
       }))
     // Why: without a router the home is fixed, so check it before the recheck that must stay last.

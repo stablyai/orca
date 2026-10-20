@@ -68,7 +68,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     sessionId: string,
     child: StructuredAgentSessionProviderChildIdentity
   ) => StructuredAgentSessionStartReadiness | null
-  /** Stops a child the chat outgrew, so the start after it reads a new login or permission mode. */
+  /** Stops a child the chat outgrew, so the start after it reads a new login, account or permission
+   *  mode. */
   stopOutgrownAgent: (sessionId: string) => Promise<void>
   clientDelivery: Pick<
     StructuredAgentSessionClientDelivery,
@@ -108,6 +109,10 @@ export function createStructuredAgentSessionConversationDelivery(input: {
         launchPermission: async () => {
           const record = deps.store.getRecord(sessionId)
           return record ? structuredAgentSessionLaunchPermission(deps, record) : null
+        },
+        launchAccountHome: async () => {
+          const record = deps.store.getRecord(sessionId)
+          return record && deps.launchAccountHome ? deps.launchAccountHome(record) : null
         },
         stopAgent: input.stopOutgrownAgent,
         logger: deps.logger

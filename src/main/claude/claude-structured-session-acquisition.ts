@@ -15,6 +15,8 @@ import {
   readClaudeInit
 } from './claude-structured-init-proof'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
+import { agentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { CLAUDE_STRUCTURED_AGENT } from './claude-structured-agent-definition'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { adoptClaudeStructuredSpawnOptions } from './claude-structured-spawn-options'
@@ -256,6 +258,7 @@ export async function acquireClaudeSession({
       ...(unbindReadingControl ? { unbindReadingControl } : {}),
       process,
       acquisitionGeneration: mintClaudeAcquisitionGeneration(deps),
+      accountHome: agentSessionAccountHome(CLAUDE_STRUCTURED_AGENT, launch.claudeConfigDir),
       options: launch.savedOptions.options,
       initialization: {
         proof: initProof,

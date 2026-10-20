@@ -1,5 +1,6 @@
-// A child the chat outgrew (signed out, or launched with another permission mode) is replaced before
-// the next send: agents read their login and permission mode only when they start.
+// A child the chat outgrew (signed out, or launched with another permission mode or account) is
+// replaced before the next send: agents read their login, account and permission mode only when they
+// start.
 
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
@@ -13,6 +14,10 @@ import {
 } from './structured-agent-session-idle-sweep'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import {
+  agentSessionAccountHomesEqual,
+  type AgentSessionAccountHome
+} from '../../../shared/agent-session-account-home'
 
 /** What the check reads of a conversation; every read skips building a snapshot. */
 type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
@@ -82,6 +87,19 @@ async function launchedWithOtherPermissionMode(
   return mode !== null && mode !== child.permissionMode
 }
 
+/** Loop-free while a start launches under the account `current` reads; a read that throws is no
+ *  answer, so an account still being set up replaces nothing. */
+async function launchedUnderOtherAccount(
+  child: OutgrownChildReading['child'],
+  current: (() => Promise<AgentSessionAccountHome | null>) | undefined
+): Promise<boolean> {
+  if (!child || child.phase === 'starting' || child.close || !child.accountHome || !current) {
+    return false
+  }
+  const home = await current().catch(() => null)
+  return home !== null && !agentSessionAccountHomesEqual(home, child.accountHome)
+}
+
 /** For a caller inside the session's serialize, before it hands the next send to the child. Work
  *  the child still owes keeps it, as it keeps an idle one from the sweep. A stop that fails leaves
  *  the close begun, which the start joins. */
@@ -95,6 +113,8 @@ export async function retireOutgrownStructuredAgentSessionChild(
     }
     /** The mode a start of the chat would launch with now. */
     launchPermission?: () => Promise<AgentChatPermissionMode | null>
+    /** The account a start of the chat would launch under now; null when it keeps its own. */
+    launchAccountHome?: () => Promise<AgentSessionAccountHome | null>
     stopAgent: (sessionId: string) => Promise<void>
     logger: StructuredAgentSessionLogger
   }
@@ -103,7 +123,8 @@ export async function retireOutgrownStructuredAgentSessionChild(
     !session ||
     !(
       structuredAgentSessionChildReportedSignedOut(session) ||
-      (await launchedWithOtherPermissionMode(session.child, deps.launchPermission))
+      (await launchedWithOtherPermissionMode(session.child, deps.launchPermission)) ||
+      (await launchedUnderOtherAccount(session.child, deps.launchAccountHome))
     ) ||
     structuredAgentSessionChildHasOpenWork(deps.work) ||
     owesWakeUp(session.journal, deps.work.childWork())

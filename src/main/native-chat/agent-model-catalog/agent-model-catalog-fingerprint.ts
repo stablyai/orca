@@ -46,8 +46,8 @@ export function agentModelCatalogFingerprint(identity: AgentModelCatalogIdentity
     .digest('hex')
 }
 
-/** The durable record pins the account home at launch, so this names the
- *  catalog THAT session lists from — not whichever account is selected now. */
+/** The catalog of the account in `record.accountHome`; a session's reads and saves pass the account
+ *  it runs on there, which differs from the one it was created under once the selection moved. */
 export function agentModelCatalogIdentityForRecord(
   record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>
 ): AgentModelCatalogIdentity {

@@ -17,6 +17,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 import {
   admitAttachOrRefuse,
@@ -95,7 +96,9 @@ export type AttachFlowInput = {
   onAttached: (
     attached: AttachedJournal,
     acquisitionGeneration: string | null,
-    owner: AttachedOwner
+    owner: AttachedOwner,
+    /** The account home the spawned child launched under, when its adapter reports one. */
+    accountHome?: AgentSessionAccountHome
   ) => Promise<void> | void
   /** The waits the publish needs (the sink's drain, a provider read), outside any commit. */
   beforePublish?: (owner: AttachedOwner) => Promise<void>
@@ -149,6 +152,7 @@ export async function performAttach(
 
   let record: AgentSessionRecord
   let acquisitionGeneration: string | null = null
+  let accountHome: AgentSessionAccountHome | undefined
   let owner: AttachedOwner = 'kept'
   let reservedRecord: AgentSessionRecord | null = null
   let unsupportedReservationSettlementAttempted = false
@@ -231,6 +235,7 @@ export async function performAttach(
       )
       record = acquired.record
       acquisitionGeneration = acquired.acquisitionGeneration
+      accountHome = acquired.accountHome
       owner = 'acquired'
     }
   } catch (error) {
@@ -294,7 +299,7 @@ export async function performAttach(
         providerHistoryWindow
       })
       await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items)
-      await input.onAttached(journal, acquisitionGeneration, owner)
+      await input.onAttached(journal, acquisitionGeneration, owner, accountHome)
       return journal
     })
     await lock.wait(input.beforePublish?.(owner) ?? Promise.resolve())
