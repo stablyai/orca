@@ -312,7 +312,10 @@ const COPILOT_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowSessionId: (link) => link.handle.nativeId,
   // The CLI resumes its own session-state row by id; the ownership guard must see that target.
   parseResumeArgs: (args) =>
-    resumeInvocationFromOptions(args, { targetless: [], markers: ['--resume'] })
+    resumeInvocationFromOptions(args, {
+      targetless: ['--continue'],
+      markers: ['--resume', '-r']
+    })
 }
 
 // Google's Antigravity ACP server, which Orca installs (the `agy` CLI has no ACP mode). Its chats

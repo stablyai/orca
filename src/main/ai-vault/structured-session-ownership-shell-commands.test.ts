@@ -179,3 +179,19 @@ it('allows a prompt that names a Pi flag while a Pi chat owns a conversation', a
   await allowed('Fix the Pi --resume flag')
   await allowed('The pi -c path is broken.\nPlease fix pi --continue too')
 })
+
+it('refuses every Copilot resume form that can select a chat-owned session', async () => {
+  installOwnership({ handle: acp('copilot', UUID) })
+  for (const command of [
+    `copilot -r ${UUID}`,
+    `copilot -r=${UUID}`,
+    `copilot --resume ${UUID}`,
+    `copilot --resume=${UUID}`,
+    'copilot --resume',
+    'copilot --continue'
+  ]) {
+    await refused(command)
+  }
+  await allowed(`copilot -r ${OTHER_UUID}`)
+  await allowed(`copilot --resume=${OTHER_UUID}`)
+})
