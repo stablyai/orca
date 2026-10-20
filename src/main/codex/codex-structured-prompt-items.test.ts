@@ -183,6 +183,27 @@ describe('codex question items', () => {
     })
   })
 
+  it.each([true, false])('reads the question-level isOther flag (%s)', (isOther) => {
+    const [item] = codexQuestionItems({
+      threadId: THREAD_ID,
+      promptKey: CODEX_ITEM_ID,
+      params: {
+        questions: [
+          {
+            id: 'branch',
+            header: 'Branch',
+            question: 'Which branch?',
+            isOther,
+            options: [{ label: 'main', description: 'Use the default branch' }]
+          }
+        ]
+      }
+    })
+
+    expect(item?.body.options).toEqual([{ id: 'branch:main', label: 'main' }])
+    expect(item?.body.freeTextQuestionId).toBe(isOther ? 'branch' : undefined)
+  })
+
   it('bounds question text, options, labels, and prompt identity components', () => {
     const longQuestionId = 'question-id-'.repeat(500)
     const longLabel = 'option '.repeat(5_000)
