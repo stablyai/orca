@@ -88,7 +88,13 @@ const test = base.extend({
   ]
 })
 
-test.afterAll(() => {
+// Why: testRepoPath is shared by every spec in this worker, so the GitHub remote must not outlive this file.
+test.afterAll(({ testRepoPath }) => {
+  try {
+    execFileSync('git', ['remote', 'remove', 'origin'], { cwd: testRepoPath, stdio: 'ignore' })
+  } catch {
+    // Already removed.
+  }
   rmSync(fakeCliDir, { recursive: true, force: true })
 })
 
