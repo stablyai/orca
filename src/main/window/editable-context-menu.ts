@@ -194,14 +194,14 @@ function buildNativeEditMenuTemplate(
 export function buildEditableContextMenuTemplate(
   params: Electron.ContextMenuParams,
   webContents: EditableContextMenuWebContents,
-  options?: { tableTarget?: RichMarkdownContextMenuTableTarget | null }
+  options?: { tableTarget?: RichMarkdownContextMenuTableTarget | null; plainTextOnly?: boolean }
 ): Electron.MenuItemConstructorOptions[] {
   if (!params.isEditable) {
     return []
   }
 
   const suggestions = params.dictionarySuggestions.slice(0, 5)
-  const isRichMarkdownSurface = params.formControlType === 'none'
+  const isRichMarkdownSurface = params.formControlType === 'none' && !options?.plainTextOnly
   const template: Electron.MenuItemConstructorOptions[] = suggestions.map((suggestion) => ({
     label: suggestion,
     click: () => webContents.replaceMisspelling(suggestion)

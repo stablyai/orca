@@ -137,6 +137,9 @@ function ImageHarness({
       </button>
       <p>text</p>
       <textarea aria-label="composer" />
+      <div contentEditable suppressContentEditableWarning>
+        <span data-testid="editable-word">refrence</span>
+      </div>
       {menu}
     </div>
   )
@@ -223,13 +226,40 @@ describe('useNativeChatContextMenu', () => {
     expect(copyTextItem()).toBeUndefined()
   })
 
-  it('offers Paste in a text field but not on the transcript', () => {
-    render(<ImageHarness />)
-    fireEvent.contextMenu(screen.getByText('text'))
-    expect(pasteItem()).toBeUndefined()
+  it.each([
+    ['composer', 'Windows', 2, false],
+    ['editable-word', 'Windows', 2, false],
+    ['composer', 'Mac', 0, true],
+    ['editable-word', 'Mac', 0, true]
+  ] as const)(
+    'leaves native spelling and editing events intact for %s on %s',
+    (target, platform, button, ctrlKey) => {
+      vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(platform)
+      const setPlainTextContextMenuTarget = vi.fn()
+      const onParentContextMenu = vi.fn()
+      vi.stubGlobal('api', { ui: { setPlainTextContextMenuTarget } })
+      render(
+        <div onContextMenu={onParentContextMenu}>
+          <ImageHarness />
+        </div>
+      )
+      const field =
+        target === 'composer'
+          ? screen.getByRole('textbox', { name: 'composer' })
+          : screen.getByTestId(target)
+      expect(fireEvent.pointerDown(field, { button, ctrlKey })).toBe(true)
+      expect(fireEvent.contextMenu(field, { clientX: 12, clientY: 34 })).toBe(true)
+      expect(setPlainTextContextMenuTarget).toHaveBeenCalledWith({ x: 12, y: 34 })
+      expect(onParentContextMenu).not.toHaveBeenCalled()
+      expect(pasteItem()).toBeUndefined()
+    }
+  )
 
-    fireEvent.contextMenu(screen.getByRole('textbox', { name: 'composer' }))
-    expect(pasteItem()).toBeDefined()
+  it('still owns transcript right-clicks and preserves their selection', () => {
+    render(<ImageHarness />)
+    expect(fireEvent.pointerDown(screen.getByText('text'), { button: 2 })).toBe(false)
+    expect(fireEvent.contextMenu(screen.getByText('text'))).toBe(false)
+    expect(pasteItem()).toBeUndefined()
   })
 
   it('copies the selected chat text', () => {

@@ -7,7 +7,7 @@ import {
   type PointerEventHandler,
   type RefObject
 } from 'react'
-import { Clipboard, Copy, GitFork, Image as ImageIcon, SquareTerminal } from 'lucide-react'
+import { Copy, GitFork, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,7 +50,6 @@ type NativeChatContextMenuState = {
   open: boolean
   point: { x: number; y: number }
   selectedText: string
-  canPaste: boolean
   image?: NativeChatCopyImage
   target: NativeChatContextMenuTarget
   returnFocusTo: Element | null
@@ -157,7 +156,6 @@ export function useNativeChatContextMenu({
     open: false,
     point: { x: 0, y: 0 },
     selectedText: '',
-    canPaste: false,
     target: noNativeChatContextMenuTarget,
     returnFocusTo: null
   })
@@ -168,7 +166,6 @@ export function useNativeChatContextMenu({
   const hasEditItems =
     image !== undefined ||
     hasSelection ||
-    state.canPaste ||
     Boolean(target.quoteText ?? target.link ?? target.codeText ?? target.messageText) ||
     (target.rewindItemId !== null && rewind !== undefined)
   const hasSessionItems = onFind !== undefined || showTerminalPaneActions
@@ -188,6 +185,12 @@ export function useNativeChatContextMenu({
 
   const onContextMenuCapture = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
+      if (isEditableTarget(event.target)) {
+        event.stopPropagation()
+        // The composer is contenteditable, but must not receive Markdown formatting commands.
+        window.api.ui.setPlainTextContextMenuTarget({ x: event.clientX, y: event.clientY })
+        return
+      }
       event.preventDefault()
       event.stopPropagation()
       if (!enabled) {
@@ -198,7 +201,6 @@ export function useNativeChatContextMenu({
         open: true,
         point: { x: event.clientX, y: event.clientY },
         selectedText: getNativeChatSelectedText(rootRef.current),
-        canPaste: isEditableTarget(event.target),
         returnFocusTo: rootRef.current?.ownerDocument.activeElement ?? null,
         image: readNativeChatCopyImage(event.target),
         target: readNativeChatContextMenuTarget(event.target, {
@@ -274,12 +276,6 @@ export function useNativeChatContextMenu({
             composerRef={composerRef}
             rewind={rewind}
           />
-          {state.canPaste ? (
-            <DropdownMenuItem onSelect={actions.onPaste}>
-              <Clipboard />
-              {translate('auto.components.terminal.pane.TerminalContextMenu.0a917b591a', 'Paste')}
-            </DropdownMenuItem>
-          ) : null}
           {hasEditItems && hasSessionItems ? <DropdownMenuSeparator /> : null}
           {onFind ? <NativeChatFindMenuItem onSelect={() => onFind(state.returnFocusTo)} /> : null}
           {showTerminalPaneActions ? (
@@ -334,6 +330,9 @@ export function useNativeChatContextMenu({
 }
 
 function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): void {
+  if (isEditableTarget(event.target)) {
+    return
+  }
   // Why: left alone, the press that opens the menu collapses the selection before contextmenu fires.
   if (event.button === 2 || (isMacPlatform() && event.ctrlKey)) {
     event.preventDefault()

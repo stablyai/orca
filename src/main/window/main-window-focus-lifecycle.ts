@@ -1,4 +1,5 @@
 import { ipcMain, Menu, type BrowserWindow } from 'electron'
+import { z } from 'zod'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import {
   richMarkdownContextMenuTargetChannel,
@@ -25,6 +26,8 @@ import { registerRendererDocumentNavigation } from './renderer-document-navigati
 import { createRendererRecoveryReloadWatchdog } from './renderer-recovery-reload-watchdog'
 import { createRendererLaunchFailureBackoff } from './renderer-launch-failure-backoff'
 import { trackRendererLivenessAtDeath } from './renderer-liveness-at-death'
+
+const contextMenuPointSchema = z.object({ x: z.number().finite(), y: z.number().finite() })
 
 export type MainWindowFocusLifecycle = {
   dispose: () => void
@@ -97,6 +100,16 @@ export function installMainWindowFocusLifecycle(args: {
   ipcMain.on(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
 
   let pendingRichMarkdownContextMenuTableTarget: RichMarkdownContextMenuTableTarget | null = null
+  let pendingPlainTextContextMenuTarget: { x: number; y: number } | null = null
+  const plainTextTargetChannel = 'ui:setPlainTextContextMenuTarget'
+  const onPlainTextContextMenuTarget = (event: Electron.IpcMainEvent, value: unknown): void => {
+    if (event.sender !== mainWindow.webContents) {
+      return
+    }
+    const parsed = contextMenuPointSchema.safeParse(value)
+    pendingPlainTextContextMenuTarget = parsed.success ? parsed.data : null
+  }
+  ipcMain.on(plainTextTargetChannel, onPlainTextContextMenuTarget)
   const onRichMarkdownContextMenuTarget = (event: Electron.IpcMainEvent, value: unknown): void => {
     if (event.sender !== mainWindow.webContents) {
       return
@@ -110,8 +123,15 @@ export function installMainWindowFocusLifecycle(args: {
       pendingRichMarkdownContextMenuTableTarget
     )
     pendingRichMarkdownContextMenuTableTarget = null
+    // DOM mouse coordinates truncate subpixels; Chromium's native menu coordinates round them.
+    const plainTextOnly =
+      pendingPlainTextContextMenuTarget !== null &&
+      Math.abs(pendingPlainTextContextMenuTarget.x - params.x) <= 1 &&
+      Math.abs(pendingPlainTextContextMenuTarget.y - params.y) <= 1
+    pendingPlainTextContextMenuTarget = null
     const template = buildEditableContextMenuTemplate(params, mainWindow.webContents, {
-      tableTarget
+      tableTarget,
+      plainTextOnly
     })
     if (template.length === 0 || mainWindow.isDestroyed()) {
       return
@@ -125,6 +145,7 @@ export function installMainWindowFocusLifecycle(args: {
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
     pendingRichMarkdownContextMenuTableTarget = null
+    pendingPlainTextContextMenuTarget = null
   }
   const resetTerminalInputFocus = (): void => {
     terminalInputFocused = false
@@ -293,6 +314,7 @@ export function installMainWindowFocusLifecycle(args: {
     ipcMain.removeListener(floatingFocusChannel, onFloatingFocus)
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
     ipcMain.removeListener(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
+    ipcMain.removeListener(plainTextTargetChannel, onPlainTextContextMenuTarget)
   }
   return {
     dispose,

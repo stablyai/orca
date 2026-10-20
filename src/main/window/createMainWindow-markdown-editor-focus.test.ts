@@ -534,5 +534,48 @@ describe('createMainWindow', () => {
       ])
     )
     expect(menuPopupMock).toHaveBeenCalledWith({ window: browserWindowInstance, x: 42, y: 84 })
+
+    const plainTextTargetListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'ui:setPlainTextContextMenuTarget')?.[1]
+    expect(plainTextTargetListener).toBeDefined()
+    const params = {
+      x: 42,
+      y: 84,
+      isEditable: true,
+      formControlType: 'none',
+      dictionarySuggestions: ['reference'],
+      misspelledWord: 'refrence'
+    }
+    for (const [sender, target, plainText] of [
+      [webContents, { x: 42, y: 84 }, true],
+      [webContents, { x: 41, y: 83 }, true],
+      [webContents, { x: 40, y: 84 }, false],
+      [webContents, { x: Number.NaN, y: 84 }, false],
+      [webContents, null, false],
+      [{}, { x: 42, y: 84 }, false]
+    ] as const) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This listener only reads sender from the IPC event fixture.
+      plainTextTargetListener?.({ sender } as never, target)
+      buildFromTemplateMock.mockClear()
+      windowHandlers['context-menu']({}, params)
+      const template = buildFromTemplateMock.mock.lastCall?.[0]
+      expect(template).toEqual(
+        expect.arrayContaining([expect.objectContaining({ label: 'reference' })])
+      )
+      const markdownActions = expect.arrayContaining([expect.objectContaining({ label: 'Format' })])
+      if (plainText) {
+        expect(template).not.toEqual(markdownActions)
+      } else {
+        expect(template).toEqual(markdownActions)
+      }
+      if (plainText) {
+        buildFromTemplateMock.mockClear()
+        windowHandlers['context-menu']({}, params)
+        expect(buildFromTemplateMock.mock.lastCall?.[0]).toEqual(
+          expect.arrayContaining([expect.objectContaining({ label: 'Format' })])
+        )
+      }
+    }
   })
 })
