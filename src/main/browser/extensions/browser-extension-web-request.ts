@@ -1,3 +1,4 @@
+import { installBrowserSessionHeadersReceived } from '../browser-session-request-decisions'
 import {
   setBrowserSessionWebRequestObserver,
   type ObservedWebRequestDetails,
@@ -9,6 +10,7 @@ import {
   emitBrowserExtensionEvent,
   getBrowserExtensionProfileIdForSession
 } from './browser-extension-api-host'
+import { browserExtensionEventHasListener } from './browser-extension-contexts'
 import { matchesExtensionMatchPattern } from './browser-extension-match-pattern'
 import { extensionHasPermission } from './browser-extension-namespace-registry'
 import { hasBrowserExtensionHostPermission } from './browser-extension-permission-grants'
@@ -21,19 +23,39 @@ import { resolveBrowserExtensionTab } from './browser-extension-tab-model'
  * either (webRequestBlocking is policy-only), so nothing they could do is lost.
  */
 
-const RESOURCE_TYPES: Record<string, string> = {
-  mainFrame: 'main_frame',
-  subFrame: 'sub_frame',
-  stylesheet: 'stylesheet',
-  script: 'script',
-  image: 'image',
-  font: 'font',
-  object: 'object',
-  xhr: 'xmlhttprequest',
-  ping: 'ping',
-  cspReport: 'csp_report',
-  media: 'media',
-  webSocket: 'websocket'
+type ChromeResourceType =
+  | 'main_frame'
+  | 'sub_frame'
+  | 'stylesheet'
+  | 'script'
+  | 'image'
+  | 'font'
+  | 'object'
+  | 'xmlhttprequest'
+  | 'ping'
+  | 'csp_report'
+  | 'media'
+  | 'websocket'
+  | 'other'
+
+const CHROME_RESOURCE_TYPES = new Map<string, ChromeResourceType>([
+  ['mainFrame', 'main_frame'],
+  ['subFrame', 'sub_frame'],
+  ['stylesheet', 'stylesheet'],
+  ['script', 'script'],
+  ['image', 'image'],
+  ['font', 'font'],
+  ['object', 'object'],
+  ['xhr', 'xmlhttprequest'],
+  ['ping', 'ping'],
+  ['cspReport', 'csp_report'],
+  ['media', 'media'],
+  ['webSocket', 'websocket']
+])
+
+/** Electron's resourceType → Chrome's, shared by webRequest and declarativeNetRequest. */
+export function chromeResourceType(resourceType: string): ChromeResourceType {
+  return CHROME_RESOURCE_TYPES.get(resourceType) ?? 'other'
 }
 
 // Chrome hides these unless a listener asks for 'extraHeaders'.
@@ -107,7 +129,7 @@ export function toChromeWebRequestDetails(
   tab: { tabId: number; windowId: number },
   frame: WebRequestFrameFields
 ): ChromeWebRequestDetails {
-  const type = RESOURCE_TYPES[details.resourceType] ?? 'other'
+  const type = chromeResourceType(details.resourceType)
   return {
     requestId: String(details.id),
     url: details.url,
@@ -170,7 +192,11 @@ function forward(
   event: ObservedWebRequestEvent,
   details: ObservedWebRequestDetails
 ): void {
-  if (!isWebUrl(details.url) || !getBrowserExtensionProfileIdForSession(session)) {
+  if (
+    !isWebUrl(details.url) ||
+    !getBrowserExtensionProfileIdForSession(session) ||
+    !browserExtensionEventHasListener(session, 'webRequest', event)
+  ) {
     return
   }
   const entry =
@@ -206,10 +232,7 @@ function observeRemainingEvents(session: Electron.Session): void {
   observedSessions.add(session)
   const { webRequest } = session
   webRequest.onSendHeaders(OBSERVE_ALL, (details) => forward(session, 'onSendHeaders', details))
-  webRequest.onHeadersReceived(OBSERVE_ALL, (details, callback) => {
-    forward(session, 'onHeadersReceived', details)
-    callback({})
-  })
+  installBrowserSessionHeadersReceived(session)
   webRequest.onResponseStarted(OBSERVE_ALL, (details) =>
     forward(session, 'onResponseStarted', details)
   )

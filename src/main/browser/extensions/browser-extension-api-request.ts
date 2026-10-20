@@ -2,9 +2,10 @@ import { z } from 'zod'
 import type { BrowserExtensionInvokeResult } from '../../../shared/browser-extension-channels'
 import {
   BrowserExtensionApiError,
-  extensionHasPermission,
+  extensionHasNamespacePermission,
   getBrowserExtensionNamespace,
-  type BrowserExtensionCaller
+  type BrowserExtensionCaller,
+  type BrowserExtensionNamespacePermission
 } from './browser-extension-namespace-registry'
 import { flushWorkerQueue } from './browser-extension-worker-event-stream'
 import {
@@ -40,9 +41,13 @@ function errorMessage(error: unknown): string {
   return error instanceof Error && error.message ? error.message : 'Extension API call failed'
 }
 
-function requirePermission(caller: BrowserExtensionCaller, permission: string | undefined): void {
-  if (permission && !extensionHasPermission(caller.extension, permission, caller.session)) {
-    throw new BrowserExtensionApiError(`This API requires the "${permission}" permission`)
+function requirePermission(
+  caller: BrowserExtensionCaller,
+  permission: BrowserExtensionNamespacePermission | undefined
+): void {
+  if (!extensionHasNamespacePermission(caller.extension, permission, caller.session)) {
+    const name = [permission].flat()[0]
+    throw new BrowserExtensionApiError(`This API requires the "${name}" permission`)
   }
 }
 

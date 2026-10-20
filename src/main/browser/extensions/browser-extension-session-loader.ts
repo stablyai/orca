@@ -8,6 +8,7 @@ import { isBrowserExtensionSupportEnabled } from './browser-extension-support'
 import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
 import { getBrowserExtensionProfileStateStore } from './browser-extension-profile-state-store'
 import { getBrowserExtensionSyncStorageStore } from './browser-extension-sync-storage-store'
+import { getBrowserExtensionDnrStore } from './browser-extension-dnr-store'
 import {
   attachBrowserExtensionApiHostToSession,
   forgetBrowserExtensionContexts
@@ -36,7 +37,7 @@ type ProfileSessionState = {
 
 /** Per-session services and per-extension restart restore, supplied by browser-extension-startup. */
 export type BrowserExtensionSessionHooks = {
-  attached: (sess: Electron.Session, profileId: string) => void
+  attached: (sess: Electron.Session, profileId: string, enabledExtensionIds: string[]) => void
   /** Runs after each startup load; resolves when restored state is back in place. */
   loaded: (
     sess: Electron.Session,
@@ -188,7 +189,7 @@ export function attachBrowserExtensionsToProfileSession(
   const sess = session.fromPartition(profile.partition)
   registerExtensionPreload(sess)
   attachBrowserExtensionApiHostToSession(sess, profile.id)
-  sessionHooks?.attached(sess, profile.id)
+  sessionHooks?.attached(sess, profile.id, enabledExtensionIds)
   const store = getBrowserExtensionInstallStore()
   const installedIds = new Set(store.list().map((extension) => extension.id))
   const loading = removeOrphanedBrowserExtensionStorage(sess.getStoragePath(), installedIds)
@@ -226,12 +227,18 @@ export async function detachBrowserExtensionsFromProfileSession(
   stateByProfileId.delete(profile.id)
   getBrowserExtensionProfileStateStore().forgetProfile(profile.id)
   getBrowserExtensionSyncStorageStore().forgetProfile(profile.id)
+  getBrowserExtensionDnrStore().forgetProfile(profile.id)
   forgetBrowserExtensionLoadFailures({ profileId: profile.id })
   await state.loading
   for (const extension of state.session.extensions.getAllExtensions()) {
     state.session.extensions.removeExtension(extension.id)
   }
   forgetBrowserExtensionContexts(state.session)
+}
+
+/** One profile session's startup loads, restore hooks included. */
+export function whenBrowserExtensionProfileLoaded(profileId: string): Promise<void> {
+  return stateByProfileId.get(profileId)?.loading ?? Promise.resolve()
 }
 
 /** Startup waits briefly so restored tabs get content scripts; a slow load never blocks launch. */

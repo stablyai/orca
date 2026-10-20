@@ -3063,6 +3063,8 @@
       "popupBlocked": "Popup blocked: {{origin}}"
     },
     "loadFailure": {
+      "blockedDescription": "An extension blocked this page. To open it, allow this site in the extension, then retry.",
+      "blockedTitle": "{{host}} is blocked",
       "cantLoadPage": "Can't load this page",
       "dnsDescription": "Check the address for typos.",
       "dnsTitle": "Couldn't find {{host}}",

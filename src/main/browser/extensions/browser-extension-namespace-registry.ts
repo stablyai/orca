@@ -23,9 +23,12 @@ export type BrowserExtensionMethod = {
   invoke: (caller: BrowserExtensionCaller, rawArgs: unknown[]) => unknown
 }
 
+/** One permission, or any of several (declarativeNetRequest or its WithHostAccess form). */
+export type BrowserExtensionNamespacePermission = string | readonly string[]
+
 export type BrowserExtensionNamespace = {
   /** Manifest permission the caller must declare; omit for always-available namespaces. */
-  permission?: string
+  permission?: BrowserExtensionNamespacePermission
   methods: Record<string, BrowserExtensionMethod>
   /** Event names (e.g. 'onCreated') main may emit through emitBrowserExtensionEvent. */
   events: readonly string[]
@@ -95,4 +98,15 @@ export function extensionHasPermission(
     return true
   }
   return Boolean(session && grantedPermissionsLookup?.(extension, session).includes(permission))
+}
+
+export function extensionHasNamespacePermission(
+  extension: Electron.Extension,
+  permission: BrowserExtensionNamespacePermission | undefined,
+  session?: Electron.Session
+): boolean {
+  return (
+    permission === undefined ||
+    [permission].flat().some((name) => extensionHasPermission(extension, name, session))
+  )
 }

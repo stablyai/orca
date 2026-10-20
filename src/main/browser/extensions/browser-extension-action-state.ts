@@ -27,12 +27,32 @@ type Overrides = Partial<BrowserExtensionActionDetails>
 export class BrowserExtensionActionState {
   private global: Overrides = {}
   private readonly byTab = new Map<number, Overrides>()
+  /** declarativeNetRequest action counts shown as badge text (displayActionCountAsBadgeText). */
+  private readonly actionCountByTab = new Map<number, number>()
 
   constructor(private readonly defaults: BrowserExtensionActionDetails) {}
 
   get(tabId?: number | null): BrowserExtensionActionDetails {
     const tab = tabId == null ? undefined : this.byTab.get(tabId)
-    return { ...this.defaults, ...this.global, ...tab }
+    const details = { ...this.defaults, ...this.global, ...tab }
+    const count = tabId == null ? 0 : (this.actionCountByTab.get(tabId) ?? 0)
+    // Why: a tab's own badge text beats the count; the count beats the global text (Chrome).
+    return count > 0 && tab?.badgeText === undefined
+      ? { ...details, badgeText: String(count) }
+      : details
+  }
+
+  /** Returns whether the shown count changed; 0 hides it. */
+  setActionCount(tabId: number, count: number): boolean {
+    if ((this.actionCountByTab.get(tabId) ?? 0) === count) {
+      return false
+    }
+    if (count > 0) {
+      this.actionCountByTab.set(tabId, count)
+    } else {
+      this.actionCountByTab.delete(tabId)
+    }
+    return true
   }
 
   /** null clears: a tab value falls back to the global one, a global value to the manifest's. */
@@ -52,9 +72,17 @@ export class BrowserExtensionActionState {
     }
   }
 
+  /** Returns whether any count was shown. */
+  clearActionCounts(): boolean {
+    const had = this.actionCountByTab.size > 0
+    this.actionCountByTab.clear()
+    return had
+  }
+
   /** Returns whether the tab had overrides, so callers only repaint when something changed. */
   forgetTab(tabId: number): boolean {
-    return this.byTab.delete(tabId)
+    const hadCount = this.actionCountByTab.delete(tabId)
+    return this.byTab.delete(tabId) || hadCount
   }
 
   private tabOverrides(tabId: number): Overrides {

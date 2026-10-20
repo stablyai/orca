@@ -5,15 +5,14 @@ import {
 } from './browser-extension-permission-messages'
 
 describe('extension permission messages', () => {
-  it('does not promise blocking Orca does not do, and says so in one line', () => {
+  it('lists content blocking the way Chrome does, now that Orca enforces it', () => {
     // uBlock Origin Lite's permissions.
     const permissions = ['activeTab', 'declarativeNetRequest', 'scripting', 'storage']
     expect(describeBrowserExtensionAccess(permissions, ['<all_urls>'])).toEqual([
-      'Read and change all your data on all websites'
+      'Read and change all your data on all websites',
+      'Block content on any page'
     ])
-    expect(describeUnsupportedBrowserExtensionFeatures(permissions)).toBe(
-      'Not available in Orca yet: blocking content.'
-    )
+    expect(describeUnsupportedBrowserExtensionFeatures(permissions)).toBeNull()
   })
 
   it('names every unsupported feature once and stays silent when there are none', () => {
@@ -24,7 +23,7 @@ describe('extension permission messages', () => {
         'identity.email',
         'declarativeNetRequestWithHostAccess'
       ])
-    ).toBe('Not available in Orca yet: extension sign-in, blocking content.')
+    ).toBe('Not available in Orca yet: extension sign-in.')
     expect(describeUnsupportedBrowserExtensionFeatures(['tabs', 'storage'])).toBeNull()
     expect(describeBrowserExtensionAccess(['tabs', 'webNavigation', 'storage'], [])).toEqual([
       'Read your browsing history'

@@ -50,6 +50,8 @@ export function emptyBrowserExtensionProfileState(): BrowserExtensionProfileStat
 export class BrowserExtensionProfileStateStore {
   private cache: StateFile | null = null
   private timer: NodeJS.Timeout | null = null
+  /** Bumped by every change, so hot paths can cache what they derive from the state. */
+  revision = 0
 
   constructor(private readonly rootDirectory: string) {}
 
@@ -104,6 +106,7 @@ export class BrowserExtensionProfileStateStore {
 
   // Why debounce: extensions create menus item by item at startup.
   private schedulePersist(): void {
+    this.revision++
     if (this.timer) {
       return
     }

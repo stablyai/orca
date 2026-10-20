@@ -5,7 +5,7 @@ import {
 } from '../../../shared/browser-extension-channels'
 import { getChromeExtensionOrigin } from '../../../shared/browser-extension-url'
 import {
-  extensionHasPermission,
+  extensionHasNamespacePermission,
   getBrowserExtensionNamespace
 } from './browser-extension-namespace-registry'
 import {
@@ -263,6 +263,21 @@ export type BrowserExtensionEventArgs =
   | unknown[]
   | ((extension: Electron.Extension, session: Electron.Session) => unknown[] | null)
 
+function listeningExtensionIds(state: HostSessionState, key: string): Set<string> {
+  const contexts = [...state.workers.values(), ...state.frames.values()]
+  return new Set(contexts.filter((c) => c.events.has(key)).map((c) => c.extensionId))
+}
+
+/** Cheap pre-check for hot paths (webRequest) before they build an event's details. */
+export function browserExtensionEventHasListener(
+  sess: Electron.Session,
+  namespace: string,
+  event: string
+): boolean {
+  const state = stateBySession.get(sess)
+  return state !== undefined && listeningExtensionIds(state, eventKey(namespace, event)).size > 0
+}
+
 export function dispatchBrowserExtensionEvent(
   target: BrowserExtensionEventTarget,
   namespace: string,
@@ -277,11 +292,16 @@ export function dispatchBrowserExtensionEvent(
     if (target.session && target.session !== sess) {
       continue
     }
-    for (const extension of sess.extensions.getAllExtensions()) {
-      if (target.extensionId && extension.id !== target.extensionId) {
+    // Why: getAllExtensions() copies every manifest out of C++; webRequest fires this per request.
+    for (const extensionId of listeningExtensionIds(state, key)) {
+      if (target.extensionId && extensionId !== target.extensionId) {
         continue
       }
-      if (permission && !extensionHasPermission(extension, permission, sess)) {
+      const extension = sess.extensions.getExtension(extensionId)
+      if (!extension) {
+        continue
+      }
+      if (!extensionHasNamespacePermission(extension, permission, sess)) {
         continue
       }
       const worker = target.exceptCaller?.fromWorker ? undefined : state.workers.get(extension.id)

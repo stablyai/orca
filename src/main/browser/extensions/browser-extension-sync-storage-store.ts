@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
 
-const DIRECTORY_NAME = 'sync-storage'
+const SYNC_STORAGE_DIRECTORY = 'sync-storage'
 const PERSIST_DELAY_MS = 250
 
 export type BrowserExtensionSyncItems = Record<string, unknown>
@@ -24,7 +24,11 @@ export class BrowserExtensionSyncStorageStore {
   private readonly dirty = new Map<string, Set<string>>()
   private timer: NodeJS.Timeout | null = null
 
-  constructor(private readonly rootDirectory: string) {}
+  constructor(
+    private readonly rootDirectory: string,
+    /** declarativeNetRequest state reuses this store under its own directory. */
+    private readonly directoryName = SYNC_STORAGE_DIRECTORY
+  ) {}
 
   read(profileId: string, extensionId: string): BrowserExtensionSyncItems {
     let byExtension = this.cache.get(profileId)
@@ -58,12 +62,12 @@ export class BrowserExtensionSyncStorageStore {
     }
     let profileDirectories: string[]
     try {
-      profileDirectories = readdirSync(join(this.rootDirectory, DIRECTORY_NAME))
+      profileDirectories = readdirSync(join(this.rootDirectory, this.directoryName))
     } catch {
       return
     }
     for (const directory of profileDirectories) {
-      rmSync(join(this.rootDirectory, DIRECTORY_NAME, directory, this.fileName(extensionId)), {
+      rmSync(join(this.rootDirectory, this.directoryName, directory, this.fileName(extensionId)), {
         force: true
       })
     }
@@ -119,7 +123,7 @@ export class BrowserExtensionSyncStorageStore {
   }
 
   private profileDirectory(profileId: string): string {
-    return join(this.rootDirectory, DIRECTORY_NAME, encodeURIComponent(profileId))
+    return join(this.rootDirectory, this.directoryName, encodeURIComponent(profileId))
   }
 
   private fileName(extensionId: string): string {

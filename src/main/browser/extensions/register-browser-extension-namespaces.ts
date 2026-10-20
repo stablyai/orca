@@ -2,6 +2,7 @@ import { registerActionNamespace } from './api/action'
 import { registerCommandsNamespace } from './api/commands'
 import { registerContextMenusNamespace } from './api/context-menus'
 import { registerCookiesNamespace } from './api/cookies'
+import { registerDeclarativeNetRequestNamespace } from './api/declarative-net-request'
 import { registerDownloadsNamespace } from './api/downloads'
 import { registerExtensionNamespace } from './api/extension'
 import { registerManagementNamespace } from './api/management'
@@ -39,4 +40,5 @@ export function registerBrowserExtensionNamespaces(): void {
   registerStorageSyncNamespace()
   registerNativeMessagingNamespace()
   registerManagementNamespace()
+  registerDeclarativeNetRequestNamespace()
 }

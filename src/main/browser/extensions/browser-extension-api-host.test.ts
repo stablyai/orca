@@ -116,7 +116,7 @@ describe('preload API surface', () => {
         Object.keys(namespace?.methods ?? {}).sort()
       )
       expect([...spec.events].sort(), name).toEqual([...(namespace?.events ?? [])].sort())
-      expect(spec.permission, name).toBe(namespace?.permission)
+      expect(spec.permission, name).toEqual(namespace?.permission)
     }
   })
 })

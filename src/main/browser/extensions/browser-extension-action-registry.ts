@@ -26,6 +26,22 @@ export function notifyBrowserExtensionActionsChanged(profileId: string): void {
   }
 }
 
+// Why 250ms: blocked-request counts change per request; the toolbar needs a few repaints a second.
+const COALESCED_NOTIFY_MS = 250
+const coalescedProfileIds = new Set<string>()
+
+/** For bursts of changes (declarativeNetRequest action counts): one repaint per interval. */
+export function notifyBrowserExtensionActionsChangedSoon(profileId: string): void {
+  if (coalescedProfileIds.has(profileId)) {
+    return
+  }
+  coalescedProfileIds.add(profileId)
+  setTimeout(() => {
+    coalescedProfileIds.delete(profileId)
+    notifyBrowserExtensionActionsChanged(profileId)
+  }, COALESCED_NOTIFY_MS)
+}
+
 /** Loading, enabling or removing an extension changes which buttons a profile's toolbar shows. */
 export function observeBrowserExtensionActionSession(sess: Electron.Session): void {
   if (observedSessions.has(sess)) {

@@ -22,8 +22,8 @@ export type BrowserExtensionSurfaceMethod = {
 }
 
 export type BrowserExtensionSurfaceNamespace = {
-  /** Installed only when the manifest declares it; main enforces the same rule. */
-  permission?: string
+  /** Installed only when the manifest declares it (any one of a list); main enforces the same rule. */
+  permission?: string | readonly string[]
   /** Installed only when the manifest has this top-level key (chrome.action needs "action"). */
   manifestKey?: string
   methods: Record<string, BrowserExtensionSurfaceMethod>
@@ -211,6 +211,39 @@ export const BROWSER_EXTENSION_API_SURFACE: BrowserExtensionSurface = {
     permission: 'downloads',
     methods: { download: {} },
     events: ['onCreated', 'onChanged']
+  },
+  // Electron's native methods succeed but enforce nothing; onRuleMatchedDebug stays native.
+  declarativeNetRequest: {
+    permission: ['declarativeNetRequest', 'declarativeNetRequestWithHostAccess'],
+    methods: {
+      updateDynamicRules: {},
+      getDynamicRules: {},
+      updateSessionRules: {},
+      getSessionRules: {},
+      updateEnabledRulesets: {},
+      getEnabledRulesets: {},
+      updateStaticRules: {},
+      getDisabledRuleIds: {},
+      getAvailableStaticRuleCount: {},
+      isRegexSupported: {},
+      testMatchOutcome: {},
+      setExtensionActionOptions: {},
+      getMatchedRules: {}
+    },
+    events: [],
+    constants: {
+      GUARANTEED_MINIMUM_STATIC_RULES: 30_000,
+      MAX_NUMBER_OF_DYNAMIC_AND_SESSION_RULES: 5000,
+      MAX_NUMBER_OF_DYNAMIC_RULES: 30_000,
+      MAX_NUMBER_OF_UNSAFE_DYNAMIC_RULES: 5000,
+      MAX_NUMBER_OF_SESSION_RULES: 5000,
+      MAX_NUMBER_OF_UNSAFE_SESSION_RULES: 5000,
+      GETMATCHEDRULES_QUOTA_INTERVAL: 10,
+      MAX_GETMATCHEDRULES_CALLS_PER_INTERVAL: 20,
+      MAX_NUMBER_OF_REGEX_RULES: 1000,
+      MAX_NUMBER_OF_STATIC_RULESETS: 100,
+      MAX_NUMBER_OF_ENABLED_STATIC_RULESETS: 50
+    }
   },
   // Added beside Electron's native getSelf/uninstallSelf.
   management: {

@@ -8,6 +8,12 @@ import {
   forgetBrowserExtensionContentScriptRestore,
   restoreBrowserExtensionContentScripts
 } from './api/scripting'
+import { setBrowserSessionRequestDecider } from '../browser-session-request-decisions'
+import { browserExtensionDnrRequestDecider } from './browser-extension-dnr-requests'
+import {
+  attachBrowserExtensionDnr,
+  whenBrowserExtensionDnrLoaded
+} from './browser-extension-dnr-session'
 import { setBrowserExtensionSessionHooks } from './browser-extension-session-loader'
 import {
   installBrowserExtensionWebRequestForwarding,
@@ -34,24 +40,30 @@ function resolveExtensionDownloadOwner(webContentsId: number): string | null {
     : null
 }
 
-/** Wires cookie and request observers into each extension session and restores scripts on load. */
+/** Wires cookie, request and content-blocking services into each extension session; restores scripts on load. */
 export function installBrowserExtensionSessionServices(): void {
   installBrowserExtensionWebRequestForwarding()
+  setBrowserSessionRequestDecider(browserExtensionDnrRequestDecider)
   browserManager.setUnownedDownloadOwnerResolver(resolveExtensionDownloadOwner)
   setBrowserExtensionSessionHooks({
-    attached: (sess) => {
+    attached: (sess, profileId, enabledExtensionIds) => {
       observeBrowserExtensionCookieChanges(sess)
       observeBrowserExtensionWebRequests(sess)
+      attachBrowserExtensionDnr(sess, profileId, enabledExtensionIds)
       sess.extensions.on('extension-unloaded', (_event, extension) =>
         forgetBrowserExtensionContentScriptRestore(sess, extension.id)
       )
     },
-    loaded: (sess, profileId, extension) =>
-      restoreBrowserExtensionContentScripts(
-        sess,
-        profileId,
-        extension,
-        CONTENT_SCRIPT_RESTORE_TIMEOUT_MS
-      )
+    loaded: async (sess, profileId, extension) => {
+      await Promise.all([
+        restoreBrowserExtensionContentScripts(
+          sess,
+          profileId,
+          extension,
+          CONTENT_SCRIPT_RESTORE_TIMEOUT_MS
+        ),
+        whenBrowserExtensionDnrLoaded(sess)
+      ])
+    }
   })
 }

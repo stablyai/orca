@@ -9,6 +9,7 @@ import { registerBrowserExtensionNamespaces } from './register-browser-extension
 import { observeBrowserExtensionTabLifecycle } from './api/tabs-lifecycle'
 import { observeBrowserExtensionWebNavigation } from './api/web-navigation'
 import { observeBrowserExtensionCommands } from './api/commands'
+import { observeBrowserExtensionDnrContents } from './browser-extension-dnr-session'
 import { installBrowserExtensionSessionServices } from './browser-extension-session-services'
 import { installBrowserExtensionToolbarNotifications } from './browser-extension-toolbar'
 import { installChromeWebStoreBridgeHost } from './browser-extension-webstore-bridge-host'
@@ -57,6 +58,7 @@ export function initializeBrowserExtensionSupport(options: {
     }
     observeBrowserExtensionWebNavigation(contents)
     observeBrowserExtensionTabLifecycle(contents)
+    observeBrowserExtensionDnrContents(contents)
     observeBrowserExtensionCommands(contents)
   })
 }

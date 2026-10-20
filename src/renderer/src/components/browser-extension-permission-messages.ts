@@ -120,8 +120,6 @@ export function describeBrowserExtensionAccess(
 
 function featureLabel(feature: UnsupportedBrowserExtensionFeature): string {
   switch (feature) {
-    case 'contentBlocking':
-      return translate('browserExtensions.unsupported.contentBlocking', 'blocking content')
     case 'identity':
       return translate('browserExtensions.unsupported.identity', 'extension sign-in')
   }

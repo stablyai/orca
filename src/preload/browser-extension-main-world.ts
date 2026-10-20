@@ -279,7 +279,7 @@ export function installBrowserExtensionApis(
     Array.isArray(list) ? list : []
   )
   for (const [namespace, spec] of Object.entries(surface)) {
-    if (spec.permission && !permissions.includes(spec.permission)) {
+    if (spec.permission && ![spec.permission].flat().some((name) => permissions.includes(name))) {
       continue
     }
     if (spec.manifestKey && !(spec.manifestKey in manifest)) {

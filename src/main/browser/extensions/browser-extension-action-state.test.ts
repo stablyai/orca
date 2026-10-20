@@ -61,6 +61,24 @@ describe('chrome.action state', () => {
     expect(state.get(7).badgeText).toBe('')
     expect(state.forgetTab(7)).toBe(false)
   })
+
+  it('shows a blocked-request count over the global text, under the tab text', () => {
+    const state = stateFor({ action: {} })
+    state.set('badgeText', 'on')
+    expect(state.setActionCount(7, 12)).toBe(true)
+    expect(state.setActionCount(7, 12)).toBe(false)
+    expect([state.get(7).badgeText, state.get(8).badgeText, state.get().badgeText]).toEqual([
+      '12',
+      'on',
+      'on'
+    ])
+    state.set('badgeText', 'mine', 7)
+    expect(state.get(7).badgeText).toBe('mine')
+    expect(state.forgetTab(7)).toBe(true)
+    state.setActionCount(7, 3)
+    expect(state.clearActionCounts()).toBe(true)
+    expect(state.get(7).badgeText).toBe('on')
+  })
 })
 
 describe('badge colors', () => {

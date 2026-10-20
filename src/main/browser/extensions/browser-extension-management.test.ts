@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => {
   const records = new Map<string, Record<string, unknown>>()
   return {
     records,
+    forgetDnrState: vi.fn(),
     sessions: [{ name: 'default' }, { name: 'work' }],
     store: {
       get: (id: string) => records.get(id) ?? null,
@@ -65,6 +66,9 @@ vi.mock('./browser-extension-profile-state-store', () => ({
 vi.mock('./browser-extension-sync-storage-store', () => ({
   getBrowserExtensionSyncStorageStore: () => ({ forgetExtension: vi.fn() })
 }))
+vi.mock('./browser-extension-dnr-store', () => ({
+  getBrowserExtensionDnrStore: () => ({ forgetExtension: mocks.forgetDnrState })
+}))
 vi.mock('./browser-extension-webstore-events', () => ({
   notifyChromeWebStoreUninstalled: vi.fn()
 }))
@@ -92,6 +96,7 @@ describe('removeBrowserExtension', () => {
       [mocks.sessions[1], ID]
     ])
     expect(mocks.store.remove).toHaveBeenCalledWith(ID)
+    expect(mocks.forgetDnrState).toHaveBeenCalledWith(ID)
   })
 
   it('still removes the extension when one profile cannot clear its data', async () => {
