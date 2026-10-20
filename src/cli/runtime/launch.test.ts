@@ -9,8 +9,10 @@ import {
   getServeUpdateHandoffPath,
   parseServeUpdateHandoffState
 } from '../../shared/serve-update-handoff'
-import { readServeUpdateHandoff } from './serve-update-handoff-file'
-import { SERVE_REPLACEMENT_READY_TIMEOUT_MS } from './serve-update-supervisor'
+import {
+  readServeUpdateHandoff,
+  SERVE_REPLACEMENT_READY_TIMEOUT_MS
+} from './serve-update-supervisor'
 
 const { spawnMock, spawnSyncMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),

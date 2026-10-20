@@ -18,8 +18,11 @@ import { needsElectronNoSandbox } from './electron-sandbox-switch'
 import { getMacAppBundlePath } from './mac-app-update-bundle'
 import { getPlatformUserDataPath } from './metadata'
 import { isSameUserDataPath } from '../../shared/serve-user-data-path'
-import { readServeUpdateHandoffSync } from './serve-update-handoff-file'
-import { resumeInterruptedServeUpdate, superviseForegroundServe } from './serve-update-supervisor'
+import {
+  readServeUpdateHandoffSync,
+  resumeInterruptedServeUpdate,
+  superviseForegroundServe
+} from './serve-update-supervisor'
 import { RuntimeClientError } from './types'
 import { SERVE_RUNTIME_ELECTRON, SERVE_RUNTIME_ENV } from '../../shared/orcad-local-serve-selection'
 import { findBundledWebClientRoot } from '../../shared/bundled-web-client-root'
@@ -37,10 +40,12 @@ import { reexecThisServeUnderInitReaper } from './serve-pid1-init-reaper'
 import { supervisedAppImageUpdate } from './serve-appimage-update'
 import {
   relocateThisServeSupervisor,
-  noteServeSupervisorStart,
-  restartThisServeSupervisorIfReplaced,
   SERVE_SUPERVISOR_APP_ROOT_ENV
 } from './serve-supervisor-relocation'
+import {
+  noteServeSupervisorStart,
+  restartThisServeSupervisorIfReplaced
+} from './serve-replaced-app-restart'
 import { serverOnlyServeMessage } from './serve-app-launcher'
 import { isSupervisedSpawnHeld } from './serve-supervised-stop'
 import { openServeBundlePark } from '../../shared/serve-bundle-park'
@@ -255,14 +260,18 @@ function spawnElectronServe(
           : 'inherit',
     env: childEnv
   }
-  const spawnServeChild: ServeSpawnChild = shouldRedactSupervisedStdout(args.supervise === true)
+  const spawnServer: ServeSpawnChild = shouldRedactSupervisedStdout(args.supervise === true)
     ? redactingSpawn(spawnProcess)
     : spawnProcess
-  // Why only our own executable: an override is a separate program the update does not delete.
-  const restartIfReplaced =
+  // Why in the spawn: every server start (first, resumed, after an install or a park) passes here,
+  // after its stop and park gates. Only our own executable: an update never deletes an override.
+  const spawnServeChild: ServeSpawnChild =
     handoffPath && executable === process.execPath
-      ? () => restartThisServeSupervisorIfReplaced(resolveAppRoot())
-      : null
+      ? (childSpec) => {
+          restartThisServeSupervisorIfReplaced(resolveAppRoot())
+          return spawnServer(childSpec)
+        }
+      : spawnServer
   const interruptedHandoff = handoffPath ? readServeUpdateHandoffSync(handoffPath) : null
   if (interruptedHandoff?.phase === 'install-requested') {
     // Why: the node-mode CLI is not an NSRunningApplication, so it can retain launchd ownership while ShipIt swaps the app.
@@ -270,15 +279,12 @@ function spawnElectronServe(
       spec,
       spawnChild: spawnServeChild,
       handoffPath: handoffPath!,
-      handoff: interruptedHandoff,
-      restartIfReplaced
+      handoff: interruptedHandoff
     })
   }
   if (isSupervisedSpawnHeld()) {
     return Promise.resolve(0)
   }
-  // Why every attempt: a desktop install swaps the app under a parked service without a handoff.
-  restartIfReplaced?.()
   const child = spawnServeChild(spec)
   const spawnedAt = Date.now()
 
@@ -290,8 +296,7 @@ function spawnElectronServe(
     spawnChild: spawnServeChild,
     child,
     handoffPath,
-    expectedHandoff: null,
-    restartIfReplaced
+    expectedHandoff: null
   }).catch((error: unknown) => {
     // Why only a prompt abort: the registration abort kills the child before any JS runs.
     if (error instanceof MacServeStartupAbortError && Date.now() - spawnedAt < STARTUP_ABORT_MS) {

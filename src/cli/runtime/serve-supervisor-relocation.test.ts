@@ -1,16 +1,18 @@
 import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   SERVE_SUPERVISOR_APP_ROOT_ENV,
   relocateServeSupervisor,
-  restartServeSupervisorIfReplaced,
   serveSupervisorSnapshotRoot,
-  type SupervisorRelocationDeps,
-  type SupervisorRestartDeps
+  type SupervisorRelocationDeps
 } from './serve-supervisor-relocation'
+import {
+  restartServeSupervisorIfReplaced,
+  type ReplacedAppRestartDeps
+} from './serve-replaced-app-restart'
 
 describe('relocateServeSupervisor', () => {
   let root: string
@@ -163,12 +165,17 @@ describe('relocateServeSupervisor', () => {
 
   describe('restartServeSupervisorIfReplaced', () => {
     const log = vi.fn()
+    beforeEach(async () => {
+      await mkdir(join(root, 'Orca.app', 'Contents', 'MacOS'), { recursive: true })
+      await writeFile(deps().execPath, '')
+      await chmod(deps().execPath, 0o755)
+    })
     const restart = (
       env: NodeJS.ProcessEnv,
       argv: string[],
-      overrides: Partial<SupervisorRestartDeps> = {}
+      overrides: Partial<ReplacedAppRestartDeps> = {}
     ) => {
-      const d: SupervisorRestartDeps = {
+      const d: ReplacedAppRestartDeps = {
         env,
         execPath: deps().execPath,
         execArgv: [],
@@ -178,8 +185,6 @@ describe('relocateServeSupervisor', () => {
         execve: vi.fn(),
         log,
         startedFrom: 'old',
-        identify: () => 'new',
-        canExecute: () => true,
         ...overrides
       }
       restartServeSupervisorIfReplaced(d)
@@ -197,15 +202,20 @@ describe('relocateServeSupervisor', () => {
 
     it('does not restart when the executable is the one it started from, as after a restart', () => {
       const argv = ['/ignored', appCli(), 'serve']
-      expect(restart({}, argv, { identify: () => 'old' }).execve).not.toHaveBeenCalled()
+      const installed = statSync(deps().execPath)
+      const startedFrom = `${installed.dev}:${installed.ino}`
+      expect(restart({}, argv, { startedFrom }).execve).not.toHaveBeenCalled()
       expect(restart({}, argv, { startedFrom: null }).execve).not.toHaveBeenCalled()
-      expect(restart({}, argv, { identify: () => null }).execve).not.toHaveBeenCalled()
+      const gone = join(root, 'gone')
+      expect(restart({}, argv, { execPath: gone }).execve).not.toHaveBeenCalled()
     })
 
     // Why: a failed process.execve aborts natively, so nothing may reach it that cannot run.
-    it('keeps running and logs when the installed app cannot run yet', () => {
+    it('keeps running and logs when the installed app cannot run yet', async () => {
       const argv = ['/ignored', appCli(), 'serve']
-      expect(restart({}, argv, { canExecute: () => false }).execve).not.toHaveBeenCalled()
+      await chmod(deps().execPath, 0o644)
+      expect(restart({}, argv).execve).not.toHaveBeenCalled()
+      await chmod(deps().execPath, 0o755)
       expect(
         restart({}, ['/ignored', join(root, 'gone.js'), 'serve']).execve
       ).not.toHaveBeenCalled()

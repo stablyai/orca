@@ -1,15 +1,16 @@
 import type { ChildProcessHandle, ProcessSpec } from '@orca/process-host/process-spec'
-import { parseServeSupervisorMessage } from '../../shared/serve-update-handoff'
+import { readFileSync } from 'node:fs'
+import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import {
+  parseServeSupervisorMessage,
+  parseServeUpdateHandoffState,
+  type ServeUpdateHandoffState
+} from '../../shared/serve-update-handoff'
 import {
   QUIT_RENDERER_ACK_TIMEOUT_MS,
   WILL_QUIT_TEARDOWN_DEADLINE_MS
 } from '../../shared/quit-teardown-deadline'
 import { serveSignalExitError } from './serve-signal-exit-diagnostic'
-import {
-  completeServeUpdateHandoff,
-  readServeUpdateHandoff,
-  recordServeUpdateHandoffFailure
-} from './serve-update-handoff-file'
 import { waitForMacBundleVersion } from './mac-app-update-bundle'
 import {
   mayRespawn,
@@ -35,8 +36,6 @@ type ServeSupervisorArgs = {
   spec: ProcessSpec
   spawnChild: (spec: ProcessSpec) => ChildProcessHandle
   handoffPath: string | null
-  /** macOS: re-runs this process if an update replaced its executable; returns when it did not. */
-  restartIfReplaced?: (() => void) | null
 }
 
 export async function resumeInterruptedServeUpdate(
@@ -50,8 +49,6 @@ export async function resumeInterruptedServeUpdate(
   if (!(await mayRespawn())) {
     return 0
   }
-  // Why: this process may have started on the old app before the install replaced it.
-  args.restartIfReplaced?.()
   const child = args.spawnChild(args.spec)
   return superviseForegroundServe({ ...args, child, expectedHandoff })
 }
@@ -126,8 +123,6 @@ export async function superviseForegroundServe(
         if (!(await mayRespawn())) {
           return 0
         }
-        // Why: TCC charges every descendant to this process, whose executable the update deleted.
-        args.restartIfReplaced?.()
         child = args.spawnChild(args.spec)
     }
   }
@@ -265,4 +260,54 @@ function waitForForegroundChild(
     })
     child.once('exit', handleExit)
   })
+}
+
+export async function readServeUpdateHandoff(
+  handoffPath: string
+): Promise<ServeUpdateHandoffState | null> {
+  try {
+    return parseServeUpdateHandoffState(JSON.parse(await readFile(handoffPath, 'utf8')))
+  } catch {
+    return null
+  }
+}
+
+export function readServeUpdateHandoffSync(handoffPath: string): ServeUpdateHandoffState | null {
+  try {
+    return parseServeUpdateHandoffState(JSON.parse(readFileSync(handoffPath, 'utf8')))
+  } catch {
+    return null
+  }
+}
+
+export async function completeServeUpdateHandoff(
+  handoffPath: string,
+  state: InstallRequestedHandoff,
+  runtimeId: string
+): Promise<void> {
+  await writeServeUpdateHandoffState(handoffPath, {
+    ...state,
+    phase: 'completed',
+    runtimeId
+  })
+  await unlink(handoffPath).catch(() => undefined)
+}
+
+export async function recordServeUpdateHandoffFailure(
+  handoffPath: string,
+  state: Extract<ServeUpdateHandoffState, { phase: 'install-requested' }>,
+  reason: string
+): Promise<void> {
+  const failedState: ServeUpdateHandoffState = { ...state, phase: 'failed', reason }
+  await writeServeUpdateHandoffState(handoffPath, failedState)
+  process.stderr.write(`[serve] update handoff failed: ${reason}\n`)
+}
+
+async function writeServeUpdateHandoffState(
+  handoffPath: string,
+  state: ServeUpdateHandoffState
+): Promise<void> {
+  const temporaryPath = `${handoffPath}.${process.pid}.tmp`
+  await writeFile(temporaryPath, JSON.stringify(state), { mode: 0o600 })
+  await rename(temporaryPath, handoffPath)
 }
