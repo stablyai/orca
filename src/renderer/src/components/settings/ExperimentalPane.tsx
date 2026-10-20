@@ -53,8 +53,12 @@ export function ExperimentalPane({
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
+  const showSessionsBoard = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().sessionsBoard
+  ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
+  const sessionsBoardEnabled = settings.experimentalSessionsBoard === true
   // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
   // while displaying the same effective clamped value the planner will use.
   const agentHibernationIdleMinutes = Math.round(
@@ -272,6 +276,47 @@ export function ExperimentalPane({
 
       {wslHostsAvailable() ? (
         <WslHostsExperimentalSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
+      {showSessionsBoard ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.ExperimentalPane.sessionsBoard.title',
+            'Sessions board'
+          )}
+          description={translate(
+            'auto.components.settings.ExperimentalPane.sessionsBoard.description',
+            'Board of every agent session on this machine, grouped into a column per agent type.'
+          )}
+          keywords={getExperimentalSearchEntry().sessionsBoard.keywords}
+          className="space-y-3 py-2"
+          id="experimental-sessions-board"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.sessionsBoard.title',
+                  'Sessions board'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.sessionsBoard.copy',
+                  'Adds a Sessions page to the left sidebar listing every agent session found on this machine, one column per agent type. Turning it off hides the page; sessions are never modified.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={sessionsBoardEnabled}
+              ariaLabel={translate(
+                'auto.components.settings.ExperimentalPane.sessionsBoard.toggleLabel',
+                'Toggle sessions board'
+              )}
+              onChange={() => updateSettings({ experimentalSessionsBoard: !sessionsBoardEnabled })}
+            />
+          </div>
+        </SearchableSetting>
       ) : null}
 
       {hiddenExperimentalUnlocked ? <HiddenExperimentalGroup /> : null}

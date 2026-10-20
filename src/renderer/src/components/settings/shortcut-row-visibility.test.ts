@@ -17,13 +17,15 @@ function creationGroup(): ShortcutGroup {
 }
 
 function globalGroup(): ShortcutGroup {
-  const items = (['workspace.openBoard', 'dashboard.toggle'] as const).map((actionId) => {
-    const definition = getKeybindingDefinition(actionId)
-    if (!definition) {
-      throw new Error(`Missing keybinding definition: ${actionId}`)
+  const items = (['workspace.openBoard', 'dashboard.toggle', 'view.sessions'] as const).map(
+    (actionId) => {
+      const definition = getKeybindingDefinition(actionId)
+      if (!definition) {
+        throw new Error(`Missing keybinding definition: ${actionId}`)
+      }
+      return definition
     }
-    return definition
-  })
+  )
   return { title: 'Global', items }
 }
 
@@ -35,6 +37,7 @@ const baseOptions = {
   managedBrowserCreationEnabled: false,
   mobileEmulatorCreationEnabled: false,
   agentDashboardEnabled: false,
+  sessionsBoardEnabled: false,
   settingsSearchQuery: '',
   shortcutQuery: '',
   shortcutFilter: 'all'
@@ -51,6 +54,7 @@ describe('buildShortcutRowVisibility', () => {
       managedBrowserCreationEnabled: false,
       mobileEmulatorCreationEnabled: false,
       agentDashboardEnabled: false,
+      sessionsBoardEnabled: false,
       settingsSearchQuery: '',
       shortcutQuery: '',
       shortcutFilter: 'all'
@@ -77,5 +81,19 @@ describe('buildShortcutRowVisibility', () => {
       'workspace.openBoard',
       'dashboard.toggle'
     ])
+  })
+
+  it('hides the sessions board toggle while its experiment is off', () => {
+    const hidden = buildShortcutRowVisibility({ ...baseOptions, groups: [globalGroup()] })
+
+    expect(hidden.shortcutRows.map((row) => row.item.id)).not.toContain('view.sessions')
+
+    const shown = buildShortcutRowVisibility({
+      ...baseOptions,
+      groups: [globalGroup()],
+      sessionsBoardEnabled: true
+    })
+
+    expect(shown.shortcutRows.map((row) => row.item.id)).toContain('view.sessions')
   })
 })

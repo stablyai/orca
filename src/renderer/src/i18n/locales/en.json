@@ -7686,6 +7686,12 @@
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
+          },
+          "sessionsBoard": {
+            "title": "Sessions board",
+            "description": "Board of every agent session on this machine, grouped into a column per agent type.",
+            "copy": "Adds a Sessions page to the left sidebar listing every agent session found on this machine, one column per agent type. Turning it off hides the page; sessions are never modified.",
+            "toggleLabel": "Toggle sessions board"
           }
         },
         "FloatingWorkspacePane": {
@@ -10163,6 +10169,16 @@
               "board": "board",
               "inWindow": "in-window",
               "worktrees": "worktrees"
+            },
+            "sessionsBoard": {
+              "title": "Sessions board",
+              "description": "Board of every agent session on this machine, grouped into a column per agent type.",
+              "sessions": "sessions",
+              "history": "history",
+              "board": "board",
+              "agent": "agent",
+              "transcript": "transcript",
+              "vault": "vault"
             }
           }
         },
@@ -14324,7 +14340,8 @@
             "resumeInNewNativeChat": "Resume in New Chat",
             "resumeInNewCli": "Resume in New Terminal",
             "resumeInNewCliTooltipFork": "Forks this conversation into a new CLI session.",
-            "resumeInNewCliTooltipChat": "The native chat stays as it is."
+            "resumeInNewCliTooltipChat": "The native chat stays as it is.",
+            "resumeNoSavedConversation": "This session has no saved conversation to resume."
           },
           "AiVaultSessionDeleteDialog": {
             "title": "Delete this session?",
@@ -20496,5 +20513,47 @@
       "errorTitle": "Space hit an error.",
       "errorDescription": "Close and reopen Space to try again."
     }
+  },
+  "sessionsBoard": {
+    "card": {
+      "untitled": "Untitled session",
+      "messageCount": "{{count}} msgs",
+      "moreActions": "More session actions",
+      "copyResume": "Copy resume command",
+      "copySessionId": "Copy session ID",
+      "copyTranscriptPath": "Copy transcript path",
+      "copied": "Copied"
+    },
+    "column": {
+      "ariaLabel": "{{label}} sessions: {{count}}"
+    },
+    "title": "Sessions",
+    "refresh": "Rescan sessions",
+    "close": "Close sessions",
+    "search": "Search sessions",
+    "hideEmpty": "Hide empty sessions",
+    "loadFailed": "The session scan failed: {{error}}",
+    "loading": "Reading every agent session on this machine…",
+    "empty": {
+      "noMatches": "No sessions match this search.",
+      "none": "No agent sessions found on this machine.",
+      "clearSearch": "Clear search"
+    },
+    "scanIssues": "Some locations could not be read ({{count}}).",
+    "conversation": {
+      "retry": "Retry",
+      "ariaLabel": "Read-only conversation",
+      "close": "Close conversation",
+      "loading": "Reading transcript…",
+      "notWritten": "This conversation has not been written to disk yet. Retry once the agent has finished a turn.",
+      "failed": "The transcript failed to load.",
+      "copyPath": "Copy transcript path"
+    },
+    "unsupported": {
+      "notice": "Orca cannot decode {{agent}} transcripts yet, so this is the preview captured during the scan, not the full conversation.",
+      "noPreview": "No conversation preview available.",
+      "truncated": "Older messages fell outside the scan preview window and are not shown."
+    },
+    "navLabel": "Sessions"
   }
 }

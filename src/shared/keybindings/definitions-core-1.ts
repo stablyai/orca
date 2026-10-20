@@ -183,6 +183,17 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'view.sessions',
+    title: 'Open Sessions Board',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'sessions', 'history', 'agents', 'transcript', 'board'],
+    // Why: configurable but unbound by default, matching dashboard.toggle — an
+    // experimental surface must not claim a global chord from terminal users.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
     id: 'sidebar.left.toggle',
     title: 'Toggle Sidebar',
     group: 'Global',

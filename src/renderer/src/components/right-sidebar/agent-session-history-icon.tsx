@@ -2,10 +2,13 @@ import React from 'react'
 
 export function AgentSessionHistoryIcon({
   size = 16,
-  className
+  className,
+  strokeWidth = 2
 }: {
   size?: number
   className?: string
+  /** Matches the activity-bar icons, which thicken the stroke on the active surface. */
+  strokeWidth?: number
 }): React.JSX.Element {
   return (
     <svg
@@ -14,7 +17,7 @@ export function AgentSessionHistoryIcon({
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={2}
+      strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden

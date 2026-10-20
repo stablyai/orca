@@ -25,6 +25,7 @@ import type {
   PhysicalModifierToken
 } from '../../../shared/keybindings'
 import { shortcutPlatform } from './app-window-chrome'
+import { sessionsBoardPageCommand } from './sessions-board-page-command'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -290,6 +291,7 @@ export function createAppCommandHandlers(
         return claim('view.tasks', () => store.openTaskPage())
       }
     ],
+    sessionsBoardPageCommand(activeView, claim),
     [
       'sidebar.right.toggle',
       () =>

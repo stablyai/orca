@@ -5,8 +5,8 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
+import { getSessionsBoardSearchEntry } from './sessions-board-search-entry'
 import { getWslHostsExperimentalSearchEntry } from './wsl-hosts-experimental-search'
-
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     {
@@ -185,7 +185,8 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     // Why: only a Windows desktop shows this toggle, so only there may search find it.
     ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
       ? [getWslHostsExperimentalSearchEntry()]
-      : [])
+      : []),
+    getSessionsBoardSearchEntry()
   ]
 )
 
@@ -229,6 +230,12 @@ export function getExperimentalSearchEntry() {
     ),
     ephemeralVms: findEntry(
       translate('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')
+    ),
+    sessionsBoard: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.sessionsBoard.title',
+        'Sessions board'
+      )
     )
   } as const
 }

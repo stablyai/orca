@@ -107,6 +107,17 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         activeView: state.previousViewBeforeMobile
       })),
     setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
-    clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null })
+    clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
+    openSessionsPage: () => {
+      set((state) => ({
+        activeView: 'sessions',
+        previousViewBeforeSessions:
+          state.activeView === 'sessions' ? state.previousViewBeforeSessions : state.activeView
+      }))
+    },
+    closeSessionsPage: () =>
+      set((state) => ({
+        activeView: state.previousViewBeforeSessions
+      }))
   }
 }

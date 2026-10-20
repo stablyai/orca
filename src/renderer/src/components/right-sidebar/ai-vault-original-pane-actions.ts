@@ -115,7 +115,9 @@ export function useAiVaultOriginalPaneActions(): {
   }
 }
 
-function revealSessionWorkspace(workspaceId: string): boolean {
+/** Shared with any surface that offers "go to where this session ran": the refusal
+ *  wording differs between a folder workspace and a worktree, and only this knows why. */
+export function revealSessionWorkspace(workspaceId: string): boolean {
   if (activateAndRevealWorkspace(workspaceId) !== false) {
     return true
   }

@@ -482,6 +482,10 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
   experimentalAgentDashboardPopout?: boolean
+  /** Experimental: full-page board of every agent session on this machine, one column per
+   *  agent type. The right sidebar's history is workspace-scoped; this is the surface for
+   *  sessions whose working directories live elsewhere. Defaults on in this fork. */
+  experimentalSessionsBoard?: boolean
   /** Set after the one-time legacy Agents tab introduction has been acknowledged. */
   agentsSidebarIntroShown?: boolean
   /** True when the profile previously opted into the legacy Agents view. */

@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { SetupGuideSidebarEntry } from './SetupGuideSidebarEntry'
 import { SidebarTaskNavButton } from './SidebarTaskNavButton'
 import { HideSidebarMenu } from './sidebar-nav-controls'
+import { AgentSessionHistoryIcon } from '@/components/right-sidebar/agent-session-history-icon'
 import { translate } from '@/i18n/i18n'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -46,6 +47,14 @@ export function shouldShowAgentDashboardButton(
   return settings?.experimentalAgentDashboardPopout === true
 }
 
+// Why gated by the flag even though it defaults on: the toggle is the off switch for
+// an unbounded machine-wide scan, so hiding the entry must follow it.
+export function shouldShowSessionsBoardButton(
+  settings: Partial<Pick<GlobalSettings, 'experimentalSessionsBoard'>> | null | undefined
+): boolean {
+  return settings?.experimentalSessionsBoard === true
+}
+
 const AgentDashboardSidebarEntry = lazyWithRetry(() => import('./AgentDashboardSidebarEntry'))
 
 const SidebarNav = React.memo(function SidebarNav() {
@@ -57,10 +66,12 @@ const SidebarNav = React.memo(function SidebarNav() {
   const openMobilePage = useAppStore((s) => s.openMobilePage)
   const openArtifactsPage = useAppStore((s) => s.openArtifactsPage)
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
+  const openSessionsPage = useAppStore((s) => s.openSessionsPage)
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const activeView = useAppStore((s) => s.activeView)
   const showAgentDashboardButton = useAppStore((s) => shouldShowAgentDashboardButton(s.settings))
+  const showSessionsBoardButton = useAppStore((s) => shouldShowSessionsBoardButton(s.settings))
   const showAutomationsButton = useAppStore((s) => shouldShowAutomationsButton(s.settings))
   const showMobileButton = useAppStore((s) => shouldShowMobileButton(s.settings))
   const showArtifactsButton = useAppStore((s) => shouldShowArtifactsButton(s.settings))
@@ -69,6 +80,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const mobileActive = activeView === 'mobile'
   const artifactsActive = activeView === 'artifacts'
   const skillsActive = activeView === 'skills'
+  const sessionsActive = activeView === 'sessions'
   const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton)
   const hideAutomationsButton = React.useCallback(() => {
     void updateSettings({ showAutomationsButton: false })
@@ -176,6 +188,30 @@ const SidebarNav = React.memo(function SidebarNav() {
           </ContextMenuTrigger>
           <HideSidebarMenu onHide={hideSkillsButton} />
         </ContextMenu>
+      ) : null}
+      {/* Why no Hide from menu: Settings → Experimental owns this entry's on/off, so a
+          second per-profile hide would be a switch with no home. */}
+      {showSessionsBoardButton ? (
+        <button
+          type="button"
+          onClick={openSessionsPage}
+          aria-current={sessionsActive ? 'page' : undefined}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+            sessionsActive
+              ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+              : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+          )}
+        >
+          <AgentSessionHistoryIcon
+            className={cn(
+              'size-4 shrink-0',
+              !sessionsActive && 'text-worktree-sidebar-foreground/30'
+            )}
+            strokeWidth={sessionsActive ? 2.25 : 1.75}
+          />
+          <span className="flex-1">{translate('sessionsBoard.navLabel', 'Sessions')}</span>
+        </button>
       ) : null}
       {showAutomationsButton ? (
         <ContextMenu>

@@ -252,6 +252,9 @@ export function buildDefaultSettings(args: {
     experimentalPet: false,
     experimentalActivity: false,
     experimentalActivityDefaultedOffForAllUsers: true,
+    // Why: on, unlike its neighbours — this fork exists to make machine-wide sessions
+    // visible, and the page costs nothing until it is mounted. The toggle turns it off.
+    experimentalSessionsBoard: true,
     experimentalTerminalAttention: false,
     experimentalAgentHibernation: false,
     agentHibernationIdleMs: 30 * 60 * 1000,

@@ -310,6 +310,34 @@ describe('createUISlice settings navigation', () => {
     expect(store.getState().activeView).toBe('activity')
   })
 
+  it('returns to the tasks page after visiting the sessions board', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openSessionsPage()
+
+    expect(store.getState().activeView).toBe('sessions')
+    expect(store.getState().previousViewBeforeSessions).toBe('tasks')
+
+    store.getState().closeSessionsPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('keeps the original return target when the sessions board is reopened while visible', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openSessionsPage()
+    store.getState().openSessionsPage()
+
+    expect(store.getState().previousViewBeforeSessions).toBe('tasks')
+
+    store.getState().closeSessionsPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
   it('clears transient settings search when opening settings', () => {
     const store = createUIStore()
 

@@ -16,6 +16,7 @@ import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   aiVaultResumeInSessionWorkspaceLabel,
+  aiVaultWorktreeJumpTooltip,
   canJumpToAiVaultSessionWorktree,
   resolveAiVaultSessionWorktreeInfo,
   type AiVaultSessionWorktreeInfo
@@ -258,5 +259,35 @@ export function aiVaultSessionResumeLabel(
   return translate(
     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
     'Resume in New Tab'
+  )
+}
+
+/**
+ * Why resume needs its own reason while jump does not: every way a *workspace* can fail to
+ * host a session is already worded for the jump affordance, so only the session-side
+ * refusals are new. A blocked session outranks an empty one — the workspace is the half
+ * the user can act on.
+ */
+export function aiVaultSessionResumeBlockedReason(args: {
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
+  resumeDisabled: boolean
+  resumeBlocked: boolean
+}): string | null {
+  if (!args.resumeDisabled) {
+    return null
+  }
+  if (args.resumeBlocked) {
+    // A workspace the jump can reach but this session's CLI cannot run in is a host mismatch;
+    // anything the jump also refuses is the jump's own reason, said once.
+    return canJumpToAiVaultSessionWorktree(args.worktreeInfo)
+      ? translate(
+          'auto.components.right.sidebar.AiVaultPanel.sessionHostMismatchUnsupported',
+          'This session belongs to a different host. Open a workspace on the same host to resume it.'
+        )
+      : aiVaultWorktreeJumpTooltip(args.worktreeInfo)
+  }
+  return translate(
+    'auto.components.right.sidebar.AiVaultSessionRow.resumeNoSavedConversation',
+    'This session has no saved conversation to resume.'
   )
 }
