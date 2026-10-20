@@ -13,6 +13,7 @@ import {
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
+import { assertMaxLoadNotCombinedWithOn } from './worker-start-host-load'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration-session-caller-codes'
 
@@ -53,6 +54,7 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         )
       }
       await assertWorkerStartTaskSpecWithinPromptBudget(params.spec ?? existingTask!.spec)
+      assertMaxLoadNotCombinedWithOn(params)
       const mode = decideWorkerStartMode({
         params,
         settings: readWorkerStartModeSettings(runtime)

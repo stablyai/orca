@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isValidMaxLoad } from '../host-load-gate'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 
 export const OptionalWorkerLaunchPreference = z
@@ -31,6 +32,14 @@ export const WorkerStartParams = z
     effort: OptionalWorkerLaunchPreference,
     retryOf: OptionalString,
     timeoutMs: OptionalFiniteNumber,
+    // Why: OptionalFiniteNumber erases a present non-number to undefined, turning a malformed gate into no gate.
+    maxLoad: z
+      .unknown()
+      .refine(isValidMaxLoad, {
+        message: '--max-load must be a positive ratio of 1-minute load average to CPU cores'
+      })
+      .transform((value) => (isValidMaxLoad(value) ? value : undefined))
+      .optional(),
     devMode: z.boolean().optional()
   })
   .superRefine((params, ctx) => {

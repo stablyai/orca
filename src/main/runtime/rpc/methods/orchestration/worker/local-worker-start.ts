@@ -35,6 +35,7 @@ import { releaseRetriedWorkerTerminal } from './retried-worker-terminal-release'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
 import { prepareLocalWorkerStart } from './worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
+import { assertWorkerStartHostLoadPermits } from './worker-start-host-load'
 import type { WorkerStartMutation } from './worker-start-mutation'
 
 export async function startLocalWorker(args: {
@@ -113,6 +114,7 @@ export async function startLocalWorker(args: {
       : requestedWorktree === 'current'
         ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
         : await runtime.showManagedTerminalWorkspace(requestedWorktree)
+  await assertWorkerStartHostLoadPermits(runtime, params, { creationWorktree, resolvedWorktree })
   if (terminal) {
     await assertExplicitWorkerUsable({
       runtime,
