@@ -67,18 +67,20 @@ describe('Copilot ACP launch resolution', () => {
       })
       expect(launch.args).not.toContain('--yolo')
       expect(launch.env.COPILOT_HOME).toBe('/home/user/.copilot')
+      expect(launch.env.COPILOT_ALLOW_ALL).toBe('false')
     }
   })
 
-  it("passes the user's own Copilot environment through unchanged", async () => {
+  it("keeps the user's credentials but forces the inherited allow-all switch off", async () => {
     const userEnv = {
       COPILOT_GITHUB_TOKEN: 'copilot-token',
       GH_TOKEN: 'gh-token',
       GITHUB_TOKEN: 'github-token',
-      COPILOT_ALLOW_ALL: 'true',
       COPILOT_MODEL: 'gpt-6-luna'
     }
-    const launch = await resolver(copilotRecord(), { launchEnv: userEnv })({ identity })
+    const launch = await resolver(copilotRecord(), {
+      launchEnv: { ...userEnv, COPILOT_ALLOW_ALL: 'true' }
+    })({ identity })
     // Only the shared pane and hook keys, and inherited scratch folders: this chat has none.
     expect(launch.envToDelete).toEqual([
       ...STRUCTURED_CHILD_ENV_TO_DELETE,
@@ -96,6 +98,8 @@ describe('Copilot ACP launch resolution', () => {
       'darwin'
     ).env
     expect(child).toMatchObject(userEnv)
+    // The inherited switch must not turn a chat in Ask mode into full access.
+    expect(child.COPILOT_ALLOW_ALL).toBe('false')
     // A pane's identity would let Copilot's Orca hook report for this chat too.
     expect(child.ORCA_PANE_KEY).toBeUndefined()
   })

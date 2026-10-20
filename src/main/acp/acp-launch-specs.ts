@@ -358,7 +358,8 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
 // GitHub Copilot CLI serves ACP through `copilot --acp --stdio`; its token variables
 // (`COPILOT_GITHUB_TOKEN` → `GH_TOKEN` → `GITHUB_TOKEN`) and BYOK variables reach it as the user
 // set them. Terminal full access is `--yolo`, but the structured posture rides the lane instead:
-// `args` adds no bypass flag and Orca answers each permission request; Copilot's own `allow_all`
+// `args` adds no bypass flag and Orca answers each permission request. The inherited
+// `COPILOT_ALLOW_ALL` switch is forced off so Ask is authoritative; Copilot's own `allow_all`
 // (observed off) and mode `autopilot` (observed `agent`) stay as the CLI left them. Recorded on
 // 1.0.98: lane-answered `allow_once` carried both full-access probes (a write outside the
 // workspace and a URL fetch) unflagged, an untrusted directory drew no trust prompt, and the
@@ -370,7 +371,8 @@ const COPILOT_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'copilot',
   command: 'copilot',
   args: ({ pluginDir }) => ['--acp', '--stdio', ...(pluginDir ? ['--plugin-dir', pluginDir] : [])],
-  env: {},
+  // Applies last, after the user's environment: a shell-wide allow-all must not override Ask.
+  env: { COPILOT_ALLOW_ALL: 'false' },
   dialect: GENERIC_ACP_DIALECT,
   loginCommand: agentSessionSignInFor('copilot')?.loginCommand ?? [],
   // The directory Copilot's terminal chats read too: hooks and settings line up with this chat.
