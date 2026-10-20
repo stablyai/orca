@@ -151,8 +151,9 @@ export const AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY =
 // capable client can render the `queued` result arm. It gates `delivery: 'queue-if-active'` and
 // the client's queueing setting and chord, never the published draft list or its card actions: a
 // host without it still publishes a message it kept unsent across a restart or a close, and both
-// clients show that card and call its actions. DARK ON PURPOSE — not in RUNTIME_CAPABILITIES:
-// advertising still requires the integrated Codex steer matrix (#21062) in the shipped host.
+// clients show that card and call its actions. The host advertises it with Codex turn/steer
+// support: the integrated turn-end-settlement suite covers queued Steer, echoed and withdrawn
+// sends, pre-0.148 turn identities, and Stop returning a card without sending it again.
 // v1 includes `submission.queuedMessageId` on every draft hand-off: a client reads that link and
 // never compares a draft id with a submission id. It also publishes the queue's pause once, as
 // `queuePause` beside the list, lifted by `agentSession.queuedMessagesResume` or any turn sent
@@ -165,7 +166,7 @@ export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
   'agent-session.queued-messages.v1' as const
 // Why: a host advertising this edits a queued card in place (`agentSession.queuedMessageUpdate`)
 // and holds it from automatic delivery while edited (`agentSession.queuedMessageEditHold`). Apart
-// from queued-messages.v1: kept and agent-mail cards are editable with mid-turn queueing still off.
+// from queued-messages.v1: kept and agent-mail cards remain editable with mid-turn queueing off.
 // A client offers Edit only when the host advertises it; there is no copy-and-delete fallback.
 export const AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY =
   'agent-session.queued-message-edit.v1' as const

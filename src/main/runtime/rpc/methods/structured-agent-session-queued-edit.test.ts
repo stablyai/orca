@@ -1,5 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-// The two in-place edit methods on the wire: registered and advertised apart from the dark
+// The two in-place edit methods on the wire: registered and advertised alongside the mid-turn
 // mid-turn queue, the caller taken from the authenticated transport, strict params, and a lease
 // release that cleanup admission always lets through.
 
@@ -45,9 +45,9 @@ beforeEach(() => {
 afterEach(clearStructuredHostStub)
 
 describe('queued edit methods', () => {
-  it('the host advertises editing on its own, with mid-turn queueing still dark', () => {
+  it('the host advertises mid-turn queueing and in-place editing', () => {
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY)
-    expect(RUNTIME_CAPABILITIES).not.toContain(AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY)
   })
 
   it.each([

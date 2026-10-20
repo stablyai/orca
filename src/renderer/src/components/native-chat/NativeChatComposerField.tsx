@@ -353,6 +353,7 @@ export function NativeChatComposerField({
                 sendBlockedReason={sendBlockedReason}
                 draftNotSaved={draftNotSaved}
                 isWorking={isWorking}
+                hasContent={draft.trim() !== '' || imageAttachments.length > 0}
                 isStopping={isStopping}
                 isDictating={isDictating}
                 isDictationHoldMode={isDictationHoldMode}
