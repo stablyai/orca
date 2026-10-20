@@ -6,6 +6,8 @@ import {
   writeFileDurableIfCurrent
 } from './durable-file-write'
 
+const PRIVATE_FILE_MODE = 0o600
+
 /**
  * Serialized durable writer for the per-provider usage caches. One per store: the multi-MB JSON must
  * not block the Electron main thread, writes are queued so two overlapping renames can't both veto
@@ -55,7 +57,8 @@ export class UsageCacheSnapshotWriter {
       durableWriteTempPath(usageFile),
       usageFile,
       payload,
-      () => generation === this.generation
+      () => generation === this.generation,
+      PRIVATE_FILE_MODE
     )
   }
 }
