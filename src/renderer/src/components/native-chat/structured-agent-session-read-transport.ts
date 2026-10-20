@@ -1,4 +1,4 @@
-import { createReconnectScheduler } from './structured-agent-session-reconnect'
+import { createReconnectScheduler } from '../../../../shared/structured-agent-session-reconnect'
 import { createAgentSessionCurrentRequestsReader } from '../../../../shared/agent-session-current-requests-reader'
 import type { StructuredAgentSessionAction } from '../../../../shared/structured-agent-session-reducer'
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
