@@ -1435,6 +1435,9 @@ jobs:
         run: node config/scripts/build-windows-cli-launcher.mjs
 
       - name: Test Windows-specific boundaries
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_REAL_WINDOWS_SKILL_TEST: '1'
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
           src/main/zcode/zcode-plan-api-key-store-native-windows.test.ts
@@ -1511,6 +1514,7 @@ jobs:
           src/main/ipc/preflight-provider-command-selection.test.ts
           src/main/ipc/preflight-runnable-local-cli.test.ts
           src/main/managed-server/install/remote-node-runtime-store-windows.test.ts
+          src/main/skills/skill-windows-rename-contention.integration.test.ts
 
       # Why the :parallel variant: identical to build:release except the three
       # electron-vite targets overlap instead of running back to back. The Linux package
