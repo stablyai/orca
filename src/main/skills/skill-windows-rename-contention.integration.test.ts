@@ -1,5 +1,4 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { once } from 'node:events'
 import type * as FsPromises from 'node:fs/promises'
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,7 +10,10 @@ import { renameSkillPathWithWindowsRetry } from './skill-filesystem-retry'
 const RUN_REAL_WINDOWS =
   process.platform === 'win32' && process.env.ORCA_REAL_WINDOWS_SKILL_TEST === '1'
 const roots: string[] = []
-const lockers: ChildProcessWithoutNullStreams[] = []
+const lockers: {
+  child: ChildProcessWithoutNullStreams
+  closed: Promise<number | null>
+}[] = []
 let onRenameError: ((error: unknown) => Promise<void>) | undefined
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -46,7 +48,8 @@ function holdFile(path: string) {
       ORCA_SKILL_LOCK_PATH: path
     }
   })
-  lockers.push(child)
+  const closed = new Promise<number | null>((resolve) => child.once('close', resolve))
+  lockers.push({ child, closed })
   let ready = false
   const locked = new Promise<void>((resolve, reject) => {
     child.once('error', reject)
@@ -65,10 +68,10 @@ function holdFile(path: string) {
   return {
     locked,
     release: async () => {
-      const closed = once(child, 'close')
-      child.stdin.end('\n')
-      const [code] = await closed
-      expect(code).toBe(0)
+      if (child.exitCode === null && child.signalCode === null) {
+        child.stdin.end('\n')
+      }
+      expect(await closed).toBe(0)
     }
   }
 }
@@ -88,12 +91,11 @@ afterEach(async () => {
   onRenameError = undefined
   vi.clearAllMocks()
   await Promise.all(
-    lockers.splice(0).map(async (child) => {
-      if (child.exitCode === null) {
-        const closed = once(child, 'close')
+    lockers.splice(0).map(async ({ child, closed }) => {
+      if (child.exitCode === null && child.signalCode === null) {
         child.kill()
-        await closed
       }
+      await closed
     })
   )
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
