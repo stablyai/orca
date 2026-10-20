@@ -15,6 +15,7 @@ const UNAUTHORIZED_CLOSE_CODE = 4001
 
 type SocketSessionOptions = {
   endpoint: string
+  createSocket?: (url: string) => WebSocket
   deviceToken: string
   serverPublicKeyB64: string
   framingPolicy: PairedE2EEFramingPolicy
@@ -47,7 +48,7 @@ export class RpcClientSocketSession {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(private readonly options: SocketSessionOptions) {
-    this.socket = new WebSocket(options.endpoint)
+    this.socket = options.createSocket?.(options.endpoint) ?? new WebSocket(options.endpoint)
     this.attachHandlers()
     this.armConnectTimeout()
   }
