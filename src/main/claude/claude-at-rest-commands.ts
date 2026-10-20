@@ -166,7 +166,7 @@ export class ClaudeAtRestCommandCatalog {
         providerRootOverrides: { claude: join(account, 'skills') }
       })
     ])
-    // What the menu offers a Claude chat at rest without a list, so reading one loses none of it.
+    // Clients that predate structuredSessionSlashCommands show only this list, so it keeps the host's.
     const builtIn = structuredSlashCommands(['clear', 'compact'], 'claude').map(
       (command): AgentSessionSlashCommand => ({
         name: command.name,

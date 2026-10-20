@@ -3,6 +3,7 @@ import {
   dispatchStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionComposerCommand,
   structuredAgentSessionGoalObjective,
+  structuredSessionSlashCommands,
   structuredSlashCommands
 } from './structured-agent-session-composer'
 
@@ -76,6 +77,41 @@ describe('structuredSlashCommands', () => {
       'model',
       'effort',
       'compact'
+    ])
+  })
+})
+
+describe('structuredSessionSlashCommands', () => {
+  const names = (commands: readonly { name: string }[]) => commands.map(({ name }) => name)
+
+  // Pi and the ACP agents report only their own commands; the host's used to vanish with the report.
+  it("keeps the host's commands first once the session reports its own", () => {
+    const reported = [
+      { name: 'llama', kind: 'command' as const },
+      { name: 'mcp', kind: 'command' as const },
+      { name: 'skill:caveman', kind: 'skill' as const }
+    ]
+    expect(names(structuredSessionSlashCommands('pi', ['clear', 'compact'], undefined))).toEqual(
+      names(structuredSlashCommands(['clear', 'compact'], 'pi'))
+    )
+    expect(names(structuredSessionSlashCommands('pi', ['clear', 'compact'], reported))).toEqual([
+      'model',
+      'effort',
+      'clear',
+      'compact',
+      'llama',
+      'mcp'
+    ])
+  })
+
+  it("offers the host's row in place of an agent command of the same name", () => {
+    const offered = structuredSessionSlashCommands(
+      'opencode',
+      ['clear', 'compact'],
+      [{ name: 'compact', kind: 'command', description: 'compact the session' }]
+    )
+    expect(offered.filter(({ name }) => name === 'compact')).toEqual([
+      { name: 'compact', description: 'Compact conversation context' }
     ])
   })
 })
