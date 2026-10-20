@@ -2,6 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
+import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
+
+// Main accepts layout.apply but its frame never lands here, so the window keeps what it drew.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+  return {
+    ...actual,
+    callRuntimeRpc: (...args: Parameters<typeof actual.callRuntimeRpc>) =>
+      args[1] === 'layout.apply' ? new Promise(() => {}) : actual.callRuntimeRpc(...args)
+  }
+})
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 

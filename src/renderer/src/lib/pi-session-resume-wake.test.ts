@@ -1,10 +1,13 @@
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+
+// Off path; switch-on test: wake-sleeping-agents-in-background.test.ts › fires wake, targeted background-mount, then resume w...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 const initialAppStoreState = useAppStore.getState()
 const PI_TRANSCRIPT_PATH = join(tmpdir(), 'pi-session-1.jsonl')

@@ -15,6 +15,9 @@ import { getDefaultWorkspaceSession } from '../shared/constants'
 
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 
+// Off path; switch-on test: pty-incarnation-renderer-save.test.ts › keeps the PTY incarnation across a window save that...
+vi.mock('../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

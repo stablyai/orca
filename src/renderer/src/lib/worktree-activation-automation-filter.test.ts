@@ -3,6 +3,9 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from './worktree-activation'
 
+// Off path; switch-on test: store-create-tab-layout-owner.test.ts › sends main the tab it drew, under its ids and in its...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const initialAppStoreState = useAppStore.getState()
 
 afterEach(() => {

@@ -8,6 +8,9 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Off path; switch-on test: tab-group-layout-owner-commands.test.ts › sets the ratio here, then has main save the group tree
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const setTabGroupSplitRatioMock = vi.fn()

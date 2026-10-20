@@ -16,6 +16,9 @@ import { beginStructuredAgentSessionAuthoritativeInventory } from './structured-
 import { resetStructuredAgentLaunchPersistenceForTests } from '../structured-agent-session-launch-persistence'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 
+// Off path; switch-on test: structured-agent-session-close-before-create.test.ts › suppresses and retires a late cancelled publication
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const layoutOwner: StructuredLaunchSlotOwner = {
   unifiedTabsByWorktree: {},
   groupsByWorktree: {},

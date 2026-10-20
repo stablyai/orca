@@ -1,7 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
+import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
+
+// Main accepts layout.apply but its frame never lands here, so the window keeps what it drew.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+  return {
+    ...actual,
+    callRuntimeRpc: (...args: Parameters<typeof actual.callRuntimeRpc>) =>
+      args[1] === 'layout.apply' ? new Promise(() => {}) : actual.callRuntimeRpc(...args)
+  }
+})
 
 const WORKTREE_ID = 'repo1::/wt-1'
 const STARTUP_COMMAND = "claude '--dangerously-skip-permissions'"

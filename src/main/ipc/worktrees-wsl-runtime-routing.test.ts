@@ -26,6 +26,9 @@ import {
 } from './worktrees-test-fixtures'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
+// Off path; switch-on test: persistence-invalid-workspace-layout-purge.test.ts › drops the workspace an authoritative scan no longer...
+vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )

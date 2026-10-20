@@ -6,15 +6,13 @@ import type { Page } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
 import { expect, test } from './helpers/orca-app'
+import { LAYOUT_OWNER_BUILD } from './helpers/layout-owner-build'
 import { waitForActiveTerminalManager } from './helpers/terminal'
 import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const execFileAsync = promisify(execFile)
 const PARKING_DELAY_MS = 500
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
 
 test.use({
   orcaAppExtraEnv: { ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARKING_DELAY_MS) }

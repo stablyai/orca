@@ -7,16 +7,12 @@
  * hard. Default tabs are handed to the relaunched window again, as a repeated activation would.
  */
 
-import { existsSync } from 'node:fs'
-import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
+import { LAYOUT_OWNER_BUILD } from './helpers/layout-owner-build'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { waitForSessionReady } from './helpers/store'
 
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
 const TEMPLATES = [{ title: 'p6-default-a' }, { title: 'p6-default-b' }]
 const TITLES = TEMPLATES.map((template) => template.title)
 

@@ -76,6 +76,8 @@ import { codexProviderHandle } from '../../../src/shared/agent-session-provider-
 import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { describeReleasedStopNoteProjection } from './cross-version-stop-note-scenarios'
 
+import { resetStructuredAgentSessionClosesBeforeCreateForTests } from '../../../src/main/runtime/rpc/methods/structured-agent-session-close-before-create'
+
 // Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
 
@@ -774,10 +776,8 @@ describe('cross-version structured agent sessions', () => {
      *  host, and the refusal that says so is what hands it the live one. */
     async function reattach(staleFence: number): Promise<HostAnswer> {
       const refused = await answer('agentSession.ensure', attachParams(staleFence))
-      expect(refused).toMatchObject({
-        ok: false,
-        refusal: { code: 'agent_session_checkpoint_stale' }
-      })
+      const stale = { ok: false, refusal: { code: 'agent_session_checkpoint_stale' } }
+      expect(refused).toMatchObject(stale)
       const currentFence = refused.refusal?.currentFence
       expect(currentFence).toBeGreaterThan(staleFence)
       const reattached = await answer('agentSession.ensure', attachParams(currentFence ?? 0))
@@ -815,6 +815,8 @@ describe('cross-version structured agent sessions', () => {
 
     beforeEach(async () => {
       resetOperationIds()
+      // Main remembers a chat closed before create; earlier tests close this same session id.
+      resetStructuredAgentSessionClosesBeforeCreateForTests()
       startGate = Promise.resolve()
       handshake = Promise.resolve()
       root = await mkdtemp(join(tmpdir(), 'orca-cross-version-agent-session-'))

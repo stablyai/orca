@@ -22,7 +22,12 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeRpcClientModule>()
-  return { ...actual, callRuntimeRpc: mockCallRuntimeRpc }
+  // Main's layout.apply is local and never answers here; the mock sees only host calls.
+  return {
+    ...actual,
+    callRuntimeRpc: (...args: Parameters<typeof actual.callRuntimeRpc>) =>
+      args[1] === 'layout.apply' ? new Promise(() => {}) : mockCallRuntimeRpc(...args)
+  }
 })
 
 createStoreCascadesMockApi()

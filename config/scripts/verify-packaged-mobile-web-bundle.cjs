@@ -143,7 +143,7 @@ function listBundleFiles(directory, prefix = '') {
  * the installer; content-addressed names mean stale copies never get overwritten.
  */
 function assertNoUnlistedFiles(bundleDir, manifest) {
-  // A dark build's marker is accounted for here; packaging refuses it through assertNotDarkBuild.
+  // A dark build's marker is accounted for here; packaging refuses it through assertReleaseDesktopBuild.
   const listed = new Set([
     'manifest.json',
     ...darkBuildMarkerFileNames(),

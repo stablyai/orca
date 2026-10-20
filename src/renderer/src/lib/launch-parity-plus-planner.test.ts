@@ -8,6 +8,9 @@ import { getDefaultSettings } from '../../../shared/constants'
 import { WIN_PATH, WSL_PATH } from '../../../shared/launch-parity-window-cases.test-fixture'
 import { launchWorkspaceId } from '../../../shared/launch-parity-window-request.test-fixture'
 
+// Off path; switch-on test: launch-agent-in-new-tab-windows-quoting.test.ts › escapes a single quote inside default agent args
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const holder = vi.hoisted((): LaunchStoreHolder => ({ store: null }))
 vi.mock('@/store', async () =>
   (await import('@/lib/launch-parity-renderer.test-fixture')).launchStoreModuleMock(holder)

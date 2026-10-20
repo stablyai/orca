@@ -24,6 +24,9 @@ import { createTestStore } from '../store/slices/store-test-helpers'
 import type { AppState } from '../store/types'
 import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
 
+// Off path; switch-on test: store-terminal-tab-changes-layout-owner.test.ts › renames in main first by tab-bar id, then the window...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()

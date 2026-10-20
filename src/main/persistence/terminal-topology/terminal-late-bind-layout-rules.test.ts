@@ -14,6 +14,9 @@ import {
 import { WindowSession, withoutLeaf } from './terminal-topology-window-session-fixture'
 import { checkWorkspaceLayoutRules } from '../../../shared/workspace-layout/workspace-layout-rules'
 
+// Off path; switch-on test: persistence-runtime-admitted-terminal-membership.test.ts › moves a dragged-out pane in every holder, and its pa...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),

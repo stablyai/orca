@@ -56,17 +56,17 @@ const ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL =
     : 'null'
 
 const darkBuildSwitches: {
-  darkBuildDefines: () => Record<string, string>
-  darkBuildMarkers: () => { fileName: string; text: string }[]
+  desktopBuildDefines: () => Record<string, string>
+  desktopBuildMarkers: () => { fileName: string; text: string }[]
 } = createRequire(import.meta.url)('./config/dark-build-switches.cjs')
-const DARK_BUILD_DEFINES = darkBuildSwitches.darkBuildDefines()
+const BUILD_SWITCH_DEFINES = darkBuildSwitches.desktopBuildDefines()
 
-/** Marks a dark switched-on main build so packaging refuses it. */
-function createDarkBuildMarkerPlugin(): Plugin {
+/** Marks a main build releases must not ship (dark or rollback), so packaging refuses it. */
+function createBuildSwitchMarkerPlugin(): Plugin {
   return {
-    name: 'orca-dark-build-marker',
+    name: 'orca-build-switch-marker',
     generateBundle() {
-      for (const marker of darkBuildSwitches.darkBuildMarkers()) {
+      for (const marker of darkBuildSwitches.desktopBuildMarkers()) {
         this.emitFile({ type: 'asset', fileName: marker.fileName, source: marker.text })
       }
     }
@@ -257,7 +257,7 @@ export const electronViteConfig: UserConfig = {
           createMainBootstrapPlugin(),
           createPlainNodeEntryGuardPlugin(),
           createProcessHostDevRebuildPlugin(),
-          createDarkBuildMarkerPlugin()
+          createBuildSwitchMarkerPlugin()
         ]
       }
     },
@@ -268,7 +268,7 @@ export const electronViteConfig: UserConfig = {
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
       ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL,
       ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL,
-      ...DARK_BUILD_DEFINES
+      ...BUILD_SWITCH_DEFINES
     },
     // Why: @xterm/headless declares "exports": null in package.json, which
     // prevents Vite's default resolver from finding the CJS entry. Point
@@ -294,7 +294,7 @@ export const electronViteConfig: UserConfig = {
     cacheDir: resolve('.cache/vite/renderer'),
     define: {
       ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL,
-      ...DARK_BUILD_DEFINES
+      ...BUILD_SWITCH_DEFINES
     },
     resolve: {
       alias: {

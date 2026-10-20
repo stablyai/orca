@@ -1,4 +1,4 @@
-import { describe } from 'vitest'
+import { describe, vi } from 'vitest'
 import { registerPtyConnectionAgentSessionResumeTests } from './pty-connection-agent-session-resume.spec'
 import { registerPtyConnectionColdRestoreAgentResumeTests } from './pty-connection-cold-restore-agent-resume.spec'
 import { registerPtyConnectionColdRestoreRepaintTests } from './pty-connection-cold-restore-repaint.spec'
@@ -8,6 +8,9 @@ import { registerPtyConnectionHiddenSleepingResumeTests } from './pty-connection
 import { registerPtyConnectionRestartReplacementTests } from './pty-connection-restart-replacement.spec'
 import { registerPtyConnectionSessionLivenessTests } from './pty-connection-session-liveness.spec'
 import { registerPtyConnectionSleepingResumeBannerTests } from './pty-connection-sleeping-resume-banner.spec'
+
+// Off path; switch-on test: exited-split-pane-close.test.ts › closes the pane itself when main closed it and no fr...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 describe('pty-connection-agent-session-resume', registerPtyConnectionAgentSessionResumeTests)
 describe(

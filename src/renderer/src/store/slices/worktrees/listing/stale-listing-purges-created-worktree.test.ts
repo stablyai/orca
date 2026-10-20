@@ -23,6 +23,11 @@ import {
   resetStructuredAgentLaunchRegistryForTests
 } from '@/lib/structured-agent-session-launch-registry'
 
+// Off path; switch-on test: structured-launch-cancel-layout-owner.test.ts › cancel after a reload, when only the saved...
+vi.mock('../../../../../../shared/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: false
+}))
+
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }
 }))

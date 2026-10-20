@@ -12,6 +12,9 @@ import {
 } from '@/lib/workspace-terminal-host-authority'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
 
+// Off path; switch-on test: workspace-layout-commands.test.ts › creates a terminal tab at the time the window drew i...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()

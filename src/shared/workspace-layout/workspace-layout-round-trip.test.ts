@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { loadWorkspaceLayout } from './workspace-layout-load'
@@ -10,6 +10,9 @@ import {
   WORKSPACE_LAYOUT_PROFILES
 } from './workspace-layout-profile.test-fixture'
 import { leaf } from './workspace-layout-session.test-fixture'
+
+// Off path; switch-on test: workspace-layout-editor-file-owner.test.ts › a reload keeps both records, each with its own...
+vi.mock('../layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 /** What reaches disk: the profile documents are JSON, so an undefined field is a missing one. */
 const onDisk = (session: WorkspaceSessionState): unknown => JSON.parse(JSON.stringify(session))

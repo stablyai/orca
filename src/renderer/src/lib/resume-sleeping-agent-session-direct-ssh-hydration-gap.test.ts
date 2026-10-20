@@ -13,6 +13,17 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-r
 import { useAppStore } from '@/store'
 import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
+
+// Main accepts layout.apply but its frame never lands here, so the window keeps what it drew.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+  return {
+    ...actual,
+    callRuntimeRpc: (...args: Parameters<typeof actual.callRuntimeRpc>) =>
+      args[1] === 'layout.apply' ? new Promise(() => {}) : actual.callRuntimeRpc(...args)
+  }
+})
 
 const initialAppStoreState = useAppStore.getState()
 

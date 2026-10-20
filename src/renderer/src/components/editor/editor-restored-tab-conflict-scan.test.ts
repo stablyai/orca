@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createStore, type StoreApi } from 'zustand/vanilla'
-import { createEditorSlice } from '@/store/slices/editor'
+import type { StoreApi } from 'zustand/vanilla'
+import { createEditorTabsStore } from '@/store/slices/editor-slice-test-harness'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { AppState } from '@/store'
 import { attachRestoredTabConflictScan } from './editor-restored-tab-conflict-scan'
@@ -20,13 +20,8 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: mocks.getConnectionIdForFile
 }))
 
-function createEditorStore(): StoreApi<AppState> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createStore<any>()((...args: any[]) => ({
-    settings: {},
-    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-  })) as unknown as StoreApi<AppState>
-}
+// The tabs-aware harness: the switch-on open path records the file's tab.
+const createEditorStore = createEditorTabsStore
 
 function openRestoredDirtyTab(
   store: StoreApi<AppState>,
@@ -37,23 +32,22 @@ function openRestoredDirtyTab(
     worktreeId: 'wt-1'
   }
 ): void {
-  store.getState().openFile({
+  // A floating file's id is owned, not its path.
+  const fileId = store.getState().openFile({
     filePath,
     ...owner,
     language: 'typescript',
     mode: 'edit'
   })
-  store.getState().setEditorDraft(filePath, 'restored draft')
-  store.getState().markFileDirty(filePath, true)
-  store.getState().setLastKnownDiskSignature(filePath, getDiskBaselineSignature(baselineContent))
+  store.getState().setEditorDraft(fileId, 'restored draft')
+  store.getState().markFileDirty(fileId, true)
+  store.getState().setLastKnownDiskSignature(fileId, getDiskBaselineSignature(baselineContent))
   // Why: hydration flags restored dirty tabs for verification; tests mimic it.
-  store.setState({
-    openFiles: store
-      .getState()
-      .openFiles.map((f) =>
-        f.id === filePath ? { ...f, pendingDiskBaselineVerification: true } : f
-      )
-  } as never)
+  store.setState((state) => ({
+    openFiles: state.openFiles.map((f) =>
+      f.id === fileId ? { ...f, pendingDiskBaselineVerification: true } : f
+    )
+  }))
 }
 
 describe('attachRestoredTabConflictScan', () => {

@@ -7,6 +7,9 @@ import { ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT } from '../../../../shared/editor-sa
 import { attachEditorAutosaveController } from './editor-autosave-controller'
 import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
 
+// Off path; switch-on test: editor-tab-layout-owner.test.ts › drains the old save before reparent, then routes exp...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))
 
 function createEditorStore(): StoreApi<AppState> {

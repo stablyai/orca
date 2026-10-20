@@ -15,6 +15,9 @@ import {
   WORKTREE_ID
 } from './terminal-pane-tab-detach-fixture'
 
+// Off path; switch-on test: terminal-pane-detach-layout-owner.test.ts › shows the pane in the tab the frame drew instead of...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const toastErrorMock = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))
 const closeTerminalSurface = vi.fn(async () => {})

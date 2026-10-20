@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Off path; switch-on test: renderer-shutdown-checkpoint-sleep-records.test.ts › records main’s own quit capture before staging, thou...
+vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const { syncHandlers, invokeHandlers } = vi.hoisted(() => ({
   syncHandlers: new Map<
     string,

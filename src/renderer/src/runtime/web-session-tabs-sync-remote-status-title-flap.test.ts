@@ -62,6 +62,9 @@ import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-ap
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { shouldApplyWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
 
+// Off path; switch-on test: store-terminal-tab-changes-layout-owner.test.ts › gives each tab of an agent-title batch its title onc...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 // Why: web-session-tabs-sync imports the app-level store singleton; this
 // harness drives a createTestStore instance instead, like the sibling suite.
 vi.mock('../store', () => ({

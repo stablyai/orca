@@ -8,6 +8,19 @@ import {
 } from './worktree-activation-created-agent.test-fixture'
 import { registerWorktreeActivationReset } from './worktree-activation.test-fixture'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
+import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
+
+// Main accepts every layout.apply, so the window shows what it asked for.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+  return {
+    ...actual,
+    callRuntimeRpc: (...args: Parameters<typeof actual.callRuntimeRpc>) =>
+      args[1] === 'layout.apply'
+        ? Promise.resolve({ ok: true, result: {} })
+        : actual.callRuntimeRpc(...args)
+  }
+})
 
 vi.mock('./worktree-creation-structured-session', () => ({
   launchStructuredWorktreeSession: vi.fn(async (args) => ({

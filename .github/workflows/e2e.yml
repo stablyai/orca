@@ -40,7 +40,7 @@ on:
         default: ''
       # Why only the app builds read it: the orcad template build refuses a dark switch.
       layout_owner:
-        description: Set to main to build with ORCA_LAYOUT_OWNER=main and record save-divergence reports
+        description: Set to window to build the ORCA_LAYOUT_OWNER=window rollback variant, or to main to record save-divergence reports on the shipped build
         required: false
         type: string
         default: ''
@@ -147,10 +147,17 @@ jobs:
 
       - wait: e2e-cli
 
-      # The switch-on specs skip, rather than fail, when the build left no marker.
+      # The layout-owner specs skip, rather than fail, when the build left the rollback marker.
       - name: Check layout-owner build marker
-        if: inputs.layout_owner == 'main'
-        run: test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+        if: inputs.layout_owner != ''
+        env:
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
+        run: |
+          if [ "$LAYOUT_OWNER" = window ]; then
+            test -f out/main/ORCA_LAYOUT_OWNER_WINDOW
+          else
+            test ! -f out/main/ORCA_LAYOUT_OWNER_WINDOW
+          fi
 
       - name: Check shared native runtime action
         id: native-runtime-action
@@ -371,8 +378,7 @@ jobs:
           fi
           E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
           E2E_PROJECT_ARGS=()
-          if [ -n "$LAYOUT_OWNER" ]; then
-            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+          if [ "$LAYOUT_OWNER" = main ]; then
             mkdir -p layout-divergence
             E2E_ENV+=(ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/window-specs.jsonl")
             E2E_ENV+=(PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/window-specs-results.json")
@@ -471,7 +477,7 @@ jobs:
           slot="$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "$slot"
-          # The headless oracle's orcad host must hold the same layout owner as the Electron host.
+          # Releases keep orcad's switch off; main also turns it on in this test orcad host.
           if [ -n "$LAYOUT_OWNER" ]; then
             ORCA_LAYOUT_OWNER="$LAYOUT_OWNER" pnpm build:orcad
           else
@@ -496,8 +502,7 @@ jobs:
           LAYOUT_OWNER: ${{ inputs.layout_owner }}
         run: |
           REPORT_ARGS=()
-          if [ -n "$LAYOUT_OWNER" ]; then
-            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+          if [ "$LAYOUT_OWNER" = main ]; then
             mkdir -p layout-divergence
             export ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/headless-oracle.jsonl"
             export PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/headless-oracle-results.json"
@@ -590,8 +595,7 @@ jobs:
           mapfile -t TEST_FILES < "$RUNNER_TEMP/managed-ssh-specs"
           export ORCA_E2E_ORCAD_CONVERT_TEMPLATE="$RUNNER_TEMP/orcad-convert-template"
           REPORT_ARGS=()
-          if [ -n "$LAYOUT_OWNER" ]; then
-            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+          if [ "$LAYOUT_OWNER" = main ]; then
             mkdir -p layout-divergence
             export ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/managed-ssh-$SHARD_INDEX.jsonl"
             export PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/managed-ssh-$SHARD_INDEX-results.json"

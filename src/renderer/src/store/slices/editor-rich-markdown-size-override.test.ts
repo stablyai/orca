@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createEditorStore } from './editor-slice-test-harness'
+import { createEditorTabsStore } from './editor-slice-test-harness'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -17,7 +17,7 @@ vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
     notifyHostOfMirroredEditorCloseMock(...args)
 }))
 
-function openMarkdown(store: ReturnType<typeof createEditorStore>, filePath: string): void {
+function openMarkdown(store: ReturnType<typeof createEditorTabsStore>, filePath: string): void {
   store.getState().openFile({
     filePath,
     relativePath: filePath.replace('/repo/', ''),
@@ -29,7 +29,7 @@ function openMarkdown(store: ReturnType<typeof createEditorStore>, filePath: str
 
 describe('createEditorSlice rich markdown size override', () => {
   it('records an opt-in per file and clears it when turned back off', () => {
-    const store = createEditorStore()
+    const store = createEditorTabsStore()
     openMarkdown(store, '/repo/big.md')
 
     store.getState().setMarkdownRichModeSizeOverride('/repo/big.md', true)
@@ -40,7 +40,7 @@ describe('createEditorSlice rich markdown size override', () => {
   })
 
   it('drops the opt-in when the file is closed', async () => {
-    const store = createEditorStore()
+    const store = createEditorTabsStore()
     openMarkdown(store, '/repo/big.md')
     store.getState().setMarkdownRichModeSizeOverride('/repo/big.md', true)
 
@@ -50,7 +50,7 @@ describe('createEditorSlice rich markdown size override', () => {
   })
 
   it('drops the opt-in for a replaced preview tab', () => {
-    const store = createEditorStore()
+    const store = createEditorTabsStore()
 
     store.getState().openFile(
       {

@@ -13,6 +13,9 @@ import {
   type UnownedLiveTerminal
 } from './worktree-live-terminal-surface-owners'
 
+// Off path; switch-on test: worktree-agent-live-surface-adoption-cli-tab.test.ts › main’s frame arrives after the census: main names it...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const WORKTREE_ID = 'repo::/worktree'
 const STALE_STRUCTURED_SESSION_ID = 'structured-session-stale'
 const LIVE_LEAF_ID = '11111111-1111-4111-8111-111111111111'

@@ -596,11 +596,13 @@ describe('arch-aware packaging guard', () => {
     expect(() => packHost(HOST_ARCH)).not.toThrow()
   })
 
-  it('refuses to package a dark layout-owner build', () => {
+  it('refuses to package the layout-owner rollback build, never the shipped default', () => {
     const previous = process.env.ORCA_LAYOUT_OWNER
-    process.env.ORCA_LAYOUT_OWNER = 'main'
+    process.env.ORCA_LAYOUT_OWNER = 'window'
     try {
-      expect(() => packHost(HOST_ARCH)).toThrow('ORCA_LAYOUT_OWNER=main')
+      expect(() => packHost(HOST_ARCH)).toThrow('ORCA_LAYOUT_OWNER=window')
+      process.env.ORCA_LAYOUT_OWNER = 'main'
+      expect(() => packHost(HOST_ARCH)).not.toThrow()
     } finally {
       if (previous === undefined) {
         delete process.env.ORCA_LAYOUT_OWNER

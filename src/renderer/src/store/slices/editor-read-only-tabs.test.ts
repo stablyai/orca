@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore } from './editor-slice-test-harness'
 import type { AppState } from '../types'
 
+// Off path; switch-on test: ai-vault-session-log-open.test.ts › opens the exact path as a permanent read-only local tab
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
 }))

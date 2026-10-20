@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Off path; switch-on test: layout-owner-shared-path-gates.test.ts › reconnect advertises restored terminals without rewr...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync: vi.fn()

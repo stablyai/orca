@@ -6,6 +6,9 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-ses
 import type * as RecoveryModule from '@/lib/structured-agent-session-launch-recovery'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 
+// Off path; switch-on test: structured-agent-session-close-before-create.test.ts › clears the draft seed when the launch is cancelled
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const mocks = vi.hoisted(() => ({
   abandonIntent: vi.fn(),
   callStructuredAgentSession: vi.fn(),

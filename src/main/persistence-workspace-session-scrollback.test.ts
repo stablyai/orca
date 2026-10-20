@@ -457,7 +457,8 @@ describe('Store', () => {
   it('remaps legacy SSH lease leaf ids when loading legacy workspace layouts', async () => {
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      // `wt1` has no `::`, so it names its own repo; main drops layouts of unregistered repos.
+      repos: [makeRepo({ id: 'wt1', connectionId: 'ssh-1' })],
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -519,7 +520,8 @@ describe('Store', () => {
     mkdirSync(agentHooksDir, { recursive: true })
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      // `wt1` has no `::`, so it names its own repo; main drops layouts of unregistered repos.
+      repos: [makeRepo({ id: 'wt1', connectionId: null })],
       worktreeMeta: {},
       settings: {},
       ui: {},

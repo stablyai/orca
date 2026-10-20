@@ -7,6 +7,9 @@ import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-act
 import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 
+// Off path; switch-on test: worktree-agent-live-surface-adoption-cli-tab.test.ts › makes no tab or pane of its own before frames draw
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const initialAppStoreState = useAppStore.getState()
 
 /**

@@ -3,6 +3,9 @@ import { createEditorStore, ownedEditorFileId } from './editor-slice-test-harnes
 import type { AppState } from '../types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
+// Off path; switch-on test: editor-tab-layout-owner.test.ts › records a close, and a reopen where the window put i...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
 }))

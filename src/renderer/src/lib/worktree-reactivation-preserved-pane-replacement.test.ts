@@ -13,6 +13,9 @@ import {
   resetHostSessionMirrorHydrationForTests
 } from '@/runtime/host-session-mirror-hydration'
 
+// Off path; switch-on test: store-create-tab-layout-owner.test.ts › sends main the tab it drew, under its ids and in its...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 // Pins the activation contract behind the run6-review-pr-11959 incident shape:
 // a persisted (husk) tab whose pane cannot resume in place gets ONE appended
 // replacement tab per provider session — the husk is retained for scrollback —

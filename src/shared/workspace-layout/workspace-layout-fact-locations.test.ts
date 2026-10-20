@@ -3,7 +3,7 @@
 // (workspace-layout-disk-fields.ts) are typed over the disk record types and every model and
 // side-data field; this test checks each claim by mutating every source and saving.
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import {
   DISK_TABLES,
@@ -19,6 +19,9 @@ import { localDesktopSession } from './workspace-layout-profile.test-fixture'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 import { addWorkspace, GIT_KEY, leaf } from './workspace-layout-session.test-fixture'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
+
+// Off path; switch-on test: workspace-layout-editor-file-owner.test.ts › the load report sees a change to one owner's record
+vi.mock('../layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 // A model or side-data field no disk field is written from fails here.
 const everySourceIsWritten: [UnwrittenLayoutSource] extends [never] ? true : UnwrittenLayoutSource =

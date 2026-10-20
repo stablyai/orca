@@ -1,10 +1,13 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createEditorSlice } from './editor'
 import type { AppState } from '../types'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
 import { makeTab } from './store-session-test-harness'
+
+// Off path; switch-on test: editor-tab-layout-owner.test.ts › records a close, and a reopen where the window put i...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 function createEditorStore(overrides?: Partial<AppState>): StoreApi<AppState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

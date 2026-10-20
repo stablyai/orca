@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import {
   makeSnapshot,
@@ -16,6 +16,17 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { makeCreatedAgentWorktree } from './worktree-activation-created-agent.test-fixture'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
+
+// Main accepts layout.apply but its frame never lands here, so the window keeps what it drew.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+  return {
+    ...actual,
+    callRuntimeRpc: (...args: Parameters<typeof actual.callRuntimeRpc>) =>
+      args[1] === 'layout.apply' ? new Promise(() => {}) : actual.callRuntimeRpc(...args)
+  }
+})
 
 // #21235: a paired client is never the execution host, so no local record can tell "another client
 // closed this tab" from a re-key or a pending handle. Whatever shape the record's pane key has, the

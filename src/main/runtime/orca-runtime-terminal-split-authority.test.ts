@@ -7,6 +7,9 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from './orca-runtime'
 
+// Off path; switch-on test: terminal-split-layout-owner.test.ts › keeps a pane whose terminal bound before the wait ra...
+vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const REPO_ID = 'repo-1'
 const WORKTREE_ID = `${REPO_ID}::/workspace`
 const TAB_ID = 'tab-remote'

@@ -19,6 +19,9 @@ import {
   makeBalancedLegacyPaneLayout
 } from './persistence-session-fixtures'
 
+// Off path; switch-on test: persistence-cross-host-pane-identity.test.ts › remaps persisted agent acknowledgement pane keys whe...
+vi.mock('../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

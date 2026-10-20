@@ -1,7 +1,11 @@
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import { fixture } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
+import { _resetClosedPaneFencesForTests } from '../terminal-topology/closed-pane-binding-fence'
+
+// Main's closed-pane fence is process-wide and these tests reuse pane ids.
+beforeEach(() => _resetClosedPaneFencesForTests())
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({

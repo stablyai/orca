@@ -13,6 +13,9 @@ import {
   createdTabStartups
 } from './worktree-activation.test-fixture'
 
+// Off path; switch-on test: worktree-activation-setup-script.test.ts › creates a background Setup tab for newly created wor...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const initialAppStoreState = useAppStore.getState()
 
 registerWorktreeActivationReset()

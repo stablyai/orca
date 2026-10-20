@@ -3,6 +3,9 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from './store-test-helpers'
 
+// Off path; switch-on test: editor-tab-layout-owner.test.ts › pins a preview tab without writing a preview flag
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {

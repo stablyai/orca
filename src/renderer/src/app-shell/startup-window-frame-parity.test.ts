@@ -47,6 +47,9 @@ import {
   projectStartupWindowView
 } from './startup-window-view.test-fixture'
 
+// Off path; switch-on test: workspace-layout-frame-sync.test.ts › changes nothing for the frame the store already shows
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()

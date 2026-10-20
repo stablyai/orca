@@ -9,6 +9,9 @@ import {
 } from '../slices/store-test-helpers'
 import { createStoreCascadesMockApi } from '../slices/store-cascades-test-harness'
 
+// Off path; switch-on test: terminal-tab-close-layout-owner.test.ts › records a window’s tab close durably, so a late star...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))

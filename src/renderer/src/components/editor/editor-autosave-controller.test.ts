@@ -17,6 +17,9 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
+// Off path; switch-on test: restored-editor-owner-save-lifecycle.test.ts › drains the old save before reparent, then routes exp...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const mocks = vi.hoisted(() => ({
   getConnectionIdForFile: vi.fn()
 }))

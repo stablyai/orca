@@ -13,7 +13,7 @@
  * still resume everything it cannot positively rule out — a gate that refuses on absent evidence
  * would strand every record captured before the stamp existed.
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '@/store'
@@ -25,6 +25,17 @@ import {
   sleepingRecordNamesAnotherExecutionHost
 } from './sleeping-record-execution-host-scope'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
+
+// Main accepts layout.apply but its frame never lands here, so the window keeps what it drew.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+  return {
+    ...actual,
+    callRuntimeRpc: (...args: Parameters<typeof actual.callRuntimeRpc>) =>
+      args[1] === 'layout.apply' ? new Promise(() => {}) : actual.callRuntimeRpc(...args)
+  }
+})
 
 const initialAppStoreState = useAppStore.getState()
 

@@ -4,6 +4,9 @@ import { createEditorStore, createEditorTabsStore } from './editor-slice-test-ha
 import type { AppState } from '../types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
+// Off path; switch-on test: floating-editor-file-id-layout-owner.test.ts › opens a floating file under the id restoring main’s...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
 }))

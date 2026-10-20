@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { asLoaded, emptyModel, WS } from './workspace-layout-command.test-fixture'
 import type { LayoutTab, WorkspaceLayout, WorkspaceLayoutModel } from './workspace-layout-model'
 import { saveWorkspaceLayout } from './workspace-layout-save'
@@ -13,6 +13,9 @@ import {
   viewRecordOf,
   type LayoutViewRecord
 } from './workspace-layout-views'
+
+// Off path; switch-on test: workspace-layout-views-owned-file.test.ts › stays through a prune
+vi.mock('../layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 const PANE_A = '00000000-0000-4000-8000-00000000000a'
 const PANE_B = '00000000-0000-4000-8000-00000000000b'

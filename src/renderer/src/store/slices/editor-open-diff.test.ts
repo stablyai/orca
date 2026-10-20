@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore, createEditorTabsStore } from './editor-slice-test-harness'
 import type { AppState } from '../types'
 
+// Off path; switch-on test: editor-tab-layout-owner.test.ts › leaves main with the same tabs as the window through...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
 }))

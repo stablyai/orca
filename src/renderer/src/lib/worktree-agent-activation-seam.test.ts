@@ -12,6 +12,9 @@ import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from './worktree-activation-created-agent.test-fixture'
 
+// Off path; switch-on test: worktree-agent-live-surface-adoption-cli-tab.test.ts › main’s frame arrives after the census: main names it...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const initialState = useAppStore.getState()
 
 function baseState(): Partial<AppState> {

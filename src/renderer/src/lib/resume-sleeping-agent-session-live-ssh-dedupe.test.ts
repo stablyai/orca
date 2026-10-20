@@ -5,6 +5,9 @@ import { useAppStore } from '@/store'
 import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
+// Off path; switch-on test: wake-sleeping-agents-in-background.test.ts › fires wake, targeted background-mount, then resume w...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const initialAppStoreState = useAppStore.getState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'

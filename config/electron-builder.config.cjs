@@ -58,7 +58,7 @@ const {
   orcadTemplateMacSignIgnore
 } = require('./scripts/packaged-orcad-template.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
-const { assertNotDarkBuild } = require('./dark-build-switches.cjs')
+const { assertReleaseDesktopBuild } = require('./dark-build-switches.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
 const {
   appImageNodeRuntimeFpmArgs,
@@ -403,7 +403,7 @@ module.exports = {
     mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR,
     ensureWaylandClipboard = ensureBundledWaylandClipboard
   ) => {
-    assertNotDarkBuild([join(__dirname, '..', 'out', 'main'), mobileWebBundleDir])
+    assertReleaseDesktopBuild([join(__dirname, '..', 'out', 'main'), mobileWebBundleDir])
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
     assertBundledRipgrepInstalled()
     assertProcessHostOutputBuilt()

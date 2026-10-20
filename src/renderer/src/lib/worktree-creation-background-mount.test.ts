@@ -3,6 +3,9 @@ import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import type * as BackgroundMountModule from '@/components/terminal/background-terminal-worktree-mount'
 
+// Off path; switch-on test: store-create-tab-layout-owner.test.ts › sends main the tab it drew, under its ids and in its...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const { requestMount } = vi.hoisted(() => ({ requestMount: vi.fn() }))
 
 vi.mock('@/components/terminal/background-terminal-worktree-mount', async (importOriginal) => ({

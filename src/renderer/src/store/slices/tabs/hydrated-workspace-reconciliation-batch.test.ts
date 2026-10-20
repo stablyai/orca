@@ -9,6 +9,9 @@ import {
   RECONCILIATION_WRITABLE_KEYS
 } from './hydrated-workspace-reconciliation-fixture'
 
+// Off path; switch-on test: layout-owner-shared-path-gates.test.ts › reconcile counts what would render and leaves the ta...
+vi.mock('../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()

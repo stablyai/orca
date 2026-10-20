@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { setupTerminalCreateSurfacing } from './ipc-events-terminal-create-test-harness'
+
+// Off path; switch-on test: useIpcEvents-silent-terminal-adoption.test.ts › draws a tab main made itself with main’s creation fa...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 describe('useIpcEvents updater integration', () => {
   it('surfaces terminal creates without stealing focus unless requested', async () => {

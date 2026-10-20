@@ -8,6 +8,9 @@ import {
   MANAGED_BROWSER_UNAVAILABLE_MESSAGE
 } from '@/lib/client-creation-action-policy'
 
+// Off path; switch-on test: store-create-tab-layout-owner.test.ts › sends main the tab it drew, under its ids and in its...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
 

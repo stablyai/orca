@@ -3,6 +3,9 @@ import { makeCloseTestTab, preparePendingSplitClose } from './pending-split-clos
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { flushPtySideEffects } from './pty-transport-test-harness'
 
+// Off path; switch-on test: layout-owner-pane-close.test.ts › a layout-owner build removes the pane only once main...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const replyFor = (kind: 'reattach' | 'cold-restore-new' | 'ordinary-fresh') => ({
   id: 'pty-restored',
   ...(kind === 'reattach' ? { isReattach: true } : {}),

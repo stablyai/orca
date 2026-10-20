@@ -1,8 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+
+// Off path; switch-on test: terminal-tab-create-through-layout-owner.test.ts › on host_not_owned
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 const initialState = useAppStore.getState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'

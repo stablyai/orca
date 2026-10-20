@@ -6,6 +6,9 @@ import {
   stubTooltip
 } from './tab-bar-windows-shell-launch-render-stubs'
 
+// Off path; switch-on test: tab-bar-layout-owner-props.test.ts › sends the pin to main by tab-bar id, then the window...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const appStoreSnapshot: {
   activeTabId: string | null
   activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null

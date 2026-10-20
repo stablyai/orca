@@ -1,10 +1,13 @@
-import { describe } from 'vitest'
+import { describe, vi } from 'vitest'
 import { registerPtyConnectionVisibilityResumeSizeTests } from './pty-connection-visibility-resume-size.spec'
 import { registerPtyConnectionHiddenCodexQueriesTests } from './pty-connection-hidden-codex-queries.spec'
 import { registerPtyConnectionHiddenDeliveryGateTests } from './pty-connection-hidden-delivery-gate.spec'
 import { registerPtyConnectionParkRevealModelSnapshotTests } from './pty-connection-park-reveal-model-snapshot.spec'
 import { registerPtyConnectionReplayPayloadHandlingTests } from './pty-connection-replay-payload-handling.spec'
 import { registerPtyConnectionPtyExitTeardownTests } from './pty-connection-pty-exit-teardown.spec'
+
+// Off path; switch-on test: exited-split-pane-close.test.ts › asks main to close the exited pane, leaving its remo...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 describe('pty-connection-visibility-resume-size', registerPtyConnectionVisibilityResumeSizeTests)
 describe('pty-connection-hidden-codex-queries', registerPtyConnectionHiddenCodexQueriesTests)

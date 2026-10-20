@@ -4,19 +4,14 @@
  * show again once the stream is back, the window's later changes apply, and a relaunch keeps them.
  */
 
-import { existsSync } from 'node:fs'
-import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
+import { LAYOUT_OWNER_BUILD } from './helpers/layout-owner-build'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { ensureTerminalVisible, switchToWorktree, waitForSessionReady } from './helpers/store'
 import { splitActiveTerminalPane, waitForActiveTerminalManager } from './helpers/terminal'
 import { leafIdsInOrder } from './helpers/workspace-layout-oracle-model'
 import { readMainLayout, type TerminalLayout } from './helpers/main-terminal-layout'
-
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
 
 type Launched = Awaited<ReturnType<ReturnType<typeof createRestartSession>['launch']>>
 

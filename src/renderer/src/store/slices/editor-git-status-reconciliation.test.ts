@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore } from './editor-slice-test-harness'
 
+// Off path; switch-on test: editor-tab-layout-owner.test.ts › sends main the record a conflict open rewrote in an...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
 }))

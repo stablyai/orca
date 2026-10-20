@@ -16,6 +16,9 @@ import {
   useTabDragSplit
 } from './useTabDragSplit'
 
+// Off path; switch-on test: tab-group-layout-owner-commands.test.ts › splits off a group under main’s id when the window m...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 vi.mock('../browser-pane/host-guest/webview-registry', () => ({

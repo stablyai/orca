@@ -4,16 +4,11 @@
  * (layout-owner build only; main holds the tab before the window ever draws the workspace).
  */
 
-import { existsSync } from 'node:fs'
-import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
+import { LAYOUT_OWNER_BUILD } from './helpers/layout-owner-build'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { switchToWorktree, waitForSessionReady } from './helpers/store'
-
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
 
 type Tabs = { window: string[]; storedRows: string[]; storedTabBar: string[] }
 

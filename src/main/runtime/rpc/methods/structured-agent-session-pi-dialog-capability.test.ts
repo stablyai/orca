@@ -39,6 +39,9 @@ import {
   WORK_METHODS
 } from './structured-agent-session-gate-classification.test-fixture'
 
+// Off path; switch-on test: structured-agent-session-close-before-create.test.ts › create then cancel: an ordinary close, and the creat...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const OLD_CLIENT = {
   ...STRUCTURED_CLIENT,
   clientCapabilities: [

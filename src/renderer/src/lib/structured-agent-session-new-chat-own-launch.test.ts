@@ -7,6 +7,9 @@ import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wi
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import type * as LaunchAdmissionModule from './structured-agent-session-launch-admission'
 
+// Off path; switch-on test: agent-session-tab-layout-owner.test.ts › records a chat the window opens and closes, so its s...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const mocks = vi.hoisted(() => ({
   createIntent: vi.fn(),
   launch: vi.fn(),

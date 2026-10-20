@@ -10,6 +10,9 @@ import { activateAndRevealWorktree } from './worktree-activation'
 import { gateWorktreeAgentActivation } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from './worktree-activation-created-agent.test-fixture'
 
+// Off path; switch-on test: terminal-presentation-frame-drawn-tab.test.ts › shows the tab its frame drew, bound to main's termin...
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 /**
  * Conditional old-host reconstruction, not proof of STA-9417: a host-created worktree with a
  * split of the (unmounted) primary tab, then the first activation of that worktree. When main's

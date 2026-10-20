@@ -29,6 +29,9 @@ import {
   type WindowLaunchCase
 } from '../../../../shared/launch-parity-window-request.test-fixture'
 
+// Off path; switch-on test: pty-launch-parity.test.ts › launches agent quick commands through the programmat...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const holder = vi.hoisted((): LaunchStoreHolder => ({ store: null }))
 vi.mock('@/store', async () =>
   (await import('@/lib/launch-parity-renderer.test-fixture')).launchStoreModuleMock(holder)

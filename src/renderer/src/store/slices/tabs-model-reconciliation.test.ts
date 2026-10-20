@@ -3,6 +3,9 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from './store-test-helpers'
 
+// Off path; switch-on test: tabs-hydration-group-validation.test.ts › drops a tab-bar terminal entry whose row is gone and...
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 

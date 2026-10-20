@@ -13,6 +13,9 @@ import { getDefaultWorkspaceSession } from '../shared/constants'
 
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 
+// Off path; switch-on test: persistence-flush-and-save-scheduling.test.ts › still bumps the topology fence for a reconciled inca...
+vi.mock('../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

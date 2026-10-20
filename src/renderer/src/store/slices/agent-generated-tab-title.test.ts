@@ -5,6 +5,9 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 
+// Off path; switch-on test: store-terminal-tab-changes-layout-owner.test.ts › sends an agent’s generated title as main’s rename
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const WORKTREE_ID = 'repo1::/path/wt1'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
