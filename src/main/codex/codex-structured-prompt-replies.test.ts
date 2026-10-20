@@ -308,3 +308,126 @@ describe('applyCodexPromptAnswer', () => {
     expect(registry.register(userInputRequest([hugeQuestionId]))).toBeNull()
   })
 })
+
+function mcpElicitationRequest(id: number, params: Record<string, unknown>) {
+  return {
+    id,
+    method: 'mcpServer/elicitation/request',
+    params: { threadId: 'thread-1', turnId: 'turn-1', serverName: 'codex_apps', ...params }
+  }
+}
+
+const MCP_TOOL_APPROVAL = {
+  mode: 'form',
+  message: 'Allow Notion to run tool "notion.notion-update-page"?',
+  requestedSchema: { type: 'object', properties: {} },
+  _meta: { codex_approval_kind: 'mcp_tool_call', persist: ['session', 'always'] }
+}
+
+describe('MCP tool-call approvals', () => {
+  it('registers each tool-call approval under its own request id', () => {
+    const registry = new CodexPromptRegistry()
+    const first = registered(registry.register(mcpElicitationRequest(7, MCP_TOOL_APPROVAL)))
+    const second = registered(registry.register(mcpElicitationRequest(8, MCP_TOOL_APPROVAL)))
+
+    expect(first.promptKey).toMatch(/^mcp-elicitation:.+:7$/)
+    expect(second.promptKey).toMatch(/^mcp-elicitation:.+:8$/)
+    expect(first.turnId).toBe('turn-1')
+  })
+
+  it('keeps approvals apart when a respawned app-server reuses a request id', () => {
+    // Each app-server process gets a fresh registry.
+    const before = registered(
+      new CodexPromptRegistry().register(mcpElicitationRequest(0, MCP_TOOL_APPROVAL))
+    )
+    const after = registered(
+      new CodexPromptRegistry().register(mcpElicitationRequest(0, MCP_TOOL_APPROVAL))
+    )
+
+    expect(after.promptKey).not.toBe(before.promptKey)
+  })
+
+  it('ignores an approvalId so two tool calls cannot share a prompt key', () => {
+    const registry = new CodexPromptRegistry()
+    registry.register(mcpElicitationRequest(12, { ...MCP_TOOL_APPROVAL, approvalId: 'shared' }))
+    registry.register(mcpElicitationRequest(13, { ...MCP_TOOL_APPROVAL, approvalId: 'shared' }))
+
+    expect(registry.sizes.prompts).toBe(2)
+  })
+
+  it('registers a tool-call approval that app-server could not correlate to a turn', () => {
+    const registry = new CodexPromptRegistry()
+    const prompt = registered(
+      registry.register({
+        id: 14,
+        method: 'mcpServer/elicitation/request',
+        params: { threadId: 'thread-1', turnId: null, ...MCP_TOOL_APPROVAL }
+      })
+    )
+
+    expect(prompt.turnId).toBeNull()
+  })
+
+  it('refuses session reuse and Deny when the request did not offer them', () => {
+    const registry = new CodexPromptRegistry()
+    const prompt = registered(
+      registry.register(
+        mcpElicitationRequest(15, {
+          ...MCP_TOOL_APPROVAL,
+          _meta: { codex_approval_kind: 'mcp_tool_call' }
+        })
+      )
+    )
+
+    expect(() =>
+      prepareCodexPromptAnswer(prompt, { kind: 'option', optionId: 'acceptForSession' })
+    ).toThrow('did not offer acceptForSession')
+    expect(() => prepareCodexPromptAnswer(prompt, { kind: 'option', optionId: 'decline' })).toThrow(
+      'did not offer decline'
+    )
+  })
+
+  it.each([
+    {
+      mode: 'url',
+      requestedSchema: undefined,
+      url: 'https://example.com',
+      elicitationId: 'link-1'
+    },
+    { mode: 'future-mode', requestedSchema: undefined },
+    { requestedSchema: { type: 'object', properties: [] } }
+  ])('does not turn unsupported elicitation shapes into approvals: %j', (params) => {
+    expect(
+      new CodexPromptRegistry().register(
+        mcpElicitationRequest(20, { ...MCP_TOOL_APPROVAL, ...params })
+      )
+    ).toBeNull()
+  })
+
+  it('leaves elicitations that ask for form input to the safe decline', () => {
+    const registry = new CodexPromptRegistry()
+
+    expect(
+      registry.register(
+        mcpElicitationRequest(9, {
+          ...MCP_TOOL_APPROVAL,
+          requestedSchema: { type: 'object', properties: { name: { type: 'string' } } }
+        })
+      )
+    ).toBeNull()
+    expect(
+      registry.register(mcpElicitationRequest(10, { ...MCP_TOOL_APPROVAL, _meta: {} }))
+    ).toBeNull()
+  })
+
+  it.each([
+    ['accept', { action: 'accept', content: null, _meta: null }],
+    ['acceptForSession', { action: 'accept', content: null, _meta: { persist: 'session' } }],
+    ['cancel', { action: 'cancel', content: null, _meta: null }]
+  ])('replies to %s in the shape Codex expects', (optionId, reply) => {
+    const registry = new CodexPromptRegistry()
+    const prompt = registry.register(mcpElicitationRequest(11, MCP_TOOL_APPROVAL))
+
+    expect(answer(prompt, { kind: 'option', optionId })).toEqual(reply)
+  })
+})

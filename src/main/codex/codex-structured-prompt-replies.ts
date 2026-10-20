@@ -2,6 +2,7 @@ import type { AgentSessionPromptResponse } from '../../shared/agent-session-ques
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { CODEX_PROMPT_MAX_ANSWER_BYTES } from './codex-prompt-registry-bounds'
 import {
+  CODEX_MCP_ELICITATION_METHOD,
   CODEX_USER_INPUT_METHOD,
   type CodexPendingPrompt,
   type CodexPromptClaim,
@@ -17,8 +18,11 @@ export {
 export {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
+  CODEX_MCP_ELICITATION_METHOD,
   CODEX_USER_INPUT_METHOD,
   CodexPromptRegistry,
+  codexMcpToolApprovalDecisions,
+  isCodexMcpToolApproval,
   isCodexPromptMethod,
   type CodexPendingPrompt,
   type CodexPromptClaim
@@ -71,6 +75,9 @@ export function prepareCodexPromptAnswer(
     if (response.kind !== 'option' || !isCodexApprovalDecision(response.optionId)) {
       throw new Error(`Codex item ${prompt.codexItemId} takes an approval decision`)
     }
+    if (prompt.offeredDecisions && !prompt.offeredDecisions.some((d) => d === response.optionId)) {
+      throw new Error(`Codex item ${prompt.codexItemId} did not offer ${response.optionId}`)
+    }
     return { kind: 'decision', decision: response.optionId }
   }
   // Each Codex question is its own journal item, so an answer names exactly one question.
@@ -98,6 +105,18 @@ export function prepareCodexPromptAnswer(
   return { kind: 'answer', questionId, answer }
 }
 
+/** Mirrors the reply Codex's own TUI sends for an MCP tool-call approval. */
+function codexMcpElicitationReply(decision: CodexApprovalDecision): Record<string, unknown> {
+  if (decision === 'accept' || decision === 'acceptForSession') {
+    return {
+      action: 'accept',
+      content: null,
+      _meta: decision === 'acceptForSession' ? { persist: 'session' } : null
+    }
+  }
+  return { action: decision, content: null, _meta: null }
+}
+
 /**
  * Records one prepared answer and returns the reply payload once the request is fully
  * answered. A multi-question user-input request stays pending until every
@@ -108,7 +127,9 @@ export function applyCodexPromptAnswer(
   prepared: CodexPreparedAnswer
 ): Record<string, unknown> | null {
   if (prepared.kind === 'decision') {
-    return { decision: prepared.decision }
+    return prompt.method === CODEX_MCP_ELICITATION_METHOD
+      ? codexMcpElicitationReply(prepared.decision)
+      : { decision: prepared.decision }
   }
   prompt.answers.set(prepared.questionId, prepared.answer)
   if (prompt.questionIds.some((id) => !prompt.answers.has(id))) {

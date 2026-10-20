@@ -8,6 +8,7 @@ import {
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
+  CODEX_MCP_ELICITATION_METHOD,
   encodeCodexQuestionOptionId
 } from './codex-structured-prompt-replies'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../native-chat/agent-session-journal/journal-row-schema'
@@ -102,6 +103,45 @@ describe('codex approval items', () => {
 
     expect(item.detail).toContain('output truncated')
     expect(Buffer.byteLength(JSON.stringify(item), 'utf8')).toBeLessThan(32 * 1024)
+  })
+
+  it('renders an MCP tool-call approval with the tool arguments and the TUI decision set', () => {
+    const item = codexApprovalItem({
+      method: CODEX_MCP_ELICITATION_METHOD,
+      params: {
+        message: 'Allow Notion to run tool "notion.notion-update-page"?',
+        requestedSchema: { type: 'object', properties: {} },
+        _meta: {
+          codex_approval_kind: 'mcp_tool_call',
+          persist: ['session', 'always'],
+          tool_params: { page_id: 'page-1' }
+        }
+      },
+      detail: null
+    })
+
+    expect(item).toMatchObject({
+      title: 'Allow Notion to run tool "notion.notion-update-page"?',
+      detail: '{"page_id":"page-1"}',
+      resolution: { state: 'pending' }
+    })
+    expect(item.options.map((option) => option.id)).toEqual([
+      'accept',
+      'acceptForSession',
+      'cancel'
+    ])
+  })
+
+  it('offers no session reuse for an MCP tool call that does not allow it', () => {
+    const item = codexApprovalItem({
+      method: CODEX_MCP_ELICITATION_METHOD,
+      params: { _meta: { codex_approval_kind: 'mcp_tool_call' } },
+      detail: null
+    })
+
+    expect(item.title).toBe('Allow this tool call?')
+    expect(item.detail).toBeNull()
+    expect(item.options.map((option) => option.id)).toEqual(['accept', 'cancel'])
   })
 })
 
