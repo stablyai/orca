@@ -283,8 +283,8 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
   protected readonly projectHostSetups = new RuntimeProjectHostSetupController({
     getStore: () => this.store,
     listRepos: () => this.listRepos(),
-    addRepo: (path, kind, hostId) => this.addRepo(path, kind, hostId),
-    cloneRepo: (url, destination, hostId) => this.cloneRepo(url, destination, hostId),
+    addRepo: (path, kind, host, seen) => this.addRepo(path, kind, host, undefined, undefined, seen),
+    cloneRepo: (url, destination, hostId, seen) => this.cloneRepo(url, destination, hostId, seen),
     invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
     invalidateWorktreeScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
     notifyReposChanged: () => this.notifyReposChanged(),

@@ -15,6 +15,7 @@ import { isHostOwnPhone } from '../host-own-phone'
 import {
   NativeChatSessionOptionsMutation,
   PRBotAuthorOverrideUpdate,
+  SettingsGetParams,
   SettingsUpdate
 } from '../../../../shared/rpc-contract/client-settings-params'
 import {
@@ -92,16 +93,23 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'settings.get',
     permission: 'workspace',
-    params: null,
-    handler: (_params, { runtime }) => ({ settings: runtime.getClientSettings() })
+    params: SettingsGetParams,
+    handler: (params, { runtime }) => ({
+      settings: runtime.getClientSettings({
+        includeRepositoryAddScript: params.includeRepositoryAddScript
+      })
+    })
   }),
   defineMethod({
     name: 'settings.update',
     permission: 'settings-write',
     params: SettingsUpdate,
-    handler: async (params, { runtime }) => ({
-      settings: await runtime.updateClientSettings(params)
-    })
+    handler: async (params, { runtime }) => {
+      const { includeRepositoryAddScript, ...updates } = params
+      return {
+        settings: await runtime.updateClientSettings(updates, { includeRepositoryAddScript })
+      }
+    }
   }),
   defineMethod({
     name: 'settings.getTerminalQuickCommands',

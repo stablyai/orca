@@ -21,6 +21,7 @@ import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custo
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import {
+  dropRepositoryAddScript,
   mergeSettings,
   mergeWebUIState,
   runtimeChatPermissionSetting
@@ -96,7 +97,7 @@ export function writeStoredSettings(
   settings: GlobalSettings,
   explicitActiveRuntimeEnvironmentId?: string | null
 ): void {
-  const durable = { ...settings }
+  const durable = dropRepositoryAddScript({ ...settings })
   if (explicitActiveRuntimeEnvironmentId !== undefined) {
     durable.activeRuntimeEnvironmentId = explicitActiveRuntimeEnvironmentId
   } else {
@@ -244,8 +245,8 @@ export async function syncRuntimeBackedSettings(
       runtimeUpdates,
       15_000
     )
-    const runtimeSettings = { ...result.settings }
-    delete runtimeSettings.activeRuntimeEnvironmentId
+    // Why: activeRuntimeEnvironmentId is local routing state, not a host setting.
+    const { activeRuntimeEnvironmentId: _local, ...runtimeSettings } = result.settings
     const updatedVisibilityDefaults = normalizeWorktreeVisibilityDefaults(
       runtimeSettings.worktreeVisibilityDefaults
     )

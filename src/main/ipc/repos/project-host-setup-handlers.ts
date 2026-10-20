@@ -30,6 +30,11 @@ import {
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
 import { addLocalRepoFromPath } from './local-repo-registration'
+import {
+  openRepositoryAddScriptRequestScope,
+  type RepositoryAddScriptCollectorSource
+} from '../../repository-add-scripts/repository-add-script-request-scope'
+import { reportNewGitRepository } from '../../repository-add-scripts/new-git-repository-observer'
 import { sshTargetNotConnectedMessage } from '../../providers/ssh-host-not-served-error'
 import {
   assertWslMoveHostSetupIdWritable,
@@ -91,7 +96,11 @@ function alignRepoWithRequestedProject(
   return buildProjectHostSetupResult(store, repo)
 }
 
-export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerProjectHostSetupHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  addScripts: RepositoryAddScriptCollectorSource
+): void {
   ipcMain.handle(
     'projectHostSetups:create',
     (_event, rawArgs: ProjectHostSetupCreateArgs): ProjectHostSetupCreateResult => {
@@ -168,6 +177,7 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
         rawArgs,
         'project_host_setup_invalid_args'
       )
+      const scope = openRepositoryAddScriptRequestScope(addScripts, args.repositoryAddScriptPreview)
       const parsedHost = parseExecutionHostId(args.hostId)
       if (!parsedHost) {
         throw new Error(`Unsupported host: ${args.hostId}`)
@@ -211,8 +221,11 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
       emitRepoAdded('folder_picker', result.alreadyExisted)
       if (result.alreadyExisted) {
         await prepareLocalWorktreeRootForRepo(store, aligned.repo)
+      } else {
+        // Only after the link above succeeded, so a rolled-back registration is never offered.
+        reportNewGitRepository(scope.observer, aligned.repo)
       }
-      return aligned
+      return { ...aligned, ...scope.singleFields() }
     }
   )
 }

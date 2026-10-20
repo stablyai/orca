@@ -6,6 +6,7 @@ import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
 import type { Repo, RepoKind } from './repo-types'
 import type { ProjectHostSetupTarget } from './project-host-setup-target'
+import type { RepositoryAddScriptRegistrationFields } from './repository-add-script-types'
 
 export type ProjectProviderIdentity = {
   provider: 'github'
@@ -123,7 +124,7 @@ export type ProjectHostSetupResult = {
   project: Project
   setup: ProjectHostSetup
   repo: Repo
-}
+} & RepositoryAddScriptRegistrationFields
 
 export type ProjectHostSetupCreateResult = {
   project: Project

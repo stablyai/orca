@@ -1,6 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
 import type { Repo } from '../../../../shared/repo-types'
+import type { RepositoryAddScriptPreview } from '../../../../shared/repository-add-script-types'
+
+const addScriptMocks = vi.hoisted(() => ({
+  resolveRequest: vi.fn(),
+  offer: vi.fn()
+}))
+
+vi.mock('@/runtime/runtime-repository-add-script', () => ({
+  resolveRuntimeRepositoryAddScriptRequest: addScriptMocks.resolveRequest
+}))
+
+vi.mock('@/store/repository-add-script-prompt', () => ({
+  offerRepositoryAddScript: addScriptMocks.offer
+}))
 
 const mocks = vi.hoisted(() => ({
   stateValues: [] as unknown[],
@@ -94,9 +108,26 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
   }
 }
 
+function makePreview(
+  overrides: Partial<RepositoryAddScriptPreview> = {}
+): RepositoryAddScriptPreview {
+  return {
+    token: 'token-created',
+    hostId: 'local',
+    hostLabel: 'This computer',
+    repoId: 'repo-created',
+    path: '/projects/created',
+    target: { kind: 'native', cwd: '/projects/created' },
+    script: 'echo created',
+    scriptHash: 'hash-created',
+    ...overrides
+  }
+}
+
 describe('useCreateRepo default-checkout handoff', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    addScriptMocks.resolveRequest.mockResolvedValue(undefined)
     mocks.stateIndex = 0
     mocks.stateSetters = []
     mocks.stateValues = []
@@ -247,6 +278,125 @@ describe('useCreateRepo default-checkout handoff', () => {
       executionHostId: 'runtime:env-1'
     })
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'runtime:env-1')
+  })
+
+  it('creates without the opt-in and never offers when the host does not accept one', async () => {
+    const repo = makeRepo()
+    mocks.createRepo.mockResolvedValue({ repo })
+    mocks.fetchWorktrees.mockResolvedValue(true)
+    const { useCreateRepo } = await import('./useCreateRepo')
+
+    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady)
+    await result.handleCreate()
+
+    expect(mocks.createRepo).toHaveBeenCalledWith({
+      parentPath: '/projects',
+      name: 'created',
+      kind: 'git'
+    })
+    expect(addScriptMocks.offer).not.toHaveBeenCalled()
+  })
+
+  it('opts a local create in and offers a matching preview once', async () => {
+    const repo = makeRepo()
+    const preview = makePreview()
+    addScriptMocks.resolveRequest.mockResolvedValue({ hostId: 'local' })
+    mocks.createRepo.mockResolvedValue({ repo, repositoryAddScriptPreview: preview })
+    mocks.fetchWorktrees.mockResolvedValue(true)
+    const { useCreateRepo } = await import('./useCreateRepo')
+
+    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady)
+    await result.handleCreate()
+
+    expect(mocks.createRepo).toHaveBeenCalledWith({
+      parentPath: '/projects',
+      name: 'created',
+      kind: 'git',
+      repositoryAddScriptPreview: { hostId: 'local' }
+    })
+    expect(addScriptMocks.offer).toHaveBeenCalledTimes(1)
+    expect(addScriptMocks.offer).toHaveBeenCalledWith(preview)
+  })
+
+  it('does not offer a preview addressed to another repo', async () => {
+    const repo = makeRepo()
+    addScriptMocks.resolveRequest.mockResolvedValue({ hostId: 'local' })
+    mocks.createRepo.mockResolvedValue({
+      repo,
+      repositoryAddScriptPreview: makePreview({ repoId: 'repo-other' })
+    })
+    mocks.fetchWorktrees.mockResolvedValue(true)
+    const { useCreateRepo } = await import('./useCreateRepo')
+
+    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady)
+    await result.handleCreate()
+
+    expect(addScriptMocks.offer).not.toHaveBeenCalled()
+  })
+
+  it('still offers a preview the host minted when a catalog refresh already stored the row', async () => {
+    const repo = makeRepo()
+    const preview = makePreview()
+    addScriptMocks.resolveRequest.mockResolvedValue({ hostId: 'local' })
+    mocks.createRepo.mockResolvedValue({
+      repo,
+      repositoryAddScriptPreview: preview
+    })
+    mocks.storeState.repos = [{ ...repo, executionHostId: 'local' }]
+    mocks.fetchWorktrees.mockResolvedValue(true)
+    const { useCreateRepo } = await import('./useCreateRepo')
+
+    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady)
+    await result.handleCreate()
+
+    expect(addScriptMocks.offer).toHaveBeenCalledWith(preview)
+  })
+
+  it('never offers a preview carried by an error result', async () => {
+    addScriptMocks.resolveRequest.mockResolvedValue({ hostId: 'local' })
+    mocks.createRepo.mockResolvedValue({
+      error: 'create failed',
+      repositoryAddScriptPreview: makePreview()
+    })
+    const { useCreateRepo } = await import('./useCreateRepo')
+
+    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady)
+    await result.handleCreate()
+
+    expect(mocks.stateSetters[STATE_ERROR_MESSAGE]).toHaveBeenCalledWith('create failed')
+    expect(addScriptMocks.offer).not.toHaveBeenCalled()
+  })
+
+  it('opts a runtime create in and offers the preview beside the repo', async () => {
+    const repo = makeRepo({ path: '/srv/created' })
+    const preview = makePreview({
+      hostId: 'runtime:env-1',
+      repoId: repo.id,
+      path: repo.path
+    })
+    addScriptMocks.resolveRequest.mockResolvedValue({ hostId: 'runtime:env-1' })
+    mocks.callRuntimeRpc.mockResolvedValue({ repo, repositoryAddScriptPreview: preview })
+    mocks.fetchWorktrees.mockResolvedValue(true)
+    const { useCreateRepo } = await import('./useCreateRepo')
+
+    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady, {
+      hostId: 'runtime:env-1',
+      runtimeEnvironmentId: 'env-1'
+    })
+    await result.handleCreate()
+
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'repo.create',
+      {
+        parentPath: '/projects',
+        name: 'created',
+        kind: 'git',
+        repositoryAddScriptPreview: { hostId: 'runtime:env-1' }
+      },
+      { timeoutMs: 60_000 }
+    )
+    expect(addScriptMocks.offer).toHaveBeenCalledWith(preview)
   })
 
   it('never creates on this computer while the chosen host is unresolved', async () => {

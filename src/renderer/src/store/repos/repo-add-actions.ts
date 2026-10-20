@@ -21,6 +21,12 @@ import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { warnIfProjectKnownInAnotherProfile } from '../projects/project-profile-presence'
 import { warnIfProjectCrossesWslFilesystemBoundary } from '../projects/project-wsl-filesystem-boundary-advisory'
+import { resolveRuntimeRepositoryAddScriptRequest } from '../../runtime/runtime-repository-add-script'
+import type {
+  RepositoryAddScriptPreview,
+  RepositoryAddScriptRegistrationFields
+} from '../../../../shared/repository-add-script-types'
+import { offerRegistrationAddScript } from './repository-add-script-offer'
 
 export function createRepoAddActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -35,27 +41,40 @@ export function createRepoAddActions(
             ? runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId ?? null)
             : defaultCreationHost(get().settings)
         const displayName = options?.displayName?.trim() || undefined
+        // Why: a folder registration never mints a script intent, so it does not pay the probe.
+        const request =
+          kind === 'folder' ? undefined : await resolveRuntimeRepositoryAddScriptRequest(target)
+        let preview: RepositoryAddScriptPreview | undefined
         let repo: Repo
         try {
           if (target.kind === 'local') {
             const result = await window.api.repos.add({
               path,
               kind,
-              ...(displayName ? { displayName } : {})
+              ...(displayName ? { displayName } : {}),
+              ...(request ? { repositoryAddScriptPreview: request } : {})
             })
             if ('error' in result) {
               throw new Error(result.error)
             }
+            preview = result.repositoryAddScriptPreview
             repo = result.repo
           } else {
-            repo = (
-              await callRuntimeRpc<{ repo: Repo }>(
-                target,
-                'repo.add',
-                { path, kind, ...(displayName ? { displayName } : {}) },
-                { timeoutMs: 15_000 }
-              )
-            ).repo
+            const result = await callRuntimeRpc<
+              { repo: Repo } & RepositoryAddScriptRegistrationFields
+            >(
+              target,
+              'repo.add',
+              {
+                path,
+                kind,
+                ...(displayName ? { displayName } : {}),
+                ...(request ? { repositoryAddScriptPreview: request } : {})
+              },
+              { timeoutMs: 15_000 }
+            )
+            preview = result.repositoryAddScriptPreview
+            repo = result.repo
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
@@ -127,6 +146,11 @@ export function createRepoAddActions(
               description: repo.displayName
             }
           )
+        }
+        // Why: only the host mints a preview, so it already proves a first registration; a
+        // concurrent catalog refresh can make this row look pre-existing and must not drop it.
+        offerRegistrationAddScript(request, repo.id, preview)
+        if (!alreadyAdded) {
           // Why: the cross-profile advisory applies to SSH-added projects too; the presence lookup already keys on connection/host.
           await warnIfProjectKnownInAnotherProfile(repo, get().activeOrcaProfileId)
           // Why after the set(): the project row carrying the runtime override only exists once the repo is in state.

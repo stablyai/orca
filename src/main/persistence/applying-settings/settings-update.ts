@@ -23,6 +23,7 @@ import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
 import { normalizeMachineName } from '../../../shared/machine-name'
+import { normalizeRepositoryAddScriptUpdate } from '../../../shared/repository-add-script-settings'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   addMobilePairingCustomAddress,
@@ -206,6 +207,12 @@ export function updateSettings(
   // runtime publishes is the trimmed, bounded form no matter which client set it.
   if ('machineName' in updates) {
     sanitizedUpdates.machineName = normalizeMachineName(updates.machineName)
+  }
+  // Why: an invalid write throws before any mutation, so it can never replace the configured script.
+  if ('repositoryAddScript' in updates) {
+    sanitizedUpdates.repositoryAddScript = normalizeRepositoryAddScriptUpdate(
+      updates.repositoryAddScript
+    )
   }
   if ('mobilePairingCustomAddress' in updates) {
     sanitizedUpdates.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(

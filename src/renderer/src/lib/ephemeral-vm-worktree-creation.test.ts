@@ -85,3 +85,36 @@ it('carries the captured provisioned-root ref identity into adoption', async () 
     ephemeralVmExpectedRefHead: 'abc123'
   })
 })
+
+it('never opts an ephemeral VM registration into the add-script offer', async () => {
+  prepareTargetMock.mockResolvedValue({ ok: false, error: 'provisioning failed' })
+
+  await prepareRequestForCreate('creation-1', {
+    repoId: 'repo-1',
+    name: 'feature',
+    setupDecision: 'inherit',
+    agent: null,
+    pendingFirstAgentMessageRename: false,
+    note: '',
+    startupPlan: null,
+    quickPrompt: '',
+    quickTelemetry: null,
+    ephemeralVmRecipe: {
+      sourceRepoId: 'repo-1',
+      recipeId: 'cloud-sandbox',
+      projectId: 'github:stablyai/orca',
+      checkoutMode: 'provisioned-root'
+    }
+  })
+
+  const { setupExistingFolder } = prepareTargetMock.mock.calls[0][0]
+  const args = {
+    projectId: 'project-1',
+    hostId: 'local',
+    path: '/workspace/repo',
+    setupMethod: 'imported-existing-folder'
+  }
+  await setupExistingFolder(args)
+
+  expect(store.setupProjectExistingFolder).toHaveBeenCalledWith(args, { offerAddScript: false })
+})

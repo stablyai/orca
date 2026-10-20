@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { GeneralPane } from './GeneralPane'
+import { LOCAL_SETTINGS_HOST_SCOPE } from './settings-host-scope'
 const fake = vi.hoisted(() => ({
   query: '',
   getVersion: vi.fn(async () => '1.4.100'),
@@ -63,6 +64,8 @@ it.each([false, true])(
     const props = {
       settings: getDefaultSettings('/synthetic'),
       updateSettings: vi.fn(),
+      updateSettingsOrThrow: vi.fn(),
+      hostScope: LOCAL_SETTINGS_HOST_SCOPE,
       fontSuggestions: [],
       wslSupportedPlatform
     }
@@ -102,6 +105,8 @@ it('keeps showing store-published remote update state without a remount', async 
   const props = {
     settings: getDefaultSettings('/synthetic'),
     updateSettings: vi.fn(),
+    updateSettingsOrThrow: vi.fn(),
+    hostScope: LOCAL_SETTINGS_HOST_SCOPE,
     fontSuggestions: []
   }
   fake.query = 'update'
@@ -124,6 +129,8 @@ it('keeps explicit remote refresh and true hide/reopen reads', async () => {
   const props = {
     settings: getDefaultSettings('/synthetic'),
     updateSettings: vi.fn(),
+    updateSettingsOrThrow: vi.fn(),
+    hostScope: LOCAL_SETTINGS_HOST_SCOPE,
     fontSuggestions: []
   }
   const view = render(<GeneralPane {...props} />)
@@ -141,7 +148,13 @@ it('keeps explicit remote refresh and true hide/reopen reads', async () => {
 
 it('preserves an autosave draft until external settings change or the section hides', async () => {
   const settings = { ...getDefaultSettings('/synthetic'), editorAutoSaveDelayMs: 1000 }
-  const props = { settings, updateSettings: vi.fn(), fontSuggestions: [] }
+  const props = {
+    settings,
+    updateSettings: vi.fn(),
+    updateSettingsOrThrow: vi.fn(),
+    hostScope: LOCAL_SETTINGS_HOST_SCOPE,
+    fontSuggestions: []
+  }
   const view = render(<GeneralPane {...props} />)
   await act(async () => {})
   fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '2500' } })
@@ -165,6 +178,8 @@ it('retains the revealed release picker only while Updates remains visible', asy
   const props = {
     settings: getDefaultSettings('/synthetic'),
     updateSettings: vi.fn(),
+    updateSettingsOrThrow: vi.fn(),
+    hostScope: LOCAL_SETTINGS_HOST_SCOPE,
     fontSuggestions: []
   }
   const view = render(<GeneralPane {...props} />)
@@ -191,6 +206,8 @@ it('does not publish a version result from a genuinely unmounted section', async
   const props = {
     settings: getDefaultSettings('/synthetic'),
     updateSettings: vi.fn(),
+    updateSettingsOrThrow: vi.fn(),
+    hostScope: LOCAL_SETTINGS_HOST_SCOPE,
     fontSuggestions: []
   }
   const view = render(<GeneralPane {...props} />)

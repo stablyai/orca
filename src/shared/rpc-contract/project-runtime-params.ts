@@ -5,6 +5,7 @@ import {
   normalizeExecutionHostId,
   parseExecutionHostId
 } from '../execution-host'
+import { RepositoryAddScriptRequestParam } from './repository-add-script-params'
 
 export const ProjectProviderIdentity = z.object({
   provider: z.literal('github'),
@@ -37,7 +38,9 @@ export const ProjectHostSetupExistingFolder = z.object({
   path: requiredString('Missing project path'),
   kind: z.enum(['git', 'folder']).optional(),
   displayName: OptionalString,
-  setupMethod: z.enum(['imported-existing-folder', 'cloned']).optional()
+  setupMethod: z.enum(['imported-existing-folder', 'cloned']).optional(),
+  // Independent of `hostId`: that one is rewritten to `local`, this alias must keep its spelling.
+  repositoryAddScriptPreview: RepositoryAddScriptRequestParam.optional()
 })
 
 export const ProjectHostSetupClone = z.object({
@@ -46,7 +49,8 @@ export const ProjectHostSetupClone = z.object({
   hostId: RequestedHostId,
   url: requiredString('Missing clone URL'),
   destination: requiredString('Missing clone destination'),
-  displayName: OptionalString
+  displayName: OptionalString,
+  repositoryAddScriptPreview: RepositoryAddScriptRequestParam.optional()
 })
 
 export const LocalWindowsRuntimePreference = z.discriminatedUnion('kind', [

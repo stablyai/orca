@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { BaseRefDefaultResult, BaseRefSearchResult } from '../../shared/repo-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { RepositoryAddScriptRequest } from '../../shared/repository-add-script-types'
 import type { PreloadApi } from '../api-types'
 
 export const reposApi = {
@@ -29,7 +30,16 @@ export const reposApi = {
 
   pickDirectory: () => ipcRenderer.invoke('repos:pickDirectory'),
 
-  clone: (args) => ipcRenderer.invoke('repos:clone', args),
+  // Annotated: contextual typing does not reach through the overloaded `clone` signature.
+  clone: (args: {
+    url: string
+    destination: string
+    repositoryAddScriptPreview?: RepositoryAddScriptRequest
+  }) => ipcRenderer.invoke('repos:clone', args),
+
+  decideAddScript: (args) => ipcRenderer.invoke('repos:decideAddScript', args),
+
+  getAddScriptOutcome: (args) => ipcRenderer.invoke('repos:getAddScriptOutcome', args),
 
   cloneAbort: () => ipcRenderer.invoke('repos:cloneAbort'),
 

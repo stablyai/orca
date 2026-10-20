@@ -11,11 +11,19 @@ const GUEST_TERMINATION_COMMAND_TIMEOUT_MS = 5_000
 export type WslProcessGroupTermination = ProcessTerminationBarrier & {
   wrapGuestArgs: (args: readonly string[]) => string[]
   stripControlOutput: (stderr: string) => string
+  /** Present only under `requireIsolation`: the guest refused before running the command. */
+  launchRefused?: (stderr: string) => boolean
 }
 
-export function createWslProcessGroupTermination(distro: string): WslProcessGroupTermination {
+export function createWslProcessGroupTermination(
+  distro: string,
+  // Why opt-in: Git tolerates running unwrapped (it waits for the root exit instead), but a
+  // user script must not start in a guest group Orca could not later clean up.
+  options: { requireIsolation?: boolean } = {}
+): WslProcessGroupTermination {
   const marker = `__ORCA_WSL_PROCESS_GROUP_${randomUUID()}__=`
   let processGroupId: number | null = null
+  const refusalMarker = `${marker}unsupported`
   let stderrTail = ''
 
   const observeStderr = (chunk: Buffer | string): void => {
@@ -68,14 +76,29 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
       // the wrapper would fail the Git command outright. Without a new session the
       // reported group is not ours to kill, so the fallback reports no identity
       // and the caller falls back to waiting for the root exit.
-      const script = [
-        'if setsid --wait true 2>/dev/null; then',
-        `  exec setsid --wait sh -c ${quotePosixShell(reportGroup)} orca-wsl-process-group "$@"`,
-        'fi',
-        'exec "$@"'
-      ].join('\n')
+      const script = options.requireIsolation
+        ? [
+            'if ! setsid --wait true 2>/dev/null; then',
+            `  printf '%s\\n' ${quotePosixShell(refusalMarker)} >&2`,
+            '  exit 125',
+            'fi',
+            `exec setsid --wait sh -c ${quotePosixShell(reportGroup)} orca-wsl-process-group "$@"`
+          ].join('\n')
+        : [
+            'if setsid --wait true 2>/dev/null; then',
+            `  exec setsid --wait sh -c ${quotePosixShell(reportGroup)} orca-wsl-process-group "$@"`,
+            'fi',
+            'exec "$@"'
+          ].join('\n')
       return ['sh', '-c', script, 'orca-wsl-process-group', ...args]
     },
-    stripControlOutput: (stderr) => stderr.replace(new RegExp(`${marker}\\d+\\r?\\n?`, 'g'), '')
+    stripControlOutput: (stderr) =>
+      stderr
+        .replace(new RegExp(`${marker}\\d+\\r?\\n?`, 'g'), '')
+        .replace(`${refusalMarker}\n`, '')
+        .replace(`${refusalMarker}\r\n`, ''),
+    ...(options.requireIsolation
+      ? { launchRefused: (stderr: string) => stderr.includes(refusalMarker) }
+      : {})
   }
 }

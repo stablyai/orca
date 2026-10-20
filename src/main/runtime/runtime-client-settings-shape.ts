@@ -33,6 +33,7 @@ export type RuntimeClientSettings = Pick<
   | 'agentSkillSharingEnabled'
   | 'machineName'
   | 'nativeChatPermissionMode'
+  | 'repositoryAddScript'
 > & {
   /** Older clients still read these; neither is persisted or accepted as an update. */
   openAgentTabsInChatByDefault?: boolean
@@ -40,6 +41,9 @@ export type RuntimeClientSettings = Pick<
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
   sourceControlAi: RuntimeClientSourceControlAi
 }
+
+/** Per-request projection switches; never persisted. */
+export type RuntimeClientSettingsReadOptions = { includeRepositoryAddScript?: boolean }
 
 /** The saved per-action launch recipes (agent, prompt template, agent args), already migrated. */
 export type RuntimeClientSourceControlAi = { actions: SourceControlAiActionDefaults }
@@ -72,4 +76,5 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'worktreeVisibilityDefaults'
   | 'machineName'
   | 'nativeChatPermissionMode'
+  | 'repositoryAddScript'
 >

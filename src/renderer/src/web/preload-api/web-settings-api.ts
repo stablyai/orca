@@ -23,6 +23,7 @@ import { noopUnsubscribe } from './web-storage'
 
 export function createWebSettingsApi(): Partial<PreloadApi> {
   return {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the web fallback implements only the settings methods callers use; unimplemented ones go through the fallback proxy.
     settings: {
       get: async () => getRuntimeBackedStoredSettings(),
       // Why: localStorage-backed settings are synchronous, so the pre-hydration kill-switch read works the same as desktop.
@@ -31,6 +32,8 @@ export function createWebSettingsApi(): Partial<PreloadApi> {
         const sanitizedUpdates = { ...updates }
         const runtimeEnvironment = requireActiveEnvironmentOrNull()
         delete sanitizedUpdates.activeRuntimeEnvironmentId
+        // Why: only an explicit write to the selected host may change it, never this generic path.
+        delete sanitizedUpdates.repositoryAddScript
         if (
           'worktreeVisibilityDefaults' in sanitizedUpdates &&
           runtimeEnvironment &&

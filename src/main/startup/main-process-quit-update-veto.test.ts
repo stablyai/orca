@@ -50,7 +50,9 @@ it('keeps startup services live when the updater has vetoed before-quit', async 
   const unsubscribeAgentAwakeStatusChanges = vi.fn()
   const dispose = vi.fn()
   const stop = vi.fn()
+  const closeRepositoryAddScripts = vi.fn(async () => {})
   const state = {
+    runtime: { closeRepositoryAddScripts },
     isQuitting: false,
     desktopRelayService: { fenceAndCloseNow },
     runtimeRpc: { setMobileRelayPairingProvider },
@@ -75,6 +77,7 @@ it('keeps startup services live when the updater has vetoed before-quit', async 
   expect(unsubscribeAgentAwakeStatusChanges).not.toHaveBeenCalled()
   expect(dispose).not.toHaveBeenCalled()
   expect(stop).not.toHaveBeenCalled()
+  expect(closeRepositoryAddScripts).not.toHaveBeenCalled()
   expect(state.agentAwakeService).toEqual({ dispose })
   expect(state.unsubscribeAgentAwakeStatusChanges).toBe(unsubscribeAgentAwakeStatusChanges)
 
@@ -86,6 +89,8 @@ it('keeps startup services live when the updater has vetoed before-quit', async 
   expect(unsubscribeAgentAwakeStatusChanges).toHaveBeenCalledOnce()
   expect(dispose).toHaveBeenCalledOnce()
   expect(stop).toHaveBeenCalledOnce()
+  // A renderer can still veto before-quit; add-script approvals close only on the committed quit.
+  expect(closeRepositoryAddScripts).not.toHaveBeenCalled()
   for (const listener of process.listeners('exit')) {
     if (!exitListenersBefore.includes(listener)) {
       process.removeListener('exit', listener)

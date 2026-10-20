@@ -1,6 +1,5 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import type { Store } from '../../persistence'
@@ -25,26 +24,30 @@ import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cac
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { runWithClonePathLock } from './clone-path-lock'
+import {
+  awaitPendingCloneAbortCleanup,
+  markCloneAbortCleanupPending,
+  settleCloneAbortCleanup,
+  type ActiveCloneMetadata
+} from './clone-abort-cleanup'
+import { RepositoryAddScriptRequestIpcArg } from './repo-ipc-arg-schemas'
+import {
+  openRepositoryAddScriptRequestScope,
+  type RepositoryAddScriptCollectorSource
+} from '../../repository-add-scripts/repository-add-script-request-scope'
+import { reportNewGitRepository } from '../../repository-add-scripts/new-git-repository-observer'
+import type {
+  RepositoryAddScriptRequest,
+  RepoWithRepositoryAddScriptPreview
+} from '../../../shared/repository-add-script-types'
 import { resolveClonedFolderConversion } from '../../folder-repo-git-conversion'
 import { findExtraFolderWorkspaceIds } from '../../folder-workspace-meta-presence'
-
-type ActiveCloneMetadata = {
-  path: string
-  pathKey: string
-  claimedTarget: ClaimedCloneTarget
-  process: ChildProcess
-  abortRequested: boolean
-  generation: number
-  pendingAbortCleanup: Promise<void> | null
-  resolvePendingAbortCleanup: (() => void) | null
-}
 
 // Why: module-scoped so the abort handle survives macOS window re-creation, when registerRepoHandlers re-runs.
 let activeClone: ActiveCloneMetadata | null = null
 const pendingLocalCloneControllers = new Set<AbortController>()
 let nextCloneGeneration = 1
 const latestCloneGenerationByPath = new Map<string, number>()
-const pendingAbortCleanupByPath = new Map<string, Promise<void>>()
 
 function emitCloneProgressFromText(mainWindow: BrowserWindow, text: string): void {
   for (const line of text.split(/[\r\n]+/)) {
@@ -80,26 +83,11 @@ async function cleanupOwnedCloneTarget(metadata: ActiveCloneMetadata): Promise<v
   await cleanupClaimedCloneTarget(metadata.path, metadata.claimedTarget)
 }
 
-function markCloneAbortCleanupPending(metadata: ActiveCloneMetadata): void {
-  if (metadata.resolvePendingAbortCleanup) {
-    return
-  }
-  metadata.pendingAbortCleanup = new Promise<void>((resolve) => {
-    metadata.resolvePendingAbortCleanup = resolve
-  })
-  pendingAbortCleanupByPath.set(metadata.pathKey, metadata.pendingAbortCleanup)
-}
-
-function settleCloneAbortCleanup(metadata: ActiveCloneMetadata): void {
-  if (pendingAbortCleanupByPath.get(metadata.pathKey) === metadata.pendingAbortCleanup) {
-    pendingAbortCleanupByPath.delete(metadata.pathKey)
-  }
-  metadata.resolvePendingAbortCleanup?.()
-  metadata.pendingAbortCleanup = null
-  metadata.resolvePendingAbortCleanup = null
-}
-
-export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerRepoCloneHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  addScripts: RepositoryAddScriptCollectorSource
+): void {
   ipcMain.handle('repos:cloneAbort', async () => {
     for (const controller of pendingLocalCloneControllers) {
       controller.abort()
@@ -116,7 +104,19 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
 
   ipcMain.handle(
     'repos:clone',
-    async (_event, args: { url: string; destination: string }): Promise<Repo> => {
+    async (
+      _event,
+      args: {
+        url: string
+        destination: string
+        repositoryAddScriptPreview?: RepositoryAddScriptRequest
+      }
+    ): Promise<Repo | RepoWithRepositoryAddScriptPreview> => {
+      const request = RepositoryAddScriptRequestIpcArg.safeParse(args.repositoryAddScriptPreview)
+      if (!request.success) {
+        throw new Error('invalid_repository_add_script_request')
+      }
+      const scope = openRepositoryAddScriptRequestScope(addScripts, request.data)
       // Why: derive the repo folder name from the URL's last segment, matching default git clone behavior.
       const clonePath = deriveValidatedClonePath(args)
       const clonePathKey = getClonePathComparisonKey(clonePath)
@@ -129,8 +129,15 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
               getClonePathComparisonKey(r.path) === clonePathKey &&
               getRepoExecutionHostId(r) === LOCAL_EXECUTION_HOST_ID
           )
-      return runWithClonePathLock(clonePathKey, async () => {
-        await pendingAbortCleanupByPath.get(clonePathKey)
+      const finalizeReusedClone = async (reused: Repo): Promise<Repo> => {
+        await prepareLocalWorktreeRootForRepo(store, reused)
+        invalidateAuthorizedRootsCache()
+        notifyReposChanged(mainWindow)
+        emitRepoAdded('clone_url', true, true)
+        return reused
+      }
+      const clonedRepo = await runWithClonePathLock(clonePathKey, async () => {
+        await awaitPendingCloneAbortCleanup(clonePathKey)
         const cloneMetadataRef: { current: ActiveCloneMetadata | null } = { current: null }
         let claimedTarget: ClaimedCloneTarget
         let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
@@ -281,11 +288,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
             // Why: git re-created this project's folder, so its worktree root is gone with it and
             // the authorized-roots cache still holds the answers from before the folder came back.
             if (current) {
-              await prepareLocalWorktreeRootForRepo(store, current)
-              invalidateAuthorizedRootsCache()
-              notifyReposChanged(mainWindow)
-              emitRepoAdded('clone_url', true, true)
-              return current
+              return await finalizeReusedClone(current)
             }
           }
 
@@ -294,6 +297,11 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
             kind: 'git',
             executionHostId: LOCAL_EXECUTION_HOST_ID
           })
+          // Icon discovery is async, so another registration can land after the check above.
+          const raceWinner = findSaved()
+          if (raceWinner) {
+            return await finalizeReusedClone(raceWinner)
+          }
           const repo: Repo = {
             id: randomUUID(),
             path: clonePath,
@@ -307,6 +315,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
           }
 
           store.addRepo(repo)
+          reportNewGitRepository(scope.observer, repo)
           await prepareLocalWorktreeRootForRepo(store, repo)
           invalidateAuthorizedRootsCache()
           notifyReposChanged(mainWindow)
@@ -319,6 +328,8 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
           }
         }
       })
+      // Without an opt-in the channel keeps returning the bare row.
+      return request.data ? { repo: clonedRepo, ...scope.singleFields() } : clonedRepo
     }
   )
 }

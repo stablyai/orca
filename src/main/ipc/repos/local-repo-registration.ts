@@ -14,12 +14,17 @@ import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared
 import { findProjectAtSameRealPath } from '../../project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
+import {
+  reportNewGitRepository,
+  type NewGitRepositoryObserver
+} from '../../repository-add-scripts/new-git-repository-observer'
 
 export async function addLocalRepoFromPath(
   store: Store,
   path: string,
   kind: 'git' | 'folder' = 'git',
-  displayName?: string
+  displayName?: string,
+  onNewGitRepository?: NewGitRepositoryObserver
 ): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
   const repoKind = kind === 'folder' ? 'folder' : 'git'
   if (repoKind === 'git') {
@@ -92,7 +97,7 @@ export async function addLocalRepoFromPath(
   })
   // Another registration can finish while icon discovery is pending.
   const raceWinner = store.getRepos().find((repo) => {
-    if (repo.connectionId) {
+    if (repo.connectionId || getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
       return false
     }
     const repoPathKey = normalizeRuntimePathForComparison(repo.path)
@@ -123,6 +128,7 @@ export async function addLocalRepoFromPath(
   }
 
   store.addRepo(repo)
+  reportNewGitRepository(onNewGitRepository, repo)
   await prepareLocalWorktreeRootForRepo(store, repo)
   return { repo, alreadyExisted: false }
 }

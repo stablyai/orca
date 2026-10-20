@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { MACHINE_NAME_MAX_LENGTH } from '../../../shared/machine-name'
+import { REPOSITORY_ADD_SCRIPT_MAX_LENGTH } from '../../../shared/repository-add-script-settings'
 import { updateSettings, type SettingsMutationOperations } from './settings-update'
 
 function settingsOperations(settings: Partial<GlobalSettings>): SettingsMutationOperations {
@@ -49,6 +50,50 @@ describe('updateSettings machineName', () => {
       { machineName: 'QA desk' },
       undefined
     )
+  })
+})
+
+describe('updateSettings repositoryAddScript', () => {
+  it('stores valid text exactly', () => {
+    const operations = settingsOperations({})
+    const script = '#!/bin/sh\n# keep\n  echo hi  \n'
+
+    expect(updateSettings(operations, { repositoryAddScript: script }).repositoryAddScript).toBe(
+      script
+    )
+  })
+
+  it('stores an empty or whitespace-only write as unconfigured', () => {
+    const operations = settingsOperations({ repositoryAddScript: 'echo hi' })
+
+    expect(updateSettings(operations, { repositoryAddScript: '' }).repositoryAddScript).toBe(
+      undefined
+    )
+    updateSettings(operations, { repositoryAddScript: 'echo hi' })
+    expect(updateSettings(operations, { repositoryAddScript: ' \n' }).repositoryAddScript).toBe(
+      undefined
+    )
+  })
+
+  it('leaves it untouched when the write does not mention it', () => {
+    const operations = settingsOperations({ repositoryAddScript: 'echo hi' })
+
+    expect(updateSettings(operations, { machineName: 'desk' }).repositoryAddScript).toBe('echo hi')
+  })
+
+  it.each([
+    ['a non-string', 42],
+    ['null', null],
+    ['oversized text', 'x'.repeat(REPOSITORY_ADD_SCRIPT_MAX_LENGTH + 1)]
+  ])('refuses %s and keeps the configured script', (_label, value) => {
+    const operations = settingsOperations({ repositoryAddScript: 'echo hi' })
+
+    expect(() =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a hand-built client can send any JSON; the boundary must refuse it.
+      updateSettings(operations, { repositoryAddScript: value as unknown as string })
+    ).toThrow()
+    expect(operations.state.settings.repositoryAddScript).toBe('echo hi')
+    expect(operations.scheduleSave).not.toHaveBeenCalled()
   })
 })
 

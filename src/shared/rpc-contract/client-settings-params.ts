@@ -8,6 +8,7 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../tui-agent-launch-defaults'
 import { MACHINE_NAME_MAX_LENGTH } from '../machine-name'
+import { REPOSITORY_ADD_SCRIPT_MAX_LENGTH } from '../repository-add-script-settings'
 import { normalizePRBotAuthorOverrides } from '../pr-bot-author-overrides'
 import { WorktreeVisibilityDefaultsUpdate } from './worktree-visibility-defaults-params'
 import { AGENT_CHAT_PERMISSION_MODES } from '../agent-chat-permission-mode'
@@ -125,7 +126,15 @@ export const SettingsUpdate = z
       .unknown()
       .transform((value) => normalizePRBotAuthorOverrides(value))
       .optional(),
-    nativeChatPermissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional()
+    nativeChatPermissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
+    repositoryAddScript: z.string().max(REPOSITORY_ADD_SCRIPT_MAX_LENGTH).optional(),
+    // Why: a response-projection option, never persisted; only strict `true` returns the script.
+    includeRepositoryAddScript: z.boolean().optional()
   })
   .strict()
+  .default({})
+
+// Non-strict: older clients may send arbitrary params, and null/absent params parse as {}.
+export const SettingsGetParams = z
+  .object({ includeRepositoryAddScript: z.boolean().optional() })
   .default({})

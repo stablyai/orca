@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSection'
+import { LOCAL_SETTINGS_HOST_SCOPE } from './settings-host-scope'
 import type { ReactNode } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
@@ -45,6 +46,8 @@ function renderSection(
       <GeneralWorkspaceSettingsSection
         settings={settings}
         updateSettings={updateSettings}
+        updateSettingsOrThrow={updateSettings}
+        hostScope={LOCAL_SETTINGS_HOST_SCOPE}
         defaultsSupported={options.defaultsSupported}
         sourceDefaultsSupported={options.sourceDefaultsSupported}
       />

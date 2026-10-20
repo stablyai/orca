@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { dirname, getRelativePathInsideRoot, joinPath } from './path'
+import { basename, dirname, getRelativePathInsideRoot, joinPath } from './path'
+
+describe('basename', () => {
+  it('takes the last segment of POSIX, Windows and mixed-separator paths', () => {
+    expect(basename('/a/b/repo')).toBe('repo')
+    expect(basename('C:\\work\\repo')).toBe('repo')
+    expect(basename('C:/work/repo')).toBe('repo')
+  })
+
+  it('ignores a trailing separator', () => {
+    expect(basename('/a/b/repo/')).toBe('repo')
+    expect(basename('C:\\work\\repo\\')).toBe('repo')
+  })
+
+  it('returns an empty name for a root or empty path', () => {
+    // The dialogs fall back to the full path so a root still reads as itself.
+    expect(basename('/')).toBe('')
+    expect(basename('')).toBe('')
+  })
+})
 
 describe('dirname', () => {
   it('keeps the POSIX root when resolving a file in the filesystem root', () => {

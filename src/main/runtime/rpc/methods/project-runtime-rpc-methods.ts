@@ -8,6 +8,7 @@ import {
   ProjectHostSetupUpdate,
   ProjectUpdate
 } from '../../../../shared/rpc-contract/project-runtime-params'
+import { openRepositoryAddScriptRequestScope } from '../../../repository-add-scripts/repository-add-script-request-scope'
 
 export const PROJECT_RUNTIME_METHODS = [
   defineMethod({
@@ -48,23 +49,31 @@ export const PROJECT_RUNTIME_METHODS = [
     name: 'projectHostSetup.setupExistingFolder',
     permission: 'workspace',
     params: ProjectHostSetupExistingFolder,
-    handler: async (params, context) => ({
-      result: projectRepoResultVisibilityForClient(
-        await context.runtime.setupProjectExistingFolder(params),
-        context
-      )
-    })
+    handler: async ({ repositoryAddScriptPreview, ...args }, context) => {
+      const scope = openRepositoryAddScriptRequestScope(context.runtime, repositoryAddScriptPreview)
+      const result = await context.runtime.setupProjectExistingFolder(args, scope.observer)
+      return {
+        result: projectRepoResultVisibilityForClient(
+          { ...result, ...scope.singleFields() },
+          context
+        )
+      }
+    }
   }),
   defineMethod({
     name: 'projectHostSetup.clone',
     permission: 'workspace',
     params: ProjectHostSetupClone,
-    handler: async (params, context) => ({
-      result: projectRepoResultVisibilityForClient(
-        await context.runtime.setupProjectClone(params),
-        context
-      )
-    })
+    handler: async ({ repositoryAddScriptPreview, ...args }, context) => {
+      const scope = openRepositoryAddScriptRequestScope(context.runtime, repositoryAddScriptPreview)
+      const result = await context.runtime.setupProjectClone(args, scope.observer)
+      return {
+        result: projectRepoResultVisibilityForClient(
+          { ...result, ...scope.singleFields() },
+          context
+        )
+      }
+    }
   }),
   defineMethod({
     name: 'projectHostSetup.update',

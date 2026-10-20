@@ -16,6 +16,10 @@ import {
   resolveNestedRepoSelection
 } from '../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
+import {
+  reportNewGitRepository,
+  type NewGitRepositoryObserver
+} from '../repository-add-scripts/new-git-repository-observer'
 import type { RuntimeStore } from './runtime-store-contract'
 
 type RuntimeNestedRepoImportDependencies = {
@@ -41,12 +45,15 @@ export class RuntimeNestedRepoImport {
     return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
   }
 
-  async import(args: {
-    parentPath: string
-    groupName: string
-    projectPaths: string[]
-    mode: ProjectGroupImportMode
-  }): Promise<ProjectGroupImportResult> {
+  async import(
+    args: {
+      parentPath: string
+      groupName: string
+      projectPaths: string[]
+      mode: ProjectGroupImportMode
+    },
+    onNewGitRepository?: NewGitRepositoryObserver
+  ): Promise<ProjectGroupImportResult> {
     await awaitWindowsHostGitEnvironmentReady({ cwd: args.parentPath })
     const store = this.deps.getStore()
     if (!store?.createProjectGroup || !store.moveProjectToGroup) {
@@ -115,6 +122,7 @@ export class RuntimeNestedRepoImport {
           ...(group ? { projectGroupId: group.id, projectGroupOrder } : {})
         }
         store.addRepo(repo)
+        reportNewGitRepository(onNewGitRepository, repo)
         importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
         results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
       } catch (error) {

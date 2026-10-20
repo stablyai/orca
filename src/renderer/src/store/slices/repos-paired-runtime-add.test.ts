@@ -36,9 +36,16 @@ describe('paired runtime repo add routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'paired-host',
       method: 'repo.add',
-      params: { path: '/srv/paired-project', kind: 'folder' },
+      params: {
+        path: '/srv/paired-project',
+        kind: 'folder'
+      },
       timeoutMs: 15_000
     })
+    // Why: a folder registration never mints a script intent, so the key must be absent.
+    expect(runtimeEnvironmentCall.mock.calls[0][0].params).not.toHaveProperty(
+      'repositoryAddScriptPreview'
+    )
     expect(reposAdd).not.toHaveBeenCalled()
     expect(reposPickFolder).not.toHaveBeenCalled()
   })

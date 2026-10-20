@@ -1,4 +1,7 @@
-import type { ChildProcess } from 'node:child_process'
+import { spawnSync, type ChildProcess } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { runWslProcessMock } = vi.hoisted(() => ({ runWslProcessMock: vi.fn() }))
@@ -91,5 +94,46 @@ describe('WSL process-group termination', () => {
 
     await expect(termination.signal({} as ChildProcess)).resolves.toBe(true)
     expect(runWslProcessMock.mock.calls[0]?.[0]?.args).toEqual(['4321'])
+  })
+
+  describe('strict isolation', () => {
+    function strict() {
+      const termination = createWslProcessGroupTermination('Ubuntu', { requireIsolation: true })
+      return { termination, args: termination.wrapGuestArgs(['/usr/bin/touch', 'SENTINEL']) }
+    }
+
+    it('keeps the default Git fallback unchanged', () => {
+      const script = createWslProcessGroupTermination('Ubuntu').wrapGuestArgs(['git'])[2] ?? ''
+      expect(script.trimEnd().endsWith('exec "$@"')).toBe(true)
+      expect(script).not.toContain('unsupported')
+    })
+
+    it('refuses before the command when setsid --wait is unsupported', () => {
+      const { termination, args } = strict()
+      const directory = mkdtempSync(join(tmpdir(), 'strict-wrapper-'))
+      try {
+        const sentinel = join(directory, 'ran')
+        const result = spawnSync('/bin/sh', [...args.slice(1, -1), sentinel], {
+          env: { PATH: '/nonexistent' },
+          encoding: 'utf-8'
+        })
+        expect(result.status).not.toBe(0)
+        expect(existsSync(sentinel)).toBe(false)
+        expect(termination.launchRefused?.(result.stderr)).toBe(true)
+        expect(termination.stripControlOutput(result.stderr)).toBe('')
+      } finally {
+        rmSync(directory, { recursive: true, force: true })
+      }
+    })
+
+    it('does not mistake ordinary output or a reported group for a refusal', () => {
+      const { termination } = strict()
+      expect(termination.launchRefused?.('setsid: unsupported')).toBe(false)
+    })
+
+    it('still wraps in a reported session when supported', () => {
+      const { args } = strict()
+      expect(args[2]).toContain('exec setsid --wait sh -c')
+    })
   })
 })

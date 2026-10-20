@@ -20,6 +20,13 @@ import * as issueCommandFile from '../../issue-command-file'
 import { registerProjectHostSetupHandlers } from './project-host-setup-handlers'
 import { registerRepoCatalogHandlers } from './repo-catalog-handlers'
 
+// No opt-in is sent here, so no collector may be requested.
+const NO_ADD_SCRIPTS = {
+  createRepositoryAddScriptCollector: (): never => {
+    throw new Error('unexpected collector')
+  }
+}
+
 const { handlers } = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>()
 }))
@@ -84,7 +91,7 @@ describe('project host setups under a WSL move', () => {
     store.addRepo(repo('repo-1'))
     store.addRepo(repo('repo-2'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
-    registerProjectHostSetupHandlers(new BrowserWindow(), store)
+    registerProjectHostSetupHandlers(new BrowserWindow(), store, NO_ADD_SCRIPTS)
     const moving = setupFor('repo-1')
 
     await expect(
@@ -108,7 +115,7 @@ describe('project host setups under a WSL move', () => {
   it("keeps a setup's own repo frozen once the WSL host owns it", async () => {
     store.addRepo(repo('repo-1'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
-    registerProjectHostSetupHandlers(new BrowserWindow(), store)
+    registerProjectHostSetupHandlers(new BrowserWindow(), store, NO_ADD_SCRIPTS)
     const owned = setupFor('repo-1')
 
     await expect(

@@ -265,7 +265,10 @@ describe('repo slice runtime folder fallback', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'repo.add',
-      params: { path: '/srv/non-git', kind: 'folder' },
+      params: {
+        path: '/srv/non-git',
+        kind: 'folder'
+      },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
@@ -312,7 +315,8 @@ describe('repo slice runtime folder fallback', () => {
     expect(runtimeEnvironmentTransportCall).not.toHaveBeenCalled()
     expect(reposAdd).toHaveBeenNthCalledWith(1, {
       path: '/local/non-git',
-      kind: 'git'
+      kind: 'git',
+      repositoryAddScriptPreview: { hostId: 'local' }
     })
     expect(store.getState().activeModal).toBe('confirm-non-git-folder')
     expect(store.getState().modalData).toEqual({ folderPath: '/local/non-git' })

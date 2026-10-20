@@ -140,7 +140,7 @@ describe('client UI RPC methods', () => {
       })
     )
 
-    expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+    expect(vi.mocked(runtime.updateClientSettings).mock.calls[0]?.[0]).toEqual({
       worktreeVisibilityDefaults: {
         external: 'show',
         customSources: [{ id: 'team', rootPath: '/srv/team' }],
@@ -173,7 +173,7 @@ describe('client UI RPC methods', () => {
       })
     )
 
-    expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+    expect(vi.mocked(runtime.updateClientSettings).mock.calls[0]?.[0]).toEqual({
       defaultTaskSource: 'jira',
       visibleTaskProviders: ['github', 'jira']
     })
@@ -192,7 +192,7 @@ describe('client UI RPC methods', () => {
       })
     )
 
-    expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+    expect(vi.mocked(runtime.updateClientSettings).mock.calls[0]?.[0]).toEqual({
       prBotAuthorOverrides: ['another-bot', 'gretelflux']
     })
   })

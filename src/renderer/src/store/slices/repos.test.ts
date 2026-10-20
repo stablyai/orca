@@ -215,9 +215,16 @@ describe('repo slice runtime routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'repo.add',
-      params: { path: '/srv/project', kind: 'folder' },
+      params: {
+        path: '/srv/project',
+        kind: 'folder'
+      },
       timeoutMs: 15_000
     })
+    // Why: a folder registration never mints a script intent, so the key must be absent.
+    expect(runtimeEnvironmentCall.mock.calls[0][0].params).not.toHaveProperty(
+      'repositoryAddScriptPreview'
+    )
     expect(reposAdd).not.toHaveBeenCalled()
     expect(reposPickFolder).not.toHaveBeenCalled()
     expect(orcaProfileFindProjectProfiles).not.toHaveBeenCalled()
@@ -302,7 +309,8 @@ describe('repo slice runtime routing', () => {
       projectProviderIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' },
       hostId: 'local',
       path: '/local',
-      kind: 'git'
+      kind: 'git',
+      repositoryAddScriptPreview: { hostId: 'local' }
     })
   })
 
@@ -362,7 +370,8 @@ describe('repo slice runtime routing', () => {
         projectId: project.id,
         hostId: 'runtime:env-1',
         path: '/srv/project',
-        kind: 'git'
+        kind: 'git',
+        repositoryAddScriptPreview: { hostId: 'runtime:env-1' }
       },
       timeoutMs: 15_000
     })
@@ -417,6 +426,10 @@ describe('repo slice runtime routing', () => {
       path: '/srv/project',
       kind: 'git'
     })
+    // Why: the key must be absent, not merely undefined — SSH rows never run the script.
+    expect(projectsSetupExistingFolder.mock.calls[0][0]).not.toHaveProperty(
+      'repositoryAddScriptPreview'
+    )
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
@@ -442,7 +455,7 @@ describe('repo slice runtime routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
-    reposClone.mockResolvedValue(clonedRepo)
+    reposClone.mockResolvedValue({ repo: clonedRepo })
     projectsSetupExistingFolder.mockResolvedValue({ project, setup, repo: clonedRepo })
     const store = createTestStore()
 
@@ -462,7 +475,8 @@ describe('repo slice runtime routing', () => {
 
     expect(reposClone).toHaveBeenCalledWith({
       url: 'https://github.com/stablyai/orca.git',
-      destination: '/workspace'
+      destination: '/workspace',
+      repositoryAddScriptPreview: { hostId: 'local' }
     })
     expect(projectsSetupExistingFolder).toHaveBeenCalledWith({
       projectId: project.id,
@@ -536,7 +550,8 @@ describe('repo slice runtime routing', () => {
       method: 'repo.clone',
       params: {
         url: 'https://github.com/stablyai/orca.git',
-        destination: '/srv'
+        destination: '/srv',
+        repositoryAddScriptPreview: { hostId: 'runtime:env-1' }
       },
       timeoutMs: 10 * 60_000
     })

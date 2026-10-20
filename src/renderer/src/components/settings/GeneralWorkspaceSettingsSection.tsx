@@ -1,17 +1,20 @@
 import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { OpenInMenuSetting } from './OpenInMenuSetting'
+import { RepositoryAddScriptSetting } from './RepositoryAddScriptSetting'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
 import { translate } from '@/i18n/i18n'
 import { GlobalWorktreeVisibilitySourcesSetting } from './GlobalWorktreeVisibilitySourcesSetting'
 import { GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+import type { SettingsHostScope } from './settings-host-scope'
 
 type GeneralWorkspaceSettingsSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  updateSettingsOrThrow?: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  updateSettingsOrThrow: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  hostScope: SettingsHostScope
   defaultsSupported?: boolean
   sourceDefaultsSupported?: boolean
 }
@@ -19,7 +22,8 @@ type GeneralWorkspaceSettingsSectionProps = {
 export function GeneralWorkspaceSettingsSection({
   settings,
   updateSettings,
-  updateSettingsOrThrow = updateSettings,
+  updateSettingsOrThrow,
+  hostScope,
   defaultsSupported = true,
   sourceDefaultsSupported = true
 }: GeneralWorkspaceSettingsSectionProps): React.JSX.Element {
@@ -37,6 +41,22 @@ export function GeneralWorkspaceSettingsSection({
       />
 
       <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
+
+      <SearchableSetting
+        id="general-repository-add-script"
+        title={translate('settings.repositoryAddScript.title', 'Repository add script')}
+        description={translate(
+          'settings.repositoryAddScript.sectionDescription',
+          'A script Orca offers to run when a Git repository is first added. It runs from the repository root, and you can run or skip it each time.'
+        )}
+        keywords={['git', 'repository', 'repo', 'script', 'add', 'setup', 'command']}
+      >
+        <RepositoryAddScriptSetting
+          settings={settings}
+          updateSettingsOrThrow={updateSettingsOrThrow}
+          hostScope={hostScope}
+        />
+      </SearchableSetting>
 
       <div
         id={GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID}

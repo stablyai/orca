@@ -689,7 +689,7 @@ describe('project group store routing', () => {
     }
     const result = {
       group: projectGroup,
-      repos: [{ path: importedRepo.path, projectId: importedRepo.id, status: 'imported' as const }],
+      projects: [{ path: importedRepo.path, projectId: importedRepo.id, status: 'imported' }],
       importedCount: 1,
       alreadyKnownCount: 0,
       failedCount: 0
@@ -709,7 +709,8 @@ describe('project group store routing', () => {
     }
     await expect(store.getState().importNestedRepos(importArgs)).resolves.toEqual(result)
 
-    expect(projectGroupsImportNested).toHaveBeenCalledWith(importArgs)
+    const expectedArgs = { ...importArgs, repositoryAddScriptPreview: { hostId: 'local' } }
+    expect(projectGroupsImportNested).toHaveBeenCalledWith(expectedArgs)
     expect(projectGroupsList).toHaveBeenCalled()
     expect(folderWorkspacesList).toHaveBeenCalled()
     expect(reposList).toHaveBeenCalled()

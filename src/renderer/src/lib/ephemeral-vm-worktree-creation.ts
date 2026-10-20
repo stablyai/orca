@@ -60,7 +60,9 @@ async function prepareEphemeralVmRecipeRequest(
           }
         : {}),
       provisionId: creationId,
-      setupExistingFolder: store.setupProjectExistingFolder
+      // Why: worktree creation is not an "add repository" gesture, so it never asks to run the add script.
+      setupExistingFolder: (args) =>
+        store.setupProjectExistingFolder(args, { offerAddScript: false })
     })
   } finally {
     unsubscribeProvisionEvents?.()
