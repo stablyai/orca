@@ -10,33 +10,33 @@ type DictationStatus = {
 type MobileTerminalLiveInputStatusProps = {
   readonly dictation: DictationStatus
   readonly isAttaching: boolean
-  readonly liveInputText: string
 }
 
+/** Shows transient recording/upload status without intercepting touches meant for live input. */
 export function MobileTerminalLiveInputStatus({
   dictation,
-  isAttaching,
-  liveInputText
+  isAttaching
 }: MobileTerminalLiveInputStatusProps) {
+  if (!dictation.isRecording && !dictation.isProcessing && !dictation.isStarting && !isAttaching) {
+    return null
+  }
   const title = dictation.isRecording
     ? 'Listening'
     : dictation.isProcessing
       ? 'Processing'
       : dictation.isStarting
         ? 'Starting mic'
-        : 'Live input'
+        : 'Uploading image'
   const detail = dictation.isRecording
     ? 'Tap mic to stop'
     : dictation.isProcessing
       ? 'Transcribing on desktop'
       : dictation.isStarting
         ? 'Preparing microphone'
-        : isAttaching
-          ? 'Uploading image to host'
-          : liveInputText || 'Tap to show keyboard'
+        : 'Uploading image to host'
 
   return (
-    <View style={styles.status}>
+    <View style={styles.status} pointerEvents="none">
       <Text style={styles.title} numberOfLines={1}>
         {title}
       </Text>
@@ -49,7 +49,6 @@ export function MobileTerminalLiveInputStatus({
 
 const styles = StyleSheet.create({
   status: {
-    flex: 1,
     gap: 1
   },
   title: {

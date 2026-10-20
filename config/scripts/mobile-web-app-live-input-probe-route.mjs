@@ -58,6 +58,7 @@ export default function LiveInputProbeRoute() {
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
     handleLiveInputKeyPress,
+    handleLiveInputSelectionChange,
     handleLiveInputSubmit
   } = useTerminalLiveInputCommit({
     activeHandle: HANDLE,
@@ -110,9 +111,6 @@ export default function LiveInputProbeRoute() {
 
   useEffect(() => {
     globalThis.__orcaLiveInputProbe = {
-      type: (text) => {
-        handleLiveInputChange({ nativeEvent: { text } })
-      },
       clear: () => {
         clearPendingLiveInputCommit()
       },
@@ -130,7 +128,7 @@ export default function LiveInputProbeRoute() {
       bufferedSent: () => [...bufferedSentRef.current],
       setLiveInputEnabled
     }
-  }, [clearPendingLiveInputCommit, handleLiveInputAccessoryBytes, handleLiveInputChange])
+  }, [clearPendingLiveInputCommit, handleLiveInputAccessoryBytes])
 
   return (
     <View testID="live-input-probe">
@@ -140,6 +138,7 @@ export default function LiveInputProbeRoute() {
         value={liveInputCapture}
         onChange={handleLiveInputChange}
         onKeyPress={handleLiveInputKeyPress}
+        onSelectionChange={handleLiveInputSelectionChange}
         onSubmitEditing={onSubmitEditing}
         blurOnSubmit={false}
         autoCapitalize="none"

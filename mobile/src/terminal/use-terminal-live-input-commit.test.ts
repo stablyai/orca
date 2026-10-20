@@ -216,6 +216,7 @@ describe('terminal live input commit hook', () => {
     vi.useFakeTimers()
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
     changeLiveInput(handlers, 'ni hao', true)
+    handlers.handleLiveInputSelectionChange({ nativeEvent: { selection: { start: 6, end: 6 } } })
 
     // When
     await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
@@ -231,6 +232,7 @@ describe('terminal live input commit hook', () => {
     vi.useFakeTimers()
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
     changeLiveInput(handlers, '한글')
+    handlers.handleLiveInputSelectionChange({ nativeEvent: { selection: { start: 2, end: 2 } } })
 
     // When
     await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
@@ -243,6 +245,7 @@ describe('terminal live input commit hook', () => {
   it('Given a failed mirrored Backspace When accessory input commits Then reports failure', async () => {
     const { handlers, sent } = createTerminalLiveInputCommitHarness({ sendResult: false })
     changeLiveInput(handlers, 'a', false)
+    handlers.handleLiveInputSelectionChange({ nativeEvent: { selection: { start: 1, end: 1 } } })
     await vi.waitFor(() => expect(sent).toEqual(['a']))
 
     const result = await handlers.handleLiveInputAccessoryBytes({
@@ -518,6 +521,85 @@ describe('terminal live input commit hook', () => {
     const sentBeforeRecovery = sent.length
     changeLiveInput(handlers, 'echo CLEANLINE')
     await vi.waitFor(() => expect(sent.slice(sentBeforeRecovery)).toEqual(['echo CLEANLINE']))
+  })
+
+  it('keeps native caret movement local and mirrors a middle Chinese edit before one Enter', async () => {
+    const harness = createTerminalLiveInputCommitHarness()
+    const { handlers, sent } = harness
+    changeLiveInput(handlers, '可是你好', false)
+    await vi.waitFor(() => expect(sent).toEqual(['可是你好']))
+
+    handlers.handleLiveInputSelectionChange({ nativeEvent: { selection: { start: 2, end: 2 } } })
+    expect(sent).toEqual(['可是你好'])
+    changeLiveInput(handlers, '可是很好', false)
+    await vi.waitFor(() => expect(sent).toEqual(['可是你好', '\x7f\x7f很好']))
+    await handlers.handleLiveInputSubmit()
+
+    expect(sent).toEqual(['可是你好', '\x7f\x7f很好', '\r'])
+    expect(harness.captures.at(-1)).toBe('')
+    harness.unmount()
+  })
+
+  it('keeps repeated accessory deletion at the native caret and resets selection after submit', async () => {
+    const harness = createTerminalLiveInputCommitHarness()
+    const { handlers, sent } = harness
+    changeLiveInput(handlers, 'a🙂bc', false)
+    handlers.handleLiveInputSelectionChange({ nativeEvent: { selection: { start: 3, end: 3 } } })
+
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+    expect(harness.captures.slice(-2)).toEqual(['abc', 'bc'])
+    expect(sent).toEqual(['a🙂bc', '\x7f\x7f\x7fbc', '\x7f\x7f\x7fbc'])
+
+    await handlers.handleLiveInputSubmit()
+    changeLiveInput(handlers, 'xy', false)
+    handlers.handleLiveInputSelectionChange({ nativeEvent: { selection: { start: 2, end: 2 } } })
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+    expect(harness.captures.at(-1)).toBe('x')
+    harness.unmount()
+  })
+
+  it('suppresses accessory deletion between a native text change and its matching caret report', async () => {
+    const harness = createTerminalLiveInputCommitHarness()
+    const { handlers } = harness
+    changeLiveInput(handlers, 'abc', false)
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { text: 'abc', selection: { start: 1, end: 1 } }
+    })
+    changeLiveInput(handlers, 'axbc', false)
+
+    expect(
+      await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+    ).toEqual({ kind: 'suppress-raw' })
+    expect(harness.captures.at(-1)).toBe('axbc')
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { text: 'axbc', selection: { start: 2, end: 2 } }
+    })
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+
+    expect(harness.captures.at(-1)).toBe('abc')
+    harness.unmount()
+  })
+
+  it('pairs a selection that arrives before its text and ignores an older native text snapshot', async () => {
+    const harness = createTerminalLiveInputCommitHarness()
+    const { handlers } = harness
+    changeLiveInput(handlers, 'abc', false)
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { text: 'axbc', selection: { start: 2, end: 2 } }
+    })
+    changeLiveInput(handlers, 'axbc', false)
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+    expect(harness.captures.at(-1)).toBe('abc')
+
+    handlers.handleLiveInputSelectionChange({
+      nativeEvent: { text: 'axbc', selection: { start: 2, end: 2 } }
+    })
+    expect(
+      await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+    ).toEqual({ kind: 'suppress-raw' })
+    expect(harness.captures.at(-1)).toBe('abc')
+    harness.unmount()
   })
 
   it('Given a held syllable during an outage When the disconnect is detected Then the settle timer cannot commit it later', async () => {

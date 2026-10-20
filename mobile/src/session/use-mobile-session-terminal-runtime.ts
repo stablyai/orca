@@ -24,6 +24,7 @@ import type {
 } from './mobile-session-route-types'
 import type { MobileSessionScreenStateModel } from './use-mobile-session-screen-state'
 
+/** Shares the active terminal's input state between the native field and accessory controls. */
 export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateModel) {
   const {
     hostId,
@@ -114,6 +115,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
     handleLiveInputKeyPress,
+    handleLiveInputSelectionChange,
     handleLiveInputSubmit
   } = useTerminalLiveInputCommit({
     activeHandle,
@@ -202,6 +204,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
     handleLiveInputKeyPress,
+    handleLiveInputSelectionChange,
     handleLiveInputSubmit,
     canCompose,
     canSend,
