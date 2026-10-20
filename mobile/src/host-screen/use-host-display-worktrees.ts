@@ -37,22 +37,18 @@ export function useHostDisplayWorktrees(
     // mount default, connecting/handshaking must keep the pre-reconnect list too.
     const base = connState === 'connected' ? state.worktrees : state.lastKnownWorktrees
     const rows = [...base, ...serverWorkspaces.worktrees]
-    return applyWorktreeHostContextLabels(
-      applyWorktreeRowDisplayState(rows, state.sleptIds, state.optimisticActiveWorktreeIdentity),
-      {
-        repoHostIdByRepoId: state.repoHostIdByRepoId,
-        hostLabelById,
-        hostPlatform,
-        hostHealthById
-      }
-    )
+    return applyWorktreeHostContextLabels(applyWorktreeRowDisplayState(rows, state.sleptIds), {
+      repoHostIdByRepoId: state.repoHostIdByRepoId,
+      hostLabelById,
+      hostPlatform,
+      hostHealthById
+    })
   }, [
     connState,
     state.worktrees,
     state.lastKnownWorktrees,
     serverWorkspaces.worktrees,
     state.sleptIds,
-    state.optimisticActiveWorktreeIdentity,
     state.repoHostIdByRepoId,
     hostLabelById,
     hostPlatform,

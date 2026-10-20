@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyWorktreeRowDisplayState,
-  clearConfirmedActiveWorktreeIdentity,
   getWorktreeRowIdentity,
   removeWorktreeRow,
   retainLiveSleptWorktreeIdentities
@@ -35,17 +34,6 @@ describe('getWorktreeRowIdentity', () => {
 })
 
 describe('host-qualified row display state', () => {
-  it('clears the optimistic active row only when the same host confirms it', () => {
-    const pending = getWorktreeRowIdentity(row('shared', 'host-a'))
-
-    expect(
-      clearConfirmedActiveWorktreeIdentity(pending, [row('shared', 'host-b', { isActive: true })])
-    ).toBe(pending)
-    expect(
-      clearConfirmedActiveWorktreeIdentity(pending, [row('shared', 'host-a', { isActive: true })])
-    ).toBeNull()
-  })
-
   it('retains slept rows only while the same host still has live terminals', () => {
     const local = row('shared', 'host-a')
     const remote = row('shared', 'host-b')
@@ -101,19 +89,18 @@ describe('host-qualified row display state', () => {
     expect(legacyIdentityReads - worktreeIdReads).toBe(2_016)
   })
 
-  it('applies active and slept overrides to the matching host row only', () => {
+  it('applies the slept override to the matching host row only', () => {
     const local = row('shared', 'host-a')
     const remote = row('shared', 'host-b')
 
     const rows = applyWorktreeRowDisplayState(
       [local, remote],
-      new Set([getWorktreeRowIdentity(local)]),
-      getWorktreeRowIdentity(remote)
+      new Set([getWorktreeRowIdentity(local)])
     )
 
-    expect(rows).toMatchObject([
-      { hostId: 'host-a', liveTerminalCount: 0, status: 'inactive', isActive: false },
-      { hostId: 'host-b', isActive: true }
+    expect(rows).toEqual([
+      { ...local, liveTerminalCount: 0, hasAttachedPty: false, status: 'inactive' },
+      remote
     ])
   })
 })

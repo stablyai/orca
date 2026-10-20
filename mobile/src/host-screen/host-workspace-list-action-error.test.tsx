@@ -61,7 +61,7 @@ function listWith(fields: { actionError: string; setActionError: (value: string)
     relayRecovery: { pairingRejected: false },
     routeNotice: '',
     router: { push: () => {} },
-    sectionsResult: { rawSections: [], sections: [], repoById: new Map() },
+    sectionsResult: { sections: [], repoById: new Map() },
     setDismissedNotice: () => {},
     settings: { activeFilterCount: 0, pendingViewChanges: { pending: [], stale: false } },
     state: {

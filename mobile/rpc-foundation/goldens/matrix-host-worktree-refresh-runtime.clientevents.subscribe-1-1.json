@@ -4,12 +4,13 @@
   "family": "host-worktree-refresh",
   "namedDeltas": [],
   "values": {
-    "121f5eaa52a4": {
-      "name": "fetchWorktrees",
-      "ordinal": 7,
+    "156e96876fc2": {
+      "name": "fetchRepoMetadata",
+      "ordinal": 6,
       "value": {
         "options": {
-          "$rpc": "undefined"
+          "force": true,
+          "queueIfInFlight": true
         }
       }
     },
@@ -22,11 +23,6 @@
           "queueIfInFlight": true
         }
       }
-    },
-    "1d8fe76c29c7": {
-      "name": "runtime.clientEvents.unsubscribe#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
     },
     "1e1067bda316": {
       "name": "fetchWorktrees",
@@ -42,36 +38,24 @@
       "fetchWorktrees": 4,
       "running": true
     },
-    "2d10343e07a1": {
+    "223025cafc76": {
       "fetchRepoMetadata": 2,
-      "fetchWorktrees": 2,
-      "running": true
+      "fetchWorktrees": 3,
+      "running": false
     },
-    "306fcb72ddc5": {
-      "name": "fetchRepoMetadata",
-      "ordinal": 8,
+    "33f55f98e9eb": {
+      "name": "fetchWorktrees",
+      "ordinal": 9,
       "value": {
         "options": {
-          "force": true,
-          "queueIfInFlight": true
+          "$rpc": "undefined"
         }
       }
     },
-    "3582e201880e": {
-      "name": "runtime.clientEvents.unsubscribe#2",
-      "ordinal": 13,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}"
-    },
-    "3a96bb9c2176": {
-      "name": "streams-registered-at-teardown",
-      "ordinal": 11,
-      "value": [
-        {
-          "cancelled": true,
-          "method": "runtime.clientEvents.subscribe",
-          "payload": "runtime.clientEvents.subscribe#1"
-        }
-      ]
+    "3cf4aa9fbbea": {
+      "name": "runtime.clientEvents.subscribe#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
     },
     "42c91b1d1905": {
       "name": "streams-registered-at-teardown",
@@ -83,6 +67,11 @@
           "payload": "runtime.clientEvents.subscribe#1"
         }
       ]
+    },
+    "47db46376114": {
+      "name": "runtime.clientEvents.unsubscribe#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}"
     },
     "4a27571a011a": {
       "name": "fetchWorktrees",
@@ -102,82 +91,41 @@
         }
       }
     },
-    "5073e6d40272": {
-      "name": "fetchRepoMetadata",
-      "ordinal": 12,
-      "value": {
-        "options": {
-          "force": true,
-          "queueIfInFlight": true
-        }
-      }
-    },
-    "66cdc2695fab": {
-      "name": "runtime.clientEvents.unsubscribe#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}"
-    },
     "6d9fd24a7491": {
       "fetchRepoMetadata": 1,
       "fetchWorktrees": 2,
       "running": true
-    },
-    "73ef93d781b5": {
-      "fetchRepoMetadata": 2,
-      "fetchWorktrees": 2,
-      "running": false
     },
     "8297145c6199": {
       "fetchRepoMetadata": 1,
       "fetchWorktrees": 1,
       "running": true
     },
-    "846dab6e46b5": {
-      "name": "fetchRepoMetadata",
-      "ordinal": 5,
-      "value": {
-        "options": {
-          "$rpc": "undefined"
+    "8b908bb4ef1a": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 9,
+      "value": [
+        {
+          "cancelled": true,
+          "method": "runtime.clientEvents.subscribe",
+          "payload": "runtime.clientEvents.subscribe#1"
         }
-      }
+      ]
     },
-    "8dd3ef405a35": {
+    "a719bd67772b": {
       "name": "runtime.clientEvents.unsubscribe#1",
-      "ordinal": 7,
+      "ordinal": 8,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}"
     },
-    "8fa922dbb034": {
-      "name": "fetchWorktrees",
-      "ordinal": 11,
-      "value": {
-        "options": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "91e9a84a208f": {
-      "fetchRepoMetadata": 4,
-      "fetchWorktrees": 5,
+    "d0fd2dc251c3": {
+      "fetchRepoMetadata": 1,
+      "fetchWorktrees": 1,
       "running": false
     },
-    "96ebe4a1b522": {
-      "name": "fetchRepoMetadata",
-      "ordinal": 6,
-      "value": {
-        "options": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "b6a25eca1497": {
-      "name": "runtime.clientEvents.subscribe#2",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
-    },
-    "bbb8d0c38170": {
-      "name": "runtime.clientEvents.subscribe#2",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
+    "dc1675ef428c": {
+      "name": "runtime.clientEvents.unsubscribe#2",
+      "ordinal": 11,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}"
     },
     "e14cb0033202": {
       "fetchRepoMetadata": 3,
@@ -189,6 +137,11 @@
       "fetchWorktrees": 3,
       "running": true
     },
+    "e5fbd698e29a": {
+      "name": "runtime.clientEvents.unsubscribe#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -196,11 +149,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "edb34b7fcc08": {
-      "fetchRepoMetadata": 4,
-      "fetchWorktrees": 5,
-      "running": true
     },
     "eef1ee3c2773": {
       "name": "runtime.clientEvents.subscribe#1",
@@ -213,6 +161,21 @@
       "settledAt": 3000,
       "value": {
         "$rpc": "undefined"
+      }
+    },
+    "f2e52e0a5e43": {
+      "name": "runtime.clientEvents.subscribe#2",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
+    },
+    "fd7422ad76af": {
+      "name": "fetchRepoMetadata",
+      "ordinal": 10,
+      "value": {
+        "options": {
+          "force": true,
+          "queueIfInFlight": true
+        }
       }
     }
   },
@@ -275,14 +238,8 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "e54e98a537b8",
-          "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "1e1067bda316",
-            "96ebe4a1b522"
-          ]
+          "state": "6d9fd24a7491",
+          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8"]
         }
       },
       {
@@ -293,15 +250,13 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -309,7 +264,26 @@
         "id": "host-worktree-refresh-stream.normal:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "1d8fe76c29c7"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43", "e5fbd698e29a"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "cutover": "f2af146a9f12"
+          },
+          "state": "e54e98a537b8",
+          "effects": [
+            "4a27571a011a",
+            "18399efbe63d",
+            "4e7ae49574b8",
+            "1e1067bda316",
+            "156e96876fc2"
+          ]
+        }
+      },
+      {
+        "id": "host-worktree-refresh-stream.normal:replayed",
+        "observation": {
+          "sender": [],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43", "e5fbd698e29a"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
@@ -320,32 +294,9 @@
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
-          ]
-        }
-      },
-      {
-        "id": "host-worktree-refresh-stream.normal:replayed",
-        "observation": {
-          "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "1d8fe76c29c7"],
-          "settlements": {
-            "start": "eb79a9b3682a",
-            "cutover": "f2af146a9f12"
-          },
-          "state": "edb34b7fcc08",
-          "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5",
-            "8fa922dbb034",
-            "5073e6d40272"
+            "156e96876fc2",
+            "33f55f98e9eb",
+            "fd7422ad76af"
           ]
         }
       },
@@ -353,23 +304,21 @@
         "id": "host-worktree-refresh-stream.normal:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "1d8fe76c29c7", "3582e201880e"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43", "e5fbd698e29a", "dc1675ef428c"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "91e9a84a208f",
+          "state": "e14cb0033202",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5",
-            "8fa922dbb034",
-            "5073e6d40272"
+            "156e96876fc2",
+            "33f55f98e9eb",
+            "fd7422ad76af"
           ]
         }
       },
@@ -405,14 +354,8 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "e54e98a537b8",
-          "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "1e1067bda316",
-            "96ebe4a1b522"
-          ]
+          "state": "6d9fd24a7491",
+          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8"]
         }
       },
       {
@@ -423,15 +366,13 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -439,20 +380,18 @@
         "id": "host-worktree-refresh-stream.result-absent:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -460,20 +399,18 @@
         "id": "host-worktree-refresh-stream.result-absent:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -481,21 +418,19 @@
         "id": "host-worktree-refresh-stream.result-absent:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43", "a719bd67772b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "e14cb0033202",
+          "state": "223025cafc76",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -503,22 +438,20 @@
         "id": "host-worktree-refresh-stream.result-absent:cleanup",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43", "a719bd67772b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "e14cb0033202",
+          "state": "223025cafc76",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5",
-            "3a96bb9c2176"
+            "156e96876fc2",
+            "8b908bb4ef1a"
           ]
         }
       },
@@ -554,14 +487,8 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "e54e98a537b8",
-          "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "1e1067bda316",
-            "96ebe4a1b522"
-          ]
+          "state": "6d9fd24a7491",
+          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8"]
         }
       },
       {
@@ -572,15 +499,13 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -588,20 +513,18 @@
         "id": "host-worktree-refresh-stream.result-null:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -609,20 +532,18 @@
         "id": "host-worktree-refresh-stream.result-null:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -630,21 +551,19 @@
         "id": "host-worktree-refresh-stream.result-null:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43", "a719bd67772b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "e14cb0033202",
+          "state": "223025cafc76",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -652,22 +571,20 @@
         "id": "host-worktree-refresh-stream.result-null:cleanup",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43", "a719bd67772b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "e14cb0033202",
+          "state": "223025cafc76",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5",
-            "3a96bb9c2176"
+            "156e96876fc2",
+            "8b908bb4ef1a"
           ]
         }
       },
@@ -703,14 +620,8 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "e54e98a537b8",
-          "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "1e1067bda316",
-            "96ebe4a1b522"
-          ]
+          "state": "6d9fd24a7491",
+          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8"]
         }
       },
       {
@@ -721,15 +632,13 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -737,20 +646,18 @@
         "id": "host-worktree-refresh-stream.inner-ok-missing:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -758,20 +665,18 @@
         "id": "host-worktree-refresh-stream.inner-ok-missing:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -779,21 +684,19 @@
         "id": "host-worktree-refresh-stream.inner-ok-missing:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43", "a719bd67772b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "e14cb0033202",
+          "state": "223025cafc76",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -801,22 +704,20 @@
         "id": "host-worktree-refresh-stream.inner-ok-missing:cleanup",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43", "a719bd67772b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "e14cb0033202",
+          "state": "223025cafc76",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5",
-            "3a96bb9c2176"
+            "156e96876fc2",
+            "8b908bb4ef1a"
           ]
         }
       },
@@ -852,14 +753,8 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "e54e98a537b8",
-          "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "1e1067bda316",
-            "96ebe4a1b522"
-          ]
+          "state": "6d9fd24a7491",
+          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8"]
         }
       },
       {
@@ -870,15 +765,13 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -886,20 +779,18 @@
         "id": "host-worktree-refresh-stream.inner-false-string-error:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -907,20 +798,18 @@
         "id": "host-worktree-refresh-stream.inner-false-string-error:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -928,21 +817,19 @@
         "id": "host-worktree-refresh-stream.inner-false-string-error:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43", "a719bd67772b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "e14cb0033202",
+          "state": "223025cafc76",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -950,22 +837,20 @@
         "id": "host-worktree-refresh-stream.inner-false-string-error:cleanup",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43", "a719bd67772b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "e14cb0033202",
+          "state": "223025cafc76",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5",
-            "3a96bb9c2176"
+            "156e96876fc2",
+            "8b908bb4ef1a"
           ]
         }
       },
@@ -1001,14 +886,8 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "e54e98a537b8",
-          "effects": [
-            "4a27571a011a",
-            "18399efbe63d",
-            "4e7ae49574b8",
-            "1e1067bda316",
-            "96ebe4a1b522"
-          ]
+          "state": "6d9fd24a7491",
+          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8"]
         }
       },
       {
@@ -1019,15 +898,13 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -1035,20 +912,18 @@
         "id": "host-worktree-refresh-stream.inner-false-object-error:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -1056,20 +931,18 @@
         "id": "host-worktree-refresh-stream.inner-false-object-error:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "1e5c2d0839f0",
+          "state": "e54e98a537b8",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -1077,21 +950,19 @@
         "id": "host-worktree-refresh-stream.inner-false-object-error:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43", "a719bd67772b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "e14cb0033202",
+          "state": "223025cafc76",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5"
+            "156e96876fc2"
           ]
         }
       },
@@ -1099,22 +970,20 @@
         "id": "host-worktree-refresh-stream.inner-false-object-error:cleanup",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "b6a25eca1497", "66cdc2695fab"],
+          "payloads": ["eef1ee3c2773", "f2e52e0a5e43", "a719bd67772b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "e14cb0033202",
+          "state": "223025cafc76",
           "effects": [
             "4a27571a011a",
             "18399efbe63d",
             "4e7ae49574b8",
             "1e1067bda316",
-            "96ebe4a1b522",
-            "121f5eaa52a4",
-            "306fcb72ddc5",
-            "3a96bb9c2176"
+            "156e96876fc2",
+            "8b908bb4ef1a"
           ]
         }
       },
@@ -1150,8 +1019,8 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "8297145c6199",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
@@ -1162,48 +1031,48 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "8297145c6199",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170"],
+          "payloads": ["eef1ee3c2773", "3cf4aa9fbbea"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "8297145c6199",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170"],
+          "payloads": ["eef1ee3c2773", "3cf4aa9fbbea"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "8297145c6199",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170", "8dd3ef405a35"],
+          "payloads": ["eef1ee3c2773", "3cf4aa9fbbea", "47db46376114"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "73ef93d781b5",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "d0fd2dc251c3",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
@@ -1238,8 +1107,8 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "8297145c6199",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
@@ -1250,48 +1119,48 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "8297145c6199",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused-no-message:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170"],
+          "payloads": ["eef1ee3c2773", "3cf4aa9fbbea"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "8297145c6199",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused-no-message:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170"],
+          "payloads": ["eef1ee3c2773", "3cf4aa9fbbea"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "8297145c6199",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.outer-refused-no-message:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170", "8dd3ef405a35"],
+          "payloads": ["eef1ee3c2773", "3cf4aa9fbbea", "47db46376114"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "73ef93d781b5",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "d0fd2dc251c3",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
@@ -1326,8 +1195,8 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "8297145c6199",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
@@ -1338,48 +1207,48 @@
           "settlements": {
             "start": "eb79a9b3682a"
           },
-          "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "8297145c6199",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.method-not-found:re-subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170"],
+          "payloads": ["eef1ee3c2773", "3cf4aa9fbbea"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "8297145c6199",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.method-not-found:replayed",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170"],
+          "payloads": ["eef1ee3c2773", "3cf4aa9fbbea"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12"
           },
-          "state": "2d10343e07a1",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "8297145c6199",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       },
       {
         "id": "host-worktree-refresh-stream.method-not-found:stopped",
         "observation": {
           "sender": [],
-          "payloads": ["eef1ee3c2773", "bbb8d0c38170", "8dd3ef405a35"],
+          "payloads": ["eef1ee3c2773", "3cf4aa9fbbea", "47db46376114"],
           "settlements": {
             "start": "eb79a9b3682a",
             "cutover": "f2af146a9f12",
             "stop": "f2af146a9f12"
           },
-          "state": "73ef93d781b5",
-          "effects": ["4a27571a011a", "18399efbe63d", "4e7ae49574b8", "846dab6e46b5"]
+          "state": "d0fd2dc251c3",
+          "effects": ["4a27571a011a", "18399efbe63d"]
         }
       }
     ]

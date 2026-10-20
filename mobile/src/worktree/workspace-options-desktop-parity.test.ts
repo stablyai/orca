@@ -13,7 +13,8 @@ import {
   isDetachedHeadWorkspace
 } from '../../../src/shared/worktree/workspace-kinds'
 import type { Worktree as DesktopWorktree } from '../../../src/shared/worktree/types'
-import { filterWorktrees, type Worktree } from './workspace-list-sections'
+import type { Worktree } from './workspace-list-types'
+import { filterWorktrees } from './worktree-row-filter'
 
 // The phone's list against the desktop sidebar's for the same workspaces, under every filter
 // combination. The desktop side mirrors desktop-workspace-row-facts.ts, which mobile tests cannot

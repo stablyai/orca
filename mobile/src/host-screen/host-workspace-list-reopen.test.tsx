@@ -60,7 +60,7 @@ function listWith(rows: number) {
     relayRecovery: { pairingRejected: false },
     routeNotice: '',
     router: { push: () => {} },
-    sectionsResult: { rawSections: sections, sections, repoById: new Map() },
+    sectionsResult: { sections, repoById: new Map() },
     setDismissedNotice: () => {},
     settings: { activeFilterCount: 0, pendingViewChanges: { pending: [], stale: false } },
     state: {

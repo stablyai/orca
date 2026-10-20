@@ -41,6 +41,7 @@ export const PAGE_STORAGE_EXACT_KEYS = [
 
 export const PAGE_STORAGE_KEY_PREFIXES = [
   /** `orca:pins:<hostId>`: the pinned worktrees of the host whose list the page is showing. */
+  // No longer written by the page; older pages served to this shell still write it.
   'orca:pins:',
   /** `orca:nativeChatTabs:<hostId>:<worktreeId>`: which tabs of one workspace show the chat. */
   'orca:nativeChatTabs:',

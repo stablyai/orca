@@ -1,7 +1,8 @@
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { describe, expect, it } from 'vitest'
 import { buildFilterRepos } from './workspace-filter-repos'
-import { filterWorktrees, type Worktree } from './workspace-list-sections'
+import type { Worktree } from './workspace-list-types'
+import { filterWorktrees } from './worktree-row-filter'
 
 function row(worktreeId: string, repoId: string, hostId: Worktree['hostId']): Worktree {
   return {

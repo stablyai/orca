@@ -9,16 +9,12 @@ import {
   type MobileViewState,
   type WorkspaceViewSettings
 } from '../worktree/workspace-view-settings'
-import type { Worktree } from '../worktree/workspace-list-sections'
+import type { FilterState, Worktree } from '../worktree/workspace-list-types'
 import {
   changedWorkspaceRowFilters,
   NO_WORKSPACE_ROW_FILTERS
 } from '../../../src/shared/workspace-view/workspace-row-filters'
-import {
-  hostCardLayoutWrite,
-  hostViewSettingsRead,
-  hostViewSettingsWrite
-} from './host-screen-operations'
+import { hostCardLayoutWrite, hostViewSettingsRead } from './host-screen-operations'
 import { hostListSettingsRead } from '../transport/settings-read-operations'
 import type {
   AgentActivityDisplayMode,
@@ -28,14 +24,9 @@ import type {
 import { getWorktreeCardModeUpdates } from '../../../src/shared/worktree/card-properties'
 import type { HostScreenState } from './use-host-screen-state'
 import { applyCollapse, withPendingViewChanges } from './host-view-pending-changes'
-import {
-  useSwitchedHostPendingViewChanges,
-  type PendingViewStatus
-} from './use-host-pending-view-changes'
-import type { FilterState } from '../worktree/workspace-list-types'
+import { useHostPendingViewChanges } from './use-host-pending-view-changes'
 
 const REFUSED_NOTE = 'The desktop did not take that change.'
-const NOTHING_PENDING: PendingViewStatus = { pending: [], stale: false }
 
 export function useHostViewSettings(args: {
   client: RpcClient | null
@@ -43,12 +34,11 @@ export function useHostViewSettings(args: {
   state: HostScreenState
 }) {
   const { client, connState, state } = args
-  const { clientRef, setActionError, setShowPinnedInGroups, setView, viewRef } = state
+  const { clientRef, setActionError, setView, viewRef } = state
 
   const localEditsRef = useRef(0)
-  // Null unless the page lists from the feed: the changes the desktop has not answered.
-  const pendingViewChanges = useSwitchedHostPendingViewChanges(client)
-  const pendingChanges = pendingViewChanges?.controls ?? null
+  const pendingViewChanges = useHostPendingViewChanges(client)
+  const pendingChanges = pendingViewChanges.controls
 
   // The one writer of the view: the ref is its synchronous mirror for edits made before a render.
   const applyViewState = useCallback((next: MobileViewState) => {
@@ -64,7 +54,7 @@ export function useHostViewSettings(args: {
       }
       const requestClient = client
       const editsAtRequest = localEditsRef.current
-      const opsAtRequest = pendingChanges?.lastOpId() ?? 0
+      const opsAtRequest = pendingChanges.lastOpId()
       try {
         // Each half applies on its own, so one failing read does not hold back the other.
         const [uiReply, settingsReply] = await Promise.all([
@@ -78,21 +68,17 @@ export function useHostViewSettings(args: {
         const hostSettings = settingsReply
           ? hostListSettingsRead.interpret(settingsReply)
           : { accepted: false as const }
-        if (hostSettings.accepted) {
-          setShowPinnedInGroups(hostSettings.value.showPinnedWorktreesInGroups)
-        }
         const uiRead = uiReply ? hostViewSettingsRead.interpret(uiReply) : null
         const read = uiRead?.accepted ? uiRead.value : undefined
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
         const ui = read as WorkspaceViewSettings | undefined
         // What the desktop had not answered when the read went out still shows as asked.
-        const waiting =
-          pendingChanges && ui
-            ? pendingChanges.reconcile(ui, {
-                resend: options.resend === true,
-                sentByOpId: opsAtRequest
-              })
-            : []
+        const waiting = ui
+          ? pendingChanges.reconcile(ui, {
+              resend: options.resend === true,
+              sentByOpId: opsAtRequest
+            })
+          : []
         // Why skip after a local edit: this reply may predate it; the edit's own change event re-reads.
         if (localEditsRef.current !== editsAtRequest) {
           return
@@ -140,15 +126,9 @@ export function useHostViewSettings(args: {
       if (Object.keys(payload).length === 0) {
         return
       }
-      if (pendingChanges) {
-        void pendingChanges
-          .sendView(patch, payload)
-          .then((outcome) => outcome === 'refused' && refused())
-        return
-      }
-      void hostViewSettingsWrite.request(client, payload).catch(() => {
-        // Best-effort: view settings are a convenience preference.
-      })
+      void pendingChanges
+        .sendView(patch, payload)
+        .then((outcome) => outcome === 'refused' && refused())
     },
     [client, applyViewState, pendingChanges, refused]
   )
@@ -247,7 +227,7 @@ export function useHostViewSettings(args: {
   const toggleCollapsed = useCallback(
     (key: string) => {
       // One section's change, so another device's edit to a sibling section is kept.
-      if (pendingChanges && client) {
+      if (client) {
         const collapsed = !viewRef.current.collapsedGroups.includes(key)
         localEditsRef.current += 1
         applyViewState(applyCollapse(viewRef.current, key, collapsed))
@@ -276,7 +256,7 @@ export function useHostViewSettings(args: {
 
   return {
     clearFilters,
-    pendingViewChanges: pendingViewChanges?.status ?? NOTHING_PENDING,
+    pendingViewChanges: pendingViewChanges.status,
     setAgentActivityDisplayMode,
     setCardLayout,
     setProjectOrderBy,

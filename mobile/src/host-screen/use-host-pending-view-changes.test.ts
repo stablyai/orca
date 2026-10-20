@@ -2,8 +2,6 @@ import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../../src/shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
-
 import {
   SetCollapsedParams,
   type SetCollapsedRequest
@@ -19,7 +17,7 @@ import {
   type PendingViewChange
 } from './host-view-pending-changes'
 import {
-  useSwitchedHostPendingViewChanges,
+  useHostPendingViewChanges,
   type HostPendingViewChanges,
   type PendingViewOutcome
 } from './use-host-pending-view-changes'
@@ -42,7 +40,7 @@ function mount(sendRequest: (method: string, params: unknown) => Promise<RpcResp
   const client = { sendRequest: vi.fn(sendRequest) } as unknown as RpcClient
   let changes: HostPendingViewChanges | null = null
   function Probe(): null {
-    changes = useSwitchedHostPendingViewChanges(client)
+    changes = useHostPendingViewChanges(client)
     return null
   }
   act(() => {

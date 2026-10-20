@@ -1,5 +1,5 @@
 import { createElement, useState } from 'react'
-import { filterWorktrees } from '../worktree/workspace-list-sections'
+import { filterWorktrees } from '../worktree/worktree-row-filter'
 import { normalizeVisibleExecutionHostIds } from '../../../src/shared/execution-host'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
@@ -13,7 +13,6 @@ vi.mock('../cache/worktree-cache', () => ({
   getCachedWorktrees: () => null,
   setCachedWorktrees: () => {}
 }))
-vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
 vi.mock('../worktree/host-worktree-refresh', () => ({ startHostWorktreeRefresh: () => () => {} }))
 vi.mock('../transport/use-worktree-resync', () => ({
   useWorktreeResync: () => ({ refreshing: false, onRefresh: async () => {} })
@@ -135,7 +134,7 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
       fetchRepoMetadata: async () => {},
       hostCapabilities,
       hostId: 'host-1',
-      sidebarFeed: null,
+      sidebarFeed: { refresh: () => {}, changed: () => {}, onInstalled: () => () => {} },
       state,
       syncViewSettingsFromDesktop: async () => {}
     })

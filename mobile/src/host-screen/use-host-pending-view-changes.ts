@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileViewPatch, WorkspaceViewSettings } from '../worktree/workspace-view-settings'
 import { hostViewSettingsWrite } from './host-screen-operations'
@@ -41,7 +40,7 @@ type OwnedChanges = { client: RpcClient | null; pending: readonly PendingViewCha
 const NO_CHANGES: readonly PendingViewChange[] = []
 
 /** The phone's own option changes until the desktop answers each, for the client that sent them. */
-function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewChanges {
+export function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewChanges {
   const [owned, setOwned] = useState<OwnedChanges>({ client, pending: NO_CHANGES })
   const ownedRef = useRef(owned)
   const seqRef = useRef(0)
@@ -157,10 +156,3 @@ function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewCha
   const status = useMemo(() => ({ pending, stale }), [pending, stale])
   return { status, controls }
 }
-
-/** Switch point: a page built without the feed sends its changes best-effort, with no pending state. */
-export const useSwitchedHostPendingViewChanges: (
-  client: RpcClient | null
-) => HostPendingViewChanges | null = ORCA_SIDEBAR_INPUTS_IS_MAIN
-  ? useHostPendingViewChanges
-  : () => null

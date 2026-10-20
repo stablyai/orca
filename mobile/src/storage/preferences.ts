@@ -2,7 +2,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
 import { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
 
-const PINS_PREFIX = 'orca:pins:'
 // Consent to the push service is separate from the old socket notification choice.
 const NOTIF_KEY = 'orca:pushServiceNotificationsEnabled'
 
@@ -254,22 +253,4 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : []
-}
-
-export async function loadPinnedIds(hostId: string): Promise<Set<string>> {
-  try {
-    const raw = await AsyncStorage.getItem(PINS_PREFIX + hostId)
-    if (!raw) {
-      return new Set()
-    }
-    return new Set(stringArray(JSON.parse(raw)))
-  } catch {
-    return new Set()
-  }
-}
-
-export async function savePinnedIds(hostId: string, ids: Set<string>): Promise<void> {
-  const key = PINS_PREFIX + hostId
-  const value = JSON.stringify([...ids])
-  await persistMirrored(key, value)
 }

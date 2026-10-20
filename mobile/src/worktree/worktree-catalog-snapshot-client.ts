@@ -1,6 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure } from '../transport/types'
-import type { Worktree } from './workspace-list-sections'
+import type { Worktree } from './workspace-list-types'
 import { worktreeCatalogRead } from './worktree-catalog-operations'
 
 // Why: worktree.ps silently truncates at 200; use a high cap so large hosts don't drop workspaces.

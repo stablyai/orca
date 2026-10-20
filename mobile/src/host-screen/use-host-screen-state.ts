@@ -6,9 +6,8 @@ import { createInitialHostRouteActionState } from '../host-route-action-state'
 import type { RpcClient } from '../transport/rpc-client'
 import { WorktreeCatalogSnapshotClient } from '../worktree/worktree-catalog-snapshot-client'
 import { INITIAL_MOBILE_VIEW, type MobileViewState } from '../worktree/workspace-view-settings'
-import type { Worktree } from '../worktree/workspace-list-sections'
+import type { SectionRepo, Worktree } from '../worktree/workspace-list-types'
 import type { ServedProjectSections } from '../worktree/project-sections-operations'
-import type { SectionRepo } from '../worktree/workspace-list-types'
 import { NO_SERVER_WORKSPACES, type ServerWorkspaces } from '../worktree/server-workspaces'
 import type { ProjectGroup } from '../../../src/shared/project-group-types'
 
@@ -31,10 +30,6 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   // Why (STA-3123): error code of the last failed worktree.ps, so a broken catalog
   // path renders as a failure instead of an empty host. Cleared on the next success.
   const [catalogError, setCatalogError] = useState<string | null>(null)
-  // Why: track the locally-opened worktree so the active-row highlight moves instantly instead of waiting for the next poll.
-  const [optimisticActiveWorktreeIdentity, setOptimisticActiveWorktreeIdentity] = useState<
-    string | null
-  >(null)
   const [hostName, setHostName] = useState('')
   // The stored name identity, loaded with the name so the header can label an offline host.
   const [hostStoredDescriptor, setHostStoredDescriptor] = useState<{
@@ -79,9 +74,6 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     createInitialHostRouteActionState(action)
   )
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
-  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
-  // Desktop's "Also show pinned worktrees in their original lists"; off by default.
-  const [showPinnedInGroups, setShowPinnedInGroups] = useState(false)
   // A feed-built list's project groups on a host with no window to publish them.
   const [hostProjectGroups, setHostProjectGroups] = useState<readonly ProjectGroup[]>([])
 
@@ -105,8 +97,6 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     lastKnownWorktrees,
     newWorktreeModalRef,
     newWorktreeModalVisibleRef,
-    optimisticActiveWorktreeIdentity,
-    pinnedIds,
     repoHostIdByRepoId,
     servedProjectSections,
     desktopRepos,
@@ -128,8 +118,6 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setHostPlatform,
     setHostStoredDescriptor,
     setLastKnownWorktrees,
-    setOptimisticActiveWorktreeIdentity,
-    setPinnedIds,
     setRepoHostIdByRepoId,
     setServedProjectSections,
     setDesktopRepos,
@@ -138,13 +126,11 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setServerNotice,
     setServerWorkspaces,
     setShowWorkspaceOptions,
-    setShowPinnedInGroups,
     setShowSearch,
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
     showWorkspaceOptions,
-    showPinnedInGroups,
     showSearch,
     setView,
     view,

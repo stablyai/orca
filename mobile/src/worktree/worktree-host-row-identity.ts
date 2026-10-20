@@ -22,15 +22,6 @@ export function removeWorktreeRow(
   return list.filter((entry) => !isSameWorktreeRow(entry, removed))
 }
 
-export function clearConfirmedActiveWorktreeIdentity(
-  pending: string | null,
-  confirmed: readonly Worktree[]
-): string | null {
-  return pending && confirmed.some((w) => getWorktreeRowIdentity(w) === pending && w.isActive)
-    ? null
-    : pending
-}
-
 export function retainLiveSleptWorktreeIdentities(
   previous: Set<string>,
   confirmed: readonly Worktree[]
@@ -58,20 +49,14 @@ export function retainLiveSleptWorktreeIdentities(
 
 export function applyWorktreeRowDisplayState(
   base: Worktree[],
-  sleptIds: ReadonlySet<string>,
-  optimisticActiveIdentity: string | null
+  sleptIds: ReadonlySet<string>
 ): Worktree[] {
-  if (sleptIds.size === 0 && optimisticActiveIdentity === null) {
+  if (sleptIds.size === 0) {
     return base
   }
-  return base.map((w) => {
-    const slept = sleptIds.has(getWorktreeRowIdentity(w))
-      ? { liveTerminalCount: 0, hasAttachedPty: false, status: 'inactive' as const }
-      : null
-    const active =
-      optimisticActiveIdentity !== null
-        ? { isActive: getWorktreeRowIdentity(w) === optimisticActiveIdentity }
-        : null
-    return slept || active ? { ...w, ...slept, ...active } : w
-  })
+  return base.map((w) =>
+    sleptIds.has(getWorktreeRowIdentity(w))
+      ? { ...w, liveTerminalCount: 0, hasAttachedPty: false, status: 'inactive' as const }
+      : w
+  )
 }

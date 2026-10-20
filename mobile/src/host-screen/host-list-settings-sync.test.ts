@@ -5,18 +5,6 @@ import { describe, expect, it, vi } from 'vitest'
 // The desktop's server-list feed loads react-native; its timer never runs without a subscriber.
 vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
-vi.mock('../cache/worktree-cache', () => ({
-  getCachedWorktrees: () => null,
-  setCachedWorktrees: () => {}
-}))
-vi.mock('../storage/preferences', () => ({
-  loadPinnedIds: async () => new Set(),
-  savePinnedIds: async () => {}
-}))
-vi.mock('../transport/host-store', () => ({
-  loadHosts: async () => [],
-  updateLastConnected: async () => {}
-}))
 vi.mock('../worktree/host-worktree-refresh', () => ({ startHostWorktreeRefresh: () => () => {} }))
 vi.mock('../transport/use-worktree-resync', () => ({
   useWorktreeResync: () => ({ refreshing: false, onRefresh: async () => {} })
@@ -25,7 +13,6 @@ vi.mock('../transport/use-worktree-resync', () => ({
 import type { RpcClient } from '../transport/rpc-client'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/types'
-import { useHostScreenIdentity } from './use-host-screen-identity'
 import { useHostViewSettings } from './use-host-view-settings'
 import { INITIAL_MOBILE_VIEW, type MobileViewState } from '../worktree/workspace-view-settings'
 
@@ -37,7 +24,7 @@ const noop = () => {}
 
 type ClientRef = { current: RpcClient | null }
 
-function screenState(clientRef: ClientRef, applied: boolean[]) {
+function screenState(clientRef: ClientRef) {
   const viewRef = { current: INITIAL_MOBILE_VIEW }
   return {
     clientRef,
@@ -46,7 +33,6 @@ function screenState(clientRef: ClientRef, applied: boolean[]) {
     setView: (view: MobileViewState) => {
       viewRef.current = view
     },
-    setShowPinnedInGroups: (show: boolean) => applied.push(show),
     ...Object.fromEntries(
       [
         'setCatalogError',
@@ -58,7 +44,6 @@ function screenState(clientRef: ClientRef, applied: boolean[]) {
         'setHostPlatform',
         'setHostStoredDescriptor',
         'setLastKnownWorktrees',
-        'setPinnedIds',
         'setRepoHostIdByRepoId',
         'setServedProjectSections',
         'setWorktrees',
@@ -77,7 +62,7 @@ async function syncWith(
     failing?: 'ui.get' | 'settings.get'
     onSent?: (clientRef: ClientRef, actions: Actions) => void
   } = {}
-): Promise<{ applied: boolean[]; view: MobileViewState; methods: string[] }> {
+): Promise<{ view: MobileViewState; methods: string[] }> {
   const client = new FakeSession('connected')
   const clientRef: ClientRef = { current: client }
   let actions: Actions | null = null
@@ -91,8 +76,7 @@ async function syncWith(
     options.onSent?.(clientRef, actions!)
     return method === 'settings.get' ? reply({ settings }) : reply({ ui: { groupBy: 'none' } })
   })
-  const applied: boolean[] = []
-  const state = screenState(clientRef, applied)
+  const state = screenState(clientRef)
   function Probe(): null {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the view sync reads only the refs and setters screenState provides.
     const hostState = state as unknown as Parameters<typeof useHostViewSettings>[0]['state']
@@ -106,7 +90,6 @@ async function syncWith(
     await actions!.syncViewSettingsFromDesktop()
   })
   return {
-    applied,
     view: state.viewRef.current,
     methods: client.sendRequest.mock.calls
       .map(([method]) => String(method))
@@ -125,14 +108,12 @@ describe('the host list mirrors the desktop list settings', () => {
   it('reads them with one settings.get beside ui.get, absent reading as off', async () => {
     const on = await syncWith(ALL_ON)
     expect(on.methods).toEqual(['settings.get', 'ui.get'])
-    expect(on.applied).toEqual([true])
     expect(on.view).toMatchObject({
       groupBy: 'none',
       compactWorktreeCards: true,
       newCardStyle: true
     })
     const off = await syncWith({})
-    expect(off.applied).toEqual([false])
     expect(off.view).toMatchObject({ compactWorktreeCards: false, newCardStyle: false })
   })
 
@@ -141,49 +122,26 @@ describe('the host list mirrors the desktop list settings', () => {
       clientRef.current = new FakeSession('connected')
     }
     const moved = await syncWith(ALL_ON, { onSent: moveOn })
-    expect(moved.applied).toEqual([])
     expect(moved.view).toBe(INITIAL_MOBILE_VIEW)
   })
 
   it('applies each read on its own when the other fails', async () => {
     const noUi = await syncWith(ALL_ON, { failing: 'ui.get' })
-    expect(noUi.applied).toEqual([true])
     expect(noUi.view).toMatchObject({ groupBy: 'repo', compactWorktreeCards: true })
     const noSettings = await syncWith(ALL_ON, { failing: 'settings.get' })
-    expect(noSettings.applied).toEqual([])
     expect(noSettings.view).toMatchObject({ groupBy: 'none', compactWorktreeCards: false })
   })
 
-  it('keeps a local edit made during the read, while pinned placement still applies', async () => {
+  it('keeps a local edit made during the read', async () => {
     const edited = await syncWith(ALL_ON, {
       onSent: (_clientRef, actions) => actions.handleSortChange('name')
     })
-    expect(edited.applied).toEqual([true])
     expect(edited.view).toMatchObject({
       sortBy: 'name',
       groupBy: 'repo',
       compactWorktreeCards: false,
       newCardStyle: false
     })
-  })
-
-  it('resets to off when the screen is reused for another host', async () => {
-    const applied: boolean[] = []
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the identity hook reads only the refs and setters screenState provides.
-    const identityState = screenState({ current: null }, applied) as unknown as Parameters<
-      typeof useHostScreenIdentity
-    >[0]['state']
-    function Probe({ hostId }: { hostId: string }): null {
-      useHostScreenIdentity({ client: null, hostId, state: identityState })
-      return null
-    }
-    const renderer = create(createElement(Probe, { hostId: 'host-1' }))
-    await act(async () => {})
-    applied.length = 0
-    await act(async () => {
-      renderer.update(createElement(Probe, { hostId: 'host-2' }))
-    })
-    expect(applied).toEqual([false])
   })
 })
 
@@ -194,7 +152,7 @@ describe('Card layout from the phone', () => {
     client.sendRequest.mockImplementation(async (method: string) =>
       method === 'settings.update' ? settingsReply : reply(null)
     )
-    const state = screenState(clientRef, [])
+    const state = screenState(clientRef)
     let actions: Actions | null = null
     function Probe(): null {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only the refs and setters screenState provides.

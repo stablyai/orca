@@ -2,14 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import type { ProjectCatalogRows } from '../../../../shared/project-compatibility-merge'
-import {
-  buildProjectGroupingIndex,
-  buildProjectSections
-} from '../../../../shared/project-section-grouping'
-import {
-  getLogicalRepoOrderRankById,
-  withRepoSectionDisplayLabels
-} from '../../../../shared/project-section-order'
+import { getLogicalRepoOrderRankById } from '../../../../shared/project-section-order'
 import {
   PROJECT_SECTION_PARITY_HEADERS,
   PROJECT_SECTION_PARITY_HOSTS,
@@ -32,10 +25,8 @@ import { worktree as worktreeFixture } from './worktree-list-groups-test-fixture
 import type { MobileProjectSectionCatalog } from '../../../../shared/mobile-project-sections-contract'
 import { getProjectSectionCatalogFromState } from '../../runtime/sync-runtime-graph/project-section-catalog'
 
-// Why: the phone's Project sections must be the desktop sidebar's by construction. The desktop
-// half answers the renderer's own catalog fetch and runs its merge, selector, repo order and
-// buildRows; the phone half groups what main serves from the renderer's published catalog, and
-// mobile/src/worktree/workspace-list-sections-desktop-parity.test.ts runs buildSections on it.
+// Why: the desktop sidebar's Project headers and the catalog main serves the phone come from one
+// renderer catalog fetch, merge, selector and repo order.
 
 const { rpc, assertCapability } = vi.hoisted(() => ({ rpc: vi.fn(), assertCapability: vi.fn() }))
 vi.mock('../../runtime/runtime-rpc-client', () => ({
@@ -154,33 +145,12 @@ async function servedCatalog(projectOrderBy: ProjectOrderBy): Promise<MobileProj
   return JSON.parse(JSON.stringify(published))
 }
 
-/** The phone's grouping over a served catalog (mobile/src/worktree/project-section-catalog.ts). */
-function phoneHeaders(served: MobileProjectSectionCatalog) {
-  const withRows = new Set(PROJECT_SECTION_PARITY_ROWS.map((row) => row.repoId))
-  return withRepoSectionDisplayLabels(
-    buildProjectSections({
-      items: PROJECT_SECTION_PARITY_ROWS,
-      repoIdOf: (row) => row.repoId,
-      repoMap: new Map(served.repos.map((repo) => [repo.id, repo])),
-      projectIndex: buildProjectGroupingIndex({
-        projects: served.projects,
-        projectHostSetups: served.setups
-      }),
-      placeholderRepoIds: served.repos
-        .filter((repo) => !withRows.has(repo.id))
-        .map((repo) => repo.id),
-      repoOrder: getLogicalRepoOrderRankById(served.repos.map((repo) => repo.id)),
-      projectOrderBy: served.projectOrderBy
-    })
-  ).map(([key, section]) => ({ key, label: section.label }))
-}
-
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.resetAllMocks()
 })
 
-describe('the phone groups by Project exactly as the paired desktop sidebar', () => {
+describe('the desktop sidebar and the catalog served to the phone share one Project grouping', () => {
   it.each(['recent', 'manual'] as const)(
     'gives checkouts of one project on local and servers the same %s headers',
     async (projectOrderBy) => {
@@ -189,7 +159,6 @@ describe('the phone groups by Project exactly as the paired desktop sidebar', ()
       )
       const served = await servedCatalog(projectOrderBy)
       expect(served).toEqual({ ...PROJECT_SECTION_PARITY_SERVED, projectOrderBy })
-      expect(phoneHeaders(served)).toEqual(PROJECT_SECTION_PARITY_HEADERS[projectOrderBy])
     }
   )
 })

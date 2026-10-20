@@ -13,7 +13,6 @@ import { useHostWorktreeActions } from './use-host-worktree-actions'
 
 vi.mock('expo-router', () => ({}))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
-vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
 vi.mock('../transport/host-removal-lifecycle', () => ({ removeHostAndCloseClient: async () => {} }))
 vi.mock('../host-route-exit', () => ({ leaveHostRoute: () => {} }))
 

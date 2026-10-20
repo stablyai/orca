@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
 vi.mock('../cache/worktree-cache', () => ({ setCachedWorktrees: () => {} }))
-vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
 vi.mock('../worktree/host-worktree-refresh', () => ({ startHostWorktreeRefresh: () => () => {} }))
 vi.mock('../transport/use-worktree-resync', () => ({
   useWorktreeResync: () => ({ refreshing: false, onRefresh: async () => {} })
@@ -32,8 +31,6 @@ function catalogHook(fetched: unknown, actionErrors: string[], catalogErrors: (s
     setActionError: (value: string) => actionErrors.push(value),
     setCatalogError: (value: string | null) => catalogErrors.push(value),
     setLastKnownWorktrees: () => {},
-    setOptimisticActiveWorktreeIdentity: () => {},
-    setPinnedIds: (apply: (previous: Set<string>) => Set<string>) => apply(new Set()),
     setServerWorkspaces: () => {},
     setSleptIds: (apply: (previous: Set<string>) => Set<string>) => apply(new Set()),
     setWorktrees: () => {},

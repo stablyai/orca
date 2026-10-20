@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import type { Worktree } from './workspace-list-sections'
+import type { Worktree } from './workspace-list-types'
 import { areWorktreeListsEqual } from './worktree-list-snapshot'
 
 function agent(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktreeAgentRow {

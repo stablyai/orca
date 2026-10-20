@@ -22,7 +22,7 @@ import {
   HostWorkspaceListReopen,
   HostWorkspaceListStates
 } from '../worktree/host-workspace-list-states'
-import { getWorktreeStatus } from '../worktree/workspace-list-sections'
+import { getWorktreeStatus } from '../worktree/worktree-row-status'
 import { repoColor } from '../worktree/repo-color'
 import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { hostScreenStyles as styles } from './host-screen-styles'
@@ -57,7 +57,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
     settings,
     state
   } = controller
-  const { rawSections, sections, repoById } = sectionsResult
+  const { sections, repoById } = sectionsResult
   const { pending } = settings.pendingViewChanges
   // A collapse the desktop has not answered within SLOW_PENDING_MS spins on its header.
   const pendingCollapseKeys = useSlowPendingKeys(
@@ -181,8 +181,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
               return pendingCreations ? <>{pendingCreations}</> : null
             }
             const isCollapsed = controller.collapsedGroups.has(section.key)
-            const count =
-              section.count ?? rawSections.find((s) => s.key === section.key)?.data.length ?? 0
+            const count = section.count ?? section.data.length
             // Why: the desktop's header draws its anchor repo's colour and icon.
             const repoSectionLook =
               state.view.groupBy === 'repo' && section.repo

@@ -1,5 +1,5 @@
 import { areStructurallyEqual } from './structural-equality'
-import type { Worktree } from './workspace-list-sections'
+import type { Worktree } from './workspace-list-types'
 
 export function areWorktreeListsEqual(
   left: readonly Worktree[],

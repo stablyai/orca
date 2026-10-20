@@ -94,21 +94,7 @@
         }
       ]
     },
-    "6b0066cfa6bd": {
-      "confirmRemoveHost": false,
-      "lastKnownWorktrees": [],
-      "optimisticActiveWorktreeIdentity": {
-        "$rpc": "null"
-      },
-      "pinnedIds": [],
-      "routeActionState": {},
-      "serverWorkspaces": {
-        "hosts": [],
-        "worktrees": []
-      },
-      "worktrees": []
-    },
-    "6e7f22e079bb": {
+    "6713d2af2e31": {
       "confirmRemoveHost": false,
       "lastKnownWorktrees": [
         {
@@ -128,10 +114,6 @@
           "worktreeId": "wt-1"
         }
       ],
-      "optimisticActiveWorktreeIdentity": {
-        "$rpc": "null"
-      },
-      "pinnedIds": [],
       "routeActionState": {},
       "serverWorkspaces": {
         "hosts": [],
@@ -192,6 +174,16 @@
       "status": "pending",
       "startedAt": 0
     },
+    "c60536b31729": {
+      "confirmRemoveHost": false,
+      "lastKnownWorktrees": [],
+      "routeActionState": {},
+      "serverWorkspaces": {
+        "hosts": [],
+        "worktrees": []
+      },
+      "worktrees": []
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -213,7 +205,7 @@
             "mount": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["8f27c443230b", "7a68c6ea2c44"]
         }
       },
@@ -226,7 +218,7 @@
             "mount": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6e7f22e079bb",
+          "state": "6713d2af2e31",
           "effects": ["8f27c443230b", "7a68c6ea2c44", "50378a292ce7", "753a3ae9bdd7"]
         }
       }

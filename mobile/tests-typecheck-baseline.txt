@@ -119,5 +119,4 @@ src/worktree/agent-row-display.test.ts
 src/worktree/agent-row-lineage.test.ts
 src/worktree/host-worktree-refresh.test.ts
 src/worktree/worktree-host-row-identity.test.ts
-src/worktree/worktree-list-completeness.test.ts
 src/worktree/worktree-list-snapshot.test.ts

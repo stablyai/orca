@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { AppState } from 'react-native'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { useFocusEffect } from 'expo-router'
 import { setCachedWorktrees } from '../cache/worktree-cache'
 import type { RpcClient } from '../transport/rpc-client'
@@ -10,11 +9,7 @@ import { useWorktreeResync } from '../transport/use-worktree-resync'
 import { startHostWorktreeRefresh } from '../worktree/host-worktree-refresh'
 import type { HostSidebarFeedTriggers } from './host-sidebar-feed-reader'
 import { areWorktreeListsEqual } from '../worktree/worktree-list-snapshot'
-import {
-  clearConfirmedActiveWorktreeIdentity,
-  retainLiveSleptWorktreeIdentities
-} from '../worktree/worktree-host-row-identity'
-import { savePinnedIds } from '../storage/preferences'
+import { retainLiveSleptWorktreeIdentities } from '../worktree/worktree-host-row-identity'
 import type { FetchHostRepoMetadata } from './use-host-repo-metadata'
 import type { HostScreenState } from './use-host-screen-state'
 import { relaysToServers } from '../transport/execution-host-scoped-rpc-client'
@@ -31,8 +26,7 @@ export function useHostWorktreeCatalog(args: {
   fetchRepoMetadata: FetchHostRepoMetadata
   hostCapabilities: readonly string[]
   hostId: string | undefined
-  /** Null in a build that lists without the feed. */
-  sidebarFeed: HostSidebarFeedTriggers | null
+  sidebarFeed: HostSidebarFeedTriggers
   state: HostScreenState
   syncViewSettingsFromDesktop: (options?: { resend?: boolean }) => Promise<void>
 }) {
@@ -54,8 +48,6 @@ export function useHostWorktreeCatalog(args: {
     setActionError,
     setCatalogError,
     setLastKnownWorktrees,
-    setOptimisticActiveWorktreeIdentity,
-    setPinnedIds,
     setServerWorkspaces,
     setSleptIds,
     setWorktrees,
@@ -83,7 +75,7 @@ export function useHostWorktreeCatalog(args: {
           setServerWorkspaces((previous) => applyServerWorkspaces(previous, fetched))
         }
       } catch {
-        // Keeps the rows shown; the next poll retries.
+        // Keeps the rows shown; the next change event, foreground return or feed update retries.
       } finally {
         if (serverFetchInFlightRef.current === requestClient) {
           serverFetchInFlightRef.current = null
@@ -103,7 +95,7 @@ export function useHostWorktreeCatalog(args: {
       if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
         return
       }
-      // Why: prevent slow remote hosts from stacking overlapping worktree.ps requests during polling.
+      // Why: prevent slow remote hosts from stacking overlapping worktree.ps requests.
       if (fetchWorktreesInFlightRef.current) {
         fetchWorktreesQueuedRef.current ||= options.queueIfInFlight === true
         return
@@ -150,31 +142,8 @@ export function useHostWorktreeCatalog(args: {
           if (hostId) {
             setCachedWorktrees(hostId, confirmed, { proven: true })
           }
-          // Drop the optimistic active override once the host reports it active, so later desktop changes win.
-          setOptimisticActiveWorktreeIdentity((pending) =>
-            clearConfirmedActiveWorktreeIdentity(pending, confirmed)
-          )
-
           // Clear optimistic sleep overrides once the server confirms inactive (liveTerminalCount === 0).
           setSleptIds((prev) => retainLiveSleptWorktreeIdentities(prev, confirmed))
-
-          // Sync pin state from server so desktop-initiated pins reflect without relying on stale AsyncStorage.
-          // Switch point: a feed-built list keeps no pin cache of its own.
-          const serverPinned = new Set(confirmed.filter((w) => w.isPinned).map((w) => w.worktreeId))
-          if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-            setPinnedIds((prev) => {
-              if (
-                serverPinned.size === prev.size &&
-                [...serverPinned].every((id) => prev.has(id))
-              ) {
-                return prev
-              }
-              if (hostId) {
-                void savePinnedIds(hostId, serverPinned)
-              }
-              return serverPinned
-            })
-          }
         }
       } catch (error) {
         // Will retry on reconnect

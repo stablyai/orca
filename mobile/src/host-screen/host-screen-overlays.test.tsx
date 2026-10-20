@@ -54,8 +54,7 @@ async function renderSheet(row: Partial<Worktree>) {
       actionTarget: { worktreeId: 'wt', repo: 'orca', branch: 'main', ...row },
       confirmDelete: null,
       view: INITIAL_MOBILE_VIEW,
-      hostLabelById: new Map(),
-      pinnedIds: new Set()
+      hostLabelById: new Map()
     }
   }
   await act(async () => {

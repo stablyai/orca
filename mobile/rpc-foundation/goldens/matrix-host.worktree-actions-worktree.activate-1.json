@@ -331,20 +331,6 @@
         }
       }
     },
-    "6b0066cfa6bd": {
-      "confirmRemoveHost": false,
-      "lastKnownWorktrees": [],
-      "optimisticActiveWorktreeIdentity": {
-        "$rpc": "null"
-      },
-      "pinnedIds": [],
-      "routeActionState": {},
-      "serverWorkspaces": {
-        "hosts": [],
-        "worktrees": []
-      },
-      "worktrees": []
-    },
     "77fc169cfecb": {
       "name": "worktree.activate#1",
       "ordinal": 5,
@@ -417,54 +403,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "815290c5536f": {
-      "confirmRemoveHost": false,
-      "lastKnownWorktrees": [
-        {
-          "branch": "feature/pin",
-          "displayName": "marlin",
-          "hasAttachedPty": false,
-          "isPinned": true,
-          "linkedPR": {
-            "$rpc": "null"
-          },
-          "liveTerminalCount": 0,
-          "path": "/repos/marlin/wt-1",
-          "preview": "",
-          "repo": "marlin",
-          "repoId": "repo-1",
-          "unread": false,
-          "worktreeId": "wt-1"
-        }
-      ],
-      "optimisticActiveWorktreeIdentity": {
-        "$rpc": "null"
-      },
-      "pinnedIds": [],
-      "routeActionState": {},
-      "serverWorkspaces": {
-        "hosts": [],
-        "worktrees": []
-      },
-      "worktrees": [
-        {
-          "branch": "feature/pin",
-          "displayName": "marlin",
-          "hasAttachedPty": false,
-          "isPinned": true,
-          "linkedPR": {
-            "$rpc": "null"
-          },
-          "liveTerminalCount": 0,
-          "path": "/repos/marlin/wt-1",
-          "preview": "",
-          "repo": "marlin",
-          "repoId": "repo-1",
-          "unread": false,
-          "worktreeId": "wt-1"
-        }
-      ]
     },
     "8b0aa83a5570": {
       "name": "worktree.activate#1",
@@ -545,6 +483,60 @@
       "name": "worktree.set#1",
       "ordinal": 4,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:wt-1\",\"isPinned\":true}}"
+    },
+    "b0d19b4d9def": {
+      "confirmRemoveHost": false,
+      "lastKnownWorktrees": [
+        {
+          "branch": "feature/pin",
+          "displayName": "marlin",
+          "hasAttachedPty": false,
+          "isPinned": true,
+          "linkedPR": {
+            "$rpc": "null"
+          },
+          "liveTerminalCount": 0,
+          "path": "/repos/marlin/wt-1",
+          "preview": "",
+          "repo": "marlin",
+          "repoId": "repo-1",
+          "unread": false,
+          "worktreeId": "wt-1"
+        }
+      ],
+      "routeActionState": {},
+      "serverWorkspaces": {
+        "hosts": [],
+        "worktrees": []
+      },
+      "worktrees": [
+        {
+          "branch": "feature/pin",
+          "displayName": "marlin",
+          "hasAttachedPty": false,
+          "isPinned": true,
+          "linkedPR": {
+            "$rpc": "null"
+          },
+          "liveTerminalCount": 0,
+          "path": "/repos/marlin/wt-1",
+          "preview": "",
+          "repo": "marlin",
+          "repoId": "repo-1",
+          "unread": false,
+          "worktreeId": "wt-1"
+        }
+      ]
+    },
+    "c60536b31729": {
+      "confirmRemoveHost": false,
+      "lastKnownWorktrees": [],
+      "routeActionState": {},
+      "serverWorkspaces": {
+        "hosts": [],
+        "worktrees": []
+      },
+      "worktrees": []
     },
     "ca91c555e48e": {
       "name": "worktrees",
@@ -680,7 +672,7 @@
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a"
           },
-          "state": "815290c5536f",
+          "state": "b0d19b4d9def",
           "effects": ["ca91c555e48e", "da6c9e1a507d"]
         }
       },
@@ -695,7 +687,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -710,7 +702,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -725,7 +717,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -740,7 +732,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -755,7 +747,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -770,7 +762,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -785,7 +777,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -800,7 +792,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -815,7 +807,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -830,7 +822,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -845,7 +837,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -860,7 +852,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -875,7 +867,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -890,7 +882,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -905,7 +897,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -920,7 +912,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -935,7 +927,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -950,7 +942,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -965,7 +957,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -980,7 +972,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -995,7 +987,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       },
@@ -1010,7 +1002,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6b0066cfa6bd",
+          "state": "c60536b31729",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "a8d6bd902609", "4fb40764fe7e"]
         }
       }

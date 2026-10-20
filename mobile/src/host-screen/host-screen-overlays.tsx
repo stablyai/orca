@@ -9,7 +9,6 @@ import { BottomDrawer } from '../components/BottomDrawer'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
 import { hostNewWorktreeSessionRoute } from '../host-route-action-state'
-import { isWorktreePinned } from '../worktree/workspace-list-sections'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { WorkspaceOptionsSheet } from './workspace-options-sheet'
 import { WorkspaceDetailsSheet } from './workspace-details-sheet'
@@ -115,8 +114,8 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                           }
                         ]),
                     {
-                      label: isWorktreePinned(actionTarget, state.pinnedIds) ? 'Unpin' : 'Pin',
-                      icon: isWorktreePinned(actionTarget, state.pinnedIds) ? PinOff : Pin,
+                      label: actionTarget.isPinned ? 'Unpin' : 'Pin',
+                      icon: actionTarget.isPinned ? PinOff : Pin,
                       onPress: () => {
                         actions.togglePin(actionTarget)
                         state.setActionTarget(null)
