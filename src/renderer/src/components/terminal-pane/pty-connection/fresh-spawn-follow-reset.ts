@@ -176,7 +176,10 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     }
     // Why: an alt-screen pane is a live TUI Orca just does not recognise as an agent, and the
     // replay already re-armed its mouse modes — keep them instead of wiping them (#8291).
-    return (isAlternateScreen ?? session.kittyKeyboardModes.isAlternateScreen)
+    // Why scan OR daemon flag: a snapshot taken before the TUI entered the alternate screen can
+    // still report false while the replayed payload did enter it; the payload scan is authoritative
+    // for what the renderer now shows, so a stale false must not wipe the mouse modes it just armed.
+    return session.kittyKeyboardModes.isAlternateScreen || isAlternateScreen === true
       ? POST_REPLAY_REATTACH_RESET_KEEP_MOUSE
       : POST_REPLAY_REATTACH_RESET
   }
