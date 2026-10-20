@@ -167,6 +167,13 @@ export type SessionParseReadRequirement = 'any' | 'whole'
  * True when this cursor already sits at the transcript's current stat, so a
  * parse would reuse the cached fold and read no bytes at all.
  */
+function sessionParseCacheMatchesAgent(
+  candidate: SessionFileCandidate,
+  entry: SessionParseCacheEntry
+): boolean {
+  return entry.session === null || entry.session.agent === candidate.agent
+}
+
 function sessionParseCacheCoversTranscript(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform
@@ -175,6 +182,7 @@ function sessionParseCacheCoversTranscript(
   const entry = getSessionParseCacheEntry(file.path)
   return (
     entry !== undefined &&
+    sessionParseCacheMatchesAgent(candidate, entry) &&
     entry.platform === platform &&
     entry.mtimeMs === file.mtimeMs &&
     (entry.sizeBytes === null || file.sizeBytes === undefined || entry.sizeBytes === file.sizeBytes)
@@ -196,7 +204,11 @@ async function parseCachedInLane(
     requestWholeTranscriptRead(file.path)
   }
   // Not looked up again after a forced read: a failed database delete would hand the row back.
-  const entry = forceWholeRead ? undefined : getSessionParseCacheEntry(file.path)
+  const cachedEntry = forceWholeRead ? undefined : getSessionParseCacheEntry(file.path)
+  // Why: Pi and OMP can scan the same directory when PI_CODING_AGENT_DIR or PI_CONFIG_DIR points
+  // at ~/.pi; never reuse or resume a cached entry folded for a different agent.
+  const entry =
+    cachedEntry && sessionParseCacheMatchesAgent(candidate, cachedEntry) ? cachedEntry : undefined
 
   if (entry !== undefined && sessionParseCacheCoversTranscript(candidate, platform)) {
     if (sidecarUnchanged(entry.sidecar, file.sidecar)) {

@@ -369,4 +369,52 @@ describe('parseAgentSessionFileCached', () => {
     expect(resumed).toEqual(await freshParse(path))
     expect(resumed?.messageCount).toBe(202)
   })
+
+  it('does not reuse or resume an omp cached entry when pi scans the same transcript path', async () => {
+    const root = await makeTempDir()
+    const path = join(root, '2026-04-20T00-00-00-000Z_aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
+    await writeFile(
+      path,
+      [
+        JSON.stringify({
+          type: 'session',
+          id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+          timestamp: '2026-04-20T00:00:00.000Z',
+          cwd: '/repo/app'
+        }),
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-04-20T00:01:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'shared session dir prompt' }] }
+        }),
+        ''
+      ].join('\n')
+    )
+    const fileStat = await stat(path)
+    const file: FileWithMtime = {
+      path,
+      mtimeMs: fileStat.mtimeMs,
+      modifiedAt: fileStat.mtime.toISOString(),
+      sizeBytes: fileStat.size
+    }
+    const ompStats = createSessionParseStats()
+    const ompSession = await parseAgentSessionFileCached(
+      { agent: 'omp', file, codexHome: null },
+      process.platform,
+      ompStats
+    )
+    expect(ompSession?.agent).toBe('omp')
+    expect(ompStats.fullParses).toBe(1)
+
+    const piStats = createSessionParseStats()
+    const piSession = await parseAgentSessionFileCached(
+      { agent: 'pi', file, codexHome: null },
+      process.platform,
+      piStats
+    )
+    expect(piSession?.agent).toBe('pi')
+    expect(piSession?.id).toContain(':pi:')
+    expect(piStats.reused).toBe(0)
+    expect(piStats.fullParses).toBe(1)
+  })
 })

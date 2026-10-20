@@ -1,5 +1,6 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
 import type {
   WebSessionTabsBatchContext,
   WebSessionTabsSnapshotApplyOptions,
@@ -25,9 +26,13 @@ export function applyWebSessionTabsSnapshotWithContext(
   batchContext?: WebSessionTabsBatchContext,
   options?: WebSessionTabsSnapshotApplyOptions
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  // Why: remote environments never mirror their floating workspace onto the desktop's local one,
+  // but local structured agent-session inventory owns this machine's floating chat tabs.
+  const isLocalStructuredFloatingSnapshot =
+    environmentId === LOCAL_STRUCTURED_SESSION_OWNER && options?.contentScope === 'agent-session'
   if (
     suppressE2eWebRuntimeBrowserSnapshot(rawSnapshot) ||
-    rawSnapshot.worktree === FLOATING_TERMINAL_WORKTREE_ID
+    (rawSnapshot.worktree === FLOATING_TERMINAL_WORKTREE_ID && !isLocalStructuredFloatingSnapshot)
   ) {
     return state
   }

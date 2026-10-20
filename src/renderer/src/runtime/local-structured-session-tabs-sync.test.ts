@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
@@ -743,6 +744,45 @@ describe('local structured session tab projection', () => {
     expect(delayed.unifiedTabsByWorktree[WORKTREE_ID]).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ entityId: 'stale-session' })])
     )
+  })
+
+  it('syncs local structured agent-session tabs in the floating workspace while ignoring remote floating snapshots', () => {
+    const floatingSnapshot: RuntimeMobileSessionTabsResult = {
+      ...structuredInventory('floating-epoch-1', 5, 'pi-floating-1'),
+      worktree: FLOATING_TERMINAL_WORKTREE_ID
+    }
+    const remoteIgnored = applyWebSessionTabsSnapshot(
+      createSnapshot(),
+      floatingSnapshot,
+      'remote-env-1',
+      1_700_000_000_000
+    )
+    expect(remoteIgnored.unifiedTabsByWorktree?.[FLOATING_TERMINAL_WORKTREE_ID]).toBeUndefined()
+
+    const afterPublish = applyLocalStructuredSessionTabSnapshots(createSnapshot(), [
+      floatingSnapshot
+    ])
+    expect(afterPublish.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
+      expect.objectContaining({
+        contentType: 'agent-session',
+        entityId: 'pi-floating-1',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      })
+    ])
+    expect(afterPublish.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(afterPublish.layoutByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual({
+      type: 'leaf',
+      groupId: SECONDARY_GROUP
+    })
+
+    // Closing the last floating tab must keep the floating worktree's version cursor so a stale
+    // lower-version frame cannot resurrect the closed floating session.
+    const afterClose = applyLocalStructuredSessionTabSnapshots(afterPublish, [
+      { ...floatingSnapshot, snapshotVersion: 6, tabs: [], tabGroups: [] }
+    ])
+    expect(afterClose.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBeUndefined()
+    const afterStaleFrame = applyLocalStructuredSessionTabSnapshots(afterClose, [floatingSnapshot])
+    expect(afterStaleFrame.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBeUndefined()
   })
 })
 
