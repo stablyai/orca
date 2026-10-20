@@ -36,6 +36,7 @@ ORCA wait --load networkidle --json
 ORCA eval --expression <js> --json
 ORCA tab list --json
 ORCA tab create --url <url> --json
+ORCA tab create --url <url> --focus --json
 ORCA tab switch --index <n> --json
 ORCA tab close --index <n> --json
 ORCA cookie get --json
@@ -52,6 +53,7 @@ Browser rules:
 - Browser commands default to the current worktree and its active tab. Use `--worktree all` only intentionally.
 - For concurrent browser work, run `ORCA tab list --json`, read `tabs[].browserPageId`, and pass `--page <browserPageId>` on later commands.
 - Use typed tab commands (`ORCA tab list/create/close/switch`), not `ORCA exec --command "tab ..."`, so Orca keeps UI state synchronized.
+- Add `--focus` to `ORCA tab create` to select the new tab as it is created. Without it, creation stays in the background.
 - Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts.
 - Anything not listed above goes through `ORCA exec --command "<agent-browser command>"`.
 - If `fill` or `type` fails on a custom input, try `ORCA focus --element @e1 --json` then `ORCA inserttext --text "text" --json`.
