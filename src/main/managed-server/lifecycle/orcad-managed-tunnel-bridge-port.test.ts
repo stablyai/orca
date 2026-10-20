@@ -35,6 +35,7 @@ const options: PortForwardStartOptions = {
   remotePort: 6768
 }
 
+/** A connection stubbed down to what the reservation reads: its transport and its ssh target. */
 function connection(systemSsh: boolean): SshConnection {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reservation reads only these three.
   return {

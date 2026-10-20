@@ -73,6 +73,10 @@ export function buildSystemSshPortForwardArgs(
   return args
 }
 
+/**
+ * An `ssh -N` forward, already listening on the port it reports. A fixed port carries both ways to
+ * reclaim it from an earlier Orca; port 0 carries neither, since the one it lands on was just free.
+ */
 export function startSystemSshPortForwardProcess(
   target: SshTarget,
   localPort: number,

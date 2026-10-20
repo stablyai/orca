@@ -18,6 +18,7 @@ import type { SshTarget } from '../../../shared/ssh-types'
 const SYSTEM_SSH_PATH =
   process.platform === 'win32' ? 'C:\\Windows\\System32\\OpenSSH\\ssh.exe' : '/usr/bin/ssh'
 
+/** A manual target by default; `source: 'ssh-config'` makes it config-backed instead. */
 function createTarget(overrides?: Partial<SshTarget>): SshTarget {
   return {
     id: 'target-1',

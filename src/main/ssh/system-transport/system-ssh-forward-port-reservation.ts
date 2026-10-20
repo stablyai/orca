@@ -6,6 +6,11 @@
 import { createServer } from 'node:net'
 import { stopOrphanedOrcaSshForward } from './system-ssh-orphaned-forward'
 
+/**
+ * The port the forward should be spawned on: `localPort`, or a free one when it is 0. Recovery is
+ * only ever attempted on a port already in use, and only from what the caller supplies — a forward
+ * process to stop, a master to ask — so a port held by anything else keeps reporting the bind error.
+ */
 export async function reserveLocalForwardPort(
   localPort: number,
   orphanArgs?: readonly string[],
@@ -37,6 +42,10 @@ async function releaseLocalForwardPort(
   return cancelMuxedForward ? cancelMuxedForward() : false
 }
 
+/**
+ * The port a listener could be opened on, closed again before it is returned. Rejects with
+ * `EADDRINUSE` as the error's `cause`, which is what tells a busy port from an unusable one.
+ */
 function bindLocalForwardPort(localPort: number): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = createServer()
