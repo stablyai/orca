@@ -12,6 +12,34 @@ Rebuild modified launch-policy code before running an app; stale build wrappers 
 
 Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not use computer-use for Orca UI validation.
 
+# Setup and Commands
+
+Use Node 24 and the pnpm version pinned in [`package.json`](./package.json) (`engines` and `packageManager`). Run these commands from the workspace root. For agent-launched apps and tests, set `ORCA_BACKGROUND_LAUNCH=1` in your shell first (see Electron UI Validation above).
+
+```bash
+pnpm install --frozen-lockfile           # root dependencies for the host OS/CPU
+pnpm -C mobile install --frozen-lockfile # separate mobile dependencies, also needed by pnpm build
+pnpm dev                               # run the desktop app with electron-vite
+pnpm build                             # typecheck and build desktop, relay, CLI, web clients and native modules
+pnpm test path/to/file.test.ts          # run one Vitest file
+```
+
+`mobile/` has its own workspace and lockfile; the root install does not install dependencies needed by `build:mobile-web`. Repeat the mobile install when `mobile/pnpm-lock.yaml` changes. Before cross-architecture packaging, run `pnpm install:release` to include x64 and arm64 dependencies for the host OS; see [Native Dependency Installs](#native-dependency-installs) and the [install policy](./docs/reference/pnpm-install-policy.md). For E2E commands, read [`tests/e2e/AGENTS.md`](./tests/e2e/AGENTS.md).
+
+# Architecture
+
+Orca's Electron desktop app and headless server share runtime services. The CLI, paired clients and mobile app reach those services through runtime RPC.
+
+- **[`src/main`](./src/main/)**: desktop main process and runtime services, with RPC handlers in `runtime/rpc`. `daemon` owns detached terminal processes (read its [instructions](./src/main/daemon/AGENTS.md)); `orcad` and `server` support headless `orca serve`.
+- **[`src/preload`](./src/preload/)**: Electron bridge exposing main-process APIs to the renderer through `api`; types live in `api-types.ts`.
+- **[`src/renderer`](./src/renderer/)**: React UI and Zustand stores in `src/store`, also projected into the browser client by `pnpm build:web-from-renderer`.
+- **[`src/shared`](./src/shared/)**: types and logic used across processes; `protocol-version.ts` defines the runtime compatibility window.
+- **[`src/relay`](./src/relay/)**: executes git, filesystem, search and terminal operations on SSH hosts, reached through `src/main/ssh` and built by `pnpm build:relay`.
+- **[`src/cli`](./src/cli/)**: the public `orca` CLI, a client of runtime RPC.
+- **[`mobile/`](./mobile/)**: Expo app with a separate pnpm workspace; `pnpm build:mobile-web` builds the web app included in desktop builds.
+
+Before changing behavior across these boundaries, read the relevant contracts in [`docs/reference/`](./docs/reference/): [SSH execution](./docs/reference/ssh-execution-boundary.md), [remote wire compatibility](./docs/reference/remote-wire-compatibility.md), [agent status](./docs/reference/agent-status-store.md) and [Git compatibility](./docs/reference/git-compatibility.md).
+
 # Style
 
 ## Reuse Before Reimplementing
