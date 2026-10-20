@@ -1,4 +1,4 @@
-import { app, clipboard, dialog, type BrowserWindow, type Tray, type WebContents } from 'electron'
+import { app, clipboard, dialog, type BrowserWindow, type WebContents } from 'electron'
 import { isNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
@@ -24,6 +24,8 @@ import {
   type RendererRecoveryPromptFailure
 } from '../window/renderer-recovery-prompt'
 import { probeRendererLaunchCapacity } from '../window/renderer-launch-failure-probe'
+import { createMacMenuBarIconGate } from '../tray/mac-menu-bar-icon-gate'
+import { logStartupMilestone } from './startup-diagnostics'
 
 // The window module injects this callback to avoid a cycle between actions and lifecycle code.
 let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
@@ -119,30 +121,55 @@ export function getSystemTrayOptions(): SystemTrayOptions | null {
   }
 }
 
-export function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
-  if (process.platform !== 'darwin' || state.isServeMode) {
-    return null
+const macMenuBarIconGate = createMacMenuBarIconGate({
+  isQuitPending: () => state.isQuitting || isQuittingForUpdate(),
+  readVisibility: () =>
+    state.isServeMode || !state.store ? null : state.store.getSettings().showMenuBarIcon !== false,
+  apply: (visible) => {
+    const options = getSystemTrayOptions()
+    if (options) {
+      logStartupMilestone('tray-sync', { visible })
+      setMacMenuBarIconVisible(visible, options)
+    }
+  },
+  logMilestone: logStartupMilestone
+})
+
+/** Applies the latest persisted showMenuBarIcon once the macOS startup gate has opened. */
+export function syncMacMenuBarIcon(): void {
+  if (process.platform === 'darwin') {
+    macMenuBarIconGate.requestSync()
   }
-  const options = getSystemTrayOptions()
-  return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
 }
 
+/** Only a successful main-window document load may start the macOS status-item grace. */
+export function noteMainWindowLoadedForMenuBarIcon(): void {
+  if (process.platform === 'darwin') {
+    macMenuBarIconGate.noteMainWindowLoaded()
+  }
+}
+
+export function closeMacMenuBarIconGate(): void {
+  macMenuBarIconGate.close()
+}
+
+/**
+ * Windows creates its tray at first paint so minimize-to-tray always has a way back. Null on macOS,
+ * whose status item waits for the menu-bar icon gate instead.
+ */
 export function createSystemTrayDeferred(
   window: BrowserWindow,
   onCreated?: () => void
-): () => void {
+): (() => void) | null {
+  if (process.platform === 'darwin') {
+    return null
+  }
   let trayCreated = false
   return () => {
     if (trayCreated || window.isDestroyed() || state.isQuitting || !state.store) {
       return
     }
     trayCreated = true
-    if (process.platform === 'darwin') {
-      if (syncMacMenuBarIcon(state.store.getSettings().showMenuBarIcon !== false)) {
-        onCreated?.()
-      }
-      return
-    }
     const options = getSystemTrayOptions()
     if (options && createSystemTray(options)) {
       onCreated?.()

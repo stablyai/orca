@@ -248,8 +248,8 @@ export async function initializeReadyFoundation(): Promise<void> {
       }
     }
     if ('showMenuBarIcon' in updates) {
-      // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.
-      syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
+      // Why: Store is the mutation authority for all settings writes; the gate applies the latest value once startup allows.
+      syncMacMenuBarIcon()
     }
     if ('agentStatusHooksEnabled' in updates) {
       agentHookServer.setStatusHooksEnabled(isAgentStatusHooksEnabled(settings))

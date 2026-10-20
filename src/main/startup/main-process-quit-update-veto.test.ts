@@ -39,6 +39,7 @@ const dependencyExports: [string, string[]][] = [
   ['../terminal-history-gc', ['cancelHistoryGc']],
   ['./window-all-closed-quit-policy', ['shouldQuitWhenAllWindowsClosed']],
   ['./configure-process', ['isDevParentShutdownRequested']],
+  ['./main-window-actions', ['closeMacMenuBarIconGate']],
   ['../persistence', ['getCanonicalUserDataPath']]
 ]
 

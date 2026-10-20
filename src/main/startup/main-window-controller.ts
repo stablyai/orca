@@ -17,7 +17,11 @@ import {
 import { logStartupMilestone } from './startup-diagnostics'
 import { notifyMainWindowBecameVisible } from '../window/main-window-visibility'
 import { setTrayAttention } from '../tray/system-tray'
-import { createSystemTrayDeferred, showRendererRecoveryPrompt } from './main-window-actions'
+import {
+  createSystemTrayDeferred,
+  noteMainWindowLoadedForMenuBarIcon,
+  showRendererRecoveryPrompt
+} from './main-window-actions'
 import { attachMainWindowCoreServices } from './main-window-core-services'
 import {
   clearMainWindowAgentStatusListeners,
@@ -164,19 +168,36 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   const createTray = createSystemTrayDeferred(window, () => logStartupMilestone('tray-created'))
   window.once('ready-to-show', () => {
     logStartupMilestone('ready-to-show')
-    setImmediate(createTray)
+    if (createTray) {
+      setImmediate(createTray)
+    }
   })
   window.once('show', () => {
     logStartupMilestone('window-shown')
     void presentGpuFallbackRecoveredLaunchPrompt(window)
   })
-  const trayCreateFallback = setTimeout(createTray, TRAY_CREATE_FALLBACK_MS)
-  trayCreateFallback.unref?.()
+  if (createTray) {
+    const trayCreateFallback = setTimeout(createTray, TRAY_CREATE_FALLBACK_MS)
+    trayCreateFallback.unref?.()
+  }
+  // Why: an error document also finishes loading; did-navigate fires only when a real document commits.
+  let showingErrorDocument = false
+  window.webContents.on('did-navigate', () => {
+    showingErrorDocument = false
+  })
+  window.webContents.on('did-fail-load', (_event, _code, _description, _url, isMainFrame) => {
+    if (isMainFrame) {
+      showingErrorDocument = true
+    }
+  })
   const rendererWebContentsId = window.webContents.id
   const onFirstWindowLoad = (): void => {
     clearExpectedRendererReload(rendererWebContentsId)
     recordCrashBreadcrumb('main_window_loaded')
     logStartupMilestone('did-finish-load')
+    if (!showingErrorDocument) {
+      noteMainWindowLoadedForMenuBarIcon()
+    }
     // Why cleared here: a reload drops the old ui:openMarkdownFiles listener, and the fresh
     // renderer re-attaches by pulling. Pushing into the gap between would be silently lost.
     state.osDocumentOpenListenerReady = false
