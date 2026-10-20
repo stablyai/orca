@@ -1,10 +1,7 @@
-import { createElement, type RefObject } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import type { TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS } from './terminal-live-preedit-mirror'
-import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
+import type { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
+import { createTerminalLiveInputCommitHarness } from './terminal-live-input-commit.test-support'
 
 // The host's report is the seam's subject; here only whether it reports a range at all matters.
 const composingRange = vi.hoisted(() => ({ hostReportsNone: false }))
@@ -22,107 +19,6 @@ function changeLiveInput(
   isComposing?: boolean
 ): void {
   handlers.handleLiveInputChange({ nativeEvent: { text, isComposing } })
-}
-
-type TerminalLiveInputCommitHarness = {
-  readonly captures: readonly string[]
-  readonly getHandlers: () => TerminalLiveInputCommitHandlers
-  readonly handlers: TerminalLiveInputCommitHandlers
-  readonly sent: readonly string[]
-  readonly setActiveSessionTabType: (next: string | undefined) => void
-  readonly setConnected: (next: boolean) => void
-  readonly setSendResult: (next: boolean) => void
-  readonly unmount: () => void
-}
-
-type TerminalLiveInputCommitHarnessOptions = {
-  readonly sendResult?: boolean
-}
-
-function createTerminalLiveInputCommitHarness({
-  sendResult = true
-}: TerminalLiveInputCommitHarnessOptions = {}): TerminalLiveInputCommitHarness {
-  const activeHandle = 'terminal-a'
-  const activeHandleRef: RefObject<string | null> = { current: activeHandle }
-  const activeSessionTabTypeRef: RefObject<string | null> = { current: 'terminal' }
-  const captures: string[] = []
-  const setLiveInputCapture = (text: string): void => {
-    captures.push(text)
-  }
-  const liveInputRef: RefObject<TextInput | null> = { current: null }
-  const liveInputTerminalHandles = new Set([activeHandle])
-  const liveInputTerminalHandlesRef: RefObject<Set<string>> = {
-    current: new Set([activeHandle])
-  }
-  const sent: string[] = []
-  let currentSendResult = sendResult
-  const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
-    current: async (_handle, bytes) => {
-      sent.push(bytes)
-      return currentSendResult
-    }
-  }
-  // Refs never re-render; only these variables re-run the hook's clear effects.
-  let currentActiveSessionTabType: string | undefined = 'terminal'
-  let currentConnected = true
-  let handlers: TerminalLiveInputCommitHandlers | null = null
-  let renderer: ReactTestRenderer | null = null
-
-  function Harness(): null {
-    handlers = useTerminalLiveInputCommit({
-      activeHandle,
-      activeHandleRef,
-      activeSessionTabType: currentActiveSessionTabType,
-      activeSessionTabTypeRef,
-      connected: currentConnected,
-      liveInputRef,
-      liveInputTerminalHandles,
-      liveInputTerminalHandlesRef,
-      sendLiveTerminalInputRef,
-      setLiveInputCapture
-    })
-    return null
-  }
-
-  act(() => {
-    renderer = create(createElement(Harness))
-  })
-  if (!handlers || !renderer) {
-    throw new Error('terminal live input hook did not render')
-  }
-
-  return {
-    captures,
-    getHandlers: () => {
-      if (!handlers) {
-        throw new Error('terminal live input hook is not mounted')
-      }
-      return handlers
-    },
-    handlers,
-    sent,
-    setActiveSessionTabType: (next: string | undefined): void => {
-      currentActiveSessionTabType = next
-      // Ref and prop derive from the same activeSessionTab in the real route, so
-      // they go null together during tab-list lag — keep the harness coupled.
-      activeSessionTabTypeRef.current = next ?? null
-      act(() => {
-        renderer?.update(createElement(Harness))
-      })
-    },
-    setConnected: (next: boolean): void => {
-      currentConnected = next
-      act(() => {
-        renderer?.update(createElement(Harness))
-      })
-    },
-    setSendResult: (next: boolean): void => {
-      currentSendResult = next
-    },
-    unmount: () => {
-      act(() => renderer?.unmount())
-    }
-  }
 }
 
 describe('terminal live input commit hook', () => {
