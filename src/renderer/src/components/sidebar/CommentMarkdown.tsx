@@ -20,6 +20,7 @@ import {
   remarkNativeChatFileLinks,
   type FileLinkExists
 } from './comment-markdown-native-chat-file-links'
+import { remarkAutolinkTrailingPunctuation } from './comment-markdown-autolink-punctuation'
 import { CommentMarkdownBlockLineContext } from './comment-markdown-code-renderers'
 import { rehypeWordFade } from './comment-markdown-word-fade'
 import { CommentMarkdownWords } from './CommentMarkdownWords'
@@ -80,7 +81,14 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
 // plain-text renderer used whitespace-pre-wrap which preserved them. Adding
 // remark-breaks converts single newlines to <br>, keeping backward compat
 // with existing plain-text comments that rely on newline formatting.
-const remarkPlugins = [remarkGfm, remarkGitHubCallouts, remarkBreaks]
+// remarkAutolinkTrailingPunctuation runs after remarkGfm so autolink literals
+// shed the Japanese punctuation GFM leaves inside the href.
+const remarkPlugins = [
+  remarkGfm,
+  remarkGitHubCallouts,
+  remarkBreaks,
+  remarkAutolinkTrailingPunctuation
+]
 
 const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
 

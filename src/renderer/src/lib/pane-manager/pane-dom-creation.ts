@@ -15,6 +15,7 @@ import { installGuardedLinkProviderRegistration } from './terminal-link-provider
 import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-chord-classification'
 import { installTerminalMouseEncodingTracker } from './terminal-mouse-encoding-tracker'
 import { StableCellFitAddon } from './terminal-stable-cell-fit-addon'
+import { TERMINAL_HTTP_URL_PATTERN } from '../url-trailing-punctuation'
 
 function defaultLinkTooltipText(uri: string, openLinkHint: string): string {
   return `${uri} (${openLinkHint})`
@@ -75,6 +76,9 @@ export function createPaneDOM(
   const webLinksAddon = new WebLinksAddon(
     options.onLinkClick ? (event, uri) => options.onLinkClick!(id, event, uri) : undefined,
     {
+      // Why: xterm's default URL regex only stops at ASCII punctuation, so
+      // `（https://…/pull/1078）。` opens an href with the Japanese tail in it.
+      urlRegex: TERMINAL_HTTP_URL_PATTERN,
       hover: (_event, uri) => {
         if (uri) {
           linkTooltipHoverToken += 1
