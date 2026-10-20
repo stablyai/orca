@@ -20,10 +20,9 @@ import {
   SystemSshPortForwardProvider,
   systemSshForwardBuildArgsOptions
 } from '../../ssh/port-forwarding/system-ssh-port-forward-provider'
-import {
-  buildSystemSshPortForwardArgs,
-  reserveLocalForwardPort
-} from '../../ssh/system-transport/system-ssh-forward-process'
+import { buildSystemSshPortForwardArgs } from '../../ssh/system-transport/system-ssh-forward-process'
+import { reserveLocalForwardPort } from '../../ssh/system-transport/system-ssh-forward-port-reservation'
+import { cancelMuxedLocalForward } from '../../ssh/system-transport/system-ssh-muxed-forward-cancel'
 
 type OrcadManagedTunnelTransportDependencies = {
   forwards: SshPortForwardProvider[]
@@ -110,7 +109,7 @@ export class OrcadManagedTunnelTransportProvider implements SshPortForwardProvid
   }
 }
 
-/** Only system SSH ever spawned an `ssh -L`, so only there can one be left holding the port. */
+/** Only system SSH ever forwarded this port, so only there can a forward be left holding it. */
 export function reserveBridgeLocalPort(
   conn: SshConnection,
   options: PortForwardStartOptions
@@ -118,12 +117,21 @@ export function reserveBridgeLocalPort(
   if (!conn.usesSystemSshTransport()) {
     return reserveLocalForwardPort(options.localPort)
   }
+  const buildArgsOptions = systemSshForwardBuildArgsOptions(conn)
   const orphanArgs = buildSystemSshPortForwardArgs(
     conn.getTarget(),
     options.localPort,
     options.remoteHost,
     options.remotePort,
-    systemSshForwardBuildArgsOptions(conn)
+    buildArgsOptions
   )
-  return reserveLocalForwardPort(options.localPort, orphanArgs)
+  return reserveLocalForwardPort(options.localPort, orphanArgs, () =>
+    cancelMuxedLocalForward(
+      conn.getTarget(),
+      options.localPort,
+      options.remoteHost,
+      options.remotePort,
+      buildArgsOptions
+    )
+  )
 }

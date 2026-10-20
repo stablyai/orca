@@ -165,6 +165,38 @@ describe.skipIf(!enabled)(
       expect(await dial(forward.localPort)).toBe(false)
     }, 20_000)
 
+    // Why: an older Orca forwarded through this master, which keeps the listener once that client
+    // exits, so the port is held with no process of Orca's left for the orphan sweep to find.
+    it('rebinds a fixed port a master still holds for a forward Orca left muxed', async () => {
+      const heldPort = await freePort()
+      execFileSync('ssh', [
+        '-F',
+        configFile,
+        '-O',
+        'forward',
+        '-L',
+        `127.0.0.1:${heldPort}:127.0.0.1:${prohibitedPort}`,
+        target.configHost!
+      ])
+      expect(await dial(heldPort)).toBe(true)
+
+      const forward = await startSystemSshPortForwardProcess(
+        target,
+        heldPort,
+        '127.0.0.1',
+        prohibitedPort,
+        buildOptions()
+      )
+      try {
+        await forward.waitForStartup()
+        expect(forward.localPort).toBe(heldPort)
+        expect(await dial(heldPort)).toBe(true)
+      } finally {
+        await forward.close()
+      }
+      expect(await dial(heldPort)).toBe(false)
+    }, 20_000)
+
     it("sees sshd's administrative refusal on its own stderr", async () => {
       const conn = {
         getTarget: () => target,
