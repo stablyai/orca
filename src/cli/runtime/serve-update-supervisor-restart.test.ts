@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { statSync } from 'node:fs'
+import { chmod, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +8,7 @@ import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import type * as SupervisorRelocation from './serve-supervisor-relocation'
 import { getServeUpdateHandoffPath } from '../../shared/serve-update-handoff'
 import { resetSupervisedServeStop } from './serve-supervised-stop'
+import { restartServeSupervisorIfReplaced } from './serve-supervisor-relocation'
 import { readServeUpdateHandoff } from './serve-update-handoff-file'
 import { resumeInterruptedServeUpdate, superviseForegroundServe } from './serve-update-supervisor'
 
@@ -18,7 +20,7 @@ const { spawnMock, restartMock } = vi.hoisted(() => ({
 vi.mock('child_process', () => ({ spawn: spawnMock, spawnSync: vi.fn() }))
 vi.mock('./serve-supervisor-relocation', async (importOriginal) => ({
   ...(await importOriginal<typeof SupervisorRelocation>()),
-  restartThisServeSupervisorFromApp: restartMock
+  restartThisServeSupervisorIfReplaced: restartMock
 }))
 
 import { serveOrcaApp } from './launch'
@@ -96,7 +98,7 @@ describe('supervisor restart after a macOS update', () => {
       child: old as unknown as ChildProcessHandle,
       handoffPath,
       expectedHandoff: null,
-      restartFromInstalledApp: restart
+      restartIfReplaced: restart
     })
     old.emit('exit', 0, null)
     return { code, spawnChild }
@@ -145,25 +147,74 @@ describe('supervisor restart after a macOS update', () => {
     await expect(code).resolves.toBe(1)
   })
 
-  it('completes the handoff after the restart without restarting again', async () => {
+  // The real decision: restart only if the install replaced the executable this process started on.
+  async function resumeWithRealRestart(swapDuringWait: boolean) {
+    const install = async (dir: string, version: string): Promise<void> => {
+      await mkdir(join(dir, 'Contents', 'MacOS'), { recursive: true })
+      await writeFile(join(dir, 'Contents', 'MacOS', 'Orca'), '')
+      await chmod(join(dir, 'Contents', 'MacOS', 'Orca'), 0o755)
+      await writeFile(join(dir, 'Contents', 'Info.plist'), plist(version))
+    }
+    const identify = (path: string): string | null => {
+      try {
+        const stats = statSync(path)
+        return `${stats.dev}:${stats.ino}`
+      } catch {
+        return null
+      }
+    }
+    await install(join(root, 'Orca.app'), swapDuringWait ? OLD : NEW)
+    const cliEntry = join(root, 'cli.js')
+    await writeFile(cliEntry, '')
     await writeFile(handoffPath, JSON.stringify(requested(4101)))
+    const startedFrom = identify(executable)
+    const execve = vi.fn()
     const replacement = new FakeChild(4102)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeChild implements every handle member the supervisor calls.
     const spawnChild = vi.fn(() => replacement as unknown as ChildProcessHandle)
-    const restart = vi.fn()
     const code = resumeInterruptedServeUpdate({
       spec: { program: executable },
       spawnChild,
       handoffPath,
       handoff: requested(4101),
-      restartFromInstalledApp: restart
+      restartIfReplaced: () =>
+        restartServeSupervisorIfReplaced({
+          env: {},
+          execPath: executable,
+          execArgv: [],
+          argv: ['/ignored', cliEntry, 'serve'],
+          appRoot: root,
+          pid: 4242,
+          execve,
+          log: vi.fn(),
+          startedFrom,
+          identify,
+          canExecute: () => true
+        })
     })
+    if (swapDuringWait) {
+      await install(join(root, 'Update.app'), NEW)
+      await rename(join(root, 'Orca.app'), join(root, 'Previous.app'))
+      await rename(join(root, 'Update.app'), join(root, 'Orca.app'))
+    }
+    // A mocked execve returns, so the replacement still starts and settles the handoff.
     await vi.waitFor(() => expect(spawnChild).toHaveBeenCalledOnce())
     serveReady(replacement)
     await vi.waitFor(async () => expect(await readServeUpdateHandoff(handoffPath)).toBeNull())
     replacement.emit('exit', 0, null)
     await expect(code).resolves.toBe(0)
-    expect(restart).not.toHaveBeenCalled()
+    return { execve, spawnChild }
+  }
+
+  it('restarts a resumed supervisor whose executable the install replaced while it waited', async () => {
+    const { execve, spawnChild } = await resumeWithRealRestart(true)
+    expect(execve).toHaveBeenCalledOnce()
+    expect(execve.mock.invocationCallOrder[0]).toBeLessThan(spawnChild.mock.invocationCallOrder[0])
+  })
+
+  it('resumes without restarting when already on the installed executable, as after a restart', async () => {
+    const { execve } = await resumeWithRealRestart(false)
+    expect(execve).not.toHaveBeenCalled()
   })
 
   describe('serveOrcaApp', () => {

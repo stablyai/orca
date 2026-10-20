@@ -37,7 +37,8 @@ import { reexecThisServeUnderInitReaper } from './serve-pid1-init-reaper'
 import { supervisedAppImageUpdate } from './serve-appimage-update'
 import {
   relocateThisServeSupervisor,
-  restartThisServeSupervisorFromApp,
+  noteServeSupervisorStart,
+  restartThisServeSupervisorIfReplaced,
   SERVE_SUPERVISOR_APP_ROOT_ENV
 } from './serve-supervisor-relocation'
 import { serverOnlyServeMessage } from './serve-app-launcher'
@@ -129,6 +130,7 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
 export function serveOrcaApp(args: ServeOrcaAppArgs = {}): Promise<number> {
   // Why first: as a container or PrivatePIDs init, nothing would reap orphaned descendants.
   reexecThisServeUnderInitReaper()
+  noteServeSupervisorStart()
   const executable = resolveForegroundOrcaExecutable()
   // Why one value: the selector, orcad and Electron must all serve the profile the caller chose.
   const userDataPath = resolveLaunchUserDataPath()
@@ -257,9 +259,9 @@ function spawnElectronServe(
     ? redactingSpawn(spawnProcess)
     : spawnProcess
   // Why only our own executable: an override is a separate program the update does not delete.
-  const restartFromInstalledApp =
+  const restartIfReplaced =
     handoffPath && executable === process.execPath
-      ? () => restartThisServeSupervisorFromApp(resolveAppRoot())
+      ? () => restartThisServeSupervisorIfReplaced(resolveAppRoot())
       : null
   const interruptedHandoff = handoffPath ? readServeUpdateHandoffSync(handoffPath) : null
   if (interruptedHandoff?.phase === 'install-requested') {
@@ -269,7 +271,7 @@ function spawnElectronServe(
       spawnChild: spawnServeChild,
       handoffPath: handoffPath!,
       handoff: interruptedHandoff,
-      restartFromInstalledApp
+      restartIfReplaced
     })
   }
   if (isSupervisedSpawnHeld()) {
@@ -287,7 +289,7 @@ function spawnElectronServe(
     child,
     handoffPath,
     expectedHandoff: null,
-    restartFromInstalledApp
+    restartIfReplaced
   }).catch((error: unknown) => {
     // Why only a prompt abort: the registration abort kills the child before any JS runs.
     if (error instanceof MacServeStartupAbortError && Date.now() - spawnedAt < STARTUP_ABORT_MS) {

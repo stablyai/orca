@@ -5,7 +5,7 @@
  * starts from the app, so it updates as before.
  */
 import { createHash } from 'node:crypto'
-import { constants, readFileSync, statSync } from 'node:fs'
+import { accessSync, constants, existsSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { cp, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { isProcessAlive } from '../../shared/serve-bundle-coordination'
@@ -193,22 +193,70 @@ export async function relocateServeSupervisor(
   return 'relocated'
 }
 
-/**
- * Re-runs this supervisor in place on the installed app after a macOS update deleted the files it
- * runs from. A relocated supervisor restarts from the app's CLI so it copies the new release aside.
- */
-export function restartServeSupervisorFromApp(
-  deps: Pick<
-    SupervisorRelocationDeps,
-    'env' | 'execPath' | 'argv' | 'appRoot' | 'execve' | 'log'
-  > & {
-    execArgv: string[]
+/** `dev:ino` of a file, which changes when an update replaces the app; null if unreadable. */
+function fileIdentity(path: string): string | null {
+  try {
+    const stats = statSync(path)
+    return `${stats.dev}:${stats.ino}`
+  } catch {
+    return null
   }
-): void {
+}
+
+function isExecutable(path: string): boolean {
+  try {
+    accessSync(path, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+let startedFromExecutable: string | null = null
+
+/** Remembers which executable this supervisor process started from, before any update wait. */
+export function noteServeSupervisorStart(): void {
+  startedFromExecutable = fileIdentity(process.execPath)
+}
+
+export type SupervisorRestartDeps = Pick<
+  SupervisorRelocationDeps,
+  'env' | 'execPath' | 'argv' | 'appRoot' | 'pid' | 'execve' | 'log'
+> & {
+  execArgv: string[]
+  /** Identity of `execPath` when this process started. */
+  startedFrom: string | null
+  identify: (path: string) => string | null
+  canExecute: (path: string) => boolean
+}
+
+/**
+ * Re-runs this supervisor in place when an update replaced the executable it started from, so no
+ * process keeps running deleted files. A relocated supervisor restarts from the app's CLI so it
+ * copies the new release aside. Returns only when it did not restart.
+ */
+export function restartServeSupervisorIfReplaced(deps: SupervisorRestartDeps): void {
+  const installed = deps.identify(deps.execPath)
+  // Why: after a restart the start identity is the installed one, so this never loops.
+  if (!deps.startedFrom || !installed || installed === deps.startedFrom) {
+    return
+  }
   const env = { ...deps.env }
   const relocated = Boolean(env[SERVE_SUPERVISOR_APP_ROOT_ENV])
   delete env[SERVE_SUPERVISOR_APP_ROOT_ENV]
   const cliEntry = relocated ? join(deps.appRoot, 'out', 'cli', 'index.js') : deps.argv[1]
+  // Why preflight: a failed process.execve aborts the process natively instead of throwing.
+  if (!deps.canExecute(deps.execPath) || !existsSync(cliEntry)) {
+    deps.log('[serve] Starting the update from here; the installed app is not ready to run.')
+    return
+  }
+  if (relocated) {
+    // Why: the copy's cleanup keeps any copy a live pid is marked on, and this pid is leaving it.
+    const snapshotDir = resolve(deps.argv[1], '..', '..', '..', '..')
+    rmSync(join(usersDir(dirname(snapshotDir), basename(snapshotDir)), String(deps.pid)), {
+      force: true
+    })
+  }
   try {
     deps.execve(
       deps.execPath,
@@ -216,6 +264,7 @@ export function restartServeSupervisorFromApp(
       env
     )
   } catch (error) {
+    // Only a runtime without process.execve gets here.
     deps.log(
       `[serve] Starting the update from here; could not restart from the installed app: ${error instanceof Error ? error.message : String(error)}`
     )
@@ -229,15 +278,19 @@ function execveThisProcess(file: string, args: string[], env: NodeJS.ProcessEnv)
   process.execve(file, args, env)
 }
 
-export function restartThisServeSupervisorFromApp(appRoot: string): void {
-  restartServeSupervisorFromApp({
+export function restartThisServeSupervisorIfReplaced(appRoot: string): void {
+  restartServeSupervisorIfReplaced({
     env: process.env,
     execPath: process.execPath,
     execArgv: process.execArgv,
     argv: process.argv,
     appRoot,
+    pid: process.pid,
     execve: execveThisProcess,
-    log: (line) => process.stderr.write(`${line}\n`)
+    log: (line) => process.stderr.write(`${line}\n`),
+    startedFrom: startedFromExecutable,
+    identify: fileIdentity,
+    canExecute: isExecutable
   })
 }
 
