@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   installNavigationPolicy: vi.fn(),
   isAllowedPartition: vi.fn(),
   attachRouteGuest: vi.fn(),
-  registerPluginGuard: vi.fn()
+  registerPluginGuard: vi.fn(),
+  extensionProfileForPartition: vi.fn((): unknown => null)
 }))
 
 vi.mock('../browser/browser-manager', () => ({
@@ -28,6 +29,10 @@ vi.mock('../browser/browser-route-session-runtime', () => ({
 vi.mock('../browser/local-ssh-browser-partitions', () => ({
   isLocalSshBrowserPartition: () => false,
   enforceLocalSshWebRtcPolicyForGuest: vi.fn()
+}))
+vi.mock('../browser/extensions/browser-extension-session-loader', () => ({
+  getBrowserExtensionSessionForProfile: () => null,
+  getBrowserExtensionProfileForPartition: mocks.extensionProfileForPartition
 }))
 vi.mock('../browser/doc-preview-protocol', () => ({
   isDocPreviewSession: (candidate: unknown) => candidate === 'doc-preview-session'
@@ -119,6 +124,24 @@ describe('main window webview security', () => {
     })
     expect(preferences).not.toHaveProperty('preloadURL')
     expect(String(preferences.preload)).toMatch(/browser-window-close-preload\.js$/)
+  })
+
+  it('runs preloads in subframes only for a profile whose session runs extensions', () => {
+    const { handlers } = installOnFakeWindow()
+    mocks.isAllowedPartition.mockReturnValue(true)
+    mocks.extensionProfileForPartition.mockReturnValueOnce({ id: 'default' })
+    const attach = (partition: string): Record<string, unknown> => {
+      const preferences: Record<string, unknown> = { partition, nodeIntegrationInSubFrames: true }
+      handlers['will-attach-webview']?.(
+        { preventDefault: vi.fn() } as never,
+        preferences as never,
+        { src: 'https://example.com' } as never
+      )
+      return preferences
+    }
+
+    expect(attach('persist:orca-browser').nodeIntegrationInSubFrames).toBe(true)
+    expect(attach('persist:orca-browser-no-extensions').nodeIntegrationInSubFrames).toBe(false)
   })
 })
 

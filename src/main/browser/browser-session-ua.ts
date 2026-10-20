@@ -2,6 +2,7 @@ import type { Session } from 'electron'
 import type { BrowserTabIdentity, UserAgentMetadata } from './browser-tab-identity'
 export { cleanElectronUserAgent } from './browser-process-user-agent'
 import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
+import { reportBrowserSessionWebRequest } from './browser-session-web-request-observer'
 
 import {
   currentUserAgent,
@@ -68,6 +69,7 @@ export function installBrowserSessionUserAgentPolicy(
   sess.webRequest.onBeforeSendHeaders(
     { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] },
     (details, callback) => {
+      reportBrowserSessionWebRequest(sess, 'onBeforeSendHeaders', details)
       const headers = details.requestHeaders
       const requestUserAgent = currentUserAgent(headers)
       let effectiveUserAgent: string | undefined

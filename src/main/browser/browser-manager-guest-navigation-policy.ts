@@ -9,6 +9,7 @@ import {
 } from './browser-manager-guest-popup-policy'
 import { allowPageUnload } from './browser-guest-unload-policy'
 import { initiatingFrameUrl } from './browser-external-app-launch'
+import { isSameExtensionNavigation } from '../../shared/browser-extension-url'
 
 export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManagerGuestPopupPolicy {
   protected installGuestNavigationPolicy(guest: Electron.WebContents): () => void {
@@ -24,6 +25,10 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       if (url.startsWith('file:')) {
         event.preventDefault()
         return false
+      }
+      // Why: an extension page (admitted at attach) may move between its own pages, nowhere else.
+      if (url.startsWith('chrome-extension:') && isSameExtensionNavigation(guest.getURL(), url)) {
+        return true
       }
       if (!normalizeBrowserNavigationUrl(url)) {
         // Initial-src validation does not cover later navigations.

@@ -10,6 +10,16 @@ import type { BrowserDownloadFinishedEvent } from '../../shared/browser-guest-ev
 import { BrowserManagerQueries } from './browser-manager-queries'
 
 export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueries {
+  private unownedDownloadOwnerResolver: ((webContentsId: number) => string | null) | null = null
+
+  /**
+   * Extension pages and workers are never registered as tabs, so their downloads would wait
+   * forever for a registration; the resolver names the page that owns them instead.
+   */
+  setUnownedDownloadOwnerResolver(resolver: (webContentsId: number) => string | null): void {
+    this.unownedDownloadOwnerResolver = resolver
+  }
+
   handleGuestWillDownload(args: { guestWebContentsId: number; item: Electron.DownloadItem }): void {
     const { guestWebContentsId, item } = args
     const downloadId = randomUUID()
@@ -46,8 +56,14 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
 
     // Stage client-hosted downloads for the remote workspace; popups use their opener.
     const ownerContext = this.resolvePopupOwnerContext(guestWebContentsId)
+    const adoptedTabId = ownerContext
+      ? null
+      : (this.unownedDownloadOwnerResolver?.(guestWebContentsId) ?? null)
     const decision = routeBrowserClientDownload({
-      guestWebContentsId: ownerContext?.rootGuestWebContentsId ?? guestWebContentsId
+      guestWebContentsId:
+        ownerContext?.rootGuestWebContentsId ??
+        (adoptedTabId ? this.getGuestWebContentsId(adoptedTabId) : null) ??
+        guestWebContentsId
     })
     const clientRoute = decision.kind === 'remote' ? decision.route : null
     const destination = (() => {
@@ -94,7 +110,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     }
     this.downloadsById.set(downloadId, download)
 
-    const browserTabId = ownerContext?.browserTabId ?? null
+    const browserTabId = ownerContext?.browserTabId ?? adoptedTabId
     if (browserTabId) {
       this.bindDownloadToTab(downloadId, browserTabId)
     } else {
