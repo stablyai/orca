@@ -144,8 +144,9 @@ describe.skipIf(process.platform === 'win32')(
       const text = await status(false)
 
       expect(printed.result).not.toHaveProperty('caller')
-      // The status text ends where main's does, with nothing about the caller.
-      expect(text.split('\n').at(-1)).toMatch(/^graphState: /)
+      expect(text).toMatch(/^graphState: /m)
+      expect(printed.result.daemon).toEqual({ reachable: false, sessionCount: 0 })
+      expect(text).toContain('\ndaemonReachable: false\ndaemonSessionCount: 0')
       expect(text).not.toMatch(/^(?:orcaSessionId|caller):/m)
       expect(callerShowRequests()).toHaveLength(0)
     })
