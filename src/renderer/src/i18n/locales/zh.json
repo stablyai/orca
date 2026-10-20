@@ -14679,6 +14679,8 @@
           "gitBash": "Git Bash",
           "gitBashDescription": "使用 Git for Windows 的 bash.exe 进行 Unix 风格的 shell 工作流。",
           "gitBashUnavailable": "已选择，但此电脑未检测到 Git Bash。",
+          "niubashDescription": "使用原生 Bash 兼容的 niu.exe，无需 WSL 或 MSYS。",
+          "niubashUnavailable": "已选择，但此电脑未检测到 Niubash。",
           "wsl": "WSL",
           "wslDescription": "在 Windows Subsystem for Linux 的默认环境中启动新的终端面板。",
           "wslUnavailable": "已选择，但此电脑未检测到 WSL。",

@@ -261,6 +261,7 @@
     "../src/main/hermes/hermes-managed-plugin-source.ts",
     "../src/main/hermes/hook-service.ts",
     "../src/main/git-bash.ts",
+    "../src/main/niubash.ts",
     "../src/main/in-flight-run-dedupe.ts",
     "../src/main/jcode/hook-settings.ts",
     "../src/main/jcode/hook-config.ts",

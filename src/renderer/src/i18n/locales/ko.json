@@ -14679,6 +14679,8 @@
           "gitBash": "Git Bash",
           "gitBashDescription": "Unix 스타일 셸 작업에는 Git for Windows의 bash.exe를 사용합니다.",
           "gitBashUnavailable": "선택되었지만 이 컴퓨터에서 Git Bash를 찾지 못했습니다.",
+          "niubashDescription": "WSL 또는 MSYS 없이 Bash 호환 네이티브 niu.exe를 사용합니다.",
+          "niubashUnavailable": "선택되었지만 이 컴퓨터에서 Niubash가 감지되지 않았습니다.",
           "wsl": "WSL",
           "wslDescription": "Windows Subsystem for Linux의 기본 환경에서 새 terminal 창을 시작합니다.",
           "wslUnavailable": "선택되었지만 이 컴퓨터에서 WSL을 찾지 못했습니다.",

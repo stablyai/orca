@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
+import { WINDOWS_NIUBASH_SHELL } from '../../../../shared/niubash-shell'
 import {
   SettingsRow,
   SettingsSegmentedControl,
@@ -13,6 +14,7 @@ type TerminalWindowsShellSectionProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   windowsShell: string
   gitBashAvailable: boolean
+  niubashAvailable?: boolean
 }
 
 function windowsShellLabel(shell: string, label: string): React.JSX.Element {
@@ -27,9 +29,11 @@ function windowsShellLabel(shell: string, label: string): React.JSX.Element {
 export function TerminalWindowsShellSection({
   updateSettings,
   windowsShell,
-  gitBashAvailable
+  gitBashAvailable,
+  niubashAvailable = false
 }: TerminalWindowsShellSectionProps): React.JSX.Element {
   const showGitBashOption = gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
+  const showNiubashOption = niubashAvailable || windowsShell === WINDOWS_NIUBASH_SHELL
   // Why: selecting WSL here would omit its required distro, but an existing WSL default must stay visible.
   const showWslOption = windowsShell === 'wsl.exe'
 
@@ -59,6 +63,8 @@ export function TerminalWindowsShellSection({
             'cmd',
             'command prompt',
             'git bash',
+            'niubash',
+            'niu.exe',
             'bash.exe',
             'default'
           ]}
@@ -123,6 +129,16 @@ export function TerminalWindowsShellSection({
                             'Git Bash'
                           ),
                           disabled: !gitBashAvailable
+                        }
+                      ]
+                    : []),
+                  ...(showNiubashOption
+                    ? [
+                        {
+                          value: WINDOWS_NIUBASH_SHELL,
+                          label: windowsShellLabel(WINDOWS_NIUBASH_SHELL, 'Niubash'),
+                          ariaLabel: 'Niubash',
+                          disabled: !niubashAvailable
                         }
                       ]
                     : []),

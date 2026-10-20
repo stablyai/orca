@@ -48,6 +48,7 @@ type TerminalPaneProps = {
   pwshAvailable?: boolean
   /** Whether Git for Windows bash.exe is installed on this machine. */
   gitBashAvailable?: boolean
+  niubashAvailable?: boolean
   /** Whether the active terminal host is Windows, even if the client is not. */
   isWindowsTerminalHost?: boolean
 }
@@ -59,6 +60,7 @@ export function TerminalPane({
   setScrollbackMode,
   pwshAvailable,
   gitBashAvailable = false,
+  niubashAvailable = false,
   isWindowsTerminalHost
 }: TerminalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
@@ -311,6 +313,7 @@ export function TerminalPane({
         updateSettings={updateSettings}
         windowsShell={windowsShell}
         gitBashAvailable={gitBashAvailable}
+        niubashAvailable={niubashAvailable}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getTerminalRenderingSearchEntries()) ? (

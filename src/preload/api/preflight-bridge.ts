@@ -41,6 +41,7 @@ export const preflightApi = {
     wslDistros: string[]
     pwshAvailable: boolean
     gitBashAvailable: boolean
+    niubashAvailable?: boolean
     hostPlatform: NodeJS.Platform | null
   }> => ipcRenderer.invoke('preflight:detectRemoteWindowsTerminalCapabilities', args)
 } satisfies PreloadApi['preflight']

@@ -14679,6 +14679,8 @@
           "gitBash": "Git Bash",
           "gitBashDescription": "Unix スタイルのシェル操作には Git for Windows の bash.exe を使います。",
           "gitBashUnavailable": "選択されていますが、このマシンでは Git Bash が検出されませんでした。",
+          "niubashDescription": "WSL や MSYS を使わず、Bash 互換のネイティブ niu.exe を使用します。",
+          "niubashUnavailable": "選択されていますが、このマシンで Niubash が検出されませんでした。",
           "wsl": "WSL",
           "wslDescription": "Windows Subsystem for Linux の既定の環境で新規ターミナルペインを起動します。",
           "wslUnavailable": "選択されていますが、このマシンでは WSL が検出されませんでした。",

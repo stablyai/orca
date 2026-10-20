@@ -3,6 +3,8 @@ import { delimiter, win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import type { ShellHydrationFailureReason } from '../../shared/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
+import { isNiubashShell } from '../../shared/niubash-shell'
+import { resolveNiubashPath } from '../niubash'
 import { SHELL_PATH_DELIMITER as DELIMITER, shellPathProbe } from './shell-path-probe'
 import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell-path-ownership'
 
@@ -83,6 +85,11 @@ export function _resetHydrateShellPathCache(): void {
 
 export function resolveProfileLoadingShell(): string | null {
   if (process.platform === 'win32') {
+    if (isNiubashShell(configuredWindowsShell)) {
+      return pathWin32.isAbsolute(configuredWindowsShell)
+        ? configuredWindowsShell
+        : resolveNiubashPath()
+    }
     const family = resolveWindowsShellStartupFamily(configuredWindowsShell)
     if (family === 'cmd') {
       return null

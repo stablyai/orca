@@ -1,5 +1,6 @@
 import { quoteCmdDoubleQuoted, quotePosixShellUnlessPlainNoAt } from './shell-argument-quoting'
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
+import { isNiubashShell } from './niubash-shell'
 import {
   buildWindowsCmdRunnerDelayedLaunchCommand,
   windowsRunnerPathNeedsCmdGuard
@@ -65,6 +66,14 @@ export function resolveSetupRunnerCommand(
     // what can execute it. A batch runner never goes to bash even from a Git Bash pane.
     const cmdRunnerFile = isWindowsCmdRunnerPath(runnerScriptPath)
     if (!cmdRunnerFile && (shell?.family === 'posix' || /\.sh$/i.test(runnerScriptPath))) {
+      if (shell?.executable && isNiubashShell(shell.executable)) {
+        const nativePath = runnerScriptPath.replaceAll('\\', '/')
+        return {
+          command: `${quotePosixArg(shell.executable.replaceAll('\\', '/'))} ${quotePosixArg(nativePath)}`,
+          runnerScriptPathForShell: nativePath,
+          shell: 'posix'
+        }
+      }
       // Why: WSL shells need /mnt/... paths, while Git Bash expects /c/... when replaying deferred setup scripts.
       if (isWslExecutable(shell?.executable)) {
         const wslPath = nativeWindowsPathToWslShellPath(runnerScriptPath)

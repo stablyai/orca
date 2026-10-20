@@ -118,6 +118,26 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('uses the same interactive niu arguments as the local PTY provider', async () => {
+    spawnMock.mockReturnValue(mockPtyProcess())
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      await createPtySubprocess({
+        sessionId: 'niubash',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'D:\\Niu Shell\\niu.exe',
+        env: { COMSPEC: 'C:\\Windows\\System32\\cmd.exe' }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+    expect(spawnMock).toHaveBeenCalledWith('D:\\Niu Shell\\niu.exe', ['-i'], expect.any(Object))
+  })
+
   it('spawns pwsh.exe when PowerShell 7 is selected and available on Windows', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

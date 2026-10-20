@@ -14964,6 +14964,8 @@
           "gitBash": "Git Bash",
           "gitBashDescription": "Uses Git for Windows bash.exe for Unix-style shell workflows.",
           "gitBashUnavailable": "Selected, but Git Bash was not detected on this machine.",
+          "niubashDescription": "Uses native Bash-compatible niu.exe without WSL or MSYS.",
+          "niubashUnavailable": "Selected, but Niubash was not detected on this machine.",
           "wsl": "WSL",
           "wslDescription": "Starts new terminal panes inside your Windows Subsystem for Linux default.",
           "wslUnavailable": "Selected, but WSL was not detected on this machine.",

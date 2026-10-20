@@ -7,6 +7,7 @@ import { buildRelayCommandEnv } from './relay-command-env'
 import { isPwshAvailableAsync } from '../main/pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
+import { resolveNiubashPath } from '../main/niubash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 import { runProcess } from '@orca/process-host'
 
@@ -114,6 +115,7 @@ export class PreflightHandler {
     wslDistros: string[]
     pwshAvailable: boolean
     gitBashAvailable: boolean
+    niubashAvailable?: boolean
     hostPlatform: NodeJS.Platform | null
   }> {
     const [wslAvailable, pwshAvailable, gitBashAvailable] = await Promise.all([
@@ -127,6 +129,7 @@ export class PreflightHandler {
       wslDistros,
       pwshAvailable,
       gitBashAvailable,
+      niubashAvailable: resolveNiubashPath() !== null,
       hostPlatform: process.platform
     }
   }

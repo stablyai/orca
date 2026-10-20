@@ -10,14 +10,16 @@ const {
   isWslAvailableAsync,
   listWslDistros,
   listWslDistrosAsync,
-  isGitBashAvailable
+  isGitBashAvailable,
+  resolveNiubashPath
 } = vi.hoisted(() => ({
   isPwshAvailable: vi.fn(),
   isPwshAvailableAsync: vi.fn(),
   isWslAvailableAsync: vi.fn(),
   listWslDistros: vi.fn(),
   listWslDistrosAsync: vi.fn(),
-  isGitBashAvailable: vi.fn()
+  isGitBashAvailable: vi.fn(),
+  resolveNiubashPath: vi.fn()
 }))
 
 vi.mock('../../../pwsh', () => ({ isPwshAvailable, isPwshAvailableAsync }))
@@ -27,6 +29,7 @@ vi.mock('../../../wsl', () => ({
   listWslDistrosAsync
 }))
 vi.mock('../../../git-bash', () => ({ isGitBashAvailable }))
+vi.mock('../../../niubash', () => ({ resolveNiubashPath }))
 
 import { HOST_CAPABILITY_METHODS } from './host-capabilities'
 
@@ -42,6 +45,7 @@ describe('host capability RPC methods', () => {
     listWslDistros.mockReset()
     listWslDistrosAsync.mockReset()
     isGitBashAvailable.mockReset()
+    resolveNiubashPath.mockReset()
   })
 
   it('reports Windows shell capability probes through explicit methods', async () => {
@@ -71,6 +75,26 @@ describe('host capability RPC methods', () => {
       result: true
     })
   })
+
+  it.each([null, 'D:\\Niu Shell\\niu.exe'])(
+    'reports Niubash from this execution host (%s)',
+    async (path) => {
+      resolveNiubashPath.mockReturnValue(path)
+      const method = HOST_CAPABILITY_METHODS.find(
+        (entry) => entry.name === 'host.niubash.isAvailable'
+      )
+      expect(method).toBeDefined()
+      const runtime = { getRuntimeId: () => 'test-runtime' }
+      const dispatcher = new RpcDispatcher({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the runtime id is used by this capability handler's dispatcher.
+        runtime: runtime as OrcaRuntimeService,
+        methods: HOST_CAPABILITY_METHODS
+      })
+      await expect(
+        dispatcher.dispatch(makeRequest('host.niubash.isAvailable'))
+      ).resolves.toMatchObject({ ok: true, result: path !== null })
+    }
+  )
 
   // Why: web/mobile clients reach these over the relay, so a sync probe would stall the
   // desktop main event loop on execFileSync wsl.exe/pwsh.exe for up to 5s per call.

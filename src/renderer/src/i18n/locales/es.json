@@ -14674,6 +14674,8 @@
           "gitBash": "Git Bash",
           "gitBashDescription": "Usa bash.exe de Git for Windows para flujos de trabajo de shell al estilo Unix.",
           "gitBashUnavailable": "Seleccionado, pero Git Bash no se detectó en esta máquina.",
+          "niubashDescription": "Usa niu.exe nativo compatible con Bash sin WSL ni MSYS.",
+          "niubashUnavailable": "Seleccionado, pero no se detectó Niubash en este equipo.",
           "wsl": "WSL",
           "wslDescription": "Inicia nuevos paneles de terminal dentro de tu distribución predeterminada de Windows Subsystem for Linux.",
           "wslUnavailable": "Seleccionado, pero WSL no se detectó en esta máquina.",

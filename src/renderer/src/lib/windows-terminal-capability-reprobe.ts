@@ -31,6 +31,7 @@ function capabilitySignature(capabilities: WindowsTerminalCapabilities): string 
     capabilities.wslDistros.join('\u0000'),
     capabilities.pwshAvailable,
     capabilities.gitBashAvailable,
+    capabilities.niubashAvailable ?? false,
     capabilities.hostPlatform ?? ''
   ].join('|')
 }
