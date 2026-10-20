@@ -79,8 +79,8 @@ describe('local IPC registration dedupe and race handling', () => {
     repos = []
     mockStore.getRepos.mockImplementation(() => repos)
     mockStore.addRepo.mockImplementation((repo: Repo) => repos.push(repo))
-    mockStore.removeProjectForHost.mockImplementation((id: string) => {
-      repos = repos.filter((repo) => repo.id !== id)
+    mockStore.removeProjectForHost.mockImplementation((repo: Repo) => {
+      repos = repos.filter((candidate) => candidate.id !== repo.id)
     })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers only touch the window, store and runtime members these fakes define.
     registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)

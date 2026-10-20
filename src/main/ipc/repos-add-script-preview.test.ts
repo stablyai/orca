@@ -129,8 +129,8 @@ describe('IPC registration add-script offers', () => {
     repos = []
     mockStore.getRepos.mockImplementation(() => repos)
     mockStore.addRepo.mockImplementation((repo: Repo) => repos.push(repo))
-    mockStore.removeProjectForHost.mockImplementation((id: string) => {
-      repos = repos.filter((repo) => repo.id !== id)
+    mockStore.removeProjectForHost.mockImplementation((repo: Repo) => {
+      repos = repos.filter((candidate) => candidate.id !== repo.id)
     })
     const settings: Partial<GlobalSettings> = { machineName: 'Studio', repositoryAddScript: SCRIPT }
     const runtime = new OrcaRuntimeService(

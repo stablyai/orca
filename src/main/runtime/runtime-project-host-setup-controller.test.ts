@@ -243,7 +243,7 @@ describe('RuntimeProjectHostSetupController rollback ownership', () => {
 
     await expect(controller.setupExistingFolder(mismatched('other'))).rejects.toThrow()
 
-    expect(removeProjectForHost).toHaveBeenCalledWith('repo-1', 'local')
+    expect(removeProjectForHost).toHaveBeenCalledWith(repo)
   })
 
   it('rolls back a folder row this call inserted when linking fails', async () => {
@@ -253,7 +253,7 @@ describe('RuntimeProjectHostSetupController rollback ownership', () => {
 
     await expect(controller.setupExistingFolder(mismatched('other', 'folder'))).rejects.toThrow()
 
-    expect(removeProjectForHost).toHaveBeenCalledWith('folder-1', 'local')
+    expect(removeProjectForHost).toHaveBeenCalledWith(folder)
   })
 
   it('keeps a known row it merely reused when linking fails', async () => {
@@ -277,6 +277,6 @@ describe('RuntimeProjectHostSetupController rollback ownership', () => {
 
     cloneRepo.mockImplementation(announceInsertion(repo))
     await expect(controller.setupClone(cloneArgs)).rejects.toThrow()
-    expect(removeProjectForHost).toHaveBeenCalledWith('repo-1', 'local')
+    expect(removeProjectForHost).toHaveBeenCalledWith(repo)
   })
 })
