@@ -118,6 +118,7 @@ docs/**
 !docs/bug-reproductions/**
 !docs/STYLEGUIDE.md
 !docs/reference/
+!docs/reference/cross-platform-support.md
 !docs/reference/git-workflow.md
 !docs/audits/
 !docs/audits/crashpad-read-limit/
