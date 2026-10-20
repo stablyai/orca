@@ -9,6 +9,7 @@ import { getTopActivityBarLayout } from './activity-bar-overflow'
 import { ActivityBarButton } from './activity-bar-buttons'
 import { getActiveChecksStatus } from './active-checks-status'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useChromeAppearanceStyle } from '@/hooks/use-chrome-appearance-style'
 import {
   RIGHT_SIDEBAR_MIN_WIDTH,
   clampRightSidebarPanelWidth,
@@ -36,6 +37,7 @@ function RightSidebarInner(): React.JSX.Element {
     isWebClient: isPairedWebClientWindow()
   })
   const rightSidebarShortcut = useShortcutLabel('sidebar.right.toggle')
+  const chromeAppearanceStyle = useChromeAppearanceStyle()
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
@@ -148,6 +150,8 @@ function RightSidebarInner(): React.JSX.Element {
         // stays mounted for performance — see App.tsx).
         rightSidebarOpen ? 'overflow-visible' : 'overflow-hidden'
       )}
+      // Why: sidebar appearance is scoped inline, so mirror it here or this panel keeps stock tokens.
+      style={chromeAppearanceStyle}
     >
       {/* Panel content area */}
       <div

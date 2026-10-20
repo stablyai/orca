@@ -113,11 +113,11 @@ export function AppWorkspaceShell(props: {
       )}
     >
       <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-        {/* Why: keep the non-workspace titlebar inside this left+center wrapper so it doesn't span over the right-sidebar column. */}
+        {/* Why: keep the non-workspace titlebar inside this left+center wrapper so it doesn't span over the right-sidebar column. Titlebars take the sidebar appearance vars so chrome reads as one surface. */}
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           {/* Why: workspace view drops the full-width titlebar so tab groups extend to the top; settings/landing/tasks keep it. */}
           {!layout.leftTitlebarChromeLayout.shouldMount ? (
-            <div className="titlebar">
+            <div className="titlebar" style={layout.leftSidebarStyle}>
               <div className="flex items-center shrink-0 mr-2">{titlebarLeftControls}</div>
               {titlebarMainStrip}
             </div>
@@ -159,7 +159,9 @@ export function AppWorkspaceShell(props: {
               {layout.stackedSidebarOpen &&
               layout.activeView !== 'automations' &&
               layout.activeView !== 'artifacts' ? (
-                <div className="titlebar">{titlebarMainStrip}</div>
+                <div className="titlebar" style={layout.leftSidebarStyle}>
+                  {titlebarMainStrip}
+                </div>
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
                 {/* Why: match the RightSidebar header's 36px/top-0 so the toggle's vertical center is identical open vs closed — else the icon jitters. */}

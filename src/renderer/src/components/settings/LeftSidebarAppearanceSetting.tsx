@@ -29,11 +29,11 @@ export function LeftSidebarAppearanceSetting({
         alignTop
         label={translate(
           'auto.components.settings.AppearancePane.leftSidebarAppearance.title',
-          'Left Sidebar Appearance'
+          'Sidebar & Panel Appearance'
         )}
         description={translate(
           'auto.components.settings.AppearancePane.leftSidebarAppearance.rowDescription',
-          'Make the left sidebar match your terminal, stay default, or use a tint.'
+          'Make the sidebars, tab bar, and side panel match your terminal, stay default, or use a tint.'
         )}
         control={
           <SettingsSegmentedControl<LeftSidebarAppearanceMode>
@@ -42,7 +42,7 @@ export function LeftSidebarAppearanceSetting({
             onChange={(leftSidebarAppearanceMode) => updateSettings({ leftSidebarAppearanceMode })}
             ariaLabel={translate(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.title',
-              'Left Sidebar Appearance'
+              'Sidebar & Panel Appearance'
             )}
             options={[
               {
@@ -79,7 +79,7 @@ export function LeftSidebarAppearanceSetting({
             )}
             description={translate(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.tintColorDescription',
-              'The color mixed into the left sidebar surface.'
+              'The color mixed into the sidebar, tab bar, and side panel surfaces.'
             )}
             value={settings.leftSidebarTintColor ?? DEFAULT_LEFT_SIDEBAR_TINT_COLOR}
             fallback={DEFAULT_LEFT_SIDEBAR_TINT_COLOR}
