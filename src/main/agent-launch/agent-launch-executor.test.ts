@@ -874,6 +874,7 @@ describe('a new local worktree whose startup terminal did not come up', () => {
     })
     h.createWorktree.mockImplementationOnce(async () => ({
       worktreeId: 'wt-new',
+      workspacePath: '/repo/task',
       connectionId: null,
       startupTerminalHandle: undefined
     }))

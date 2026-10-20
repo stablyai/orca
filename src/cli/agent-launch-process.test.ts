@@ -14,7 +14,7 @@ import {
 import { agentLaunchFixture } from './agent-launch-test-fixtures'
 
 it('real CLI processes carry surface choices and refuse invalid or unsupported picks before mutation', async () => {
-  const manifest = createRequire(import.meta.url).resolve('bun/package.json')
+  const manifest = createRequire(resolve('package.json')).resolve('bun/package.json')
   const { bin } = z
     .object({ bin: z.object({ bun: z.string() }) })
     .parse(JSON.parse(readFileSync(manifest, 'utf8')))
