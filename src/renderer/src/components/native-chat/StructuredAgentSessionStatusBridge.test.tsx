@@ -66,7 +66,8 @@ import {
   getStructuredAgentSessionTabs,
   StructuredAgentSessionStatusBridge,
   useStructuredAgentSessionHostExecutionPhase,
-  useStructuredAgentSessionHostStopping
+  useStructuredAgentSessionHostStopping,
+  useStructuredAgentSessionOptionStamp
 } from './StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import { useAppStore } from '@/store'
@@ -812,6 +813,21 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(stops).toHaveLength(rendersWhileStopping)
     act(() => feed().emit({ type: 'status', session: summary({}) }))
     expect(stops.at(-1)).toBe(false)
+  })
+
+  // The stamp is what makes an open chat re-read its options.
+  it("moves a chat's option stamp when another device picks only an effort", async () => {
+    const stamps: string[] = []
+    function StampProbe(): null {
+      stamps.push(useStructuredAgentSessionOptionStamp('session-1', { kind: 'local' }))
+      return null
+    }
+    render(<StampProbe />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    act(() => feed().emit({ type: 'status', session: summary({ model: 'opus', effort: 'high' }) }))
+    const before = stamps.at(-1)
+    act(() => feed().emit({ type: 'status', session: summary({ model: 'opus', effort: 'low' }) }))
+    expect(stamps.at(-1)).not.toBe(before)
   })
 })
 

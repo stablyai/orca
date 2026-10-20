@@ -452,6 +452,46 @@ describe('useStructuredAgentSessionOptions', () => {
       unmount()
     })
 
+    it('commits a held pick accepted after the chat attached, so the next send carries it', async () => {
+      const claudeModels = [{ id: 'opus', label: 'Opus', isDefault: true, efforts }]
+      const ownEffort = (effort: string) => ({
+        models: claudeModels,
+        current: { model: 'opus', effort }
+      })
+      const reads: ((answer: unknown) => void)[] = []
+      answer({
+        modelCatalog: async () => ({ origin: 'probe', fetchedAt: 1, models: claudeModels }),
+        options: () => new Promise((resolve) => reads.push(resolve))
+      })
+      let accept = (_outcome: unknown): void => {}
+      mocks.hold.mockReturnValue(new Promise((resolve) => (accept = resolve)))
+      const claude = { agent: 'claude' as const, launchSeedOptions: { model: 'opus' } }
+      const { result, rerender, unmount } = renderOptions(
+        { ...PROVISIONAL, ...claude },
+        mutateWith(async () => null).mutate
+      )
+      await waitFor(() =>
+        expect(descriptor(result.current.optionSnapshot, 'effort')?.settable).toBe(true)
+      )
+      act(() => void result.current.setStructuredOption('effort', 'low'))
+      // The fence arrives, replacing the record the pick was made in, and the chat reads its own.
+      rerender({ ...ATTACHED, ...claude })
+      await waitFor(() => expect(reads).toHaveLength(1))
+      await act(async () => reads[0]!(ownEffort('high')))
+      rerender({ ...ATTACHED, ...claude, turnId: 'turn-1' })
+      await waitFor(() => expect(reads).toHaveLength(2))
+      await act(async () => accept({ kind: 'accepted', options: { effort: 'low' } }))
+      // A read issued before the acceptance cannot put the old effort back.
+      await act(async () => reads[1]!(ownEffort('high')))
+      expect(currentValue(result.current.optionSnapshot, 'effort')).toBe('low')
+      const { optionStateRef, optionView } = result.current.sendSource
+      expect(
+        structuredAgentSessionSendSelection(optionView(optionStateRef.current, undefined, {}))
+      ).toEqual({ model: 'opus', effort: 'low' })
+      await waitFor(() => expect(reads).toHaveLength(3))
+      unmount()
+    })
+
     it('reports a pick the launch could not apply as a refused write and remembers nothing', async () => {
       answer({ modelCatalog: () => Promise.resolve(SAVED_LIST) })
       mocks.hold.mockResolvedValue({

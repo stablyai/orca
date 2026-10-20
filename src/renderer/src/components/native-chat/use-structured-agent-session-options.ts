@@ -12,17 +12,15 @@ import {
   canSetStructuredAgentSessionOption,
   commitStructuredAgentSessionOptionValues,
   lockedStructuredAgentSessionOptionSnapshot,
-  structuredAgentSessionOptionPicks,
-  structuredAgentSessionOptionSnapshot,
-  type StructuredAgentSessionOptionState
+  structuredAgentSessionOptionSnapshot
 } from '../../../../shared/structured-agent-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
 import { encodeStructuredAgentSessionOptionValue } from '../../../../shared/structured-agent-session-option-codec'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useHostModelCatalogUpgrade } from './use-host-model-catalog-upgrade'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
+import { useStructuredAgentSessionAcceptedPick } from './use-structured-agent-session-accepted-pick'
 import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
 import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
 import {
@@ -118,16 +116,13 @@ export function useStructuredAgentSessionOptions(args: {
     onListingLanded: rereadOptions
   })
 
-  // What a settled pick must remember so the next launch starts where the user left off.
-  const rememberOptionPicks = useCallback(
-    (view: StructuredAgentSessionOptionState, committed: Readonly<Record<string, string>>) => {
-      const picks = structuredAgentSessionOptionPicks(view, committed)
-      if (picks.length > 0) {
-        void enqueueSessionOptionSettingsWrite(target, { type: 'apply-picks', agent, picks })
-      }
-    },
-    [agent, target]
-  )
+  const acceptPick = useStructuredAgentSessionAcceptedPick({
+    agent,
+    target,
+    launchSeedOptions,
+    optionView,
+    updateOptionState
+  })
   const sendStructuredOption = useCallback(
     async (id: string, encoded: string): Promise<boolean> => {
       const currentState = optionStateRef.current
@@ -157,16 +152,7 @@ export function useStructuredAgentSessionOptions(args: {
         if (result && sameRecord() && currentPick()) {
           const returned = result.options ?? { [id]: encoded }
           const committed = isCurrent() ? returned : { [id]: returned[id] ?? encoded }
-          updateOptionState((current) =>
-            current.record === targetRecord
-              ? commitStructuredAgentSessionOptionValues(current, committed)
-              : current
-          )
-          // The launch seed names the model an effort-only pick was made under.
-          rememberOptionPicks(
-            optionView(currentState, launchSeedOptions, NO_HELD_OPTIONS),
-            committed
-          )
+          acceptPick(targetRecord, committed, currentState)
         }
         return Boolean(result)
       } finally {
@@ -199,33 +185,32 @@ export function useStructuredAgentSessionOptions(args: {
       }
     },
     [
+      acceptPick,
       activeOptionRecordRef,
       applyOptionsAnswer,
-      launchSeedOptions,
       mutate,
       optionMutationGeneration,
       optionStateRef,
-      optionView,
       pendingOptionsRef,
       providerStarting,
-      rememberOptionPicks,
       sessionId,
       target,
       updateOptionState
     ]
   )
   const settleLaunchOptionPick = useCallback(
-    (outcome: StructuredLaunchOptionOutcome) => {
+    (id: string, encoded: string, outcome: StructuredLaunchOptionOutcome) => {
       if (outcome.kind === 'refused') {
         toast.error(agentSessionWriteFailureText(outcome.failure, 'option'))
       } else if (outcome.kind === 'accepted') {
-        rememberOptionPicks(
-          optionView(optionStateRef.current, launchSeedOptions, NO_HELD_OPTIONS),
-          outcome.options
-        )
+        // The fence that accepted it replaced the record it was picked in; drop reads from before.
+        optionMutationGeneration.current += 1
+        const committed = { [id]: outcome.options[id] ?? encoded }
+        acceptPick(activeOptionRecordRef.current, committed, optionStateRef.current)
+        rereadOptions()
       }
     },
-    [launchSeedOptions, optionStateRef, optionView, rememberOptionPicks]
+    [acceptPick, activeOptionRecordRef, optionMutationGeneration, optionStateRef, rereadOptions]
   )
   const optionSnapshot = useMemo(() => {
     const snapshot = structuredAgentSessionOptionSnapshot(
@@ -251,7 +236,7 @@ export function useStructuredAgentSessionOptions(args: {
       if (!transportEnabled || fence === null) {
         // No fence yet: the launch holds it and applies it before anything else is sent.
         const applied = holdStructuredAgentSessionLaunchOption(sessionId, id, encoded, view)
-        void applied?.then(settleLaunchOptionPick)
+        void applied?.then((outcome) => settleLaunchOptionPick(id, encoded, outcome))
         return applied !== null
       }
       return sendStructuredOption(id, encoded)

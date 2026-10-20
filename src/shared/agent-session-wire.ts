@@ -243,6 +243,11 @@ export type AgentSessionStatusSummary = {
   model?: string
   /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
   permissionMode?: string
+  /** The chat's saved effort, Fast and speed picks, encoded; another device's pick moves them so a
+   *  client re-reads options. Absent from older hosts. */
+  effort?: string
+  fastMode?: string
+  serviceTier?: string
   /** The tool the running turn is inside, else the last one it used. Absent unless `status`
    *  is 'working'. */
   toolName?: string

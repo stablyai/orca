@@ -32,6 +32,9 @@ export function structuredStatusSummariesEqual(
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
     a.permissionMode === b.permissionMode &&
+    a.effort === b.effort &&
+    a.fastMode === b.fastMode &&
+    a.serviceTier === b.serviceTier &&
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.lastAssistantMessage === b.lastAssistantMessage &&

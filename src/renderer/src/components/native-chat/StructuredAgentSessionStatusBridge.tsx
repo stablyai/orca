@@ -2,6 +2,7 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
+import { agentSessionStatusOptionStamp } from '../../../../shared/agent-session-status-option-stamp'
 import {
   agentChildWorkProjectionCandidateFromBackgroundTask,
   projectAgentChildWorkLegacySubagents
@@ -63,7 +64,7 @@ export function useStructuredAgentSessionStatusSummary(
   return { summary, observation }
 }
 
-/** The host status's option values as one stamp: another device's pick moves it, so options re-read. */
+/** The host status's option stamp for one session. */
 export function useStructuredAgentSessionOptionStamp(
   sessionId: string,
   target: RuntimeClientTarget
@@ -72,10 +73,7 @@ export function useStructuredAgentSessionOptionStamp(
   useEffect(() => feed.activate(), [feed])
   return useSyncExternalStore(
     feed.subscribe,
-    () => {
-      const summary = feed.getSnapshot().get(sessionId)
-      return `${summary?.model ?? ''}|${summary?.permissionMode ?? ''}`
-    },
+    () => agentSessionStatusOptionStamp(feed.getSnapshot().get(sessionId)),
     () => ''
   )
 }

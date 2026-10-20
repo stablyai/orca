@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import { agentSessionStatusOptionStamp } from '../../../src/shared/agent-session-status-option-stamp'
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
 
 const noSubscription = (): (() => void) => () => {}
@@ -16,9 +17,7 @@ export function useMobileStructuredSessionOptionStamp(args: {
     (listener: () => void) => (feed ? feed.subscribe(listener) : noSubscription()),
     [feed]
   )
-  const readStamp = (): string => {
-    const summary = feed && sessionId ? feed.getSnapshot().get(sessionId) : undefined
-    return `${summary?.model ?? ''}|${summary?.permissionMode ?? ''}`
-  }
+  const readStamp = (): string =>
+    agentSessionStatusOptionStamp(feed && sessionId ? feed.getSnapshot().get(sessionId) : undefined)
   return useSyncExternalStore(subscribe, readStamp, readStamp)
 }
