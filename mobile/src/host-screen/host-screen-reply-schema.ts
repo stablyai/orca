@@ -3,6 +3,7 @@ import type { PersistedUIState } from '../../../src/shared/persisted-ui-state-ty
 import type { RepoIcon } from '../../../src/shared/repo-icon'
 import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import { NODE_PLATFORM_NAMES } from '../transport/mobile-runtime-host-platform'
+import { withoutIncognitoRepoRows } from '../worktree/incognito-project-rows'
 
 // The closed arm sets on this screen are the desktop's own unions, pinned through hostUnionArms so
 // an arm the desktop adds or drops fails tsc here rather than degrading silently on the phone.
@@ -91,7 +92,7 @@ export const hostRepoCatalogSchema = z
       })
     )
   })
-  .transform((reply) => reply.repos)
+  .transform((reply) => withoutIncognitoRepoRows(reply.repos))
 
 /**
  * The SSH target labels a mixed-host catalog names its rows with.

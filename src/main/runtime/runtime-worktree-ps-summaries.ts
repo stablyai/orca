@@ -4,6 +4,7 @@ import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
 import { getWorkspaceAttachments } from '../../shared/workspace-attachments'
+import { isIncognitoRepo } from '../../shared/incognito-projects'
 import { getWorkspaceRowKindFacts } from '../../shared/worktree/workspace-kinds'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -42,6 +43,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       ...((meta?.hostId ?? worktree.hostId) ? { hostId: meta?.hostId ?? worktree.hostId } : {}),
       terminalPlatform: args.platformByRepoId.get(worktree.repoId) ?? process.platform,
       repo: repo?.displayName ?? worktree.repoId,
+      ...(isIncognitoRepo(repo) ? { repoIncognito: true } : {}),
       path: worktree.path,
       branch: worktree.branch,
       isArchived: worktree.isArchived,

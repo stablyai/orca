@@ -1,6 +1,7 @@
 import { isSyntheticWorkspaceRoute } from '../session/synthetic-workspace-route'
 import type { ConnectionState } from '../transport/types'
 import type { HomeWorktreeSummary, HostWorktreeInfo } from './home-worktree-info'
+import { isIncognitoWorktreeRow } from './incognito-project-rows'
 
 // Picks what the home screen's Resume card shows, and whether tapping it can do anything.
 // Why the two are separate: gating the card itself on 'connected' made it appear above Tasks
@@ -34,7 +35,7 @@ function lastVisitedCard({
   const match = cachedWorktrees(lastVisited.hostId)?.find(
     (worktree) => worktree.worktreeId === lastVisited.worktreeId
   )
-  if (!match) {
+  if (!match || isIncognitoWorktreeRow(match)) {
     return null
   }
   return {
@@ -50,7 +51,8 @@ function hostHistoryCard(
 ): HomeResumeCard | null {
   for (const host of hosts) {
     const worktree = worktreeInfo[host.id]?.lastActiveWorktree
-    if (!worktree) {
+    // Why: a persisted snapshot can predate the reader that drops incognito rows.
+    if (!worktree || isIncognitoWorktreeRow(worktree)) {
       continue
     }
     const actionable = hostStates[host.id] === 'connected'

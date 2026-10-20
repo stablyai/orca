@@ -18,6 +18,7 @@ import {
 import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
 import type { SidebarWorktreeFilters } from './use-filters'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
+import { getConcealedRepoIdsFromState } from '@/store/concealed-repo-selector'
 import { useSleepingSweepRetention } from './use-sleeping-sweep-retention'
 
 const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
@@ -75,6 +76,7 @@ export function useVisibleSidebarWorktrees(args: {
   const worktreeIdsWithStructuredChat = useAppStore((s) =>
     getStructuredChatWorktreeIds(showSleepingWorkspaces, s.unifiedTabsByWorktree)
   )
+  const concealedRepoIds = useAppStore(getConcealedRepoIdsFromState)
 
   // Why snapshot on agentStatusEpoch: update membership immediately without repainting on every hook ping.
   const worktreeIdsWithLiveAgent = useMemo(() => {
@@ -124,9 +126,11 @@ export function useVisibleSidebarWorktrees(args: {
       preserveLineageParentOrder: sortBy === 'manual',
       forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
         ? [args.agentSendTargetWorktreeId]
-        : undefined
+        : undefined,
+      concealedRepoIds
     })
   }, [
+    concealedRepoIds,
     args.agentSendTargetWorktreeId,
     worktreeIdsWithLiveAgent,
     sleepingSweepExemptWorktreeIds,

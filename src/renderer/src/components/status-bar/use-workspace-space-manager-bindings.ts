@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import type { GitStatusResult } from '../../../../shared/git-status-types'
 import { useAppStore } from '../../store'
+import { getShownWorkspaceSpaceAnalysisFromState } from '../../store/concealed-repo-selector'
 import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/selectors'
 import type {
   WorkspaceSpaceSortDirection,
@@ -9,7 +10,7 @@ import type {
 import type { WorkspaceGitRefreshState } from './workspace-space-manager-state-types'
 
 export function useWorkspaceSpaceManagerBindings() {
-  const analysis = useAppStore((state) => state.workspaceSpaceAnalysis)
+  const analysis = useAppStore(getShownWorkspaceSpaceAnalysisFromState)
   const progress = useAppStore((state) => state.workspaceSpaceScanProgress)
   const scanError = useAppStore((state) => state.workspaceSpaceScanError)
   const isScanning = useAppStore((state) => state.workspaceSpaceScanning)

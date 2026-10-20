@@ -236,4 +236,41 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     expect(summary?.automationCreated).toBe(true)
     expect(summary).not.toHaveProperty('automationName')
   })
+
+  it('marks only rows whose project is incognito, so older clients see no new field otherwise', () => {
+    const row = (repoId: string) => ({
+      id: `${repoId}::/workspace/${repoId}`,
+      repoId,
+      path: `/workspace/${repoId}`,
+      branch: 'feature',
+      isArchived: false,
+      isMainWorktree: false,
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      lineage: null,
+      lastActivityAt: 0
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads only these fields for a git row.
+    const worktrees = [row('secret'), row('open')] as unknown as ResolvedWorktree[]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads only these store members.
+    const store = {
+      getRepos: () => [
+        { id: 'secret', displayName: 'Secret', incognito: true },
+        { id: 'open', displayName: 'Open', incognito: false }
+      ],
+      getWorktreeMeta: () => undefined,
+      getAllWorktreeMeta: () => ({}),
+      getFolderWorkspaces: () => [],
+      getProjectGroups: () => []
+    } as unknown as RuntimeStore
+
+    const summaries = buildRuntimeWorktreePsSummaries({
+      store,
+      resolvedWorktrees: worktrees,
+      platformByRepoId: new Map()
+    })
+
+    expect(summaries.get('secret::/workspace/secret')?.repoIncognito).toBe(true)
+    expect(summaries.get('open::/workspace/open')).not.toHaveProperty('repoIncognito')
+  })
 })

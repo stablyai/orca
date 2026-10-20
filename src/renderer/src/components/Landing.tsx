@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
+import { getShownReposFromState } from '../store/concealed-repo-selector'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
 import {
@@ -223,7 +224,8 @@ function PreflightBanner({
 }
 
 export default function Landing(): React.JSX.Element {
-  const repos = useAppStore((s) => s.repos)
+  // Why: a sole locked incognito project must not switch Landing into its project-present state.
+  const repos = useAppStore(getShownReposFromState)
   const openModal = useAppStore((s) => s.openModal)
 
   const createTargetLabel =

@@ -35,4 +35,13 @@ describe('workspace cleanup removal candidates', () => {
       })
     ).toEqual([remote])
   })
+
+  it('never removes a workspace whose project was relocked into incognito', () => {
+    const secret = makeCandidate({ worktreeId: 'secret::/repo/a', repoId: 'secret' })
+    const open = makeCandidate({ worktreeId: 'open::/repo/b', repoId: 'open' })
+
+    expect(
+      filterWorkspaceCleanupRemovalCandidates([secret, open], {}, new Set(['secret']))
+    ).toEqual([open])
+  })
 })

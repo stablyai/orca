@@ -121,6 +121,7 @@ export class RepoUpdatePersistenceOperations {
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
         | 'projectGroupOrder'
+        | 'incognito'
         | 'projectHostSetupMethod'
       >
     > & {
@@ -184,6 +185,11 @@ export class RepoUpdatePersistenceOperations {
         !Number.isFinite(sanitizedUpdates.projectGroupOrder))
     ) {
       delete sanitizedUpdates.projectGroupOrder
+    }
+    // Why: an absent flag is "not incognito", so clearing deletes it instead of persisting false.
+    if ('incognito' in sanitizedUpdates && sanitizedUpdates.incognito !== true) {
+      delete repo.incognito
+      delete sanitizedUpdates.incognito
     }
     const externalWorktreeVisibilityLegacy =
       'externalWorktreeVisibility' in sanitizedUpdates &&

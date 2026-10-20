@@ -39,6 +39,7 @@ const FeatureWallModal = lazy(() => import('../components/feature-wall/FeatureWa
 const FeatureTipsModal = lazy(() => import('../components/feature-tips/FeatureTipsModal'))
 const AddRepoDialog = lazy(() => import('../components/sidebar/AddRepoDialog'))
 const NonGitFolderDialog = lazy(() => import('../components/sidebar/NonGitFolderDialog'))
+const IncognitoProjectsDialog = lazy(() => import('../components/sidebar/IncognitoProjectsDialog'))
 const AddProjectFromFolderDialog = lazy(
   () => import('../components/sidebar/AddProjectFromFolderDialog')
 )
@@ -150,6 +151,7 @@ export function AppRootSurfaces(props: {
   const updateStatus = useAppStore((s) => s.updateStatus)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const hasSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
+  const incognitoDialogOpen = useAppStore((s) => s.incognitoProjectsDialog !== null)
 
   const shouldMountSetupGuideTelemetryObserver = persistedUIReady
   const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
@@ -212,6 +214,11 @@ export function AppRootSurfaces(props: {
         {activeModal === 'confirm-non-git-folder' ? (
           <ModalBoundary boundaryId="modal.confirm-non-git-folder" resetKey>
             <NonGitFolderDialog />
+          </ModalBoundary>
+        ) : null}
+        {incognitoDialogOpen ? (
+          <ModalBoundary boundaryId="modal.incognito-projects" resetKey>
+            <IncognitoProjectsDialog />
           </ModalBoundary>
         ) : null}
         {activeModal === 'confirm-add-project-from-folder' ? (

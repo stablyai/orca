@@ -60,7 +60,14 @@ export type MobilePushRegistrar = {
   unregister(deviceId: string): Promise<{ unregistered: boolean }>
 }
 
+export type RuntimeMobileNotificationControllerOptions = {
+  /** True for a workspace no paired phone may hear about (an incognito project's). */
+  isWorktreeHiddenFromPhones?: (worktreeId: string) => boolean
+}
+
 export class RuntimeMobileNotificationController {
+  constructor(private readonly options: RuntimeMobileNotificationControllerOptions = {}) {}
+
   private readonly listeners = new Set<(event: MobileNotificationEvent) => void>()
   private readonly legacyCooldown = new Map<string, number>()
   private readonly replay = new MobileNotificationReplayBuffer()
@@ -118,6 +125,10 @@ export class RuntimeMobileNotificationController {
 
   dispatch(event: MobileNotificationEvent): void {
     if (event.type === 'notification') {
+      // Why before the replay record: a lock-screen push or a reconnect replay would name the project.
+      if (event.worktreeId && this.options.isWorktreeHiddenFromPhones?.(event.worktreeId)) {
+        return
+      }
       // Decide once before recording so reconnect and buffer eviction cannot reset cooldown.
       const legacySocketAllowed =
         event.desktopAllowed !== false &&
@@ -156,7 +167,15 @@ export class RuntimeMobileNotificationController {
   }
 
   getMissedSince(lastSeenSeq: number, epoch?: string) {
-    return this.replay.getMissedSince(lastSeenSeq, epoch)
+    const missed = this.replay.getMissedSince(lastSeenSeq, epoch)
+    const isHidden = this.options.isWorktreeHiddenFromPhones
+    // Why: a project made incognito after the event was recorded must not reach a reconnecting phone.
+    return isHidden
+      ? missed.filter(
+          (event) =>
+            event.type !== 'notification' || !event.worktreeId || !isHidden(event.worktreeId)
+        )
+      : missed
   }
 
   getEpoch(): string {

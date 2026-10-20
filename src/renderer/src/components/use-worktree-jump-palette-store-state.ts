@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { dedupePaletteWorktrees } from '@/lib/palette-repo-resolution'
@@ -11,6 +12,11 @@ import {
   selectPaletteStatusInputs
 } from './worktree-jump-palette-status-inputs'
 import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
+import {
+  getConcealedRepoIdsFromState,
+  getShownReposFromState,
+  omitConcealedRepoKeys
+} from '@/store/concealed-repo-selector'
 
 export function useWorktreeJumpPaletteStoreState({
   visible,
@@ -29,7 +35,13 @@ export function useWorktreeJumpPaletteStoreState({
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const revealSidebarRow = useAppStore((state) => state.revealSidebarRow)
-  const worktreesByRepo = useAppStore((state) => state.worktreesByRepo)
+  // Why filter at the source: search deliberately bypasses sidebar filters, but never incognito.
+  const concealedRepoIds = useAppStore(getConcealedRepoIdsFromState)
+  const allWorktreesByRepo = useAppStore((state) => state.worktreesByRepo)
+  const worktreesByRepo = useMemo<AppState['worktreesByRepo']>(
+    () => omitConcealedRepoKeys(allWorktreesByRepo, concealedRepoIds),
+    [allWorktreesByRepo, concealedRepoIds]
+  )
   const folderWorkspaces = useAppStore((state) => state.folderWorkspaces)
   const workspaces = useMemo(
     () =>
@@ -39,11 +51,33 @@ export function useWorktreeJumpPaletteStoreState({
       ]),
     [folderWorkspaces, worktreesByRepo]
   )
-  const repos = useAppStore((state) => state.repos)
+  const repos = useAppStore(getShownReposFromState)
   const projectGroups = useAppStore((state) => state.projectGroups)
-  const projects = useAppStore((state) => state.projects)
-  const projectHostSetups = useAppStore((state) => state.projectHostSetups)
-  const detectedWorktreesByRepo = useAppStore((state) => state.detectedWorktreesByRepo)
+  const allProjects = useAppStore((state) => state.projects)
+  const projects = useMemo<AppState['projects']>(
+    () =>
+      concealedRepoIds.size === 0
+        ? allProjects
+        : allProjects.filter(
+            (project) =>
+              project.sourceRepoIds.length === 0 ||
+              project.sourceRepoIds.some((repoId) => !concealedRepoIds.has(repoId))
+          ),
+    [allProjects, concealedRepoIds]
+  )
+  const allProjectHostSetups = useAppStore((state) => state.projectHostSetups)
+  const projectHostSetups = useMemo<AppState['projectHostSetups']>(
+    () =>
+      concealedRepoIds.size === 0
+        ? allProjectHostSetups
+        : allProjectHostSetups.filter((setup) => !concealedRepoIds.has(setup.repoId)),
+    [allProjectHostSetups, concealedRepoIds]
+  )
+  const allDetectedWorktreesByRepo = useAppStore((state) => state.detectedWorktreesByRepo)
+  const detectedWorktreesByRepo = useMemo<AppState['detectedWorktreesByRepo']>(
+    () => omitConcealedRepoKeys(allDetectedWorktreesByRepo, concealedRepoIds),
+    [allDetectedWorktreesByRepo, concealedRepoIds]
+  )
   const pendingWorktreeCreations = useAppStore((state) => state.pendingWorktreeCreations)
   const pluginCommands = usePluginCommands()
   const paletteStatusInputsActive = visible || lingering

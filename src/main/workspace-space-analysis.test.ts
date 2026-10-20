@@ -242,6 +242,30 @@ describe('analyzeWorkspaceSpace', () => {
     )
   })
 
+  it('never names an incognito repo or its worktrees in scan progress', async () => {
+    const repoPath = join(tempDir!, 'secret')
+    await mkdir(repoPath, { recursive: true })
+    const repo: Repo = {
+      id: 'repo-secret',
+      path: repoPath,
+      displayName: 'secret-client',
+      badgeColor: '#000',
+      addedAt: 0,
+      incognito: true
+    }
+    listRepoWorktreesMock.mockResolvedValue([
+      { path: repoPath, head: 'a', branch: 'refs/heads/main', isBare: false, isMainWorktree: true }
+    ])
+    const progress: unknown[] = []
+
+    await analyzeWorkspaceSpace(createStore([repo]), {
+      onProgress: (event) => progress.push(event)
+    })
+
+    expect(progress.length).toBeGreaterThan(1)
+    expect(JSON.stringify(progress)).not.toContain('secret-client')
+  })
+
   it('rejects when a scan is cancelled before it starts', async () => {
     const repo: Repo = {
       id: 'repo-1',

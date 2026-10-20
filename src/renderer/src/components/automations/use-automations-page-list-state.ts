@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree/id'
+import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
 import { buildExternalAutomationListEntries } from './external-automation-list-entries'
 import { externalAutomationScopeEntries } from './external-automation-scope-gating'
 import { externalAutomationUncheckedNotice } from './external-automation-unchecked-hosts'
@@ -25,7 +26,15 @@ export function useAutomationsPageListState({
   store: AutomationsPageStoreState
   local: AutomationsPageLocalState
 }) {
-  const { repoMap, worktreeMap, repoForRow, worktreeForRow, selectedId, setSelectedId } = store
+  const {
+    repoMap,
+    worktreeMap,
+    repoForRow,
+    worktreeForRow,
+    selectedId,
+    setSelectedId,
+    concealedRepoIds
+  } = store
   const {
     automations,
     failedAuthorityKeys,
@@ -49,7 +58,15 @@ export function useAutomationsPageListState({
     scopeEntries: externalScopeEntries
   })
   const unscopedRows = useMemo(() => unscopedAutomationListRows(automations), [automations])
-  const visibleRows = hostCatalog.rows.answered ? hostCatalog.rows.rows : unscopedRows
+  const hostRows = hostCatalog.rows.answered ? hostCatalog.rows.rows : unscopedRows
+  // Why: an automation's name and run history point at its project, so a locked incognito one stays out.
+  const visibleRows = useMemo(
+    () =>
+      concealedRepoIds.size === 0
+        ? hostRows
+        : hostRows.filter((row) => !concealedRepoIds.has(getAutomationRunRepoId(row.automation))),
+    [concealedRepoIds, hostRows]
+  )
   const capturedAutomationOwners = hostCatalog.rows.capturedOwners
   const externalAutomationEntries = useMemo(
     () => buildExternalAutomationListEntries(scopedExternal.managers),

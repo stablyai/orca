@@ -8,6 +8,7 @@ import {
   getPairedDeviceIdsByEnvironment
 } from '../../../../shared/workspace-creator-visibility'
 import type { VisibleWorktreeOptions } from './compute-visible-worktrees'
+import { getConcealedRepoIdsFromState } from '@/store/concealed-repo-selector'
 
 /**
  * Read the store into the filter inputs `computeVisibleWorktrees` decides from.
@@ -49,6 +50,7 @@ export function buildVisibleWorktreeOptionsFromState(
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
     defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
     worktreeLineageById: state.worktreeLineageById,
-    preserveLineageParentOrder: state.sortBy === 'manual'
+    preserveLineageParentOrder: state.sortBy === 'manual',
+    concealedRepoIds: getConcealedRepoIdsFromState(state)
   }
 }

@@ -1,5 +1,10 @@
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
+import {
+  getConcealedRepoIdsFromState,
+  getShownReposFromState,
+  withoutConcealedOnlyProjectGroups
+} from '@/store/concealed-repo-selector'
 import { useShallow } from 'zustand/react/shallow'
 import {
   useAllWorktrees,
@@ -65,7 +70,9 @@ const WorktreeList = React.memo(function WorktreeList({
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
-  const repos = useAppStore((s) => s.repos)
+  // Why: locked incognito projects must not surface as headers, placeholders or picker rows.
+  const repos = useAppStore(getShownReposFromState)
+  const concealedRepoIds = useAppStore(getConcealedRepoIdsFromState)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
@@ -91,8 +98,19 @@ const WorktreeList = React.memo(function WorktreeList({
   const clearPendingRevealSidebarRow = useAppStore((s) => s.clearPendingRevealSidebarRow)
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
-  const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
+  const allProjectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const allRepos = useAppStore((s) => s.repos)
+  const projectGroups = useMemo(
+    () =>
+      withoutConcealedOnlyProjectGroups(
+        allProjectGroups,
+        allRepos,
+        folderWorkspaces,
+        concealedRepoIds
+      ),
+    [allProjectGroups, allRepos, folderWorkspaces, concealedRepoIds]
+  )
   const settings = useAppStore((s) => s.settings)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const { prCache, hostedReviewCache } = useAppStore(

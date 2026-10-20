@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { getConcealedRepoIdsFromState } from '@/store/concealed-repo-selector'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
 import {
@@ -13,7 +14,7 @@ import {
   startWorkspaceCleanupBackgroundRemoval,
   type WorkspaceCleanupRemovalProgress
 } from './workspace-cleanup-background-removal'
-import { filterWorkspaceCleanupRemovalCandidates } from './workspace-cleanup-removal-candidates'
+import { selectRemovableCleanupCandidates } from './workspace-cleanup-removal-candidates'
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
 import { useWorkspaceCleanupUnverifiedRemoval } from './use-workspace-cleanup-unverified-removal'
 import {
@@ -62,6 +63,14 @@ export function useWorkspaceCleanupRemoval({
 
   const [confirming, setConfirming] = useState(false)
   const [confirmCandidates, setConfirmCandidates] = useState<WorkspaceCleanupCandidate[]>([])
+  const concealedRepoIds = useAppStore(getConcealedRepoIdsFromState)
+  const shownConfirmCandidates = useMemo(
+    () =>
+      concealedRepoIds.size === 0
+        ? confirmCandidates
+        : confirmCandidates.filter((candidate) => !concealedRepoIds.has(candidate.repoId)),
+    [concealedRepoIds, confirmCandidates]
+  )
   const [removalProgress, setRemovalProgress] = useState<WorkspaceCleanupRemovalProgress | null>(
     null
   )
@@ -114,10 +123,7 @@ export function useWorkspaceCleanupRemoval({
   })
 
   const openConfirmRemove = useCallback((candidates: readonly WorkspaceCleanupCandidate[]) => {
-    const nextCandidates = filterWorkspaceCleanupRemovalCandidates(
-      candidates,
-      useAppStore.getState().deleteStateByWorktreeId
-    )
+    const nextCandidates = selectRemovableCleanupCandidates(candidates, useAppStore.getState())
     if (nextCandidates.length === 0) {
       return
     }
@@ -168,9 +174,9 @@ export function useWorkspaceCleanupRemoval({
     if (confirmCandidates.length === 0 || removalInFlightRef.current) {
       return
     }
-    const filteredCandidates = filterWorkspaceCleanupRemovalCandidates(
+    const filteredCandidates = selectRemovableCleanupCandidates(
       confirmCandidates,
-      useAppStore.getState().deleteStateByWorktreeId
+      useAppStore.getState()
     )
     if (filteredCandidates.length === 0) {
       clearAgentStopRequest()
@@ -300,8 +306,9 @@ export function useWorkspaceCleanupRemoval({
   }, [agentStopRequest, confirmRemove, confirmUnverifiedRemoval])
 
   return {
-    confirming,
-    confirmCandidates,
+    // Why: relocking can empty the confirmation; fall back to the list instead of a blank confirm.
+    confirming: confirming && (removalInFlight || shownConfirmCandidates.length > 0),
+    confirmCandidates: shownConfirmCandidates,
     removalProgress,
     removalInFlight,
     deletionPhaseByIdentity,

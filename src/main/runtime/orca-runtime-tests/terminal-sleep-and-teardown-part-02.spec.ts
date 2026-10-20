@@ -405,6 +405,27 @@ describe('OrcaRuntimeService', () => {
     expect(delivered).toHaveLength(1)
   })
 
+  it('never fans out a notification about an incognito project to phones', () => {
+    const repos = store.getRepos().map((repo) => ({ ...repo, incognito: true }))
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id)
+    })
+    const delivered: unknown[] = []
+    runtime.onNotificationDispatched((event) => delivered.push(event))
+
+    runtime.dispatchMobileNotification({
+      type: 'notification',
+      source: 'agent-task-complete',
+      title: 'Secret',
+      body: '',
+      worktreeId: TEST_WORKTREE_ID
+    })
+
+    expect(delivered).toEqual([])
+  })
+
   it('keeps the original committed disposition across an idempotent retry', async () => {
     const runtime = new OrcaRuntimeService(store)
     const events: RuntimeClientEvent[] = []

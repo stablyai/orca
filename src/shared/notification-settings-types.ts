@@ -71,6 +71,8 @@ export type NotificationDispatchRequest = {
   structuredOrigin?: StructuredAttentionOrigin
   /** The execution host already pushed this to its paired phones, so main must not fan it out again. */
   mobileDeliveredByHost?: boolean
+  /** The workspace's project is incognito. Phones have no unlock, so main never fans it out to them. */
+  repoIncognito?: boolean
 }
 
 export type NotificationDispatchResult = {

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import { withoutIncognitoRepoRows } from '../worktree/incognito-project-rows'
 import type { WorktreeDisplayNameSource } from './worktree-display-name'
 
 // What the session screen reads: the terminal inventory, the repo list two screens resolve a
@@ -33,7 +34,7 @@ export const sessionTerminalInventorySchema = z.looseObject({
  */
 export const runtimeRepoListSchema = z
   .looseObject({ repos: salvagingArray(z.looseObject({ id: z.string() })) })
-  .transform((reply) => reply.repos)
+  .transform((reply) => withoutIncognitoRepoRows(reply.repos))
 
 /**
  * The agents a host reports for a workspace.

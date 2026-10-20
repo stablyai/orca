@@ -130,6 +130,8 @@ export type RuntimeWorktreePsSummary = {
   /** This host calls the row another client's ("Hide other-client workspaces"); sent only to its
    *  own phone, which applies the filter value it shares with this host. */
   desktopOtherClient?: true
+  /** The row's project is incognito (`Repo.incognito`); clients without an unlock drop it. */
+  repoIncognito?: true
 }
 
 export type RuntimeGitLocalBranches = {

@@ -48,6 +48,7 @@ import type {
   NotificationsApi
 } from './api/os-permission-api'
 import type { PetApi } from './api/pet-api'
+import type { IncognitoProjectsApi } from './api/incognito-projects-api'
 import type { PluginsApi } from './api/plugin-host-api'
 import type { PreflightApi } from './api/preflight-api'
 import type { PtyApi } from './api/pty-api'
@@ -116,6 +117,7 @@ export type PreloadApi = {
   terminalPreview: TerminalPreviewApi
   macosTccPrompts: MacosTccPromptsApi
   developerPermissions: DeveloperPermissionsApi
+  incognitoProjects: IncognitoProjectsApi
   computerUsePermissions: ComputerUsePermissionsApi
   shell: ShellApi
   skills: SkillsApi
