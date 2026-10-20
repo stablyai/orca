@@ -111,25 +111,27 @@ export function MobileSessionTabStrip({
             delayLongPress={400}
           >
             <View style={styles.tabLabelRow}>
-              {t.type === 'browser' && (
-                <Globe size={13} color={colors.textSecondary} strokeWidth={2.1} />
-              )}
-              {t.type === 'markdown' && (
-                <FileText size={13} color={colors.textSecondary} strokeWidth={2.1} />
-              )}
-              {t.type === 'file' && (
-                <File size={13} color={colors.textSecondary} strokeWidth={2.1} />
-              )}
-              {t.type === 'agent-session' && <MobileAgentIcon agentId={t.agent} size={13} />}
-              {t.type === 'terminal' &&
-                (() => {
-                  const agentId = resolveMobileTerminalTabAgentId(t)
-                  return agentId ? (
-                    <MobileAgentIcon agentId={agentId} size={13} />
-                  ) : (
-                    <SquareTerminal size={13} color={colors.textSecondary} strokeWidth={2.1} />
-                  )
-                })()}
+              <View style={styles.tabIcon}>
+                {t.type === 'browser' && (
+                  <Globe size={13} color={colors.textSecondary} strokeWidth={2.1} />
+                )}
+                {t.type === 'markdown' && (
+                  <FileText size={13} color={colors.textSecondary} strokeWidth={2.1} />
+                )}
+                {t.type === 'file' && (
+                  <File size={13} color={colors.textSecondary} strokeWidth={2.1} />
+                )}
+                {t.type === 'agent-session' && <MobileAgentIcon agentId={t.agent} size={13} />}
+                {t.type === 'terminal' &&
+                  (() => {
+                    const agentId = resolveMobileTerminalTabAgentId(t)
+                    return agentId ? (
+                      <MobileAgentIcon agentId={agentId} size={13} />
+                    ) : (
+                      <SquareTerminal size={13} color={colors.textSecondary} strokeWidth={2.1} />
+                    )
+                  })()}
+              </View>
               <Text
                 style={[styles.tabText, t.id === activeSessionTabId && styles.tabTextActive]}
                 numberOfLines={1}

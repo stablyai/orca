@@ -143,6 +143,10 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs
   },
+  // The page shrinks a bare svg in a row before the title's ellipsis kicks in.
+  tabIcon: {
+    flexShrink: 0
+  },
   tabText: {
     flexShrink: 1,
     color: colors.textSecondary,
