@@ -4,6 +4,8 @@ import type { PreloadApi } from '../api-types'
 
 export const agentAwakeApi = {
   getStatus: (): Promise<ComputerAwakeStatus> => ipcRenderer.invoke('agentAwake:getStatus'),
+  getSystemIdleSeconds: (): Promise<number | null> =>
+    ipcRenderer.invoke('agentAwake:getSystemIdleSeconds'),
   onChanged: (callback: (status: ComputerAwakeStatus) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: ComputerAwakeStatus): void =>
       callback(status)

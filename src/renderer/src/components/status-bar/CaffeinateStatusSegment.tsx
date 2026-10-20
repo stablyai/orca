@@ -3,6 +3,7 @@ import { Coffee } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -18,6 +19,7 @@ import {
   getAgentAwakeModeLabel,
   getAgentAwakeTitle
 } from '../settings/agent-awake-copy'
+import { getSleepyModeStartLabel } from '../settings/sleepy-mode-copy'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,
@@ -43,6 +45,7 @@ export function CaffeinateStatusSegment({
 }): React.JSX.Element | null {
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
+  const setSleepyModeActive = useAppStore((state) => state.setSleepyModeActive)
   const configuredMode = normalizeComputerAwakeMode(
     settings?.computerAwakeMode,
     settings?.keepComputerAwakeWhileAgentsRun
@@ -164,6 +167,10 @@ export function CaffeinateStatusSegment({
             </span>
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => setSleepyModeActive(true)}>
+          {getSleepyModeStartLabel()}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

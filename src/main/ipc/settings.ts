@@ -11,6 +11,7 @@ import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { track } from '../telemetry/client'
 import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
 import type { AgentAwakeService } from '../agent-awake-service'
+import { readSystemIdleSeconds } from '../system-idle-seconds'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
@@ -81,6 +82,7 @@ export function registerSettingsHandlers(
     'agentAwake:getStatus',
     () => agentAwakeService?.getStatus() ?? { mode: 'off', active: false }
   )
+  ipcMain.handle('agentAwake:getSystemIdleSeconds', () => readSystemIdleSeconds())
   agentAwakeService?.subscribe?.((status) => {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
