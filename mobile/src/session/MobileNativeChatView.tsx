@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
+import { createNativeChatMessageReuse } from '../../../src/shared/native-chat-row-reuse'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type {
   NativeChatLiveTurnIndicator,
@@ -236,18 +237,21 @@ export function MobileNativeChatView({
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
 
   // `data` is the list source: folded transcript + synthetic streaming bubble +
-  // route-owned accepted echoes. Memoize on the same deps so the
-  // downstream autoscroll effects/`renderItem` keep referential stability.
-  const { data } = useMemo(
+  // route-owned accepted echoes. Rows unchanged since the last batch keep their
+  // identity, so a streamed batch re-renders only the rows it changed.
+  const [reuseRows] = useState(createNativeChatMessageReuse)
+  const data = useMemo(
     () =>
-      buildMobileNativeChatTransientData({
-        messages,
-        folded,
-        streaming,
-        pending,
-        imagePreviewsByMessageId
-      }),
-    [messages, folded, streaming, pending, imagePreviewsByMessageId]
+      reuseRows(
+        buildMobileNativeChatTransientData({
+          messages,
+          folded,
+          streaming,
+          pending,
+          imagePreviewsByMessageId
+        }).data
+      ),
+    [reuseRows, messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
   const tail = useMobileNativeChatTailFollow({ hasItems: data.length > 0, scopeKey: sendSurfaceId })
   const { jumpToTail, recordScrollMetrics, scrollMayLoadEarlier, pageSettled } = tail
@@ -305,7 +309,7 @@ export function MobileNativeChatView({
   const rowKeys = useMobileNativeChatRowKeys(folded, messages, sendSurfaceId, turns.presentation)
   const disclosures = useMobileNativeChatDisclosures(sendSurfaceId)
   const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(data), [data])
-  const renderItem = useMobileNativeChatRowRenderer({
+  const { renderItem, renderWaitingRow } = useMobileNativeChatRowRenderer({
     rowKeyOf: rowKeys.keyOf,
     runOwners: rowKeys.runOwners,
     toolsExpanded,
@@ -338,7 +342,7 @@ export function MobileNativeChatView({
   const layoutKey = `${fontScale}:${toolsExpanded}`
   const pageHeader = (measuring: boolean) =>
     mobileNativeChatListHeader(hasMore, olderPages, loadEarlier, measuring)
-  const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
+  const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderWaitingRow)
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
 
   const lockReason = useSettledMobileNativeChatInputLock(inputLockReason)

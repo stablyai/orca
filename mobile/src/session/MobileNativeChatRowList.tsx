@@ -7,6 +7,9 @@ import {
   type MobileNativeChatTailFollow
 } from './use-mobile-native-chat-tail-follow'
 
+// FlatList (native and web) honours `strictMode` at runtime; React Native's bundled types omit it.
+const FLAT_LIST_STRICT_MODE = { strictMode: true }
+
 type PageProps = ComponentProps<typeof MobileNativeChatPageList>
 
 type Props = Pick<
@@ -48,6 +51,8 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
       data={rows}
       keyExtractor={rowKeys.keyOf}
       renderItem={renderItem}
+      // Why: without it FlatList re-renders every mounted cell, stable `renderItem` or not.
+      {...FLAT_LIST_STRICT_MODE}
       contentContainerStyle={contentContainerStyle}
       // Let link/file taps land while the composer keyboard is up
       // instead of being swallowed by the dismiss gesture.
