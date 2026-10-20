@@ -326,7 +326,15 @@ describe('replay-guard', () => {
       vi.advanceTimersByTime(2_000)
       expect(terminal.lastData).toEqual(['snapshot', 'epilogue'])
       expect(onUndeliverable).not.toHaveBeenCalled()
-      expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
+      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(2)
+      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+        'terminal_replay_guard_disposed_target_release',
+        expect.objectContaining({ paneId: 1 })
+      )
+      expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalledWith(
+        'terminal_replay_guard_wedged_release',
+        expect.anything()
+      )
       _resetWritePipelineHealthForTests(pane.terminal)
     } finally {
       vi.useRealTimers()

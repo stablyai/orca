@@ -143,6 +143,11 @@ function engageReplayGuard(
       recordRendererCrashBreadcrumb('terminal_replay_guard_wedged_release', breadcrumbData)
       // Why: a rejected replay or silent probe makes the pipeline undeliverable; recover instead of a fossil that eats input.
       notifyUndeliverableWrite(terminal, 'replay-wedged')
+    } else if (reason === 'target-disposed') {
+      console.warn(
+        `[terminal] replay guard released for pane ${paneId} — its xterm was disposed before the replay parsed`
+      )
+      recordRendererCrashBreadcrumb('terminal_replay_guard_disposed_target_release', breadcrumbData)
     }
     onRelease?.()
   }
@@ -157,10 +162,6 @@ function engageReplayGuard(
     if (!isXtermInstanceDisposed(terminal)) {
       return false
     }
-    console.warn(
-      `[terminal] replay guard released for pane ${paneId} — its xterm was disposed before the replay parsed`
-    )
-    recordRendererCrashBreadcrumb('terminal_replay_guard_disposed_target_release', breadcrumbData)
     release('target-disposed')
     return true
   }
