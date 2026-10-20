@@ -4,12 +4,12 @@ import { join } from 'node:path'
 import { platform, arch } from 'node:os'
 import type { WebContents } from 'electron'
 import { BrowserError } from './cdp-bridge'
+import { getAgentBrowserBinaryName } from './agent-browser-binary-name'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { EMBEDDED_NAVIGATION_TIMEOUT_MS } from './agent-browser-bridge-types'
 
 export function agentBrowserNativeName(): string {
-  const ext = process.platform === 'win32' ? '.exe' : ''
-  return `agent-browser-${platform()}-${arch()}${ext}`
+  return getAgentBrowserBinaryName(platform(), arch())
 }
 
 export function resolveAgentBrowserBinary(): string {

@@ -16,6 +16,8 @@ export type SpeechModelDownloadFile = {
   sha256: string
 }
 
+export const LOCAL_SPEECH_UNAVAILABLE_ERROR_CODE = 'voice_local_dictation_unavailable'
+
 export type SpeechModelManifest = {
   id: string
   label: string

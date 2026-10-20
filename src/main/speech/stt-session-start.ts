@@ -2,6 +2,7 @@ import { Worker } from 'node:worker_threads'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { readOpenAiSpeechApiKey } from './openai-api-key-store'
+import { assertLocalSpeechRecognitionSupported } from './speech-platform-support'
 import type { SttEventSink } from './stt-service'
 import type { SttSessionState } from './stt-session-state'
 import {
@@ -84,6 +85,8 @@ async function startSttSession(
     sink({ type: 'ready' })
     return
   }
+
+  assertLocalSpeechRecognitionSupported()
 
   if (state.cloudSession) {
     await stopSttDictation(state, owner, { cancelStarting: false })
