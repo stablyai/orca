@@ -12675,6 +12675,12 @@
           "submit": "Re-pair",
           "success": "Re-paired with {{name}}",
           "failed": "Re-pair failed"
+        },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "エディターのキーバインド",
+          "1b23c01cc6": "デフォルト",
+          "77674e2d1e": "Vim",
+          "a30ca600ee": "標準の編集の代わりに、コードエディターで Vim のモーダルキーバインドを使用します。"
         }
       },
       "right": {

@@ -12675,6 +12675,12 @@
           "submit": "Re-pair",
           "success": "Re-paired with {{name}}",
           "failed": "Re-pair failed"
+        },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "편집기 키 바인딩",
+          "1b23c01cc6": "기본값",
+          "77674e2d1e": "Vim",
+          "a30ca600ee": "표준 편집 대신 코드 편집기에서 Vim 모달 키 바인딩을 사용합니다."
         }
       },
       "right": {
