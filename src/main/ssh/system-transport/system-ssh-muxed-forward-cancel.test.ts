@@ -81,6 +81,21 @@ describe('system SSH muxed forward cancel', () => {
     )
   })
 
+  // Why: a refused cancel exits 0, so only its stderr tells the port apart from a released one.
+  it('reports nothing released when the master refuses the spec but still exits 0', async () => {
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: '',
+      stderr:
+        'mux_client_forward: forwarding request failed: port not forwarded\nmuxclient: master cancel forward request failed\n'
+    })
+
+    await expect(cancelMuxedLocalForward(createTarget(), 59418, '127.0.0.1', 6768)).resolves.toBe(
+      false
+    )
+  })
+
   it('reports nothing released when ssh cannot be spawned at all', async () => {
     runProcessMock.mockRejectedValue(new Error('ENOENT'))
 

@@ -27,6 +27,14 @@ export function buildMuxedLocalForwardCancelArgs(
 }
 
 /**
+ * A refused `-O cancel` still exits 0, reporting `master cancel forward request failed` on stderr,
+ * so a spec no master registered would otherwise read as a release that freed the port.
+ */
+function refusedMuxedForwardCancel(stderr: string): boolean {
+  return stderr.includes('request failed')
+}
+
+/**
  * True when a master released this exact forward. OpenSSH refuses a spec no master registered, so
  * someone else's forward on this port, and a port held by anything but a master, are left alone.
  */
@@ -47,7 +55,7 @@ export async function cancelMuxedLocalForward(
     args,
     timeoutMs: SYSTEM_SSH_MUXED_FORWARD_CANCEL_TIMEOUT_MS
   }).catch(() => null)
-  if (result?.code !== 0) {
+  if (result?.code !== 0 || refusedMuxedForwardCancel(result.stderr)) {
     return false
   }
   console.warn(
