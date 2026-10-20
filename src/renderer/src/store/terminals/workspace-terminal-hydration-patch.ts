@@ -13,6 +13,7 @@ export type WorkspaceHydrationPatch = Pick<
   | 'activeWorkspaceExecutionHostId'
   | 'activeTabId'
   | 'activeTabIdByWorktree'
+  | 'worktreeSplitViewPair'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
   | 'repos'
   | 'tabsByWorktree'

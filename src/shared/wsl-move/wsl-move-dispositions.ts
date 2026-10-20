@@ -109,6 +109,10 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
     note: "'local' becomes the WSL host for a moved focus."
   },
   activeTabId: notApplicableDisposition(32, 'Tab ids are kept.'),
+  worktreeSplitViewPair: notApplicableDisposition(
+    32,
+    'View state: a pair naming a moved worktree fails restore validation and the split ends.'
+  ),
   browserUrlHistory: notApplicableDisposition(31),
   workspaceDocHistory: moveDisposition(30),
   activeConnectionIdsAtShutdown: notApplicableDisposition(60),

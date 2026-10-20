@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildSanitizedTabsByWorktree, buildWorkspaceSessionPayload } from './workspace-session'
+import { buildWorkspaceSessionPayload } from './workspace-session'
+import { buildSanitizedTabsByWorktree } from './workspace-session-sanitized-tabs'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { AppState } from '../store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'

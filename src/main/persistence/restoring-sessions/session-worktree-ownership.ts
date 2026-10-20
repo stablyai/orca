@@ -25,6 +25,8 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   activeWorkspaceExecutionHostId: 'none',
   activeWorktreeId: 'direct',
   activeTabId: 'none',
+  // Why none: a split must not keep a worktree's metadata alive; restore drops a pair with a dead side.
+  worktreeSplitViewPair: 'none',
   tabsByWorktree: 'owner-keyed-row-arrays',
   terminalLayoutsByTabId: 'none',
   localOnlyScrollbackByTabId: 'none',

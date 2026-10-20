@@ -26,6 +26,7 @@ import { addHydratedSshWorktreePlaceholders } from './workspace-terminal-ssh-pla
 import { retainUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { restoreActiveTabIdByWorktree } from './workspace-terminal-active-tabs'
 import { retainPairedTerminalTabCloseIntentsForCatalog } from '../../runtime/paired-terminal-tab-close-intents'
+import { restorableWorktreeSplitViewPair } from '../../../../shared/worktree-split-view-pair'
 
 export function createWorkspaceTerminalHydrationActions(
   set: TerminalStoreSet,
@@ -154,6 +155,12 @@ export function createWorkspaceTerminalHydrationActions(
           activeWorkspaceExecutionHostId,
           activeTabId,
           activeTabIdByWorktree,
+          // Why here: set with activeWorktreeId so the first frame already renders the split.
+          worktreeSplitViewPair: restorableWorktreeSplitViewPair(
+            session.worktreeSplitViewPair,
+            activeWorktreeId,
+            validWorktreeIds
+          ),
           restoredRuntimeHostIdByWorkspaceSessionKey:
             options?.runtimeHostIdByWorkspaceSessionKey ?? {},
           // Why conditional: a mid-session re-hydration (the SSH pull merge) carries no shadow, and

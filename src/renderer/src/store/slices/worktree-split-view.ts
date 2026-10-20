@@ -1,14 +1,9 @@
 import type { StateCreator } from 'zustand'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { WorktreeSplitViewPair } from '../../../../shared/worktree-split-view-pair'
 import type { AppState } from '../types'
 
-/** Two worktrees shown side by side; whichever one is `activeWorktreeId` owns input. */
-export type WorktreeSplitViewPair = {
-  leftWorktreeId: string
-  leftExecutionHostId: ExecutionHostId | null
-  rightWorktreeId: string
-  rightExecutionHostId: ExecutionHostId | null
-}
+export type { WorktreeSplitViewPair }
 
 /** Left half's flex-grow share, set on the surfaces container so a divider drag skips React. */
 export const WORKTREE_SPLIT_LEFT_FLEX_VAR = '--worktree-split-left'

@@ -176,6 +176,12 @@ export function localDesktopSession(): WorkspaceSessionState {
     activeWorktreeId: GIT_KEY,
     activeWorkspaceKey: `worktree:${GIT_KEY}`,
     activeTabId: 'term-agent',
+    worktreeSplitViewPair: {
+      leftWorktreeId: GIT_KEY,
+      leftExecutionHostId: null,
+      rightWorktreeId: FOLDER_KEY,
+      rightExecutionHostId: null
+    },
     activeWorktreeIdsOnShutdown: [GIT_KEY, FOLDER_KEY],
     localOnlyScrollbackByTabId: { 'tab-shell': { [leaf(2)]: 'last screen' } },
     lastVisitedAtByWorktreeId: {
