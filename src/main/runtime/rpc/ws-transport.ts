@@ -1,5 +1,6 @@
-// WebSocket transport letting mobile clients reach the Orca runtime over LAN (ws://); auth is per-device tokens, and E2EE runs above this layer.
-import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
+// WebSocket transport letting mobile clients reach the Orca runtime over LAN (ws://, or wss:// with --tls-cert); auth is per-device tokens, and E2EE runs above this layer.
+import type { Server as HttpServer } from 'node:http'
+import type { Server as HttpsServer } from 'node:https'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
 import { answerWithoutWebClient, createStaticWebClientHandler } from './static-web-client-handler'
@@ -14,6 +15,11 @@ import {
 import { RemoteRuntimeServerHeartbeat } from './remote-runtime-server-heartbeat'
 import { assertPortNotShadowingListener } from './shadowed-port-probe'
 import { REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES } from '../../../shared/remote-runtime-memory-limits'
+import {
+  createGuardedWsListener,
+  trackUnauthenticatedClose,
+  type WsTransportNetworkGuard
+} from './ws-transport-network-guard'
 
 export const WEBSOCKET_TRANSPORT_MAX_MESSAGE_BYTES = REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES
 // Why: one desktop remote-host client can hold many concurrent streams, so keep the cap high enough that stale streams don't starve control RPCs.
@@ -45,6 +51,7 @@ export type WebSocketTransportOptions = {
   requirePinnedPort?: boolean
   // Why: deterministic ports tried before an OS-assigned one, so a fallback stays stable across reboots.
   fallbackLadder?: readonly number[]
+  networkGuard?: WsTransportNetworkGuard
 }
 
 export class WebSocketTransport implements RpcTransport {
@@ -57,8 +64,10 @@ export class WebSocketTransport implements RpcTransport {
   private readonly preferPinnedPort: boolean
   private readonly requirePinnedPort: boolean
   private readonly fallbackLadder: readonly number[]
+  private readonly networkGuard: WsTransportNetworkGuard
   private persistedFallbackBindFailed = false
-  private httpServer: HttpServer | null = null
+  private httpServer: HttpServer | HttpsServer | null = null
+  private stopCredentialWatch: (() => void) | null = null
   private wss: WebSocketServer | null = null
   private messageHandler: WebSocketMessageHandler | null = null
   private connectionCloseHandler: WebSocketConnectionCloseHandler | null = null
@@ -66,6 +75,8 @@ export class WebSocketTransport implements RpcTransport {
   private wsClientIds = new Map<WebSocket, string>()
   private heartbeatConnections = new Set<WebSocket>()
   private preAuthTimers = new WeakMap<WebSocket, ReturnType<typeof setTimeout>>()
+  // Why separate from wsClientIds: lifecycle finalize clears that map before close listeners run.
+  private authenticatedSockets = new WeakSet<WebSocket>()
 
   constructor({
     host,
@@ -77,7 +88,8 @@ export class WebSocketTransport implements RpcTransport {
     fallbackPort,
     preferPinnedPort,
     requirePinnedPort,
-    fallbackLadder
+    fallbackLadder,
+    networkGuard
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
@@ -92,6 +104,11 @@ export class WebSocketTransport implements RpcTransport {
     this.preferPinnedPort = preferPinnedPort === true
     this.requirePinnedPort = requirePinnedPort === true
     this.fallbackLadder = fallbackLadder ?? []
+    this.networkGuard = networkGuard ?? {}
+  }
+
+  get secure(): boolean {
+    return this.networkGuard.tls !== undefined
   }
 
   // True when the persisted fallback was tried and refused, so the caller can drop it.
@@ -110,6 +127,7 @@ export class WebSocketTransport implements RpcTransport {
 
   setClientId(ws: WebSocket, clientId: string): void {
     this.wsClientIds.set(ws, clientId)
+    this.authenticatedSockets.add(ws)
     clearNodeWebSocketPreAuthTimer(ws, this.preAuthTimers)
   }
 
@@ -194,9 +212,11 @@ export class WebSocketTransport implements RpcTransport {
   private async tryListen(port: number): Promise<void> {
     await assertPortNotShadowingListener(this.host, port)
     // Why the 404: with no 'request' listener Node never answers plain HTTP, so it hung (#30100).
-    const httpServer = createHttpServer(
-      this.staticRoot ? createStaticWebClientHandler(this.staticRoot) : answerWithoutWebClient
+    const listener = createGuardedWsListener(
+      this.staticRoot ? createStaticWebClientHandler(this.staticRoot) : answerWithoutWebClient,
+      this.networkGuard
     )
+    const httpServer = listener.server
 
     await new Promise<void>((resolve, reject) => {
       httpServer.once('error', reject)
@@ -204,6 +224,9 @@ export class WebSocketTransport implements RpcTransport {
         httpServer.off('error', reject)
         resolve()
       })
+    }).catch((error: unknown) => {
+      listener.stopCredentialWatch()
+      throw error
     })
 
     // Why: the WS cap applies only post-upgrade; a separate TCP cap bounds raw/pre-upgrade descriptor use.
@@ -214,7 +237,10 @@ export class WebSocketTransport implements RpcTransport {
       maxPayload: WEBSOCKET_TRANSPORT_MAX_MESSAGE_BYTES
     })
 
-    wss.on('connection', (ws) => {
+    wss.on('connection', (ws, request) => {
+      trackUnauthenticatedClose(this.networkGuard, ws, request, (socket) =>
+        this.authenticatedSockets.has(socket)
+      )
       if (wss.clients.size > WEBSOCKET_TRANSPORT_MAX_CONNECTIONS) {
         rejectNodeWebSocketOverCapacity(ws)
         return
@@ -223,6 +249,7 @@ export class WebSocketTransport implements RpcTransport {
     })
 
     this.httpServer = httpServer
+    this.stopCredentialWatch = listener.stopCredentialWatch
     this.wss = wss
   }
 
@@ -231,6 +258,8 @@ export class WebSocketTransport implements RpcTransport {
     const httpServer = this.httpServer
     this.wss = null
     this.httpServer = null
+    this.stopCredentialWatch?.()
+    this.stopCredentialWatch = null
     await stopNodeWebSocketTransport({
       wss,
       httpServer,

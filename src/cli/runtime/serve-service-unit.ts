@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { SERVE_LAUNCHD_LABEL_PREFIX } from '../../shared/serve-bundle-coordination'
+import { serveNetworkArgs, type ServeNetworkFlags } from './serve-network-flags'
 
 export type ServeServiceManager = 'launchd' | 'systemd'
 
@@ -25,18 +26,20 @@ export type ServeServiceInput = {
   path: string
   port?: string | null
   pairingAddress?: string | null
+  network?: ServeNetworkFlags
 }
 
 /** Why `--no-pairing`: a service's output lands in a log, which must never hold a live offer. */
 export function serveServiceArgs(
-  input: Pick<ServeServiceInput, 'port' | 'pairingAddress'>
+  input: Pick<ServeServiceInput, 'port' | 'pairingAddress' | 'network'>
 ): string[] {
   return [
     'serve',
     '--supervise',
     '--no-pairing',
     ...(input.port ? ['--port', input.port] : []),
-    ...(input.pairingAddress ? ['--pairing-address', input.pairingAddress] : [])
+    ...(input.pairingAddress ? ['--pairing-address', input.pairingAddress] : []),
+    ...serveNetworkArgs(input.network ?? {})
   ]
 }
 

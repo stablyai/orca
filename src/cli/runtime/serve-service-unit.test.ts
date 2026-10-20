@@ -23,6 +23,30 @@ describe('renderServeService', () => {
     expect(spec.content).toContain('<key>ORCA_USER_DATA_PATH</key>')
   })
 
+  it('carries the network hardening flags into the service command', () => {
+    const spec = renderServeService({
+      ...base,
+      network: {
+        bind: '100.64.1.20',
+        allowIp: '100.64.0.0/10',
+        tlsCert: '/etc/orca/cert.pem',
+        tlsKey: '/etc/orca/key.pem'
+      }
+    })
+    for (const value of [
+      '--bind',
+      '100.64.1.20',
+      '--allow-ip',
+      '100.64.0.0/10',
+      '--tls-cert',
+      '/etc/orca/cert.pem',
+      '--tls-key',
+      '/etc/orca/key.pem'
+    ]) {
+      expect(spec.content).toContain(`<string>${value}</string>`)
+    }
+  })
+
   it('gives another profile its own label and pins its userData', () => {
     const spec = renderServeService({ ...base, userDataPath: '/tmp/profile & co' })
     expect(spec.name).toMatch(/^com\.stablyai\.orca\.serve\.[0-9a-f]{8}$/)

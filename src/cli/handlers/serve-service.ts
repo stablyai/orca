@@ -5,6 +5,7 @@ import { runProcess } from '@orca/process-host'
 import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime/types'
 import { getOptionalServePort } from '../runtime/serve-port-flag'
+import { readServeNetworkFlags, type ServeNetworkFlags } from '../runtime/serve-network-flags'
 import { formatServeServiceInstall, formatServeServiceStatus } from './serve-service-format'
 import { resolveLaunchUserDataPath } from '../runtime/launch-user-data-path'
 import { getPlatformUserDataPath } from '../runtime/metadata'
@@ -59,7 +60,12 @@ function requireManager(platform: NodeJS.Platform): void {
 
 function serviceSpec(
   deps: ServeServiceDeps,
-  options: { command: string; port?: string | null; pairingAddress?: string | null }
+  options: {
+    command: string
+    port?: string | null
+    pairingAddress?: string | null
+    network?: ServeNetworkFlags
+  }
 ): ServeServiceSpec {
   return renderServeService({
     platform: deps.platform,
@@ -69,7 +75,8 @@ function serviceSpec(
     defaultUserDataPath: getPlatformUserDataPath(deps.platform, deps.homeDir),
     path: deps.env.PATH ?? '/usr/bin:/bin',
     port: options.port,
-    pairingAddress: options.pairingAddress
+    pairingAddress: options.pairingAddress,
+    network: options.network
   })
 }
 
@@ -99,6 +106,7 @@ export async function installServeService(
     command: string | null
     port?: string | null
     pairingAddress?: string | null
+    network?: ServeNetworkFlags
     dryRun: boolean
   },
   deps: ServeServiceDeps = defaultDeps()
@@ -244,6 +252,7 @@ export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
       // Why validate here: a bad value fails before the supervisor's brake and launchd would loop.
       port: getOptionalServePort(flags),
       pairingAddress: optionalString(flags.get('pairing-address')),
+      network: readServeNetworkFlags(flags),
       dryRun: flags.get('dry-run') === true
     })
     emit(result, json, formatServeServiceInstall)

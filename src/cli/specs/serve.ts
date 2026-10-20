@@ -6,11 +6,15 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve'],
     summary: 'Start an Orca runtime server without opening a desktop window',
     usage:
-      'orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--json]',
+      'orca serve [--port <port>] [--pairing-address <host>] [--bind <ip>] [--allow-ip <list>] [--tls-cert <file> --tls-key <file>] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'port',
       'pairing-address',
+      'bind',
+      'allow-ip',
+      'tls-cert',
+      'tls-key',
       'mobile-pairing',
       'no-pairing',
       'grant-desktop-control',
@@ -23,6 +27,10 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'Runs in the foreground and prints the bound endpoint, advertised endpoint, and pairing status. Stop it with Ctrl+C.',
       'With --port, serve exits with an error when that port is already in use. Without it, serve uses 6768 and moves to another port when 6768 is taken.',
       '--pairing-address changes only the client-advertised address; use a reachable LAN, Tailscale, SSH-forward, or reverse-proxy endpoint.',
+      'serve listens on every interface unless --bind names one literal IP (for example a Tailscale or LAN address).',
+      '--allow-ip takes comma-separated IPs or CIDR ranges (203.0.113.7,100.64.0.0/10). Other peers are disconnected before TLS or HTTP; loopback is always allowed, so SSH port-forwards keep working.',
+      '--tls-cert and --tls-key (PEM files, used together) make serve listen on https:// and wss:// itself, so pairing links and the browser client need no reverse proxy. Clients verify the certificate, so it must match the --pairing-address hostname; renewed files are picked up within an hour without dropping clients.',
+      'On a listener reachable beyond loopback, a source that opens 20 connections in 5 minutes that never authenticate is refused for 15 minutes (IPv6 per /64). Paired clients that reconnect are never counted.',
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
       'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
       "A paired client cannot drive this machine's desktop (orca computer) unless the offer was created with --grant-desktop-control.",
@@ -38,7 +46,9 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'orca serve --json',
       'orca serve --project-root /workspace/repo --pairing-address wss://sandbox.example.com --recipe-json',
       'orca serve --port 6768 --pairing-address 100.64.1.20',
-      'orca serve --pairing-address 100.64.1.20 --mobile-pairing'
+      'orca serve --pairing-address 100.64.1.20 --mobile-pairing',
+      'orca serve --port 6768 --pairing-address orca.example.com --tls-cert /etc/letsencrypt/live/orca.example.com/fullchain.pem --tls-key /etc/letsencrypt/live/orca.example.com/privkey.pem',
+      'orca serve --bind 100.64.1.20 --allow-ip 100.64.0.0/10'
     ]
   },
   {
@@ -57,8 +67,18 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve', 'service', 'install'],
     summary: 'Run orca serve as a per-user background service that restarts itself',
     usage:
-      'orca serve service install [--port <port>] [--pairing-address <host>] [--command <path>] [--dry-run] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'port', 'pairing-address', 'command', 'dry-run'],
+      'orca serve service install [--port <port>] [--pairing-address <host>] [--bind <ip>] [--allow-ip <list>] [--tls-cert <file> --tls-key <file>] [--command <path>] [--dry-run] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'port',
+      'pairing-address',
+      'bind',
+      'allow-ip',
+      'tls-cert',
+      'tls-key',
+      'command',
+      'dry-run'
+    ],
     notes: [
       'macOS writes a LaunchAgent; Linux writes a systemd user unit. Both run `orca serve --supervise --no-pairing` for this profile, so the server restarts with growing delays and gives up after repeated failures instead of looping.',
       'The service never prints a pairing link to its log. Pair clients from the desktop app, or with `orca serve` in a terminal while the service is stopped.',

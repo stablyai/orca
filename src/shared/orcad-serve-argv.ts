@@ -11,6 +11,13 @@ export type ServeOrcaAppArgs = {
   grantDesktopControl?: boolean
   recipeJson?: boolean
   projectRoot?: string | null
+  /** Literal IP to listen on; serve otherwise listens on every interface. */
+  bind?: string | null
+  /** Comma-separated IPs/CIDR ranges allowed to connect. */
+  allowIp?: string | null
+  /** Absolute PEM paths; set together. */
+  tlsCert?: string | null
+  tlsKey?: string | null
   /** Starts Electron serve despite a remembered macOS startup abort in this environment. */
   force?: boolean
   /** Restart the server under a service manager instead of exiting with it; never inferred. */
@@ -25,21 +32,24 @@ export function serveOptionArgs(args: ServeOrcaAppArgs, prefix: '--' | '--serve-
     ...(args.noPairing ? [`${prefix}no-pairing`] : []),
     ...(args.mobilePairing ? [`${prefix}mobile-pairing`] : []),
     ...(args.grantDesktopControl ? [`${prefix}grant-desktop-control`] : []),
+    ...(args.bind ? [`${prefix}bind`, args.bind] : []),
+    ...(args.allowIp ? [`${prefix}allow-ip`, args.allowIp] : []),
+    ...(args.tlsCert ? [`${prefix}tls-cert`, args.tlsCert] : []),
+    ...(args.tlsKey ? [`${prefix}tls-key`, args.tlsKey] : []),
     ...(args.recipeJson && args.projectRoot
       ? [`${prefix}recipe-json`, `${prefix}project-root`, args.projectRoot]
       : [])
   ]
 }
 
-/** `bindHost` exists for tests, which must not listen on every interface. */
+/** `bindHost` exists for tests, which must not listen on every interface; `--bind` replaces it. */
 export function orcadServeArgs(
   args: ServeOrcaAppArgs,
   webClientRoot?: string,
   bindHost = '0.0.0.0'
 ): string[] {
   return [
-    '--bind',
-    bindHost,
+    ...(args.bind ? [] : ['--bind', bindHost]),
     ...serveOptionArgs(args, '--'),
     ...(webClientRoot ? ['--web-client-root', webClientRoot] : [])
   ]

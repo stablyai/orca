@@ -15,6 +15,11 @@ export type OrcadOptions = {
   projectRoot?: string
   /** Literal IP to bind. Defaults to loopback; see orcad-bind-address.ts. */
   bind?: string
+  /** Comma-separated IPs/CIDR ranges allowed to connect; loopback always is. */
+  allowIp?: string
+  /** PEM certificate and key; the listener then serves https:// and wss://. */
+  tlsCert?: string
+  tlsKey?: string
   /** The browser client's directory; the slot carries none, so `orca serve` passes the app's. */
   webClientRoot?: string
 }

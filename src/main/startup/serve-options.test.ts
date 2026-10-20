@@ -18,6 +18,35 @@ describe('getServeOptions', () => {
     })
   })
 
+  it('parses the network hardening flags and requires the TLS pair together', () => {
+    expect(
+      getServeOptions(
+        normalizeServeModeArgv([
+          '/AppRun',
+          'serve',
+          '--bind',
+          '100.64.1.20',
+          '--allow-ip=100.64.0.0/10',
+          '--tls-cert',
+          '/etc/orca/cert.pem',
+          '--tls-key',
+          '/etc/orca/key.pem'
+        ])
+      )
+    ).toMatchObject({
+      bind: '100.64.1.20',
+      allowIp: '100.64.0.0/10',
+      tlsCert: '/etc/orca/cert.pem',
+      tlsKey: '/etc/orca/key.pem'
+    })
+    expect(() =>
+      getServeOptions(['/AppRun', '--serve', '--serve-tls-cert', '/etc/orca/cert.pem'])
+    ).toThrow('Use --tls-cert and --tls-key together.')
+    expect(() => getServeOptions(['/AppRun', '--serve', '--alow-ip', '10.0.0.0/8'])).toThrow(
+      'Did you mean --allow-ip?'
+    )
+  })
+
   it('accepts equals-form values in the normalized shape', () => {
     expect(
       getServeOptions([

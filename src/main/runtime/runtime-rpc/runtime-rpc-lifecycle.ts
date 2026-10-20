@@ -198,7 +198,8 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       ...(options.fallbackPort !== undefined ? { fallbackPort: options.fallbackPort } : {}),
       ...(options.preferPinnedPort ? { preferPinnedPort: true } : {}),
       ...(options.requirePinnedPort ? { requirePinnedPort: true } : {}),
-      fallbackLadder: wsFallbackPortLadder(this.wsPort)
+      fallbackLadder: wsFallbackPortLadder(this.wsPort),
+      networkGuard: this.wsNetworkGuard
     })
     const mobileSocketWiring = this.ensureMobileSocketWiring(deviceRegistry, e2eeKeypair)
     this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport)
@@ -215,7 +216,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     this.wsBoundHost = options.host
     return {
       transport: wsTransport,
-      endpoint: formatWsEndpoint(options.host, wsTransport.resolvedPort)
+      endpoint: formatWsEndpoint(options.host, wsTransport.resolvedPort, wsTransport.secure)
     }
   }
 

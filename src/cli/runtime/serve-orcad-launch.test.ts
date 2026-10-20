@@ -102,6 +102,26 @@ describe('orca serve asking the app which host to run', () => {
     expect(orcadServeArgs({})).toEqual(['--bind', '0.0.0.0'])
   })
 
+  it('lets --bind replace the every-interface default and forwards the hardening flags', () => {
+    expect(
+      orcadServeArgs({
+        bind: '100.64.1.20',
+        allowIp: '100.64.0.0/10',
+        tlsCert: '/etc/orca/cert.pem',
+        tlsKey: '/etc/orca/key.pem'
+      })
+    ).toEqual([
+      '--bind',
+      '100.64.1.20',
+      '--allow-ip',
+      '100.64.0.0/10',
+      '--tls-cert',
+      '/etc/orca/cert.pem',
+      '--tls-key',
+      '/etc/orca/key.pem'
+    ])
+  })
+
   // #30100: the slot carries no browser client, so without this orcad served no web page.
   it("hands orcad the app's browser client directory when the app has one", () => {
     expect(

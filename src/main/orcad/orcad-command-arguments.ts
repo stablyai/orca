@@ -1,7 +1,11 @@
 import type { OrcadOptions } from './orcad-start-contract'
 import { DEFAULT_WS_PORT } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
 import { ORCAD_LOOPBACK_BIND_HOST } from './orcad-bind-address'
-import { getServeOptionValidationError } from '../../shared/serve-option-validation'
+import {
+  getServeOptionValidationError,
+  getServeTlsOptionValidationError
+} from '../../shared/serve-option-validation'
+import { parseAllowedClientRanges } from '../runtime/rpc/ws-client-address-policy'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { WEB_CLIENT_INDEX_FILENAME } from '../../shared/bundled-web-client-root'
@@ -17,6 +21,11 @@ Options:
                            Use an SSH port-forward or a network IP for remote access.
   --pairing-address <addr> Address advertised in pairing offers when different
                            from the bind address (for example, a public hostname).
+  --allow-ip <list>        Comma-separated IPs or CIDR ranges allowed to connect;
+                           others are dropped before TLS or HTTP. Loopback always is.
+  --tls-cert <file>        PEM certificate; with --tls-key, serve https:// and wss://.
+                           Renewed files are picked up within an hour.
+  --tls-key <file>         PEM private key for --tls-cert.
   --json                   Print the one-line server readiness JSON to stdout.
   --no-pairing             Do not create a client pairing offer at startup.
   --mobile-pairing         Create a mobile-scoped pairing offer with a QR code.
@@ -83,6 +92,20 @@ export function parseArgs(argv: string[]): OrcadCommandArguments {
       }
       options.webClientRoot = value
       i += 1
+    } else if (arg === '--allow-ip' || arg === '--tls-cert' || arg === '--tls-key') {
+      const value = argv[i + 1]
+      if (!value) {
+        throw new Error(`${arg} expects a value`)
+      }
+      if (arg === '--allow-ip') {
+        parseAllowedClientRanges(value)
+        options.allowIp = value
+      } else if (arg === '--tls-cert') {
+        options.tlsCert = value
+      } else {
+        options.tlsKey = value
+      }
+      i += 1
     } else if (arg === '--pairing-address') {
       const value = argv[i + 1]
       if (!value) {
@@ -94,13 +117,14 @@ export function parseArgs(argv: string[]): OrcadCommandArguments {
       throw new Error(`Unknown argument: ${arg}`)
     }
   }
-  const validationError = getServeOptionValidationError({
-    noPairing: options.noPairing === true,
-    mobilePairing: options.mobilePairing === true,
-    grantDesktopControl: options.grantDesktopControl,
-    recipeJson: options.recipeJson === true,
-    projectRoot: options.projectRoot
-  })
+  const validationError =
+    getServeOptionValidationError({
+      noPairing: options.noPairing === true,
+      mobilePairing: options.mobilePairing === true,
+      grantDesktopControl: options.grantDesktopControl,
+      recipeJson: options.recipeJson === true,
+      projectRoot: options.projectRoot
+    }) ?? getServeTlsOptionValidationError(options)
   if (validationError) {
     throw new Error(validationError)
   }
