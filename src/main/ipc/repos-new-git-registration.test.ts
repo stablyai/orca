@@ -278,6 +278,22 @@ describe('local IPC registration dedupe and race handling', () => {
       })
     })
 
+    it('registers a local row when only another host tracks that path', async () => {
+      await withTree(async (root) => {
+        repos.push(...foreignRows(join(root, 'api')))
+
+        const result = await handlers.get('projectGroups:importNested')!(
+          null,
+          importArgs(root, ['api'])
+        )
+
+        expect(result).toMatchObject({ importedCount: 1, alreadyKnownCount: 0 })
+        expect(repos).toHaveLength(3)
+        expect(repos[2].path).toBe(join(root, 'api'))
+        expect(repos[2].executionHostId).toBeUndefined()
+      })
+    })
+
     it('keeps a repo another registration added during icon discovery', async () => {
       await withTree(async (root) => {
         detectMock.mockImplementationOnce(async () => {

@@ -102,13 +102,15 @@ export function registerNestedRepoImportHandler(
             })
             continue
           }
-          const findExisting = (localOnly = false): Repo | undefined =>
+          // Why: only a row on this machine can be the checkout this import just inspected; a
+          // runtime-host row at the same path belongs to that host, not to this registration.
+          const findExisting = (): Repo | undefined =>
             store
               .getRepos()
               .find(
                 (repo) =>
                   (repo.connectionId ?? null) === (args.connectionId ?? null) &&
-                  (!localOnly || getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID) &&
+                  getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
                   normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath
               )
           const group = groupResolver.getGroupForRepo(repoPath)
@@ -130,8 +132,7 @@ export function registerNestedRepoImportHandler(
             executionHostId: LOCAL_EXECUTION_HOST_ID
           })
           // Icon discovery is async, so the same repo may have been registered meanwhile.
-          // Only a local row can be the same checkout this import just inspected.
-          const raceWinner = findExisting(true)
+          const raceWinner = findExisting()
           if (raceWinner) {
             adoptKnownRepo(raceWinner)
             continue
