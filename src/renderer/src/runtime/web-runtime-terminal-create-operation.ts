@@ -10,7 +10,10 @@ import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
 } from './agent-session-create-operation'
-import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
+import {
+  assertRemoteAgentThinkingSupported,
+  runRemoteAgentSessionLaunch
+} from './remote-agent-session-launch'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { resolveWebRuntimeSessionEnvironmentId } from './web-runtime-session-workspace-routing'
@@ -127,14 +130,22 @@ export async function createWebRuntimeSessionTerminalResult(
                 )
             : undefined
           : async () =>
-              await createAgentSessionCreateOperation().run(async (clientOperationId) =>
-                readCreatedAgentTerminalIdentity(
+              await createAgentSessionCreateOperation().run(async (clientOperationId) => {
+                const keyboard = await keyboardOptions(environmentId)
+                if (agent === 'omp') {
+                  await assertRemoteAgentThinkingSupported({
+                    environmentId,
+                    agent,
+                    launchPreferences: args.launchPreferences
+                  })
+                }
+                return readCreatedAgentTerminalIdentity(
                   unwrapRuntimeRpcResult(
                     await callEnvironment({
                       method: 'terminal.createAgentSession',
                       params: withAgentSessionCreateOperationId(
                         {
-                          ...(await keyboardOptions(environmentId)),
+                          ...keyboard,
                           worktree: toRuntimeWorktreeSelector(args.worktreeId),
                           agent,
                           ...(args.prompt ? { prompt: args.prompt } : {}),
@@ -155,13 +166,15 @@ export async function createWebRuntimeSessionTerminalResult(
                     })
                   )
                 )
-              )
+              })
       const resumeHostAuthorityCapability =
         args.agentSessionKind === 'resume' ? agentResumeHostAuthorityCapability(agent) : undefined
       const created = await runRemoteAgentSessionLaunch<{
         terminal: CreatedAgentTerminalIdentity
       }>({
         environmentId,
+        agent,
+        launchPreferences: args.launchPreferences,
         ...(hostAuthority ? { hostAuthority } : {}),
         ...(resumeHostAuthorityCapability
           ? { hostAuthorityCapability: resumeHostAuthorityCapability }

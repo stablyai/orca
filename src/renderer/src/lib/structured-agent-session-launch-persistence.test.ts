@@ -162,6 +162,25 @@ describe('structured agent launch persistence', () => {
     })
   })
 
+  it("preserves another agent's config-default effort when restoring a paired-host launch", () => {
+    writeStructuredAgentLaunchRecord({
+      sessionId: 'grok_paired',
+      executionHostId: SERVER,
+      agent: 'grok',
+      lifecycle: 'pending',
+      clientOperationId: 'operation-grok',
+      payloadFingerprint: 'fingerprint-grok',
+      expectedRuntimeFence: null,
+      seedOptions: { model: 'custom/model', effort: 'config-default' }
+    })
+    reload()
+
+    expect(readStructuredAgentLaunchRecord('grok_paired')?.seedOptions).toEqual({
+      model: 'custom/model',
+      effort: 'config-default'
+    })
+  })
+
   it('stores only content-free identity and preserves operation identity', () => {
     writeStructuredAgentLaunchRecord({
       sessionId: 'claude_session',

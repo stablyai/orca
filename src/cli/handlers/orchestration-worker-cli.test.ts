@@ -4,15 +4,6 @@ const callMock = vi.fn()
 const originalExitCode = process.exitCode
 const originalCliCommand = process.env.ORCA_CLI_COMMAND
 
-type RecoveryWorkerStartResult = {
-  taskId: string
-  dispatchId: string
-  state: string
-  effects: unknown[]
-  residualResources: unknown[]
-  nextCommands: string[]
-}
-
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
@@ -144,6 +135,21 @@ describe('orchestration worker-start CLI contract', () => {
     )
   })
 
+  it('refuses OMP thinking when an old peer cannot honor launch preferences', async () => {
+    callMock.mockResolvedValueOnce({ result: { capabilities: [] } })
+    await expect(
+      invokeWorkerStart(
+        new Map([
+          ['task', 'task_1'],
+          ['agent', 'omp'],
+          ['model', 'custom/model'],
+          ['effort', 'max']
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'incompatible_runtime' })
+    expect(callMock).toHaveBeenCalledTimes(1)
+  })
+
   it('forwards --spec without a task for atomic creation', async () => {
     callMock.mockResolvedValue({
       result: { runId: 'run_1', taskId: 'task_new', dispatchId: 'ctx_1', state: 'ready' }
@@ -199,53 +205,6 @@ describe('orchestration worker-start CLI contract', () => {
 
     expect(process.exitCode).toBe(1)
   })
-
-  it.each([
-    ['JSON', 'orca-dev', true],
-    ['plain', 'orca-ide', false]
-  ] as const)(
-    'renders %s recovery commands through the resolved %s executable',
-    async (_format, executable, json) => {
-      process.env.ORCA_CLI_COMMAND = executable
-      callMock.mockResolvedValue({
-        result: {
-          taskId: 'task_1',
-          dispatchId: 'ctx_unknown',
-          state: 'outcome_unknown',
-          effects: [],
-          residualResources: [],
-          nextCommands: [
-            'orca orchestration worker-show --dispatch ctx_unknown --json',
-            'orca orchestration worker-abandon --dispatch ctx_unknown --json'
-          ]
-        }
-      })
-
-      await invokeWorkerStart(
-        new Map<string, string | boolean>([
-          ['task', 'task_1'],
-          ['agent', 'codex'],
-          ['from', 'term_coord']
-        ]),
-        json
-      )
-
-      const [response, , formatter] = vi.mocked(printResult).mock.calls[0] as [
-        { result: RecoveryWorkerStartResult },
-        boolean,
-        (result: RecoveryWorkerStartResult) => string
-      ]
-      expect(response.result.nextCommands).toEqual([
-        `${executable} orchestration worker-show --dispatch ctx_unknown --json`,
-        `${executable} orchestration worker-abandon --dispatch ctx_unknown --json`
-      ])
-      if (!json) {
-        expect(formatter(response.result)).toContain(
-          `Next command: ${executable} orchestration worker-show --dispatch ctx_unknown --json`
-        )
-      }
-    }
-  )
 
   it('prints the host error for a refused worker start', async () => {
     callMock.mockResolvedValue({

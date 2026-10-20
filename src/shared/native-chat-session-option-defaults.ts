@@ -6,6 +6,7 @@ import {
 } from './agent-chat-permission-mode'
 import type { GlobalSettings } from './global-settings-types'
 import { sessionOptionValueIsValid } from './agent-session-option-catalog'
+import { OMP_CONFIG_DEFAULT_THINKING } from './agent-session-option-catalog-omp'
 import type {
   NativeChatSessionOptionSettingsMutation,
   PersistedNativeChatSessionOptions,
@@ -31,6 +32,9 @@ export function resolveNativeChatSessionOptionDefaults(
   const storedValues = entry?.valuesByModel?.[modelId]
   if (storedValues && typeof storedValues === 'object') {
     for (const [id, value] of Object.entries(storedValues)) {
+      if (agent === 'omp' && id === 'effort' && value === OMP_CONFIG_DEFAULT_THINKING) {
+        continue
+      }
       if (sessionOptionValueIsValid(value)) {
         values[id] = value
       }
@@ -196,20 +200,27 @@ export function updateNativeChatSessionOptionDefaults(args: {
   adoptModelAsLaunchDefault?: boolean
 }): PersistedNativeChatSessionOptions {
   const currentAgent = args.persisted?.[args.agent]
-  const currentModelValues = currentAgent?.valuesByModel?.[args.modelId] ?? {}
+  const currentModelValues = { ...currentAgent?.valuesByModel?.[args.modelId] }
+  const resetsThinking =
+    args.agent === 'omp' && args.optionId === 'effort' && args.value === OMP_CONFIG_DEFAULT_THINKING
+  if (resetsThinking) {
+    delete currentModelValues.effort
+  } else if (args.optionId !== 'model') {
+    currentModelValues[args.optionId] = args.value
+  }
   const valuesByModel = {
     ...currentAgent?.valuesByModel,
     ...(args.optionId === 'model'
       ? {}
       : {
-          [args.modelId]: { ...currentModelValues, [args.optionId]: args.value }
+          [args.modelId]: currentModelValues
         })
   }
   return {
     ...args.persisted,
     [args.agent]: {
       ...currentAgent,
-      ...(args.adoptModelAsLaunchDefault === false
+      ...(resetsThinking || args.adoptModelAsLaunchDefault === false
         ? {}
         : { model: args.optionId === 'model' ? String(args.value) : args.modelId }),
       valuesByModel

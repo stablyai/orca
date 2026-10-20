@@ -11,6 +11,7 @@ import {
   resolveAgentSessionOptionLaunch
 } from './agent-session-option-launch'
 import type { TuiAgent } from './tui-agent'
+import { isOmpThinkingLevel } from './omp-model-list-probe'
 
 export type AgentLaunchModelPreferenceRefusal = {
   code: 'invalid_argument' | 'capability_unsupported'
@@ -56,6 +57,9 @@ export function checkAgentLaunchModelPreferences(args: {
     )
   }
 
+  if (args.agent === 'omp' && args.effort && !isOmpThinkingLevel(args.effort)) {
+    return refuse('invalid_argument', `OMP does not support thinking ${args.effort}.`)
+  }
   if (args.effort) {
     const model = findCatalogModel(catalog, args.model)
     const option =

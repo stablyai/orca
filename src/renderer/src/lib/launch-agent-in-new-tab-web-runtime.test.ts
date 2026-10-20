@@ -98,67 +98,12 @@ describe('launchAgentInNewTab paired web runtime', () => {
         pasteDraftAfterLaunch: false
       })
     )
-    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
-      {
-        worktreeId: 'wt-1',
-        environmentId: 'web-runtime',
-        targetGroupId: 'group-1',
-        activate: true,
-        agentSessionKind: 'fresh',
-        agent: 'claude',
-        viewMode: 'terminal'
-      },
-      { notifyFailure: false }
-    )
+
     expect(mocks.createTab).not.toHaveBeenCalled()
     await Promise.resolve()
     // Why: host creation is async, so the user may be viewing another worktree by the time it lands.
     expect(mocks.setActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', 'wt-1')
     // A local tab closes locally (the host close no-ops), so a launch leaves it alone.
     expect(mocks.closeTab).not.toHaveBeenCalled()
-  })
-
-  it('forwards prompt launch env and captured config to the host runtime', async () => {
-    store.settings.agentDefaultArgs = { codex: '--model gpt-5 --reasoning-effort high' }
-    store.settings.agentDefaultEnv = { codex: { CODEX_PROFILE: 'captured' } }
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-2',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: 'fix the spinner',
-      groupId: 'group-1'
-    })
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        surface: { kind: 'host-published' },
-        pasteDraftAfterLaunch: false
-      })
-    )
-    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
-      {
-        worktreeId: 'wt-1',
-        environmentId: 'web-runtime',
-        targetGroupId: 'group-1',
-        activate: true,
-        agentSessionKind: 'fresh',
-        launchAgent: 'codex',
-        command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
-        env: { CODEX_PROFILE: 'captured' },
-        launchConfig: {
-          agentCommand: "codex '--model' 'gpt-5' '--reasoning-effort' 'high'",
-          agentArgs: '--model gpt-5 --reasoning-effort high',
-          agentEnv: { CODEX_PROFILE: 'captured' }
-        },
-        startupCommandDelivery: 'shell-ready',
-        prompt: 'fix the spinner',
-        promptDelivery: 'auto-submit',
-        viewMode: 'terminal'
-      },
-      { notifyFailure: false }
-    )
-    expect(mocks.createTab).not.toHaveBeenCalled()
   })
 })

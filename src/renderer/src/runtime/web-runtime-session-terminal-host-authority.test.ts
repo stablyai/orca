@@ -17,6 +17,10 @@ import {
   stubTerminalCreateEnvironment
 } from './web-runtime-session-test-harness'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import { clearRuntimeCompatibilityCache } from './runtime-rpc-client'
+import { createRuntimeAgentBackgroundTerminal } from '../lib/runtime-agent-background-create'
+import { launchAgentInWebHostTab } from '../lib/launch-agent-web-host-tab'
+import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -627,5 +631,147 @@ describe('createWebRuntimeSessionTerminal', () => {
       agent: 'claude',
       text: 'https://github.com/o/r/issues/12'
     })
+  })
+
+  it.each(['background', 'web-host'] as const)(
+    'refuses %s OMP retry after the first host capability is invalidated',
+    async (lane) => {
+      let supportsThinking = true
+      let creates = 0
+      const runtimeCall = vi.fn(async (request: { method: string }) => {
+        if (request.method === 'status.get') {
+          return {
+            id: 'status',
+            ok: true,
+            result: {
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: [
+                'agent-session.host-authority.v1',
+                ...(supportsThinking ? ['agent.launch.omp-thinking.v1'] : [])
+              ]
+            }
+          }
+        }
+        if (request.method === 'terminal.createAgentSession') {
+          creates += 1
+          if (creates === 1) {
+            supportsThinking = false
+            clearRuntimeCompatibilityCache(ENVIRONMENT_ID)
+            throw new Error('connection closed before response')
+          }
+          return {
+            id: 'create',
+            ok: true,
+            result: {
+              terminal: {
+                handle: 'incorrect-replacement-create',
+                tabId: 'host-tab-replayed',
+                paneKey: `host-tab-replayed:${FOCUS_LEAF_ID}`
+              }
+            }
+          }
+        }
+        return { id: 'list', ok: true, result: makeSnapshot() }
+      })
+      stubRuntimeEnvironmentBridge({ call: runtimeCall })
+      const outcome =
+        lane === 'background'
+          ? await createRuntimeAgentBackgroundTerminal({
+              environmentId: ENVIRONMENT_ID,
+              worktreeId: WORKTREE_ID,
+              tabId: 'tab-1',
+              leafId: FOCUS_LEAF_ID,
+              agent: 'omp',
+              sessionOptions: { model: 'opus', effort: 'off' },
+              legacy: {
+                command: 'omp',
+                env: {},
+                launchConfig: { agentArgs: '', agentEnv: {} },
+                launchToken: 'owned-test-launch'
+              }
+            }).then(
+              () => 'created',
+              () => 'refused'
+            )
+          : (
+                await createWebRuntimeSessionTerminal({
+                  worktreeId: WORKTREE_ID,
+                  launchAgent: 'omp',
+                  launchPreferences: { model: 'opus', effort: 'off' }
+                })
+              ).status === 'failed'
+            ? 'refused'
+            : 'created'
+
+      expect(outcome).toBe('refused')
+      expect(creates).toBe(1)
+    }
+  )
+
+  it('preserves prepared OMP thinking argv for a promptless web legacy launch', async () => {
+    const state = mocks.getState()
+    mocks.getState.mockReturnValue({ ...state, setActiveTabType: vi.fn() })
+    const creates: {
+      command?: string
+      env?: Record<string, string>
+      launchConfig?: { agentEnv?: Record<string, string> | null; agentCommand?: string }
+      launchAgent?: string
+    }[] = []
+    const runtimeCall = vi.fn(
+      async (request: { method: string; params?: (typeof creates)[number] }) => {
+        if (request.method === 'status.get') {
+          return {
+            id: 'status',
+            ok: true,
+            result: {
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: ['agent.launch.omp-thinking.v1']
+            }
+          }
+        }
+        if (request.method === 'session.tabs.createTerminal') {
+          creates.push(request.params ?? {})
+          return { id: 'create', ok: true, result: { tab: { id: 'host-tab-1' } } }
+        }
+        return { id: 'list', ok: true, result: makeSnapshot() }
+      }
+    )
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
+    const startupPlan = buildAgentStartupPlan({
+      agent: 'omp',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      agentEnv: { OMP_TEST_CUSTOM_CONFIG_ROOT: '/host/custom-omp-config' },
+      sessionOptions: { model: 'anthropic/claude-opus-5-5', effort: 'off' }
+    })
+    if (!startupPlan) {
+      throw new Error('Missing OMP launch plan')
+    }
+
+    await launchAgentInWebHostTab({
+      agent: 'omp',
+      worktreeId: WORKTREE_ID,
+      environmentId: ENVIRONMENT_ID,
+      startupPlan,
+      prompt: '',
+      promptDelivery: 'auto-submit',
+      pastePromptAfterReady: null,
+      submitPastedPrompt: false
+    })
+
+    expect(creates).toHaveLength(1)
+    expect(creates[0].command).toMatch(/['"]?--thinking['"]?\s+['"]?off(?:['"]|\s|$)/)
+    expect(creates[0].command).toMatch(
+      /['"]?--model['"]?\s+['"]?anthropic\/claude-opus-5-5(?:['"]|\s|$)/
+    )
+    expect(creates[0].env?.OMP_TEST_CUSTOM_CONFIG_ROOT).toBe('/host/custom-omp-config')
+    expect(creates[0].launchAgent).toBe('omp')
+    expect(creates[0].launchConfig?.agentEnv?.OMP_TEST_CUSTOM_CONFIG_ROOT).toBe(
+      '/host/custom-omp-config'
+    )
   })
 })

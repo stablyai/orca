@@ -12,7 +12,10 @@ import {
 } from '@/runtime/agent-session-create-operation'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-launch'
+import {
+  assertRemoteAgentThinkingSupported,
+  runRemoteAgentSessionLaunch
+} from '@/runtime/remote-agent-session-launch'
 
 export async function createRuntimeAgentBackgroundTerminal(args: {
   environmentId: string
@@ -37,14 +40,24 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
   const launchPreferences = toAgentLaunchPreferences(args.sessionOptions)
   return await runRemoteAgentSessionLaunch({
     environmentId: args.environmentId,
+    agent: args.agent,
+    launchPreferences,
     hostAuthority: () =>
-      operation.run(async (clientOperationId) =>
-        callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
+      operation.run(async (clientOperationId) => {
+        const keyboard = await keyboardOptions(args.environmentId)
+        if (args.agent === 'omp') {
+          await assertRemoteAgentThinkingSupported({
+            environmentId: args.environmentId,
+            agent: args.agent,
+            launchPreferences
+          })
+        }
+        return callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
           { kind: 'environment', environmentId: args.environmentId },
           'terminal.createAgentSession',
           withAgentSessionCreateOperationId(
             {
-              ...(await keyboardOptions(args.environmentId)),
+              ...keyboard,
               worktree: toRuntimeWorktreeSelector(args.worktreeId),
               agent: args.agent,
               ...(args.prompt
@@ -59,7 +72,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
           ),
           { timeoutMs: 15_000 }
         )
-      ),
+      }),
     legacy: ({ skipCompatibilityCheck }) =>
       callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
         { kind: 'environment', environmentId: args.environmentId },

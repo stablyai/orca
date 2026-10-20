@@ -1,5 +1,6 @@
 import type { AgentType } from './agent-status-types'
 import { findCatalogModel, getAgentSessionOptionCatalog } from './agent-session-option-catalog'
+import { OMP_CONFIG_DEFAULT_THINKING } from './agent-session-option-catalog-omp'
 import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
 import type {
   AgentSessionOptionCatalog,
@@ -37,6 +38,13 @@ export function removeOverriddenAgentSessionArgs(
   const model = findCatalogModel(catalog, modelId)
   const modelOptions = model?.options ?? catalog.unknownModelOptions ?? []
   for (const option of modelOptions) {
+    if (
+      agent === 'omp' &&
+      option.id === 'effort' &&
+      values[option.id] === OMP_CONFIG_DEFAULT_THINKING
+    ) {
+      continue
+    }
     if (values[option.id] !== undefined && option.apply.removeAgentArgs) {
       result = option.apply.removeAgentArgs(result)
     }
@@ -63,6 +71,13 @@ export function resolveAgentSessionOptionLaunch(
   const modelValues = Object.fromEntries(
     modelOptions.flatMap((option) => {
       const explicitValue = values[option.id]
+      if (
+        agent === 'omp' &&
+        option.id === 'effort' &&
+        explicitValue === OMP_CONFIG_DEFAULT_THINKING
+      ) {
+        return []
+      }
       if (explicitValue !== undefined) {
         if (
           !model &&

@@ -129,6 +129,40 @@ describe('native chat session option enrichment', () => {
     expect(models.at(-1)).toMatchObject({ id: 'account-model' })
     expect(readNativeChatEnrichedModels('cursor', 'ssh:two')).toBeNull()
   })
+  it('keeps OMP terminal model discovery free of launch-only thinking options', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [
+        {
+          id: 'custom/model',
+          label: 'Model',
+          thinkingLevels: [
+            { id: 'low', label: 'Low' },
+            { id: 'high', label: 'High' }
+          ]
+        },
+        { id: 'custom/plain', label: 'Plain' }
+      ]
+    })
+    const discovered = await discoverNativeChatCatalogModels('omp', {
+      target: { kind: 'local' as const },
+      worktreeId: 'repo::/worktree',
+      worktreePath: '/worktree'
+    })
+    ensureNativeChatModelEnrichment({
+      agent: 'omp',
+      hostKey: 'local',
+      discover: async () => discovered
+    })
+    await vi.waitFor(() => expect(readNativeChatEnrichedModels('omp', 'local')).not.toBeNull())
+    expect(readNativeChatEnrichedModels('omp', 'local')).toEqual(discovered)
+    expect(readNativeChatEnrichedModels('omp', 'local')?.map(({ options }) => options)).toEqual([
+      [],
+      []
+    ])
+    expect(readNativeChatEnrichedModels('omp', 'ssh:other')).toBeNull()
+  })
 
   it('falls back permanently to the seed after a failed once-per-host probe', async () => {
     const discover = vi.fn().mockRejectedValue(new Error('offline'))

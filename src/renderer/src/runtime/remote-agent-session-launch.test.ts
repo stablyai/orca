@@ -34,6 +34,7 @@ describe('remote agent-session launch routing', () => {
     await expect(
       runRemoteAgentSessionLaunch({
         environmentId: 'env-1',
+        agent: 'claude',
         hostAuthority,
         hostAuthorityCapability: 'agent-session.omp-resume-path.v1',
         legacy
@@ -59,6 +60,7 @@ describe('remote agent-session launch routing', () => {
       await expect(
         runRemoteAgentSessionLaunch({
           environmentId: 'env-1',
+          agent,
           hostAuthority,
           hostAuthorityCapability: agentResumeHostAuthorityCapability(agent),
           legacy
@@ -82,6 +84,7 @@ describe('remote agent-session launch routing', () => {
       await expect(
         runRemoteAgentSessionLaunch({
           environmentId: 'env-1',
+          agent,
           hostAuthority,
           hostAuthorityCapability: agentResumeHostAuthorityCapability(agent),
           legacy
@@ -102,7 +105,12 @@ describe('remote agent-session launch routing', () => {
     mocks.supportsCapability.mockResolvedValue(false)
 
     await expect(
-      runRemoteAgentSessionLaunch({ environmentId: 'env-1', hostAuthority, legacy })
+      runRemoteAgentSessionLaunch({
+        environmentId: 'env-1',
+        agent: 'claude',
+        hostAuthority,
+        legacy
+      })
     ).resolves.toBe('legacy')
     expect(legacy).toHaveBeenCalledOnce()
     expect(hostAuthority).not.toHaveBeenCalled()
@@ -114,7 +122,12 @@ describe('remote agent-session launch routing', () => {
     mocks.supportsCapability.mockRejectedValue(new Error('status temporarily unavailable'))
 
     await expect(
-      runRemoteAgentSessionLaunch({ environmentId: 'env-1', hostAuthority, legacy })
+      runRemoteAgentSessionLaunch({
+        environmentId: 'env-1',
+        agent: 'claude',
+        hostAuthority,
+        legacy
+      })
     ).resolves.toBe('legacy')
     expect(legacy).toHaveBeenCalledOnce()
     expect(hostAuthority).not.toHaveBeenCalled()
@@ -130,6 +143,7 @@ describe('remote agent-session launch routing', () => {
     await expect(
       runRemoteAgentSessionLaunch({
         environmentId: 'env-1',
+        agent: 'claude',
         hostAuthority: vi.fn(),
         legacy
       })
@@ -145,6 +159,7 @@ describe('remote agent-session launch routing', () => {
     await expect(
       runRemoteAgentSessionLaunch({
         environmentId: 'env-1',
+        agent: 'claude',
         hostAuthority: vi.fn().mockRejectedValue(structuredError),
         legacy
       })
@@ -164,6 +179,7 @@ describe('remote agent-session launch routing', () => {
     await expect(
       runRemoteAgentSessionLaunch({
         environmentId: 'env-1',
+        agent: 'claude',
         hostAuthority: vi.fn().mockRejectedValue(legacyRequired),
         legacy
       })
@@ -183,6 +199,7 @@ describe('remote agent-session launch routing', () => {
     await expect(
       runRemoteAgentSessionLaunch({
         environmentId: 'env-1',
+        agent: 'claude',
         hostAuthority: vi.fn().mockRejectedValue(methodNotFound),
         legacy
       })
@@ -193,9 +210,87 @@ describe('remote agent-session launch routing', () => {
   it('uses legacy directly when no structured form exists', async () => {
     const legacy = vi.fn().mockResolvedValue('legacy')
 
-    await expect(runRemoteAgentSessionLaunch({ environmentId: 'env-1', legacy })).resolves.toBe(
-      'legacy'
-    )
+    await expect(
+      runRemoteAgentSessionLaunch({ environmentId: 'env-1', agent: 'claude', legacy })
+    ).resolves.toBe('legacy')
     expect(mocks.supportsCapability).not.toHaveBeenCalled()
   })
+
+  it.each([
+    { effort: 'off', hostAuthority: true },
+    { effort: 'auto', hostAuthority: true },
+    { effort: 'off', hostAuthority: false },
+    { effort: 'auto', hostAuthority: false }
+  ])(
+    'refuses unsupported OMP $effort before either launch path ($hostAuthority)',
+    async ({ effort, hostAuthority: hasHostAuthority }) => {
+      const hostAuthority = vi.fn().mockResolvedValue('host')
+      const legacy = vi.fn().mockResolvedValue('legacy')
+      mocks.supportsCapability.mockImplementation(
+        (_environmentId, capability) => capability === 'agent-session.host-authority.v1'
+      )
+
+      await expect(
+        runRemoteAgentSessionLaunch({
+          environmentId: 'env-1',
+          agent: 'omp',
+          launchPreferences: { model: 'anthropic/claude-opus-5-5', effort },
+          ...(hasHostAuthority ? { hostAuthority } : {}),
+          legacy
+        })
+      ).rejects.toThrow('cannot preserve OMP launch thinking')
+      expect(hostAuthority).not.toHaveBeenCalled()
+      expect(legacy).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not launch OMP with explicit thinking after a failed capability probe', async () => {
+    const unavailable = new Error('Host unavailable')
+    mocks.supportsCapability.mockRejectedValue(unavailable)
+    const legacy = vi.fn()
+    await expect(
+      runRemoteAgentSessionLaunch({
+        environmentId: 'env-1',
+        agent: 'omp',
+        launchPreferences: { model: 'opus', effort: 'off' },
+        legacy
+      })
+    ).rejects.toBe(unavailable)
+    expect(legacy).not.toHaveBeenCalled()
+  })
+
+  it('launches explicit OMP thinking when its execution host supports it', async () => {
+    mocks.supportsCapability.mockResolvedValue(true)
+    const hostAuthority = vi.fn().mockResolvedValue('host')
+    const legacy = vi.fn()
+    await expect(
+      runRemoteAgentSessionLaunch({
+        environmentId: 'env-1',
+        agent: 'omp',
+        launchPreferences: { model: 'opus', effort: 'off' },
+        hostAuthority,
+        legacy
+      })
+    ).resolves.toBe('host')
+    expect(legacy).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { agent: 'omp', launchPreferences: { model: 'opus' } },
+    { agent: 'claude', launchPreferences: { model: 'opus', effort: 'high' } }
+  ] as const)(
+    'preserves legacy compatibility for $agent without explicit OMP thinking',
+    async ({ agent, launchPreferences }) => {
+      const legacy = vi.fn().mockResolvedValue('legacy')
+      mocks.supportsCapability.mockResolvedValue(false)
+      await expect(
+        runRemoteAgentSessionLaunch({
+          environmentId: 'env-1',
+          agent,
+          launchPreferences,
+          legacy
+        })
+      ).resolves.toBe('legacy')
+    }
+  )
 })

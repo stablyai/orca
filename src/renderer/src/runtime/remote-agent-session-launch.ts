@@ -1,15 +1,40 @@
+import type { AgentLaunchPreferences } from '../../../shared/agent-session-host-authority'
+import { AGENT_LAUNCH_OMP_THINKING_RUNTIME_CAPABILITY } from '../../../shared/agent-launch-runtime-capability'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from '../../../shared/agent-session-host-authority'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { isRuntimeCompatBlockError } from './runtime-protocol-compat'
 
+export async function assertRemoteAgentThinkingSupported(args: {
+  environmentId: string
+  agent: TuiAgent
+  launchPreferences?: AgentLaunchPreferences
+}): Promise<void> {
+  if (
+    args.agent === 'omp' &&
+    args.launchPreferences?.effort !== undefined &&
+    !(await runtimeEnvironmentSupportsCapability(
+      args.environmentId,
+      AGENT_LAUNCH_OMP_THINKING_RUNTIME_CAPABILITY
+    ))
+  ) {
+    throw new Error(
+      'This Orca host cannot preserve OMP launch thinking. Update Orca on the execution host, or omit the thinking preference.'
+    )
+  }
+}
+
 export async function runRemoteAgentSessionLaunch<TResult>(args: {
   environmentId: string
+  agent: TuiAgent
+  launchPreferences?: AgentLaunchPreferences
   hostAuthority?: () => Promise<TResult>
   hostAuthorityCapability?: RuntimeCapability
   legacy: (options: { skipCompatibilityCheck: boolean }) => Promise<TResult>
 }): Promise<TResult> {
+  await assertRemoteAgentThinkingSupported(args)
   if (!args.hostAuthority) {
     return await args.legacy({ skipCompatibilityCheck: false })
   }

@@ -5,6 +5,48 @@ import { labelFromModelId } from './model-id-label'
 // default table output groups rows per provider and would need a brittle parser.
 export const OMP_MODEL_LIST_ARGS = ['models', '--json']
 
+export const OMP_THINKING_LEVELS = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+  'auto'
+] as const
+
+export function isOmpThinkingLevel(value: string): boolean {
+  return OMP_THINKING_LEVELS.some((level) => level === value)
+}
+
+/** The listing advertises efforts only; off and auto are OMP session policies. */
+export function ompThinkingLevels(
+  value: unknown
+): NonNullable<CommitMessageModel['thinkingLevels']> {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const efforts = new Set(
+    value.filter(
+      (level): level is string =>
+        typeof level === 'string' &&
+        isOmpThinkingLevel(level) &&
+        level !== 'off' &&
+        level !== 'auto'
+    )
+  )
+  if (efforts.size === 0) {
+    return []
+  }
+  return OMP_THINKING_LEVELS.filter(
+    (level) => level === 'off' || level === 'auto' || efforts.has(level)
+  ).map((id) => ({
+    id,
+    label: id === 'xhigh' ? 'Extra high' : id.charAt(0).toUpperCase() + id.slice(1)
+  }))
+}
+
 /** The outermost JSON value on stdout, or null when none parses. */
 function parseJsonObject(stdout: string): unknown {
   const trimmed = stdout.trim()
@@ -66,12 +108,14 @@ export function parseOmpModelList(stdout: string): CommitMessageModel[] {
       'contextWindow' in value && typeof value.contextWindow === 'number'
         ? value.contextWindow
         : null
+    const thinkingLevels = ompThinkingLevels('thinking' in value ? value.thinking : undefined)
     byId.set(id, {
       id,
       label: name || labelFromModelId(id),
       // Why: the same model name ships under several providers; the provider is
       // what tells two "DeepSeek V4 Pro" rows apart in the picker.
       ...(provider ? { description: provider } : {}),
+      ...(thinkingLevels.length ? { thinkingLevels } : {}),
       ...(contextWindow !== null && Number.isFinite(contextWindow) && contextWindow > 0
         ? { contextWindowTokens: contextWindow }
         : {})

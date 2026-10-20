@@ -11,6 +11,7 @@ import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_OMP_THINKING_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
 } from '../shared/agent-launch-runtime-capability'
 import { createStructuredAgentSessionOperationId } from '../shared/structured-agent-session-mutation'
@@ -120,6 +121,16 @@ export async function callAgentLaunch(
     throw new RuntimeClientError(
       'incompatible_runtime',
       'This Orca host cannot honor CLI launch focus or background behavior. Update Orca on the execution host.'
+    )
+  }
+  if (
+    launch.agent === 'omp' &&
+    launch.sessionOptions?.effort !== undefined &&
+    !capabilities.includes(AGENT_LAUNCH_OMP_THINKING_RUNTIME_CAPABILITY)
+  ) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'This Orca host cannot preserve OMP launch thinking. Update Orca on the execution host, or omit --effort.'
     )
   }
   const operationId = replaySupported

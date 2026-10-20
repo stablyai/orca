@@ -33,7 +33,7 @@ export type CommitMessageModel = {
   description?: string
   /** Omit when the model does not expose an effort selector — the UI then hides the dropdown. */
   thinkingLevels?: ThinkingLevel[]
-  /** Required when thinkingLevels is present. */
+  /** Omitted when the CLI's configured default is unknown. */
   defaultThinkingLevel?: string
   /** Whether the model exposes Claude's mid-session Fast mode toggle. */
   supportsFastMode?: boolean

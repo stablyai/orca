@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
-import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
+import {
+  removeOverriddenAgentSessionArgs,
+  resolveAgentSessionOptionLaunch
+} from './agent-session-option-launch'
 import { parseBuiltSessionOptionCommand } from './native-chat-session-option-commands'
-import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from './omp-model-list-probe'
+import { parseOmpModelList } from './omp-model-list-probe'
+import {
+  applyStructuredAgentSessionOptions,
+  createStructuredAgentSessionOptionState,
+  structuredAgentSessionOptionSnapshot
+} from './structured-agent-session-options'
 
 const LISTING = JSON.stringify({
   models: [
@@ -31,12 +38,10 @@ const LISTING = JSON.stringify({
 })
 
 describe('omp model list probe', () => {
-  it('asks omp for its machine-readable listing', () => {
-    expect(OMP_MODEL_LIST_ARGS).toEqual(['models', '--json'])
-  })
-
   it('parses selectors as ids, names as labels, and providers as descriptions', () => {
-    expect(parseOmpModelList(LISTING)).toEqual([
+    expect(
+      parseOmpModelList(LISTING).map(({ thinkingLevels: _thinking, ...model }) => model)
+    ).toEqual([
       { id: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro', description: 'deepseek' },
       { id: 'minimax-cn/MiniMax-M3', label: 'MiniMax M3', description: 'minimax-cn' },
       { id: 'openai/gpt-5.5', label: 'Openai GPT 5.5', description: 'openai' }
@@ -109,29 +114,135 @@ describe('omp model list probe', () => {
 })
 
 describe('omp session option catalog', () => {
-  it('is registered for the omp agent', () => {
-    expect(getAgentSessionOptionCatalog('omp')).toBe(OMP_SESSION_OPTION_CATALOG)
-  })
-
-  it('seeds no model because none is available on every install', () => {
-    expect(OMP_SESSION_OPTION_CATALOG.models).toEqual([])
-    expect(OMP_SESSION_OPTION_CATALOG.defaultModelIsCliDefault).toBeUndefined()
-    expect(OMP_SESSION_OPTION_CATALOG.discoveredModelsAreAuthoritative).toBe(true)
-  })
-
-  it('discovers models through the same JSON listing the probe parses', () => {
-    const listModels = OMP_SESSION_OPTION_CATALOG.listModels!
-    expect(listModels.command).toBe('omp models --json')
-    expect(listModels.parse(LISTING)).toEqual([
-      {
-        id: 'deepseek/deepseek-v4-pro',
-        label: 'DeepSeek V4 Pro',
-        description: 'deepseek',
-        options: []
-      },
-      { id: 'minimax-cn/MiniMax-M3', label: 'MiniMax M3', description: 'minimax-cn', options: [] },
-      { id: 'openai/gpt-5.5', label: 'Openai GPT 5.5', description: 'openai', options: [] }
+  it('does not invent OMP thinking choices for a reported model with no advertised metadata', () => {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('omp'),
+      { ...OMP_SESSION_OPTION_CATALOG },
+      { models: [], current: { model: 'opaque-model', effort: 'high' } }
+    )
+    expect(state.catalog?.models).toEqual([
+      { id: 'opaque-model', label: 'opaque-model', options: [] }
     ])
+    expect(
+      structuredAgentSessionOptionSnapshot(state).some((descriptor) => descriptor.id === 'effort')
+    ).toBe(false)
+  })
+
+  it('keeps model-specific native thinking choices without guessing a default', () => {
+    const models = parseOmpModelList(LISTING)
+    expect(models[0].thinkingLevels?.map(({ id }) => id)).toEqual([
+      'off',
+      'low',
+      'high',
+      'max',
+      'auto'
+    ])
+    expect(models[0].defaultThinkingLevel).toBeUndefined()
+    expect(models[1].thinkingLevels).toBeUndefined()
+    expect(models[2].thinkingLevels).toBeUndefined()
+    const options = OMP_SESSION_OPTION_CATALOG.listModels!.parse(LISTING)[0].options
+    expect(options[0].kind).toMatchObject({ defaultValue: 'config-default' })
+    expect(options[0].apply.midSession).toEqual({ kind: 'unsupported' })
+  })
+
+  it('drops malformed, duplicate, and foreign thinking values', () => {
+    const model = parseOmpModelList(
+      JSON.stringify({
+        models: [
+          {
+            provider: 'custom',
+            id: 'model',
+            thinking: ['high', 'high', 'ultra', 'turbo', null, 12]
+          }
+        ]
+      })
+    )[0]
+    expect(model.thinkingLevels?.map(({ id }) => id)).toEqual(['off', 'high', 'auto'])
+  })
+
+  it.each([
+    { thinking: undefined },
+    { thinking: null },
+    { thinking: [] },
+    { thinking: ['off', 'auto'] },
+    { thinking: ['ultra'] },
+    { thinking: 'high' }
+  ])('does not invent thinking capabilities from $thinking', ({ thinking }) => {
+    const listing = JSON.stringify({ models: [{ provider: 'custom', id: 'plain', thinking }] })
+    expect(parseOmpModelList(listing)[0].thinkingLevels).toBeUndefined()
+    expect(OMP_SESSION_OPTION_CATALOG.listModels!.parse(listing)[0].options).toEqual([])
+  })
+
+  it('keeps configured thinking unset and yields to explicit native launch flags', () => {
+    const model = 'custom/model'
+    expect(
+      resolveAgentSessionOptionLaunch('omp', { model, effort: 'config-default' }, [], true)
+    ).toEqual({
+      args: ['--model', model],
+      appliedValues: { model }
+    })
+    expect(
+      resolveAgentSessionOptionLaunch(
+        'omp',
+        { model, effort: 'high' },
+        ['--model=other/model', '--thinking=auto', '--no-extensions'],
+        false
+      )
+    ).toEqual({ args: [], appliedValues: {} })
+    expect(
+      removeOverriddenAgentSessionArgs('omp', { model, effort: 'config-default' }, [
+        '--thinking=high',
+        '--no-extensions',
+        '--',
+        '--thinking',
+        'low'
+      ])
+    ).toEqual(['--thinking=high', '--no-extensions', '--', '--thinking', 'low'])
+  })
+
+  it.each([undefined, 'config-default'])(
+    'preserves user-authored thinking arguments without an explicit override: %s',
+    (effort) => {
+      const tokens = ['--thinking=auto', '--no-extensions', '--', '--thinking', 'low']
+      const values = { model: 'provider/model:high', ...(effort ? { effort } : {}) }
+      expect(removeOverriddenAgentSessionArgs('omp', values, tokens)).toEqual(tokens)
+      expect(resolveAgentSessionOptionLaunch('omp', values, tokens, false)).toEqual({
+        args: ['--model', values.model],
+        appliedValues: { model: values.model }
+      })
+    }
+  )
+
+  it.each(['off', 'auto'])('passes explicit %s unchanged for native validation', (effort) => {
+    const picks = { model: 'provider/model:high', effort }
+    const tokens = ['--thinking=low', '--no-extensions']
+    const remaining = removeOverriddenAgentSessionArgs('omp', picks, tokens)
+    expect(remaining).toEqual(['--no-extensions'])
+    expect(resolveAgentSessionOptionLaunch('omp', picks, remaining, false)).toEqual({
+      args: ['--model', picks.model, '--thinking', effort],
+      appliedValues: picks
+    })
+  })
+
+  it('launches native thinking and removes conflicting free-form flags for explicit picks', () => {
+    const picks = { model: 'deepseek/deepseek-v4-pro', effort: 'max' }
+    expect(resolveAgentSessionOptionLaunch('omp', picks, [], false)).toEqual({
+      args: ['--model', picks.model, '--thinking', 'max'],
+      appliedValues: picks
+    })
+    const args = ['--thinking', 'low', '--thinking=auto', '--no-extensions']
+    expect(removeOverriddenAgentSessionArgs('omp', picks, args)).toEqual(['--no-extensions'])
+    expect(resolveAgentSessionOptionLaunch('omp', picks, args, false)).toEqual({
+      args: ['--model', picks.model],
+      appliedValues: { model: picks.model }
+    })
+    // Launch sees every selector as opaque; only native thinking levels may pass to OMP.
+    expect(
+      resolveAgentSessionOptionLaunch('omp', { ...picks, effort: 'ultra' }, [], false)
+    ).toEqual({
+      args: ['--model', picks.model],
+      appliedValues: { model: picks.model }
+    })
   })
 
   it('launches a picked model with --model <selector>', () => {

@@ -49,6 +49,9 @@ export const AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY =
 export const AGENT_LAUNCH_CREATE_FOLDER_WORKSPACE_RUNTIME_CAPABILITY =
   'agent.launch.create-folder-workspace.v1' as const
 
+// Host-advertised: OMP launch preferences preserve native thinking, including off and auto.
+export const AGENT_LAUNCH_OMP_THINKING_RUNTIME_CAPABILITY = 'agent.launch.omp-thinking.v1' as const
+
 // Client-advertised only: the client reads a listed launch tab with no terminal yet as "not
 // started", never as proof its agent runs. The host publishes a paired caller's tab before the
 // spawn only for a client that says so.
@@ -80,5 +83,6 @@ export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_CREATE_FOLDER_WORKSPACE_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_CREATE_FOLDER_WORKSPACE_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_OMP_THINKING_RUNTIME_CAPABILITY
 ] as const

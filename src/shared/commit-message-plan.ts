@@ -10,6 +10,7 @@ import {
 import { planCustomCommand, tokenizeCustomCommandTemplate } from './commit-message-prompt'
 import type { TuiAgent } from './tui-agent'
 import { mergeOpenCodeGenerationArgs } from './opencode-generation-command'
+import { isOmpThinkingLevel } from './omp-model-list-probe'
 
 // Why: planning is a pure transformation from "user request + prompt text"
 // into "spawn-ready binary + argv". Keeping it in shared lets both the local
@@ -235,6 +236,9 @@ export function planCommitMessageGeneration(
     return { ok: false, error: `Model "${input.model}" is not available for ${spec.label}.` }
   }
   if (input.thinkingLevel) {
+    if (input.agentId === 'omp' && !isOmpThinkingLevel(input.thinkingLevel)) {
+      return { ok: false, error: `OMP does not support thinking "${input.thinkingLevel}".` }
+    }
     if (!model.thinkingLevels && spec.modelSource !== 'dynamic') {
       return {
         ok: false,

@@ -45,6 +45,10 @@ import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 import { agentLaunchFixture, agentLaunchHostFixture } from './agent-launch-test-fixtures'
+import {
+  AGENT_LAUNCH_OMP_THINKING_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITIES
+} from '../shared/agent-launch-runtime-capability'
 
 const WORKTREE_ID = 'repo-1::/tmp/repo'
 
@@ -113,6 +117,35 @@ describe('orca cli agent launch', () => {
     })
     expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).result.receipt.reason).toBe('user_default')
   })
+
+  it.each(['off', 'auto', 'high'])(
+    'refuses OMP thinking %s before an older host can silently drop it',
+    async (effort) => {
+      queueFixtures(
+        callMock,
+        okFixture('req_status', {
+          capabilities: AGENT_LAUNCH_RUNTIME_CAPABILITIES.filter(
+            (capability) => capability !== AGENT_LAUNCH_OMP_THINKING_RUNTIME_CAPABILITY
+          )
+        })
+      )
+      const output = await runRefused([
+        'agent',
+        'launch',
+        '--agent',
+        'omp',
+        '--model',
+        'anthropic/claude-opus-5-5',
+        '--effort',
+        effort,
+        '--worktree',
+        `id:${WORKTREE_ID}`,
+        '--json'
+      ])
+      expect(output).toContain('cannot preserve OMP launch thinking')
+      expect(launchCalls()).toEqual([])
+    }
+  )
 
   it('switches to the new tab only with --focus', async () => {
     queueFixtures(callMock, agentLaunchHostFixture(), agentLaunchFixture(WORKTREE_ID))

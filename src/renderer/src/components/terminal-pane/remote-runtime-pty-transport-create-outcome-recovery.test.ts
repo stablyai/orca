@@ -18,6 +18,7 @@ import {
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
+import type { PtyTransport } from './pty-transport-types'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -322,4 +323,256 @@ describe('createRemoteRuntimePtyTransport', () => {
       vi.useRealTimers()
     }
   })
+
+  it('refuses OMP thinking replay when the replacement host cannot preserve it', async () => {
+    vi.useFakeTimers()
+    let transport: PtyTransport | undefined
+    try {
+      let supportsThinking = true
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'status.get') {
+          return {
+            ok: true,
+            result: {
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: [
+                'agent-session.host-authority.v1',
+                ...(supportsThinking ? ['agent.launch.omp-thinking.v1'] : [])
+              ]
+            }
+          }
+        }
+        throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+          code: 'runtime_timeout'
+        })
+      })
+      // Reset modules gives each transport a fresh runtime capability cache.
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        launchAgent: 'omp',
+        agentLaunchPreferences: { model: 'opus', effort: 'off' }
+      })
+      const connect = transport.connect({ url: '', callbacks: { onError } })
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+      await connect
+      const initialCreates = runtimeCall.mock.calls.filter(
+        ([args]) => args.method === 'terminal.createAgentSession'
+      ).length
+      expect(initialCreates).toBeGreaterThan(0)
+
+      supportsThinking = false
+      expect(transport.retryRecovery?.()).toBe(true)
+      await vi.waitFor(() => expect(onError).toHaveBeenCalled())
+      expect(
+        runtimeCall.mock.calls.filter(([args]) => args.method === 'terminal.createAgentSession')
+      ).toHaveLength(initialCreates)
+      expect(runtimeCall.mock.calls.some(([args]) => args.method === 'terminal.create')).toBe(false)
+      expect(transport.getPtyId()).toBeNull()
+    } finally {
+      transport?.destroy?.()
+      vi.useRealTimers()
+    }
+  })
+
+  it('refuses automatic OMP replay after pairing invalidates the first host capability', async () => {
+    vi.useFakeTimers()
+    let transport: PtyTransport | undefined
+    try {
+      // Each fixture reloads the transport and its production capability cache together.
+      const { clearRuntimeCompatibilityCache } = await import('../../runtime/runtime-rpc-client')
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      let supportsThinking = true
+      let creates = 0
+      const operationIds: (string | undefined)[] = []
+      runtimeCall.mockImplementation(
+        async (args: { method: string; params?: { clientOperationId?: string } }) => {
+          if (args.method === 'status.get') {
+            return {
+              ok: true,
+              result: {
+                runtimeProtocolVersion: 3,
+                minCompatibleRuntimeClientVersion: 2,
+                capabilities: [
+                  'agent-session.host-authority.v1',
+                  ...(supportsThinking ? ['agent.launch.omp-thinking.v1'] : [])
+                ]
+              }
+            }
+          }
+          if (args.method === 'terminal.createAgentSession') {
+            creates += 1
+            operationIds.push(args.params?.clientOperationId)
+            if (creates === 1) {
+              supportsThinking = false
+              clearRuntimeCompatibilityCache('env-1')
+            } else {
+              return {
+                ok: true,
+                result: {
+                  disposition: 'replayed',
+                  terminal: { handle: 'terminal-thinking-replayed' }
+                }
+              }
+            }
+          }
+          throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+            code: 'runtime_timeout'
+          })
+        }
+      )
+      const onError = vi.fn()
+      transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        launchAgent: 'omp',
+        agentLaunchPreferences: { model: 'opus', effort: 'off' }
+      })
+      const connect = transport.connect({ url: '', callbacks: { onError } })
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+      await connect
+
+      expect(creates).toBe(1)
+      expect(onError).toHaveBeenCalled()
+      expect(runtimeCall.mock.calls.some(([args]) => args.method === 'terminal.create')).toBe(false)
+      expect(transport.getPtyId()).toBeNull()
+
+      supportsThinking = true
+      clearRuntimeCompatibilityCache('env-1')
+      expect(transport.retryRecovery?.()).toBe(true)
+      const replayTransport = transport
+      await vi.waitFor(() =>
+        expect(replayTransport.getPtyId()).toBe('remote:env-1@@terminal-thinking-replayed')
+      )
+      expect(operationIds[0]).toMatch(/\S+/)
+      expect(operationIds).toEqual([operationIds[0], operationIds[0]])
+    } finally {
+      transport?.destroy?.()
+      vi.useRealTimers()
+    }
+  })
+
+  it('refuses automatic legacy OMP create after thinking capability is invalidated', async () => {
+    vi.useFakeTimers()
+    let transport: PtyTransport | undefined
+    try {
+      // Pairing invalidation must affect the same production cache used by this transport.
+      const { clearRuntimeCompatibilityCache } = await import('../../runtime/runtime-rpc-client')
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      let supportsThinking = true
+      let creates = 0
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'status.get') {
+          return {
+            ok: true,
+            result: {
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: [
+                TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+                ...(supportsThinking ? ['agent.launch.omp-thinking.v1'] : [])
+              ]
+            }
+          }
+        }
+        if (args.method === 'terminal.create') {
+          creates += 1
+          if (creates === 1) {
+            supportsThinking = false
+            clearRuntimeCompatibilityCache('env-1')
+            throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+              code: 'runtime_timeout'
+            })
+          }
+          return { ok: true, result: { terminal: { handle: 'incorrect-legacy-create' } } }
+        }
+        return { ok: true, result: {} }
+      })
+      const onError = vi.fn()
+      transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        launchAgent: 'omp',
+        agentLaunchPreferences: { model: 'opus', effort: 'off' }
+      })
+      const connect = transport.connect({ url: '', callbacks: { onError } })
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+      await connect
+      expect(creates).toBe(1)
+      expect(onError).toHaveBeenCalled()
+      expect(transport.getPtyId()).toBeNull()
+    } finally {
+      transport?.destroy?.()
+      vi.useRealTimers()
+    }
+  })
+
+  it.each(['host-authority', 'legacy'] as const)(
+    'does not invent uncertain %s creation when only the thinking preflight times out',
+    async (lane) => {
+      vi.useFakeTimers()
+      let transport: PtyTransport | undefined
+      try {
+        let statusCalls = 0
+        const creates: { method: string; params?: { reconcileExisting?: boolean } }[] = []
+        runtimeCall.mockImplementation(
+          async (args: { method: string; params?: { reconcileExisting?: boolean } }) => {
+            if (args.method === 'status.get') {
+              statusCalls += 1
+              if (statusCalls > 1) {
+                throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+                  code: 'runtime_timeout'
+                })
+              }
+              return {
+                ok: true,
+                result: {
+                  runtimeProtocolVersion: 3,
+                  minCompatibleRuntimeClientVersion: 2,
+                  capabilities: [
+                    'agent.launch.omp-thinking.v1',
+                    TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+                    ...(lane === 'host-authority' ? ['agent-session.host-authority.v1'] : [])
+                  ]
+                }
+              }
+            }
+            if (
+              args.method === 'terminal.create' ||
+              args.method === 'terminal.createAgentSession'
+            ) {
+              creates.push(args)
+              return { ok: true, result: { terminal: { handle: 'terminal-after-preflight' } } }
+            }
+            return { ok: true, result: {} }
+          }
+        )
+        // Reloaded transport and capability cache are paired by the fixture.
+        const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+        transport = createRemoteRuntimePtyTransport('env-1', {
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          leafId: 'pane:1',
+          launchAgent: 'omp',
+          terminalKittyKeyboardProtocol: true,
+          agentLaunchPreferences: { model: 'opus', effort: 'off' }
+        })
+        const options = { url: '', callbacks: {} }
+        const first = transport.connect(options)
+        await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+        await first
+        expect(creates).toEqual([])
+        expect(transport.retryRecovery?.()).toBe(false)
+      } finally {
+        transport?.destroy?.()
+        vi.useRealTimers()
+      }
+    }
+  )
 })

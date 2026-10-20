@@ -68,6 +68,8 @@ export type AgentSessionOptionCatalog = {
    * must be able to drop it rather than only add. Membership only — option menus
    * still come from the seed. */
   discoveredModelsAreAuthoritative?: true
+  /** Live model rows own their option menus; opaque worker launch options remain separate. */
+  liveModelOptionsAreAuthoritative?: true
   /** Set only when the `isDefault` model is provably what the CLI runs with no model
    * flag, so an untouched draft may show it as selected. Off means `isDefault` stays
    * decorative: agents whose default comes from account or user config would otherwise

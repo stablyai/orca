@@ -77,6 +77,26 @@ describe('mobile OMP model discovery and picker choices', () => {
       ])
     })
   })
+  it('does not add launch-only thinking options to terminal model choices', async () => {
+    await mount({
+      sendRequest: vi.fn(async () =>
+        reply({
+          ...listed,
+          models: [
+            {
+              id: reportedModel,
+              label: 'Current',
+              thinkingLevels: [
+                { id: 'low', label: 'Low' },
+                { id: 'high', label: 'High' }
+              ]
+            }
+          ]
+        })
+      )
+    })
+    expect(snapshot.map(({ id }) => id)).toEqual(['model'])
+  })
   it('makes discovered choices selectable only after the live extension advertises support', async () => {
     await mount({ sendRequest: vi.fn(async () => reply(listed)) })
     expect(snapshot[0]?.settable).toBe(true)

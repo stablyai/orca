@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyNativeChatSessionOptionSettingsMutation,
   clearNativeChatSessionOptionModel,
   narrowStructuredLaunchSeedOptions,
   resolveNativeChatSessionOptionDefaults,
@@ -184,4 +185,73 @@ describe('narrowStructuredLaunchSeedOptions', () => {
     // error the client reads as unknown, stranding the launch with no fallback.
     expect(narrowStructuredLaunchSeedOptions(values as never)).toBeUndefined()
   })
+})
+
+describe('OMP configured thinking default', () => {
+  const model = 'custom/model'
+  const persisted: PersistedNativeChatSessionOptions = {
+    omp: {
+      model,
+      valuesByModel: {
+        [model]: { effort: 'high', serviceTier: 'standard' },
+        'other/model': { effort: 'off' }
+      }
+    },
+    codex: { model: 'gpt-5.6-sol', valuesByModel: {} }
+  }
+
+  it.each([undefined, 'other/model'])(
+    'removes only the thinking override without adopting its model over %s',
+    (savedModel) => {
+      const starting = { ...persisted, omp: { ...persisted.omp, model: savedModel } }
+      const reset = applyNativeChatSessionOptionSettingsMutation(starting, {
+        type: 'apply-picks',
+        agent: 'omp',
+        picks: [{ modelId: model, optionId: 'effort', value: 'config-default' }]
+      })
+      expect(reset?.omp?.valuesByModel?.[model]).toEqual({ serviceTier: 'standard' })
+      expect(reset?.omp?.valuesByModel?.['other/model']).toEqual({ effort: 'off' })
+      expect(reset?.codex).toEqual(persisted.codex)
+      expect(persisted.omp?.valuesByModel?.[model]?.effort).toBe('high')
+      expect(resolveStructuredLaunchSeedOptions(reset, 'omp')).toEqual(
+        savedModel ? { model: savedModel, effort: 'off' } : undefined
+      )
+    }
+  )
+
+  it('drops a legacy sentinel from OMP saved preferences before encoding startup records', () => {
+    const legacy = {
+      omp: { model, valuesByModel: { [model]: { effort: 'config-default' } } }
+    }
+    expect(resolveNativeChatSessionOptionDefaults(legacy, 'omp')).toEqual({ model })
+    expect(resolveStructuredLaunchSeedOptions(legacy, 'omp')).toEqual({ model })
+  })
+
+  it('preserves another agent’s identically named effort through default resolution and seed encoding', () => {
+    const selected: PersistedNativeChatSessionOptions = {
+      grok: { model, valuesByModel: { [model]: { effort: 'config-default' } } }
+    }
+    expect(resolveStructuredLaunchSeedOptions(selected, 'grok')).toEqual({
+      model,
+      effort: 'config-default'
+    })
+  })
+
+  it.each(['off', 'auto'])(
+    'retains an explicit native %s preference in startup seeds',
+    (effort) => {
+      const selected = updateNativeChatSessionOptionDefaults({
+        persisted,
+        agent: 'omp',
+        modelId: model,
+        optionId: 'effort',
+        value: effort
+      })
+      expect(resolveStructuredLaunchSeedOptions(selected, 'omp')).toEqual({
+        model,
+        effort,
+        serviceTier: 'standard'
+      })
+    }
+  )
 })

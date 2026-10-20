@@ -41,7 +41,7 @@ export function structuredAgentSessionOptionCatalog(
     models.push({
       id: result.current.model,
       label: result.current.model,
-      options: seed.unknownModelOptions ?? []
+      options: seed.liveModelOptionsAreAuthoritative ? [] : (seed.unknownModelOptions ?? [])
     })
   }
   return { ...seed, models, defaultModelIsCliDefault: true }

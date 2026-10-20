@@ -39,15 +39,37 @@ describe('orchestration worker launch preferences', () => {
     })
   })
 
-  it('rejects OMP effort until its model options support it', () => {
-    expect(() =>
-      resolveWorkerLaunchPreferences({
-        agent: 'omp',
-        model: 'google-vertex/claude-haiku-4-5@20251001',
-        effort: 'low'
-      })
-    ).toThrow('does not support effort low')
-  })
+  it.each(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'])(
+    'passes native OMP thinking %s without translating it into Codex effort',
+    (effort) => {
+      const model = 'custom/model'
+      const launch = resolveWorkerLaunchPreferences({ agent: 'omp', model, effort })
+      expect(launch.preferences).toEqual({ model, effort })
+      expect(resolveAgentSessionOptionLaunch('omp', launch.preferences, [], false).args).toEqual([
+        '--model',
+        model,
+        '--thinking',
+        effort
+      ])
+      expect(() =>
+        assertWorkerLaunchPreferencesRuntimeSupported({
+          model,
+          effort,
+          capabilities: [],
+          serverName: 'older-host'
+        })
+      ).toThrow()
+    }
+  )
+
+  it.each(['ultra', 'turbo', 'config-default', 'inherit'])(
+    'rejects non-native OMP thinking %s',
+    (effort) => {
+      expect(() =>
+        resolveWorkerLaunchPreferences({ agent: 'omp', model: 'custom/model', effort })
+      ).toThrow(`OMP does not support thinking ${effort}`)
+    }
+  )
 
   it('passes an opaque Claude model and portable effort through the shared catalog', () => {
     expect(
