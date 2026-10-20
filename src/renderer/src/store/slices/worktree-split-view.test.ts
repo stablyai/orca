@@ -4,6 +4,7 @@ import {
   clampWorktreeSplitViewRatio,
   isWorktreeSurfaceShown,
   selectWorktreeSplitPartnerId,
+  splitViewPairAfterActivation,
   splitViewPairAfterHostTwinPurge,
   splitViewPairAfterRemoval,
   splitViewPairAfterRename
@@ -88,6 +89,22 @@ describe('worktree split view', () => {
     expect(splitViewPairAfterHostTwinPurge({ worktreeSplitViewPair }, twins, 'ssh:other')).toEqual(
       {}
     )
+  })
+
+  it('ends the split only when activation leaves the pair', () => {
+    const worktreeSplitViewPair = {
+      leftWorktreeId: 'wt-a',
+      leftExecutionHostId: null,
+      rightWorktreeId: 'wt-b',
+      rightExecutionHostId: null
+    }
+    expect(splitViewPairAfterActivation({ worktreeSplitViewPair }, 'wt-a')).toEqual({})
+    expect(splitViewPairAfterActivation({ worktreeSplitViewPair }, 'wt-c')).toEqual({
+      worktreeSplitViewPair: null
+    })
+    expect(splitViewPairAfterActivation({ worktreeSplitViewPair }, null)).toEqual({
+      worktreeSplitViewPair: null
+    })
   })
 
   it('clamps the divider ratio', () => {

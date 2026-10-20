@@ -38,6 +38,7 @@ export function TerminalSplitWorkspaceSurfaces({
   const splitViewPair = useAppStore((state) => state.worktreeSplitViewPair)
   const splitViewRatio = useAppStore((state) => state.worktreeSplitViewRatio)
   const setWorktreeSplitViewRatio = useAppStore((state) => state.setWorktreeSplitViewRatio)
+  const closeWorktreeSplitView = useAppStore((state) => state.closeWorktreeSplitView)
   // Why: this and TerminalSurface are both strict ancestors of every browser <webview>, so a
   // remote controller needs each to drop `hidden` — the per-worktree surface hatch below cannot
   // override an ancestor that stopped compositing.
@@ -133,7 +134,12 @@ export function TerminalSplitWorkspaceSurfaces({
             />
           )
         })}
-      {isSplitShown ? <WorktreeSplitViewDivider onRatioCommit={setWorktreeSplitViewRatio} /> : null}
+      {isSplitShown ? (
+        <WorktreeSplitViewDivider
+          onRatioCommit={setWorktreeSplitViewRatio}
+          onClose={closeWorktreeSplitView}
+        />
+      ) : null}
     </div>
   )
 }

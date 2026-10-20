@@ -102,6 +102,16 @@ export function splitViewPairAfterHostTwinPurge(
     : {}
 }
 
+/** State patch that ends the split once the user activates a worktree outside the pair. */
+export function splitViewPairAfterActivation(
+  s: Partial<Pick<AppState, 'worktreeSplitViewPair'>>,
+  worktreeId: string | null
+): Partial<Pick<AppState, 'worktreeSplitViewPair'>> {
+  return s.worktreeSplitViewPair && !isWorktreeInSplitViewPair(s.worktreeSplitViewPair, worktreeId)
+    ? { worktreeSplitViewPair: null }
+    : {}
+}
+
 /** State patch that re-points a side after a worktree id changes. */
 export function splitViewPairAfterRename(
   s: Pick<AppState, 'worktreeSplitViewPair'>,

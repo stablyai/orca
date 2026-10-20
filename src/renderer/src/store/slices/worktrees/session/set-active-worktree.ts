@@ -18,6 +18,7 @@ import {
 } from '../../../../../../shared/workspace-scope'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { resolveActivatedWorktreeSurface } from './active-worktree-surface'
+import { splitViewPairAfterActivation } from '../../worktree-split-view'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import {
   pendingActivationTerminalPrepCancels,
@@ -68,6 +69,7 @@ export function createSetActiveWorktree(
       if (!worktreeId) {
         return {
           ...stateTransition?.patch,
+          ...splitViewPairAfterActivation(s, null),
           activeWorktreeId: null,
           activeWorkspaceKey: null,
           activeWorkspaceExecutionHostId: null,
@@ -163,7 +165,8 @@ export function createSetActiveWorktree(
         rightSidebarExplorerView: restoredRightSidebarExplorerView,
         activeTabId,
         everActivatedWorktreeIds: nextEverActivated,
-        ...tabsByWorktreeUpdate
+        ...tabsByWorktreeUpdate,
+        ...splitViewPairAfterActivation(s, worktreeId)
       }
     })
 
