@@ -142,6 +142,7 @@ import { ClientEventsUnsubscribeParams } from './client-events-params'
 import {
   NativeChatSessionOptionsMutation,
   PRBotAuthorOverrideUpdate,
+  SettingsGetParams,
   SettingsUpdate
 } from './client-settings-params'
 import { FeatureInteractionIdParam, UiUpdate } from './client-ui-params'
@@ -495,6 +496,10 @@ import {
   RepoSparsePresetSave,
   RepoUpdate
 } from './repo-params'
+import {
+  RepositoryAddScriptDecideParams,
+  RepositoryAddScriptIdentityParams
+} from './repository-add-script-params'
 import { BrowserTarget } from './rpc-param-primitives'
 import { ClientCapabilitiesUpdate } from './runtime-client-capabilities-params'
 import { SessionTabsUnsubscribeAllParams } from './session-tabs-params'
@@ -1263,6 +1268,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.show': RepoShow,
   'repo.sparsePresets': RepoSelector,
   'repo.update': RepoUpdate,
+  'repositoryAddScript.decide': RepositoryAddScriptDecideParams,
+  'repositoryAddScript.outcome': RepositoryAddScriptIdentityParams,
   'runtime.automaticWork.resume': null,
   'runtime.automaticWork.status': null,
   'runtime.clientCapabilities.update': ClientCapabilitiesUpdate,
@@ -1281,7 +1288,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'session.tabs.unsubscribe': SessionTabsUnsubscribe,
   'session.tabs.unsubscribeAll': SessionTabsUnsubscribeAllParams,
   'session.tabs.updatePaneLayout': UpdatePaneLayout,
-  'settings.get': null,
+  'settings.get': SettingsGetParams,
   'settings.getAgentLaunch': null,
   'settings.getTerminalQuickCommands': null,
   'settings.mutateAgentLaunch': AgentLaunchSettingsMutation,

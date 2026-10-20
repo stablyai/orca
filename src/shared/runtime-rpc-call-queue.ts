@@ -1,5 +1,6 @@
 import { abortSignalReason } from './abort-signal-reason'
 import { REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES } from './remote-runtime-memory-limits'
+import { REPOSITORY_ADD_SCRIPT_DECIDE_METHOD } from './repository-add-script-wire'
 
 const DEFAULT_REMOTE_RUNTIME_CALL_CONCURRENCY = 8
 const DEFAULT_REMOTE_RUNTIME_BACKGROUND_CALL_CONCURRENCY = 2
@@ -52,10 +53,15 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
 }
 
 // Why its own lane: these reply only when slow host work finishes (worktree.rm when Git has deleted
-// the checkout, a model catalog read that waits on the first listing), so they would hold the
+// the checkout, a model catalog read that waits on the first listing, an add-script run that
+// answers when the script ends), so they would hold the
 // foreground slots listing refreshes and sends need; the background lane's slots belong to status.
 function isLongWaitRuntimeMethod(method: string): boolean {
-  return method === 'worktree.rm' || method === 'agentSession.modelCatalog'
+  return (
+    method === 'worktree.rm' ||
+    method === 'agentSession.modelCatalog' ||
+    method === REPOSITORY_ADD_SCRIPT_DECIDE_METHOD
+  )
 }
 
 export class RuntimeRpcCallQueuePool {

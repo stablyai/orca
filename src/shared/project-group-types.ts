@@ -1,3 +1,5 @@
+import type { RepositoryAddScriptPreview } from './repository-add-script-types'
+
 export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
 
 export type ProjectGroup = {
@@ -57,4 +59,6 @@ export type ProjectGroupImportResult = {
   importedCount: number
   alreadyKnownCount: number
   failedCount: number
+  // One per row this import inserted and the caller opted in for; never shaped into `projects`.
+  repositoryAddScriptPreviews?: RepositoryAddScriptPreview[]
 }

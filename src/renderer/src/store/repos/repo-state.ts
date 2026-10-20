@@ -181,8 +181,10 @@ export type RepoSlice = {
     kind?: 'git' | 'folder',
     options?: AddRepoPathOptions
   ) => Promise<Repo | null>
+  /** `offerAddScript: false` for a follow-up that must not mint a second add-script preview. */
   setupProjectExistingFolder: (
-    args: ProjectHostSetupExistingFolderArgs
+    args: ProjectHostSetupExistingFolderArgs,
+    options?: { offerAddScript?: boolean }
   ) => Promise<ProjectHostSetupResult | null>
   createProjectHostSetup: (
     args: ProjectHostSetupCreateArgs

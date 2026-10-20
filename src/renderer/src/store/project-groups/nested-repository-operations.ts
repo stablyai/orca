@@ -7,6 +7,8 @@ import type {
 } from '../../../../shared/project-group-types'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import { resolveRuntimeRepositoryAddScriptRequest } from '../../runtime/runtime-repository-add-script'
+import { offerRegistrationAddScript } from '../repos/repository-add-script-offer'
 import { translate } from '@/i18n/i18n'
 import type { RepoSlice } from '../repos/repo-state'
 
@@ -81,9 +83,13 @@ export function createNestedRepositoryActions(
     importNestedRepos: async (args) => {
       try {
         const target = runtimeTargetForOwnerEnvironment(args.runtimeEnvironmentId)
+        const request = await resolveRuntimeRepositoryAddScriptRequest(target)
         const result =
           target.kind === 'local'
-            ? await window.api.projectGroups.importNested(args)
+            ? await window.api.projectGroups.importNested({
+                ...args,
+                ...(request ? { repositoryAddScriptPreview: request } : {})
+              })
             : await callRuntimeRpc<ProjectGroupImportResult>(
                 target,
                 'projectGroup.importNested',
@@ -92,10 +98,23 @@ export function createNestedRepositoryActions(
                   groupName: args.groupName,
                   projectPaths: args.projectPaths,
                   scanId: args.scanId,
-                  mode: args.mode
+                  mode: args.mode,
+                  ...(request ? { repositoryAddScriptPreview: request } : {})
                 },
                 { timeoutMs: 60_000 }
               )
+        // Why before the catalog refreshes: a refresh may fail, but the offer was still earned.
+        // Why repo ids: a selected linked worktree registers under its main worktree path.
+        const importedRepoIds = new Set(
+          result.projects.flatMap((project) =>
+            project.status === 'imported' && project.projectId ? [project.projectId] : []
+          )
+        )
+        for (const preview of result.repositoryAddScriptPreviews ?? []) {
+          if (importedRepoIds.has(preview.repoId)) {
+            offerRegistrationAddScript(request, preview.repoId, preview)
+          }
+        }
         const catalogOptions = { runtimeEnvironmentId: args.runtimeEnvironmentId }
         await get().fetchProjectGroups(catalogOptions)
         await get().fetchFolderWorkspaces(catalogOptions)

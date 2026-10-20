@@ -14,6 +14,7 @@ import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../shared/source-control-ai
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-options'
+import { normalizeStoredRepositoryAddScript } from '../../shared/repository-add-script-settings'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
@@ -29,6 +30,7 @@ import {
 import { agentLaunchSettingsRollbackUpdates } from './agent-launch-settings-rollback'
 import type {
   RuntimeClientSettings,
+  RuntimeClientSettingsReadOptions,
   RuntimeClientSettingsUpdate,
   RuntimeClientSourceControlAi,
   RuntimeHostDisplayLabelOverrides
@@ -46,7 +48,7 @@ export class RuntimeClientSettingsController {
     private readonly notifyReposChanged: (() => void) | undefined = undefined
   ) {}
 
-  get(): RuntimeClientSettings {
+  get(options: RuntimeClientSettingsReadOptions = {}): RuntimeClientSettings {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
     }
@@ -93,6 +95,11 @@ export class RuntimeClientSettingsController {
       ...(settings.agentNativeChatPermissionModes
         ? { agentNativeChatPermissionModes: settings.agentNativeChatPermissionModes }
         : {}),
+      // Why opt-in: older web clients merge whole responses into localStorage, so the script is returned only when asked; malformed stored values are never published.
+      ...(options.includeRepositoryAddScript === true &&
+      normalizeStoredRepositoryAddScript(settings.repositoryAddScript)
+        ? { repositoryAddScript: settings.repositoryAddScript }
+        : {}),
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
@@ -104,7 +111,10 @@ export class RuntimeClientSettingsController {
     }
   }
 
-  async update(updates: RuntimeClientSettingsUpdate): Promise<RuntimeClientSettings> {
+  async update(
+    updates: RuntimeClientSettingsUpdate,
+    options: RuntimeClientSettingsReadOptions = {}
+  ): Promise<RuntimeClientSettings> {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')
     }
@@ -133,7 +143,7 @@ export class RuntimeClientSettingsController {
     ) {
       await this.reconcileManagedAgentHooks()
     }
-    return this.get()
+    return this.get(options)
   }
 
   getTerminalQuickCommands(): TerminalQuickCommand[] {

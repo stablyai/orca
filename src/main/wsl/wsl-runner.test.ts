@@ -384,3 +384,168 @@ describe('WSLENV', () => {
     expect(wslenv.split(':')).not.toContain('HOME')
   })
 })
+
+describe('pre-spawn validation', () => {
+  it('runs after the awaited environment probe and immediately before the spawn', async () => {
+    const order: string[] = []
+    runProcessMock.mockImplementation(async () => {
+      order.push('spawn')
+      return { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
+    })
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    await runWslProcess({
+      script: 'true',
+      loginPath: 'preferred',
+      beforeSpawn: () => {
+        order.push('validate')
+        return true
+      }
+    })
+    expect(order).toEqual(['validate', 'spawn'])
+  })
+
+  it.each([
+    ['false', () => false],
+    ['undefined', () => undefined],
+    ['a truthy non-boolean', () => 1],
+    ['a resolved promise', () => Promise.resolve(true)],
+    ['a rejected promise', () => Promise.reject(new Error('late'))],
+    [
+      'a throw',
+      () => {
+        throw new Error('stale')
+      }
+    ]
+  ])('does not spawn unless the validator returns literal true (%s)', async (_name, verdict) => {
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    await expect(
+      runWslProcess({
+        script: 'true',
+        loginPath: 'preferred',
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Deliberately violates the type to prove the runtime guard.
+        beforeSpawn: verdict as never
+      })
+    ).rejects.toThrow()
+    expect(runProcessMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('guest termination', () => {
+  const termination = () => ({
+    observeStderr: vi.fn(),
+    signal: vi.fn(async () => true),
+    force: vi.fn(async () => true),
+    wrapGuestArgs: (args: readonly string[]) => ['wrapped-guest', ...args],
+    stripControlOutput: (stderr: string) => stderr.replace('CONTROL', '')
+  })
+
+  it('forwards the barrier object, wraps the whole guest argv, and strips control output', async () => {
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    const guest = termination()
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: '',
+      stderr: 'CONTROLreal error',
+      timedOut: false
+    })
+    const result = await runWslProcess({
+      script: 'true',
+      loginPath: 'preferred',
+      guestTermination: guest
+    })
+    const spec = runProcessMock.mock.calls.at(-1)?.[0]
+    expect(spec.terminationBarrier).toBe(guest)
+    expect(lastArgv()[lastArgv().indexOf('--exec') + 1]).toBe('wrapped-guest')
+    expect(result.stderr).toBe('real error')
+  })
+
+  it('refuses the launch when the guest cannot isolate its process group', async () => {
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    runProcessMock.mockResolvedValue({
+      code: 125,
+      signal: null,
+      stdout: '',
+      stderr: 'REFUSED',
+      timedOut: false
+    })
+    await expect(
+      runWslProcess({
+        script: 'true',
+        loginPath: 'preferred',
+        guestTermination: { ...termination(), launchRefused: (stderr) => stderr === 'REFUSED' }
+      })
+    ).rejects.toThrow('process group')
+  })
+})
+
+describe('abort signal', () => {
+  it('never probes or spawns when already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      runWslProcess({ script: 'true', loginPath: 'preferred', signal: controller.signal })
+    ).rejects.toThrow('aborted')
+    expect(runProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses the spawn when aborted during the environment probe', async () => {
+    const controller = new AbortController()
+    runProcessMock.mockImplementation(async () => {
+      controller.abort()
+      return { code: 1, signal: null, stdout: '', stderr: '', timedOut: false }
+    })
+    const beforeSpawn = vi.fn(() => true)
+    await expect(
+      runWslProcess({
+        script: 'true',
+        loginPath: 'preferred',
+        signal: controller.signal,
+        beforeSpawn
+      })
+    ).rejects.toThrow('aborted')
+    // Only the probe ran.
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
+    expect(beforeSpawn).not.toHaveBeenCalled()
+  })
+
+  it('forwards the signal to the spawn and reports the process signal', async () => {
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    const controller = new AbortController()
+    runProcessMock.mockResolvedValue({
+      code: null,
+      signal: 'SIGTERM',
+      stdout: '',
+      stderr: '',
+      timedOut: false
+    })
+    const result = await runWslProcess({
+      script: 'true',
+      loginPath: 'preferred',
+      signal: controller.signal
+    })
+    expect(runProcessMock.mock.calls.at(-1)?.[0].signal).toBe(controller.signal)
+    expect(result).toMatchObject({ code: null, signal: 'SIGTERM', timedOut: false })
+  })
+
+  it('keeps the previous result shape when the process was not signalled', async () => {
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: 'ok',
+      stderr: '',
+      timedOut: false
+    })
+    const result = await runWslProcess({ script: 'true', loginPath: 'preferred' })
+    expect(result).toEqual({
+      environmentResolved: true,
+      code: 0,
+      stdout: 'ok',
+      stderr: '',
+      timedOut: false,
+      outputTruncated: false
+    })
+    expect(runProcessMock.mock.calls.at(-1)?.[0]).not.toHaveProperty('signal')
+  })
+})

@@ -327,6 +327,22 @@
     "followSymlinkedDirectoriesDescription": "Recherchez les dossiers liés dans Quick Open et développez les dossiers liés locaux dans l'Explorateur de fichiers.",
     "accounts": {
       "claudeRemoveFolder": "Orca supprime le dossier Claude de ce compte et sa connexion de cet ordinateur. L'historique de chat partagé avec Système par défaut est conservé. S'il est sélectionné, le prochain Claude que vous démarrez utilise Système par défaut."
+    },
+    "repositoryAddScript": {
+      "title": "Script à l’ajout du dépôt",
+      "webUnavailable": "Le script à l’ajout du dépôt ne peut pas être modifié depuis le client web. Ouvrez les réglages de cet hôte dans l’application de bureau.",
+      "loadingHost": "Chargement du script à l’ajout du dépôt…",
+      "localDescription": "Un script qu’Orca propose d’exécuter sur cet ordinateur lorsqu’un dépôt Git est ajouté pour la première fois. Il s’exécute à la racine du dépôt et vous pouvez l’exécuter ou l’ignorer à chaque fois.",
+      "unsupportedHost": "Mettez à jour ce serveur pour modifier son script à l’ajout du dépôt.",
+      "readFailedHost": "Impossible de lire le script à l’ajout du dépôt. Vérifiez la connexion à l’hôte et réessayez.",
+      "retry": "Réessayer",
+      "hostDescription": "Un script qu’Orca propose d’exécuter sur {{host}} lorsqu’un dépôt Git est ajouté pour la première fois. Il s’exécute à la racine du dépôt et vous pouvez l’exécuter ou l’ignorer à chaque fois.",
+      "tooLong": "Le script dépasse {{max}} caractères. Raccourcissez-le avant d’enregistrer.",
+      "save": "Enregistrer",
+      "clear": "Effacer",
+      "saveFailed": "Impossible d’enregistrer le script. Vérifiez la connexion à l’hôte et réessayez.",
+      "saved": "Enregistré",
+      "sectionDescription": "Un script qu’Orca propose d’exécuter lorsqu’un dépôt Git est ajouté pour la première fois. Il s’exécute à la racine du dépôt et vous pouvez l’exécuter ou l’ignorer à chaque fois."
     }
   },
   "menu": {
@@ -6747,6 +6763,27 @@
           "outsideDistro": "Choisissez un dossier dans {{value0}}.",
           "underDistro": "Cet hôte ne peut ajouter que des dossiers sous \\\\wsl.localhost\\{{value0}}.",
           "windowsDrive": "Les dossiers sur un lecteur Windows restent sur cet ordinateur. Choisissez cet ordinateur comme hôte pour en ajouter un."
+        },
+        "RepositoryAddScriptPromptDialog": {
+          "title": "Exécuter le script d'ajout pour {{repo}} ?",
+          "description": "Ce script est configuré pour {{host}}. Il s'exécute la première fois qu'un dépôt est ajouté à Orca, et vous pouvez l'exécuter ou l'ignorer à chaque fois.",
+          "scriptLabel": "Script d'ajout",
+          "target": "S'exécute dans {{cwd}} sur {{host}}",
+          "skip": "Ignorer",
+          "run": "Exécuter"
+        },
+        "RepositoryAddScriptResultDialog": {
+          "failedTitle": "Le script d'ajout a échoué",
+          "unverifiableTitle": "Le script d'ajout est peut-être toujours en cours",
+          "failedDescription": "Le script d'ajout pour {{repo}} sur {{host}} ne s'est pas terminé correctement.",
+          "executionFailedDescription": "Orca n'a pas pu lancer le script d'ajout pour {{repo}} sur {{host}}.",
+          "unverifiableDescription": "Orca a arrêté le script d'ajout pour {{repo}} sur {{host}}, mais n'a pas pu confirmer son arrêt. Il est peut-être toujours en cours d'exécution.",
+          "exitCode": "Code de sortie {{code}}",
+          "noExitCode": "Aucun code de sortie n'a été enregistré.",
+          "output": "Sortie",
+          "noOutput": "Aucune sortie n'a été enregistrée.",
+          "truncated": "La sortie a été tronquée ; les lignes précédentes ne sont pas affichées.",
+          "close": "Fermer"
         }
       },
       "shared": {
@@ -10255,7 +10292,13 @@
             "command": "commande",
             "confirm": "confirmer",
             "close": "fermer",
-            "omp": "OMP"
+            "omp": "OMP",
+            "repositoryAddScript": "Script à l’ajout du dépôt",
+            "repositoryAddScriptDescription": "Exécutez un script à la racine du dépôt lorsqu’un dépôt Git est ajouté pour la première fois.",
+            "git": "git",
+            "repository": "dépôt",
+            "script": "script",
+            "setup": "configuration"
           }
         },
         "git": {
@@ -18372,6 +18415,18 @@
       "forgeCredentialTarget": {
         "unknownHost": "La machine qui possède ce dépôt n'est pas encore connue. Reconnectez-la et réessayez.",
         "thisComputer": "cet ordinateur"
+      },
+      "repositoryAddScriptExecution": {
+        "running": "Exécution du script d'ajout…",
+        "finished": "Script d'ajout terminé",
+        "checking": "Vérification du script d'ajout…",
+        "unconfirmedTitle": "Impossible de confirmer la fin du script d'ajout",
+        "unconfirmedDescription": "Orca a perdu le contact avec {{host}} pendant l'exécution du script. Il est peut-être toujours en cours d'exécution.",
+        "checkAgain": "Vérifier à nouveau",
+        "notStartedTitle": "Le script d'ajout n'a pas été lancé",
+        "notStartedDescription": "Orca n'a pas pu envoyer cette demande à {{host}}. Rien n'a été exécuté.",
+        "rejectedTitle": "Le script d'ajout n'a pas été lancé",
+        "rejectedDescription": "Orca a refusé cette demande de script d'ajout. Ajoutez à nouveau le dépôt pour obtenir une nouvelle invite."
       }
     },
     "ssh": {

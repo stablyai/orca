@@ -9,6 +9,8 @@ import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-p
 import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
 import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
 import RunningTerminalCloseDialog from './components/terminal-pane/RunningTerminalCloseDialog'
+import { RepositoryAddScriptPromptDialog } from './components/sidebar/RepositoryAddScriptPromptDialog'
+import { RepositoryAddScriptResultDialog } from './components/sidebar/RepositoryAddScriptResultDialog'
 import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
 import ClaudeAccountSwitchDialog from './components/ClaudeAccountSwitchDialog'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
@@ -116,6 +118,8 @@ function App(): React.JSX.Element {
       <ClaudeAccountSwitchDialog />
       <PinnedTabCloseDialog />
       <RunningTerminalCloseDialog />
+      <RepositoryAddScriptPromptDialog />
+      <RepositoryAddScriptResultDialog />
       {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so WindowControls stay clickable. */}
       {hasCustomTitleBar && <WindowControls />}
     </div>

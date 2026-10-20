@@ -196,7 +196,9 @@ it.each([
         disposeSkillUploadSessions: settled(),
         getRuntimeId: () => undefined,
         closeNotificationDismissals,
-        flushPaneGrids: () => null
+        flushPaneGrids: () => null,
+        closeRepositoryAddScripts: settled(),
+        hasUnsettledRepositoryAddScriptRuns: () => false
       },
       runtimeRpc: { setMobileRelayPairingProvider: idle(), stop: vi.fn(() => rpcStop.promise) }
     })
@@ -217,3 +219,61 @@ it.each([
     expect(app.quit).toHaveBeenCalledOnce()
   }
 )
+
+function addScriptRuntime(
+  closeRepositoryAddScripts: () => Promise<void>,
+  hasUnsettledRepositoryAddScriptRuns = () => false
+) {
+  return {
+    getOffscreenBrowserBackend: () => null,
+    getAgentBrowserBridge: () => null,
+    getEmulatorBridge: () => null,
+    disposeSkillUploadSessions: settled(),
+    getRuntimeId: () => undefined,
+    closeNotificationDismissals: settled(),
+    closeRepositoryAddScripts: vi.fn(closeRepositoryAddScripts),
+    hasUnsettledRepositoryAddScriptRuns: vi.fn(hasUnsettledRepositoryAddScriptRuns)
+  }
+}
+
+it('seals repository add scripts before RPC stops and bounds them by the shared deadline', async () => {
+  const order: string[] = []
+  const runtime = addScriptRuntime(() => {
+    order.push('add-scripts')
+    return new Promise<void>(() => {})
+  })
+  const stop = vi.fn(() => {
+    order.push('rpc')
+    return new Promise<void>(() => {})
+  })
+  const { app } = await startQuit(async () => {}, {
+    runtime,
+    runtimeRpc: { setMobileRelayPairingProvider: idle(), stop }
+  })
+  // Synchronously on the committed quit, ahead of the RPC stop and before any await.
+  expect(runtime.closeRepositoryAddScripts).toHaveBeenCalledOnce()
+  expect(order).toEqual(['add-scripts', 'rpc'])
+  await vi.advanceTimersByTimeAsync(WILL_QUIT_TEARDOWN_DEADLINE_MS - 1)
+  expect(app.quit).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(console.warn).toHaveBeenCalledWith('[shutdown] Quit teardown deadline reached', {
+    pendingTeardowns: ['runtime-rpc', 'repository-add-scripts', 'notification-dismissals']
+  })
+  expect(app.quit).toHaveBeenCalledOnce()
+})
+
+it('reports a settled close whose runs were never proven gone', async () => {
+  const runtime = addScriptRuntime(
+    async () => {},
+    () => true
+  )
+  const { app } = await startQuit(async () => {}, {
+    runtime,
+    runtimeRpc: { setMobileRelayPairingProvider: idle(), stop: settled() }
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(console.warn).toHaveBeenCalledWith(
+    '[repository-add-scripts] Repository add script cleanup could not be verified.'
+  )
+  expect(app.quit).toHaveBeenCalledOnce()
+})

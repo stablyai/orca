@@ -22,6 +22,28 @@ function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedSt
   return normalizeLoadedGlobalSettings(parsed, terminal, profile)
 }
 
+describe('repository add script', () => {
+  it('has no runnable default', () => {
+    expect(normalizeLegacyProfile({}).repositoryAddScript).toBeUndefined()
+  })
+
+  it('loads valid text exactly', () => {
+    const script = '#!/bin/sh\n  echo hi \n'
+    expect(normalizeLegacyProfile({ repositoryAddScript: script }).repositoryAddScript).toBe(script)
+  })
+
+  it.each([
+    ['empty', ''],
+    ['whitespace-only', '  \n'],
+    ['a number', 7],
+    ['an array', ['echo hi']],
+    ['an object', { script: 'echo hi' }],
+    ['oversized', 'x'.repeat(64 * 1024 + 1)]
+  ])('does not load %s as a runnable script', (_label, repositoryAddScript) => {
+    expect(normalizeLegacyProfile({ repositoryAddScript }).repositoryAddScript).toBeUndefined()
+  })
+})
+
 describe('retired setup placement', () => {
   it.each(['split-vertical', 'split-horizontal', 'new-tab', undefined])(
     'drops saved setup location %s without changing terminal preferences',

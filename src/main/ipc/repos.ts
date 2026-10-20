@@ -13,6 +13,7 @@ import { registerRepoFolderPickerHandlers } from './repos/repo-folder-picker-han
 import { registerRepoCloneHandlers } from './repos/repo-clone-lifecycle'
 import { registerRepoGitUsernameHandler } from './repos/repo-git-username-handler'
 import { registerBaseRefQueryHandlers } from './repos/base-ref-query-handlers'
+import { registerRepositoryAddScriptHandlers } from './repos/repository-add-script-handlers'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 export function registerRepoHandlers(
@@ -59,20 +60,23 @@ export function registerRepoHandlers(
   ipcMain.removeHandler('repos:searchBaseRefs')
   ipcMain.removeHandler('repos:searchBaseRefDetails')
   ipcMain.removeHandler('repos:create')
+  ipcMain.removeHandler('repos:decideAddScript')
+  ipcMain.removeHandler('repos:getAddScriptOutcome')
   ipcMain.removeHandler('sparsePresets:list')
   ipcMain.removeHandler('sparsePresets:save')
   ipcMain.removeHandler('sparsePresets:remove')
 
   registerRepoCatalogHandlers(mainWindow, store, runtime)
-  registerProjectHostSetupHandlers(mainWindow, store)
-  registerRepoCreationHandlers(mainWindow, store)
+  registerProjectHostSetupHandlers(mainWindow, store, runtime)
+  registerRepoCreationHandlers(mainWindow, store, runtime)
   registerProjectGroupHandlers(mainWindow, store)
   registerFolderWorkspaceHandlers(mainWindow, store, runtime)
-  registerNestedRepoImportHandler(mainWindow, store)
+  registerNestedRepoImportHandler(mainWindow, store, runtime)
   registerRepoUpdateHandler(mainWindow, store)
   registerSparsePresetHandlers(mainWindow, store)
   registerRepoFolderPickerHandlers(mainWindow)
-  registerRepoCloneHandlers(mainWindow, store)
+  registerRepoCloneHandlers(mainWindow, store, runtime)
+  registerRepositoryAddScriptHandlers(runtime)
   registerRepoGitUsernameHandler(store)
   registerBaseRefQueryHandlers(store)
 }

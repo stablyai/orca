@@ -13,7 +13,7 @@ import {
   resolveNestedRepoSelection
 } from '../../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../../project-groups/nested-repo-import-target'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
@@ -21,13 +21,22 @@ import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { ProjectGroupImportNestedArgs, parseProjectGroupIpcArgs } from './repo-ipc-arg-schemas'
 import { getCompletedNestedRepoScan, scanNestedReposForIpc } from './nested-repo-scan-ipc'
+import {
+  openRepositoryAddScriptRequestScope,
+  type RepositoryAddScriptCollectorSource
+} from '../../repository-add-scripts/repository-add-script-request-scope'
+import { reportNewGitRepository } from '../../repository-add-scripts/new-git-repository-observer'
 
 function sanitizeNestedRepoImportError(context: string, error: unknown): string {
   console.warn(`[project-groups] ${context}`, error)
   return 'Repository could not be imported'
 }
 
-export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store: Store): void {
+export function registerNestedRepoImportHandler(
+  mainWindow: BrowserWindow,
+  store: Store,
+  addScripts: RepositoryAddScriptCollectorSource
+): void {
   ipcMain.handle(
     'projectGroups:importNested',
     async (_event, rawArgs: unknown): Promise<ProjectGroupImportResult> => {
@@ -36,6 +45,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
         rawArgs,
         'invalid_project_group_import_nested_args'
       )
+      const scope = openRepositoryAddScriptRequestScope(addScripts, args.repositoryAddScriptPreview)
       const requestedPaths = args.projectPaths
       const completedScan = getCompletedNestedRepoScan(args)
       const scan =
@@ -92,20 +102,26 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
             })
             continue
           }
-          const existing = store
-            .getRepos()
-            .find(
-              (repo) =>
-                (repo.connectionId ?? null) === (args.connectionId ?? null) &&
-                normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath
-            )
+          const findExisting = (localOnly = false): Repo | undefined =>
+            store
+              .getRepos()
+              .find(
+                (repo) =>
+                  (repo.connectionId ?? null) === (args.connectionId ?? null) &&
+                  (!localOnly || getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID) &&
+                  normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath
+              )
           const group = groupResolver.getGroupForRepo(repoPath)
-          if (existing) {
+          const adoptKnownRepo = (known: Repo): void => {
             if (group) {
-              store.moveProjectToGroup(existing, group.id, projectGroupOrder)
+              store.moveProjectToGroup(known, group.id, projectGroupOrder)
             }
-            importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
-            results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
+            importedProjectIdsByRepoPath.set(normalizedImportRepoPath, known.id)
+            results.push({ path: repoPath, projectId: known.id, status: 'already-known' })
+          }
+          const existing = findExisting()
+          if (existing) {
+            adoptKnownRepo(existing)
             continue
           }
           const detected = await detectRepoIconAndUpstream({
@@ -113,6 +129,13 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
             kind: 'git',
             executionHostId: LOCAL_EXECUTION_HOST_ID
           })
+          // Icon discovery is async, so the same repo may have been registered meanwhile.
+          // Only a local row can be the same checkout this import just inspected.
+          const raceWinner = findExisting(true)
+          if (raceWinner) {
+            adoptKnownRepo(raceWinner)
+            continue
+          }
           const repo: Repo = {
             id: randomUUID(),
             path: importRepoPath,
@@ -131,6 +154,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
               : {})
           }
           store.addRepo(repo)
+          reportNewGitRepository(scope.observer, repo)
           await prepareLocalWorktreeRootForRepo(store, repo)
           importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
           results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
@@ -161,7 +185,8 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
         projects: results,
         importedCount,
         alreadyKnownCount,
-        failedCount
+        failedCount,
+        ...scope.manyFields()
       }
     }
   )

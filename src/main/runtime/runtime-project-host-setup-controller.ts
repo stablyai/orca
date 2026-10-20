@@ -19,14 +19,18 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
-import { resolveImportedFolderProjectLink } from '../../shared/imported-folder-project-identity'
 import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
 import {
   SshHostNotServedError,
   sshTargetNotConnectedMessage
 } from '../providers/ssh-host-not-served-error'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import {
+  reportNewGitRepository,
+  type InsertedRepoObserver,
+  type NewGitRepositoryObserver
+} from '../repository-add-scripts/new-git-repository-observer'
+import { linkRepoToRequestedProject } from './project-host-setup-repo-linking'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { updateProjectHostSetupWithProvenKind } from '../folder-repo-git-conversion'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -50,8 +54,18 @@ import {
 type RuntimeProjectHostSetupDependencies = {
   getStore: () => RuntimeStore | null
   listRepos: () => Repo[]
-  addRepo: (path: string, kind: 'folder' | 'git', hostId: ExecutionHostId) => Promise<Repo>
-  cloneRepo: (url: string, destination: string, hostId: ExecutionHostId) => Promise<Repo>
+  addRepo: (
+    path: string,
+    kind: 'folder' | 'git',
+    hostId: ExecutionHostId,
+    onInserted?: InsertedRepoObserver
+  ) => Promise<Repo>
+  cloneRepo: (
+    url: string,
+    destination: string,
+    hostId: ExecutionHostId,
+    onNewGitRepository?: NewGitRepositoryObserver
+  ) => Promise<Repo>
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
@@ -123,25 +137,34 @@ export class RuntimeProjectHostSetupController {
   }
 
   async setupExistingFolder(
-    args: ProjectHostSetupExistingFolderArgs
+    args: ProjectHostSetupExistingFolderArgs,
+    onNewGitRepository?: NewGitRepositoryObserver
   ): Promise<ProjectHostSetupResult> {
     if (!this.deps.getStore()) {
       throw new Error('runtime_unavailable')
     }
     const kind = args.kind === 'folder' ? 'folder' : 'git'
-    const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
     const sshTargetId = getSshTargetIdForExecutionHost(args.hostId)
     if (sshTargetId) {
       throw sshTargetNotServedError(sshTargetId)
     }
-    const repo = await this.deps.addRepo(args.path, kind, args.hostId)
-    const repoWasCreated = !knownRepoIds.has(repo.id)
+    // Exact insertion evidence, not a before/after snapshot a concurrent add could pollute.
+    const insertedRepoIds = new Set<string>()
+    const repo = await this.deps.addRepo(args.path, kind, args.hostId, (inserted) => {
+      insertedRepoIds.add(inserted.id)
+    })
+    const repoWasCreated = insertedRepoIds.has(repo.id)
     // Why: a registered row's stored remote can predate a remote the user has since added.
     const folderRemote =
       repoWasCreated && repo.gitRemoteIdentity !== undefined
         ? repo
         : await readCurrentGitRemoteIdentity(repo)
-    return this.completeSetup(args, repo, repoWasCreated, folderRemote)
+    const result = this.completeSetup(args, repo, repoWasCreated, folderRemote)
+    // Reported here, not by the inner add, so a registration rolled back above is never offered.
+    if (repoWasCreated) {
+      reportNewGitRepository(onNewGitRepository, result.repo)
+    }
+    return result
   }
 
   /**
@@ -155,17 +178,28 @@ export class RuntimeProjectHostSetupController {
     throw new SshHostNotServedError(args.connectionId, SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
   }
 
-  async setupClone(args: ProjectHostSetupCloneArgs): Promise<ProjectHostSetupResult> {
+  async setupClone(
+    args: ProjectHostSetupCloneArgs,
+    onNewGitRepository?: NewGitRepositoryObserver
+  ): Promise<ProjectHostSetupResult> {
     assertCloneHostIsSupported(args.hostId)
-    const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
-    const repo = await this.deps.cloneRepo(args.url, args.destination, args.hostId)
-    return this.completeSetup(
+    // A clone only ever inserts a Git row, so the Git observer is exact insertion evidence here.
+    const insertedRepoIds = new Set<string>()
+    const repo = await this.deps.cloneRepo(args.url, args.destination, args.hostId, (inserted) => {
+      insertedRepoIds.add(inserted.id)
+    })
+    const repoWasCreated = insertedRepoIds.has(repo.id)
+    const result = this.completeSetup(
       { ...args, path: repo.path, kind: 'git', setupMethod: 'cloned' },
       repo,
-      !knownRepoIds.has(repo.id),
+      repoWasCreated,
       // Why: a fresh clone's remote is not probed yet, and a Git-remote project links through it.
       repo.gitRemoteIdentity === undefined ? await readCurrentGitRemoteIdentity(repo) : repo
     )
+    if (repoWasCreated) {
+      reportNewGitRepository(onNewGitRepository, result.repo)
+    }
+    return result
   }
 
   // Why sync up front: availability and the WSL move fence refuse before any Git probe starts.
@@ -269,7 +303,7 @@ export class RuntimeProjectHostSetupController {
     folderRemote: Pick<Repo, 'gitRemoteIdentity'>
   ): ProjectHostSetupResult {
     try {
-      return this.linkRepo(args, initialRepo, folderRemote)
+      return linkRepoToRequestedProject(this.deps.getStore(), args, initialRepo, folderRemote)
     } catch (error) {
       if (repoWasCreated) {
         // Why: host-scoped so a rollback never takes a same-id row on another host.
@@ -281,53 +315,5 @@ export class RuntimeProjectHostSetupController {
       }
       throw error
     }
-  }
-
-  private linkRepo(
-    args: ProjectHostSetupExistingFolderArgs,
-    initialRepo: Repo,
-    folderRemote: Pick<Repo, 'gitRemoteIdentity'>
-  ): ProjectHostSetupResult {
-    const store = this.deps.getStore()
-    if (!store) {
-      throw new Error('runtime_unavailable')
-    }
-    assertWslMoveHostSetupWritable(store, {
-      projectId: args.projectId,
-      hostId: getRepoExecutionHostId(initialRepo),
-      repoId: initialRepo.id
-    })
-    let repo = initialRepo
-    let setup = getProjectHostSetupForRepo(this.listSetups(), repo)
-    if (setup.projectId !== args.projectId) {
-      const existingProject = this.listProjects().find((project) => project.id === args.projectId)
-      const updated = store.updateRepo(
-        repo,
-        resolveImportedFolderProjectLink(
-          folderRemote,
-          args.projectId,
-          existingProject?.providerIdentity ?? args.projectProviderIdentity
-        )
-      )
-      if (!updated) {
-        throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
-      }
-      repo = updated
-      setup = getProjectHostSetupForRepo(this.listSetups(), repo)
-    }
-    const setupMethod = args.setupMethod ?? 'imported-existing-folder'
-    const updated = store.updateRepo(repo, { projectHostSetupMethod: setupMethod })
-    if (!updated) {
-      throw new Error(
-        `Project setup repo disappeared before setup metadata could be linked: ${repo.id}`
-      )
-    }
-    repo = updated
-    setup = getProjectHostSetupForRepo(this.listSetups(), repo)
-    const project = this.listProjects().find((entry) => entry.id === setup.projectId)
-    if (!project) {
-      throw new Error(`Project setup was created without a project record: ${setup.projectId}`)
-    }
-    return { project, setup, repo }
   }
 }

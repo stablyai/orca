@@ -5,6 +5,7 @@ import { ORCAD_MIGRATION_METHODS } from './orcad-migration'
 import { AI_VAULT_METHODS } from './ai-vault'
 import { AUTOMATION_METHODS } from './automations'
 import { REPO_METHODS } from './repo'
+import { REPOSITORY_ADD_SCRIPT_METHODS } from './repository-add-script'
 import { WORKTREE_METHODS } from './worktree'
 import { REFERENCE_METHODS } from './reference'
 import { TERMINAL_METHODS } from './terminal'
@@ -84,6 +85,7 @@ export const ALL_RPC_METHODS = [
   ...ARTIFACT_METHODS,
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,
+  ...REPOSITORY_ADD_SCRIPT_METHODS,
   ...WORKTREE_METHODS,
   ...REFERENCE_METHODS,
   ...AGENT_SESSION_METHODS,

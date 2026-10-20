@@ -223,6 +223,22 @@
     "followSymlinkedDirectoriesDescription": "在快速打开中搜索链接文件夹，并在文件资源管理器中展开本地链接文件夹。",
     "accounts": {
       "claudeRemoveFolder": "Orca 会从此计算机删除此账户的 Claude 文件夹及其登录信息。与系统默认共享的聊天记录会保留。如果此账户被选中，您下次启动的 Claude 将使用系统默认。"
+    },
+    "repositoryAddScript": {
+      "title": "仓库添加脚本",
+      "webUnavailable": "无法从 Web 客户端编辑仓库添加脚本。请在桌面应用中打开此主机的设置。",
+      "loadingHost": "正在加载仓库添加脚本…",
+      "localDescription": "Orca 在首次添加 Git 仓库时提供在此计算机上运行的脚本。它在仓库根目录运行，每次都可以选择运行或跳过。",
+      "unsupportedHost": "更新此服务器后即可编辑其仓库添加脚本。",
+      "readFailedHost": "无法读取仓库添加脚本。请检查主机连接并重试。",
+      "retry": "重试",
+      "hostDescription": "Orca 在首次添加 Git 仓库时提供在 {{host}} 上运行的脚本。它在仓库根目录运行，每次都可以选择运行或跳过。",
+      "tooLong": "脚本超过 {{max}} 个字符。请缩短后再保存。",
+      "save": "保存",
+      "clear": "清除",
+      "saveFailed": "无法保存脚本。请检查主机连接并重试。",
+      "saved": "已保存",
+      "sectionDescription": "Orca 在首次添加 Git 仓库时提供运行的脚本。它在仓库根目录运行，每次都可以选择运行或跳过。"
     }
   },
   "menu": {
@@ -6639,6 +6655,27 @@
           "outsideDistro": "请选择 {{value0}} 内的文件夹。",
           "underDistro": "此主机只能添加 \\\\wsl.localhost\\{{value0}} 下的文件夹。",
           "windowsDrive": "Windows 驱动器上的文件夹保留在此计算机上。请选择此计算机作为主机以添加。"
+        },
+        "RepositoryAddScriptPromptDialog": {
+          "title": "为 {{repo}} 运行添加脚本？",
+          "description": "此脚本为 {{host}} 配置。首次将仓库添加到 Orca 时会运行，每次都可以选择运行或跳过。",
+          "scriptLabel": "添加脚本",
+          "target": "在 {{host}} 上的 {{cwd}} 中运行",
+          "skip": "跳过",
+          "run": "运行"
+        },
+        "RepositoryAddScriptResultDialog": {
+          "failedTitle": "添加脚本失败",
+          "unverifiableTitle": "添加脚本可能仍在运行",
+          "failedDescription": "{{host}} 上 {{repo}} 的添加脚本未能成功完成。",
+          "executionFailedDescription": "Orca 无法启动 {{host}} 上 {{repo}} 的添加脚本。",
+          "unverifiableDescription": "Orca 已停止 {{host}} 上 {{repo}} 的添加脚本，但无法确认它已停止。脚本可能仍在运行。",
+          "exitCode": "退出代码 {{code}}",
+          "noExitCode": "未记录退出代码。",
+          "output": "输出",
+          "noOutput": "未记录输出。",
+          "truncated": "输出已截断；未显示前面的行。",
+          "close": "关闭"
         }
       },
       "shared": {
@@ -10090,7 +10127,13 @@
             "command": "命令",
             "confirm": "确认",
             "close": "关闭",
-            "omp": "OMP"
+            "omp": "OMP",
+            "repositoryAddScript": "仓库添加脚本",
+            "repositoryAddScriptDescription": "首次添加 Git 仓库时在仓库根目录运行脚本。",
+            "git": "git",
+            "repository": "仓库",
+            "script": "脚本",
+            "setup": "设置"
           }
         },
         "git": {
@@ -18268,6 +18311,18 @@
       "forgeCredentialTarget": {
         "unknownHost": "拥有此存储库的计算机尚不清楚。请重新连接它并重试。",
         "thisComputer": "此计算机"
+      },
+      "repositoryAddScriptExecution": {
+        "running": "正在运行添加脚本…",
+        "finished": "添加脚本已完成",
+        "checking": "正在检查添加脚本…",
+        "unconfirmedTitle": "无法确认添加脚本是否完成",
+        "unconfirmedDescription": "脚本运行期间 Orca 与 {{host}} 失去了联系。脚本可能仍在运行。",
+        "checkAgain": "再次检查",
+        "notStartedTitle": "添加脚本未启动",
+        "notStartedDescription": "Orca 无法将此请求发送到 {{host}}。没有执行任何内容。",
+        "rejectedTitle": "添加脚本未启动",
+        "rejectedDescription": "Orca 拒绝了此添加脚本请求。请重新添加仓库以获取新的提示。"
       }
     },
     "ssh": {

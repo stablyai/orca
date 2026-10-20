@@ -20,6 +20,14 @@ import type {
   ProjectUpdateArgs
 } from '../../shared/project-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shared/repo-types'
+import type {
+  RepoWithRepositoryAddScriptPreview,
+  RepositoryAddScriptDecision,
+  RepositoryAddScriptDecisionResult,
+  RepositoryAddScriptIdentity,
+  RepositoryAddScriptOutcome,
+  RepositoryAddScriptRequest
+} from '../../shared/repository-add-script-types'
 
 export type RepositoryApi = {
   list: () => Promise<Repo[]>
@@ -28,7 +36,9 @@ export type RepositoryApi = {
     path: string
     kind?: 'git' | 'folder'
     displayName?: string
-  }) => Promise<{ repo: Repo } | { error: string }>
+    // Opt-in: only a request naming the host it registers on can come back with an offered script.
+    repositoryAddScriptPreview?: RepositoryAddScriptRequest
+  }) => Promise<RepoWithRepositoryAddScriptPreview | { error: string }>
   // Forget a project on one execution host only, leaving the same repo id on other hosts intact.
   removeForHost: (args: { repoId: string; hostId: string }) => Promise<void>
   reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>
@@ -72,14 +82,29 @@ export type RepositoryApi = {
   pickFolder: () => Promise<string | null>
   pickFolders: () => Promise<string[]>
   pickDirectory: () => Promise<string | null>
-  clone: (args: { url: string; destination: string }) => Promise<Repo>
+  // Why overloads: only the opted-in call may return the wrapped shape; existing callers still get a bare Repo.
+  clone: {
+    (args: {
+      url: string
+      destination: string
+      repositoryAddScriptPreview: RepositoryAddScriptRequest
+    }): Promise<RepoWithRepositoryAddScriptPreview>
+    (args: { url: string; destination: string }): Promise<Repo>
+  }
   cloneAbort: () => Promise<void>
   // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
   create: (args: {
     parentPath: string
     name: string
     kind: 'git' | 'folder'
-  }) => Promise<{ repo: Repo } | { error: string }>
+    repositoryAddScriptPreview?: RepositoryAddScriptRequest
+  }) => Promise<RepoWithRepositoryAddScriptPreview | { error: string }>
+  // Takes the offered token and nothing else: no script, path or target.
+  decideAddScript: (args: RepositoryAddScriptDecision) => Promise<RepositoryAddScriptDecisionResult>
+  // Null when this host holds no record for that exact token, host and repo.
+  getAddScriptOutcome: (
+    args: RepositoryAddScriptIdentity
+  ) => Promise<RepositoryAddScriptOutcome | null>
   isGitAvailable: () => Promise<boolean>
   getDefaultCreateProjectParent: () => Promise<string>
   onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
@@ -108,7 +133,11 @@ export type ProjectsApi = {
   update: (args: ProjectUpdateArgs) => Promise<Project | null>
   listHostSetups: () => Promise<ProjectHostSetup[]>
   createHostSetup: (args: ProjectHostSetupCreateArgs) => Promise<ProjectHostSetupCreateResult>
-  setupExistingFolder: (args: ProjectHostSetupExistingFolderArgs) => Promise<ProjectHostSetupResult>
+  setupExistingFolder: (
+    args: ProjectHostSetupExistingFolderArgs & {
+      repositoryAddScriptPreview?: RepositoryAddScriptRequest
+    }
+  ) => Promise<ProjectHostSetupResult>
   updateHostSetup: (args: ProjectHostSetupUpdateArgs) => Promise<ProjectHostSetupUpdateResult>
   deleteHostSetup: (args: ProjectHostSetupDeleteArgs) => Promise<ProjectHostSetupDeleteResult>
 }
@@ -150,5 +179,6 @@ export type ProjectGroupsApi = {
     connectionId?: string
     scanId?: string
     mode: ProjectGroupImportMode
+    repositoryAddScriptPreview?: RepositoryAddScriptRequest
   }) => Promise<ProjectGroupImportResult>
 }

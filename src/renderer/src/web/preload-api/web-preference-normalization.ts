@@ -186,12 +186,20 @@ export function mergeSettings(
     ),
     uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage)
   }
-  return {
+  return dropRepositoryAddScript({
     ...merged,
     ...normalizeAutoRenameBranchFromWorkDefaultOn(merged, {
       preserveExplicitValue: options.preserveAutoRenameBranchFromWorkUpdate
     })
-  }
+  })
+}
+
+/** Why: the script runs on the execution host, so browser storage must never mirror it. */
+export function dropRepositoryAddScript<T extends { repositoryAddScript?: string }>(
+  settings: T
+): T {
+  delete settings.repositoryAddScript
+  return settings
 }
 
 /** The host's new-chat permission default (the host seeds from it), kept only when a known mode. */

@@ -162,6 +162,10 @@ vi.mock('../runtime/orca-runtime', () => ({
       return null
     }
     async closeNotificationDismissals() {}
+    async closeRepositoryAddScripts() {}
+    hasUnsettledRepositoryAddScriptRuns() {
+      return false
+    }
     syncWindowGraph() {}
   }
 }))

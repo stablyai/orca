@@ -21,7 +21,7 @@ import {
 } from '@orca/process-host/process-tree-termination'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 
-const HOOK_TIMEOUT = 120_000 // 2 minutes
+export const HOOK_TIMEOUT = 120_000 // 2 minutes
 
 type HookProcessOutcome = { success: boolean; output: string; exitCode?: number }
 

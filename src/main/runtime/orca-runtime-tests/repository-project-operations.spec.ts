@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { Repo } from '../../../shared/repo-types'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   EventEmitter,
@@ -298,7 +299,7 @@ describe('OrcaRuntimeService', () => {
 
   it('rolls back a newly cloned repo when project alignment fails', async () => {
     const repos: Record<string, unknown>[] = []
-    const clonedRepo = {
+    const clonedRepo: Repo = {
       id: 'cloned-repo',
       path: '/tmp/cloned-repo',
       displayName: 'cloned-repo',
@@ -320,10 +321,14 @@ describe('OrcaRuntimeService', () => {
         projectHostSetupProjectionFromRepos(repos as never).setups as never
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    vi.spyOn(runtime, 'cloneRepo').mockImplementation(async () => {
-      repos.push(clonedRepo)
-      return clonedRepo as never
-    })
+    vi.spyOn(runtime, 'cloneRepo').mockImplementation(
+      async (_url, _destination, _hostId, onNewGitRepository) => {
+        repos.push(clonedRepo)
+        // A real clone announces the row it inserted; rollback ownership depends on that evidence.
+        onNewGitRepository?.(clonedRepo)
+        return clonedRepo as never
+      }
+    )
 
     await expect(
       runtime.setupProjectClone({

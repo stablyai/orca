@@ -44,6 +44,7 @@ import { installOrcadProcessErrorGuards } from './orcad-process-error-guards'
 import { orcadWsPortOptions } from './orcad-ws-port-policy'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
+import { registerOrcadRepositoryAddScriptsCleanup } from '../repository-add-scripts/repository-add-script-shutdown'
 
 export { parseArgs }
 
@@ -255,6 +256,8 @@ async function startOrcadRuntime(
     }
   })
   paneGridsForShutdown = runtime
+  // Registered right at construction so a failed startup closes it too; runs after RPC stops.
+  const repositoryAddScripts = registerOrcadRepositoryAddScriptsCleanup(runtime, registerCleanup)
 
   accountLaunch?.attachToRuntime(runtime)
 
@@ -352,7 +355,11 @@ async function startOrcadRuntime(
     ...orcadWsPortOptions(options.port)
   })
   // Stops first: no RPC may write while the rest of the runtime is torn down.
-  registerCleanup(() => rpc.stop())
+  registerCleanup(() => {
+    // Sealed before the stop's first await, so no add script starts while RPC drains.
+    repositoryAddScripts.start()
+    return rpc.stop()
+  })
   await rpc.start()
   startOrcadAutomations(runtime, profileStore, registerCleanup)
   const pushService = DesktopPushService.create({
