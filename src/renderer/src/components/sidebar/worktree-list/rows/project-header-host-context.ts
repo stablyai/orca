@@ -61,7 +61,8 @@ export function getProjectHeaderHostContexts(args: {
     hostsByProjectKey.set(key, projectHosts)
   }
   const candidates = new Map<string, ProjectHeaderHostContext>()
-  const visibleHostIds = new Set<ExecutionHostId>()
+  const sectionLabels = new Map<string, string>()
+  const hostsByLabel = new Map<string, Set<ExecutionHostId>>()
   for (const row of args.rows) {
     // Host sections already identify every following project header.
     if (row.type === 'host-header') {
@@ -70,6 +71,13 @@ export function getProjectHeaderHostContexts(args: {
     if (row.type !== 'header' || row.icon.kind !== 'project') {
       continue
     }
+    const label = row.label
+    if (!label) {
+      continue
+    }
+    sectionLabels.set(row.key, label)
+    const labelHosts = hostsByLabel.get(label) ?? new Set<ExecutionHostId>()
+    hostsByLabel.set(label, labelHosts)
     let ownerHostId: ExecutionHostId
     if (row.repo) {
       const projectHosts = hostsByProjectKey.get(row.key)
@@ -83,7 +91,7 @@ export function getProjectHeaderHostContexts(args: {
             })
           : projectHosts
         for (const hostId of visibleProjectHosts) {
-          visibleHostIds.add(hostId)
+          labelHosts.add(hostId)
         }
         continue
       }
@@ -99,7 +107,7 @@ export function getProjectHeaderHostContexts(args: {
       continue
     }
     const hostId = canonicalHostId(ownerHostId)
-    visibleHostIds.add(hostId)
+    labelHosts.add(hostId)
     const host = hostsById.get(hostId)
     candidates.set(row.key, {
       hostId,
@@ -107,6 +115,8 @@ export function getProjectHeaderHostContexts(args: {
       detail: host?.detail ?? getHostContextLabel(hostId)
     })
   }
-  // Keep single-host sidebars quiet, independently of workspace-card preferences.
-  return visibleHostIds.size > 1 ? candidates : new Map()
+  // Only colliding names across machines need a host label.
+  return new Map(
+    [...candidates].filter(([key]) => (hostsByLabel.get(sectionLabels.get(key)!)?.size ?? 0) > 1)
+  )
 }
