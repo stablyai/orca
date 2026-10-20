@@ -185,6 +185,13 @@ export function prepareWebSessionTabsSnapshotBrowser(
       : createEditorBuffers(state.editorBuffers ?? {}, mirroredOpenFiles)
   const retainedUnifiedTabs = currentUnifiedTabs.filter((tab) => {
     if (tab.contentType === 'agent-session') {
+      // Paired routes can publish the same session id; only its owner may replace or retire it.
+      if (
+        tab.executionHostId !== undefined &&
+        tab.executionHostId !== executionHostIdForSessionTabsOwner(environmentId)
+      ) {
+        return true
+      }
       // A matching host row is authoritative; retaining the provisional tab beside its mirror
       // would briefly render two panes before lifecycle publication is recorded.
       // A host that cannot list its chats is no evidence this one closed.

@@ -73,6 +73,9 @@ export function buildMirroredAgentTabs(
       (tab) =>
         !hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
     )
+  const ownedTabs = currentUnifiedTabs.filter(
+    (tab) => tab.executionHostId === undefined || tab.executionHostId === executionHostId
+  )
   const occupiedIds = new Set(currentUnifiedTabs.map((tab) => tab.id))
   const assignedIds = new Set<string>()
   const replacementTabs = new Map<string, Tab>()
@@ -82,11 +85,11 @@ export function buildMirroredAgentTabs(
       continue
     }
     const existing =
-      currentUnifiedTabs.find(
+      ownedTabs.find(
         (candidate) =>
           candidate.contentType === 'agent-session' && candidate.entityId === tab.sessionId
       ) ??
-      currentUnifiedTabs.find(
+      ownedTabs.find(
         (candidate) =>
           !replacementIds.has(candidate.id) &&
           candidate.contentType === 'agent-session' &&
@@ -100,7 +103,7 @@ export function buildMirroredAgentTabs(
   return agentTabs.map((tab, index) => {
     const existing =
       replacementTabs.get(tab.sessionId) ??
-      currentUnifiedTabs.find(
+      ownedTabs.find(
         (candidate) =>
           !replacementIds.has(candidate.id) &&
           candidate.contentType === 'agent-session' &&
