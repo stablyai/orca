@@ -19,6 +19,8 @@ import {
 } from './codex-managed-home-resource-copy-marker'
 import { observe, observeResolvedPathEntry } from './codex-path-observation'
 
+import { syncSystemCodexRules } from './codex-managed-home-rules'
+
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 
 const CODEX_SYSTEM_RESOURCE_ENTRIES = [
@@ -81,6 +83,7 @@ export function getOrcaUserDataPath(): string {
 export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string): void {
   const targetHome = managedHomePath ?? getOrcaManagedCodexHomePath()
   const systemHomePath = getSystemCodexHomePath()
+  syncSystemCodexRules(systemHomePath, targetHome)
   for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {
     linkSystemCodexResource(systemHomePath, targetHome, entryName)
   }
