@@ -9,6 +9,7 @@ import { WorktreeHostContextBadge } from './WorktreeHostContextBadge'
 import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
 import { TruncatedSidebarLabel } from './truncated-sidebar-label'
 import { getDirectoryName } from './worktree-card-model'
+import { streamShortName } from '../../../../shared/perforce/workspace-copy/workspace-copy-name-rules'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
@@ -69,7 +70,9 @@ export function WorktreeCardMetaRow({
             className="min-w-0 truncate font-mono text-[11px] leading-none text-muted-foreground"
             title={worktree.path}
           >
-            {getDirectoryName(worktree.path)}
+            {worktree.perforceStream
+              ? streamShortName(worktree.perforceStream)
+              : getDirectoryName(worktree.path)}
           </span>
         ) : showBranch ? (
           <TruncatedSidebarLabel

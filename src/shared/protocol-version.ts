@@ -291,6 +291,8 @@ export const RUNTIME_CAPABILITIES = [
   WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY,
   RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY,
   SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY,
+  // perforce.* family; value mirrors PERFORCE_RUNTIME_CAPABILITY in perforce-runtime-capability.ts
+  'perforce.v1',
   ...agentLaunchCapabilities.AGENT_LAUNCH_RUNTIME_CAPABILITIES
 ] as const
 

@@ -17,6 +17,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-
 import { OrcaRuntimeWithLinearCommands } from '../integrations/linear/linear-commands'
 
 import type { RuntimeStore } from '../runtime-store-contract'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { StatsCollector } from '../../stats/collector'
 
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
@@ -28,6 +29,12 @@ import { installRuntimeGitCommandSurface } from '../runtime-git-command-surface'
 import { installRuntimeRepositoryCommandSurface } from '../runtime-repository-command-surface'
 import { installRuntimeReviewCommandSurface } from '../runtime-review-command-surface'
 import { installRuntimeServiceCommandSurface } from '../runtime-service-command-surface'
+import {
+  RuntimePerforceCommands,
+  installRuntimePerforceCommandSurface,
+  type RuntimePerforceCommandSurface
+} from '../runtime-perforce-commands'
+import { RuntimePerforceCopyCommands } from '../runtime-perforce-copy-commands'
 import { RuntimeSkillCommands } from '../runtime-skill-command-surface'
 import { installRuntimeSkillCommandSurface } from '../runtime-skill-command-contract'
 import { getAppEnvironment } from '../../../shared/app-environment'
@@ -88,6 +95,18 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     worktreeId: string | null | undefined
   ): ProjectExecutionRuntimeResolution | undefined
   protected abstract ensureNativeWindowsConptyDa1Override(ptyId: string): void
+  // Perforce copy commands reach these later-layer methods through constructor callbacks.
+  protected abstract stopPtysForDestructiveWorktreeRemoval(
+    worktreeId: string,
+    options?: { connectionId?: string; allowUnverifiedStop?: boolean }
+  ): Promise<void>
+  protected abstract purgeRemovedWorktree(
+    store: RuntimeStore,
+    worktreeId: string,
+    repoId: string,
+    removalHostId?: ExecutionHostId
+  ): void
+  abstract notifyWorktreesChanged(repoId: string): void
 
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
 
@@ -176,6 +195,33 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       )
     })
     installRuntimeSkillCommandSurface(runtime, this.skillCommands)
+    const getRuntimeSettings = () => this.store?.getSettings?.() ?? {}
+    installRuntimePerforceCommandSurface(runtime, {
+      workspaces: new RuntimePerforceCommands({
+        resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
+        getRuntimeSettings,
+        getCommitMessageAgentEnvironment: () => this.accounts.getCommitMessageAgentEnvironment()
+      }),
+      copies: new RuntimePerforceCopyCommands({
+        resolveRepo: (selector) => this.resolveRepoSelector(selector),
+        getStore: () => this.requireStore(),
+        getRuntimeSettings,
+        acquireFileWatcherRemoval: (path, connectionId) =>
+          this.acquireFileWatcherRemoval(path, connectionId),
+        stopWorkspaceTerminals: (worktreeId, connectionId) =>
+          this.stopPtysForDestructiveWorktreeRemoval(
+            worktreeId,
+            connectionId ? { connectionId } : {}
+          ),
+        forgetWorktree: (worktreeId, repoId, hostId) =>
+          this.purgeRemovedWorktree(this.requireStore(), worktreeId, repoId, hostId),
+        worktreesChanged: (repoId) => {
+          this.invalidateWorktreeScanCacheForRepo(repoId)
+          this.notifyWorktreesChanged(repoId)
+        },
+        reposChanged: () => this.notifyReposChanged()
+      })
+    })
     Object.assign(this, this.edgeCommands.surface)
     this.clientSettings = new RuntimeClientSettingsController(store, () =>
       this.notifyReposChanged()
@@ -275,4 +321,5 @@ export interface OrcaRuntimeWithStateFields
     RuntimeReviewCommandSurface,
     RuntimeServiceCommandSurface,
     RuntimeSkillCommandSurface,
+    RuntimePerforceCommandSurface,
     RuntimeEdgeCommandSurface {}

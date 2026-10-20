@@ -30,12 +30,18 @@ import { startNativeChatDraftLoad } from './app-shell/native-chat-draft-startup'
 import { useDocumentAppearance } from './app-shell/use-document-appearance'
 import { useFloatingWorkspacePanel } from './app-shell/use-floating-workspace-panel'
 import { useGlobalKeybindings } from './app-shell/use-global-keybindings'
+import { usePerforceFileChords } from './app-shell/use-perforce-file-chords'
 import { useOnboardingAndFeatureTips } from './app-shell/use-onboarding-and-feature-tips'
 import { usePersistedUIWriter } from './app-shell/use-persisted-ui-writer'
 import { useRuntimeGraphSync } from './app-shell/use-runtime-graph-sync'
 import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-effects'
 import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
 import { installActiveWorktreeRemovalSuccessor } from './lib/active-worktree-removal-successor'
+import { setRuntimeFileWriteGuard } from './runtime/runtime-file-mutation-client'
+import { checkoutPerforceFileBeforeWrite } from './lib/perforce-checkout-before-write'
+
+// Both the desktop and the web entry load App, so every save in either one passes this guard.
+setRuntimeFileWriteGuard(checkoutPerforceFileBeforeWrite)
 
 function App(): React.JSX.Element {
   const layout = useAppChromeLayout()
@@ -53,6 +59,7 @@ function App(): React.JSX.Element {
   useDocumentAppearance()
   useWindowVisibilityEffects()
   useGlobalKeybindings({ layout, floatingWorkspace })
+  usePerforceFileChords()
   // Why App, not store creation: the Space window mirrors this store's selection but owns none.
   useEffect(() => installActiveWorktreeRemovalSuccessor(), [])
 

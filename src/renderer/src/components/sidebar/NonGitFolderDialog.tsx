@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -81,6 +81,11 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
           'This path was checked locally.'
         )
 
+  // Why: Perforce workspaces have no .git but do have source control; skip the warning for them.
+  const [perforceCheckedPath, setPerforceCheckedPath] = useState<string | null>(null)
+  const checkKey = `${connectionId}|${runtimeEnvironmentId}|${folderPath}`
+  const perforceCheckDone = perforceCheckedPath === checkKey
+
   const handleConfirm = useCallback(() => {
     if (connectionId && folderPath) {
       void (async () => {
@@ -144,6 +149,38 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
     closeModal()
   }, [addNonGitFolder, closeModal, displayName, folderPath, connectionId, runtimeEnvironmentId])
 
+  useEffect(() => {
+    if (!isOpen || !folderPath || runtimeEnvironmentId || perforceCheckDone) {
+      return
+    }
+    let cancelled = false
+    void window.api.perforce
+      .detectFolder({ folderPath, ...(connectionId ? { connectionId } : {}) })
+      .then((result) => result.isWorkspace)
+      .catch(() => false)
+      .then((isPerforce) => {
+        if (cancelled) {
+          return
+        }
+        if (isPerforce) {
+          handleConfirm()
+        } else {
+          setPerforceCheckedPath(checkKey)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    isOpen,
+    folderPath,
+    connectionId,
+    runtimeEnvironmentId,
+    perforceCheckDone,
+    checkKey,
+    handleConfirm
+  ])
+
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open) {
@@ -154,7 +191,10 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
   )
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+    <Dialog
+      open={isOpen && (Boolean(runtimeEnvironmentId) || perforceCheckDone)}
+      onOpenChange={handleOpenChange}
+    >
       <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-sm">

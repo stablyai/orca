@@ -22,7 +22,7 @@ import {
   buildDisconnectedDetectedWorktrees,
   buildFolderDetectedWorktrees
 } from './folder-workspace-catalog'
-import { isFolderWorkspaceIdForRepo } from '../folder-workspace-model'
+import { isFolderRepoWorktreeIdForRepo } from '../folder-workspace-model'
 import {
   createSshWorktreeMetaIndexForRepo,
   listDisconnectedSshWorktrees
@@ -73,7 +73,7 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
       // Folder workspace ids carry instance suffixes, so their existing builder handles them.
       if (isFolderRepo(repo)) {
         const folderWorkspaceIds = Object.keys(store.getAllWorktreeMeta()).filter((worktreeId) =>
-          isFolderWorkspaceIdForRepo(repo, worktreeId)
+          isFolderRepoWorktreeIdForRepo(repo, worktreeId)
         )
         return hasConflictingStoredWorktreeOwner(store, repo, folderWorkspaceIds)
           ? rejected()

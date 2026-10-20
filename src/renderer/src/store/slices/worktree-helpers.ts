@@ -235,6 +235,7 @@ export type WorktreeSlice = {
       loaderVisible?: boolean
       request?: PendingWorktreeCreation['request']
       provisioningLog?: string
+      progressDetail?: string
       checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
     }
   ) => void

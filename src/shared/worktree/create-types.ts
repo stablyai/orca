@@ -16,6 +16,10 @@ import type {
 } from './types'
 import type { WorkspaceLineage, WorktreeLineage, WorktreeLineageWarning } from './lineage-types'
 import type {
+  PerforceCopyCreateSummary,
+  WorkspaceCopyStreamChoice
+} from '../perforce/workspace-copy/workspace-copy-types'
+import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch
@@ -132,6 +136,9 @@ export type CreateWorktreeArgs = {
   manualOrder?: number
   /** Parent workspace for in-app creates launched from a folder workspace. */
   parentWorkspace?: WorkspaceKey
+  /** Folder projects in a Perforce stream workspace: make the workspace a Perforce copy
+   *  (`<root>.wt/<name>` with its own client) instead of sharing the project folder. */
+  perforceCopy?: { stream?: WorkspaceCopyStreamChoice }
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
   /** Set when the renderer knows this auto-generated branch should be renamed
@@ -170,6 +177,8 @@ export type CreateWorktreeProgressEvent = {
   creationId?: string
   phase: 'fetching' | 'creating'
   checkout?: WorktreeCheckoutProgress | null
+  /** A step within the phase, shown instead of the phase label (Perforce copies report several). */
+  detail?: string
 }
 
 export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {
@@ -192,6 +201,8 @@ export type CreateWorktreeResult = {
   lineage?: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
   warnings?: WorktreeLineageWarning[]
+  /** Set when the workspace was made as a Perforce copy; additive, older hosts omit it. */
+  perforceCopy?: PerforceCopyCreateSummary
   setup?: WorktreeSetupLaunch
   setupReceipt?: {
     requested: 'run' | 'skip' | 'inherit'

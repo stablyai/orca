@@ -5,6 +5,7 @@ import { getCommitMessageAiPaneSearchEntries } from '@/components/settings/commi
 import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspace-search'
 import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/git-provider-api-budget-search'
 import { getGitPaneSearchEntries } from '@/components/settings/git-search'
+import { getPerforcePaneSearchEntries } from '@/components/settings/perforce-search'
 import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile-emulator-search'
 import { getQuickCommandsPaneSearchEntries } from '@/components/settings/quick-commands-search'
 import { getShareSkillsSettingsSearchEntries } from '@/components/settings/share-skills-settings-search'
@@ -106,6 +107,17 @@ export function buildWorkflowSettingsSections(
         ...getCommitMessageAiPaneSearchEntries(),
         ...getGitProviderApiBudgetSearchEntries()
       ],
+      group: 'workflows'
+    },
+    {
+      id: 'perforce',
+      title: translate('perforce.settings.navTitle', 'Perforce'),
+      description: translate(
+        'perforce.settings.navDescription',
+        'Connection, Source Control behavior, changelists, and shelves.'
+      ),
+      icon: GitBranch,
+      searchEntries: getPerforcePaneSearchEntries(),
       group: 'workflows'
     },
     {

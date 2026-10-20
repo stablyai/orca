@@ -979,13 +979,16 @@ export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
   phase: 'fetching' | 'creating',
   creationId?: string,
-  checkout?: WorktreeCheckoutProgress | null
+  checkout?: WorktreeCheckoutProgress | null,
+  /** A step within the phase, shown instead of the phase label (Perforce copies report several). */
+  detail?: string
 ): void {
   if (!mainWindow.isDestroyed()) {
     const event: CreateWorktreeProgressEvent = {
       creationId,
       phase,
-      ...(checkout !== undefined ? { checkout } : {})
+      ...(checkout !== undefined ? { checkout } : {}),
+      ...(detail ? { detail } : {})
     }
     mainWindow.webContents.send('createWorktree:progress', event)
   }

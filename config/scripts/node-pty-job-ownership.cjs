@@ -20,7 +20,7 @@ const NODE_PTY_JOB_EXPORTS = ['listJobProcessIds', 'terminateJob', 'assignCurren
  * docs/reference/windows-msys-job-breakaway.md.
  *
  * Same shape as stagedRelayAddonIsUnpatched() in
- * src/main/windows/windows-process-table.ts, which already tells a patched
+ * src/main/windows/windows-process-tree-unpatched-addon.ts, which already tells a patched
  * addon from a published one by a binary import name.
  */
 const CYGWIN_BREAKAWAY_MARKER_TEXT = 'msys-2.0.dll'

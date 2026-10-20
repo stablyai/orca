@@ -47,6 +47,11 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
     method === 'git.conflictOperation' ||
     method === 'git.branchCompare' ||
     method === 'git.upstreamStatus' ||
+    method === 'perforce.detect' ||
+    method === 'perforce.status' ||
+    method === 'perforce.history' ||
+    method === 'perforce.detectProject' ||
+    method === 'perforce.syncCopies' ||
     method === 'worktree.prefetchCreateBase'
   )
 }
@@ -56,6 +61,15 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
 // foreground slots listing refreshes and sends need; the background lane's slots belong to status.
 function isLongWaitRuntimeMethod(method: string): boolean {
   return method === 'worktree.rm' || method === 'agentSession.modelCatalog'
+}
+
+// Why: p4 scans, syncs and copy removals run for minutes on large workspaces, so Perforce gets its
+// own queue rather than holding the slots Git status and listing refreshes share.
+function runtimeCallQueueLane(method: string): string | null {
+  if (isLongWaitRuntimeMethod(method)) {
+    return 'long-wait'
+  }
+  return method.startsWith('perforce.') ? 'perforce' : null
 }
 
 export class RuntimeRpcCallQueuePool {
@@ -82,7 +96,8 @@ export class RuntimeRpcCallQueuePool {
       return Promise.reject(abortSignalReason(signal))
     }
     // Same concurrency bound, counted apart from the selector's other calls; global caps still apply.
-    const queueKey = isLongWaitRuntimeMethod(method) ? `${selector}\u0000long-wait` : selector
+    const lane = runtimeCallQueueLane(method)
+    const queueKey = lane ? `${selector}\u0000${lane}` : selector
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }

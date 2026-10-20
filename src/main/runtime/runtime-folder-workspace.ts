@@ -4,8 +4,10 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { Worktree } from '../../shared/worktree/types'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
-  getRepoMainWorktreeId
+  getRepoMainWorktreeId,
+  splitWorktreeId
 } from '../../shared/worktree/id'
+import { isPerforceCopyWorktreeIdForRepo } from '../../shared/worktree/perforce-copy-worktree'
 import { normalizeWorkspaceCreatorProvenance } from '../../shared/workspace-creator-provenance'
 
 export function getRuntimeFolderWorkspaceRootId(repo: Repo): string {
@@ -16,11 +18,13 @@ export function getRuntimeFolderWorkspaceInstanceId(repo: Repo, instanceId: stri
   return `${getRuntimeFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}${instanceId}`
 }
 
+/** Folder workspaces and Perforce copies: every worktree a folder project lists. */
 export function isRuntimeFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): boolean {
   const rootId = getRuntimeFolderWorkspaceRootId(repo)
   return (
     worktreeId === rootId ||
-    worktreeId.startsWith(`${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`)
+    worktreeId.startsWith(`${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`) ||
+    isPerforceCopyWorktreeIdForRepo(repo, worktreeId)
   )
 }
 
@@ -40,7 +44,11 @@ export function mergeRuntimeFolderWorkspace(
       ? { projectHostSetupId: meta.projectHostSetupId }
       : {}),
     ...(creatorProvenance ? { creatorProvenance } : {}),
-    path: repo.path,
+    // Why: a Perforce copy has its own folder; folder workspaces all share the project folder.
+    path: isPerforceCopyWorktreeIdForRepo(repo, worktreeId)
+      ? (splitWorktreeId(worktreeId)?.worktreePath ?? repo.path)
+      : repo.path,
+    ...(meta.perforceStream ? { perforceStream: meta.perforceStream } : {}),
     head: '',
     branch: '',
     isBare: false,
