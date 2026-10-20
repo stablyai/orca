@@ -96,6 +96,21 @@ On the computer you want to use as the client:
 
 Adding a server saves it without forcing every new project onto it. Open **Advanced → Default host for new projects** only when you want server-routed projects, terminals, provider checks, and browser or mobile handoff to use that server by default.
 
+## Alternative: your own HTTPS tunnel
+
+A user-managed Cloudflare Tunnel or reverse proxy can provide a connection without Tailscale. Orca does not create or manage the tunnel. Configure its public HTTPS hostname to forward HTTP and WebSocket traffic to the Orca runtime's actual local listener port.
+
+1. Keep Orca running on the server and find its bound port. A headless `orca serve` prints the bound endpoint; use that port rather than assuming it is `6768`.
+1. Configure a [Cloudflare Tunnel](https://developers.cloudflare.com/tunnel/get-started/) with a stable hostname, such as `https://orca.example.com`, and an HTTP origin such as `http://127.0.0.1:7777` when the runtime listens on `7777`. Run the connector on the server computer.
+1. In **Settings → Remote Orca Servers**, create a new access link and choose **Custom address**. Paste the public HTTPS URL, or its `wss://` equivalent. HTTPS is converted to WSS; do not append the local listener port to the public URL. An explicit public port and any proxy route are preserved.
+1. Generate the access link. Use **Pair another Orca client** for a desktop client, or the generated web-client URL for a browser.
+
+The public endpoint uses TLS, while the local connector can reach Orca over loopback HTTP. Keep the existing Orca pairing and access grants enabled. If your tunnel has additional authentication, each client must be able to complete that authentication before opening its WebSocket; browser login pages do not authenticate native clients automatically.
+
+[Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) are useful for temporary testing, but their hostnames change each time the connector starts and they have no uptime guarantee. After a hostname change, generate a new access link for new clients and update existing clients' endpoint configuration. Use a stable named tunnel for ongoing access. Keep access links private and revoke test grants when finished.
+
+For the native mobile companion, use a mobile-scoped pairing link and the [custom tunnel setup](/docs/mobile#use-your-own-tunnel). A mobile-scoped grant cannot open the full browser client.
+
 ## Use the remote server
 
 Once the server shows **Connected**, select it or one of its projects and use Orca normally. Terminals, agent processes, files, worktrees, and session state live on the server computer.
