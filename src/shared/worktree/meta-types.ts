@@ -13,6 +13,7 @@ import type {
 import type { TuiAgent } from '../tui-agent'
 import type { OrcaWorkspaceLayout } from '../global-settings-types'
 import type { DiffComment, MobileDiffReviewState } from '../diff-comment-types'
+import type { LinkedPluginTask } from '../plugins/plugin-task-link'
 import type { SmartTier } from '../sidebar-list/sort-stamps'
 
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
@@ -52,6 +53,8 @@ export type WorktreeMeta = {
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedItems?: WorkspaceAttachment[]
+  /** See Worktree.linkedPluginTask. */
+  linkedPluginTask?: LinkedPluginTask | null
   linkedTaskSourceContext?: TaskSourceContext | null
   isArchived: boolean
   isUnread: boolean

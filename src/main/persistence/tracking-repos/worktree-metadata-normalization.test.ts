@@ -138,6 +138,30 @@ describe('normalizeWorktreeLinkedItemMetadata', () => {
     expect(state.worktreeIdentityAliases).toEqual({ 'local|r1::/tmp/live': [liveKey] })
   })
 
+  it('clears every invalid plugin task link, falsy ones included', () => {
+    const link = {
+      pluginKey: 'orca-samples.hello-tasks',
+      sourceId: 'samples',
+      itemId: 'a',
+      title: 'A',
+      sourceTitle: 'Hello Tasks'
+    }
+    const state = makeState({
+      worktreeMeta: {
+        'r1::/tmp/empty': Object.assign(makeMeta(), { linkedPluginTask: '' }),
+        'r1::/tmp/zero': Object.assign(makeMeta(), { linkedPluginTask: 0 }),
+        'r1::/tmp/partial': Object.assign(makeMeta(), { linkedPluginTask: { itemId: 'a' } }),
+        'r1::/tmp/valid': { ...makeMeta(), linkedPluginTask: link }
+      }
+    })
+
+    expect(normalizeWorktreeLinkedItemMetadata(state)).toBe(true)
+    expect(state.worktreeMeta['r1::/tmp/empty']?.linkedPluginTask).toBeNull()
+    expect(state.worktreeMeta['r1::/tmp/zero']?.linkedPluginTask).toBeNull()
+    expect(state.worktreeMeta['r1::/tmp/partial']?.linkedPluginTask).toBeNull()
+    expect(state.worktreeMeta['r1::/tmp/valid']?.linkedPluginTask).toEqual(link)
+  })
+
   it('leaves already-normalized state clean', () => {
     const state = makeState({
       worktreeMeta: { 'r1::/tmp/wt': makeMeta() }

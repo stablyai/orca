@@ -16,6 +16,11 @@ import {
   pluginRelativePathSchema
 } from './plugin-manifest-fields'
 import { validatePluginManifestContributions } from './plugin-manifest-contribution-validation'
+import { PLUGIN_TASK_SOURCE_LIMIT, pluginTaskSourceContributionSchema } from './plugin-task-source'
+import {
+  PLUGIN_SETTING_LIMIT,
+  pluginSettingContributionSchema
+} from './plugin-settings-contribution'
 
 /**
  * Plugin manifest v1 (`orca-plugin.json` at the plugin root). The
@@ -110,7 +115,12 @@ const pluginManifestV1Object = z.object({
       agents: z
         .array(pluginAgentProfileContributionSchema)
         .max(PLUGIN_AGENT_PROFILE_LIMIT)
-        .default([])
+        .default([]),
+      taskSources: z
+        .array(pluginTaskSourceContributionSchema)
+        .max(PLUGIN_TASK_SOURCE_LIMIT)
+        .default([]),
+      settings: z.array(pluginSettingContributionSchema).max(PLUGIN_SETTING_LIMIT).default([])
     })
     .strict()
     // Why prefault: runs `{}` through the schema, so every family's own default applies.

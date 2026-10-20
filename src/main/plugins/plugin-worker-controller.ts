@@ -97,6 +97,18 @@ export class PluginWorkerController {
           `plugin ${plugin.pluginKey} registered undeclared command ${undeclaredCommand}`
         )
       }
+      const declaredTaskSources = new Set(
+        plugin.manifest.contributes.taskSources.map((source) => source.id)
+      )
+      const undeclaredTaskSource = handle.taskSources.find(
+        (sourceId) => !declaredTaskSources.has(sourceId)
+      )
+      if (undeclaredTaskSource) {
+        await this.manager.deactivate(plugin.pluginKey)
+        throw new Error(
+          `plugin ${plugin.pluginKey} registered undeclared task source ${undeclaredTaskSource}`
+        )
+      }
       this.activationErrors.delete(plugin.pluginKey)
       this.registerCommands(plugin, spec, handle.commands)
       return handle

@@ -5,6 +5,7 @@ import {
   type PluginWorkerChildMessage
 } from '../../shared/plugins/plugin-host-protocol'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
+import type { PluginTaskSourceOperation } from '../../shared/plugins/plugin-task-source'
 
 /**
  * Message-loop core of the out-of-process plugin worker. Electron-free and
@@ -15,12 +16,23 @@ import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
 
 export type PluginHostCallError = Error & { code?: string }
 
+/** Handlers behind one `contributes.taskSources` entry. Results are validated
+ *  host-side against the shapes in shared/plugins/plugin-task-source.ts. */
+export type PluginWorkerTaskSourceHandlers = {
+  list(params: unknown): unknown
+  get(params: unknown): unknown
+}
+
 /** API surface handed to a plugin's `activate(orca)` export. Everything is
  *  EXPERIMENTAL until pluginApi v1 freezes. */
 export type PluginWorkerOrcaApi = {
   /** Register the handler for a command declared in the manifest. */
   commands: {
     register(commandId: string, handler: (args: unknown) => unknown): void
+  }
+  /** Register the handlers for a task source declared in the manifest. */
+  tasks: {
+    registerSource(sourceId: string, handlers: PluginWorkerTaskSourceHandlers): void
   }
   /** Handle an event the manifest subscribed to (`contributes.events`). */
   events: {
@@ -49,6 +61,14 @@ function toErrorMessage(error: unknown): string {
   return error instanceof Error ? (error.stack ?? error.message) : String(error)
 }
 
+function pickTaskSourceHandler(
+  handlers: PluginWorkerTaskSourceHandlers,
+  operation: PluginTaskSourceOperation
+): (params: unknown) => unknown {
+  // Why: bind so plugin authors can use `this` inside an object-literal source.
+  return operation === 'list' ? handlers.list.bind(handlers) : handlers.get.bind(handlers)
+}
+
 export function createPluginWorkerRuntime(
   options: PluginWorkerRuntimeOptions
 ): PluginWorkerRuntime {
@@ -56,6 +76,7 @@ export function createPluginWorkerRuntime(
   const importModule = options.importModule ?? ((specifier: string) => import(specifier))
   const exit = options.exit ?? ((code: number) => process.exit(code))
   const commandHandlers = new Map<string, (args: unknown) => unknown>()
+  const taskSourceHandlers = new Map<string, PluginWorkerTaskSourceHandlers>()
   const eventHandlers = new Map<string, ((payload: unknown) => void | Promise<void>)[]>()
   const pendingHostCalls = new Map<
     number,
@@ -95,6 +116,14 @@ export function createPluginWorkerRuntime(
           commandHandlers.set(commandId, handler)
         }
       },
+      tasks: {
+        registerSource(sourceId, handlers) {
+          if (typeof handlers?.list !== 'function' || typeof handlers?.get !== 'function') {
+            throw new Error(`task source ${sourceId} must provide list and get handlers`)
+          }
+          taskSourceHandlers.set(sourceId, handlers)
+        }
+      },
       events: {
         on(event, handler) {
           const handlers = eventHandlers.get(event) ?? []
@@ -117,7 +146,11 @@ export function createPluginWorkerRuntime(
       }
     }
     await activate(orca)
-    send({ type: 'ready', commands: [...commandHandlers.keys()] })
+    send({
+      type: 'ready',
+      commands: [...commandHandlers.keys()],
+      taskSources: [...taskSourceHandlers.keys()]
+    })
   }
 
   return {
@@ -154,6 +187,31 @@ export function createPluginWorkerRuntime(
                 callId: message.callId,
                 ok: false,
                 error: toErrorMessage(error)
+              })
+            }
+            return
+          }
+          case 'invokeTaskSource': {
+            const handlers = taskSourceHandlers.get(message.sourceId)
+            const handler = handlers ? pickTaskSourceHandler(handlers, message.operation) : null
+            if (!handler) {
+              send({
+                type: 'taskSourceResult',
+                callId: message.callId,
+                ok: false,
+                error: `no handler registered for task source ${message.sourceId}`
+              })
+              return
+            }
+            try {
+              const value = await handler(message.params)
+              send({ type: 'taskSourceResult', callId: message.callId, ok: true, value })
+            } catch (error) {
+              send({
+                type: 'taskSourceResult',
+                callId: message.callId,
+                ok: false,
+                error: toErrorMessage(error).slice(0, 8192)
               })
             }
             return

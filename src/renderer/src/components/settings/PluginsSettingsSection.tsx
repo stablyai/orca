@@ -7,6 +7,7 @@ import { Button } from '../ui/button'
 import { PluginConsentDialog } from './PluginConsentDialog'
 import { PluginInstallDialog } from './PluginInstallDialog'
 import { PluginRemoveDialog } from './PluginRemoveDialog'
+import { PluginSettingsDialog } from './PluginSettingsDialog'
 import { PluginRollbackDialog } from './PluginRollbackDialog'
 import { PluginSettingsOverview } from './PluginSettingsOverview'
 import { getPluginsSectionPresentation } from './plugins-search'
@@ -36,6 +37,7 @@ export function PluginsSettingsSection({
   const [installOpen, setInstallOpen] = useState(false)
   const [consentPluginId, setConsentPluginId] = useState<string | null>(null)
   const [removePluginId, setRemovePluginId] = useState<string | null>(null)
+  const [settingsPluginId, setSettingsPluginId] = useState<string | null>(null)
   const [busyPluginKeys, setBusyPluginKeys] = useState<Set<string>>(() => new Set())
   const [featureBusy, setFeatureBusy] = useState(false)
   const [devPathsBusy, setDevPathsBusy] = useState(false)
@@ -159,6 +161,7 @@ export function PluginsSettingsSection({
     plugins.find((plugin) => plugin.pluginKey === consentPluginId) ?? null
   const consentPlugin = selectedConsentPlugin?.consentFingerprint ? selectedConsentPlugin : null
   const removePlugin = plugins.find((plugin) => plugin.pluginKey === removePluginId) ?? null
+  const settingsPlugin = plugins.find((plugin) => plugin.pluginKey === settingsPluginId) ?? null
 
   const toggleFeature = async (): Promise<void> => {
     setFeatureBusy(true)
@@ -336,6 +339,7 @@ export function PluginsSettingsSection({
         onMarketplaceInstalled={marketplaceLifecycle.reloadAfterMutation}
         onRollbackRequest={marketplaceLifecycle.requestRollback}
         onRemoveRequest={setRemovePluginId}
+        onOpenSettings={setSettingsPluginId}
         onUpdateDevPaths={updateDevPaths}
       />
       <PluginInstallDialog open={installOpen} onOpenChange={setInstallOpen} onInstall={install} />
@@ -343,6 +347,11 @@ export function PluginsSettingsSection({
         key={consentPlugin?.pluginKey ?? 'closed'}
         plugin={consentPlugin}
         onDecision={decideConsent}
+      />
+      <PluginSettingsDialog
+        key={settingsPlugin?.pluginKey ?? 'closed'}
+        plugin={settingsPlugin}
+        onClose={() => setSettingsPluginId(null)}
       />
       <PluginRemoveDialog
         plugin={removePlugin}

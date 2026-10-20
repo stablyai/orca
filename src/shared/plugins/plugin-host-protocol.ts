@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { PLUGIN_COMMAND_LIMIT, PLUGIN_EVENT_NAMES, pluginCommandIdSchema } from './plugin-manifest'
 import { PLUGIN_CAPABILITY_KINDS } from './plugin-capabilities'
+import { pluginIdSchema } from './plugin-manifest-fields'
+import { PLUGIN_TASK_SOURCE_LIMIT, PLUGIN_TASK_SOURCE_OPERATIONS } from './plugin-task-source'
 
 /**
  * Message protocol between the Orca process and the out-of-process plugin
@@ -26,6 +28,15 @@ export const pluginWorkerInvokeCommandSchema = z.object({
   args: z.unknown().optional()
 })
 
+/** Params are validated host-side before they are sent. */
+export const pluginWorkerInvokeTaskSourceSchema = z.object({
+  type: z.literal('invokeTaskSource'),
+  callId: z.number().int().nonnegative(),
+  sourceId: pluginIdSchema,
+  operation: z.enum(PLUGIN_TASK_SOURCE_OPERATIONS),
+  params: z.unknown().optional()
+})
+
 export const pluginWorkerDeliverEventSchema = z.object({
   type: z.literal('deliverEvent'),
   eventId: z.number().int().nonnegative(),
@@ -47,6 +58,7 @@ export const pluginWorkerShutdownSchema = z.object({ type: z.literal('shutdown')
 export const pluginWorkerParentMessageSchema = z.discriminatedUnion('type', [
   pluginWorkerInitSchema,
   pluginWorkerInvokeCommandSchema,
+  pluginWorkerInvokeTaskSourceSchema,
   pluginWorkerDeliverEventSchema,
   pluginWorkerHostResultSchema,
   pluginWorkerShutdownSchema
@@ -55,7 +67,9 @@ export const pluginWorkerParentMessageSchema = z.discriminatedUnion('type', [
 export const pluginWorkerReadySchema = z.object({
   type: z.literal('ready'),
   /** Command ids the worker registered handlers for (⊆ manifest commands). */
-  commands: z.array(pluginCommandIdSchema).max(PLUGIN_COMMAND_LIMIT)
+  commands: z.array(pluginCommandIdSchema).max(PLUGIN_COMMAND_LIMIT),
+  /** Task source ids the worker registered (⊆ manifest taskSources). */
+  taskSources: z.array(pluginIdSchema).max(PLUGIN_TASK_SOURCE_LIMIT).default([])
 })
 
 export const pluginWorkerCommandResultSchema = z.object({
@@ -64,6 +78,15 @@ export const pluginWorkerCommandResultSchema = z.object({
   ok: z.boolean(),
   // Why: value crosses a fork() IPC boundary, so it is structured-clone data
   // by construction; zod treats it as opaque and callers re-validate shape.
+  value: z.unknown().optional(),
+  error: z.string().max(8192).optional()
+})
+
+/** Same envelope as commandResult; call ids share one sequence per worker. */
+export const pluginWorkerTaskSourceResultSchema = z.object({
+  type: z.literal('taskSourceResult'),
+  callId: z.number().int().nonnegative(),
+  ok: z.boolean(),
   value: z.unknown().optional(),
   error: z.string().max(8192).optional()
 })
@@ -95,6 +118,7 @@ export const pluginWorkerFatalSchema = z.object({
 export const pluginWorkerChildMessageSchema = z.discriminatedUnion('type', [
   pluginWorkerReadySchema,
   pluginWorkerCommandResultSchema,
+  pluginWorkerTaskSourceResultSchema,
   pluginWorkerEventAckSchema,
   pluginWorkerHostCallSchema,
   pluginWorkerLogSchema,

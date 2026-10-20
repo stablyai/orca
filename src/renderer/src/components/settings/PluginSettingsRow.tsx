@@ -5,6 +5,7 @@ import {
   Loader2,
   MoreHorizontal,
   RotateCcw,
+  Settings2,
   Trash2
 } from 'lucide-react'
 import type { PluginHostListEntry, PluginHostLogLine } from '../../../../preload/api-types'
@@ -38,6 +39,7 @@ type PluginSettingsRowProps = {
   onToggleLogs: (pluginKey: string) => void
   onRollbackRequest: (pluginKey: string) => void
   onRemoveRequest: (pluginKey: string) => void
+  onOpenSettings: (pluginKey: string) => void
 }
 
 function statusPresentation(plugin: PluginHostListEntry): { label: string; className: string } {
@@ -136,8 +138,10 @@ export function PluginSettingsRow({
   onToggleEnabled,
   onToggleLogs,
   onRollbackRequest,
-  onRemoveRequest
+  onRemoveRequest,
+  onOpenSettings
 }: PluginSettingsRowProps): React.JSX.Element {
+  const hasSettings = (plugin.settings?.length ?? 0) > 0
   const status = statusPresentation(plugin)
   const needsReview = plugin.needsReconsent || plugin.status === 'pending'
   const enabled =
@@ -161,7 +165,14 @@ export function PluginSettingsRow({
       {translate('auto.components.settings.PluginSettingsRow.reviewAndEnable', 'Review & enable')}
     </Button>
   ) : null
-  const footerAction = reviewAction
+  const footerAction =
+    reviewAction ??
+    (hasSettings ? (
+      <Button variant="outline" size="sm" onClick={() => onOpenSettings(plugin.pluginKey)}>
+        <Settings2 />
+        {translate('auto.components.settings.PluginSettingsRow.settings', 'Settings')}
+      </Button>
+    ) : null)
 
   return (
     <article
@@ -286,6 +297,12 @@ export function PluginSettingsRow({
                   ? translate('auto.components.settings.PluginSettingsRow.hideLogs', 'Hide logs')
                   : translate('auto.components.settings.PluginSettingsRow.viewLogs', 'View logs')}
               </DropdownMenuItem>
+              {hasSettings ? (
+                <DropdownMenuItem onSelect={() => onOpenSettings(plugin.pluginKey)}>
+                  <Settings2 />
+                  {translate('auto.components.settings.PluginSettingsRow.settings', 'Settings')}
+                </DropdownMenuItem>
+              ) : null}
               {plugin.source?.kind === 'marketplace' ? (
                 <DropdownMenuItem onSelect={() => onRollbackRequest(plugin.pluginKey)}>
                   <RotateCcw />
