@@ -10,6 +10,8 @@ import type { RetiredTerminalSurface } from '../../mobile-session-terminal-retir
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeLeafRecord
@@ -46,6 +48,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
        * also drives the SSH surface decision and the liveness verdict: node-pty reports real exits
        * as -1, so the numeric code alone cannot tell a dead process from a failed stop. */
       providerExitObserved?: boolean
+      /** A window's view of the pane was showing when it ended (layout-owner build). */
+      viewShown?: boolean
     } = {}
   ): void | Promise<void> {
     const pty = this.ptysById.get(ptyId)
@@ -58,10 +62,14 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     const observedCause = options.cause ?? resolveUnreportedExitCause(exitCode)
     const stopNeverConfirmed =
       observedCause.kind === 'unknown' && observedCause.reason === 'stop_unverified'
+    const stopRequested = this.stopRequestedPtyIds.has(ptyId)
+    // A raw provider code is not a death: node-pty reports a closed socket as -1 too.
+    const endVouched =
+      stopRequested ||
+      options.hostExitConfirmed === true ||
+      this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict.status === 'exited'
     const exitCause: TerminalExitCause =
-      this.stopRequestedPtyIds.has(ptyId) && !stopNeverConfirmed
-        ? OPERATOR_CLOSE_EXIT_CAUSE
-        : observedCause
+      stopRequested && !stopNeverConfirmed ? OPERATOR_CLOSE_EXIT_CAUSE : observedCause
     this.stopRequestedPtyIds.delete(ptyId)
     const preservesAbnormalSshSurface =
       this.isSshOwnedPtyId(ptyId) &&
@@ -253,7 +261,18 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         // Why: permanent process exit is absence, not a starting/sleeping tab.
         // Retire before publishing so paired clients never persist a ghost.
         try {
-          retirement = this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
+          retirement = this.retireMobileSessionSurfacesForPty(
+            ptyId,
+            incarnationId,
+            exactSurfaces,
+            // Switch point: main decides an exited split pane's close.
+            ORCA_LAYOUT_OWNER_IS_MAIN
+              ? exitedSplitPaneFacts(this.terminalRunFacts, pty, ptyId, exitCode, {
+                  ...options,
+                  endVouched
+                })
+              : undefined
+          )
         } catch (error) {
           console.error('[runtime] failed to publish terminal retirement:', error)
         }

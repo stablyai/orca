@@ -119,7 +119,8 @@ export async function restoreRemoteWatcherAfterFailedRemoval(
     sender.send('fs:changed', {
       worktreePath,
       events: [{ kind: 'overflow', absolutePath: worktreePath }],
-      connectionId
+      connectionId,
+      resync: true
     } satisfies FsChangedPayload)
   }
   // Why: an overlapping retried removal may have re-suspended owners into this same entry.

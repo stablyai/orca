@@ -34,7 +34,7 @@ export type WindowLayoutCommand =
       /** A pane the window already split under its own id. */
       newLeafId?: string
     }
-  | { type: 'closePane'; tabId: string; leafId: string; automatic?: true }
+  | { type: 'closePane'; tabId: string; leafId: string }
   | { type: 'renamePane'; tabId: string; leafId: string; title: string | null }
   | { type: 'equalizePanes'; tabId: string }
   | { type: 'movePane'; tabId: string; leafId: string; targetLeafId: string; side: PaneSide }

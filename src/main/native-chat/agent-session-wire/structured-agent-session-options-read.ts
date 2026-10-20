@@ -3,11 +3,9 @@
 // The record keeps the next message's choices; the catalog names known defaults. A provider's
 // reports remain execution facts and never replace the saved selection.
 
-import {
-  refuse,
-  type AgentSessionModelCatalogResult,
-  type AgentSessionOptionResult,
-  type AgentSessionOptionsResult
+import type {
+  AgentSessionModelCatalogResult,
+  AgentSessionOptionsResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
@@ -16,11 +14,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { decodeStructuredAgentSessionOptionValue } from '../../../shared/structured-agent-session-option-codec'
 import { finishedListingIds } from '../../../shared/structured-agent-session-options'
-import {
-  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
-  agentChatPermissionModes
-} from '../../../shared/agent-chat-permission-mode'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { savedEffectiveServiceTier } from '../../../shared/structured-agent-session-effective-tier'
 import { journalOpenReadRefusal } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentDefinition } from './structured-agent-definition'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
@@ -30,8 +24,13 @@ import { saveStructuredAgentSessionListing } from './structured-agent-session-st
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { structuredAgentSessionOptionModels } from './structured-agent-session-option-models'
 import { structuredAgentSessionLaunchPermission } from './structured-agent-session-launch-permission'
-import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import { structuredAgentSessionNeverSent } from './structured-agent-session-never-sent'
+
+export {
+  recordStructuredAgentSessionOptionIntent,
+  structuredAgentSessionOptionOverridesRefusal
+} from './structured-agent-session-option-intent'
 
 type RestingOptions = Pick<
   AgentSessionOptionsResult,
@@ -44,38 +43,6 @@ export type StructuredAgentSessionOptionsReader = { readsWithoutModel: boolean }
 /** A same-build caller in this process reads as the RPC gate treats one: it takes no model. */
 export const IN_PROCESS_OPTIONS_READER: StructuredAgentSessionOptionsReader = {
   readsWithoutModel: true
-}
-
-/** Whether the agent takes this pick: a permission mode it offers, or an option key it names. */
-function acceptsOptionPick(
-  agents: Pick<StructuredAgentRegistry, 'definition'>,
-  provider: string,
-  key: string,
-  value: string
-): boolean {
-  const definition = agents.definition(provider)
-  return key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
-    ? definition !== null &&
-        agentChatPermissionModes(provider)?.modes.some((mode) => mode === value) === true
-    : definition?.restingOptions.acceptsKey(key) === true
-}
-
-/** Initial explicit picks follow the same rules as a pick made while the chat is at rest. */
-export function structuredAgentSessionOptionOverridesRefusal(
-  agents: Pick<StructuredAgentRegistry, 'definition'>,
-  provider: string,
-  options: Readonly<Record<string, string>>
-) {
-  const key = Object.keys(options).find(
-    (key) => !acceptsOptionPick(agents, provider, key, options[key] ?? '')
-  )
-  return key === undefined
-    ? null
-    : refuse(
-        'agent_session_operation_invalid',
-        { reason: 'optionRejected' },
-        `${provider} has no session option named ${key}`
-      )
 }
 
 /** The at-rest rules of the record's agent, as this runtime registered it; null for any other. */
@@ -140,6 +107,11 @@ async function readStructuredAgentSessionOptionsAtRest(
     (rules?.effortDefaultsToModel || (saved.model === undefined && folderDefault)
       ? models.find((entry) => entry.id === model)?.defaultEffort
       : undefined)
+  const defaulted = (['model', 'effort'] as const).filter(
+    (key) => saved[key] === undefined && Boolean(key === 'model' ? model : effort)
+  )
+  // The tier the chat's own model runs; the record keeps the saved one for a model that offers it.
+  const serviceTier = savedEffectiveServiceTier(saved, models)
   return {
     models: listed ? structuredAgentSessionOptionModels(listed, model, (row) => row) : [],
     ...(listedModelIds ? { listedModelIds } : {}),
@@ -150,43 +122,10 @@ async function readStructuredAgentSessionOptionsAtRest(
       ...(model ? { model } : {}),
       ...(effort ? { effort } : {}),
       ...(typeof fastMode === 'boolean' ? { fastMode } : {}),
-      ...(saved.serviceTier ? { serviceTier: saved.serviceTier } : {})
+      ...(serviceTier ? { serviceTier } : {}),
+      defaulted
     }
   }
-}
-
-/** Records a pick for the next start. Only a key the provider would accept is kept. */
-export async function recordStructuredAgentSessionOptionIntent(
-  deps: {
-    store: Pick<AgentSessionRecordStore, 'getRecord' | 'replaceSessionOptions'>
-    agents: Pick<StructuredAgentRegistry, 'definition'>
-  },
-  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'fence' | 'persistOptions' | 'publish' | 'now'>,
-  input: { key: string; value: string }
-): Promise<TurnOutcome<AgentSessionOptionResult>> {
-  const record = deps.store.getRecord(ctx.sessionId)
-  if (!record || !acceptsOptionPick(deps.agents, record.provider, input.key, input.value)) {
-    return {
-      ok: false,
-      refusal: refuse(
-        'agent_session_operation_invalid',
-        { reason: 'optionRejected' },
-        `${record?.provider ?? 'This session'} has no session option named ${input.key}`
-      )
-    }
-  }
-  const options = { ...record.options, [input.key]: input.value }
-  // The answer still names the mode among the options, as the wire always has.
-  await (input.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
-    ? deps.store.replaceSessionOptions({
-        sessionId: ctx.sessionId,
-        fence: ctx.fence,
-        permissionMode: input.value,
-        now: ctx.now()
-      })
-    : ctx.persistOptions(options))
-  ctx.publish()
-  return { ok: true, value: { ...input, options } }
 }
 
 /** A live child's own answer, or the answer at rest; the goal, usage and rewind either way. */
@@ -285,8 +224,22 @@ export async function readStructuredAgentSessionOptions(
       saved.fastMode !== undefined
         ? selected.current.fastMode
         : (options.current.fastMode ?? selected.current.fastMode),
-    serviceTier: saved.serviceTier ?? options.current.serviceTier ?? selected.current.serviceTier
+    // The saved tier as the shared speed rule runs it under the saved model.
+    serviceTier:
+      saved.serviceTier !== undefined
+        ? selected.current.serviceTier
+        : (options.current.serviceTier ?? selected.current.serviceTier)
   }
+  // A chat that saved a value has no default for it: the saved value shows, or the child it
+  // refused runs what it reports. A chat that has sent nothing runs the default it shows, which its
+  // first send pins. A model the child leaves blank shows the at-rest one, with its marking.
+  const defaultedBy = (key: 'model' | 'effort') =>
+    (key === 'model' && !options.current.model ? selected : options).current.defaulted
+  const defaulted = structuredAgentSessionNeverSent(record, session.journal)
+    ? []
+    : (['model', 'effort'] as const).filter(
+        (key) => saved[key] === undefined && defaultedBy(key)?.includes(key) === true
+      )
   const confirmed = options.current.confirmed?.filter((key) =>
     key === 'model' || key === 'effort' || key === 'fastMode' || key === 'serviceTier'
       ? current[key] === options.current[key]
@@ -296,6 +249,7 @@ export async function readStructuredAgentSessionOptions(
     ...options,
     current: {
       ...current,
+      defaulted,
       confirmed,
       ...(options.current.fastModeState ? { fastModeState: options.current.fastModeState } : {}),
       ...(confirmed?.length ? { confirmed } : {}),

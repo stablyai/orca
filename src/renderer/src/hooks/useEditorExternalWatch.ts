@@ -69,7 +69,8 @@ export function useEditorExternalWatch(): void {
               markWorktreeCatchUpPayload({
                 worktreePath: target.worktreePath,
                 events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
-                connectionId: target.connectionId
+                connectionId: target.connectionId,
+                resync: true
               }),
               target.runtimeEnvironmentId,
               target

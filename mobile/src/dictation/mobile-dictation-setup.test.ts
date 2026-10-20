@@ -3,6 +3,7 @@ import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-clien
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import {
+  dictationModelRowAction,
   deleteDictationModel,
   downloadDictationModel,
   fetchDictationSetup,
@@ -186,6 +187,31 @@ describe('rpc wrappers', () => {
     const client = clientWith([malformedFailure({ code: 'internal_error' })])
 
     await expect(fetchDictationSetup(client)).rejects.toThrow('Failed to load dictation models')
+  })
+})
+
+describe('dictationModelRowAction', () => {
+  // #31174: a cloud-only host (Windows or a managed SSH server) lists only OpenAI rows.
+  it('lets a ready cloud model be picked like a downloaded one', () => {
+    const cloud = model({
+      id: 'openai-gpt-4o-mini-transcribe',
+      provider: 'openai',
+      status: 'ready'
+    })
+    expect(dictationModelRowAction(cloud, '')).toBe('use')
+    expect(dictationModelRowAction(cloud, cloud.id)).toBe('in-use')
+  })
+
+  it('asks for a key on the host when a cloud model is not ready', () => {
+    const cloud = model({ provider: 'openai', status: 'not-downloaded' })
+    expect(dictationModelRowAction(cloud, '')).toBe('needs-api-key')
+  })
+
+  it('keeps on-device rows downloadable until they are ready', () => {
+    expect(dictationModelRowAction(model({ status: 'not-downloaded' }), '')).toBe('download')
+    expect(dictationModelRowAction(model({ status: 'error' }), '')).toBe('download')
+    expect(dictationModelRowAction(model({ status: 'downloading' }), '')).toBe('downloading')
+    expect(dictationModelRowAction(model({ status: 'ready' }), 'm1')).toBe('in-use')
   })
 })
 

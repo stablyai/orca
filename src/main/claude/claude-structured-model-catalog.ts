@@ -97,6 +97,11 @@ export function seedModels(): ListedModel[] {
   }))
 }
 
+/** Whether `currentModelId` falls back to the list's default, which the chat never chose. */
+export function currentModelIsDefaulted(reportedModel: string | undefined): boolean {
+  return !reportedModel || reportedModel === 'default'
+}
+
 export function currentModelId(models: ListedModel[], reportedModel: string | undefined): string {
   const matched = reportedModel
     ? models.find(

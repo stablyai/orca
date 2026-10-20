@@ -21,6 +21,7 @@ import {
   reportedCodexSessionOptions
 } from './codex-structured-session-options'
 import { startBackgroundCodexCatalogRefresh } from './codex-structured-background-catalog'
+import { CodexSkillReport } from './codex-structured-skill-report'
 import { codexAcquireCatalogAccess } from './codex-structured-acquire-catalog'
 import { reportedCodexThreadOptions } from './codex-structured-service-tier'
 import {
@@ -76,7 +77,10 @@ export async function openCodexStructuredSession(
     assertCodexConnectionOpen(connection, sessionId)
   }
   current()
-  await waitForPromiseWithSignal(initializeCodexAppServerConnection(connection), openInput.signal)
+  await waitForPromiseWithSignal(
+    initializeCodexAppServerConnection(connection, null),
+    openInput.signal
+  )
   current()
   const threadLaunch = await waitForPromiseWithSignal(
     withCodexVisualsThreadConfig(connection, launch, {
@@ -94,7 +98,9 @@ export async function openCodexStructuredSession(
     openCodexThread(
       connection,
       { ...threadLaunch, commandEnv },
-      deps.requestTimeoutMs,
+      // No deadline of its own: resuming a long rollout or starting MCP servers takes what it
+      // takes. The host's start ceiling, a close and a Stop end the wait through the signal.
+      deps.requestTimeoutMs ?? null,
       openInput.signal
     ),
     openInput.signal
@@ -119,14 +125,6 @@ export async function openCodexStructuredSession(
     prompts: attempt.window.prompts,
     options: restoredCodexSessionOptions(input.options),
     reportedOptions: reportedCodexThreadOptions(opened),
-    ...(launch.resumeThreadId === null && !launch.model && opened.model
-      ? {
-          nativeDefaults: {
-            model: opened.model,
-            ...(opened.effort ? { effort: opened.effort } : {})
-          }
-        }
-      : {}),
     ...(catalogAccess ? { catalogAccess } : {}),
     dispatchEchoes: start.dispatchEchoes,
     translator,
@@ -149,6 +147,16 @@ export async function openCodexStructuredSession(
   }
   current()
   acquisitions.deleteIfCurrent(sessionId, attempt)
+  session.skillReport = new CodexSkillReport({
+    connection,
+    cwd: launch.cwd,
+    sessionId,
+    isCurrent: () => sessions.get(sessionId) === session && !session.ended,
+    publish: () => input.events?.publish(),
+    ...(deps.requestTimeoutMs !== undefined ? { timeoutMs: deps.requestTimeoutMs } : {}),
+    ...(deps.logger ? { logger: deps.logger } : {})
+  })
+  session.skillReport.refresh()
   startBackgroundCodexCatalogRefresh({
     session,
     sessionId,

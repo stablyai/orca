@@ -304,6 +304,10 @@ describe('structured Codex session options', () => {
       serviceTier: 'unrecognized-tier',
       confirmed: ['serviceTier']
     })
+    // A thread that reported no model runs the listing's default, which the chat never chose.
+    await expect(
+      readCodexStructuredSessionOptions({ connection, current: {} })
+    ).resolves.toMatchObject({ current: { model: 'gpt-live', defaulted: ['model'] } })
   })
 
   it('hides and rejects Fast mode when the running catalog does not advertise it', async () => {

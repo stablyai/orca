@@ -156,6 +156,49 @@ export function renamePane(model: WorkspaceLayoutModel, command: CommandOf<'rena
   )
 }
 
+export function setPaneGrid(
+  model: WorkspaceLayoutModel,
+  command: CommandOf<'setPaneGrid'>
+): Applied {
+  const tab = paneTab(model, command)
+  if (!tab) {
+    return refuse('tab_not_found')
+  }
+  if (!layoutContainsLeafId(tab.panes.root, command.leafId)) {
+    return refuse('pane_not_found')
+  }
+  const workspace = model.workspaces[command.workspace]!
+  const leaf = workspace.leaves?.[command.leafId]
+  const { cols, rows } = command.grid
+  if (leaf?.lastGrid?.cols === cols && leaf.lastGrid.rows === rows) {
+    return applied(model)
+  }
+  return applied(
+    withWorkspace(
+      model,
+      command.workspace,
+      setLeaf(workspace, command.leafId, { ...leaf, lastGrid: { cols, rows } })
+    )
+  )
+}
+
+export function releasePaneTerminal(
+  model: WorkspaceLayoutModel,
+  command: CommandOf<'releasePaneTerminal'>
+): Applied {
+  const tab = paneTab(model, command)
+  if (!tab || !layoutContainsLeafId(tab.panes.root, command.leafId)) {
+    return refuse('pane_not_found')
+  }
+  const workspace = model.workspaces[command.workspace]!
+  const leaf = workspace.leaves?.[command.leafId]
+  if (leaf?.ptyId !== command.ptyId) {
+    return applied(model)
+  }
+  const { ptyId: _released, incarnationId: _incarnation, ...rest } = leaf
+  return applied(withWorkspace(model, command.workspace, setLeaf(workspace, command.leafId, rest)))
+}
+
 /** Drag-out (#25380): only the tree moves; the pane's data and scrollback are keyed by its id. */
 export function movePaneToNewTab(
   model: WorkspaceLayoutModel,

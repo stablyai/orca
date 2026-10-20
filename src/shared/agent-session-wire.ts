@@ -451,6 +451,8 @@ export type AgentSessionSlashCommand = {
   description?: string
   /** Provider-authored argument sketch, e.g. `<issue-url>`. */
   argumentHint?: string
+  /** The skill file the provider selects this skill by; two skills may share a name. */
+  path?: string
 }
 
 /** The provider's own command surface, read per session. Additive read-only

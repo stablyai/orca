@@ -389,8 +389,7 @@ describe('method routing', () => {
         callerKey: 'trusted-local:runtime'
       })
     )
-    expect(hostCalls.attach).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({
         accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
         options: { model: 'gpt-5.6-sol', effort: 'medium' }
@@ -422,8 +421,7 @@ describe('method routing', () => {
     })
     // Beside `options`, after the attach fingerprint: which tab shows the chat is not which
     // conversation this attaches to.
-    expect(hostCalls.attach).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({ surfaceTabId: 'chat-tab-1' })
     )
   })
@@ -580,8 +578,7 @@ describe('method routing', () => {
         callerKey: 'trusted-local:runtime'
       })
     )
-    expect(hostCalls.attach).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({
         accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/host/.claude' }
       })
@@ -650,8 +647,7 @@ describe('method routing', () => {
       })
 
       expect(await call(method, params, STRUCTURED_CLIENT)).toMatchObject({ ok: true })
-      expect(hostCalls.attach).toHaveBeenCalledWith(
-        expect.anything(),
+      expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
         expect.objectContaining({ location: params.location })
       )
       expect(hostCalls.attach.mock.calls[0]?.[1]).not.toHaveProperty('launchDirectory')

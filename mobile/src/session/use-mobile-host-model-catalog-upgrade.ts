@@ -1,7 +1,7 @@
 import { useEffect, type MutableRefObject } from 'react'
 import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session-wire'
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
-import type { NativeChatSessionOptionRecord } from '../../../src/shared/native-chat-session-option-state'
+import type { StructuredAgentSessionOptionRecord } from '../../../src/shared/structured-agent-session-option-state'
 import {
   applyStructuredAgentSessionModelCatalog,
   settleStructuredAgentSessionBuiltinCatalog,
@@ -31,7 +31,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
   worktree?: string
   fence: number | null
   optionCatalog: AgentSessionOptionCatalog | null
-  activeOptionRecordRef: MutableRefObject<NativeChatSessionOptionRecord>
+  activeOptionRecordRef: MutableRefObject<StructuredAgentSessionOptionRecord>
   /** A listing landed after the chat's options were read, which answered without it. */
   onListingLanded?: () => void
   updateOptionState: (

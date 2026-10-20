@@ -437,6 +437,19 @@ describe('Claude Fast mode reported by the session frame alone', () => {
   })
 })
 
+describe("Claude's model the chat never chose", () => {
+  it('marks the listed default it falls back to, never a model the chat runs', async () => {
+    const { session } = fastModeSession(true)
+    const current = async () =>
+      (await readClaudeStructuredSessionOptions(session, undefined)).current
+    expect((await current()).defaulted).toBeUndefined()
+    session.options.delete('model')
+    expect(await current()).toMatchObject({ defaulted: ['model'] })
+    session.options.set('model', 'default')
+    expect(await current()).toMatchObject({ defaulted: ['model'] })
+  })
+})
+
 describe('Claude structured option write under the request deadline', () => {
   it("keeps a timed-out client write as the deadline's own error, not a rejection", async () => {
     const session = sessionFor(async () => {

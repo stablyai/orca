@@ -7,11 +7,14 @@ const readRuntimeFileContentMock = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({
   toast: toastMock
 }))
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: vi.fn()
+vi.mock('@/store', () => {
+  const getState = vi.fn()
+  return {
+    useAppStore: Object.assign((select: (state: unknown) => unknown) => select(getState()), {
+      getState
+    })
   }
-}))
+})
 vi.mock('@/runtime/runtime-file-read-client', () => ({
   readRuntimeFileContent: readRuntimeFileContentMock
 }))

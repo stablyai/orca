@@ -35,6 +35,9 @@ export { ROOT_ONLY_GRACEFUL_EXIT_MS as GRACEFUL_EXIT_MS } from '../provider-proc
 
 export type CodexAppServerLaunch = ProviderProcessLaunch
 
+// Why: calls made after the start run in the session's queue, which a Stop or a close waits behind,
+// so their deadline is what frees it from a Codex that never answers. Temporary: it goes once a
+// Stop or close can end the child without queueing behind its request.
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 
 /** Builds the transport so an owner can record its process before initialization. */
@@ -148,7 +151,7 @@ async function connectCodexAppServer(
   function request(
     method: string,
     params?: Record<string, unknown>,
-    options: { timeoutMs?: number; onReply?: () => void } = {}
+    options: { timeoutMs?: number | null; onReply?: () => void } = {}
   ): Promise<unknown> {
     if (closing) {
       return Promise.reject(new Error(`codex app-server connection is closed (${method})`))
@@ -160,19 +163,24 @@ async function connectCodexAppServer(
       return Promise.reject(buildExitError())
     }
     const id = nextRequestId++
-    const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
+    const timeoutMs =
+      options.timeoutMs === undefined ? DEFAULT_REQUEST_TIMEOUT_MS : options.timeoutMs
     return new Promise<unknown>((resolve, reject) => {
-      // Why: per request, not per session — a chat session outlives every call,
-      // so only the individual call can carry a deadline.
-      const timer = setTimeout(() => {
-        dispatcher.timeOutPending(id)
-        reject(
-          withProviderRequestTimeout(
-            new CodexAppServerTimeoutError(`codex app-server ${method} exceeded ${timeoutMs}ms`),
-            { method, timeoutMs }
-          )
-        )
-      }, timeoutMs)
+      // Null requests are bounded by their caller; timed requests belong to this call.
+      const timer =
+        timeoutMs === null
+          ? undefined
+          : setTimeout(() => {
+              dispatcher.timeOutPending(id)
+              reject(
+                withProviderRequestTimeout(
+                  new CodexAppServerTimeoutError(
+                    `codex app-server ${method} exceeded ${timeoutMs}ms`
+                  ),
+                  { method, timeoutMs }
+                )
+              )
+            }, timeoutMs)
       dispatcher.addPending(id, { method, resolve, reject, timer, onReply: options.onReply })
       try {
         sendLine(params === undefined ? { method, id } : { method, id, params })
@@ -238,7 +246,8 @@ async function connectCodexAppServer(
     }
     if (initialize) {
       handshaking = true
-      await initializeCodexAppServerConnection(connection)
+      // Direct opens cannot expose the connection for cancellation until initialization finishes.
+      await initializeCodexAppServerConnection(connection, 15_000)
     }
   } catch (error) {
     if ((await close()) !== true) {

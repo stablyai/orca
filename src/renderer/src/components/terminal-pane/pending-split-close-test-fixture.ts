@@ -110,6 +110,15 @@ export async function preparePendingSplitClose(
     retireAgentPaneAuthority: vi.fn(),
     suppressPtyExit: vi.fn()
   }) as unknown as AppState
+  // Main answers the window's layout commands (a layout-owner build): the only local runtime call
+  // these closes make. The transport refuses anything that carries no command.
+  const { layoutApplyTestTransport: main } =
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  const runtimeCall = async ({ params }: { params?: unknown }) => ({
+    ok: true,
+    result: await main.call(params)
+  })
+  Object.assign(window.api, { runtime: { ...window.api.runtime, call: vi.fn(runtimeCall) } })
   const spawn = Promise.withResolvers<PtyConnectResult>()
   vi.mocked(window.api.pty.spawn).mockReturnValueOnce(spawn.promise)
   const transport = createIpcPtyTransport({})
@@ -193,6 +202,9 @@ export async function preparePendingSplitClose(
   // oxlint-disable-next-line react-hooks/rules-of-hooks -- React registration is mocked; exercise the real close callbacks without mounting UI.
   const actions = useTerminalPaneCloseActions(controller)
   return {
+    /** Lets main answer the window's closes (a layout-owner build); nothing to wait for otherwise. */
+    mainAnswered: () => main.settle(),
+    sentPaneCloses: () => main.sentOfType('closePane'),
     transport,
     transports,
     connecting,

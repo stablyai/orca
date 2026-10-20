@@ -1,3 +1,6 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -117,5 +120,29 @@ describe('findIdOnlyLookups', () => {
       'lookup:ops.ts#pickRepo',
       'lookup:ops.ts#pickOptional'
     ])
+  })
+})
+
+describe('listStoreOperationClasses', () => {
+  it('finds an operations class whose import also brings in a function', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'id-only-ratchet-'))
+    const file = path.join(root, 'src/main/persistence/loading-store/store-domain-composition.ts')
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(
+      file,
+      [
+        "import { RowOps } from './row-ops'",
+        "import { scheduleSave, WriteOps } from './write-ops'",
+        'const STORE_DOMAIN_OPERATION_CLASSES = [RowOps, WriteOps]'
+      ].join('\n')
+    )
+    try {
+      expect(listStoreOperationClasses(root)).toEqual([
+        ['RowOps', 'src/main/persistence/loading-store/row-ops.ts'],
+        ['WriteOps', 'src/main/persistence/loading-store/write-ops.ts']
+      ])
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
   })
 })

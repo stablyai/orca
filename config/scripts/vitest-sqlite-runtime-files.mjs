@@ -111,6 +111,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-failed-create-owner-verdict.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-current-work.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-forget-status.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-agent-session-fork-rewind.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-held-child-lease-renewal.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-host-runtime-state.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-host.test.ts',

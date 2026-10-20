@@ -78,6 +78,13 @@ export function isEditorModelDirty(state: AppState, file: OpenFile): boolean {
   return editorModelSiblingTabs(state, file).some((tab) => tab.isDirty)
 }
 
+/** The tab holding the model's unsaved text; it may be a sibling of `file`, not `file` itself. */
+export function editorModelDraftHolder(state: AppState, file: OpenFile): OpenFile | undefined {
+  return editorModelSiblingTabs(state, file).find(
+    (tab) => tab.isDirty && state.editorDrafts[tab.id] !== undefined
+  )
+}
+
 /** Whether a store snapshot is whole enough to resolve a tab's model siblings. */
 export function isWholeEditorState(state: unknown): state is AppState {
   return (

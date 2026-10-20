@@ -36,6 +36,7 @@ import { useNativeChatExternalAttachments } from './use-native-chat-external-att
 import type { NativeChatPendingAttachmentChips } from './native-chat-session-attachment-drop'
 import type { AgentSessionAttachmentPathUploadResult } from '../../../../shared/agent-session-attachments'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import type { NativeChatStructuredAttachmentSession } from './native-chat-attachment-upload'
 
 type HookApi = ReturnType<typeof useNativeChatExternalAttachments>
 
@@ -68,7 +69,7 @@ function Probe({
 }: {
   disabled: boolean
   structuredWorktreeId?: string
-  structuredSession?: { sessionId: string; runtimeEnvironmentId: string | null }
+  structuredSession?: NativeChatStructuredAttachmentSession
   attachResolvedPaths: (paths: string[]) => void
   pendingChips: NativeChatPendingAttachmentChips
   setNotice: (notice: string | null) => void
@@ -96,7 +97,7 @@ let root: Root | null = null
 async function renderProbe(args: {
   disabled?: boolean
   structuredWorktreeId?: string
-  structuredSession?: { sessionId: string; runtimeEnvironmentId: string | null }
+  structuredSession?: NativeChatStructuredAttachmentSession
   attachResolvedPaths: (paths: string[]) => void
   pendingChips?: NativeChatPendingAttachmentChips
   setNotice?: (notice: string | null) => void
@@ -160,6 +161,30 @@ afterEach(() => {
 })
 
 describe('useNativeChatExternalAttachments', () => {
+  it('keeps a failed paired chat from issuing an upload and says how to retry', async () => {
+    const attachResolvedPaths = vi.fn()
+    const setNotice = vi.fn()
+    const notice = 'Codex chat could not open. Use Retry in the chat, then attach the files again.'
+    const probe = await renderProbe({
+      structuredWorktreeId: 'folder-1',
+      structuredSession: {
+        sessionId: 'codex-1',
+        runtimeEnvironmentId: 'server-1',
+        sessionPending: true,
+        sessionPendingNotice: notice
+      },
+      attachResolvedPaths,
+      setNotice
+    })
+    await act(async () => {
+      await probe.latest().captureExternalDrop()(['/local/a.txt'])
+    })
+    expect(setNotice).toHaveBeenCalledWith(notice)
+    expect(mocks.prepareNativeChatSessionAttachmentUpload).not.toHaveBeenCalled()
+    expect(mocks.uploadNativeChatSessionAttachmentPaths).not.toHaveBeenCalled()
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+  })
+
   it('attaches local worktree paths unchanged', async () => {
     mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
     const attachResolvedPaths = vi.fn()

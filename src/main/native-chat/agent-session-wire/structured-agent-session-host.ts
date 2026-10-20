@@ -321,7 +321,9 @@ export class StructuredAgentSessionHost {
 
   conversationCommand = this.conversationCommands.run
   /** Undefined means unavailable; an empty array is an authoritative catalog. */
-  readCommands = (sessionId: string) => ({ commands: this.clientDelivery.readCommands(sessionId) })
+  readCommands = async (sessionId: string) => ({
+    commands: await this.clientDelivery.readCommandsSettled(sessionId)
+  })
 
   /** From the record store, never the session map: an idle-released chat has no map entry. */
   handoffStatus = (sessionId: string) => structuredAgentSessionOwnerStatus(this.deps, sessionId)

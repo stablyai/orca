@@ -4,6 +4,7 @@ import * as DropdownMenuPrimitive from 'radix-ui/dropdown-menu'
 
 import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
+import { keepFocusWhileMenuCloses } from './menu-item-closing-focus'
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
   return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
@@ -51,6 +52,8 @@ function DropdownMenuItem({
   className,
   inset,
   variant = 'default',
+  onPointerMove,
+  onPointerLeave,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
   inset?: boolean
@@ -66,6 +69,8 @@ function DropdownMenuItem({
         "relative flex cursor-default items-center gap-2 rounded-md px-2 py-[4px] text-[12px] leading-[17px] font-[450] outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-7 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5 [&_svg:not([class*='text-'])]:text-muted-foreground data-[variant=destructive]:*:[svg]:text-destructive! data-[variant=launch]:rounded-[7px] data-[variant=launch]:py-1.5 data-[variant=launch]:leading-5 data-[variant=launch]:font-medium",
         className
       )}
+      onPointerMove={keepFocusWhileMenuCloses(onPointerMove)}
+      onPointerLeave={keepFocusWhileMenuCloses(onPointerLeave)}
       {...props}
     />
   )

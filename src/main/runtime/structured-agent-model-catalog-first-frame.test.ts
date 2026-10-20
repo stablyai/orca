@@ -136,7 +136,7 @@ describe('a new chat’s first frame from the host catalog', () => {
     expect(host).toMatchObject({ origin: 'probe', listingNamesConfiguredModel: false })
     expect(model?.choices.map((choice) => choice.value)).toEqual(['grok-4', 'grok-3-mini'])
     expect(model?.currentValue).toBeUndefined()
-    expect(state.record.model).toBeUndefined()
+    expect(state.record.values.model).toBeUndefined()
   })
 
   it('lists a warm Pi account’s models without naming one its listing does not name', async () => {

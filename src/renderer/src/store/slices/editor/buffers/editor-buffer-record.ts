@@ -78,21 +78,6 @@ export function writeEditorBuffer(
   return { openFiles, editorBuffers }
 }
 
-/** (Re)creates records for tabs whose buffer state comes from outside the store, e.g. a host snapshot. */
-export function createEditorBuffers(
-  records: EditorBufferRecords,
-  files: readonly OpenFile[]
-): EditorBufferRecords {
-  if (files.length === 0) {
-    return records
-  }
-  const next = { ...records }
-  for (const file of files) {
-    next[file.id] = editorBufferRecordFromFile(file)
-  }
-  return next
-}
-
 /** Moves each migrated tab's record to its new id in the same update that re-keys the tab. */
 export function rekeyEditorBuffers(
   records: EditorBufferRecords,

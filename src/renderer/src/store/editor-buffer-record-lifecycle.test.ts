@@ -206,6 +206,20 @@ describe('editor buffer records', () => {
     })
   })
 
+  it("adopts a host republish of an open tab's buffer state, as remote session sync writes it", () => {
+    const id = openEditTab()
+    useAppStore.setState((state) => ({
+      openFiles: state.openFiles.map((file) =>
+        file.id === id ? { ...file, isDirty: true, lastKnownDiskSignature: 'host' } : file
+      )
+    }))
+
+    expect(useAppStore.getState().editorBuffers[id]).toMatchObject({
+      isDirty: true,
+      lastKnownDiskSignature: 'host'
+    })
+  })
+
   it('rejects a slice write that changes a mirror field without its record', () => {
     type State = {
       openFiles: OpenFile[]

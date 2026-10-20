@@ -59,6 +59,10 @@ export function structuredChatNamingDeps(
       }
       const target = await resolveGenerationTarget(workspace.path, settings.params.agentId, runtime)
       if (!target) {
+        logger.warn('No chat name agent can run in this workspace', {
+          scope: 'conversation-name',
+          sessionId: record.sessionId
+        })
         return null
       }
       const result = await generateConversationNameFromContext(

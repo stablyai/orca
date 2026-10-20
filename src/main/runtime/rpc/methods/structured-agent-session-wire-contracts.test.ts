@@ -341,8 +341,7 @@ describe('legacy attach-shaped permission creation', () => {
           structuredAgentSessionLaunchSeedOptions: seed
         })
       ).toMatchObject({ ok: true })
-      expect(hostCalls.attach).toHaveBeenCalledWith(
-        expect.anything(),
+      expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
         expect.objectContaining({
           options: { permissionMode: 'full-access' },
           envelope: params.envelope

@@ -28,7 +28,6 @@ export function buildWebSessionTabsFinalPatch(
     removedTerminalResourceIds,
     mirroredTerminalIds,
     nextOpenFiles,
-    nextEditorBuffers,
     nextBrowserTabsByWorktree,
     nextUnifiedTabsByWorktree,
     nextGroupsByWorktree,
@@ -96,9 +95,8 @@ export function buildWebSessionTabsFinalPatch(
     ...agentStatusPatch,
     ...retractedTabSweepPatch,
     ...remirroredClosedTabLiftPatch,
-    ...(nextOpenFiles !== state.openFiles
-      ? { openFiles: nextOpenFiles, editorBuffers: nextEditorBuffers }
-      : {}),
+    // Why no editorBuffers: the store's buffer middleware adopts the host's mirrored tab state.
+    ...(nextOpenFiles !== state.openFiles ? { openFiles: nextOpenFiles } : {}),
     ...(nextTabsByWorktree !== state.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
     ...(nextBrowserTabsByWorktree !== state.browserTabsByWorktree
       ? { browserTabsByWorktree: nextBrowserTabsByWorktree }

@@ -138,6 +138,14 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
           : null
         const fileContext = getEditorFileOperationContext(state, liveFile, worktree?.path ?? null)
         const connectionId = fileContext.connectionId
+        const precondition = editorSavePrecondition(liveFile, trigger)
+        if (precondition.kind === 'blocked') {
+          // Why: a mobile refusal is reported to mobile; the desktop tab may not even be dirty.
+          if (trigger !== 'mobile') {
+            setModelExternalMutation(store.getState(), file.id, 'changed')
+          }
+          return 'blocked-stale'
+        }
         // Why: stamp before writing so useEditorExternalWatch ignores our own fs:changed echo (editor-self-write-registry).
         recordSelfWrite(
           liveFile.filePath,
@@ -147,15 +155,6 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
             ? SELF_WRITE_REMOTE_TTL_MS
             : undefined
         )
-        const precondition = editorSavePrecondition(liveFile, trigger)
-        if (precondition.kind === 'blocked') {
-          clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
-          // Why: a mobile refusal is reported to mobile; the desktop tab may not even be dirty.
-          if (trigger !== 'mobile') {
-            setModelExternalMutation(store.getState(), file.id, 'changed')
-          }
-          return 'blocked-stale'
-        }
         let writeResult: FileWriteResult
         try {
           writeResult = await writeEditorSave(

@@ -1,9 +1,10 @@
 import {
-  CLAUDE_MODEL_LIST_ARGS,
+  buildClaudeModelListArgs,
   CLAUDE_MODEL_LIST_STDIN,
   parseClaudeModelList
 } from '../../shared/claude-model-list-probe'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { runClaudeBackgroundAttempts } from '../../shared/claude-background-run-isolation'
 import { parseClaudeModels } from '../../shared/commit-message-model-parsers'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
@@ -33,11 +34,11 @@ export async function runClaudeListing(
   deps: ClaudeModelCatalogProbeDeps,
   request: {
     accountHomePath: string
-    args: readonly string[]
     stdin: string
     site: string
     cwd?: string
     signal?: AbortSignal
+    isCurrent?: () => boolean
   }
 ): Promise<string> {
   // Same pin rule as the session spawn: naming the CLI's default dir would move
@@ -46,15 +47,38 @@ export async function runClaudeListing(
     ...base,
     ...claudeConfigDirEnvPatch(request.accountHomePath, { env: base })
   }))
-  return (deps.runListing ?? runAgentModelCatalogListing)(
-    {
-      command,
-      args: [...request.args],
-      stdin: request.stdin,
-      ...(request.cwd ? { cwd: request.cwd } : {})
-    },
-    { site: request.site, inheritedEnv: env, signal: request.signal }
-  )
+  const run = (args: readonly string[]) => {
+    if (request.isCurrent && !request.isCurrent()) {
+      throw new Error('Listing context retired')
+    }
+    return (deps.runListing ?? runAgentModelCatalogListing)(
+      {
+        command,
+        args: [...args],
+        stdin: request.stdin,
+        ...(request.cwd ? { cwd: request.cwd } : {})
+      },
+      { site: request.site, inheritedEnv: env, signal: request.signal }
+    )
+  }
+  const result = await runClaudeBackgroundAttempts({
+    agentId: 'claude',
+    run: (strictMcp) =>
+      run(buildClaudeModelListArgs(strictMcp)).catch((error: unknown) => {
+        if (error instanceof AgentModelCatalogProbeError) {
+          return error
+        }
+        throw error
+      }),
+    failedExit: (outcome) =>
+      outcome instanceof AgentModelCatalogProbeError && outcome.reason === 'exit'
+        ? outcome.failedExit
+        : undefined
+  })
+  if (result instanceof AgentModelCatalogProbeError) {
+    throw result
+  }
+  return result
 }
 
 /**
@@ -68,7 +92,6 @@ export function createClaudeModelCatalogProbe(
   return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
     const stdout = await runClaudeListing(deps, {
       accountHomePath: requireLegacyAgentSessionAccountHome(accountHome).path,
-      args: CLAUDE_MODEL_LIST_ARGS,
       stdin: CLAUDE_MODEL_LIST_STDIN,
       site: 'claude-model-catalog-probe',
       ...(options?.signal ? { signal: options.signal } : {})

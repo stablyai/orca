@@ -47,6 +47,7 @@ import { holdRestartedStructuredAgentSessionSends } from './structured-agent-ses
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 import { waitsForCodexTurnOptions } from './structured-agent-session-message-options'
+import type { StructuredAgentSessionRanRecorder } from './structured-agent-session-ran-options'
 import { sameProviderChild } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 
@@ -86,6 +87,7 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   stopping: (sessionId: string) => boolean
   now: () => number
   acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
+  recordRanOptions?: StructuredAgentSessionRanRecorder
 }
 
 type Prepared =
@@ -312,8 +314,7 @@ export class StructuredAgentSessionDeliveryLoop {
       }
     }
     if (
-      this.deps.record(sessionId)?.provider === 'codex' &&
-      waitsForCodexTurnOptions(session.journal, next)
+      waitsForCodexTurnOptions(this.deps.record(sessionId), session.journal, next, awaitedChild)
     ) {
       return this.stop(sessionId)
     }
@@ -332,7 +333,8 @@ export class StructuredAgentSessionDeliveryLoop {
         now: this.deps.now,
         acquireAborts: this.deps.acquireAborts,
         deliveryOrder: this.deps.deliveryOrder,
-        workChanged: () => this.deps.workChanged?.(sessionId)
+        workChanged: () => this.deps.workChanged?.(sessionId),
+        recordRanOptions: this.deps.recordRanOptions?.(sessionId, awaitedChild.fence)
       },
       next,
       // Re-read right before the provider call, which runs outside the serialize.

@@ -192,7 +192,7 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.284
-        version: 0.3.284(@anthropic-ai/sdk@0.122.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
+        version: 0.3.284(@anthropic-ai/sdk@0.122.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7))(zod@4.6.7)
       '@electron-toolkit/utils':
         specifier: ^4.0.0
         version: 4.0.0(electron@43.7.8(supports-color@7.2.0))
@@ -272,8 +272,8 @@ importers:
         specifier: ^2.9.1
         version: 2.9.1
       zod:
-        specifier: ~4.6.5
-        version: 4.6.5
+        specifier: ~4.6.7
+        version: 4.6.7
     devDependencies:
       '@actions/expressions':
         specifier: 0.3.61
@@ -310,7 +310,7 @@ importers:
         version: 0.1.5(eslint@10.10.0(@types/keyv@3.1.4)(jiti@2.7.0)(supports-color@7.2.0))
       '@stablyai/playwright-test':
         specifier: ^2.1.16
-        version: 2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.5)
+        version: 2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)
       '@streamparser/json':
         specifier: 0.0.26
         version: 0.0.26
@@ -8491,8 +8491,8 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.6.5:
-    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
   zustand@5.0.15:
     resolution: {integrity: sha512-MpSEjRiBkA9crSYeOUH32rJC7SVqAbm0Fqcqge/bUi2PPoLcBWKOsG+C8mevmpr8TwXHBVkChbbJiyvkE+i/3A==}
@@ -8542,18 +8542,18 @@ snapshots:
       package-manager-detector: 1.6.0
       tinyexec: 1.1.2
 
-  '@anthropic-ai/claude-agent-sdk@0.3.284(@anthropic-ai/sdk@0.122.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)':
+  '@anthropic-ai/claude-agent-sdk@0.3.284(@anthropic-ai/sdk@0.122.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7))(zod@4.6.7)':
     dependencies:
-      '@anthropic-ai/sdk': 0.122.0(zod@4.6.5)
-      '@modelcontextprotocol/sdk': 1.32.1(supports-color@7.2.0)(zod@4.6.5)
-      zod: 4.6.5
+      '@anthropic-ai/sdk': 0.122.0(zod@4.6.7)
+      '@modelcontextprotocol/sdk': 1.32.1(supports-color@7.2.0)(zod@4.6.7)
+      zod: 4.6.7
 
-  '@anthropic-ai/sdk@0.122.0(zod@4.6.5)':
+  '@anthropic-ai/sdk@0.122.0(zod@4.6.7)':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.1.1
     optionalDependencies:
-      zod: 4.6.5
+      zod: 4.6.7
 
   '@babel/code-frame@7.29.7':
     dependencies:
@@ -9342,7 +9342,7 @@ snapshots:
       - '@types/hono'
       - supports-color
 
-  '@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.5)':
+  '@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7)':
     dependencies:
       '@hono/node-server': 2.1.0(hono@4.13.7)
       ajv: 8.20.0
@@ -9359,8 +9359,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 4.6.5
-      zod-to-json-schema: 3.25.2(zod@4.6.5)
+      zod: 4.6.7
+      zod-to-json-schema: 3.25.2(zod@4.6.7)
     transitivePeerDependencies:
       - '@types/ajv'
       - '@types/express'
@@ -10810,28 +10810,28 @@ snapshots:
 
   '@stablelib/base64@1.0.1': {}
 
-  '@stablyai/playwright-base@2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.5)':
+  '@stablyai/playwright-base@2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)':
     dependencies:
       '@playwright/test': 1.63.0(electron@43.7.8(supports-color@7.2.0))
       jpeg-js: 0.4.4
       p-retry: 4.6.2
       pngjs: 7.0.0
     optionalDependencies:
-      zod: 4.6.5
+      zod: 4.6.7
 
-  '@stablyai/playwright-test@2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.5)':
+  '@stablyai/playwright-test@2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)':
     dependencies:
       '@playwright/test': 1.63.0(electron@43.7.8(supports-color@7.2.0))
-      '@stablyai/playwright': 2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.5)
-      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.5)
+      '@stablyai/playwright': 2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)
+      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)
     transitivePeerDependencies:
       - '@types/zod'
       - zod
 
-  '@stablyai/playwright@2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.5)':
+  '@stablyai/playwright@2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)':
     dependencies:
       '@playwright/test': 1.63.0(electron@43.7.8(supports-color@7.2.0))
-      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.5)
+      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.63.0(electron@43.7.8(supports-color@7.2.0)))(zod@4.6.7)
     transitivePeerDependencies:
       - '@types/zod'
       - zod
@@ -16222,13 +16222,13 @@ snapshots:
     dependencies:
       zod: 3.25.76
 
-  zod-to-json-schema@3.25.2(zod@4.6.5):
+  zod-to-json-schema@3.25.2(zod@4.6.7):
     dependencies:
-      zod: 4.6.5
+      zod: 4.6.7
 
   zod@3.25.76: {}
 
-  zod@4.6.5: {}
+  zod@4.6.7: {}
 
   zustand@5.0.15(@types/react@19.2.18)(@types/use-sync-external-store@0.0.6)(react@19.2.8)(use-sync-external-store@1.6.0(@types/react@19.2.18)(react@19.2.8)):
     optionalDependencies:

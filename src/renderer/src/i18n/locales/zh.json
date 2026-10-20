@@ -28,7 +28,7 @@
       "description": "选择聊天的外观和行为方式。",
       "names": {
         "title": "聊天名称",
-        "description": "使用智能体根据首条消息为新聊天生成名称。未生成名称时，聊天仍显示为 Claude Chat 或 Codex Chat。",
+        "description": "使用智能体根据首条消息为新聊天生成名称。生成名称前，聊天显示其首条消息。",
         "enable": "自动为聊天命名",
         "recipe": "聊天名称",
         "recipeDescription": "根据新聊天的首条消息生成简短名称。",
@@ -5406,7 +5406,8 @@
         },
         "PendingWorktreeRow": {
           "af21e953d1": "取消工作树创建",
-          "188f6922a0": "取消"
+          "188f6922a0": "取消",
+          "creatingWorkspace": "正在创建工作区…"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "取消",
@@ -18599,6 +18600,7 @@
         "permissionFullAccessCodexDescription": "从不询问；可以编辑任何文件并使用网络",
         "permissionFullAccessSharedDescription": "编辑或运行命令前从不询问",
         "pasteFailed": "粘贴失败。",
+        "tooManySkills": "消息未发送给 {{agent}}。请将所选技能文件减少到最多 {{limit}} 个，然后重试。",
         "commandAttachmentsUnsupported": "使用聊天会话命令前，请先移除附件。",
         "optionValueShort": {
           "minimal": "最小",

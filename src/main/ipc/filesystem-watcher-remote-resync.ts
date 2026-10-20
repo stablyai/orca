@@ -32,7 +32,8 @@ function flushRemoteWatcherResync(key: string): void {
       listener.send('fs:changed', {
         worktreePath: state.worktreePath,
         events: [{ kind: 'overflow', absolutePath: state.worktreePath }],
-        connectionId: getRemoteWatcherKeyConnectionId(key)
+        connectionId: getRemoteWatcherKeyConnectionId(key),
+        resync: true
       } satisfies FsChangedPayload)
       sent = true
     } catch (error) {

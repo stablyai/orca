@@ -12,6 +12,9 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { TerminalPanePlacement } from '../../../shared/terminal-pane-placement'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
+/** How the binding was persisted: nothing, durability of an already-matching binding, or a mutation. */
+export type PtyBindingPath = 'durable_match' | 'durability_only' | 'mutation'
+
 export type PtyBindingSpanOutcome = 'fast_lane' | 'flushed' | 'refused' | 'threw'
 
 /**
@@ -36,7 +39,7 @@ export function spawnCommitBindingOrigin(
     : 'spawn'
 }
 
-// Bound frequent no-op traces; writes, refusals, and failures are always recorded.
+// Bound successful matching traces; mutations, refusals, and failures are always recorded.
 export const PTY_BINDING_FAST_LANE_SPAN_BUDGET_PER_WINDOW = 200
 const FAST_LANE_WINDOW_MS = 60_000
 
@@ -55,6 +58,7 @@ function admitFastLaneSpan(nowMs: number): boolean {
 
 export type PtyBindingSpan = {
   setEligibility(verdict: { eligible: boolean; misses: readonly PtyBindingFastLaneMiss[] }): void
+  setPath(path: PtyBindingPath): void
   setPlacement(agreement: TerminalPanePlacementAgreement): void
   /** A binding that breaks a layout invariant (report-only: it is still written). */
   setOwnerConflict(reason: TerminalOwnerConflictReason | 'check_threw'): void
@@ -81,7 +85,11 @@ export function startPtyBindingSpan(entry: {
       'binding.generation_gap': entry.generationGap
     },
     shouldRecord(record) {
-      if (record.attributes['binding.outcome'] !== 'fast_lane') {
+      const path = record.attributes['binding.path']
+      const frequentMatch =
+        record.attributes['binding.outcome'] === 'fast_lane' ||
+        (path === 'durability_only' && record.attributes['binding.outcome'] === 'flushed')
+      if (!frequentMatch) {
         return true
       }
       return admitFastLaneSpan(Date.now())
@@ -91,6 +99,9 @@ export function startPtyBindingSpan(entry: {
     setEligibility(verdict) {
       span.setAttribute('binding.eligible', verdict.eligible)
       span.setAttribute('binding.misses', verdict.misses.join(','))
+    },
+    setPath(path) {
+      span.setAttribute('binding.path', path)
     },
     setPlacement(agreement) {
       span.setAttribute('binding.placement', agreement)

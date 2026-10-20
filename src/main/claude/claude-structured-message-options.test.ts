@@ -26,6 +26,40 @@ const MODELS = [
 ]
 
 describe('Claude accepted message choices', () => {
+  it.each([
+    ['the effort the CLI applied over the settings level', 'low', { effort: 'low' }],
+    ['no effort where the CLI applies none, whatever the settings say', null, {}]
+  ])('reports %s', async (_name, applied, ranOptions) => {
+    let effortLevel = 'high'
+    const claude = fakeClaude({
+      routes: {
+        list_models: () => MODELS,
+        apply_flag_settings: ({ settings } = {}) => {
+          effortLevel = JSON.stringify(settings).includes('low') ? 'low' : effortLevel
+        }
+      },
+      settings: {
+        applied: { model: 'claude-sonnet-5', effort: applied },
+        get effective() {
+          return { effortLevel }
+        }
+      }
+    })
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = await acquired(claude, {}, events)
+    await vi.waitFor(() =>
+      expect(events).toContainEqual(expect.objectContaining({ type: 'options-reported' }))
+    )
+    const outcome = await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'm',
+      body: USER_MESSAGE,
+      executionOptions: {},
+      fence: 7
+    })
+    expect(outcome).toEqual({ state: 'admitted', ranOptions })
+  })
+
   it('applies a held message A before its prompt, then message B on the existing child', async () => {
     const order: string[] = []
     let currentEffort = 'high'
@@ -82,7 +116,7 @@ describe('Claude accepted message choices', () => {
     await adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'high', fence: 7 })
     order.length = 0
     release()
-    await expect(a).resolves.toEqual({ state: 'admitted' })
+    await expect(a).resolves.toMatchObject({ state: 'admitted' })
     expect(order).toEqual(['model:sonnet', 'effort:{"effortLevel":"low"}', 'prompt'])
 
     order.length = 0
@@ -94,7 +128,7 @@ describe('Claude accepted message choices', () => {
         executionOptions: { model: 'opus', effort: 'high' },
         fence: 7
       })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toMatchObject({ state: 'admitted' })
     expect(order).toEqual(['model:opus', 'effort:{"effortLevel":"high"}', 'prompt'])
   })
 
@@ -122,7 +156,7 @@ describe('Claude accepted message choices', () => {
         executionOptions: { model: 'sonnet' },
         fence: 7
       })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toMatchObject({ state: 'admitted' })
     expect(actual).toBe('sonnet')
     expect(connection.sent).toHaveLength(1)
   })
@@ -168,7 +202,7 @@ describe('Claude accepted message choices', () => {
           executionOptions: options,
           fence: 7
         })
-      ).resolves.toEqual({ state: 'admitted' })
+      ).resolves.toMatchObject({ state: 'admitted' })
     }
     expect(captured.options.fastMode).toBe('true')
     expect(connection.calls.filter((call) => call.subtype === 'apply_flag_settings')).toEqual(
@@ -221,7 +255,7 @@ describe('Claude accepted message choices', () => {
         executionOptions: {},
         fence: 7
       })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toMatchObject({ state: 'admitted' })
     expect(
       connection.calls.filter((call) => ['set_model', 'apply_flag_settings'].includes(call.subtype))
     ).toEqual([

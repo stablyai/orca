@@ -79,7 +79,7 @@ it('shares a host-home snapshot even if shell recapture fails, retaining it with
   expect(mocks.observe).toHaveBeenCalledTimes(3)
 })
 
-it('replaces the snapshot on a launch setting or Refresh, which first recaptures the shell', async () => {
+it('recaptures for settings and uses the completed capture on Refresh', async () => {
   const { availability, change } = install()
   const read = vi.fn()
   availability.subscribe(read)
@@ -92,10 +92,11 @@ it('replaces the snapshot on a launch setting or Refresh, which first recaptures
   mocks.observe.mockImplementation(async () => version)
   mocks.recapture.mockImplementation(() => capture.promise)
   mocks.refreshed.forEach((listener) => listener())
+  expect(mocks.recapture).toHaveBeenCalledTimes(2)
   change({ agentDefaultEnv: { pi: { PI_TEST: 'updated' } } })
   await new Promise<void>((resolve) => setImmediate(resolve))
   expect(read).toHaveBeenCalledTimes(2)
-  expect(mocks.observe).toHaveBeenCalledTimes(6)
+  expect(mocks.observe).toHaveBeenCalledTimes(9)
   version = 'supported'
   capture.resolve()
   await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(3))

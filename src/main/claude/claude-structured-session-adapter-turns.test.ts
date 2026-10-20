@@ -25,7 +25,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         fence: 7,
         executionOptions: { model: 'sonnet', effort: 'high' }
       })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toMatchObject({ state: 'admitted' })
     const controls = connection.calls.slice(before).map((call) => call.subtype)
     expect(controls.indexOf('set_model')).toBeGreaterThan(-1)
     expect(controls.indexOf('apply_flag_settings')).toBeGreaterThan(controls.indexOf('set_model'))
@@ -43,7 +43,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       fence: 7
     })
 
-    expect(result).toEqual({ state: 'admitted' })
+    expect(result).toMatchObject({ state: 'admitted' })
     expect(settled).toHaveBeenCalledWith({
       sessionId: 'session-1',
       clientMessageId: 'client-1',
@@ -70,7 +70,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toMatchObject({ state: 'admitted' })
     expect(settled).not.toHaveBeenCalled()
   })
 
@@ -182,7 +182,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
           body: USER_MESSAGE,
           fence: 7
         })
-      ).resolves.toEqual({ state: 'admitted' })
+      ).resolves.toMatchObject({ state: 'admitted' })
       expect(settled).toHaveBeenCalledWith({
         sessionId: 'session-1',
         clientMessageId: 'client-T',
@@ -195,7 +195,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
           body: USER_MESSAGE,
           fence: 7
         })
-      ).resolves.toEqual({ state: 'admitted' })
+      ).resolves.toMatchObject({ state: 'admitted' })
       expect(claude.connections[0].sent).toHaveLength(2)
 
       await expect(

@@ -123,7 +123,7 @@ export type TerminalActions = {
       recordInteraction?: boolean
     }
   ) => void
-  setTabColor: (tabId: string, color: string | null) => void
+  setTabColor: (tabId: string, color: string | null, opts?: { recordInteraction?: boolean }) => void
   /** What the tab keeps about the launch that laid out one of its panes; undefined clears it.
    *  `remount` remounts the tab's panes, so one whose spawn was refused spawns again. */
   setTabAgentLaunchPane: (

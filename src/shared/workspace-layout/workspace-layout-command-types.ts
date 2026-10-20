@@ -10,7 +10,11 @@ import type { AgentType } from '../agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault-session-title'
 import type { EditorTabView } from '../editor-tab-view-types'
 import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
-import type { TerminalPaneLayoutNode, TerminalPaneSplitDirection } from '../terminal-tab-types'
+import type {
+  TerminalGrid,
+  TerminalPaneLayoutNode,
+  TerminalPaneSplitDirection
+} from '../terminal-tab-types'
 import type { PaneSide } from './terminal-pane-tree'
 import type { PaneOutcomeChanges } from './workspace-layout-pane-outcomes'
 import type { LayoutEditorFile, LayoutTerminalCreation } from './workspace-layout-model'
@@ -101,6 +105,10 @@ export type LayoutCommand =
     })
   | (On & { type: 'renameTab'; tabId: string } & TabTitle)
   | (On & { type: 'renamePane'; tabId: string; leafId: string; title: string | null })
+  /** Main only: the grid the pane's terminal was last sized to, which a restart starts it at. */
+  | (On & { type: 'setPaneGrid'; tabId: string; leafId: string; grid: TerminalGrid })
+  /** Main only: unbinds the pane from `ptyId` if it still names it, stopping nothing. */
+  | (On & { type: 'releasePaneTerminal'; tabId: string; leafId: string; ptyId: string })
   | (On & {
       type: 'setTabProps'
       tabId: string
@@ -215,12 +223,23 @@ export type LayoutCommand =
   | (On & { type: 'wake'; paneKeys?: string[]; recordOnly?: true })
   /** The workspace's default tabs were applied (or it had none): never apply them again. */
   | (On & { type: 'setDefaultTabsApplied' })
+  /** A workspace's default terminal tabs, in order, and the mark: nothing once it is marked. */
+  | (On & { type: 'applyDefaultTabs'; tabs: DefaultTerminalTab[] })
 
 /**
  * Why a workspace's first surface is asked for: `restore` at relaunch, `activation` when a user
  * opens the workspace. Either is a no-op once the workspace has a tab.
  */
 export type InitialSurfaceReason = 'restore' | 'activation'
+
+/** The ids are the window's: it keys its spawn inputs by them before main answers. */
+export type DefaultTerminalTab = {
+  tabId: string
+  leafId: string
+  title?: string
+  color?: string
+  creation?: Partial<LayoutTerminalCreation>
+}
 
 export type CommandOf<T extends LayoutCommand['type']> = Extract<LayoutCommand, { type: T }>
 
@@ -281,6 +300,8 @@ export type LayoutRefusalCode =
   | 'pane_already_bound'
   | 'workspace_exists'
   | 'tab_exists'
+  /** A create under a tab id main recorded closed, or a pane id it closed: a resend after the close. */
+  | 'tab_closed'
   | 'group_exists'
   /** A window's drag-out: another tab holds the pane, or no copy binds the window's terminal. */
   | 'pane_in_other_tab'
@@ -308,6 +329,8 @@ export type LayoutCommandResult = {
   renamedTabIds?: Record<string, string>
   /** `renameTabs`: the titles main did not give; every other tab has its title. */
   untitled?: UntitledTab[]
+  /** Tabs one command made, in order (`applyDefaultTabs`). */
+  createdTabs?: { tabId: string; leafId: string; paneKey: string }[]
 }
 
 /** A command applied to a stored layout: its result, or why it changed nothing. */

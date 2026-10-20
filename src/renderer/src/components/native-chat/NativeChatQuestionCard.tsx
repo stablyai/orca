@@ -430,7 +430,7 @@ function OptionRow({
       aria-pressed={selected}
       data-native-chat-prompt-card-focus-target={initialFocus || undefined}
       className={cn(
-        'flex w-full items-start gap-3 px-3.5 py-2.5 text-left transition-colors focus:bg-accent focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring disabled:pointer-events-none',
+        'flex w-full items-start gap-3 px-3.5 py-2.5 text-left transition-colors focus:bg-accent focus:outline-none disabled:pointer-events-none',
         selected ? 'bg-accent' : 'hover:bg-accent'
       )}
     >

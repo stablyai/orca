@@ -181,6 +181,7 @@
     "../src/main/codex/codex-managed-trust-reconciliation.ts",
     "../src/main/provider-process/provider-process-exit-deadline.ts",
     "../src/main/provider-process/managed-provider-process.ts",
+    "../src/main/provider-process/provider-error-chain.ts",
     "../src/main/provider-process/provider-executable-missing.ts",
     "../src/main/provider-process/provider-group-orphan-guard.ts",
     "../src/main/provider-process/provider-process-row-read.ts",

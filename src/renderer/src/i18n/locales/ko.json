@@ -28,7 +28,7 @@
       "description": "채팅의 모양과 동작 방식을 선택하세요.",
       "names": {
         "title": "채팅 이름",
-        "description": "에이전트가 첫 메시지를 바탕으로 새 채팅의 이름을 생성합니다. 이름이 생성되지 않으면 Claude Chat 또는 Codex Chat으로 유지됩니다.",
+        "description": "에이전트가 첫 메시지를 바탕으로 새 채팅의 이름을 생성합니다. 이름이 생성되기 전까지는 첫 메시지가 표시됩니다.",
         "enable": "채팅 이름 자동 지정",
         "recipe": "채팅 이름",
         "recipeDescription": "새 채팅의 첫 메시지에서 짧은 이름을 생성합니다.",
@@ -5406,7 +5406,8 @@
         },
         "PendingWorktreeRow": {
           "af21e953d1": "워크트리 만들기 취소",
-          "188f6922a0": "취소"
+          "188f6922a0": "취소",
+          "creatingWorkspace": "워크스페이스 만드는 중…"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "취소",
@@ -18634,6 +18635,7 @@
         "permissionFullAccessCodexDescription": "묻지 않습니다. 모든 파일을 편집하고 네트워크를 사용할 수 있습니다",
         "permissionFullAccessSharedDescription": "편집이나 명령 전에 묻지 않습니다",
         "pasteFailed": "붙여넣기 실패.",
+        "tooManySkills": "{{agent}}에 메시지를 보내지 못했습니다. 선택한 스킬 파일을 {{limit}}개 이하로 줄인 후 다시 시도하세요.",
         "commandAttachmentsUnsupported": "채팅 세션 명령을 사용하기 전에 첨부 파일을 제거하세요.",
         "optionValueShort": {
           "minimal": "최소",

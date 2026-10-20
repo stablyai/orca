@@ -1,6 +1,7 @@
 import type { AgentSessionFastModeState } from '../../shared/agent-session-wire'
 import {
   currentModelId,
+  currentModelIsDefaulted,
   listedModels,
   matchListedModel,
   record,
@@ -342,7 +343,8 @@ export function claudeStructuredSessionOptionsFrom(
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),
-      ...(confirmed.length > 0 ? { confirmed } : {})
+      ...(confirmed.length > 0 ? { confirmed } : {}),
+      ...(currentModelIsDefaulted(current.id) ? { defaulted: ['model'] as const } : {})
     },
     ...(catalogListing ? { catalogListing } : {})
   }

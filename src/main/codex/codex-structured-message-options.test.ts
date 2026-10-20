@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { optionSession } from './codex-structured-option-session.test-fixture'
 import { resolvedCodexMessageOptions } from './codex-structured-message-options'
-import { startCodexTurn } from './codex-structured-turn-start'
+import { dispatchCodexTurn, startCodexTurn } from './codex-structured-turn-start'
 import { CodexAppServerRequestError } from './codex-app-server-connection'
 import type { CodexSession } from './codex-structured-session-state'
 import {
@@ -112,7 +112,12 @@ describe('Codex captured message choices', () => {
         : { config: { personality: 'pragmatic', service_tier: 'flex' } }
     )
     const session = optionSession(request)
-    session.reportedOptions = { model: 'model-a', effort: 'high' }
+    session.reportedOptions = {
+      model: 'model-a',
+      effort: 'high',
+      serviceTier: 'flex',
+      serviceTierKnown: true
+    }
     session.options = new Map([
       ['model', 'model-a'],
       ['effort', 'high'],
@@ -132,7 +137,8 @@ describe('Codex captured message choices', () => {
         { model: 'model-a', effort: 'high', personality: 'friendly', serviceTier: 'priority' }
       ],
       ['second', {}],
-      ['third', { model: 'model-a' }]
+      ['third', { model: 'model-a' }],
+      ['fourth', { effort: 'low' }]
     ] as const) {
       const turnOptions = await resolvedCodexMessageOptions(session, choices)
       await startCodexTurn(session, { clientMessageId: id, body, turnOptions })
@@ -142,11 +148,14 @@ describe('Codex captured message choices', () => {
       request.mock.calls.filter(([method]) => method === 'turn/start').map(([, params]) => params)
     ).toMatchObject([
       { model: 'model-a', effort: 'high', personality: 'friendly', serviceTier: 'priority' },
-      { model: 'model-b', effort: 'medium', personality: 'pragmatic', serviceTier: 'flex' },
+      // Unchosen keys keep the thread's own model and effort, not the listing's defaults.
+      { model: 'model-a', effort: 'high', personality: 'pragmatic', serviceTier: 'flex' },
+      { model: 'model-a', effort: 'high' },
       { model: 'model-a', effort: 'low' }
     ])
     expect(request.mock.calls.map(([method]) => method)).toEqual([
       'config/read',
+      'turn/start',
       'turn/start',
       'turn/start',
       'turn/start'
@@ -155,6 +164,34 @@ describe('Codex captured message choices', () => {
       model: 'model-a',
       effort: 'low'
     })
+  })
+
+  it('reports what a turn ran: a listed effort for an unlisted thread one, a steer its turn', async () => {
+    const request = vi.fn(async (method: string, _params?: Record<string, unknown>) =>
+      method === 'turn/steer' ? { turnId: 'turn-1' } : { turn: { id: 'turn-1' } }
+    )
+    const session = optionSession(request)
+    session.reportedOptions = { model: 'model-a', effort: 'xhigh' }
+    seedMessageDefaults(session)
+    const send = async (id: string, choices: Record<string, string>) =>
+      dispatchCodexTurn(
+        session,
+        {
+          sessionId: 'session-1',
+          clientMessageId: id,
+          body: USER_MESSAGE,
+          turnOptions: await resolvedCodexMessageOptions(session, choices)
+        },
+        undefined
+      )
+    const ran = { model: 'model-a', effort: 'low' }
+    expect(await send('first', { model: 'model-a' })).toMatchObject({ ranOptions: ran })
+    expect(request.mock.calls[0]?.[1]).toMatchObject(ran)
+    session.activeTurnIds = new Set(['turn-1'])
+    const steered = await send('steer', { model: 'model-a', serviceTier: 'priority' })
+    expect(request.mock.calls.at(-1)?.[0]).toBe('turn/steer')
+    expect(steered).toMatchObject({ ranOptions: ran })
+    expect(steered).not.toHaveProperty('ranOptions.serviceTier')
   })
 
   it('inherits untouched native tier and personality without a configuration probe', async () => {
@@ -211,6 +248,7 @@ describe('Codex captured message choices', () => {
   it('refuses a default reset with no trustworthy default before prompt input', async () => {
     const request = vi.fn(async () => ({ turn: { id: 'unexpected' } }))
     const session = optionSession(request)
+    session.reportedOptions = {}
     session.options.set('model', 'old-override')
     session.options.set('effort', 'high')
     await expect(resolvedCodexMessageOptions(session, {})).rejects.toThrow(

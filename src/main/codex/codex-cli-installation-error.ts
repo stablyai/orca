@@ -7,6 +7,7 @@ import {
   resolveProviderChildEnv,
   type ProviderProcessLaunch
 } from '../provider-process/provider-process-launch'
+import { findInErrorChain } from '../provider-process/provider-error-chain'
 
 export class CodexCliInstallationError extends AgentSessionPreSpawnError {
   readonly codexInstallation: CodexInstallationProblem
@@ -26,17 +27,10 @@ export class CodexCliInstallationError extends AgentSessionPreSpawnError {
   }
 }
 
-export function codexInstallationProblemOf(
-  error: unknown,
-  depth = 0
-): CodexInstallationProblem | undefined {
-  if (depth >= 6 || !(error instanceof Error)) {
-    return undefined
-  }
-  if (error instanceof CodexCliInstallationError) {
-    return error.codexInstallation
-  }
-  return codexInstallationProblemOf(error.cause, depth + 1)
+export function codexInstallationProblemOf(error: unknown): CodexInstallationProblem | undefined {
+  return findInErrorChain(error, (inner) =>
+    inner instanceof CodexCliInstallationError ? inner.codexInstallation : undefined
+  )
 }
 
 export async function requireSupportedCodexCli(

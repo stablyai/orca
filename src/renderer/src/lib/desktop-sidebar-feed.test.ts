@@ -81,6 +81,21 @@ describe('desktop sidebar feed', () => {
     expect(result.current?.domains.review).toBe(first?.domains.review)
   })
 
+  it('keeps following main while no list is mounted, so a remount draws current rows', async () => {
+    const main = connectMain()
+    const reader = await load()
+    const first = renderHook(() => reader.useDesktopSidebarFeed())
+    await vi.waitFor(() => expect(first.result.current?.domains.workspaces.size).toBe(1))
+    first.unmount()
+    main.workspaces.set('local|repo-1::/w/b', workspaceRow('repo-1::/w/b')['local|repo-1::/w/b'])
+    await act(() => vi.advanceTimersByTimeAsync(60))
+    await vi.waitFor(() => expect(main.call).toHaveBeenCalledTimes(2))
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    const second = renderHook(() => reader.useDesktopSidebarFeed())
+    // The first render, before any read the remount itself starts could answer.
+    expect(second.result.current?.domains.workspaces.size).toBe(2)
+  })
+
   it('answers a refresh with an install from that read or later', async () => {
     connectMain()
     const reader = await load()

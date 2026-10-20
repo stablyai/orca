@@ -1,11 +1,10 @@
 import { useCallback } from 'react'
-import { structuredAgentSessionOptionSnapshot } from '../../../../shared/structured-agent-session-options'
 import { structuredAgentSessionSendSelection } from '../../../../shared/structured-agent-session-option-view'
 import { getStructuredAgentSessionLaunchSelection } from '@/lib/structured-agent-session-launch-options'
 import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
 import type { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
 
-/** What each send carries to a host that takes it: the model and effort the composer shows now. */
+/** What each send carries to a host that takes it: the chat's own model and effort, picks over them. */
 export function useStructuredAgentSessionSendOptions(
   sessionId: string,
   launch: StructuredAgentSessionLaunchView | undefined,
@@ -26,9 +25,6 @@ export function useStructuredAgentSessionSendOptions(
       ...(selection?.held ?? launch?.heldOptions),
       ...pendingOptionsRef.current
     })
-    return structuredAgentSessionSendSelection(
-      view.record.agent,
-      structuredAgentSessionOptionSnapshot(view)
-    )
+    return structuredAgentSessionSendSelection(view)
   }, [launch, optionStateRef, optionView, pendingOptionsRef, sessionId, takesSendOptions])
 }

@@ -66,7 +66,7 @@ describe('the first frame of every agent’s picker', () => {
           expect(canSetStructuredAgentSessionOption(state, 'model', 'anything')).toBe(false)
         } else {
           // A built-in list is presentation only: no value is tracked from it.
-          expect(state.record.model).toBeUndefined()
+          expect(state.record.values.model).toBeUndefined()
         }
       }
     }
@@ -85,7 +85,7 @@ describe('the first frame of every agent’s picker', () => {
         model?.kind.type === 'select' && model.kind.choices.map((choice) => choice.value)
       ).toEqual(['model-listed'])
       // Listed, not picked: nothing reads as a value the chat confirmed or will launch with.
-      expect(state.record.model).toBeUndefined()
+      expect(state.record.values.model).toBeUndefined()
     }
   )
 
@@ -105,7 +105,7 @@ describe('the first frame of every agent’s picker', () => {
       expect(currentValue(snapshot, 'effort')).toBe('high')
       // Shown as the default it runs, never as a pick the next launch would replay.
       expect(snapshot.find((descriptor) => descriptor.id === 'model')?.valueSource).toBe('default')
-      expect(state.record.model).toBeUndefined()
+      expect(state.record.values.model).toBeUndefined()
       // A reopened chat may run a model picked in it, so it names none.
       const reopened = firstFrame(
         agent,

@@ -9,7 +9,6 @@ import { structuredAgentSessionSeedCatalog } from '../../../../shared/structured
 import type { SessionOptionsSurface } from '../../../../shared/native-chat-session-options'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
 import {
-  applyStructuredAgentSessionOptions,
   canSetStructuredAgentSessionOption,
   commitStructuredAgentSessionOptionValues,
   lockedStructuredAgentSessionOptionSnapshot,
@@ -62,10 +61,11 @@ export function useStructuredAgentSessionOptions(args: {
     turnId
   } = args
   const providerStarting = args.providerStarting ?? false
+  const newLaunch = launch?.kind === 'new'
   const launchSeedOptions = launch?.seedOptions
   const held = launch?.heldOptions ?? NO_HELD_OPTIONS
   // Published but not attached: the launch no longer holds picks and there is no fence to send one.
-  const acceptsPicks = !transportEnabled || fence !== null
+  const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
   const optionCatalog = useMemo(() => structuredAgentSessionSeedCatalog(agent), [agent])
   const {
     optionView,
@@ -76,6 +76,7 @@ export function useStructuredAgentSessionOptions(args: {
     pendingOptionsRef,
     optionMutationGeneration,
     updateOptionState,
+    applyOptionsAnswer,
     rereadOptions,
     conversationSupport
   } = useStructuredAgentSessionOptionState({
@@ -85,7 +86,7 @@ export function useStructuredAgentSessionOptions(args: {
     fence,
     sessionId,
     target,
-    newLaunch: launch?.kind === 'new',
+    newLaunch,
     ...(launch?.worktree ? { worktree: launch.worktree } : {}),
     seedsModel: launchSeedOptions?.model !== undefined,
     providerVisible,
@@ -105,14 +106,12 @@ export function useStructuredAgentSessionOptions(args: {
     optionCatalog,
     enabled: args.isVisible,
     // A resumed conversation may keep its own model, so only a new one runs the listed default.
-    newLaunch: launch?.kind === 'new',
+    newLaunch,
     ...(launch?.worktree ? { worktree: launch.worktree } : {}),
     fence,
     turnId,
     reportedUnpickedModel:
-      launch?.kind === 'new' &&
-      launchSeedOptions?.model === undefined &&
-      optionState.catalogSource === 'live',
+      newLaunch && launchSeedOptions?.model === undefined && optionState.catalogSource === 'live',
     ...(args.providerRunning ? { providerRunning: true } : {}),
     activeOptionRecordRef,
     updateOptionState,
@@ -184,9 +183,7 @@ export function useStructuredAgentSessionOptions(args: {
             .then((refreshed) => {
               if (isCurrent()) {
                 updateOptionState((latest) =>
-                  latest.record === targetRecord && optionCatalog
-                    ? applyStructuredAgentSessionOptions(latest, optionCatalog, refreshed)
-                    : latest
+                  latest.record === targetRecord ? applyOptionsAnswer(latest, refreshed) : latest
                 )
               }
             })
@@ -203,9 +200,9 @@ export function useStructuredAgentSessionOptions(args: {
     },
     [
       activeOptionRecordRef,
+      applyOptionsAnswer,
       launchSeedOptions,
       mutate,
-      optionCatalog,
       optionMutationGeneration,
       optionStateRef,
       optionView,
@@ -253,7 +250,7 @@ export function useStructuredAgentSessionOptions(args: {
       }
       if (!transportEnabled || fence === null) {
         // No fence yet: the launch holds it and applies it before anything else is sent.
-        const applied = holdStructuredAgentSessionLaunchOption(sessionId, id, encoded)
+        const applied = holdStructuredAgentSessionLaunchOption(sessionId, id, encoded, view)
         void applied?.then(settleLaunchOptionPick)
         return applied !== null
       }

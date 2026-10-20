@@ -174,6 +174,8 @@ export function queuedMessageWithEdit(
   if (text === editable && (!images || sameImages(images, imageBlocks(body)))) {
     return { ok: true, body }
   }
+  // Plain-text edits cannot retain which occurrence owned a picked file.
+  const { skills: _pickedSkills, ...plainBody } = body
   if (images) {
     const blocks: AgentJournalMessageItem['blocks'] = [
       ...(text.trim() ? [{ type: 'text' as const, text: text.trimEnd() }] : []),
@@ -185,7 +187,7 @@ export function queuedMessageWithEdit(
     if (byteLength(JSON.stringify(blocks)) > MAX_PROMPT_BYTES) {
       return { ok: false, reason: 'too-large' }
     }
-    return { ok: true, body: { ...body, blocks } }
+    return { ok: true, body: { ...plainBody, blocks } }
   }
   const blocks: AgentJournalMessageItem['blocks'] = []
   let placed = false
@@ -200,5 +202,5 @@ export function queuedMessageWithEdit(
   if (!placed) {
     blocks.unshift({ type: 'text', text })
   }
-  return { ok: true, body: { ...body, blocks } }
+  return { ok: true, body: { ...plainBody, blocks } }
 }

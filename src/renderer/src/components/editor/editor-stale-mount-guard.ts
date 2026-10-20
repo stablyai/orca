@@ -22,10 +22,17 @@ const requestedReloads = new Map<string, string>()
 
 /** Drops a stale cache so it reloads from disk, once per cached text and baseline: a reload that lands the same text can't loop. */
 export function requestStaleCacheReload(fileId: string, content: string): void {
-  const file = useAppStore.getState()?.openFiles?.find((openFile) => openFile.id === fileId)
+  const openFiles = useAppStore.getState()?.openFiles ?? []
+  const file = openFiles.find((openFile) => openFile.id === fileId)
   const stamp = `${file?.lastKnownDiskSignature ?? ''}\n${getDiskBaselineSignature(content)}`
   if (requestedReloads.get(fileId) === stamp) {
     return
+  }
+  // Why: drop closed tabs' stamps, which no settling mount will ever clear.
+  for (const id of requestedReloads.keys()) {
+    if (!openFiles.some((openFile) => openFile.id === id)) {
+      requestedReloads.delete(id)
+    }
   }
   requestedReloads.set(fileId, stamp)
   notifyEditorFileCacheStale(fileId)

@@ -69,7 +69,7 @@ describe('reconcileEditorTabsAfterOverflow', () => {
       tab('staged.ts', { mode: 'diff', diffSource: 'staged' })
     )
     harness.runtimePathsExist.mockResolvedValue([{ exists: true }])
-    reconcileEditorTabsAfterOverflow(target)
+    reconcileEditorTabsAfterOverflow(target, true)
     await vi.waitFor(() => expect(harness.scheduleReload).toHaveBeenCalledTimes(2))
 
     expect(harness.scheduleReload).toHaveBeenCalledWith(notification('staged.ts'))
@@ -85,7 +85,7 @@ describe('reconcileEditorTabsAfterOverflow', () => {
       { exists: false },
       { exists: true }
     ])
-    reconcileEditorTabsAfterOverflow(target)
+    reconcileEditorTabsAfterOverflow(target, true)
     await vi.waitFor(() => expect(harness.scheduleReload).toHaveBeenCalledTimes(1))
 
     expect(harness.scheduleReload).toHaveBeenCalledWith(notification('here.ts'))
@@ -103,7 +103,7 @@ describe('reconcileEditorTabsAfterOverflow', () => {
   ])('reloads as before when %s', async (_label, arrange) => {
     arrange()
     setTabs(tab('a.ts'))
-    reconcileEditorTabsAfterOverflow(target)
+    reconcileEditorTabsAfterOverflow(target, true)
     await vi.waitFor(() =>
       expect(harness.scheduleReload).toHaveBeenCalledWith(notification('a.ts'))
     )
@@ -112,17 +112,46 @@ describe('reconcileEditorTabsAfterOverflow', () => {
 
   it('hands dirty tabs to the disk check instead of reloading them', () => {
     setTabs(tab('dirty.ts', { isDirty: true, lastKnownDiskSignature: 'sig' }))
-    reconcileEditorTabsAfterOverflow(target)
+    reconcileEditorTabsAfterOverflow(target, true)
 
     expect(setPendingDiskBaselineVerification).toHaveBeenCalledWith('dirty.ts', true)
     expect(harness.runtimePathsExist).not.toHaveBeenCalled()
     expect(harness.scheduleReload).not.toHaveBeenCalled()
   })
 
+  it('a storm overflow reloads clean tabs without probing, pausing autosave or dropping combined bodies', () => {
+    setTabs(
+      tab('a.md', { externalMutation: 'deleted' }),
+      tab('dirty.ts', { isDirty: true, lastKnownDiskSignature: 'sig' })
+    )
+    reconcileEditorTabsAfterOverflow(target, false)
+
+    expect(harness.scheduleReload.mock.calls).toEqual([[notification('a.md')]])
+    expect(setExternalMutation).toHaveBeenCalledWith('a.md', null)
+    expect(harness.runtimePathsExist).not.toHaveBeenCalled()
+    expect(setPendingDiskBaselineVerification).not.toHaveBeenCalled()
+    expect(harness.forgetCombinedBodies).not.toHaveBeenCalled()
+  })
+
+  it('a storm overflow supersedes a pending resync probe', async () => {
+    setTabs(tab('a.ts'))
+    let answer: (rows: unknown) => void = () => {}
+    harness.runtimePathsExist.mockImplementationOnce(
+      () => new Promise((resolve) => (answer = resolve))
+    )
+    reconcileEditorTabsAfterOverflow(target, true)
+    reconcileEditorTabsAfterOverflow(target, false)
+    expect(getPendingOverflowProbeCountForTest()).toBe(0)
+
+    answer([{ exists: false }])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(setExternalMutation).not.toHaveBeenCalledWith('a.ts', 'deleted')
+  })
+
   it('only touches tabs of the matching runtime owner', async () => {
     setTabs(tab('local.md'), tab('runtime.md', { runtimeEnvironmentId: 'env-1' }))
     harness.runtimePathsExist.mockResolvedValue([{ exists: true }])
-    reconcileEditorTabsAfterOverflow({ ...target, runtimeEnvironmentId: 'env-1' })
+    reconcileEditorTabsAfterOverflow({ ...target, runtimeEnvironmentId: 'env-1' }, true)
     await vi.waitFor(() => expect(harness.scheduleReload).toHaveBeenCalledTimes(1))
 
     expect(harness.scheduleReload).toHaveBeenCalledWith(notification('runtime.md', 'env-1'))
@@ -142,7 +171,7 @@ describe('reconcileEditorTabsAfterOverflow', () => {
       // The last tab (the only one in the second chunk) is gone.
       paths.map((path) => ({ exists: path !== '/repo/f128.ts' }))
     )
-    reconcileEditorTabsAfterOverflow(target)
+    reconcileEditorTabsAfterOverflow(target, true)
     await vi.waitFor(() => expect(harness.scheduleReload).toHaveBeenCalledTimes(128))
 
     expect(harness.runtimePathsExist.mock.calls.map(([, paths]) => paths.length)).toEqual([128, 1])
@@ -156,8 +185,8 @@ describe('reconcileEditorTabsAfterOverflow', () => {
     harness.runtimePathsExist
       .mockImplementationOnce(() => new Promise((resolve) => (answerFirst = resolve)))
       .mockResolvedValueOnce([{ exists: false }])
-    reconcileEditorTabsAfterOverflow(target)
-    reconcileEditorTabsAfterOverflow(target)
+    reconcileEditorTabsAfterOverflow(target, true)
+    reconcileEditorTabsAfterOverflow(target, true)
     await vi.waitFor(() => expect(setExternalMutation).toHaveBeenCalledWith('a.ts', 'deleted'))
 
     answerFirst([{ exists: true }])
@@ -181,7 +210,7 @@ describe('reconcileEditorTabsAfterOverflow', () => {
     harness.runtimePathsExist.mockImplementationOnce(
       () => new Promise((resolve) => (answer = resolve))
     )
-    reconcileEditorTabsAfterOverflow(target)
+    reconcileEditorTabsAfterOverflow(target, true)
     supersedeOverflowProbesForBatch(
       {
         createOrUpdatePaths: new Map(),
@@ -207,7 +236,7 @@ describe('reconcileEditorTabsAfterOverflow', () => {
     harness.runtimePathsExist.mockImplementationOnce(
       () => new Promise((resolve) => (answer = resolve))
     )
-    reconcileEditorTabsAfterOverflow(target)
+    reconcileEditorTabsAfterOverflow(target, true)
     expect(getPendingOverflowProbeCountForTest()).toBe(1)
 
     setTabs()

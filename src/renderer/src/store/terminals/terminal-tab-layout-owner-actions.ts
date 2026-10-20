@@ -125,11 +125,11 @@ export function routeTerminalTabChangesThroughLayoutOwner(
         (id) => ({ type: 'renameTab', tabId: id, kind: 'custom', title }),
         () => actions.setTabCustomTitle(tabId, title, opts)
       ),
-    setTabColor: (tabId, color) =>
+    setTabColor: (tabId, color, opts) =>
       route(
         tabId,
         (id) => ({ type: 'setTabProps', tabId: id, color }),
-        () => actions.setTabColor(tabId, color)
+        () => actions.setTabColor(tabId, color, opts)
       ),
     setAiVaultTabTitle: (tabId, title) => {
       const current = terminalTab(get(), tabId)?.aiVaultTitle ?? null

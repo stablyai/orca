@@ -105,7 +105,9 @@ describe('a structured chat launch on a paired server', () => {
       failureNotified: false
     })
     expect(onHostDeclined).toHaveBeenCalledOnce()
-    expect(mocks.toastInfo).toHaveBeenCalledOnce()
+    expect(mocks.toastInfo).toHaveBeenCalledWith(expect.any(String), {
+      description: expect.stringContaining("can't run")
+    })
     expect(useAppStore.getState().activeWorktreeId).toBe(WORKTREE)
     expectNoChatCommitted()
   })
@@ -215,7 +217,11 @@ describe('a structured chat launch on a paired server', () => {
         'claude'
       )
       expect(settlement).toEqual(expect.objectContaining({ kind: 'failed', notified: true }))
-      expect(mocks.toastError).toHaveBeenCalledTimes(1)
+      expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('Claude'), {
+        description: expect.stringMatching(
+          kind === 'unverified' ? /confirm the host's permissions for Claude/ : /older Orca/
+        )
+      })
       expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
       expectNoChatCommitted()
     }
@@ -265,7 +271,7 @@ describe('a structured chat launch on this machine', () => {
       delivered: true,
       failureNotified: false
     })
-    expect(onHostDeclined).toHaveBeenCalledExactlyOnceWith({ kind: 'local' })
+    expect(onHostDeclined).toHaveBeenCalledExactlyOnceWith({ kind: 'local' }, undefined)
     expect(mocks.toastInfo).not.toHaveBeenCalled()
     expect(mocks.toastError).not.toHaveBeenCalled()
     expectNoChatCommitted()

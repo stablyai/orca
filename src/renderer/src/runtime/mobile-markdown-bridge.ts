@@ -121,11 +121,20 @@ async function saveMobileMarkdownTab(
     }
 
     const state = useAppStore.getState()
-    const stampedBaseline = stampMobileVerifiedBaseline(freshTarget.sourceFile, current)
-    const previousDraft = state.editorDrafts[freshTarget.sourceFile.id]
-    const previousDirty = freshTarget.sourceFile.isDirty
-    state.setEditorDraft(freshTarget.sourceFile.id, content)
-    state.markFileDirty(freshTarget.sourceFile.id, true)
+    // Why live: a desktop save during the read moved the baseline past the version the phone saw.
+    const sourceFile = state.openFiles.find((file) => file.id === freshTarget.sourceFile.id)
+    if (!sourceFile) {
+      throw new Error('tab_not_found')
+    }
+    // Why: desktop typing during the disk read is newer than the version the phone edited.
+    if (current.source === 'file' && state.editorDrafts[sourceFile.id] !== undefined) {
+      throw new Error('conflict')
+    }
+    const stampedBaseline = stampMobileVerifiedBaseline(sourceFile, current)
+    const previousDraft = state.editorDrafts[sourceFile.id]
+    const previousDirty = sourceFile.isDirty
+    state.setEditorDraft(sourceFile.id, content)
+    state.markFileDirty(sourceFile.id, true)
     let verified: string
     try {
       await waitForPositiveSave(freshTarget.sourceFile, content)

@@ -19,12 +19,15 @@ export type ScriptedCodexChild = ScriptedAgentChild & {
 }
 
 /** A held answer gives up on the request's own deadline, as the real connection's does (30 s when
- *  the caller names none). */
+ *  the caller names none, never when it passes null). */
 function heldAnswer(
   answer: Promise<unknown>,
   method: string,
-  timeoutMs = 30_000
+  timeoutMs: number | null = 30_000
 ): Promise<unknown> {
+  if (timeoutMs === null) {
+    return answer
+  }
   let timer: ReturnType<typeof setTimeout> | undefined
   const timedOut = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(

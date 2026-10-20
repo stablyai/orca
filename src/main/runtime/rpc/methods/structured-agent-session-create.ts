@@ -19,6 +19,8 @@ import type {
   StructuredAgentSessionFirstMessage
 } from '../../../../shared/structured-agent-session-create'
 import { structuredAgentSessionOptionOverridesRefusal } from '../../../native-chat/agent-session-wire/structured-agent-session-options-read'
+import { savedAgentSessionCatalogModels } from '../../../native-chat/agent-session-wire/structured-agent-session-pick-reply'
+import type { StructuredAgentSessionCreateOptions } from '../../../native-chat/agent-session-wire/structured-agent-session-create'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   captureStructuredAgentCliSource,
@@ -37,6 +39,7 @@ export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
   attachParams: AgentSessionAttachParams
   hostLaunchDirectory?: string
+  catalogModels?: StructuredAgentSessionCreateOptions['catalogModels']
   /** Null when the caller supplied its own location; only a resolved worktree publishes a tab. */
   tab: { workspaceId: string; agent: StructuredAgentId } | null
   /** Absent for older clients and provider-dependent in-process callers. */
@@ -145,15 +148,30 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       ? { ...resolved.options, ...args.options }
       : { ...seededPermissionMode(resolved.options), ...args.options }
     : resolved.options
+  // The folder the new-chat picker read its list for, resolved once: the seed and the host's
+  // admission read the same list.
+  let folder: Promise<string | null> | undefined
+  const catalogFolder = () =>
+    (folder ??= args.runtime
+      .resolveStructuredAgentSessionLocalWorkspacePath(args.worktree)
+      .catch(() => null))
   // After the fingerprints: a remembered model the saved listing no longer names moves, with the
   // effort the create runs under it. A model the create names itself is never moved.
   const options = args.options?.model
     ? picked
-    : await structuredLaunchSeedOnSavedListing(host, args.agent, picked, () =>
-        args.runtime.resolveStructuredAgentSessionLocalWorkspacePath(args.worktree)
-      )
+    : await structuredLaunchSeedOnSavedListing(host, args.agent, picked, catalogFolder)
+  const catalogModels =
+    options && host.deps.modelCatalog
+      ? await savedAgentSessionCatalogModels(
+          host.deps,
+          resolved.provider,
+          args.envelope.sessionId,
+          await catalogFolder()
+        )
+      : undefined
   return {
     host,
+    ...(catalogModels ? { catalogModels } : {}),
     ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
     attachParams: {
       ...resolvedAttach,
@@ -183,6 +201,7 @@ export async function commitStructuredAgentSessionCreate(args: {
   if (prepared.atRest) {
     return prepared.host.create(args.caller, prepared.attachParams, {
       ...prepared.atRest,
+      ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {}),
       ...(prepared.hostLaunchDirectory
         ? { hostLaunchDirectory: prepared.hostLaunchDirectory }
         : {}),
@@ -206,11 +225,10 @@ export async function commitStructuredAgentSessionCreate(args: {
         : {})
     })
   }
-  const result = prepared.hostLaunchDirectory
-    ? await prepared.host.attach(args.caller, prepared.attachParams, {
-        hostLaunchDirectory: prepared.hostLaunchDirectory
-      })
-    : await prepared.host.attach(args.caller, prepared.attachParams)
+  const result = await prepared.host.attach(args.caller, prepared.attachParams, {
+    ...(prepared.hostLaunchDirectory ? { hostLaunchDirectory: prepared.hostLaunchDirectory } : {}),
+    ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {})
+  })
   if (!result.ok || !prepared.tab) {
     return result
   }

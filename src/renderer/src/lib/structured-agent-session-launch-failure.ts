@@ -10,14 +10,43 @@ import {
   readAgentSessionErrorRefusal,
   type AgentSessionWriteRefusal
 } from '../../../shared/agent-session-write-failure'
+import { translate } from '@/i18n/i18n'
+import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
 
 export type StructuredLaunchFailure = AgentSessionWriteRefusal & {
-  authStartupMessage?: string
+  /** Words that replace the refusal's generic cause: the host's sign-in guidance, or why this
+   *  workspace can't run the chat. */
+  causeText?: string
   owner?: AgentSessionConversationOwner
+}
+
+/** Why a host said it can't run a chat in this workspace, and what to do instead. */
+export function structuredChatUnavailableText(reason?: string): string {
+  return reason === 'wsl'
+    ? translate(
+        'components.native-chat.explicitChatWsl',
+        'Chat is not available in WSL. Open the agent in a terminal instead.'
+      )
+    : reason === 'remote'
+      ? translate(
+          'components.native-chat.explicitChatSsh',
+          'Chat is not available over SSH. Open the agent in a terminal instead.'
+        )
+      : translate(
+          'components.native-chat.explicitChatUnavailable',
+          'This workspace cannot run the chat. Check the agent installation or open it in a terminal.'
+        )
 }
 
 /** The host's refusal behind a failed launch; undefined when the failure carried none. */
 export function structuredLaunchFailure(error: unknown): StructuredLaunchFailure | undefined {
+  if (error instanceof StructuredAgentSessionCreateRefusalError && error.hostReason) {
+    return {
+      kind: 'refused',
+      code: 'structured_agent_session_unsupported',
+      causeText: structuredChatUnavailableText(error.hostReason)
+    }
+  }
   const refusal = launchRefusal(error)
   if (!refusal) {
     return undefined
@@ -35,7 +64,7 @@ export function structuredLaunchFailure(error: unknown): StructuredLaunchFailure
     failure.details?.reason === 'notSignedIn' &&
     message &&
     message !== failure.code
-    ? { ...failure, authStartupMessage: message }
+    ? { ...failure, causeText: message }
     : failure
 }
 

@@ -132,7 +132,7 @@
       "description": "Choisissez l’apparence et le comportement des chats.",
       "names": {
         "title": "Noms des chats",
-        "description": "Utilisez un agent pour nommer les nouveaux chats à partir de leur premier message. Sans nom généré, ils restent Claude Chat ou Codex Chat.",
+        "description": "Utilisez un agent pour nommer les nouveaux chats à partir de leur premier message. En attendant un nom généré, le chat affiche son premier message.",
         "enable": "Nommer automatiquement les chats",
         "recipe": "Nom du chat",
         "recipeDescription": "Génère un nom court à partir du premier message d’un nouveau chat.",
@@ -5552,7 +5552,8 @@
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Annuler la création du worktree",
-          "188f6922a0": "Annuler"
+          "188f6922a0": "Annuler",
+          "creatingWorkspace": "Création de l'espace de travail…"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Annuler",
@@ -18703,6 +18704,7 @@
         "permissionFullAccessCodexDescription": "Ne demande jamais ; peut modifier n’importe quel fichier et utiliser le réseau",
         "permissionFullAccessSharedDescription": "Ne demande jamais avant les modifications ou les commandes",
         "pasteFailed": "Échec du collage.",
+        "tooManySkills": "Votre message n’a pas été envoyé à {{agent}}. Gardez au maximum {{limit}} fichiers de compétences sélectionnés et réessayez.",
         "commandAttachmentsUnsupported": "Retirez les pièces jointes avant d'utiliser une commande de session de chat.",
         "optionValueShort": {
           "minimal": "Min.",

@@ -28,12 +28,16 @@ const VISUALS: NativeChatVisualsLaunch = {
 const MANUAL = codexStructuredPermissionPolicy('ask')
 const YOLO = codexStructuredPermissionPolicy('full-access')
 
-type Call = { method: string; params?: Record<string, unknown>; timeoutMs?: number }
+type Call = { method: string; params?: Record<string, unknown>; timeoutMs?: number | null }
 
 function connectionAnswering(routes: Record<string, () => unknown>) {
   const calls: Call[] = []
   const request = vi.fn(
-    async (method: string, params?: Record<string, unknown>, options?: { timeoutMs?: number }) => {
+    async (
+      method: string,
+      params?: Record<string, unknown>,
+      options?: { timeoutMs?: number | null }
+    ) => {
       calls.push({ method, params, timeoutMs: options?.timeoutMs })
       const route = routes[method]
       return route ? route() : {}

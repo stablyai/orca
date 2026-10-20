@@ -75,7 +75,8 @@ export async function openCodexThread(
     /** Env every command the agent runs must see, whatever the user's shell environment policy. */
     commandEnv?: Record<string, string>
   },
-  timeoutMs: number | undefined,
+  /** null: no deadline; the start that opens the thread bounds it (`signal`). */
+  timeoutMs: number | null | undefined,
   signal?: AbortSignal
 ): Promise<CodexOpenedThread> {
   const resumeThreadId = launch.resumeThreadId

@@ -22,6 +22,7 @@ import {
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
 import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
+import { findInErrorChain } from '../../provider-process/provider-error-chain'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { codexInstallationProblemOf } from '../../codex/codex-cli-installation-error'
 
@@ -53,22 +54,13 @@ export function withObservedProviderExit<TError extends Error>(error: TError): T
   return Object.assign(error, { providerExitObserved: true })
 }
 
-/** Whether the adapter saw the child exit on its own. Follows `cause` and the errors a cleanup
- *  aggregated, since the acquisition errors wrap what the adapter threw. */
-export function providerExitObserved(error: unknown, depth = 0): boolean {
-  if (depth >= 6 || !(error instanceof Error)) {
-    return false
-  }
-  if ('providerExitObserved' in error && error.providerExitObserved === true) {
-    return true
-  }
-  if (
-    error instanceof AggregateError &&
-    error.errors.some((inner) => providerExitObserved(inner, depth + 1))
-  ) {
-    return true
-  }
-  return providerExitObserved(error.cause, depth + 1)
+/** Whether the error's chain marks an exit the adapter saw on its own. */
+export function providerExitObserved(error: unknown): boolean {
+  return (
+    findInErrorChain(error, (inner) =>
+      'providerExitObserved' in inner && inner.providerExitObserved === true ? true : undefined
+    ) ?? false
+  )
 }
 
 /** A start that did not land. A refusal the adapter typed keeps its situation, and an exit the
@@ -96,17 +88,11 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
   if (providerExecutableMissing(cause)) {
     return agentSessionFailureFact('cliMissing')
   }
-  const detail = providerDiagnosticOf(cause)
-  if (providerExitObserved(cause)) {
-    return agentSessionFailureFact('providerStartFailed', {
-      detail,
-      argumentProblem: argumentProblemOf(cause)
-    })
-  }
-  return agentSessionFailureFact('startFailed', {
-    detail,
+  const exited = providerExitObserved(cause)
+  return agentSessionFailureFact(exited ? 'providerStartFailed' : 'startFailed', {
+    detail: providerDiagnosticOf(cause),
     argumentProblem: argumentProblemOf(cause),
-    requestTimeout: providerRequestTimeoutOf(cause)
+    ...(exited ? {} : { requestTimeout: providerRequestTimeoutOf(cause) })
   })
 }
 

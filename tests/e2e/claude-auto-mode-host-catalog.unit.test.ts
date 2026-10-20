@@ -105,6 +105,7 @@ async function hostCatalog(listingLands: Promise<void>) {
   const record = agentSessionRecordFixture({
     sessionId: SESSION,
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: join(dir, 'claude-home') },
+    providerHandleChain: [],
     options: { permissionMode: 'ask' }
   })
   const modelCatalog = createAgentModelCatalogService({
@@ -133,7 +134,13 @@ async function hostCatalog(listingLands: Promise<void>) {
   const resting = {
     child: null,
     params: { provider: 'claude' },
-    journal: { threadGoal: () => null, contextUsage: () => null, context: { floor: () => null } }
+    journal: {
+      threadGoal: () => null,
+      visitItems: () => {},
+      submissions: () => [],
+      contextUsage: () => null,
+      context: { floor: () => null }
+    }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read touches only these members.
   const context = {

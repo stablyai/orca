@@ -14,7 +14,7 @@
     "audit:perf": "oxlint --config config/oxlint-performance-audit.json --format json src",
     "test:perf:contracts": "vitest run --config config/vitest.performance.config.ts",
     "format": "oxfmt --write .",
-    "lint": "oxlint && pnpm run audit:anti-slop && pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run check:reliability-gates && pnpm run check:dead-classes && pnpm run check:max-lines-ratchet && pnpm run check:ts-nocheck-ratchet && pnpm run check:runtime-electron-ratchet && pnpm run check:focus-read-ratchet && pnpm run check:layout-writer-ratchets && pnpm run check:path-literal-ratchet && pnpm run check:legacy-relay-fence-ratchet && pnpm run check:unproven-pty-retirement-ratchet && pnpm run check:id-only-store-write-ratchet && pnpm run check:readme-local-links && pnpm run check:node-runtime-pin && pnpm run verify:rpc-params-catalog && pnpm run verify:acp-protocol && pnpm run verify:bundled-skill-guides && pnpm run verify:skill-bundle-manifest && pnpm run verify:localization-catalogs && pnpm run verify:localization-extraction && pnpm run verify:localization-coverage && pnpm run check:process-host-imports && pnpm run check:main-sync-spawn-ratchet && pnpm run check:compat-boundary-imports",
+    "lint": "oxlint && pnpm run audit:anti-slop && pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run check:reliability-gates && pnpm run check:dead-classes && pnpm run check:max-lines-ratchet && pnpm run check:ts-nocheck-ratchet && pnpm run check:runtime-electron-ratchet && pnpm run check:focus-read-ratchet && pnpm run check:layout-writer-ratchets && pnpm run check:path-literal-ratchet && pnpm run check:legacy-relay-fence-ratchet && pnpm run check:unproven-pty-retirement-ratchet && pnpm run check:id-only-store-write-ratchet && pnpm run check:repo-host-read-ratchet && pnpm run check:readme-local-links && pnpm run check:node-runtime-pin && pnpm run verify:rpc-params-catalog && pnpm run verify:acp-protocol && pnpm run verify:bundled-skill-guides && pnpm run verify:skill-bundle-manifest && pnpm run verify:localization-catalogs && pnpm run verify:localization-extraction && pnpm run verify:localization-coverage && pnpm run check:process-host-imports && pnpm run check:main-sync-spawn-ratchet && pnpm run check:compat-boundary-imports",
     "audit:code-quality": "pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run audit:react-doctor",
     "audit:code-quality:native": "oxlint --config config/oxlint-code-quality-native-plugins.json src config tests mobile --deny-warnings",
     "audit:code-quality:type-aware": "oxlint --type-aware --config config/oxlint-code-quality-type-aware.json src config tests --deny-warnings",
@@ -42,6 +42,7 @@
     "check:legacy-relay-fence-ratchet": "node config/scripts/check-legacy-relay-fence-ratchet.mjs",
     "check:unproven-pty-retirement-ratchet": "node config/scripts/check-unproven-pty-retirement-ratchet.mjs",
     "check:id-only-store-write-ratchet": "node config/scripts/check-id-only-store-write-ratchet.mjs",
+    "check:repo-host-read-ratchet": "node config/scripts/check-repo-host-read-ratchet.mjs",
     "check:worktree-id-composer-ratchet": "node config/scripts/check-worktree-id-composer-ratchet.mjs",
     "check:e2e-typecheck-ratchet": "node config/scripts/check-e2e-typecheck-ratchet.mjs",
     "check:runtime-electron-ratchet": "node config/scripts/check-runtime-electron-ratchet.mjs",
@@ -216,7 +217,7 @@
     "tweetnacl": "^1.0.3",
     "ws": "^8.22.0",
     "yaml": "^2.9.1",
-    "zod": "~4.6.5"
+    "zod": "~4.6.7"
   },
   "devDependencies": {
     "@actions/expressions": "0.3.61",

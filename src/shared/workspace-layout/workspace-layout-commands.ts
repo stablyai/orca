@@ -35,6 +35,8 @@ import {
   movePane,
   movePaneToNewTab,
   renamePane,
+  setPaneGrid,
+  releasePaneTerminal,
   setPaneRatios,
   splitPane
 } from './workspace-layout-pane-commands'
@@ -48,6 +50,7 @@ import {
   setTabProps
 } from './workspace-layout-tab-commands'
 import { moveTabToWorkspace } from './workspace-layout-workspace-move'
+import { applyDefaultTabs } from './workspace-layout-default-tabs'
 
 const CREATES_WORKSPACE = new Set<LayoutCommand['type']>([
   'createTerminalTab',
@@ -85,6 +88,9 @@ function applyCommand(
   if (command.type === 'setDefaultTabsApplied') {
     return setDefaultTabsApplied(model, command.workspace)
   }
+  if (command.type === 'applyDefaultTabs') {
+    return applyDefaultTabs(model, command, context, setDefaultTabsApplied)
+  }
   if (!model.workspaces[command.workspace] && !CREATES_WORKSPACE.has(command.type)) {
     // Closing what is already gone is not an error (#10747).
     if (command.type === 'closeTabs') {
@@ -121,6 +127,10 @@ function applyCommand(
       return renameTab(model, command)
     case 'renamePane':
       return renamePane(model, command)
+    case 'setPaneGrid':
+      return setPaneGrid(model, command)
+    case 'releasePaneTerminal':
+      return releasePaneTerminal(model, command)
     case 'setTabProps':
       return setTabProps(model, command)
     case 'setChatPane':

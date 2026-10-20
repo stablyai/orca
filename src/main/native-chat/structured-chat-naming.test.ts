@@ -83,20 +83,30 @@ function rig(provider: 'claude' | 'codex') {
 }
 
 describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provider) => {
-  it('writes only the generated name without awaiting generation', async () => {
+  it('names the chat from its first prompt at once, then takes the generated name', async () => {
     const state = rig(provider)
     const generation = deferred<string | null>()
     state.deps.generate = vi.fn(() => generation.promise)
     expect(state.handle(state.summary, { replay: false })).toBeUndefined()
     await settle()
-    expect(state.read()?.conversationName).toBeUndefined()
-    expect(state.setConversationName).not.toHaveBeenCalled()
-    expect(state.deps.onNamed).not.toHaveBeenCalled()
+    expect(state.read()?.conversationName).toBe('Please repair the login flow')
+    expect(state.deps.onNamed).toHaveBeenCalledTimes(1)
     expect(state.deps.readFirstPrompt).toHaveBeenCalledWith(state.summary.sessionId, 100)
     generation.resolve('auth/login')
     await settle()
     expect(state.read()?.conversationName).toBe('auth/login')
-    expect(state.deps.onNamed).toHaveBeenCalledTimes(1)
+    expect(state.deps.onNamed).toHaveBeenCalledTimes(2)
+  })
+
+  it('clips a long first prompt into a short name', async () => {
+    const state = rig(provider)
+    const generation = deferred<string | null>()
+    state.deps.generate = vi.fn(() => generation.promise)
+    state.deps.readFirstPrompt = async () =>
+      'use /agent-slack to search the thread and bring indexed search to cmd + j'
+    state.handle(state.summary, { replay: false })
+    await settle()
+    expect(state.read()?.conversationName).toBe('use /agent-slack to search the thread and bring…')
   })
 
   it.each([null, 'idle', 'attention'] as const)('does no work for status %s', async (status) => {
@@ -172,7 +182,7 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
   })
 
   it.each(['rejected', 'declined', 'empty'] as const)(
-    'leaves %s generation unnamed without retrying',
+    'keeps the first-prompt name when generation is %s, without retrying',
     async (outcome) => {
       const state = rig(provider)
       state.deps.generate = vi.fn(async () => {
@@ -186,9 +196,9 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
       state.handle({ ...state.summary, status: 'idle' }, { replay: false })
       state.handle({ ...state.summary, latestPrompt: 'Second request' }, { replay: false })
       await settle()
-      expect(state.read()?.conversationName).toBeUndefined()
+      expect(state.read()?.conversationName).toBe('Please repair the login flow')
       expect(state.deps.generate).toHaveBeenCalledTimes(1)
-      expect(state.setConversationName).not.toHaveBeenCalled()
+      expect(state.setConversationName).toHaveBeenCalledTimes(1)
     }
   )
 
@@ -206,7 +216,7 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     generation.resolve('Late agent name')
     await settle()
     expect(state.read()?.conversationName).toBe('User name')
-    expect(state.deps.onNamed).not.toHaveBeenCalled()
+    expect(state.deps.onNamed).toHaveBeenCalledTimes(1)
   })
 
   it('protects a name changed while the first prompt is read', async () => {
@@ -254,7 +264,7 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     state.deps.generate = vi.fn(() => generation.promise)
     state.handle(state.summary, { replay: false })
     await settle()
-    expect(state.read()?.conversationName).toBeUndefined()
+    expect(state.read()?.conversationName).toBe(prompt)
     expect(state.deps.generate).toHaveBeenCalledWith(expect.anything(), prompt)
     generation.resolve('auth/login')
     await settle()

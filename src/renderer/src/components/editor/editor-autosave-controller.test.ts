@@ -324,15 +324,15 @@ describe('attachEditorAutosaveController', () => {
         } as never
       ]
     })
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/runtime/folder/src/file.ts',
       relativePath: 'src/file.ts',
       worktreeId: workspaceKey,
       language: 'typescript',
       mode: 'edit'
     })
-    store.getState().setEditorDraft('/runtime/folder/src/file.ts', 'edited')
-    store.getState().markFileDirty('/runtime/folder/src/file.ts', true)
+    store.getState().setEditorDraft(fileId, 'edited')
+    store.getState().markFileDirty(fileId, true)
 
     const cleanup = attachEditorAutosaveController(withLoadedBaselines(store))
     try {
@@ -397,7 +397,7 @@ describe('attachEditorAutosaveController', () => {
         'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' }] as never
       }
     })
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/remote/repo/file.ts',
       relativePath: 'file.ts',
       worktreeId: 'wt-1',
@@ -405,8 +405,8 @@ describe('attachEditorAutosaveController', () => {
       language: 'typescript',
       mode: 'edit'
     })
-    store.getState().setEditorDraft('/remote/repo/file.ts', 'edited')
-    store.getState().markFileDirty('/remote/repo/file.ts', true)
+    store.getState().setEditorDraft(fileId, 'edited')
+    store.getState().markFileDirty(fileId, true)
 
     const cleanup = attachEditorAutosaveController(withLoadedBaselines(store))
     try {

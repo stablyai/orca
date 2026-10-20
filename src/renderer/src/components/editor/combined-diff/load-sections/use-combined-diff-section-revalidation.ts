@@ -111,15 +111,16 @@ export function useCombinedDiffSectionRevalidation({
     if (treeMode !== 'all' && treeMode !== 'uncommitted') {
       return
     }
-    // Why: an overflow (or a switch-back catch-up) names no paths, and snapshot-backed reviews skip
+    // Why: a resync (the watch was down) names no paths, and snapshot-backed reviews skip
     // status-driven reloads, so re-read every loaded working-tree section of this workspace.
+    // A storm overflow only refreshes git status, so it never re-reads every section.
     const handler = (event: WindowEventMap[typeof ORCA_WORKTREE_FILE_CHANGE_EVENT]): void => {
       const { payload, runtimeEnvironmentId } = event.detail
       if (
         (runtimeEnvironmentId?.trim() || null) !== (file.runtimeEnvironmentId?.trim() || null) ||
         normalizeRuntimePathForComparison(payload.worktreePath) !==
           normalizeRuntimePathForComparison(file.filePath) ||
-        !payload.events.some((change) => change.kind === 'overflow')
+        payload.resync !== true
       ) {
         return
       }

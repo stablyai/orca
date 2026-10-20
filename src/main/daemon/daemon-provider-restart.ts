@@ -11,8 +11,7 @@ import {
 } from './daemon-endpoint-adoption'
 import {
   getDaemonHistoryDir as getHistoryDir,
-  getDaemonRuntimeDir as getRuntimeDir,
-  resolvePackagedDarwinAppVersion
+  getDaemonRuntimeDir as getRuntimeDir
 } from './daemon-launch-paths'
 import { trackDaemonRetired } from './daemon-lifecycle-event'
 import { attributeNextDaemonReplacement } from './daemon-out-of-process-launcher'
@@ -134,7 +133,7 @@ async function runRestartDaemon(
     pidPath: getDaemonPidPath(runtimeDir),
     profileScope: runtimeDir,
     runtimeDir,
-    packagedAppVersion: resolvePackagedDarwinAppVersion(),
+    packagedAppVersion: currentSpawner.staleDaemonRecycleVersion,
     historyPath: getHistoryDir(),
     respawn: async (reason: DaemonRespawnReason) => {
       // Why: attribute rather than emit — the launcher below is the one that completes the

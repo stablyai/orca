@@ -80,7 +80,7 @@ describe('codex model catalog probe', () => {
         process.stdout.write(JSON.stringify({ id: message.id, result }) + '\n')
       })
     `
-    const configReadTimeouts: (number | undefined)[] = []
+    const configReadTimeouts: (number | null | undefined)[] = []
     const configReadFailures: unknown[] = []
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({ PATH: '/bin' }),

@@ -205,7 +205,7 @@ export function useNativeChatComposerPaste({
         return
       }
       if (owner.kind === 'not-ready') {
-        setNotice(nativeChatWorktreeNotReadyNotice())
+        setNotice(owner.notice ?? nativeChatWorktreeNotReadyNotice())
         return
       }
       // Why: snapshot the caret before the async temp-file round-trip — `caret`
@@ -285,7 +285,7 @@ export function useNativeChatComposerPaste({
           setNotice(
             owner.kind === 'remote'
               ? nativeChatLocalAttachmentUnsupportedNotice()
-              : nativeChatWorktreeNotReadyNotice()
+              : (owner.notice ?? nativeChatWorktreeNotReadyNotice())
           )
         }
         return

@@ -203,7 +203,7 @@ jobs:
         if: needs.changes.outputs.qualification == 'false'
       - run: pnpm build:orcad
         env:
-          ORCA_REUSE_PREPARED_WINDOWS_SECURITY: ${{ github.event_name == 'pull_request' && runner.os == 'Windows' && steps.dependencies.outcome == 'success' }}
+          ORCA_REUSE_PREPARED_WINDOWS_SECURITY: ${{ runner.os == 'Windows' && steps.dependencies.outcome == 'success' }}
       - wait: bun-orcad
       - run: pnpm test:node-server --artifact ${{ runner.os == 'Linux' && '--cross-runtime' || '' }}
         env:

@@ -82,7 +82,7 @@ it('abandons only the stopped message while waiting for a previous turn to open'
       body: CODEX_TEST_USER_MESSAGE,
       signal
     })
-  await expect(dispatch('first')).resolves.toEqual({ state: 'admitted' })
+  await expect(dispatch('first')).resolves.toMatchObject({ state: 'admitted' })
   const controller = new AbortController()
   const stopped = dispatch('waiting', controller.signal)
   await new Promise<void>((resolve) => setTimeout(resolve, 10))
@@ -120,7 +120,7 @@ it.each(['accepted', 'uncertain'] as const)(
     controller.abort(new Error('Stop after write'))
     if (outcome === 'accepted') {
       answer.resolve({ turnId: 'running' })
-      await expect(sent).resolves.toEqual({ state: 'admitted' })
+      await expect(sent).resolves.toMatchObject({ state: 'admitted' })
     } else {
       const lost = new Error('Reply lost after write')
       answer.reject(lost)

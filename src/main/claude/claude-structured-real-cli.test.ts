@@ -468,7 +468,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1
         })
         // Read as the write resolves: the CLI had not answered initialize, so nothing held it.
-        expect(dispatched).toEqual({ state: 'admitted' })
+        expect(dispatched).toMatchObject({ state: 'admitted' })
         const deadline = Date.now() + 90_000
         while (!messages().some((m) => m.type === 'result') && Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, 250))
@@ -543,7 +543,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         const first = events.length
         await expect(
           send('real-cli-stop-1', 'Count from 1 to 300, one number per line, and nothing else.')
-        ).resolves.toEqual({ state: 'admitted' })
+        ).resolves.toMatchObject({ state: 'admitted' })
         const startedBeforeStop = replyStarted(first)
 
         await expect(
@@ -559,7 +559,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         expect(replyStarted(first)).toBe(false)
 
         const second = events.length
-        await expect(send('real-cli-stop-2', 'Reply with the single word ok.')).resolves.toEqual({
+        await expect(
+          send('real-cli-stop-2', 'Reply with the single word ok.')
+        ).resolves.toMatchObject({
           state: 'admitted'
         })
         await expect(result(second)).resolves.toMatchObject({ subtype: 'success' })
@@ -688,7 +690,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
             },
             fence: 1
           })
-        ).resolves.toEqual({ state: 'admitted' })
+        ).resolves.toMatchObject({ state: 'admitted' })
         await vi.waitFor(
           () => expect(frames()).toContainEqual(expect.objectContaining({ type: 'result' })),
           { timeout: 120_000, interval: 200 }

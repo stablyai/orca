@@ -8,6 +8,7 @@ import {
   subscribeSidebarPendingLayer
 } from '@/lib/sidebar-pending-layer'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
+import { readEndedCreations, subscribeEndedCreations } from '@/lib/sidebar-ended-creations'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import {
@@ -58,13 +59,21 @@ const NO_FEED: SidebarFeedDomains = {
 // The window renders its own collapse, so planning never re-runs on a toggle.
 const PLANNED_UNCOLLAPSED: ReadonlySet<string> = new Set()
 
-/** The window's own creations main does not list: preflight, a paired server's, and the window's
- *  work after main's reply (as the window's own list shows them). */
-function withWindowCreations(
+/** Every creation main lists, whoever started it (so the window lists what the phone does), less
+ *  those the window just ended, plus the window's own main does not list: preflight, a paired
+ *  server's, and its work after main's reply. */
+export function withWindowCreations(
   domains: SidebarFeedDomains,
-  pendingCreationKeys: readonly string[]
+  pendingCreationKeys: readonly string[],
+  endedCreationIds: ReadonlySet<string>
 ): SidebarFeedDomains {
   let creations: Map<string, { repoId: string }> | null = null
+  for (const creationId of endedCreationIds) {
+    if (domains.creations.has(creationId)) {
+      creations ??= new Map(domains.creations)
+      creations.delete(creationId)
+    }
+  }
   for (const key of pendingCreationKeys) {
     const separator = key.indexOf(' ')
     const creationId = key.slice(0, separator)
@@ -103,6 +112,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   useSidebarListSession()
   const feed = useDesktopSidebarFeed()
   const pending = useSyncExternalStore(subscribeSidebarPendingLayer, readSidebarPendingLayer)
+  const endedCreationIds = useSyncExternalStore(subscribeEndedCreations, readEndedCreations)
   const pendingCreationKeys = useAppStore(
     useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations))
   )
@@ -115,9 +125,10 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
           repos,
           lineageById: args.worktreeLineageById
         }),
-        pendingCreationKeys
+        pendingCreationKeys,
+        endedCreationIds
       ),
-    [feed, pending, pendingCreationKeys, repos, args.worktreeLineageById]
+    [feed, pending, pendingCreationKeys, endedCreationIds, repos, args.worktreeLineageById]
   )
   const catalog = useMemo(
     () => ({ repos, projectGroups: args.projectGroups, projectGrouping: args.projectGrouping }),

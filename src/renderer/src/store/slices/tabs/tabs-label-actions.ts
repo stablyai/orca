@@ -206,15 +206,15 @@ export function createTabsLabelActions(
       }
     },
 
-    setUnifiedTabColor: (tabId, color) => {
+    setUnifiedTabColor: (tabId, color, opts) => {
       const exists = get().getTab(tabId) !== null
       set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { color }) ?? state)
-      if (exists) {
+      if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
     },
 
-    pinTab: (tabId) => {
+    pinTab: (tabId, opts) => {
       const exists = get().getTab(tabId) !== null
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
@@ -247,12 +247,12 @@ export function createTabsLabelActions(
         }
       })
       mirrorTabPinnedToHost(get(), tabId, true)
-      if (exists) {
+      if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
     },
 
-    unpinTab: (tabId) => {
+    unpinTab: (tabId, opts) => {
       const exists = get().getTab(tabId) !== null
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
@@ -284,7 +284,7 @@ export function createTabsLabelActions(
         }
       })
       mirrorTabPinnedToHost(get(), tabId, false)
-      if (exists) {
+      if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
     }

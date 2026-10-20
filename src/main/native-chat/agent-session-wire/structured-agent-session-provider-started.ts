@@ -17,6 +17,7 @@ import {
   saveStructuredAgentSessionStartReadbackListing
 } from './structured-agent-session-start-listing'
 import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
+import { noteStructuredAgentSessionReportedOptions } from './structured-agent-session-ran-options'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { recordAgentSessionProviderHandle } from '../../runtime/agent-session-provider-handle-transition'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -87,6 +88,12 @@ export async function settleStructuredAgentSessionProviderStarted(
       return null
     }
     context.runtimeState.startupAttempts.ready(event.sessionId, child)
+    await noteStructuredAgentSessionReportedOptions(
+      context,
+      event.sessionId,
+      child.fence,
+      event.reportedOptions
+    )
     void context.wakeDelivery(event.sessionId)
     noteStructuredAgentSessionProviderStarted(context.deps, event.sessionId)
     if (event.catalogListing) {
@@ -235,6 +242,12 @@ export async function settleStructuredAgentSessionOptionsReported(
       return
     }
   }
+  await noteStructuredAgentSessionReportedOptions(
+    context,
+    event.sessionId,
+    event.fence,
+    event.reportedOptions
+  )
   if (event.catalogListing) {
     void saveStructuredAgentSessionStartReadbackListing(context, event, event.catalogListing)
   }

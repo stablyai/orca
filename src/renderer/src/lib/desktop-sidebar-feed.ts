@@ -29,8 +29,7 @@ const RETRY_MS = 1_000
 let state: SidebarInputsFeedState = INITIAL_SIDEBAR_INPUTS_FEED_STATE
 let read: SidebarFeedRead | null = null
 let feed: DesktopSidebarFeed | null = null
-let readers = 0
-let detachNotices: (() => void) | null = null
+let started = false
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 const listeners = new Set<() => void>()
 const installListeners = new Set<(installed: DesktopSidebarFeed) => void>()
@@ -54,7 +53,7 @@ async function send(request: SidebarInputsFeedRequest): Promise<void> {
     state = sidebarInputsReadFailed(state, request.id)
     retryTimer ??= setTimeout(() => {
       retryTimer = null
-      if (readers > 0 && state.inFlight === null) {
+      if (state.inFlight === null) {
         advance(refreshSidebarInputs(state))
       }
     }, RETRY_MS)
@@ -88,29 +87,25 @@ export function onDesktopSidebarFeedInstalled(
 
 /** Reads again now, so the next install reflects every write main has answered so far. */
 export function refreshDesktopSidebarFeed(): number {
-  if (readers === 0) {
-    // Nothing is read now; the next mount's first read is the earliest that shows the write.
+  if (!started) {
+    // Nothing is read yet; the first mount's first read is the earliest that shows the write.
     return state.lastRequestId + 1
   }
   advance(refreshSidebarInputs(state))
   return state.lastRequestId
 }
 
-function acquire(): () => void {
-  readers += 1
-  if (readers === 1) {
-    detachNotices = window.api.runtime.onSidebarInputsChanged((notice) =>
-      advance(sidebarInputsChanged(state, notice))
-    )
-    advance(refreshSidebarInputs(state))
+/** Follows main from the first mount for the window's life: main serves this window until it closes
+ *  either way, and a list that remounts must not first draw rows main changed while it was hidden. */
+function start(): void {
+  if (started) {
+    return
   }
-  return () => {
-    readers -= 1
-    if (readers === 0) {
-      detachNotices?.()
-      detachNotices = null
-    }
-  }
+  started = true
+  window.api.runtime.onSidebarInputsChanged((notice) =>
+    advance(sidebarInputsChanged(state, notice))
+  )
+  advance(refreshSidebarInputs(state))
 }
 
 function subscribe(listener: () => void): () => void {
@@ -120,6 +115,6 @@ function subscribe(listener: () => void): () => void {
 
 /** Null until main's first install lands. Only an ORCA_SIDEBAR_INPUTS=main window reads this. */
 export function useDesktopSidebarFeed(): DesktopSidebarFeed | null {
-  useEffect(acquire, [])
+  useEffect(start, [])
   return useSyncExternalStore(subscribe, () => feed)
 }

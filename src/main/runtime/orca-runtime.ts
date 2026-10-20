@@ -249,7 +249,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     store: () => this.store,
     homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key),
     // An empty title is no title.
-    liveTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId) || null
+    liveTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId) || null,
+    paneStartFact: (paneKey, binding) => this.paneStartStatuses?.get(paneKey, binding) ?? null
   })
 
   protected markPaneLiveTitlesDirty(): void {
@@ -270,16 +271,15 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   /** A window's layout command (`layout.apply`), applied to the partitions that hold its tab. */
   async applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply> {
+    // A workspace's first surface comes after the live terminals main is placing.
+    const placing = this.livePlacementSettledFor(command)
     const apply = (): Promise<LayoutApplyReply> =>
       applyWindowLayoutCommand(
         this.requireStore(),
-        (worktreeId, tabId) => {
-          if (tabId !== null) {
-            return this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
-          }
-          const routed = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
-          return routed ? [routed] : []
-        },
+        (worktreeId, tabId) =>
+          tabId !== null
+            ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
+            : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
         command,
         (move) => rekeyMovedPaneOwners(this, move)
       )
@@ -287,7 +287,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN &&
     (command.type === 'sleep' || command.type === 'wake')
       ? this.inResumeRecordOrder(apply)
-      : apply())
+      : (placing?.then(apply) ?? apply()))
     // Sent before the reply, so the window can wait for the frame that shows the change.
     return { ...reply, frameSeq: this.workspaceLayoutStream.settledSeq() }
   }

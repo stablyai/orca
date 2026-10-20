@@ -45,7 +45,6 @@
 2 src/renderer/src/runtime/web-session-tabs-sync/apply-preparation-groups.ts
 5 src/renderer/src/runtime/web-session-tabs-sync/apply-terminal-records.ts
 4 src/renderer/src/runtime/web-session-tabs-sync/apply-worktree-records.ts
-1 src/renderer/src/runtime/web-session-tabs-sync/mirrored-editor-file-identity.ts
 2 src/renderer/src/runtime/web-session-tabs-sync/session-tabs-inventory-absence.ts
 1 src/renderer/src/runtime/web-session-terminal-orphan-recovery-surface.ts
 2 src/renderer/src/runtime/web-session-terminal-orphan-topology.ts

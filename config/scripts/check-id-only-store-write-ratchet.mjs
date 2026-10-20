@@ -80,8 +80,20 @@ export const NOT_HOST_TWINNED = new Map([
 /** `[className, file]` for every operations class the Store mixes in, in composition order. */
 export function listStoreOperationClasses(root) {
   const text = fs.readFileSync(path.join(root, COMPOSITION), 'utf8')
+  // Each value name a one-line import brings in (an operations class may share its import).
   const imports = new Map(
-    [...text.matchAll(/^import \{ (\w+) \} from '([^']+)'/gm)].map((m) => [m[1], m[2]])
+    [...text.matchAll(/^import \{ ([\w, ]+) \} from '([^']+)'/gm)].flatMap((m) =>
+      m[1]
+        .split(',')
+        .map((name) =>
+          name
+            .trim()
+            .split(/\s+as\s+/)
+            .at(-1)
+        )
+        .filter(Boolean)
+        .map((name) => [name, m[2]])
+    )
   )
   const list = /STORE_DOMAIN_OPERATION_CLASSES = \[([\s\S]*?)\]/.exec(text)
   if (!list) {

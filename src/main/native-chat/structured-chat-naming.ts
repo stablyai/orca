@@ -1,7 +1,10 @@
 import type { StructuredAgentSessionStatusObserverOptions } from './agent-session-wire/structured-agent-session-status-observation'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
-import { clampConversationNameFirstPrompt } from '../../shared/conversation-name-generation'
+import {
+  clampConversationNameFirstPrompt,
+  conversationNameSeed
+} from '../../shared/conversation-name-generation'
 import { hasStructuredChatPromptText } from '../../shared/structured-agent-session-first-prompt'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
@@ -43,35 +46,45 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     }
   }
 
-  async function generateName(
-    store: NonNullable<ReturnType<StructuredChatNamingDeps['getStore']>>,
-    record: AgentSessionRecord
-  ): Promise<string | null> {
-    const firstPrompt = clampConversationNameFirstPrompt(
-      await deps.readFirstPrompt(record.sessionId, hostStartedAt)
-    )
-    if (
-      !hasStructuredChatPromptText(firstPrompt) ||
-      store.getRecord(record.sessionId)?.conversationName !== undefined ||
-      deps.getSettings().nativeChatAutoName === false
-    ) {
-      return null
-    }
-    return deps.generate(record, firstPrompt)
-  }
-
   async function name(summary: AgentSessionStatusSummary) {
     const store = deps.getStore()
     const record = store?.getRecord(summary.sessionId)
-    if (!store || !record || record.conversationName !== undefined) {
+    const namingOff = () => deps.getSettings().nativeChatAutoName === false
+    if (!store || !record || record.conversationName !== undefined || namingOff()) {
       return
     }
     const workerTask = deps.workerTaskTitle(record)
-    const chatName = workerTask ? workerTask.title : await generateName(store, record)
-    if (!chatName || deps.getSettings().nativeChatAutoName === false) {
+    if (workerTask) {
+      const named =
+        workerTask.title &&
+        (await store.compareAndSetConversationName(summary.sessionId, workerTask.title, null))
+      if (named) {
+        refresh(named)
+      }
       return
     }
-    const named = await store.compareAndSetConversationName(summary.sessionId, chatName, null)
+    const firstPrompt = clampConversationNameFirstPrompt(
+      await deps.readFirstPrompt(record.sessionId, hostStartedAt)
+    )
+    const seed = hasStructuredChatPromptText(firstPrompt) ? conversationNameSeed(firstPrompt) : null
+    if (!seed || namingOff()) {
+      return
+    }
+    // The prompt names the chat at once; generation only upgrades it, so its failure keeps a name.
+    const seeded = await store.compareAndSetConversationName(summary.sessionId, seed, null)
+    if (!seeded?.conversationName) {
+      return
+    }
+    refresh(seeded)
+    const chatName = await deps.generate(seeded, firstPrompt)
+    if (!chatName || namingOff()) {
+      return
+    }
+    const named = await store.compareAndSetConversationName(
+      summary.sessionId,
+      chatName,
+      seeded.conversationName
+    )
     if (named) {
       refresh(named)
     }

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
+import { withEditorBufferRecords } from './editor-buffer-record-lifecycle'
+import type { EditorBufferRecords } from './slices/editor/buffers/editor-buffer-record'
+import type { OpenFile } from './slices/editor/types/open-file'
 import type { ReactCommitCascadeWriteBoundary } from '@/lib/react-commit-cascade-store-write-samples'
 
 const { probe, noteWrite } = vi.hoisted(() => ({
@@ -70,5 +73,34 @@ describe('withReactCommitCascadeWriteProbe', () => {
 
     expect(noteWrite).not.toHaveBeenCalled()
     expect(useProbedStore.getState().ticks).toBe(4)
+  })
+
+  // Why: composed as in store/index.ts, the buffer middleware must not turn every write into one
+  // updater from one frame, or the crash report loses changed keys and distinct write sites.
+  it('sees each original partial and caller under the editor buffer middleware', () => {
+    type BufferedState = {
+      ticks: number
+      openFiles: OpenFile[]
+      editorBuffers: EditorBufferRecords
+      tick: () => void
+    }
+    const useBufferedStore = create<BufferedState>()(
+      withEditorBufferRecords(
+        withReactCommitCascadeWriteProbe<BufferedState>((set) => ({
+          ticks: 0,
+          openFiles: [],
+          editorBuffers: {},
+          tick: () => set({ ticks: 1 })
+        }))
+      )
+    )
+    probe.armed = true
+
+    useBufferedStore.getState().tick()
+    useBufferedStore.setState({ ticks: 2 })
+
+    expect(noteWrite.mock.calls.map(([, partial]) => partial)).toEqual([{ ticks: 1 }, { ticks: 2 }])
+    expect(noteWrite.mock.calls[1]?.[0]).toBe(useBufferedStore.setState)
+    expect(useBufferedStore.getState().ticks).toBe(2)
   })
 })

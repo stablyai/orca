@@ -91,6 +91,22 @@ describe.skipIf(process.platform === 'win32')('orcad launch file modes', () => {
     expect(mode(baseDir)).toBe(0o700)
   })
 
+  // Regression (#31125): git, terminals and agents the daemon spawns create the user's files.
+  it('runs the daemon itself at the login umask', async () => {
+    writeFileSync(
+      join(slotDir, 'orcad.js'),
+      `mkdir daemon-dir && : > daemon-file && printf '%s\\n' '${READY_LINE}'\n`
+    )
+
+    await launchUnderLoginUmask()
+
+    expect(mode(join(slotDir, 'daemon-file'))).toBe(0o644)
+    expect(mode(join(slotDir, 'daemon-dir'))).toBe(0o755)
+    expect(mode(join(slotDir, ORCAD_READINESS_FILENAME))).toBe(0o600)
+    expect(mode(join(slotDir, ORCAD_PID_FILENAME))).toBe(0o600)
+    expect(mode(join(slotDir, ORCAD_LOG_FILENAME))).toBe(0o600)
+  })
+
   it('leaves a parent that is not ~/.orca-remote alone', async () => {
     slotDir = join(home, 'custom-slot')
     mkdirSync(slotDir, { mode: 0o755 })

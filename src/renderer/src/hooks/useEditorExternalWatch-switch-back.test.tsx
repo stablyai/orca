@@ -220,7 +220,8 @@ describe('switching back to a workspace that was not watched', () => {
     await act(async () =>
       emitIpc({
         worktreePath: '/background',
-        events: [{ kind: 'overflow', absolutePath: '/background' }]
+        events: [{ kind: 'overflow', absolutePath: '/background' }],
+        resync: true
       })
     )
     await act(async () => vi.advanceTimersByTimeAsync(200))

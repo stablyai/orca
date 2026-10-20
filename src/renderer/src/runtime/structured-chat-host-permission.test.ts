@@ -135,13 +135,13 @@ describe('the permission verdict a chat holds', () => {
     mocks.contactListeners.length = 0
     mocks.supportsCapability.mockResolvedValue(true)
     const { result } = renderHook(() => useStructuredChatHostPermissionVerdict(PAIRED, 'claude'))
-    expect(result.current).toEqual({ kind: 'checking' })
-    await vi.waitFor(() => expect(result.current).toEqual({ kind: 'allowed' }))
+    expect(result.current).toMatchObject({ kind: 'checking' })
+    await vi.waitFor(() => expect(result.current).toMatchObject({ kind: 'allowed' }))
 
     // The host came back as an older build: its answer is still on the way.
     mocks.supportsCapability.mockReturnValue(new Promise(() => undefined))
     act(() => mocks.contactListeners.forEach((listener) => listener()))
-    expect(result.current).toEqual({ kind: 'checking' })
+    expect(result.current).toMatchObject({ kind: 'checking' })
   })
 })
 
@@ -160,7 +160,7 @@ describe('a held chat', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(30_000)
       })
-      expect(result.current).toEqual({ kind: 'allowed' })
+      expect(result.current).toMatchObject({ kind: 'allowed' })
     } finally {
       vi.useRealTimers()
     }

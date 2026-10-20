@@ -175,7 +175,10 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       'stream-json',
       '--output-format',
       'stream-json',
-      '--verbose'
+      '--verbose',
+      '--strict-mcp-config',
+      '--settings',
+      '{"disableAllHooks":true}'
     ])
     expect(spawnMock.mock.calls[0]![2]).toMatchObject({
       windowsHide: true,

@@ -117,6 +117,8 @@ docs/**
 !docs/bug-reproductions/
 !docs/bug-reproductions/**
 !docs/STYLEGUIDE.md
+!docs/reference/
+!docs/reference/git-workflow.md
 !docs/audits/
 !docs/audits/crashpad-read-limit/
 !docs/audits/crashpad-read-limit/source-hashes.json

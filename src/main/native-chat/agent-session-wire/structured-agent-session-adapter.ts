@@ -1,6 +1,7 @@
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
 import type { AgentSessionAccountKind } from '../../../shared/agent-session-availability'
 import type {
+  AgentSessionRewindFork,
   AgentSessionRewindReason,
   AgentSessionRewindSupport
 } from '../../../shared/agent-session-rewind'
@@ -28,7 +29,8 @@ import type { AgentSessionProviderHandleLink } from '../../../shared/agent-sessi
 import type {
   AgentSessionAccountHome,
   AgentSessionExecutionLocation,
-  AgentSessionProcessIdentity
+  AgentSessionProcessIdentity,
+  AgentSessionRecord
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type {
@@ -170,16 +172,23 @@ export type AgentSessionCommandAdmission =
   | AgentSessionDispatchOutcome
   | { state: 'accepted'; providerIdentity: null }
 
+/** In memory only: the model and options the provider took the message under, from its own
+ *  execution (a steer reports its running turn's), never a setting or a picker default. */
+export type AgentSessionRanOptionsEvidence = { ranOptions?: Readonly<Record<string, string>> }
+
 export type AgentSessionDispatchOutcome =
   /** The provider owns the turn now, under this identity. */
-  | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity }
+  | ({
+      state: 'accepted'
+      providerIdentity: AgentJournalItemIdentity
+    } & AgentSessionRanOptionsEvidence)
   /**
    * The provider transport took the message; identity settles later, out of band.
    * The submission stays `pending`: a message queued behind a running turn is
    * acknowledged only when that turn starts, so elapsed time is not evidence of
    * anything and never promotes this to `unknown`.
    */
-  | { state: 'admitted' }
+  | ({ state: 'admitted' } & AgentSessionRanOptionsEvidence)
   /** Words from `agentSessionFailureWords`, never written by hand. `answeredInTurn`: the turn the
    *  provider answered the send into, which ended before the answer was read. */
   | ({
@@ -296,6 +305,15 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     fence: number
     beforeTurnId: string
   }): Promise<{ ok: true } | { ok: false; reason: AgentSessionRewindReason }>
+  /** Saves the fork a rewind continues in, before the journal or record changes.
+   *  The agent need not be running; a refusal leaves its conversation unchanged. */
+  forkForRewind?(input: {
+    record: AgentSessionRecord
+    beforeMessage: { sessionId: string; uuid: string }
+    rewindOperationId: string
+  }): Promise<
+    { ok: true; fork: AgentSessionRewindFork } | { ok: false; reason: AgentSessionRewindReason }
+  >
   /** Sends a conversation compaction and answers with the provider's receipt of it, as a dispatch
    *  does. The command's turn is the child's journal translator's to end, from the provider's own
    *  frames; a child that ends first leaves it to the host's settlement of that child. */

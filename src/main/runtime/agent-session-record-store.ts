@@ -320,6 +320,13 @@ export class AgentSessionRecordStore {
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
 
+  /** One options revision from `agent-session-record-options`, decided against the record this
+   *  ordered write holds. */
+  reviseSessionOptions = <A extends { sessionId: string }>(
+    revise: (record: AgentSessionRecord, args: A) => AgentSessionRecord,
+    args: A
+  ) => this.mutate(args.sessionId, (record) => revise(record, args))
+
   async retireClaimKey(keyId: string, now: number): Promise<void> {
     await this.transact((draft) => retireAgentSessionClaimKey(draft, keyId, now))
   }

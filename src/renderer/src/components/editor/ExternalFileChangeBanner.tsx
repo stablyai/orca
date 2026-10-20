@@ -14,13 +14,14 @@ import { getDiskBaselineSignature } from './diff-content-signature'
 import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
 import { attemptEditorFileSave } from './editor-file-save-attempt'
 import {
+  editorModelDraftHolder,
   editorModelSiblingTabs,
   isEditorBaselineRestampSuperseded,
   isEditorModelDirty,
-  isWholeEditorState,
   setEditorDiskBaseline,
   trackEditorBaselineRestamp
 } from './editor-save-disk-precondition'
+import { setModelExternalMutation } from './editor-save-rebaseline'
 import { notifyEditorFileCacheStale } from './editor-autosave'
 
 // Why: when an external process (usually an agent) rewrites a file while the
@@ -36,14 +37,14 @@ export function reloadTabContentFromDisk(
   reloadContent: (file: OpenFile) => void
 ): void {
   const state = useAppStore.getState()
-  const discardedDraft = state.editorDrafts[file.id]
-  const discardedDiskSignature = state.openFiles.find(
-    (openFile) => openFile.id === file.id
-  )?.lastKnownDiskSignature
+  const liveTab = state.openFiles.find((openFile) => openFile.id === file.id)
+  // Why holder: a clean tab's Reload discards the unsaved text a sibling of the model holds.
+  const holder = liveTab ? editorModelDraftHolder(state, liveTab) : undefined
+  const discardedDraft = state.editorDrafts[holder?.id ?? file.id]
+  const discardedDiskSignature = liveTab?.lastKnownDiskSignature
   // Why: drop the draft before reloading — the buffer shadows loaded content
   // (editBuffers ?? fileContents), so a reload alone would keep showing the
   // stale unsaved text.
-  const liveTab = state.openFiles.find((openFile) => openFile.id === file.id)
   // Why every sibling: they share the model a reload replaces, so their drafts go with it.
   const siblings = liveTab ? editorModelSiblingTabs(state, liveTab) : [file]
   for (const tab of siblings) {
@@ -105,7 +106,8 @@ export function reloadTabContentFromDisk(
 
 export function keepTabEditsOverExternalChange(file: OpenFile): void {
   const state = useAppStore.getState()
-  state.setExternalMutation(file.id, null)
+  // Why model-wide: a sibling left marked would keep its banner and suspended autosave if the read fails.
+  setModelExternalMutation(state, file.id, null)
   // Why: the dismissal must survive restart — without advancing the baseline
   // to the current disk content, the restored-tab conflict scan re-derives
   // the dismissed conflict from the stale signature on every launch.
@@ -158,9 +160,8 @@ export function keepTabEditsOverExternalChange(file: OpenFile): void {
 export function overwriteDiskWithTabEdits(file: OpenFile): Promise<boolean> {
   const state = useAppStore.getState()
   const live = state.openFiles.find((openFile) => openFile.id === file.id)
-  const tabs = live && isWholeEditorState(state) ? editorModelSiblingTabs(state, live) : [file]
   // Why: the unsaved text may live in another tab of the same model; with none there is nothing to write.
-  const holder = tabs.find((tab) => tab.isDirty && state.editorDrafts[tab.id] !== undefined)
+  const holder = live ? editorModelDraftHolder(state, live) : undefined
   return holder
     ? attemptEditorFileSave({ fileId: holder.id, overwrite: true })
     : Promise.resolve(false)
@@ -180,14 +181,15 @@ export function ExternalFileChangeBanner({
 }): React.JSX.Element {
   const [compareOpen, setCompareOpen] = useState(false)
   // Why model-level: another tab of the same code model may hold the unsaved text.
-  const storeState = useAppStore.getState()
-  const liveFile = isWholeEditorState(storeState)
-    ? storeState.openFiles.find((openFile) => openFile.id === file.id)
-    : undefined
-  const isModelDirty =
-    liveFile && isWholeEditorState(storeState)
-      ? isEditorModelDirty(storeState, liveFile)
-      : file.isDirty
+  const isModelDirty = useAppStore((state) => {
+    const live = state.openFiles.find((openFile) => openFile.id === file.id)
+    return live ? isEditorModelDirty(state, live) : file.isDirty
+  })
+  const modelDraft = useAppStore((state) => {
+    const live = state.openFiles.find((openFile) => openFile.id === file.id)
+    const holder = live ? editorModelDraftHolder(state, live) : undefined
+    return holder ? state.editorDrafts[holder.id] : undefined
+  })
 
   const handleReload = (): void => {
     trackExternalChangeConflictAction(file, 'reload')
@@ -257,7 +259,7 @@ export function ExternalFileChangeBanner({
       {compareOpen && (
         <ExternalFileChangeCompareDialog
           file={file}
-          currentContent={currentContent}
+          currentContent={modelDraft ?? currentContent}
           open={compareOpen}
           onOpenChange={setCompareOpen}
           onReload={handleReload}

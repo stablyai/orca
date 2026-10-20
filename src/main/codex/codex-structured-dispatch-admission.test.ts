@@ -59,7 +59,7 @@ describe('codex dispatch admission', () => {
     const outcome = await send(adapter, 'client-2')
 
     // No doubt: elapsed time is not evidence, so nothing invites a Retry.
-    expect(outcome).toEqual({ state: 'admitted' })
+    expect(outcome).toMatchObject({ state: 'admitted' })
     expect(settlements).toEqual([])
 
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u2', clientId: 'client-2' })
@@ -351,7 +351,7 @@ describe('codex dispatch admission', () => {
     startTurn(connection, 'turn-1')
 
     for (let index = 0; index < MAX_CODEX_PENDING_DISPATCH_ECHOES; index += 1) {
-      expect(await send(adapter, `client-${index}`)).toEqual({ state: 'admitted' })
+      expect(await send(adapter, `client-${index}`)).toMatchObject({ state: 'admitted' })
     }
     expect(await send(adapter, 'client-overflow')).toEqual({
       state: 'rejected',

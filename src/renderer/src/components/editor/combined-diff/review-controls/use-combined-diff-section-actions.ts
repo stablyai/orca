@@ -11,7 +11,11 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import { canOpenDiffSectionPreviewToSide } from '../../diff-section-preview'
 import { getLargeDiffRenderLimit } from '../../large-diff-render-limit'
-import { getStoredTextDiffContent, getStoredTextDiffResult } from '../../large-diff-section-content'
+import {
+  getStoredTextDiffContent,
+  getStoredTextDiffResult,
+  isPrunedTextDiffResult
+} from '../../large-diff-section-content'
 import { removeDiffSectionMeasuredHeight } from '../../diff-section-height-cache'
 import type { DiffSection } from '../../diff-section-types'
 import type { DiffSectionItemProps } from '../../diff-section-item-props'
@@ -173,8 +177,7 @@ export function useCombinedDiffSectionActions({
       // Why first: a save earlier in this section's chain wrote it, maybe before state caught up.
       const loaded =
         writtenBySectionRef.current.get(section.key) ??
-        (section.diffResult?.kind === 'text' &&
-        !(section.diffResult.modifiedContent === '' && section.largeDiffRenderLimit?.limited)
+        (section.diffResult?.kind === 'text' && !isPrunedTextDiffResult(section.diffResult)
           ? section.diffResult.modifiedContent
           : undefined)
       const markConflict = (): void =>
