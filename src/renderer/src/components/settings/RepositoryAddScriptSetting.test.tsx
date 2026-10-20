@@ -260,6 +260,16 @@ describe('repository add script local editor', () => {
 })
 
 describe('repository add script host editor', () => {
+  it('refuses to edit a remote host script in the web client without reading it', () => {
+    mocks.webClient = true
+    renderSetting(REMOTE_SCOPE)
+
+    expect(screen.getByText(/can’t be edited from the web client/)).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(mocks.read).not.toHaveBeenCalled()
+    expect(mocks.updateSettingsOrThrow).not.toHaveBeenCalled()
+  })
+
   it('says an old server needs an update instead of reading the script', async () => {
     mocks.read.mockResolvedValue(null)
     renderSetting(REMOTE_SCOPE)

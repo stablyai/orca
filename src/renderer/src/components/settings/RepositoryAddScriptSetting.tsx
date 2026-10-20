@@ -33,16 +33,19 @@ export function RepositoryAddScriptSetting({
   const environment = useAppStore((state) =>
     environmentId ? state.runtimeEnvironments.find((entry) => entry.id === environmentId) : null
   )
-  if (!environmentId) {
-    // Why: the web client's settings API deliberately drops this host-owned value.
-    return isWebClientLocation() ? (
+  // Why: the script belongs to the host, and browser storage only strips the local copy.
+  if (isWebClientLocation()) {
+    return (
       <p className="text-sm text-muted-foreground">
         {translate(
           'settings.repositoryAddScript.webUnavailable',
           'The repository add script can’t be edited from the web client. Open this host’s Settings in the desktop app.'
         )}
       </p>
-    ) : (
+    )
+  }
+  if (!environmentId) {
+    return (
       <LocalRepositoryAddScriptSetting
         settings={settings}
         updateSettingsOrThrow={updateSettingsOrThrow}
