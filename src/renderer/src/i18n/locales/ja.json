@@ -5636,8 +5636,10 @@
           "680043342f": "コンパクト",
           "c7591b6014": "repo",
           "hosts": "ホスト",
+          "agents": "Agent",
           "showSection": "表示",
           "allHostsDetail": "すべてのホストを表示",
+          "allAgentsDetail": "すべての Agent を表示",
           "configuredSshHost": "設定済み SSH",
           "projectSshHost": "プロジェクト SSH",
           "activeRuntimeHost": "新規プロジェクトの既定",
@@ -6269,6 +6271,17 @@
           "3e102f111c": "すべてのホスト",
           "visibleHostsCount": "{{value0}} 台のホスト"
         },
+        "sidebarAgentOptions": {
+          "allAgents": "すべての Agent",
+          "visibleAgentsCount": "{{value0}} Agent"
+        },
+        "SidebarAgentFilterSection": {
+          "agent": "Agent"
+        },
+        "SidebarAgentScopeStrip": {
+          "scopedTo": "{{value0}} を表示中",
+          "backToAll": "すべての Agent"
+        },
         "SidebarHostScopeStrip": {
           "scopedTo": "{{value0}} 件を表示中",
           "backToAll": "すべてのホスト"
@@ -6329,7 +6342,8 @@
           "f0a1b2c3d4": "Linear の課題 {{value0}} をスキップしました: このワークスペースは複数のホストにあります。",
           "c7d8e9f0a1": "{{value0}} 件更新",
           "d8e9f0a1b2": "{{value0}} 件スキップ",
-          "e9f0a1b2c3": "{{value0}} 件失敗"
+          "e9f0a1b2c3": "{{value0}} 件失敗",
+          "noWorkspacesMatchFilters": "現在のフィルターに一致するワークスペースはありません"
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "親ワークツリーを設定できませんでした",

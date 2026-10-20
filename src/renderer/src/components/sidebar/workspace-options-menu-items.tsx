@@ -25,6 +25,7 @@ import {
 } from './sidebar-host-options'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { SidebarHostScopeMenuSection } from './SidebarHostScopeMenuSection'
+import { SidebarAgentScopeMenuSection } from './SidebarAgentScopeMenuSection'
 import { PROJECT_ORDER_OPTIONS, SORT_OPTIONS } from './sidebar-workspace-option-items'
 import {
   WorktreeCardDisplayMenuItem,
@@ -51,7 +52,7 @@ export function useWorkspaceOptionsFilterBadge(): {
       countActiveWorkspaceFilters(
         sidebarWorkspaceRowFilters(filterState),
         repos.map((repo) => repo.id)
-      ),
+      ) + (filterState.filterAgentIds != null ? 1 : 0),
     [filterState, repos]
   )
   return {
@@ -286,6 +287,10 @@ export function WorkspaceOptionsMenuItems({
     projectCount: repoCount,
     mayHaveServerHosts: !runtimeEnvironmentCatalogHydrated || runtimeEnvironmentCount > 0
   })
+  // Agent is desktop-only, so it is not a shared option, but it always opens Show.
+  const menuSections = sections.some((entry) => entry.section === 'show')
+    ? sections
+    : [{ section: 'show' as const, options: [] }, ...sections]
 
   return (
     <>
@@ -295,10 +300,13 @@ export function WorkspaceOptionsMenuItems({
           'Workspace options'
         )}
       </DropdownMenuLabel>
-      {sections.map(({ section, options }, index) => (
+      {menuSections.map(({ section, options }, index) => (
         <Fragment key={section}>
           {index > 0 && <DropdownMenuSeparator />}
           <SectionHeading section={section} />
+          {section === 'show' && (
+            <SidebarAgentScopeMenuSection preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
+          )}
           {options.map((option) => {
             const OptionItem = OPTION_ITEMS[option.key]
             return (

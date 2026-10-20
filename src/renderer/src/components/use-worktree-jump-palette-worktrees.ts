@@ -18,6 +18,7 @@ import {
 import type { Worktree } from '../../../shared/worktree/types'
 import { EMPTY_SORTED_WORKTREES } from './worktree-jump-palette-model'
 import { buildWorktreeJumpPaletteDocumentIndex } from './worktree-jump-palette-document-index'
+import { filterEmptyQueryWorktreesByAgent } from './worktree-jump-palette-empty-query-visibility'
 import { buildWorktreeJumpPaletteWorktreeMaps } from './worktree-jump-palette-worktree-maps'
 import type { WorktreeJumpPaletteWorktreesInput } from './worktree-jump-palette-worktrees-input'
 
@@ -37,6 +38,9 @@ export function useWorktreeJumpPaletteWorktrees({
   hideWorkspacesFromOtherDevices,
   showSleepingWorkspaces,
   alwaysShowDefaultBranchWorkspace,
+  filterAgentIds,
+  retainedAgentsByPaneKey,
+  sleepingAgentSessionsByPaneKey,
   ptyIdsByTabId,
   browserTabsByWorktree,
   unifiedTabsByWorktree,
@@ -109,12 +113,27 @@ export function useWorktreeJumpPaletteWorktrees({
         worktreeIdsWithStructuredChat
       })
     )
-    return filterPredicate ? visible.filter(filterPredicate.matchesWorktree) : visible
+    const scoped = filterPredicate ? visible.filter(filterPredicate.matchesWorktree) : visible
+    return filterEmptyQueryWorktreesByAgent(scoped, workspaces, {
+      filterAgentIds,
+      agentStatusByPaneKey,
+      retainedAgentsByPaneKey,
+      sleepingAgentSessionsByPaneKey,
+      tabsByWorktree,
+      runtimePaneTitlesByTabId,
+      terminalLayoutsByTabId
+    })
   }, [
     workspaces,
     alwaysShowDefaultBranchWorkspace,
+    agentStatusByPaneKey,
     browserTabsByWorktree,
+    filterAgentIds,
     filterPredicate,
+    retainedAgentsByPaneKey,
+    runtimePaneTitlesByTabId,
+    sleepingAgentSessionsByPaneKey,
+    terminalLayoutsByTabId,
     hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces,
     hideDefaultBranchWorkspace,

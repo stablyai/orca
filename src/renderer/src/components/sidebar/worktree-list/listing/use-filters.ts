@@ -35,6 +35,13 @@ import {
 } from '../../../../../../shared/workspace-creator-visibility'
 import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getAllWorktreesFromState } from '@/store/selectors'
+import { worktreePassesSidebarFilters } from '../../worktree-filter-visibility'
+import {
+  collectAgentTypesByWorktree,
+  collidingWorktreeIds,
+  resolveRevealFilterAgentIds
+} from '../../workspace-agent-filter-evidence'
 import {
   getVisibleWorktreeBrowserActivityTabs,
   getVisibleWorktreeTerminalActivityTabs,
@@ -144,6 +151,43 @@ function getRevealTargetHostId(state: AppState, worktree: Worktree, repo: Repo |
   return getWorktreeExecutionHostId(worktree, repo, defaultHostId)
 }
 
+function revealAgentFilter(context: RevealContext): void {
+  const { state, worktree, targetHostId } = context
+  if (!state.filterAgentIds) {
+    return
+  }
+  const worktrees = getAllWorktreesFromState(state)
+  const lookup = {
+    tabsByWorktree: state.tabsByWorktree,
+    agentTypesByWorktree: collectAgentTypesByWorktree({
+      agentStatusByPaneKey: state.agentStatusByPaneKey,
+      retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+      sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
+      tabsByWorktree: state.tabsByWorktree,
+      worktrees
+    }),
+    runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+    terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+    collidingWorktreeIds: collidingWorktreeIds(worktrees)
+  }
+  // Why: the listing, not a parallel match, decides whether Agent still hides it.
+  const next = resolveRevealFilterAgentIds(
+    state.filterAgentIds,
+    worktree,
+    lookup,
+    !worktreePassesSidebarFilters(worktree.id, targetHostId)
+  )
+  if (next !== state.filterAgentIds) {
+    state.setFilterAgentIds(next)
+  }
+  if (
+    useAppStore.getState().filterAgentIds &&
+    !worktreePassesSidebarFilters(worktree.id, targetHostId)
+  ) {
+    useAppStore.getState().setFilterAgentIds(null)
+  }
+}
+
 // Every sidebar filter, plus the single escape hatch that resets all of them.
 export function useSidebarWorktreeFilters() {
   const filterState = useAppStore(useShallow(selectSidebarFilterState))
@@ -160,6 +204,7 @@ export function useSidebarWorktreeFilters() {
     for (const key of activeWorkspaceRowFilterKeys(sidebarWorkspaceRowFilters(state))) {
       REVEAL_WORKSPACE[key](context)
     }
+    revealAgentFilter(context)
   }, [])
 
   const clearFilters = useCallback(

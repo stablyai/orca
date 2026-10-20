@@ -29,6 +29,7 @@ const args: Parameters<typeof useVisibleSidebarWorktrees>[0] = {
     hideDetachedHeadWorkspaces: false,
     hideWorkspacesFromOtherDevices: false,
     alwaysShowDefaultBranchWorkspace: false,
+    filterAgentIds: null,
     visibleWorkspaceHostIds: null,
     workspaceHostScope: 'all'
   },

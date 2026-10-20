@@ -6,6 +6,7 @@ import {
 import { resolveVisibleWorkspaceHostIds } from '../../../../shared/workspace-view/workspace-host-visibility'
 import type { AppState } from '../../store/types'
 import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
+import type { FilterAgentIds } from '../../../../shared/workspace-agent-filter'
 
 /**
  * Whether the sidebar is currently filtered, and what "clear filters" should undo.
@@ -25,6 +26,8 @@ export type SidebarFilterState = {
   hideWorkspacesFromOtherDevices: boolean
   /** Keeps each project's main workspace out of the "Hide sleeping" sweep; absent means on. */
   alwaysShowDefaultBranchWorkspace?: boolean
+  /** Catalog agents to show; null or absent shows every agent. Desktop-only. */
+  filterAgentIds?: FilterAgentIds
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
   workspaceHostScope?: ExecutionHostScope
 }
@@ -60,13 +63,17 @@ export function selectSidebarFilterState(
     hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices,
     alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
+    filterAgentIds: state.filterAgentIds,
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
     workspaceHostScope: state.workspaceHostScope
   }
 }
 
 export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
-  return activeWorkspaceRowFilterKeys(sidebarWorkspaceRowFilters(state)).length > 0
+  return (
+    state.filterAgentIds != null ||
+    activeWorkspaceRowFilterKeys(sidebarWorkspaceRowFilters(state)).length > 0
+  )
 }
 
 export type SidebarFilterSetters = Pick<
@@ -79,6 +86,7 @@ export type SidebarFilterSetters = Pick<
   | 'setHideDetachedHeadWorkspaces'
   | 'setHideWorkspacesFromOtherDevices'
   | 'setFilterRepoIds'
+  | 'setFilterAgentIds'
   | 'setVisibleWorkspaceHostIds'
 >
 
@@ -118,6 +126,10 @@ const RESET_SIDEBAR_FILTER: Record<
 export function clearSidebarFilters(state: SidebarFilterState, store: SidebarFilterSetters): void {
   for (const key of activeWorkspaceRowFilterKeys(sidebarWorkspaceRowFilters(state))) {
     RESET_SIDEBAR_FILTER[key](store)
+  }
+  // Agent scope is desktop-only, so it is not one of the shared row filters.
+  if (state.filterAgentIds != null) {
+    store.setFilterAgentIds(null)
   }
 }
 

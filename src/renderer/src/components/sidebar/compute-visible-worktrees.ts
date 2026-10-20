@@ -1,5 +1,6 @@
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { FilterAgentIds } from '../../../../shared/workspace-agent-filter'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
@@ -8,6 +9,7 @@ import { selectVisibleSidebarWorktrees } from '../../../../shared/sidebar-list/v
 import { buildDesktopWorkspaceRowFactReader } from './desktop-workspace-row-facts'
 import { sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
 import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
+import { filterWorktreesBySelectedAgents } from './workspace-agent-filter-evidence'
 
 // Why its own module: the store's attention slice asks it without an import cycle. The filter
 // rules live in the shared builder; this binds them to the window's store index and activity facts.
@@ -27,6 +29,10 @@ export type VisibleWorktreeOptions = {
   hideWorkspacesFromOtherDevices: boolean
   pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>
   alwaysShowDefaultBranchWorkspace?: boolean
+  filterAgentIds?: FilterAgentIds
+  agentTypesByWorktree?: Record<string, readonly (string | null | undefined)[]> | null
+  runtimePaneTitlesByTabId?: Record<string, Record<number, string>> | null
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined> | null
   repoMap: Map<string, Repo>
   workspaceHostScope: ExecutionHostScope
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
@@ -44,8 +50,20 @@ export function computeVisibleWorktrees(
   sortedIds: string[],
   opts: VisibleWorktreeOptions
 ): Worktree[] {
+  let rows = getIndexedAllWorktrees(worktreesByRepo)
+  // Why before the shared filters: host twins must still be in the list so agent
+  // evidence stays on the host that published it.
+  if (opts.filterAgentIds) {
+    rows = filterWorktreesBySelectedAgents(rows, opts.filterAgentIds, {
+      tabsByWorktree: opts.tabsByWorktree,
+      agentTypesByWorktree: opts.agentTypesByWorktree,
+      runtimePaneTitlesByTabId: opts.runtimePaneTitlesByTabId,
+      terminalLayoutsByTabId: opts.terminalLayoutsByTabId
+    })
+  }
+
   return selectVisibleSidebarWorktrees({
-    rows: getIndexedAllWorktrees(worktreesByRepo),
+    rows,
     ancestorById: getLineageAncestorIndex(worktreesByRepo),
     rankById: getSortedWorktreeRankIndex(sortedIds),
     filters: sidebarWorkspaceRowFilters(opts),

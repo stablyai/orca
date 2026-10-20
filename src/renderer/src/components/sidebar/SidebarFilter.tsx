@@ -33,6 +33,7 @@ import { searchRepos } from '@/lib/repo-search'
 import { clearSidebarFilters, selectSidebarFilterState } from './sidebar-filter-actions'
 import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
 import { translate } from '@/i18n/i18n'
+import SidebarAgentFilterSection from './SidebarAgentFilterSection'
 
 type SidebarFilterProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -243,6 +244,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
           checked={hideDetachedHeadWorkspaces}
           onChange={setHideDetachedHeadWorkspaces}
         />
+        <DropdownMenuSeparator />
+        <SidebarAgentFilterSection />
 
         {canFilterRepos && (
           <>

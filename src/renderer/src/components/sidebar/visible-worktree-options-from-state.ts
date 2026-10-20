@@ -8,6 +8,7 @@ import {
   getPairedDeviceIdsByEnvironment
 } from '../../../../shared/workspace-creator-visibility'
 import type { VisibleWorktreeOptions } from './compute-visible-worktrees'
+import { collectScopedAgentTypesByWorktree } from './workspace-agent-filter-evidence'
 
 /**
  * Read the store into the filter inputs `computeVisibleWorktrees` decides from.
@@ -44,6 +45,17 @@ export function buildVisibleWorktreeOptionsFromState(
         )
       : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
     alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
+    filterAgentIds: state.filterAgentIds,
+    agentTypesByWorktree: collectScopedAgentTypesByWorktree({
+      filterAgentIds: state.filterAgentIds,
+      agentStatusByPaneKey: state.agentStatusByPaneKey,
+      retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+      sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
+      tabsByWorktree: state.tabsByWorktree,
+      worktrees: Object.values(state.worktreesByRepo).flat()
+    }),
+    runtimePaneTitlesByTabId: state.filterAgentIds ? state.runtimePaneTitlesByTabId : null,
+    terminalLayoutsByTabId: state.filterAgentIds ? state.terminalLayoutsByTabId : null,
     repoMap,
     workspaceHostScope: state.workspaceHostScope,
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
