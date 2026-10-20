@@ -2,6 +2,7 @@ import { Platform } from 'react-native'
 import * as Notifications from 'expo-notifications'
 import { canPresentForegroundPush } from './push-receive'
 import { readOrcaPushPayload } from './push-payload'
+import { openSealedPushData } from './push-sealed-payload'
 
 export function startAndroidForegroundPushPresentation(): () => void {
   if (Platform.OS !== 'android') {
@@ -29,15 +30,17 @@ export function startAndroidForegroundPushPresentation(): () => void {
     })
 
     async function present(): Promise<void> {
-      if (!payload || !(await canPresentForegroundPush(payload))) {
+      const opened = await openSealedPushData(content.data).catch(() => null)
+      const presentedPayload = opened ? readOrcaPushPayload(opened.data) : payload
+      if (!presentedPayload || !(await canPresentForegroundPush(presentedPayload))) {
         return
       }
       await Notifications.scheduleNotificationAsync({
         identifier,
         content: {
-          title: content.title,
-          body: content.body,
-          data: content.data,
+          title: opened?.opened ? (opened.title ?? content.title) : content.title,
+          body: opened?.opened ? (opened.body ?? '') : content.body,
+          data: opened ? opened.data : content.data,
           sound: content.sound === 'default' ? 'default' : false
         },
         trigger:

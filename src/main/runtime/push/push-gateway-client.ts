@@ -49,6 +49,8 @@ export type PushSendNotification = {
   body: string
   worktreeId?: string
   executionHost?: `runtime:${string}`
+  // Carries the sealed envelope (push-e2e-seal.ts); the desktop has no other use for it.
+  paneKey?: string
 }
 
 type PushGatewayClientOptions = {

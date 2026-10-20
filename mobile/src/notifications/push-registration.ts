@@ -11,7 +11,10 @@ import type {
   MobilePushFilter,
   MobilePushRegisterInput
 } from '../../../src/shared/mobile-push-contract'
-import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
+  NOTIFICATIONS_REMOTE_PUSH_SEALED_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import type { RpcClient } from '../transport/rpc-client'
 import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
 import { pushRouteRegister, pushRouteUnregister } from './mobile-push-registration-operations'
@@ -35,6 +38,7 @@ type HostPushState = {
   connection: { client: PushClient | null }
   // An unanswered probe is unknown, not unsupported.
   supported: boolean | null
+  sealable: boolean
   capabilityProbeStop: (() => void) | null
   chain: Promise<void>
 }
@@ -53,6 +57,7 @@ function hostState(hostId: string): HostPushState {
     state = {
       connection: { client: null },
       supported: null,
+      sealable: false,
       capabilityProbeStop: null,
       chain: Promise.resolve()
     }
@@ -99,13 +104,16 @@ async function currentToken(): Promise<MobilePushToken | null> {
 async function sendRegister(
   client: PushClient,
   token: MobilePushToken,
-  filter: MobilePushFilter
+  filter: MobilePushFilter,
+  hostSeals: boolean
 ): Promise<boolean> {
   const params: Omit<MobilePushRegisterInput, 'deviceId'> = {
     platform: token.platform,
     token: token.token,
     ...(token.apnsEnvironment ? { apnsEnvironment: token.apnsEnvironment } : {}),
-    filter
+    filter,
+    // Android only: iOS shows APNs alerts itself and this app has no service extension to open them.
+    ...(hostSeals && token.platform === 'android' ? { sealedContent: 'e2e1' as const } : {})
   }
   const reply = await pushRouteRegister
     .request(client, params, { timeoutMs: REQUEST_TIMEOUT_MS, failWhenDisconnected: true })
@@ -156,6 +164,8 @@ async function reconcileHost(hostId: string): Promise<void> {
         return
       }
       state.supported = capabilities.includes(NOTIFICATIONS_REMOTE_PUSH_CAPABILITY)
+      // Older hosts reject an unknown registerPush field, so it is sent only when advertised.
+      state.sealable = capabilities.includes(NOTIFICATIONS_REMOTE_PUSH_SEALED_RUNTIME_CAPABILITY)
       void enqueueReconcile(hostId)
     })
     return
@@ -192,7 +202,10 @@ async function reconcileHost(hostId: string): Promise<void> {
   ) {
     return
   }
-  if (!(await sendRegister(client, token, filter)) || hostsById.get(hostId) !== state) {
+  if (
+    !(await sendRegister(client, token, filter, state.sealable)) ||
+    hostsById.get(hostId) !== state
+  ) {
     return
   }
   if (generation !== consentGeneration) {

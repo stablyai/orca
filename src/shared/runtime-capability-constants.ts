@@ -267,6 +267,9 @@ export const WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY =
 export const RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY = 'runtime-source-fence.v1' as const
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const
+// Hosts with this accept `sealedContent` in notifications.registerPush and then end-to-end encrypt that phone's pushes.
+export const NOTIFICATIONS_REMOTE_PUSH_SEALED_RUNTIME_CAPABILITY =
+  'notifications.remote-push.sealed.v1' as const
 
 export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
   'git.antigravity-configured-model.v1' as const

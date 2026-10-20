@@ -15,6 +15,11 @@ export type MobilePushPlatform = (typeof MOBILE_PUSH_PLATFORMS)[number]
 export const MOBILE_PUSH_APNS_ENVIRONMENTS = ['sandbox', 'production'] as const
 export type MobilePushApnsEnvironment = (typeof MOBILE_PUSH_APNS_ENVIRONMENTS)[number]
 
+// Why versioned: the phone names the envelope format it can open, so a later format
+// can be added without an older phone receiving pushes it cannot read.
+export const MOBILE_PUSH_SEALED_CONTENT_VERSIONS = ['e2e1'] as const
+export type MobilePushSealedContentVersion = (typeof MOBILE_PUSH_SEALED_CONTENT_VERSIONS)[number]
+
 export type MobilePushFilter = {
   onlyWhenDesktopAway?: boolean
   sound?: boolean
@@ -25,6 +30,8 @@ export type MobilePushRegistration = {
   registrationId: string
   filter: MobilePushFilter
   expiresAt: number
+  /** Absent for phones that predate sealed pushes; those keep receiving readable text. */
+  sealedContent?: MobilePushSealedContentVersion
 }
 
 export type MobilePushRegisterInput = {
@@ -33,6 +40,7 @@ export type MobilePushRegisterInput = {
   token: string
   apnsEnvironment?: MobilePushApnsEnvironment
   filter: MobilePushFilter
+  sealedContent?: MobilePushSealedContentVersion
 }
 
 export type MobilePushRegisterResult =
@@ -90,7 +98,13 @@ export function parseMobilePushRegistration(value: unknown): MobilePushRegistrat
   return {
     registrationId: registration.registrationId,
     filter,
-    expiresAt: registration.expiresAt
+    expiresAt: registration.expiresAt,
+    // An unknown version degrades to readable pushes rather than dropping the registration.
+    ...(MOBILE_PUSH_SEALED_CONTENT_VERSIONS.some(
+      (version) => version === registration.sealedContent
+    )
+      ? { sealedContent: registration.sealedContent }
+      : {})
   }
 }
 
