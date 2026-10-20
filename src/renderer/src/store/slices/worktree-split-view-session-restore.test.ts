@@ -74,6 +74,53 @@ describe('worktree split view session restore', () => {
     expect(store.getState().worktreeSplitViewPair).toBeNull()
   })
 
+  it('restores a tabless side of a repo whose worktrees have not listed yet', () => {
+    const store = storeWithWorktrees([])
+    store.getState().hydrateWorkspaceSession(
+      sessionWith({
+        worktreeSplitViewPair: PAIR,
+        tabsByWorktree: { [WT_B]: [makeTab({ id: 'tab-b', worktreeId: WT_B })] },
+        terminalLayoutsByTabId: { 'tab-b': makeLayout() }
+      })
+    )
+
+    expect(store.getState().activeWorktreeId).toBe(WT_B)
+    expect(store.getState().worktreeSplitViewPair).toEqual(PAIR)
+  })
+
+  it('ends the split when a scoped merge moves focus outside the pair', () => {
+    const WT_C = 'repo1::/path/c'
+    const store = storeWithWorktrees([WT_A, WT_B, WT_C])
+    store.setState({ activeWorktreeId: WT_A, worktreeSplitViewPair: PAIR })
+
+    store.getState().hydrateWorkspaceSession(
+      sessionWith({
+        activeWorktreeId: WT_C,
+        activeTabId: 'tab-c',
+        tabsByWorktree: { [WT_C]: [makeTab({ id: 'tab-c', worktreeId: WT_C })] },
+        terminalLayoutsByTabId: { 'tab-c': makeLayout() }
+      }),
+      { replaceWorkspaceKeys: [WT_A, WT_C] }
+    )
+
+    expect(store.getState().activeWorktreeId).toBe(WT_C)
+    expect(store.getState().worktreeSplitViewPair).toBeNull()
+  })
+
+  it('keeps the live split when a scoped merge leaves focus inside the pair', () => {
+    const store = storeWithWorktrees([WT_A, WT_B])
+    store.setState({ activeWorktreeId: WT_A, worktreeSplitViewPair: PAIR })
+
+    store
+      .getState()
+      .hydrateWorkspaceSession(sessionWith({ activeWorktreeId: WT_A, activeTabId: 'tab-a' }), {
+        replaceWorkspaceKeys: [WT_A]
+      })
+
+    expect(store.getState().activeWorktreeId).toBe(WT_A)
+    expect(store.getState().worktreeSplitViewPair).toEqual(PAIR)
+  })
+
   it('loads a session written before the field existed', () => {
     const store = storeWithWorktrees([WT_A, WT_B])
     store.getState().hydrateWorkspaceSession(sessionWith({}))

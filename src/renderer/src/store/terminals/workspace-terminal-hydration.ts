@@ -54,7 +54,16 @@ export function createWorkspaceTerminalHydrationActions(
             worktreesByRepo: runtimeSessionPlaceholders.worktreesByRepo,
             detectedWorktreesByRepo: s.detectedWorktreesByRepo
           },
-          collectPersistedWorktreeIdsForSessionHydration(session)
+          // Why the pair too: a tabless side of a not-yet-listed SSH repo must still restore.
+          [
+            ...collectPersistedWorktreeIdsForSessionHydration(session),
+            ...(session.worktreeSplitViewPair
+              ? [
+                  session.worktreeSplitViewPair.leftWorktreeId,
+                  session.worktreeSplitViewPair.rightWorktreeId
+                ]
+              : [])
+          ]
         )
         const knownRepoIds = new Set(runtimeSessionPlaceholders.repos.map((r) => r.id))
         // Why: the Floating Workspace isn't a repo worktree, but its tabs use the normal session pipeline so daemon PTYs survive app restart.

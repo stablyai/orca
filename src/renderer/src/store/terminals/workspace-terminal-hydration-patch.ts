@@ -2,6 +2,7 @@ import type { AppState } from '../types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveAgentPaneAuthorityKey } from '../slices/agent-pane-authority'
+import { splitViewPairAfterActivation } from '../slices/worktree-split-view'
 import type { HydrateWorkspaceSessionOptions } from './terminal-contracts'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 
@@ -144,9 +145,12 @@ export function targetScopedWorkspaceHydrationPatch(
       everActivatedWorktreeIds.add(workspaceKey)
     }
   }
+  const activeWorktreeId = activeOutsideScope ? state.activeWorktreeId : hydrated.activeWorktreeId
   return {
     activeRepoId: activeOutsideScope ? state.activeRepoId : hydrated.activeRepoId,
-    activeWorktreeId: activeOutsideScope ? state.activeWorktreeId : hydrated.activeWorktreeId,
+    activeWorktreeId,
+    // Why live pair: a scoped merge keeps this window's split unless it moves focus out of it.
+    ...splitViewPairAfterActivation(state, activeWorktreeId),
     activeWorkspaceKey: activeOutsideScope ? state.activeWorkspaceKey : hydrated.activeWorkspaceKey,
     activeWorkspaceExecutionHostId: activeOutsideScope
       ? state.activeWorkspaceExecutionHostId
