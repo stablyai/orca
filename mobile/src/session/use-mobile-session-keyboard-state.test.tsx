@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SoftKeyboardState } from '../platform/keyboard-occlusion'
 import type { RouteHandoff } from '../navigation/route-handoff'
-import type { CustomKey } from '../components/CustomKeyModal'
+import type { CustomKey } from '../terminal/terminal-custom-keys'
 
 const harness = vi.hoisted(() => {
   const keyboard: SoftKeyboardState = { height: 0, visible: false }
@@ -33,7 +33,7 @@ vi.mock('../terminal/terminal-viewport-refit', () => ({
     notifyTerminalFrameHeight: harness.notifyTerminalFrameHeight
   })
 }))
-vi.mock('../components/CustomKeyModal', () => ({ removeCustomKey: harness.removeCustomKey }))
+vi.mock('../terminal/terminal-custom-keys', () => ({ removeCustomKey: harness.removeCustomKey }))
 vi.mock('../worktree/last-visited-worktree-repo', () => ({ writeLastVisitedWorktree: () => {} }))
 
 import { useMobileSessionKeyboardState } from './use-mobile-session-keyboard-state'
