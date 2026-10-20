@@ -30,6 +30,7 @@ import {
 import { GHEditSection } from '../edit/section'
 import { usePullRequestDetails } from './use-details'
 import { PullRequestPageHeader } from './header'
+import { usePullRequestCustomActions } from './use-custom-actions'
 import { PullRequestPageTabs } from './tabs-shell'
 import { syncPullRequestFileViewed } from './viewed-sync'
 
@@ -200,6 +201,13 @@ export default function PullRequestPage({
     }
     return { ...workItem, ...details.item, repoId: workItem.repoId }
   }, [details?.item, workItem])
+  // Why: prompts read the details-merged item so branch and title variables match what the page shows.
+  const { customActions, customActionsBusy, onRunCustomAction, onManageCustomActions } =
+    usePullRequestCustomActions({
+      workItem: displayWorkItem,
+      effectiveRepoId,
+      openWorkspaceComposer: handleUseWorkItem
+    })
 
   const workItemRepoId = workItem?.repoId
   useEffect(() => {
@@ -334,6 +342,10 @@ export default function PullRequestPage({
         Icon={Icon}
         onOpenOrUsePR={handleOpenOrUsePR}
         onUseWorkItem={handleUseWorkItem}
+        customActions={customActions}
+        customActionsBusy={customActionsBusy}
+        onRunCustomAction={onRunCustomAction}
+        onManageCustomActions={onManageCustomActions}
       />
 
       {(canUseDetailsRepoContext || projectOrigin) && (

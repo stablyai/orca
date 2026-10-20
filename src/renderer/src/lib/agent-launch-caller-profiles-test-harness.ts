@@ -134,8 +134,9 @@ export const AGENT_LAUNCH_CALLER_PROFILES: readonly AgentLaunchCallerProfile[] =
     args: { agent: 'codex', worktreeId: 'wt-1', groupId: 'group-1', launchSource: 'shortcut' }
   },
   {
-    id: 'fix-checks',
-    caller: 'src/renderer/src/lib/fix-checks-agent-launch.ts',
+    // Shared by Fix checks and pull request custom actions.
+    id: 'pull-request-agent-prompt',
+    caller: 'src/renderer/src/lib/pull-request-agent-prompt-launch.ts',
     args: {
       agent: 'codex',
       worktreeId: 'wt-1',

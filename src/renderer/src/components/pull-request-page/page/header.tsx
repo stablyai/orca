@@ -8,7 +8,9 @@ import {
   Copy,
   ExternalLink,
   FolderKanban,
-  Plus
+  Plus,
+  Settings2,
+  Sparkles
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -17,6 +19,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
@@ -25,6 +28,7 @@ import { formatRelativeTime, getStateLabel } from '@/components/github/work-item
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { SourceControlCustomAction } from '../../../../../shared/source-control-custom-actions'
 import { getSolidStateTone } from '../presentation/state-badge'
 
 export function PullRequestPageHeader({
@@ -40,7 +44,11 @@ export function PullRequestPageHeader({
   localState,
   Icon,
   onOpenOrUsePR,
-  onUseWorkItem
+  onUseWorkItem,
+  customActions,
+  customActionsBusy,
+  onRunCustomAction,
+  onManageCustomActions
 }: {
   workItem: GitHubWorkItem
   displayWorkItem: GitHubWorkItem | null
@@ -55,6 +63,11 @@ export function PullRequestPageHeader({
   Icon: React.ComponentType<{ className?: string }>
   onOpenOrUsePR: () => void
   onUseWorkItem: () => void
+  customActions: readonly SourceControlCustomAction[]
+  /** True while a chosen action is still starting, so a second pick cannot double-launch. */
+  customActionsBusy: boolean
+  onRunCustomAction: (action: SourceControlCustomAction) => void
+  onManageCustomActions: () => void
 }): React.JSX.Element {
   const ownerRepo = parseOwnerRepoFromItemUrl(workItem.url)
   const headBranch = workItem.branchName
@@ -188,6 +201,18 @@ export function PullRequestPageHeader({
                 </DropdownMenuTrigger>
               </ButtonGroup>
               <DropdownMenuContent align="end">
+                {/* Why: custom actions are the user's frequent shortcuts, so they lead the menu. */}
+                {customActions.map((action) => (
+                  <DropdownMenuItem
+                    key={action.id}
+                    disabled={customActionsBusy}
+                    onSelect={() => onRunCustomAction(action)}
+                  >
+                    <Sparkles className="size-4" />
+                    <span className="truncate">{action.label}</span>
+                  </DropdownMenuItem>
+                ))}
+                {customActions.length > 0 ? <DropdownMenuSeparator /> : null}
                 {hasAttachedWorkspace ? (
                   <DropdownMenuItem onSelect={onUseWorkItem}>
                     <Plus className="size-4" />
@@ -197,6 +222,13 @@ export function PullRequestPageHeader({
                 <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
                   <ExternalLink className="size-4" />
                   {translate('auto.components.PullRequestPage.8ecda455a0', 'Open on GitHub')}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={onManageCustomActions}>
+                  <Settings2 className="size-4" />
+                  {customActions.length > 0
+                    ? translate('pullRequestCustomActions.menu.manage', 'Manage custom actions…')
+                    : translate('pullRequestCustomActions.menu.add', 'Add custom action…')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

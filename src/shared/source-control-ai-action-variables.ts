@@ -52,8 +52,26 @@ export const SOURCE_CONTROL_ACTION_VARIABLE_INFO = {
     example: 'diff --git a/src/app.ts b/src/app.ts\n+addActionRecipeDefaults()'
   },
   baseBranch: {
-    description: 'The target branch selected in the Create PR composer.',
+    description:
+      'The target branch: the one selected in the Create PR composer, or the pull request base for custom actions.',
     example: 'main'
+  },
+  prUrl: {
+    description: 'The web URL of the pull request the custom action runs on.',
+    example: 'https://github.com/acme/api/pull/123'
+  },
+  prNumber: {
+    description: 'The number of the pull request the custom action runs on.',
+    example: '123'
+  },
+  prTitle: {
+    description:
+      'The title of the pull request the custom action runs on. Written by the PR author and submitted without review.',
+    example: 'Add retry to the upload client'
+  },
+  headBranch: {
+    description: 'The pull request head branch. Empty when Orca does not know it yet.',
+    example: 'feature/upload-retry'
   },
   currentTitle: {
     description: 'The PR title currently typed in the composer before generation starts.',
