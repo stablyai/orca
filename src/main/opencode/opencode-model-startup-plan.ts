@@ -19,6 +19,7 @@ import {
   probeOpenCodeModelAvailability,
   resolveOpenCodeDirectModelExecutable
 } from './opencode-model-availability'
+import { prepareDshModelStartupInputs } from '../dsh/dsh-model-startup-plan'
 
 type StartupScope = {
   inputs: AgentStartupPlanInputs
@@ -26,6 +27,7 @@ type StartupScope = {
   isWsl?: boolean
   hostIdentity?: string
   signal?: AbortSignal
+  accountEnv?: Record<string, string>
 }
 
 function refuseModel(): never {
@@ -148,7 +150,8 @@ export async function buildExecutionHostAgentStartupPlan(
     promptDelivery?: 'auto-submit' | 'draft'
   }
 ) {
-  const prepared = await prepareOpenCodeModelStartupInputs(options)
+  const inputs = await prepareDshModelStartupInputs(options)
+  const prepared = await prepareOpenCodeModelStartupInputs({ ...options, inputs })
   if (prepared.launchConfig && options.promptDelivery === 'draft') {
     refuseModel()
   }
@@ -174,7 +177,8 @@ export async function planExecutionHostStartupWithPromptCandidate(
     host: { shellName?: string; provesAgentInFront: boolean }
   }
 ): Promise<{ plan: AgentStartupPlan | null; promptCarried: boolean }> {
-  const prepared = await prepareOpenCodeModelStartupInputs(options)
+  const inputs = await prepareDshModelStartupInputs(options)
+  const prepared = await prepareOpenCodeModelStartupInputs({ ...options, inputs })
   const offered = planStartupWithPromptCandidate(prepared.inputs, options.prompt, options.host)
   if (offered.plan && prepared.launchConfig) {
     offered.plan.launchConfig = prepared.launchConfig

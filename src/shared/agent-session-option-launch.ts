@@ -1,6 +1,7 @@
 import type { AgentType } from './agent-status-types'
 import { findCatalogModel, getAgentSessionOptionCatalog } from './agent-session-option-catalog'
 import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
+import { DSH_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-dsh'
 import type {
   AgentSessionOptionCatalog,
   CatalogOptionApply
@@ -20,6 +21,9 @@ function isOverriddenByAgentArgs(apply: CatalogOptionApply, tokens: readonly str
 export function getAgentSessionOptionLaunchCatalog(
   agent: AgentType
 ): AgentSessionOptionCatalog | null {
+  if (agent === 'dsh') {
+    return DSH_LAUNCH_OPTION_CATALOG
+  }
   return agent === 'opencode' ? OPENCODE_LAUNCH_OPTION_CATALOG : getAgentSessionOptionCatalog(agent)
 }
 
@@ -67,6 +71,7 @@ export function resolveAgentSessionOptionLaunch(
         if (
           !model &&
           option.kind.type === 'select' &&
+          !option.kind.validateOnAgentLaunch &&
           !option.kind.choices.some((choice) => choice.value === explicitValue)
         ) {
           return []

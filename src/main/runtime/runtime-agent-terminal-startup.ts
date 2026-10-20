@@ -192,6 +192,7 @@ async function buildRuntimeAgentTerminalStartupOptions(
     prompt: opts.startupPrompt ?? '',
     cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
     hostIdentity: host.hostIdentity,
+    accountEnv: opts.accountEnv,
     signal: opts.signal
   }
   // TEMPORARY (createAgentSession parity, removed with force-line): a draft skips the carry rule.
