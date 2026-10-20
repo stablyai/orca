@@ -21,6 +21,7 @@ import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hos
 import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
 import { cn } from '@/lib/utils'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
+import { useChromeAppearanceStyle } from '@/hooks/use-chrome-appearance-style'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -70,6 +71,7 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const chromeAppearanceStyle = useChromeAppearanceStyle()
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const {
     activeTab,
@@ -275,6 +277,8 @@ export default function TabGroupPanel({
       {tabStrip !== 'attached' ? null : (
         <div
           className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-card"
+          // Why: follow the sidebar appearance so the tab row matches the columns beside it.
+          style={chromeAppearanceStyle}
           data-tab-group-strip-id={groupId}
           data-terminal-focus-release-surface="true"
           data-worktree-id={worktreeId}

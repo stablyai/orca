@@ -347,8 +347,8 @@ describe('AppearancePane', () => {
     expect(interfaceToggle?.textContent).toContain('Dark · 中文（简体） · Inter')
   })
 
-  it('updates the left sidebar appearance from sidebar settings', async () => {
-    mocks.state.settingsSearchQuery = 'left sidebar'
+  it('updates the sidebar and panel appearance from sidebar settings', async () => {
+    mocks.state.settingsSearchQuery = 'tab bar'
     const updateSettings = vi.fn()
     const settings = getDefaultSettings('/tmp')
 
@@ -506,7 +506,7 @@ describe('AppearancePane', () => {
     mocks.state.settingsSearchQuery = 'Window & Sidebar'
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
 
-    expect(container.textContent).toContain('Left Sidebar Appearance')
+    expect(container.textContent).toContain('Sidebar & Panel Appearance')
     expect(container.textContent).toContain('Status Bar')
     expect(container.textContent).not.toContain('Advanced')
   })
