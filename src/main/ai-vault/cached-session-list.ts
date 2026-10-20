@@ -129,7 +129,8 @@ export async function listAiVaultSessions(
   const startGeneration = cacheGeneration
   let progress: LocalAiVaultScanProgressHandle | null = null
   return scanCoordinator.run({
-    key: scanKey,
+    // Isolate invalidated scans without changing the key used by progress readers.
+    key: JSON.stringify({ scanKey, generation: startGeneration }),
     force: args?.force,
     signal: options.signal,
     onCreate: (scanId) => {
