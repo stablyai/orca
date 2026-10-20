@@ -75,7 +75,10 @@ export function reconcileMountedPanesToLayout(args: {
       expectPaneToAppear(insertion.newLeafId, intent)
       continue
     }
-    recordCreatedTerminalPaneSplit(created, intent.telemetry)
+    recordCreatedTerminalPaneSplit(created, {
+      ...intent.telemetry,
+      equalizeTarget: intent.equalizeTarget
+    })
     changed = true
   }
 
