@@ -5,11 +5,16 @@ import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { AddressPicker, type AddressOption } from '../network/AddressPicker'
 import { parseServerShareAddress } from '../../../../shared/network/server-share-address'
+import { parseCloudflareTunnelAddress } from '../../../../shared/network/cloudflare-tunnel-address'
 import { GeneratedUrlRow, UnavailableUrlRow } from './RuntimePairingGeneratedUrlRows'
+import { RuntimePairingIntentOptions } from './RuntimePairingIntentOptions'
+import { CloudflareTunnelFields } from './CloudflareTunnelFields'
 import type { RuntimePairingIntent } from './runtime-pairing-link-state'
 import { translate } from '@/i18n/i18n'
 
 export type { RuntimePairingIntent } from './runtime-pairing-link-state'
+
+export type RuntimePairingCopyTarget = 'web' | 'pairing' | 'command'
 
 type RuntimePairingGeneratorFormProps = {
   intent: RuntimePairingIntent
@@ -20,13 +25,14 @@ type RuntimePairingGeneratorFormProps = {
   isGeneratingPairing: boolean
   webClientUrl: string | null
   runtimePairingUrl: string | null
-  copiedTarget: 'web' | 'pairing' | null
+  copiedTarget: RuntimePairingCopyTarget | null
   generatedAddress: string | null
+  localWebSocketPort?: number | null
   onIntentChange: (intent: RuntimePairingIntent) => void
   onSelectedAddressChange: (address: string) => void
   onRefreshNetworkInterfaces: () => void
   onGenerate: () => void
-  onCopy: (target: 'web' | 'pairing', value: string) => void
+  onCopy: (target: RuntimePairingCopyTarget, value: string) => void
 }
 
 export function RuntimePairingGeneratorForm({
@@ -40,6 +46,7 @@ export function RuntimePairingGeneratorForm({
   runtimePairingUrl,
   copiedTarget,
   generatedAddress,
+  localWebSocketPort = null,
   onIntentChange,
   onSelectedAddressChange,
   onRefreshNetworkInterfaces,
@@ -55,88 +62,28 @@ export function RuntimePairingGeneratorForm({
   const customAddressResult =
     intent === 'custom' ? parseServerShareAddress(selectedAddress) : { ok: true as const }
   const customAddressInvalid = selectedAddress !== '' && !customAddressResult.ok
-  const canGenerate = selectedAddress !== '' && (intent !== 'custom' || customAddressResult.ok)
+  const addressAcceptedForIntent =
+    intent === 'custom'
+      ? customAddressResult.ok
+      : intent === 'cloudflare'
+        ? parseCloudflareTunnelAddress(selectedAddress).ok
+        : true
+  const canGenerate = selectedAddress !== '' && addressAcceptedForIntent
 
   return (
     <>
       <div className="space-y-3">
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium">
-            {translate(
-              'auto.components.settings.RuntimePairingUrlGenerator.intentQuestion',
-              'Where will this link be opened?'
-            )}
-          </legend>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {(
-              [
-                [
-                  'another',
-                  translate(
-                    'auto.components.settings.RuntimePairingUrlGenerator.anotherDevice',
-                    'Another device'
-                  ),
-                  translate(
-                    'auto.components.settings.RuntimePairingUrlGenerator.anotherDeviceHelp',
-                    'Tailscale, LAN, or another reachable address'
-                  )
-                ],
-                [
-                  'local',
-                  translate(
-                    'auto.components.settings.RuntimePairingUrlGenerator.localOnly',
-                    'This computer only'
-                  ),
-                  translate(
-                    'auto.components.settings.RuntimePairingUrlGenerator.localOnlyHelp',
-                    'A browser or Orca client on this computer'
-                  )
-                ],
-                [
-                  'custom',
-                  translate(
-                    'auto.components.settings.RuntimePairingUrlGenerator.customAddress',
-                    'Custom address'
-                  ),
-                  translate(
-                    'auto.components.settings.RuntimePairingUrlGenerator.customAddressHelp',
-                    'SSH tunnel, reverse proxy, or custom hostname'
-                  )
-                ]
-              ] as const
-            ).map(([value, label, description]) => (
-              <label
-                key={value}
-                className="flex cursor-pointer gap-2 rounded-md border border-border p-3 has-[:checked]:border-ring has-[:checked]:ring-1 has-[:checked]:ring-ring"
-              >
-                <input
-                  type="radio"
-                  name="runtime-pairing-intent"
-                  value={value}
-                  checked={intent === value}
-                  onChange={() => onIntentChange(value)}
-                  className="mt-0.5"
-                />
-                <span className="space-y-1">
-                  <span className="block text-xs font-medium">
-                    {label}
-                    {value === 'another' ? (
-                      <span className="ml-1.5 text-[11px] text-muted-foreground">
-                        {translate(
-                          'auto.components.settings.RuntimePairingUrlGenerator.recommended',
-                          'Recommended'
-                        )}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="block text-[11px] text-muted-foreground">{description}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <RuntimePairingIntentOptions intent={intent} onIntentChange={onIntentChange} />
 
-        {intent === 'local' ? (
+        {intent === 'cloudflare' ? (
+          <CloudflareTunnelFields
+            address={selectedAddress}
+            localPort={localWebSocketPort}
+            commandCopied={copiedTarget === 'command'}
+            onAddressChange={onSelectedAddressChange}
+            onCopyCommand={(command) => onCopy('command', command)}
+          />
+        ) : intent === 'local' ? (
           <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs">
             <div className="font-medium">
               {translate(
