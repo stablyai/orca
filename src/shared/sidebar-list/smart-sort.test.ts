@@ -1,16 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
-import {
-  buildWorktreeComparator,
-  CREATE_GRACE_MS,
-  effectiveRecentActivity,
-  sortWorktreesSmart
-} from './smart-sort'
+import { sortWorktreesByStamps } from './smart-sort'
 
 // Smart and Recent order by the owning host's stamps (stamp-order.test.ts); no window attention sort.
-
-const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()
 
 const repoMap = new Map<string, Repo>([
   [
@@ -43,12 +36,11 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     isPinned: overrides.isPinned ?? false,
     displayName: overrides.displayName ?? overrides.id ?? 'wt-1',
     sortOrder: overrides.sortOrder ?? 0,
-    lastActivityAt: overrides.lastActivityAt ?? 0,
-    ...(overrides.createdAt !== undefined ? { createdAt: overrides.createdAt } : {})
+    lastActivityAt: overrides.lastActivityAt ?? 0
   }
 }
 
-describe('sortWorktreesSmart — labels', () => {
+describe('sortWorktreesByStamps — labels', () => {
   it('falls back to the path label when a persisted worktree has no displayName', () => {
     const missingDisplayName = {
       ...makeWorktree({
@@ -60,13 +52,13 @@ describe('sortWorktreesSmart — labels', () => {
     } as unknown as Worktree
     const named = makeWorktree({ id: 'named', displayName: 'Zulu', sortOrder: 1 })
 
-    const sorted = sortWorktreesSmart([named, missingDisplayName], {}, repoMap, {}, {}, {})
+    const sorted = sortWorktreesByStamps([named, missingDisplayName], 'smart', repoMap)
 
     expect(sorted.map((w) => w.id)).toEqual(['missing-display-name', 'named'])
   })
 })
 
-describe('buildWorktreeComparator — recent (lastActivityAt)', () => {
+describe('sortWorktreesByStamps — recent (lastActivityAt)', () => {
   it('sorts by lastActivityAt descending (most recent first)', () => {
     const older = makeWorktree({
       id: 'older',
@@ -80,7 +72,7 @@ describe('buildWorktreeComparator — recent (lastActivityAt)', () => {
     })
     const worktrees = [older, newer]
 
-    worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
+    sortWorktreesByStamps(worktrees, 'recent', repoMap)
 
     expect(worktrees.map((w) => w.id)).toEqual(['newer', 'older'])
   })
@@ -98,7 +90,7 @@ describe('buildWorktreeComparator — recent (lastActivityAt)', () => {
     })
     const worktrees = [legacy, touched]
 
-    worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
+    sortWorktreesByStamps(worktrees, 'recent', repoMap)
 
     expect(worktrees.map((w) => w.id)).toEqual(['touched', 'legacy'])
   })
@@ -116,7 +108,7 @@ describe('buildWorktreeComparator — recent (lastActivityAt)', () => {
     })
     const worktrees = [bravo, alpha]
 
-    worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
+    sortWorktreesByStamps(worktrees, 'recent', repoMap)
 
     expect(worktrees.map((w) => w.id)).toEqual(['alpha', 'bravo'])
   })
@@ -136,52 +128,19 @@ describe('buildWorktreeComparator — recent (lastActivityAt)', () => {
     })
     const worktrees = [staleHighOrder, freshActive]
 
-    worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
+    sortWorktreesByStamps(worktrees, 'recent', repoMap)
 
     expect(worktrees.map((w) => w.id)).toEqual(['fresh-active', 'stale-high-order'])
   })
 })
 
-describe('effectiveRecentActivity — create-grace floor', () => {
-  it('returns lastActivityAt when createdAt is absent', () => {
-    const wt = makeWorktree({ id: 'old', lastActivityAt: 12345 })
-    expect(effectiveRecentActivity(wt, NOW)).toBe(12345)
-  })
-
-  it('returns createdAt + CREATE_GRACE_MS when grace window exceeds lastActivityAt', () => {
-    const wt = makeWorktree({ id: 'fresh', lastActivityAt: NOW, createdAt: NOW })
-    expect(effectiveRecentActivity(wt, NOW)).toBe(NOW + CREATE_GRACE_MS)
-  })
-
-  it('returns lastActivityAt when grace window has elapsed', () => {
-    const wt = makeWorktree({
-      id: 'post-grace',
-      createdAt: NOW - CREATE_GRACE_MS - 60_000,
-      lastActivityAt: NOW - 1000
-    })
-    expect(effectiveRecentActivity(wt, NOW)).toBe(NOW - 1000)
-  })
-
-  it('returns lastActivityAt when real activity has surpassed the grace floor', () => {
-    const createdAt = NOW - 3 * 60 * 1000
-    const wt = makeWorktree({ id: 'used', createdAt, lastActivityAt: NOW - 60_000 })
-    expect(effectiveRecentActivity(wt, NOW)).toBe(createdAt + CREATE_GRACE_MS)
-  })
-
-  it('returns lastActivityAt once the grace window has elapsed even when no other activity has occurred', () => {
-    const createdAt = NOW - CREATE_GRACE_MS - 1
-    const wt = makeWorktree({ id: 'untouched', createdAt, lastActivityAt: createdAt })
-    expect(effectiveRecentActivity(wt, NOW)).toBe(createdAt)
-  })
-})
-
-describe('buildWorktreeComparator — manual order', () => {
+describe('sortWorktreesByStamps — manual order', () => {
   it('orders by persisted manualOrder with higher values first', () => {
     const first = makeWorktree({ id: 'first', displayName: 'First', manualOrder: 3000 })
     const second = makeWorktree({ id: 'second', displayName: 'Second', manualOrder: 2000 })
     const worktrees = [second, first]
 
-    worktrees.sort(buildWorktreeComparator('manual', repoMap, NOW, new Map()))
+    sortWorktreesByStamps(worktrees, 'manual', repoMap)
 
     expect(worktrees.map((w) => w.id)).toEqual(['first', 'second'])
   })
@@ -199,29 +158,8 @@ describe('buildWorktreeComparator — manual order', () => {
     })
     const worktrees = [restoredBottom, restoredTop]
 
-    worktrees.sort(buildWorktreeComparator('manual', repoMap, NOW, new Map()))
+    sortWorktreesByStamps(worktrees, 'manual', repoMap)
 
     expect(worktrees.map((w) => w.id)).toEqual(['restored-top', 'restored-bottom'])
-  })
-})
-
-describe('buildWorktreeComparator — recent with createdAt grace window', () => {
-  it('falls through to normal recency once the grace window has elapsed', () => {
-    const oldCreated = makeWorktree({
-      id: 'old-created',
-      displayName: 'Old created',
-      createdAt: NOW - CREATE_GRACE_MS - 10_000,
-      lastActivityAt: NOW - 30_000
-    })
-    const freshActivity = makeWorktree({
-      id: 'fresh-activity',
-      displayName: 'Fresh activity',
-      lastActivityAt: NOW - 1000
-    })
-    const worktrees = [oldCreated, freshActivity]
-
-    worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
-
-    expect(worktrees.map((w) => w.id)).toEqual(['fresh-activity', 'old-created'])
   })
 })

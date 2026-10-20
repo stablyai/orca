@@ -242,7 +242,7 @@ describe('parked terminal watcher synchronization', () => {
     const syncCallsAfterMount = harness.syncCalls
 
     act(() => {
-      useAppStore.setState({ sortEpoch: 1 })
+      useAppStore.setState({})
     })
 
     expect(harness.reconciliationPtyReads).toBe(0)
@@ -318,7 +318,7 @@ describe('parked terminal watcher synchronization key semantics', () => {
     renderHarness({})
     renderHarness({})
     act(() => {
-      useAppStore.setState({ sortEpoch: 1 })
+      useAppStore.setState({})
     })
     expect(harness.syncCalls).toBe(1)
   })

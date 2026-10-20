@@ -183,7 +183,7 @@ describe('sort stamps: the design note’s before/after table', () => {
   })
 
   it('typing in a plain shell, renaming and editing a comment are not events', () => {
-    // None reaches the classifier; worktrees-recent-stamp-switch-on.test.ts proves the window writes none.
+    // None reaches the classifier; worktrees-recent-stamp-host-owned.test.ts proves the window writes none.
     const host = new Host(['a', 'b', 'c'])
     const before = both(host)
     host.advance(60_000)

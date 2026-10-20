@@ -8,7 +8,7 @@ export type LineageScenario = {
 
 export async function seedLineageScenario(
   page: Page,
-  options: { inlineOnly?: boolean; preserveGrouping?: boolean } = {}
+  options: { preserveGrouping?: boolean } = {}
 ): Promise<LineageScenario> {
   const family = await page.evaluate((preserveGrouping) => {
     const store = window.__store
@@ -41,55 +41,14 @@ export async function seedLineageScenario(
     if (!parent.instanceId || !child.instanceId) {
       throw new Error('Worktree lineage E2E needs instance-stamped worktrees')
     }
-    return {
-      parentId: parent.id,
-      childId: child.id,
-      parentInstanceId: parent.instanceId,
-      childInstanceId: child.instanceId
-    }
+    return { parentId: parent.id, childId: child.id }
   }, options.preserveGrouping ?? false)
   const { parentId, childId } = family
   await writeWorkspaceMeta(page, [
     { worktreeId: parentId, updates: { displayName: 'E2E lineage parent', sortOrder: 0 } },
     { worktreeId: childId, updates: { displayName: 'E2E lineage child', sortOrder: 1 } }
   ])
-  if (!options.inlineOnly) {
-    await linkWorkspaces(page, [{ childId, parentId }])
-  }
-  if (options.inlineOnly) {
-    // Window-only on purpose: the records' inline link with no side map, which main cannot produce.
-    await page.evaluate(({ parentId, childId, parentInstanceId, childInstanceId }) => {
-      const lineage = {
-        worktreeId: childId,
-        worktreeInstanceId: childInstanceId,
-        parentWorktreeId: parentId,
-        parentWorktreeInstanceId: parentInstanceId,
-        origin: 'manual' as const,
-        capture: { source: 'manual-action' as const, confidence: 'explicit' as const },
-        createdAt: Date.now()
-      }
-      window.__store!.setState((current) => ({
-        worktreesByRepo: Object.fromEntries(
-          Object.entries(current.worktreesByRepo).map(([repoId, repoWorktrees]) => [
-            repoId,
-            repoWorktrees.map((worktree) =>
-              worktree.id === parentId
-                ? {
-                    ...worktree,
-                    parentWorktreeId: null,
-                    childWorktreeIds: [childId],
-                    lineage: null
-                  }
-                : worktree.id === childId
-                  ? { ...worktree, parentWorktreeId: parentId, childWorktreeIds: [], lineage }
-                  : worktree
-            )
-          ])
-        ),
-        worktreeLineageById: {}
-      }))
-    }, family)
-  }
+  await linkWorkspaces(page, [{ childId, parentId }])
   await page.evaluate(
     (parentId) => window.__store!.getState().setActiveWorktree(parentId),
     parentId

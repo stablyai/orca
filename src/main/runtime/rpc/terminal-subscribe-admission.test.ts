@@ -6,6 +6,7 @@ import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { TerminalUnsubscribe } from '../../../shared/rpc-contract/terminal-viewport-schemas-params'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
+import { createSidebarFactsDouble } from './sidebar-facts-double.test-fixture'
 
 const PTY_ID = 'pty-1'
 const SUBSCRIPTION_ID = 'terminal-1:phone-1'
@@ -94,6 +95,7 @@ function stubRuntime(overrides: Record<string, unknown> = {}) {
   let ptyReady = false
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   const runtime = {
+    sidebarFacts: createSidebarFactsDouble(),
     getRuntimeId: () => 'test-runtime',
     registerRemoteTerminalViewSubscriber: () => () => {},
     requestRendererTerminalTabMount: vi.fn(() => false),

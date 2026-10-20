@@ -22,7 +22,6 @@ import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/struc
 import { SessionTabsUnsubscribeAllParams } from '../../../../shared/rpc-contract/session-tabs-params'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { createSessionTabsTabDeltaEncoder } from '../../../../shared/session-tabs-tab-delta'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 
 export const SESSION_TAB_METHODS = [
   defineMethod({
@@ -129,10 +128,10 @@ export const SESSION_TAB_METHODS = [
         // Why: shared-control can carry multiple subscribers for one worktree on
         // one socket; include the RPC id so one subscriber cannot evict another.
         subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
-        // Switch point: a phone holding the workspace's session open is looking at it.
+        // A phone holding the workspace's session open is looking at it.
         const closePhoneSession =
-          ORCA_SIDEBAR_INPUTS_IS_MAIN && clientKind === 'mobile'
-            ? runtime.sidebarFacts?.readAndHoldPhoneSession(worktreeId)
+          clientKind === 'mobile'
+            ? runtime.sidebarFacts.readAndHoldPhoneSession(worktreeId)
             : undefined
         runtime.registerSubscriptionCleanup(
           subscriptionId,

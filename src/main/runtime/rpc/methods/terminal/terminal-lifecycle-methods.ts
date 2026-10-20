@@ -1,5 +1,4 @@
 import { terminalImageViewerSupported } from '../../../terminal-image-viewer-env'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
 import { defineMethod } from '../../core'
 import {
   navigationTargetsHost,
@@ -85,13 +84,9 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             ...(preAllocatedHandle ? { preAllocatedHandle } : {})
           })
       )
-      // Switch point. A CLI start is work in the workspace; a window or phone tab is a person opening one.
-      if (
-        ORCA_SIDEBAR_INPUTS_IS_MAIN &&
-        context.caller?.kind === 'local-cli' &&
-        !terminal.isReattach
-      ) {
-        runtime.sidebarFacts?.sortStamps.noteTerminalStarted(
+      // A CLI start is work in the workspace; a window or phone tab is a person opening one.
+      if (context.caller?.kind === 'local-cli' && !terminal.isReattach) {
+        runtime.sidebarFacts.sortStamps.noteTerminalStarted(
           terminal.worktreeId,
           terminal.executionHostId
         )

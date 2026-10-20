@@ -8,8 +8,6 @@ import {
   resetWorktreeSliceModuleMemory
 } from './worktrees-slice-test-harness'
 
-vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
-
 vi.mock('sonner', () => ({
   toast: {
     warning: vi.fn(),
@@ -26,9 +24,8 @@ vi.mock('@/components/worktree-base-fallback-notice', () => ({
 
 beforeEach(resetWorktreeSliceModuleMemory)
 
-// With the switch on, the owning host writes every Recent stamp and the unread flag; the window
-// writes neither.
-describe('window-side Recent stamps with the sidebar-inputs switch on', () => {
+// The owning host writes every Recent stamp and the unread flag; the window writes neither.
+describe('window-side Recent stamps', () => {
   const wt = makeWorktree({
     id: 'repo1::/path/wt1',
     repoId: 'repo1',
@@ -54,13 +51,6 @@ describe('window-side Recent stamps with the sidebar-inputs switch on', () => {
     mockApi.worktrees.updateMeta.mock.calls.some(
       ([args]: [{ updates: Record<string, unknown> }]) => 'lastActivityAt' in args.updates
     )
-
-  it('a terminal start or exit writes no stamp', () => {
-    const store = storeWith()
-    store.getState().bumpWorktreeActivity(wt.id)
-    expect(lastActivityAt(store)).toBe(5)
-    expect(persistedStamp()).toBe(false)
-  })
 
   const persistedUnread = () =>
     mockApi.worktrees.updateMeta.mock.calls.some(
@@ -89,11 +79,10 @@ describe('window-side Recent stamps with the sidebar-inputs switch on', () => {
     expect(persistedStamp()).toBe(false)
   })
 
-  it('a folder workspace’s terminal activity and finish write no stamp and no flag', async () => {
+  it('a folder workspace’s finish writes no stamp and no flag', async () => {
     const store = createTestStore()
     const folder = makeFolderWorkspace({ id: 'folder-1', lastActivityAt: 5 })
     store.setState({ folderWorkspaces: [folder], projectGroups: [] })
-    store.getState().bumpWorktreeActivity(folderWorkspaceKey(folder.id))
     store.getState().markAgentAttentionUnread({
       workspaceId: folderWorkspaceKey(folder.id),
       subjectKey: null,

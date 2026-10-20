@@ -12,14 +12,14 @@ function fileFor(worktreeId: string, id: string): OpenFile {
 }
 
 function buildState(openFiles: OpenFile[]): AppState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: removal success reads only these slices.
   return {
     worktreesByRepo: { 'repo-1': [] },
     tabsByWorktree: { [KEPT]: [] },
     openFiles,
     everActivatedWorktreeIds: new Set<string>(),
     lastVisitedAtByWorktreeId: {},
-    deleteStateByWorktreeId: {},
-    sortEpoch: 0
+    deleteStateByWorktreeId: {}
   } as unknown as AppState
 }
 

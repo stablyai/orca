@@ -32,8 +32,8 @@ export function isExplicitAgentStatusFresh(
 
 /**
  * Title-only activity classification for consumers whose product rule really
- * is "what does this title say" (timer seeding, ready-wait polling, sort-epoch
- * comparison, synthetic-title writing) — they combine no hook/liveness
+ * is "what does this title say" (timer seeding, ready-wait polling,
+ * synthetic-title writing) — they combine no hook/liveness
  * evidence, so routing them through the pane resolver would misstate intent.
  */
 export function classifyTitleActivity(title: string): AgentStatus | null {

@@ -6,10 +6,6 @@ import { RpcDispatcher } from '../../dispatcher'
 import type { RpcDispatchStreamingOptions } from '../../dispatcher-stream-options'
 import { TERMINAL_LIFECYCLE_METHODS } from './terminal-lifecycle-methods'
 
-vi.mock('../../../../../shared/sidebar-inputs-switch', () => ({
-  ORCA_SIDEBAR_INPUTS_IS_MAIN: true
-}))
-
 const WT = 'repo-1::/tmp/a'
 
 function makeHost(created: { isReattach?: true } = {}) {

@@ -54,6 +54,7 @@ import { getManagedServerActions } from './managed-server-actions-registry'
 import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-update'
 import { isDesktopBrowserBridgeHostEnabled } from './desktop-browser-bridge/desktop-browser-bridge-registry'
 import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../shared/desktop-browser-bridge-protocol'
+import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../shared/workspace-unread-raise-capability'
 import { darkSwitchRuntimeCapabilities } from './dark-switch-runtime-capabilities'
 
 type RuntimeStatusHost = {
@@ -147,6 +148,11 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
     }
     if (isDesktopBrowserBridgeHostEnabled()) {
       capabilities.push(DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY)
+    }
+    // This host raises the workspace unread flag itself. The env lets the e2e play an older host
+    // without keeping an old binary.
+    if (process.env.ORCA_E2E_OLDER_UNREAD_HOST !== '1') {
+      capabilities.push(WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY)
     }
     capabilities.push(...darkSwitchRuntimeCapabilities())
     // Why not a static capability: dev trees and `orca serve` installs may carry no

@@ -64,8 +64,7 @@ describe('web session structured tab focus', () => {
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},
       unifiedTabsByWorktree: { [WORKTREE_ID]: [first, second] },
-      unreadTerminalTabs: {},
-      sortEpoch: 0
+      unreadTerminalTabs: {}
     } as WebSessionTabsSyncState
     const snapshot: RuntimeMobileSessionTabsResult = {
       worktree: WORKTREE_ID,

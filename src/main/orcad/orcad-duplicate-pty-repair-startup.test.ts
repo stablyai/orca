@@ -1,3 +1,4 @@
+import { createSidebarFactsDouble } from '../runtime/rpc/sidebar-facts-double.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -132,7 +133,7 @@ vi.mock('../runtime/push/desktop-push-service', () => ({
 }))
 vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {
-    readonly sidebarFacts = null
+    readonly sidebarFacts = createSidebarFactsDouble()
     readonly agentTransitions = { seedRestoredRows() {} }
     attachAgentStatusStore() {
       return () => {}

@@ -32,8 +32,7 @@ export function reduceAgentStatusLiveUpdate(
     providerSession,
     providerSessionChanged,
     migrationUnsupported,
-    retentionRelevantChange,
-    sortRelevantChange
+    retentionRelevantChange
   } = build
   const paneKey = entry.paneKey
   let nextRetentionSuppressedPaneKeys = state.retentionSuppressedPaneKeys
@@ -118,11 +117,7 @@ export function reduceAgentStatusLiveUpdate(
     agentStatusEpoch:
       retentionRelevantChange || migrationUnsupported.changed || evictedOrphans
         ? state.agentStatusEpoch + 1
-        : state.agentStatusEpoch,
-    sortEpoch:
-      sortRelevantChange || migrationUnsupported.changed || evictedOrphans
-        ? state.sortEpoch + 1
-        : state.sortEpoch
+        : state.agentStatusEpoch
   }
   return { patch, evictedEntries }
 }

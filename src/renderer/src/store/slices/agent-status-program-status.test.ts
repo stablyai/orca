@@ -59,7 +59,6 @@ describe('agent status program-status facet', () => {
     const entryAfter = after.agentStatusByPaneKey[PANE]
     expect(entryAfter).toEqual({ ...entryBefore, programStatus: FACET })
     expect(after.agentStatusEpoch).toBe(before.agentStatusEpoch)
-    expect(after.sortEpoch).toBe(before.sortEpoch)
     expect(after.unreadAgentCompletionPanes).toBe(before.unreadAgentCompletionPanes)
 
     expect(store.getState().setAgentProgramStatus(PANE, null)).toBe(true)

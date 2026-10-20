@@ -11,10 +11,7 @@ import {
   worktreeMatchesVisibleHost
 } from './visible-worktree-host-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
-import {
-  buildWorktreeComparator,
-  sortWorktreesSmart
-} from '../../../../shared/sidebar-list/smart-sort'
+import { sortWorktreesByStamps } from '../../../../shared/sidebar-list/smart-sort'
 export {
   EMPTY_STRUCTURED_CHAT_WORKTREE_IDS,
   getWorktreeIdsWithStructuredChat
@@ -32,12 +29,10 @@ import {
  * Module-level cache of the visible worktree IDs as last computed by
  * WorktreeList's render pipeline.
  *
- * Why: WorktreeList freezes its sort order via sortedIds / sortEpoch useMemo
- * and only re-sorts when sortEpoch bumps. If getVisibleWorktreeIds()
- * recomputes sort order from a live Zustand snapshot, the Cmd+1–9 shortcut
- * could target a different worktree than what's rendered at that sidebar
- * position. By caching the IDs that WorktreeList actually rendered, the
- * shortcut numbering always matches the sidebar card order.
+ * Why: WorktreeList holds its order while the pointer is over the list, so a
+ * re-sort from a live Zustand snapshot could make the Cmd+1–9 shortcut target a
+ * different worktree than what's rendered at that sidebar position. Caching the
+ * IDs WorktreeList actually rendered keeps shortcut numbering on the card order.
  *
  * Why null vs []: [] is a real rendered order (everything collapsed/filtered);
  * null means WorktreeList is unmounted.
@@ -75,30 +70,9 @@ export function getVisibleWorktreeIds(): string[] {
   const state = useAppStore.getState()
   const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
 
-  // Hoist repoMap so it's built once and reused across all branches below.
   const repoMap = getRepoMapFromState(state)
 
-  let sortedIds: string[]
-
-  if (state.sortBy === 'smart') {
-    sortedIds = sortWorktreesSmart(
-      allWorktrees,
-      state.tabsByWorktree,
-      repoMap,
-      state.agentStatusByPaneKey,
-      state.runtimePaneTitlesByTabId,
-      state.ptyIdsByTabId,
-      state.migrationUnsupportedByPtyId,
-      state.terminalLayoutsByTabId
-    ).map((w) => w.id)
-  } else {
-    // Why empty map: non-smart branches don't read attentionByWorktree, but
-    // the param is required to keep smart-mode callers honest at the type level.
-    const sorted = [...allWorktrees].sort(
-      buildWorktreeComparator(state.sortBy, repoMap, Date.now(), new Map())
-    )
-    sortedIds = sorted.map((w) => w.id)
-  }
+  const sortedIds = sortWorktreesByStamps([...allWorktrees], state.sortBy, repoMap).map((w) => w.id)
 
   const visibleIds = computeVisibleWorktreeIds(
     state.worktreesByRepo,

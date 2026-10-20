@@ -517,8 +517,6 @@ describe('terminal slice behaviors', () => {
     // The allDead generation bump must tag the tab so the click-driven respawn is suppressed, even on a non-first activation.
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
 
-    const sortEpochBeforeSpawn = store.getState().sortEpoch
-
     // Stale wake-hint reattach fails before a fresh spawn; the clear suppresses its own bump without consuming the spawn suppression.
     store.getState().clearTabPtyId('tab-1', 'wake-hint-session')
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
@@ -529,7 +527,6 @@ describe('terminal slice behaviors', () => {
     await settleOwnerAnswer()
     const worktree = store.getState().worktreesByRepo.repo1[0]
     expect(worktree.lastActivityAt).toBe(originalLastActivityAt)
-    expect(store.getState().sortEpoch).toBe(sortEpochBeforeSpawn)
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalledWith(
       expect.objectContaining({
         updates: expect.objectContaining({ lastActivityAt: expect.any(Number) })

@@ -1579,7 +1579,7 @@ async function performLocalWorktreeCreate(
       : {}),
     // Stamp activity so the worktree sorts into its final position immediately, avoiding a re-sort race with scroll-to-reveal.
     lastActivityAt: now,
-    // createdAt protects the new worktree from ambient PTY bumps for CREATE_GRACE_MS.
+    // Older clients keep a new worktree near the top of Recent for a few minutes from createdAt.
     createdAt: now,
     orcaCreatedAt: now,
     orcaCreationSource: 'desktop',

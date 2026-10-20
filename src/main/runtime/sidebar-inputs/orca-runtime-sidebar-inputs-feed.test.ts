@@ -2,10 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { requireSwitchedOn } from './require-switched-on'
 import { TestPhone } from './sidebar-inputs-feed.test-fixture'
-
-vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -20,7 +17,7 @@ afterEach(() => {
 describe('the runtime sidebar inputs feed', () => {
   it('publishes the producers’ snapshots and announces a change on the client-event bus', async () => {
     const runtime = new OrcaRuntimeService(null)
-    const feed = requireSwitchedOn(runtime.sidebarInputsFeed)
+    const feed = runtime.sidebarInputsFeed
     const events: RuntimeClientEvent[] = []
     runtime.onClientEvent((event) => events.push(event))
     const phone = new TestPhone(feed, 'conn-1')
@@ -28,7 +25,7 @@ describe('the runtime sidebar inputs feed', () => {
     await phone.settle()
     expect(phone.view().temporal).toEqual({ sessionId: null, retention: null })
 
-    const creation = requireSwitchedOn(runtime.workspaceCreations).open({
+    const creation = runtime.workspaceCreations.open({
       creationId: 'c1',
       repoId: 'repo-1'
     })

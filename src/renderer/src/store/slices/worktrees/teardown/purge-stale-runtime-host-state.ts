@@ -273,7 +273,6 @@ export function createPurgeStaleRuntimeHostState(
               )
             : s.detectedWorktreesByRepo
 
-          const rowsChanged = worktreesChanged || detectedChanged
           return {
             ...purgeState,
             ...(reposChanged ? { repos: survivingRepos } : {}),
@@ -293,7 +292,6 @@ export function createPurgeStaleRuntimeHostState(
             ...(visibilitySourceSupportChanged
               ? { worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: null }
               : {}),
-            ...(rowsChanged ? { sortEpoch: s.sortEpoch + 1 } : {}),
             // Why: mirror validateRepoScopedUi so a filtered/active sidebar can't reference a purged repo id.
             ...(reposChanged
               ? {

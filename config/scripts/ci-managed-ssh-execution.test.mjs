@@ -57,7 +57,7 @@ it('uses one PR shard for at most two selected files and preserves the full defa
   ).toEqual(['1/2', '2/2'])
 })
 
-it('keeps shared SSH fixtures on the full suite but excludes the experimental sidebar spec', () => {
+it('keeps shared SSH fixtures on the full suite and routes the phone feed-list spec by its sources', () => {
   for (const file of [
     'tests/e2e/helpers/orcad-managed-workspace.ts',
     'tests/e2e/helpers/paired-host-terminal.ts',
@@ -68,13 +68,9 @@ it('keeps shared SSH fixtures on the full suite but excludes the experimental si
   for (const file of [
     'tests/e2e/ssh-orcad-phone-feed-list.spec.ts',
     'tests/e2e/helpers/phone-feed-list.ts',
-    'tests/e2e/helpers/sidebar-inputs-build.ts',
-    'src/shared/sidebar-list/sidebar-feed-list.ts'
+    'src/shared/sidebar-list/sidebar-feed-rows.ts'
   ]) {
-    expect(
-      selectPrE2eSpecs([file]).some((spec) => spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX)),
-      file
-    ).toBe(false)
+    expect(selectPrE2eSpecs([file]), file).toContain('tests/e2e/ssh-orcad-phone-feed-list.spec.ts')
   }
 })
 

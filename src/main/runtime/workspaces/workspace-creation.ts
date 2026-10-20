@@ -27,7 +27,6 @@ import {
   WorkspaceCreationRegistry,
   type WorkspaceCreationHandle
 } from '../sidebar-inputs/workspace-creation-registry'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   protected abstract resolveLineageForWorktreeCreate(
@@ -35,8 +34,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     childRepo?: Repo
   ): Promise<WorktreeLineageResolution>
 
-  // Switch point: only a build where main produces the sidebar's inputs lists creations.
-  readonly workspaceCreations = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new WorkspaceCreationRegistry() : null
+  readonly workspaceCreations = new WorkspaceCreationRegistry()
 
   async createManagedWorktree(
     args: RuntimeManagedWorktreeCreateArgs
@@ -68,7 +66,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
     // Listed from here: a create refused before its project resolved has nothing to show.
-    const creation = this.workspaceCreations?.open({ creationId: args.creationId, repoId: repo.id })
+    const creation = this.workspaceCreations.open({ creationId: args.creationId, repoId: repo.id })
     try {
       return await this.createInResolvedProject(args, repo, creation, rearm, events)
     } finally {

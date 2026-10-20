@@ -3,8 +3,6 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
 
-vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
-
 const initialAppStoreState = useAppStore.getState()
 
 afterEach(() => {
@@ -34,7 +32,7 @@ function worktree(name: string): Worktree {
   }
 }
 
-describe('switching workspaces with the sidebar-inputs switch on', () => {
+describe('switching workspaces', () => {
   it('marks the workspace you leave as used up to now, just before the one you open', () => {
     vi.useFakeTimers({ now: 50_000, toFake: ['Date'] })
     const shells = worktree('shells')

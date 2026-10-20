@@ -5,7 +5,6 @@ import { addWorktreeMock, listWorktreesMock } from './worktrees-test-module-mock
 import { handlers, mainWindow, setupWorktreeHandlers } from './worktrees-test-harness'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 
-vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )

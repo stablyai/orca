@@ -118,8 +118,7 @@ function createSnapshot(): WebSessionTabsSyncState {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     unifiedTabsByWorktree: { [WORKTREE_ID]: tabs },
-    unreadTerminalTabs: {},
-    sortEpoch: 0
+    unreadTerminalTabs: {}
   }
 }
 

@@ -22,8 +22,10 @@ import {
 import { getProjectHostSetupProjectionFromState } from '../../store/project-host-setup-selector'
 import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 import { worktree as worktreeFixture } from './worktree-list-groups-test-fixtures'
-import type { MobileProjectSectionCatalog } from '../../../../shared/mobile-project-sections-contract'
-import { getProjectSectionCatalogFromState } from '../../runtime/sync-runtime-graph/project-section-catalog'
+import {
+  buildMobileProjectSectionCatalog,
+  type MobileProjectSectionCatalog
+} from '../../../../shared/mobile-project-sections-contract'
 
 // Why: the desktop sidebar's Project headers and the catalog main serves the phone come from one
 // renderer catalog fetch, merge, selector and repo order.
@@ -132,17 +134,13 @@ async function desktopHeaders(projectOrderBy: ProjectOrderBy) {
   ).flatMap((row) => (row.type === 'header' ? [{ key: row.key, label: row.label }] : []))
 }
 
-/**
- * What main serves the phone: the renderer's published catalog as JSON crosses the wire. Main
- * stores and answers it unchanged (src/main/ipc/runtime.test.ts, mobile-project-sections.test.ts).
- */
+/** The desktop's catalog in the phone's wire shape, as JSON crosses the wire. */
 async function servedCatalog(projectOrderBy: ProjectOrderBy): Promise<MobileProjectSectionCatalog> {
   const { repos, rows } = await desktopCatalog()
-  const published = getProjectSectionCatalogFromState({ repos, ...rows, projectOrderBy })
-  if (!published) {
-    throw new Error('the renderer published no catalog')
-  }
-  return JSON.parse(JSON.stringify(published))
+  const projection = getProjectHostSetupProjectionFromState({ repos, ...rows })
+  return JSON.parse(
+    JSON.stringify(buildMobileProjectSectionCatalog(repos, projection, projectOrderBy))
+  )
 }
 
 afterEach(() => {

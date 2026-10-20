@@ -1,5 +1,3 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
   consumePendingActivationSpawn,
@@ -18,7 +16,6 @@ export function createTerminalPtyReleaseActions(
       }
       let worktreeId: string | null = null
       let wasActivationSpawn = false
-      let isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
       set((s) => {
         const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
         const remainingPtyIds = ptyId ? existingPtyIds.filter((id) => id !== ptyId) : []
@@ -32,10 +29,6 @@ export function createTerminalPtyReleaseActions(
           const tab = tabs[index]
           if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
             wasActivationSpawn = true
-          }
-          if (!ptyId) {
-            isRemoteRuntimeMirror =
-              existingPtyIds.length > 0 && existingPtyIds.every((id) => isRemoteRuntimePtyId(id))
           }
           // Why: consume pendingActivationSpawn on real activation clears, but keep it when clearing a stale wake-hint id — its fallback spawn still needs the suppression.
           const { pendingActivationSpawn: _unused, ...rest } = tab
@@ -102,16 +95,6 @@ export function createTerminalPtyReleaseActions(
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
         }
       })
-      // Bump activity on PTY exit, but skip intentional shutdowns (suppressed exits) and click-driven pane unmounts (pendingActivationSpawn).
-      if (
-        worktreeId &&
-        !wasActivationSpawn &&
-        !isRemoteRuntimeMirror &&
-        !hasWorktreeSleepIntent(worktreeId) &&
-        !(ptyId && get().suppressedPtyExitIds[ptyId])
-      ) {
-        get().bumpWorktreeActivity(worktreeId)
-      }
     }
   }
 }

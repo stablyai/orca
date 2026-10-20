@@ -3,11 +3,8 @@ import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { removeWorktreeViaStore } from './helpers/dead-terminal'
 import { expect, test } from './helpers/orca-app'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import { getActiveWorktreeId, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-
-test.skip(!SIDEBAR_INPUTS_BUILD, 'main lists creations only in an ORCA_SIDEBAR_INPUTS=main build')
 
 function readCreations(page: Page): Promise<{ pending: string[]; host: string[] }> {
   return page.evaluate(async () => {

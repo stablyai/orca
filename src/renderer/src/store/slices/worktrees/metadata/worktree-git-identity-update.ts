@@ -118,8 +118,7 @@ export function createUpdateWorktreeGitIdentity(
       }
 
       return {
-        worktreesByRepo: { ...s.worktreesByRepo, [repoId]: next },
-        sortEpoch: s.sortEpoch + 1
+        worktreesByRepo: { ...s.worktreesByRepo, [repoId]: next }
       }
     })
     if (!shouldPersistHostedReviewClear || clearedBranch === null) {

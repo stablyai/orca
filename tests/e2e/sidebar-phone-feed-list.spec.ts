@@ -10,7 +10,6 @@ import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { z } from 'zod'
 import { test, expect } from './helpers/orca-app'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { createDesktopMobilePairingOffer } from './helpers/paired-electron-client'
 import { pairMobileClient } from './helpers/paired-mobile-client'
@@ -63,12 +62,7 @@ async function runtimeCall(page: Page, method: string, params: unknown): Promise
   )
 }
 
-test.describe('switch on', () => {
-  test.skip(
-    !SIDEBAR_INPUTS_BUILD,
-    'the phone reads the feed only in an ORCA_SIDEBAR_INPUTS=main build'
-  )
-
+test.describe('the phone reads the sidebar feed', () => {
   test('the phone lists the desktop sidebar from the feed, through pins, the open workspace and collapse', async ({
     orcaPage
   }) => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
-  buildWorktreeComparator,
+  buildWorktreeStampComparator,
   buildWorktreeSortLabels,
   compareWorktreeSortLabel,
   getWorktreeSortLabel,
@@ -107,8 +107,6 @@ const repoMap = new Map<string, Repo>([
 ])
 
 const SORT_MODES: readonly SortBy[] = ['name', 'smart', 'recent', 'repo', 'manual']
-const NOW = 1_700_000_000_000
-
 describe('worktree sort label ordering', () => {
   it('matches the pre-precompute comparator on every pair', () => {
     const labels = buildWorktreeSortLabels(corpus)
@@ -123,12 +121,11 @@ describe('worktree sort label ordering', () => {
 
   it('produces byte-for-byte identical sort output in every mode', () => {
     for (const sortBy of SORT_MODES) {
-      const attention = new Map()
       const withLabels = [...corpus].sort(
-        buildWorktreeComparator(sortBy, repoMap, NOW, attention, buildWorktreeSortLabels(corpus))
+        buildWorktreeStampComparator(sortBy, repoMap, buildWorktreeSortLabels(corpus))
       )
       const withoutLabels = [...corpus].sort(
-        buildWorktreeComparator(sortBy, repoMap, NOW, attention)
+        buildWorktreeStampComparator(sortBy, repoMap, undefined)
       )
       expect(withLabels.map((w) => w.id)).toEqual(withoutLabels.map((w) => w.id))
     }

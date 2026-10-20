@@ -178,11 +178,10 @@ export function createAgentStatusRuntime(
   const freshness = createFreshnessScheduler({
     getStatusEntries: () => get().agentStatusByPaneKey,
     bumpEpochs: () => {
-      // Why: freshness is time-based — bump both epochs at the stale boundary to force selector
-      // recompute and re-sort even with no new output, since staleness can change worktree ordering.
+      // Why: freshness is time-based — bump the epoch at the stale boundary to force selector
+      // recompute even with no new output.
       set((s) => ({
-        agentStatusEpoch: s.agentStatusEpoch + 1,
-        sortEpoch: s.sortEpoch + 1
+        agentStatusEpoch: s.agentStatusEpoch + 1
       }))
     }
   })

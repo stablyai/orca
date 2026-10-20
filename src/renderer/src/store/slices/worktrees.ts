@@ -35,7 +35,6 @@ import { createUpdateWorktreeMeta } from './worktrees/metadata/update-worktree-m
 import { createEnsureHostedReviewPushTarget } from './worktrees/metadata/hosted-review-push-target-ensure'
 import { createUpdateWorktreesMeta } from './worktrees/metadata/update-worktrees-meta'
 import { createSetWorktreesPinnedAndReveal } from './worktrees/session/worktree-pin-reveal'
-import { createBumpWorktreeActivity } from './worktrees/session/worktree-activity-bump'
 import {
   createMarkWorktreeVisited,
   createPruneLastVisitedTimestamps,
@@ -95,7 +94,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   updateWorktreesMeta: createUpdateWorktreesMeta(set, get),
   setWorktreesPinnedAndReveal: createSetWorktreesPinnedAndReveal(set, get),
   observeTerminalGitHubPullRequestLink: createObserveTerminalGitHubPullRequestLink(get),
-  bumpWorktreeActivity: createBumpWorktreeActivity(set, get),
   markWorktreeVisited: createMarkWorktreeVisited(set, get),
   pruneLastVisitedTimestamps: createPruneLastVisitedTimestamps(set, get),
   seedActiveWorktreeLastVisitedIfMissing: createSeedActiveWorktreeLastVisitedIfMissing(set, get),

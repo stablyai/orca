@@ -87,7 +87,6 @@ describe('agent pane authority', () => {
       before.recentlyRetiredAgentStatusPaneKeys[TARGET]
     )
     expect(after.agentStatusEpoch).toBe(before.agentStatusEpoch)
-    expect(after.sortEpoch).toBe(before.sortEpoch)
   })
 
   it('retires the pane activity cutoff with the rest of its pane-owned state', () => {

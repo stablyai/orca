@@ -57,8 +57,6 @@ import {
   registerWorkspaceHttpLinkBrowserOpener
 } from '@/lib/http-link-routing'
 import { installStoreListenerCensus } from './store-listener-census'
-import { installSettledSortEpoch } from './settled-sort-epoch'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
 import { withStoreIdentityChurnProbe } from './store-identity-churn-probe'
 import { withEditorBufferRecords } from './editor-buffer-record-lifecycle'
@@ -82,11 +80,6 @@ export const useAppStore = create<AppState>()(
   withEditorBufferRecords(
     withDevelopmentStoreProbes(
       withReactCommitCascadeWriteProbe((...a) => {
-        // Why first: settling inside the bump's own notify means hook subscribers never see it unsettled.
-        // Switch point: the stamp-sorted list reads no settled epoch.
-        if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-          installSettledSortEpoch(a[2])
-        }
         // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
         installStoreListenerCensus(a[2])
         return {

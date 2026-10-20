@@ -16,6 +16,7 @@ import type { RpcRequest, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { AGENT_SESSION_METHODS } from './agent-session'
 import { TERMINAL_METHODS } from './terminal'
+import { createSidebarFactsDouble } from '../sidebar-facts-double.test-fixture'
 
 function request(method: string, params: unknown): RpcRequest {
   return { id: 'request-1', authToken: 'token', method, params }
@@ -35,6 +36,7 @@ function terminalResult(disposition: 'created' | 'adopted' | 'replayed' = 'creat
 function runtimeStub() {
   return {
     getRuntimeId: () => 'runtime-1',
+    sidebarFacts: createSidebarFactsDouble(),
     ensureAgentSession: vi.fn().mockResolvedValue(terminalResult()),
     createAgentSession: vi.fn().mockResolvedValue(terminalResult())
   }
@@ -206,6 +208,7 @@ describe('agent session RPC methods', () => {
     )
     const runtime = {
       getRuntimeId: () => 'runtime-1',
+      sidebarFacts: createSidebarFactsDouble(),
       createTerminal,
       dedupeTerminalCreate
     }

@@ -1,14 +1,10 @@
 import {
-  isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId,
   toRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime-pty-id'
 import { isTerminalTabPresent } from '../slices/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
-import {
-  consumePendingActivationSpawn,
-  getPendingActivationSpawnCount
-} from './terminal-pty-identities'
+import { consumePendingActivationSpawn } from './terminal-pty-identities'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { omitDisownedPtyIds } from './terminal-disowned-pty-sources'
@@ -24,8 +20,6 @@ export function createTerminalPtyBindingActions(
         return
       }
       let worktreeId: string | null = null
-      let wasActivationSpawn = false
-      const isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
       set((s) => {
         const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
         const remote = parseRemoteRuntimePtyId(ptyId)
@@ -75,9 +69,6 @@ export function createTerminalPtyBindingActions(
           }
           worktreeId = wId
           const tab = tabs[index]
-          if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
-            wasActivationSpawn = true
-          }
           // Why: consume one suppression per split-pane activation callback.
           const { pendingActivationSpawn: _unused, restoredFromSession: _restored, ...rest } = tab
           void _unused
@@ -101,10 +92,6 @@ export function createTerminalPtyBindingActions(
           }
           break
         }
-        // Why: the first active PTY changes sorting, except activation-spawn side effects.
-        const isFirstPty = existingPtyIds.length === 0
-        const isActiveWorktree = worktreeId != null && s.activeWorktreeId === worktreeId
-        const shouldBumpSortEpoch = isFirstPty && isActiveWorktree && !wasActivationSpawn
         const shouldRetainSuppressedExit = Boolean(
           explicitReplacementPtyId &&
           (s.suppressedPtyExitIds[ptyId] ||
@@ -189,16 +176,11 @@ export function createTerminalPtyBindingActions(
           migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
           ...(nextTerminalLayoutsByTabId !== s.terminalLayoutsByTabId
             ? { terminalLayoutsByTabId: nextTerminalLayoutsByTabId }
-            : {}),
-          ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
+            : {})
         }
       })
       // Why: a bound PTY means the workspace is awake by any route (CLI, automation, client wake), not only activation.
       clearWorktreeSleepIntent(worktreeId)
-      // Why: activation spawns come from clicking a worktree, not work in it — skip the lastActivityAt stamp and sortEpoch bump; other spawn reasons still bump.
-      if (worktreeId && !wasActivationSpawn && !isRemoteRuntimeMirror) {
-        get().bumpWorktreeActivity(worktreeId)
-      }
     }
   }
 }

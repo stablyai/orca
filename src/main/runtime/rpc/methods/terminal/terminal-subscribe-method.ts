@@ -58,7 +58,7 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
         }
         if (isMobile && leaf?.ptyId) {
           // A phone opening a terminal is use of its workspace, for cleanup's "last active".
-          runtime.sidebarFacts?.terminalUse.noteTerminalUse(leaf.ptyId, Date.now())
+          runtime.sidebarFacts.terminalUse.noteTerminalUse(leaf.ptyId, Date.now())
         }
         if (!leaf?.ptyId) {
           const read = await runtime.readTerminal(params.terminal)

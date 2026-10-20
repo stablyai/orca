@@ -12,8 +12,6 @@ import type { RuntimeStore } from '../runtime-store-contract'
 import { TERMINAL_USE_THROTTLE_MS } from './terminal-use-producer'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
-vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
-
 const WT = 'repo-1::/tmp/phone-only'
 const DAY_MS = 24 * 60 * 60 * 1000
 

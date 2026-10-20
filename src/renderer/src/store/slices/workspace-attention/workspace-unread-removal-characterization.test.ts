@@ -98,7 +98,7 @@ describe('closing tabs', () => {
     store.getState().closeTab(pane.tabId)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:read:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -114,7 +114,7 @@ describe('closing tabs', () => {
     store.getState().closeUnifiedTab(`unified-${first.tabId}`)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a2=terminal-bell",
         "panes tab-a2:L2=terminal-bell",
         "completions tab-a2:L2=agent-completion",
@@ -129,7 +129,7 @@ describe('closing tabs', () => {
     store.getState().closeUnifiedTab(`unified-${first.tabId}`, { terminalRetirementHandled: true })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a2=terminal-bell",
         "panes tab-a1:L1=terminal-bell tab-a2:L2=terminal-bell",
         "completions tab-a1:L1=agent-completion tab-a2:L2=agent-completion",
@@ -155,7 +155,7 @@ describe('closing tabs', () => {
     store.getState().closeUnifiedTab(chat.id)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -187,7 +187,7 @@ describe('closing tabs', () => {
     ringBell(store, pane)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 folder-1@local:UNREAD:1000 sortEpoch=1",
+        "rows a@local:read:0 b@local:read:0 folder-1@local:UNREAD:1000",
         "tabs tab-f1=terminal-bell",
         "panes -",
         "completions -",
@@ -199,7 +199,7 @@ describe('closing tabs', () => {
     store.getState().closeTab(pane.tabId)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 folder-1@local:read:1000 sortEpoch=1",
+        "rows a@local:read:0 b@local:read:0 folder-1@local:read:1000",
         "tabs -",
         "panes -",
         "completions -",
@@ -217,7 +217,7 @@ describe('sleep, hibernate, retire, rekey, reconcile, purge', () => {
     await store.getState().shutdownWorktreeTerminals(WS_A, { keepIdentifiers: true })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:read:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -249,7 +249,7 @@ describe('sleep, hibernate, retire, rekey, reconcile, purge', () => {
     })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=3",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell tab-a2=terminal-bell",
         "panes tab-a2:L2=terminal-bell",
         "completions tab-a2:L2=agent-completion",
@@ -264,7 +264,7 @@ describe('sleep, hibernate, retire, rekey, reconcile, purge', () => {
     store.getState().retireAgentPaneAuthority(first.paneKey)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell tab-a2=terminal-bell",
         "panes tab-a2:L2=terminal-bell",
         "completions tab-a2:L2=agent-completion",
@@ -287,7 +287,7 @@ describe('sleep, hibernate, retire, rekey, reconcile, purge', () => {
       )
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell tab-a2=terminal-bell",
         "panes tab-a1:L1=terminal-bell tab-a2:L2=terminal-bell",
         "completions tab-a2:L2=agent-completion",
@@ -305,7 +305,7 @@ describe('sleep, hibernate, retire, rekey, reconcile, purge', () => {
     })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell tab-a2=terminal-bell",
         "panes tab-a2:L2=terminal-bell tab-a1:33333333-3333-4333-8333-333333333333=terminal-bell",
         "completions tab-a2:L2=agent-completion tab-a1:33333333-3333-4333-8333-333333333333=agent-completion",
@@ -328,7 +328,7 @@ describe('sleep, hibernate, retire, rekey, reconcile, purge', () => {
     store.getState().setActiveWorktree(WS_A)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:read:1000 b@local:read:0",
         "tabs -",
         "panes tab-a1:L1=terminal-bell",
         "completions tab-a1:L1=agent-completion",
@@ -344,7 +344,7 @@ describe('sleep, hibernate, retire, rekey, reconcile, purge', () => {
     store.getState().purgeWorktreeTerminalState([WS_A])
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:read:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -365,7 +365,7 @@ describe('engagement, read state and tab focus on other surfaces', () => {
     store.getState().focusGroup(WS_A, groupId!)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell",
         "panes tab-a1:L1=terminal-bell",
         "completions tab-a1:L1=agent-completion",
@@ -380,7 +380,7 @@ describe('engagement, read state and tab focus on other surfaces', () => {
     store.getState().acknowledgeAgents([first.paneKey], [])
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell tab-a2=terminal-bell",
         "panes tab-a1:L1=terminal-bell tab-a2:L2=terminal-bell",
         "completions tab-a2:L2=agent-completion",

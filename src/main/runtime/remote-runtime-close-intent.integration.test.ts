@@ -1,11 +1,11 @@
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
+import { runtimeDoubleWithSidebarFacts } from './rpc/sidebar-facts-double.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { parsePairingCode } from '../../shared/pairing'
 import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
-import type { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
 const TEST_TIMEOUT_MS = 15_000
@@ -44,7 +44,7 @@ it(
         }
       ]
     })
-    const runtime = {
+    const runtime = runtimeDoubleWithSidebarFacts({
       configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'close-intent-runtime-test',
       getStartedAt: () => 1,
@@ -54,7 +54,7 @@ it(
       listMobileSessionTabs,
       refuseUnattributedMobileSessionTabClose,
       closeMobileSessionTab
-    } as unknown as OrcaRuntimeService
+    })
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,

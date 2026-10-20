@@ -1,7 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { OrcaRuntimeWithWorkspaceReviewFacts } from './orca-runtime-workspace-review-facts'
-import type { OrcaRuntimeWithAgentTransitions } from '../orca-runtime-agent-transitions'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../shared/constants'
 import {
   getConnectionExecutionHostId,
@@ -255,13 +253,4 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithWork
           [...this.tabs.values()].some((tab) => tab.worktreeId === worktreeId))
     }
   }
-}
-
-/** The top sidebar layer, so a switch-off build folds the instanceof away with the switch. */
-export function sidebarFactsRuntime(
-  runtime: OrcaRuntimeWithAgentTransitions
-): OrcaRuntimeWithSidebarTemporal | null {
-  return ORCA_SIDEBAR_INPUTS_IS_MAIN && runtime instanceof OrcaRuntimeWithSidebarTemporal
-    ? runtime
-    : null
 }

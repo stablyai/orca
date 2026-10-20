@@ -1,6 +1,5 @@
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
-import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import {
   applyGeneratedTabTitleUpdates,
   applyTerminalTabTitleUpdates
@@ -152,21 +151,11 @@ export function createTerminalTabPresentationActions(
         if (prevTitle && isDecorativeAgentTitleFrameChange(prevTitle, title)) {
           return s
         }
-        // Why: re-sort hookless title changes only when their activity classification changes.
-        const classificationChanged =
-          classifyTitleActivity(prevTitle ?? '') !== classifyTitleActivity(title)
-        // Why: skip active-worktree remount side effects and orphaned panes.
-        const ownerWorktreeId = classificationChanged
-          ? getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
-          : null
-        const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
-        const shouldBump = classificationChanged && ownerWorktreeId !== null && !isActive
         return {
           runtimePaneTitlesByTabId: {
             ...s.runtimePaneTitlesByTabId,
             [tabId]: { ...currentByPane, [paneId]: title }
-          },
-          ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
+          }
         }
       })
     },
@@ -176,7 +165,6 @@ export function createTerminalTabPresentationActions(
         if (!currentByPane || !(paneId in currentByPane)) {
           return s
         }
-        const prevTitle = currentByPane[paneId]
         const nextByPane = { ...currentByPane }
         delete nextByPane[paneId]
         const next = { ...s.runtimePaneTitlesByTabId }
@@ -185,17 +173,8 @@ export function createTerminalTabPresentationActions(
         } else {
           delete next[tabId]
         }
-        // Why: clearing a classified title changes the smart-sort title-heuristic verdict, so it needs a re-sort. See setRuntimePaneTitle.
-        const hadClassification = classifyTitleActivity(prevTitle ?? '') !== null
-        // Why: same active-worktree gate as setRuntimePaneTitle — click-driven teardown clears must not re-rank the sidebar; skip when owner is missing (orphaned).
-        const ownerWorktreeId = hadClassification
-          ? getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
-          : null
-        const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
-        const shouldBump = hadClassification && ownerWorktreeId !== null && !isActive
         return {
-          runtimePaneTitlesByTabId: next,
-          ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
+          runtimePaneTitlesByTabId: next
         }
       })
     }

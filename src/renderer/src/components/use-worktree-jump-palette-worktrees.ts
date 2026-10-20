@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { getStructuredChatWorktreeIds } from '@/components/sidebar/visible-worktree-activity-inputs'
 import { filterWorkspaceRows } from '../../../shared/workspace-view/workspace-row-filters'
 import { buildDesktopWorkspaceRowFactReader } from '@/components/sidebar/desktop-workspace-row-facts'
-import { sortWorktreesSmart } from '../../../shared/sidebar-list/smart-sort'
+import { sortWorktreesByStamps } from '../../../shared/sidebar-list/smart-sort'
 import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
@@ -47,9 +47,6 @@ export function useWorktreeJumpPaletteWorktrees({
   lastVisitedAtByWorktreeId,
   paletteStatusInputsActive,
   repoMap,
-  runtimePaneTitlesByTabId,
-  migrationUnsupportedByPtyId,
-  terminalLayoutsByTabId,
   repoByHostIdentity,
   hostOptions,
   hostFilterActive,
@@ -157,28 +154,8 @@ export function useWorktreeJumpPaletteWorktrees({
       return EMPTY_SORTED_WORKTREES
     }
     const scope = filterPredicate ? workspaces.filter(filterPredicate.matchesWorktree) : workspaces
-    return sortWorktreesSmart(
-      scope,
-      tabsByWorktree,
-      repoMap,
-      agentStatusByPaneKey,
-      runtimePaneTitlesByTabId,
-      ptyIdsByTabId,
-      migrationUnsupportedByPtyId,
-      terminalLayoutsByTabId
-    )
-  }, [
-    paletteStatusInputsActive,
-    workspaces,
-    filterPredicate,
-    tabsByWorktree,
-    repoMap,
-    agentStatusByPaneKey,
-    runtimePaneTitlesByTabId,
-    ptyIdsByTabId,
-    migrationUnsupportedByPtyId,
-    terminalLayoutsByTabId
-  ])
+    return sortWorktreesByStamps([...scope], 'smart', repoMap)
+  }, [paletteStatusInputsActive, workspaces, filterPredicate, repoMap])
   const sortedWorktrees = useMemo(
     () =>
       hasQuery

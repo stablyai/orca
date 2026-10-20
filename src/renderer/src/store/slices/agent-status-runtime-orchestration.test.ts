@@ -410,7 +410,6 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
   ): {
     entry: AgentStatusEntry
     agentStatusEpoch: number
-    sortEpoch: number
   } {
     const store = createTestStore()
     store.getState().setAgentStatus(PANE_KEY, {
@@ -433,8 +432,7 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
     }
     return {
       entry,
-      agentStatusEpoch: snapshot.agentStatusEpoch,
-      sortEpoch: snapshot.sortEpoch
+      agentStatusEpoch: snapshot.agentStatusEpoch
     }
   }
 
@@ -457,7 +455,6 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
       // Why: an extra epoch tick is an extra render across every aggregate consumer — that
       // would be a behavior change even though no rendered value differs.
       expect(stamped.agentStatusEpoch).toBe(unstamped.agentStatusEpoch)
-      expect(stamped.sortEpoch).toBe(unstamped.sortEpoch)
     })
 
     it.each(STATES)('resolves %s identically for freshness, rows, dot and attention', (state) => {

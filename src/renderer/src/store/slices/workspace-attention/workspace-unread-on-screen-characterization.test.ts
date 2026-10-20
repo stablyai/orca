@@ -95,7 +95,7 @@ describe('on screen means read', () => {
     ringBell(store, pane)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell",
         "panes -",
         "completions -",
@@ -108,7 +108,7 @@ describe('on screen means read', () => {
     setWindowOnScreen(store, true)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:read:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -128,7 +128,7 @@ describe('on screen means read', () => {
     ringBell(store, pane)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -148,7 +148,7 @@ describe('on screen means read', () => {
     completeAgentTurn(store, { worktreeId: WS_A, paneKey: `tab-a1:${LEAF_2}` })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -201,7 +201,7 @@ describe('the flag follows its markers', () => {
     store.getState().setActiveWorktree(WS_A)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:0 sortEpoch=0",
+        "rows a@local:UNREAD:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -212,7 +212,7 @@ describe('the flag follows its markers', () => {
     setWindowOnScreen(store, true)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 sortEpoch=0",
+        "rows a@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -234,7 +234,7 @@ describe('the flag follows its markers', () => {
     pointerDownInTab(store, { ...first, paneKey: null })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:0 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -246,7 +246,7 @@ describe('the flag follows its markers', () => {
     store.getState().activateTab('unified-tab-a1')
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=1",
+        "rows a@local:read:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -273,7 +273,7 @@ describe('the flag follows its markers', () => {
       )
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:read:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -295,7 +295,7 @@ describe('the flag follows its markers', () => {
     toggleUnreadByUser(store, store.getState().worktreesByRepo.repo1[0]!)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:1000 b@local:read:0 sortEpoch=2",
+        "rows a@local:read:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -316,7 +316,7 @@ describe('the flag follows its markers', () => {
     store.getState().closeTab(unmarked.tabId)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:0 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -331,7 +331,7 @@ describe('the flag follows its markers', () => {
     store.getState().closeTab(marked.tabId)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=1",
+        "rows a@local:read:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",

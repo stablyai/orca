@@ -4,7 +4,6 @@ import { execInTerminal, waitForActivePanePtyId } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { getRendererTitleLog, installRendererTitleLog } from './helpers/terminal-title-log'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 
 type NotificationDispatch = { source?: string; worktreeId?: string }
 
@@ -83,7 +82,7 @@ async function setFilterAndSetting(
     },
     { hide: hideDefaultBranch, notify: notifyHiddenWorkspaces }
   )
-  // A switch-on build's host reads the persisted switch, written after the window's copy.
+  // The host reads the persisted setting, written after the window's copy.
   await expect
     .poll(() => page.evaluate(async () => (await window.api.ui.get()).hideDefaultBranchWorkspace))
     .toBe(hideDefaultBranch)
@@ -118,16 +117,14 @@ test.describe('Hidden workspace notifications', () => {
     await expect.poll(() => bellRequests(electronApp, worktreeId), { timeout: 5_000 }).toBe(1)
     expect(await isWorkspaceUnread(orcaPage, worktreeId)).toBe(true)
 
-    // Hidden and the setting off: no request, past the bell's 250 ms delay. The window raises no
-    // dot; a switch-on host raises its shared dot, which ignores every client's Filters.
+    // Hidden and the setting off: no request, past the bell's 250 ms delay. The host raises its
+    // shared dot, which ignores every client's Filters.
     await setFilterAndSetting(orcaPage, true, false)
     await ringBellOffScreen(orcaPage, ptyId, worktreeId, 'hwn-hidden')
-    if (SIDEBAR_INPUTS_BUILD) {
-      await expect.poll(() => isWorkspaceUnread(orcaPage, worktreeId)).toBe(true)
-    }
+    await expect.poll(() => isWorkspaceUnread(orcaPage, worktreeId)).toBe(true)
     await orcaPage.waitForTimeout(1_500)
     expect(await bellRequests(electronApp, worktreeId)).toBe(1)
-    expect(await isWorkspaceUnread(orcaPage, worktreeId)).toBe(SIDEBAR_INPUTS_BUILD)
+    expect(await isWorkspaceUnread(orcaPage, worktreeId)).toBe(true)
 
     // Hidden with "Notify About Hidden Workspaces" on: both come back.
     await setFilterAndSetting(orcaPage, true, true)

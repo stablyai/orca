@@ -1,11 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { searchWorktreeDocuments } from './worktree-palette-search'
 import { buildWorktreePaletteDocuments } from './worktree-palette-document'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
-
-vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
 const worktree: Worktree = {
   id: 'repo-1::/tmp/shell-only',
@@ -31,7 +29,7 @@ const repoMap = new Map<string, Repo>([
   ['repo-1', { id: 'repo-1', path: '/tmp/repo', displayName: 'Repo', badgeColor: '', addedAt: 0 }]
 ])
 
-describe('jump palette last active with the switch on', () => {
+describe('jump palette last active', () => {
   it('counts a visit to a plain-shell workspace as its last activity', () => {
     const visitedAt = 5_000
     for (const query of ['', 'shell']) {

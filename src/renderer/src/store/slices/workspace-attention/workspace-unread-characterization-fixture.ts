@@ -217,7 +217,7 @@ export function observe(store: AttentionStore, persists: () => PersistCall[]): s
       `${f.id}@${f.executionHostId ?? f.connectionId ?? 'local'}:${f.isUnread ? 'UNREAD' : 'read'}:${f.lastActivityAt}`
   )
   return [
-    `rows ${[...rows, ...folders].join(' ')} sortEpoch=${s.sortEpoch}`,
+    `rows ${[...rows, ...folders].join(' ')}`,
     `tabs ${markers(s.unreadTerminalTabs)}`,
     `panes ${markers(s.unreadTerminalPanes)}`,
     `completions ${markers(s.unreadAgentCompletionPanes)}`,

@@ -1,6 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForSessionReady } from './helpers/store'
 
 async function setCollapsed(
@@ -21,12 +20,7 @@ function windowCollapsed(page: Page): Promise<string[]> {
   return page.evaluate(() => [...(window.__store?.getState().collapsedGroups ?? [])].sort())
 }
 
-test.describe('switch on', () => {
-  test.skip(
-    !SIDEBAR_INPUTS_BUILD,
-    'ui.setCollapsed exists only in an ORCA_SIDEBAR_INPUTS=main build'
-  )
-
+test.describe('ui.setCollapsed', () => {
   test('ui.setCollapsed changes one section without undoing the window or a newer writer', async ({
     orcaPage
   }) => {
@@ -47,16 +41,5 @@ test.describe('switch on', () => {
       result: { collapsed: false, applied: false }
     })
     await expect.poll(() => windowCollapsed(orcaPage)).toEqual(['e2e:window'])
-  })
-})
-
-test.describe('switch off', () => {
-  test.skip(SIDEBAR_INPUTS_BUILD, 'checks the shipped method set')
-
-  test('a switch-off build registers no ui.setCollapsed', async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    const response = await setCollapsed(orcaPage, 'e2e:phone', true, 'phone-a', 1)
-    expect(response).toMatchObject({ ok: false, error: { code: 'method_not_found' } })
-    expect(await windowCollapsed(orcaPage)).not.toContain('e2e:phone')
   })
 })

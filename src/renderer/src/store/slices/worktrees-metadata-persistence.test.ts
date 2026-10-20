@@ -386,9 +386,8 @@ describe('worktree remote runtime mutations', () => {
     const second = makeWorktree({ id: 'repo1::/path/wt2', repoId: 'repo1', path: '/path/wt2' })
     const subscriber = vi.fn()
     store.setState({
-      worktreesByRepo: { repo1: [first, second] },
-      sortEpoch: 7
-    } as Partial<AppState>)
+      worktreesByRepo: { repo1: [first, second] }
+    })
 
     const unsubscribe = store.subscribe(subscriber)
     await store.getState().updateWorktreesMeta([
@@ -401,7 +400,6 @@ describe('worktree remote runtime mutations', () => {
       'in-review',
       'completed'
     ])
-    expect(store.getState().sortEpoch).toBe(8)
     expect(subscriber).toHaveBeenCalledTimes(1)
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledTimes(2)
   })

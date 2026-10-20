@@ -67,7 +67,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           fromExistingBranch: typeof args.baseBranch === 'string' && args.baseBranch.length > 0,
           isFolder: isFolderRepo(repo)
         })
-        const creation = runtime.workspaceCreations?.open({
+        const creation = runtime.workspaceCreations.open({
           creationId: args.creationId,
           repoId: repo.id
         })

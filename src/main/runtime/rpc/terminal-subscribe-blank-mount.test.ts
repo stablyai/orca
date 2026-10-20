@@ -1,4 +1,5 @@
 import './unused-default-rpc-methods.test-fixture'
+import { runtimeDoubleWithSidebarFacts } from './sidebar-facts-double.test-fixture'
 /** STA-1840 regression: missing mobile terminal models request an exact renderer tab mount. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
@@ -9,7 +10,7 @@ import { createSubscriptionRegistryDouble } from './subscription-registry-test-d
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
-  return {
+  return runtimeDoubleWithSidebarFacts({
     getRuntimeId: () => 'test-runtime',
     subscribeToPtyExit: vi.fn(() => vi.fn()),
     registerRemoteTerminalViewSubscriber: () => () => {},
@@ -22,7 +23,7 @@ function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeSe
     serializeRendererTerminalBuffer: async () => null,
     hasHeadlessTerminalState: () => true,
     ...overrides
-  } as OrcaRuntimeService
+  })
 }
 
 const makeRequest = (method: string, params?: unknown): RpcRequest => ({

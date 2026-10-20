@@ -6,11 +6,11 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
-import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
+import { runtimeDoubleWithSidebarFacts } from './sidebar-facts-double.test-fixture'
 
 const request: RpcRequest = {
   id: 'req-output-race',
@@ -32,7 +32,7 @@ describe('terminal subscribe renderer recovery output ordering', () => {
     let onData:
       | ((data: string, meta?: { seq?: number; rawLength?: number; cwd?: string }) => void)
       | undefined
-    const runtime = {
+    const runtime = runtimeDoubleWithSidebarFacts({
       getRuntimeId: () => 'test-runtime',
       subscribeToPtyExit: vi.fn(() => vi.fn()),
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-output-race' }),
@@ -74,7 +74,7 @@ describe('terminal subscribe renderer recovery output ordering', () => {
       registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
-    } as unknown as OrcaRuntimeService
+    })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(request, vi.fn(), {

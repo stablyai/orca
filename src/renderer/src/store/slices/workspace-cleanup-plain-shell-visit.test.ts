@@ -3,12 +3,10 @@ import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qu
 import { makeTerminalTab } from '@/components/worktree-jump-palette-test-fixtures'
 import { NOW, WORKTREE_ID, makeCandidate, makeState } from './workspace-cleanup-slice-test-harness'
 
-vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
-
 const DAY_MS = 24 * 60 * 60 * 1000
 
 // A remote workspace used only through plain shells: no agent ran, so no host stamp moved its
-// Recent time, and with the switch on its terminals' start and exit write none either.
+// Recent time, and its terminals' start and exit write none either.
 function plainShellWorkspace(visitedDaysAgo: number) {
   const candidate = makeCandidate({
     executionHostId: 'ssh:box',
@@ -24,7 +22,7 @@ function plainShellWorkspace(visitedDaysAgo: number) {
   return { candidate, state }
 }
 
-describe('cleanup reads a plain-shell workspace’s visits as activity (switch on)', () => {
+describe('cleanup reads a plain-shell workspace’s visits as activity', () => {
   beforeEach(() => {
     vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
   })

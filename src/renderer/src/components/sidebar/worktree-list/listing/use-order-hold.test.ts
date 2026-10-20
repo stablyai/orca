@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
 import type { SidebarFeedIndex } from '../../../../../../shared/sidebar-list/sidebar-feed-index'
@@ -7,10 +7,6 @@ import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
 import { useOrderHeldWhileEngaged, useProjectRecencyHeldWhileEngaged } from './use-order-hold'
-
-vi.mock('../../../../../../shared/sidebar-inputs-switch', () => ({
-  ORCA_SIDEBAR_INPUTS_IS_MAIN: true
-}))
 
 function mountList() {
   const list = document.createElement('div')

@@ -167,8 +167,7 @@ export function createAgentStatusProviderSessionActions(
               s.unreadAgentCompletionPanes,
               retiredPaneKeys
             ),
-            agentStatusEpoch: removedLiveStatus ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-            sortEpoch: removedLiveStatus ? s.sortEpoch + 1 : s.sortEpoch
+            agentStatusEpoch: removedLiveStatus ? s.agentStatusEpoch + 1 : s.agentStatusEpoch
           }
         })
       )

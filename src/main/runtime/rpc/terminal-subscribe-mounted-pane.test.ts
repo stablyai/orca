@@ -11,6 +11,7 @@ import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
+import { runtimeDoubleWithSidebarFacts } from './sidebar-facts-double.test-fixture'
 
 const request: RpcRequest = {
   id: 'req-1',
@@ -24,8 +25,7 @@ const request: RpcRequest = {
 }
 
 function asRuntime(double: Record<string, unknown>): OrcaRuntimeService {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: terminal.subscribe reads only the members the double provides.
-  return double as unknown as OrcaRuntimeService
+  return runtimeDoubleWithSidebarFacts(double)
 }
 
 type PaneDouble = {

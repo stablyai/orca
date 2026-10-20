@@ -1,3 +1,4 @@
+import { createSidebarFactsDouble } from './rpc/sidebar-facts-double.test-fixture'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
@@ -110,6 +111,7 @@ describe('paired check details over real encrypted loopback transport', () => {
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'paired-check-host',
+        sidebarFacts: createSidebarFactsDouble(),
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: () => {},
         cancelMobileDictationForConnection: () => {},

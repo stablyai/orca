@@ -1,4 +1,3 @@
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
@@ -197,7 +196,7 @@ function supersede(
 }
 
 /**
- * Switch point. Shows the window's own row writes before main's feed has caught up: each is laid
+ * Shows the window's own row writes before main's feed has caught up: each is laid
  * over main's rows from its start until main shows it, so main's value wins afterwards whether
  * main took the write or not.
  */
@@ -205,9 +204,6 @@ export function withPendingSidebarRowWrites<T>(
   readWrites: () => readonly SidebarRowWrite[],
   operation: () => Promise<T>
 ): Promise<T> {
-  if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-    return operation()
-  }
   const added = readWrites().flatMap((write): PendingRowWrite[] => {
     const values = pickRowFields(write.updates, () => true)
     const hostId = parseExecutionHostId(write.executionHostId)?.id ?? null
@@ -233,11 +229,8 @@ export function withPendingSidebarRowWrites<T>(
   return running
 }
 
-/** Switch point. Lists a workspace the window just created until main's feed lists it too. */
+/** Lists a workspace the window just created until main's feed lists it too. */
 export function holdCreatedSidebarWorkspace(workspace: CreatedWorkspace): void {
-  if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-    return
-  }
   const [worktreeId, rawHostId] =
     'worktree' in workspace
       ? [workspace.worktree.id, workspace.worktree.hostId]

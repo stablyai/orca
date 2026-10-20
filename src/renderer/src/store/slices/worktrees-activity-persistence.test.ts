@@ -6,8 +6,7 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks,
-  resetWorktreeSliceModuleMemory,
-  runtimeEnvironmentCall
+  resetWorktreeSliceModuleMemory
 } from './worktrees-slice-test-harness'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
@@ -81,20 +80,6 @@ describe('worktree remote runtime mutations', () => {
       errorSpy.mockRestore()
       mockApi.worktrees.updateMeta.mockReset().mockResolvedValue({})
     }
-  })
-
-  it('does not persist activity for a missing worktree', async () => {
-    const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      worktreesByRepo: { repo1: [] }
-    } as Partial<AppState>)
-
-    store.getState().bumpWorktreeActivity('repo1::/missing')
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
   it('clears folder workspace unread on its record and dedupes repeat calls', async () => {

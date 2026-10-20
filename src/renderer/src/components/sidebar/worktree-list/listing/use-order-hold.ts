@@ -1,5 +1,4 @@
 import { useMemo, useState, useSyncExternalStore } from 'react'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import {
   withHeldProjectRecency,
   type SidebarFeedIndex
@@ -70,16 +69,11 @@ function subscribe(listener: () => void): () => void {
   }
 }
 
-const noSubscription = (): (() => void) => () => {}
 const notEngaged = (): boolean => false
 
 function useListEngaged(): boolean {
-  // Switch point: the stamp-sorted list moves on events, so it holds; today's list settles itself.
-  return useSyncExternalStore(
-    ORCA_SIDEBAR_INPUTS_IS_MAIN ? subscribe : noSubscription,
-    ORCA_SIDEBAR_INPUTS_IS_MAIN ? isEngaged : notEngaged,
-    notEngaged
-  )
+  // The stamp-sorted list moves on events, so it holds.
+  return useSyncExternalStore(subscribe, isEngaged, notEngaged)
 }
 
 /**
@@ -96,10 +90,10 @@ export function useOrderHeldWhileEngaged(ids: string[], sortBy: SortBy): string[
       ? { ids: mergeHeldOrder(shown.ids, ids), sortBy }
       : { ids, sortBy }
   const changed = next.ids !== shown.ids || next.sortBy !== shown.sortBy
-  if (ORCA_SIDEBAR_INPUTS_IS_MAIN && changed) {
+  if (changed) {
     setShown(next)
   }
-  return ORCA_SIDEBAR_INPUTS_IS_MAIN ? next.ids : ids
+  return next.ids
 }
 
 /** As above for project sections in Recent order: they keep the stamps they had at engagement. */

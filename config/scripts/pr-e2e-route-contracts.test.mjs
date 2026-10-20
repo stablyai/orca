@@ -16,7 +16,6 @@ import { testImportClosure } from './e2e-test-import-closure.mjs'
 import { isLayoutOracleSource, LAYOUT_ORACLE_E2E_SPECS } from './pr-layout-oracle-route.mjs'
 import {
   hasNativeImeSourceChange,
-  MANUAL_ONLY_E2E_SPECS,
   PR_E2E_SOURCE_ROUTES,
   selectPrE2eSpecs,
   shouldRunReusablePrE2e
@@ -497,9 +496,7 @@ describe('managed-SSH remote sources routing', () => {
       .filter((name) => /^ssh-orcad-.*\.spec\.ts$/.test(name))
       .map((name) => `tests/e2e/${name}`)
     expect(specs.length).toBeGreaterThan(0)
-    expect(
-      specs.filter((spec) => !routed.has(spec) && !MANUAL_ONLY_E2E_SPECS.includes(spec))
-    ).toEqual([])
+    expect(specs.filter((spec) => !routed.has(spec))).toEqual([])
   })
 
   it('starts the lane for remote product sources no hand-kept route names', () => {

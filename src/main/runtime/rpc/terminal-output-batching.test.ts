@@ -13,16 +13,17 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
+import { runtimeDoubleWithSidebarFacts } from './sidebar-facts-double.test-fixture'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
-  return {
+  return runtimeDoubleWithSidebarFacts({
     getRuntimeId: () => 'test-runtime',
     subscribeToPtyExit: vi.fn(() => vi.fn()),
     // Why: subscribe streams register as remote view subscribers for Phase-5
     // query-authority suppression (terminal-query-authority.md).
     registerRemoteTerminalViewSubscriber: () => () => {},
     ...overrides
-  } as OrcaRuntimeService
+  })
 }
 
 function makeRequest(method: string, params?: unknown): RpcRequest {

@@ -167,8 +167,7 @@ export function createAgentStatusWorktreeDropActions(
             ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
             : {}),
           agentStatusEpoch:
-            hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-          sortEpoch: hadLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
+            hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch
         }
       })
       if (hadLive) {

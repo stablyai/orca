@@ -39,7 +39,6 @@ export type AgentStatusTabPrefixDropState = Pick<
   | 'recentlyRetiredAgentStatusPaneKeys'
   | 'retainedAgentsByPaneKey'
   | 'retentionSuppressedPaneKeys'
-  | 'sortEpoch'
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
 >
@@ -199,8 +198,7 @@ export function buildAgentStatusTabPrefixDropPatch(
         : {}),
       // Why: mirrors removeAgentStatusByTabPrefix — only bump epochs when the live map changed; retained-only sweeps don't affect sort/freshness.
       agentStatusEpoch:
-        hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-      sortEpoch: hadLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
+        hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch
     }
   }
   const patch = buildPatch()

@@ -9,7 +9,6 @@ import {
   getRepoExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
 import {
   floatingWorkspaceToWorktree,
@@ -178,13 +177,6 @@ export function getFolderWorkspaceMetaUpdates(
       updates.firstAgentMessageRenameError === undefined
         ? null
         : updates.firstAgentMessageRenameError
-  }
-  if (
-    updates.comment !== undefined &&
-    updates.lastActivityAt === undefined &&
-    !ORCA_SIDEBAR_INPUTS_IS_MAIN
-  ) {
-    next.lastActivityAt = Date.now()
   }
   if (updates.linkedWorkItem !== undefined) {
     next.linkedTask = updates.linkedWorkItem

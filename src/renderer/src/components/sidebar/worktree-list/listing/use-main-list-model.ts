@@ -102,7 +102,7 @@ function windowFolderRecordOf(
 }
 
 /**
- * Switch point. The list built from main's inputs, by the builder the phone runs: the window adds
+ * The list built from main's inputs, by the builder the phone runs: the window adds
  * only screen state (hover hold, collapse, host drag, agent-send reveal), its desktop-only cards,
  * its own view settings and host order, and its row writes main has not shown yet. Cards render
  * the window's own records for the rows main lists.

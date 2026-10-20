@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { AppState } from '../types'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearHugeRepoWarningDismissalsForTests } from '@/lib/source-control-huge-repo-warning-dismissals'
@@ -63,10 +64,9 @@ describe('fetchWorktrees', () => {
     const lineage = makeLineage({ worktreeId: initial.id })
     const refreshed = { ...initial, lineage }
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      worktreesByRepo: { repo1: [initial] },
-      sortEpoch: 7
-    } as Partial<AppState>)
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
+      worktreesByRepo: { repo1: [initial] }
+    })
     runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
       const result =
         method === 'worktree.lineageList'
@@ -84,7 +84,6 @@ describe('fetchWorktrees', () => {
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([refreshed])
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
-    expect(store.getState().sortEpoch).toBe(8)
   })
 
   it('updates worktree records when only GitLab link metadata changes', async () => {
@@ -98,14 +97,12 @@ describe('fetchWorktrees', () => {
     const refreshed = { ...initial, linkedGitLabIssue: 321 }
     mockApi.worktrees.list.mockResolvedValue([refreshed])
     store.setState({
-      worktreesByRepo: { repo1: [initial] },
-      sortEpoch: 7
-    } as Partial<AppState>)
+      worktreesByRepo: { repo1: [initial] }
+    })
 
     await store.getState().fetchWorktrees('repo1')
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([refreshed])
-    expect(store.getState().sortEpoch).toBe(8)
   })
 
   it('refreshes remote lineage when the worktree payload is otherwise unchanged', async () => {
@@ -127,11 +124,10 @@ describe('fetchWorktrees', () => {
       parentWorktreeId: 'repo1::/remote/new-parent'
     })
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
       worktreesByRepo: { repo1: [worktree] },
-      worktreeLineageById: { [worktree.id]: staleLineage },
-      sortEpoch: 7
-    } as Partial<AppState>)
+      worktreeLineageById: { [worktree.id]: staleLineage }
+    })
     runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
       const result =
         method === 'worktree.lineageList'
@@ -151,7 +147,6 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreeLineageById).toEqual({
       [freshLineage.worktreeId]: freshLineage
     })
-    expect(store.getState().sortEpoch).toBe(7)
   })
 
   it('keeps remote lineage map identity when a cloned payload is unchanged', async () => {
@@ -189,8 +184,7 @@ describe('fetchWorktrees', () => {
       worktreeLineageById: { [lineage.worktreeId]: lineage },
       workspaceLineageByChildKey: {
         [workspaceLineage.childWorkspaceKey]: workspaceLineage
-      },
-      sortEpoch: 7
+      }
     } as Partial<AppState>)
     runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
       const result =
@@ -505,11 +499,10 @@ describe('fetchWorktrees', () => {
     })
     const staleLineage = makeLineage({ worktreeId: refreshed.id })
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
       worktreesByRepo: {},
-      worktreeLineageById: { [staleLineage.worktreeId]: staleLineage },
-      sortEpoch: 7
-    } as Partial<AppState>)
+      worktreeLineageById: { [staleLineage.worktreeId]: staleLineage }
+    })
     runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
       if (method === 'worktree.lineageList') {
         return Promise.reject(new Error('lineage timeout'))
@@ -535,6 +528,5 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreeLineageById).toEqual({
       [staleLineage.worktreeId]: staleLineage
     })
-    expect(store.getState().sortEpoch).toBe(8)
   })
 })

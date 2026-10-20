@@ -46,8 +46,7 @@ describe('fetchWorktrees', () => {
     mockApi.worktrees.listDetected.mockResolvedValueOnce(detected)
     store.setState({
       worktreesByRepo: { repo1: [existing] },
-      detectedWorktreesByRepo: { repo1: detected },
-      sortEpoch: 7
+      detectedWorktreesByRepo: { repo1: detected }
     } as Partial<AppState>)
 
     const unsubscribe = store.subscribe(subscriber)
@@ -55,7 +54,6 @@ describe('fetchWorktrees', () => {
     unsubscribe()
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
-    expect(store.getState().sortEpoch).toBe(7)
     expect(subscriber).not.toHaveBeenCalled()
     expect(result).toBe(true)
   })
@@ -88,8 +86,7 @@ describe('fetchWorktrees', () => {
     const detected = makeDetectedResult('repo1', [first, second])
     store.setState({
       worktreesByRepo: { repo1: [first, second] },
-      detectedWorktreesByRepo: { repo1: detected },
-      sortEpoch: 7
+      detectedWorktreesByRepo: { repo1: detected }
     } as Partial<AppState>)
     mockApi.worktrees.listDetected.mockResolvedValueOnce(
       structuredClone(makeDetectedResult('repo1', [first, second]))
@@ -106,7 +103,6 @@ describe('fetchWorktrees', () => {
     expect(after.worktreesByRepo.repo1).toBe(before.worktreesByRepo.repo1)
     expect(after.detectedWorktreesByRepo).toBe(before.detectedWorktreesByRepo)
     expect(after.detectedWorktreesByRepo.repo1).toBe(before.detectedWorktreesByRepo.repo1)
-    expect(after.sortEpoch).toBe(7)
     expect(subscriber).not.toHaveBeenCalled()
   })
 
@@ -126,8 +122,7 @@ describe('fetchWorktrees', () => {
     const detected = makeDetectedResult('repo1', [changed, stable])
     store.setState({
       worktreesByRepo: { repo1: [changed, stable] },
-      detectedWorktreesByRepo: { repo1: detected },
-      sortEpoch: 7
+      detectedWorktreesByRepo: { repo1: detected }
     } as Partial<AppState>)
     mockApi.worktrees.listDetected.mockResolvedValueOnce(
       makeDetectedResult('repo1', [
@@ -143,10 +138,9 @@ describe('fetchWorktrees', () => {
     expect(after.worktreesByRepo.repo1[0].pushTarget?.remoteCreated).toBe(true)
     expect(after.worktreesByRepo.repo1[1]).toBe(stable)
     expect(after.detectedWorktreesByRepo.repo1.worktrees[1]).toBe(detected.worktrees[1])
-    expect(after.sortEpoch).toBe(8)
   })
 
-  it('updates the repo entry and bumps sortEpoch when git reports a branch change', async () => {
+  it('updates the repo entry when git reports a branch change', async () => {
     const store = createTestStore()
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
@@ -165,12 +159,11 @@ describe('fetchWorktrees', () => {
     })
 
     mockApi.worktrees.list.mockResolvedValue([refreshed])
-    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([refreshed])
-    expect(store.getState().sortEpoch).toBe(8)
   })
 
   it('clears branch-scoped linked reviews when the listing observes a branch switch', async () => {
@@ -547,12 +540,11 @@ describe('fetchWorktrees', () => {
     })
 
     mockApi.worktrees.list.mockResolvedValue([refreshed])
-    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([refreshed])
-    expect(store.getState().sortEpoch).toBe(8)
   })
 
   it('updates the repo entry when only prior worktree id aliases change', async () => {
@@ -570,12 +562,11 @@ describe('fetchWorktrees', () => {
     })
 
     mockApi.worktrees.list.mockResolvedValue([refreshed])
-    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([refreshed])
-    expect(store.getState().sortEpoch).toBe(8)
   })
 
   it('keeps the last known worktree list when a refresh transiently returns empty', async () => {
@@ -588,12 +579,11 @@ describe('fetchWorktrees', () => {
         source: 'metadata-fallback'
       })
     )
-    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     const result = await store.getState().fetchWorktrees('repo1')
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
-    expect(store.getState().sortEpoch).toBe(7)
     expect(result).toBe(false)
   })
 
@@ -607,12 +597,11 @@ describe('fetchWorktrees', () => {
         source: 'metadata-fallback'
       })
     )
-    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     const result = await store.getState().fetchWorktrees('repo1')
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
-    expect(store.getState().sortEpoch).toBe(7)
     expect(result).toBe(false)
   })
 
@@ -635,13 +624,12 @@ describe('fetchWorktrees', () => {
         source: 'metadata-fallback'
       })
     )
-    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     const result = await store.getState().fetchWorktrees('repo1', { requireAuthoritative: true })
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
     expect(store.getState().detectedWorktreesByRepo.repo1).toBeUndefined()
-    expect(store.getState().sortEpoch).toBe(7)
     expect(result).toBe(false)
   })
 })

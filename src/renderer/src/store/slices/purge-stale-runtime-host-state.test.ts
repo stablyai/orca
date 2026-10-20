@@ -4,8 +4,8 @@
  * Removing a runtime identity must retire the repos/setups/rows/detected rows and
  * cascaded tab state it owned, while leaving local, ssh, and — the P1 regression —
  * a *never-saved* runtime-stamped LOCAL repo (a serving instance's own row)
- * untouched. The action is scoped to the removal diff, so it must no-op (no
- * sortEpoch bump) for an empty diff or an env that matches nothing.
+ * untouched. The action is scoped to the removal diff, so it must no-op for an
+ * empty diff or an env that matches nothing.
  */
 import { describe, it, expect, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
@@ -114,7 +114,6 @@ describe('purgeStaleRuntimeHostState', () => {
       },
       tabsByWorktree: { [WT_A]: [makeTab({ id: TAB_A, worktreeId: WT_A })] }
     })
-    const epochBefore = store.getState().sortEpoch
 
     store.getState().purgeStaleRuntimeHostState(['env-a'])
 
@@ -128,8 +127,6 @@ describe('purgeStaleRuntimeHostState', () => {
     // Local repo AND the never-saved runtime-stamped local repo BOTH survive.
     expect(s.worktreesByRepo.repo1).toHaveLength(1)
     expect(s.worktreesByRepo.repoServing).toHaveLength(1)
-    // sortEpoch bumped because rows changed.
-    expect(s.sortEpoch).toBe(epochBefore + 1)
   })
 
   it('keeps a still-saved sibling runtime env when another runtime env is removed', () => {
@@ -169,7 +166,7 @@ describe('purgeStaleRuntimeHostState', () => {
     expect(s.worktreesByRepo.repoA).toEqual([])
   })
 
-  it('is a no-op (no sortEpoch bump) for an empty removed set and for a non-matching env', () => {
+  it('is a no-op for an empty removed set and for a non-matching env', () => {
     const store = createTestStore()
     seedStore(store, {
       repos: [TEST_REPO],
@@ -179,7 +176,6 @@ describe('purgeStaleRuntimeHostState', () => {
       }
     })
     const before = store.getState()
-    const epochBefore = before.sortEpoch
     const worktreesRef = before.worktreesByRepo
     const reposRef = before.repos
     const setupsRef = before.projectHostSetups
@@ -188,7 +184,6 @@ describe('purgeStaleRuntimeHostState', () => {
     store.getState().purgeStaleRuntimeHostState(['env-does-not-exist'])
 
     const s = store.getState()
-    expect(s.sortEpoch).toBe(epochBefore)
     // Nothing stale => the reducer returns state untouched (same references).
     expect(s.worktreesByRepo).toBe(worktreesRef)
     expect(s.repos).toBe(reposRef)

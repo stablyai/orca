@@ -230,7 +230,6 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
           { updatedAt: 1_000, stateStartedAt: 1_000 }
         )
       const firstEpoch = store.getState().agentStatusEpoch
-      const firstSortEpoch = store.getState().sortEpoch
 
       store
         .getState()
@@ -250,7 +249,6 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
       // for state/freshness/final-done changes that can affect aggregate
       // dashboard/sidebar calculations.
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
-      expect(store.getState().sortEpoch).toBe(firstSortEpoch)
 
       store
         .getState()
@@ -259,7 +257,6 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
           stateStartedAt: 3_000
         })
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
-      expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
     })
 
     it('bumps aggregate epochs when a same-state entry gains worktree attribution', () => {
@@ -270,7 +267,6 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
         stateStartedAt: 1_000
       })
       const firstEpoch = store.getState().agentStatusEpoch
-      const firstSortEpoch = store.getState().sortEpoch
 
       store
         .getState()
@@ -283,7 +279,6 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
         )
 
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
-      expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
     })
 
     it('bumps the status epoch when same-state working enters monitoring', () => {
@@ -294,7 +289,6 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
         stateStartedAt: 1_000
       })
       const firstEpoch = store.getState().agentStatusEpoch
-      const firstSortEpoch = store.getState().sortEpoch
 
       store
         .getState()
@@ -307,10 +301,9 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
 
       expect(store.getState().agentStatusByPaneKey['tab-1:1'].workingMode).toBe('monitoring')
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
-      expect(store.getState().sortEpoch).toBe(firstSortEpoch)
     })
 
-    it('bumps the status epoch, not sort epoch, for same-state done updates', () => {
+    it('bumps the status epoch for same-state done updates', () => {
       vi.useFakeTimers()
       const store = createTestStore()
       store
@@ -320,7 +313,6 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
           stateStartedAt: 1_000
         })
       const firstEpoch = store.getState().agentStatusEpoch
-      const firstSortEpoch = store.getState().sortEpoch
 
       store.getState().setAgentStatus(
         'tab-1:1',
@@ -337,33 +329,8 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
       expect(store.getState().agentStatusByPaneKey['tab-1:1'].lastAssistantMessage).toBe(
         'final answer'
       )
-      // Why: retained rows need the final done snapshot, but done->done does not
-      // change smart-sort class, so only the status/retention epoch should tick.
+      // Why: retained rows need the final done snapshot.
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
-      expect(store.getState().sortEpoch).toBe(firstSortEpoch)
-    })
-
-    it('bumps sort epoch when a same-state done update changes completion eligibility', () => {
-      vi.useFakeTimers()
-      const store = createTestStore()
-      store
-        .getState()
-        .setAgentStatus(
-          'tab-1:1',
-          { state: 'done', prompt: 'p1', agentType: 'claude', interrupted: true },
-          'claude',
-          { updatedAt: 1_000, stateStartedAt: 1_000 }
-        )
-      const firstSortEpoch = store.getState().sortEpoch
-
-      store
-        .getState()
-        .setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1', agentType: 'claude' }, 'claude', {
-          updatedAt: 2_000,
-          stateStartedAt: 1_000
-        })
-
-      expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
     })
 
     it('bumps global epochs when a stale same-state entry refreshes', () => {
@@ -378,7 +345,6 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
           { updatedAt: 1_000, stateStartedAt: 1_000 }
         )
       const firstEpoch = store.getState().agentStatusEpoch
-      const firstSortEpoch = store.getState().sortEpoch
 
       store
         .getState()
@@ -394,13 +360,11 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
 
       const refreshedEntry = store.getState().agentStatusByPaneKey['tab-1:1']
       expect(refreshedEntry.prompt).toBe('fresh again')
-      // Why: a stale same-state refresh can promote the worktree back into a
-      // smart-sort attention class, so both freshness and sort epochs must tick.
+      // Why: a stale same-state refresh changes freshness.
       expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
-      expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
     })
 
-    it('bumps sort epoch when Command Code starts a new prompt while still working', () => {
+    it('takes a Command Code prompt started while still working', () => {
       vi.useFakeTimers()
       const store = createTestStore()
       store
@@ -411,7 +375,6 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
           'command-code',
           { updatedAt: 1_000, stateStartedAt: 1_000 }
         )
-      const firstSortEpoch = store.getState().sortEpoch
 
       store
         .getState()
@@ -425,10 +388,9 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
       const entry = store.getState().agentStatusByPaneKey['tab-1:1']
       expect(entry.prompt).toBe('second task')
       expect(entry.stateStartedAt).toBe(2_000)
-      expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
     })
 
-    it('bumps sort epoch when Command Code reruns the same prompt with a new turn key', () => {
+    it('takes a Command Code rerun of the same prompt with a new turn key', () => {
       vi.useFakeTimers()
       const store = createTestStore()
       store.getState().setAgentStatus(
@@ -442,7 +404,6 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
         'command-code',
         { updatedAt: 1_000, stateStartedAt: 1_000 }
       )
-      const firstSortEpoch = store.getState().sortEpoch
 
       store.getState().setAgentStatus(
         'tab-1:1',
@@ -460,10 +421,9 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
       expect(entry.prompt).toBe('same task')
       expect(entry.promptInteractionKey).toBe('command-code-transcript-b')
       expect(entry.stateStartedAt).toBe(2_000)
-      expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
     })
 
-    it('bumps sort epoch when main advances Command Code stateStartedAt without a renderer-visible key change', () => {
+    it('takes main advancing Command Code stateStartedAt without a renderer-visible key change', () => {
       vi.useFakeTimers()
       const store = createTestStore()
       // First turn carries no interaction key (e.g. transcript read failed), so
@@ -476,11 +436,9 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
           'command-code',
           { updatedAt: 1_000, stateStartedAt: 1_000 }
         )
-      const firstSortEpoch = store.getState().sortEpoch
 
       // Main detected a new turn via interaction-key change and reset stateStartedAt,
       // but the renderer can't see the key change (no key, identical prompt text).
-      // The authoritative stateStartedAt advance must still re-sort.
       store
         .getState()
         .setAgentStatus(
@@ -492,7 +450,6 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
 
       const entry = store.getState().agentStatusByPaneKey['tab-1:1']
       expect(entry.stateStartedAt).toBe(2_000)
-      expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
     })
   })
 }

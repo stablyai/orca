@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
 import {
-  buildWorktreeComparator,
+  buildWorktreeStampComparator,
   buildWorktreeSortLabels,
   type SortBy
 } from '../../../../shared/sidebar-list/smart-sort'
@@ -304,9 +304,7 @@ describe('the shared comparator matches the sidebar comparator it replaced', () 
   for (const sortBy of ['name', 'repo', 'manual'] as const) {
     it(`orders rows the same way by ${sortBy}`, () => {
       const labels = buildWorktreeSortLabels(sortRows)
-      const actual = [...sortRows].sort(
-        buildWorktreeComparator(sortBy, repoMap, 60_000, new Map(), labels)
-      )
+      const actual = [...sortRows].sort(buildWorktreeStampComparator(sortBy, repoMap, labels))
       const expected = [...sortRows].sort(previousDesktopComparator(sortBy))
       expect(actual.map((w) => w.id)).toEqual(expected.map((w) => w.id))
     })

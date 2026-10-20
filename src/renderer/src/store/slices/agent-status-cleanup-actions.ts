@@ -28,8 +28,7 @@ export function createAgentStatusCleanupActions(
             ...s.migrationUnsupportedByPtyId,
             [entry.ptyId]: entry
           },
-          agentStatusEpoch: s.agentStatusEpoch + 1,
-          sortEpoch: s.sortEpoch + 1
+          agentStatusEpoch: s.agentStatusEpoch + 1
         }
       })
     },
@@ -43,8 +42,7 @@ export function createAgentStatusCleanupActions(
         delete next[ptyId]
         return {
           migrationUnsupportedByPtyId: next,
-          agentStatusEpoch: s.agentStatusEpoch + 1,
-          sortEpoch: s.sortEpoch + 1
+          agentStatusEpoch: s.agentStatusEpoch + 1
         }
       })
     },
@@ -97,8 +95,7 @@ export function createAgentStatusCleanupActions(
           ...(nextManualUnread !== s.manuallyUnreadTurnsByPaneKey
             ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
             : {}),
-          agentStatusEpoch: s.agentStatusEpoch + 1,
-          sortEpoch: s.sortEpoch + 1
+          agentStatusEpoch: s.agentStatusEpoch + 1
         }
       })
       freshness.scheduleDeferred()
@@ -161,8 +158,7 @@ export function createAgentStatusCleanupActions(
           ...(nextManualUnread !== s.manuallyUnreadTurnsByPaneKey
             ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
             : {}),
-          agentStatusEpoch: s.agentStatusEpoch + 1,
-          sortEpoch: s.sortEpoch + 1
+          agentStatusEpoch: s.agentStatusEpoch + 1
         }
       })
       freshness.scheduleDeferred()
@@ -200,8 +196,7 @@ export function createAgentStatusCleanupActions(
           ...(next
             ? {
                 agentStatusByPaneKey: next,
-                agentStatusEpoch: s.agentStatusEpoch + 1,
-                sortEpoch: s.sortEpoch + 1
+                agentStatusEpoch: s.agentStatusEpoch + 1
               }
             : {}),
           transientClearedAgentStatusConnectionIds: alreadyBlocked

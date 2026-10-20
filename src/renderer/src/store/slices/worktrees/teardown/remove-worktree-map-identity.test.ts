@@ -15,7 +15,6 @@ function buildState(): AppState {
     everActivatedWorktreeIds: new Set<string>(),
     lastVisitedAtByWorktreeId: {},
     deleteStateByWorktreeId: {},
-    sortEpoch: 0,
     // Worktree-keyed maps that hold nothing for the removed worktree.
     gitStatusByWorktree: { [SURVIVING_ID]: 'clean' },
     gitStatusHugeByWorktree: {},

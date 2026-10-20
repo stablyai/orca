@@ -14,7 +14,6 @@ import { translate } from '@/i18n/i18n'
 import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
 import { displayNameUpdatePinsLabel } from '../../../../../../shared/worktree/display-name-provenance'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { getHostedReviewCacheKey } from '../../hosted-review-cache-identity'
 import { getGitHubPRCacheKeyCandidates } from '../../../../../../shared/github/github-cache-key'
@@ -159,7 +158,7 @@ export function createUpdateWorktreeMeta(
       : shouldClearStaleHostedReviewPushTarget
         ? { ...normalizedUpdates, ...displayNameProvenance, pushTarget: undefined }
         : { ...normalizedUpdates, ...displayNameProvenance }
-    const renameCleared =
+    const enriched =
       'displayName' in targetEnriched
         ? {
             ...targetEnriched,
@@ -167,11 +166,6 @@ export function createUpdateWorktreeMeta(
             firstAgentMessageRenameError: null
           }
         : targetEnriched
-    // Switch point: a comment edit is not a Recent event once the host owns the stamps.
-    const enriched =
-      'comment' in renameCleared && !ORCA_SIDEBAR_INPUTS_IS_MAIN
-        ? { ...renameCleared, lastActivityAt: Date.now() }
-        : renameCleared
 
     let didApply = false
     set((s) => {
@@ -239,9 +233,7 @@ export function createUpdateWorktreeMeta(
         : prCache
 
       return {
-        ...(nextWorktrees !== s.worktreesByRepo
-          ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
-          : {}),
+        ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
         ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
           ? { detectedWorktreesByRepo: nextDetectedWorktrees }
           : {}),

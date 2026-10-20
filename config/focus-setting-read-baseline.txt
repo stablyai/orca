@@ -309,8 +309,6 @@
 1 src/renderer/src/lib/worktree-jump-navigation.ts
 1 src/renderer/src/lib/worktree-row-open-in-owner.ts # reads focus through resolveOwnerWithLegacyFallback, newly counted (round 3 F2); F8 nets it down
 3 src/renderer/src/lib/worktree-runtime-owner.ts # typed owner resolver and the legacy-fallback adapter the folds moved to (round 3 F0); F8 deleted the deprecated pair
-1 src/renderer/src/lib/worktree-sort-order-host-split.ts
-1 src/renderer/src/lib/worktree-sort-order-persistence.ts # its split helper calls resolveOwnerWithLegacyFallback directly (round 3 F4); F8 nets it down
 17 src/renderer/src/runtime/runtime-jira-client.ts
 2 src/renderer/src/runtime/runtime-jira-summary-client.ts
 1 src/renderer/src/runtime/runtime-jira-target.ts

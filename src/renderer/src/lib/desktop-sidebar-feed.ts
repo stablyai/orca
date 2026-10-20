@@ -113,7 +113,7 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-/** Null until main's first install lands. Only an ORCA_SIDEBAR_INPUTS=main window reads this. */
+/** Null until main's first install lands. */
 export function useDesktopSidebarFeed(): DesktopSidebarFeed | null {
   useEffect(start, [])
   return useSyncExternalStore(subscribe, () => feed)

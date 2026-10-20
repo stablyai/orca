@@ -17,12 +17,9 @@ export type GeneratedTabTitleUpdate = {
   options?: { replaceExistingGeneratedTitle?: boolean }
 }
 
-type TitleState = Pick<
-  AppState,
-  'activeWorktreeId' | 'settings' | 'sortEpoch' | 'tabsByWorktree' | 'unifiedTabsByWorktree'
->
+type TitleState = Pick<AppState, 'settings' | 'tabsByWorktree' | 'unifiedTabsByWorktree'>
 
-type TitlePatch = Partial<Pick<AppState, 'sortEpoch' | 'tabsByWorktree' | 'unifiedTabsByWorktree'>>
+type TitlePatch = Partial<Pick<AppState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>>
 
 type TitleUpdateResult = {
   patch: TitlePatch | null
@@ -123,11 +120,7 @@ function updateStageUnifiedLabel(
   stage.unifiedTabs[index] = { ...stage.unifiedTabs[index], [key]: value }
 }
 
-function finishTitleStages(
-  state: TitleState,
-  stages: Map<string, OwnerStage>,
-  sortEpochIncrement = 0
-): TitleUpdateResult {
+function finishTitleStages(state: TitleState, stages: Map<string, OwnerStage>): TitleUpdateResult {
   const tabsChanged = [...stages.values()].some((stage) => stage.tabsChanged)
   const unifiedTabsChanged = [...stages.values()].some((stage) => stage.unifiedTabsChanged)
   if (!tabsChanged && !unifiedTabsChanged) {
@@ -148,9 +141,6 @@ function finishTitleStages(
       patch.unifiedTabsByWorktree![worktreeId] = stage.unifiedTabs
     }
   }
-  if (sortEpochIncrement > 0) {
-    patch.sortEpoch = state.sortEpoch + sortEpochIncrement
-  }
   if (patch.tabsByWorktree) {
     adoptTerminalTabOwnerMetadataOnlyBuckets(
       state.tabsByWorktree,
@@ -167,7 +157,6 @@ export function applyTerminalTabTitleUpdates(
 ): TitleUpdateResult {
   const ownerByTabId = getTerminalTabOwners(state.tabsByWorktree)
   const stages = new Map<string, OwnerStage>()
-  let sortEpochIncrement = 0
   for (const { tabId, title } of updates) {
     const ownerWorktreeId = ownerByTabId.get(tabId)
     if (!ownerWorktreeId) {
@@ -196,11 +185,8 @@ export function applyTerminalTabTitleUpdates(
         (/^Terminal \d+$/.test(tab.title) ? tab.title : undefined) ??
         (/^Terminal \d+$/.test(nextTitle) ? nextTitle : undefined)
     }))
-    if (ownerWorktreeId !== state.activeWorktreeId) {
-      sortEpochIncrement += 1
-    }
   }
-  return finishTitleStages(state, stages, sortEpochIncrement)
+  return finishTitleStages(state, stages)
 }
 
 export function applyGeneratedTabTitleUpdates(

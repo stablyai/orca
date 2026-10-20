@@ -268,13 +268,11 @@ describe('setActiveWorktree', () => {
     store.getState().updateTabTitle(first.id, 'Claude Code')
     const tabsByWorktree = store.getState().tabsByWorktree
     const unifiedTabsByWorktree = store.getState().unifiedTabsByWorktree
-    const sortEpoch = store.getState().sortEpoch
 
     store.getState().updateTabTitle(first.id, 'Claude Code')
 
     expect(store.getState().tabsByWorktree).toBe(tabsByWorktree)
     expect(store.getState().unifiedTabsByWorktree).toBe(unifiedTabsByWorktree)
-    expect(store.getState().sortEpoch).toBe(sortEpoch)
   })
 
   it('repairs a stale unified tab label when a live title repeats', () => {

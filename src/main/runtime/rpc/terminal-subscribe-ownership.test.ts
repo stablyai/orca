@@ -6,6 +6,7 @@ import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
+import { createSidebarFactsDouble } from './sidebar-facts-double.test-fixture'
 
 const SUBSCRIPTION_ID = 'terminal-1:phone-1'
 
@@ -18,6 +19,7 @@ function stubRuntime(
 ): OrcaRuntimeService {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   return {
+    sidebarFacts: createSidebarFactsDouble(),
     getRuntimeId: () => 'test-runtime',
     registerRemoteTerminalViewSubscriber: () => () => {},
     requestRendererTerminalTabMount: () => false,

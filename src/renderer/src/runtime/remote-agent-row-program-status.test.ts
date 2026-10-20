@@ -116,7 +116,7 @@ describe('mirrored program-status facet on a client-owned pane', () => {
     resetRendererOwnedAgentStatusPanesForTests()
   })
 
-  it("takes the host's facet without bumping the agent-status or sort epochs", () => {
+  it("takes the host's facet without bumping the agent-status epoch", () => {
     const store = seedClientOwnedPane()
     const before = store.getState()
     expect(before.agentStatusByPaneKey[PANE_KEY]?.programStatus).toBeUndefined()
@@ -126,7 +126,6 @@ describe('mirrored program-status facet on a client-owned pane', () => {
     const after = store.getState()
     expect(after.agentStatusByPaneKey[PANE_KEY]?.programStatus).toEqual(FACET)
     expect(after.agentStatusEpoch).toBe(before.agentStatusEpoch)
-    expect(after.sortEpoch).toBe(before.sortEpoch)
   })
 
   it('drops the facet key once the host clears it', () => {

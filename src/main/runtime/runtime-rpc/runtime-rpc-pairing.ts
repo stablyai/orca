@@ -14,7 +14,6 @@ import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
 import { MobileDesktopRelay } from '../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileDesktopRelayHosts } from '../mobile-desktop-relay/mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from '../mobile-desktop-relay/mobile-relay-host-catalog'
-import { OnDemandServerWorktreeRows } from '../mobile-desktop-relay/on-demand-server-worktree-rows'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../shared/delegated-mobile-device-contract'
 import { allocateTerminalSubscriptionStreamId } from '../rpc/methods/terminal/terminal-subscription-stream-id'
@@ -104,11 +103,11 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       : null
     const { pairedServerRows } = this.runtime
     this.detachPairedServerRows?.()
-    this.detachPairedServerRows = hosts && pairedServerRows ? pairedServerRows.attach(hosts) : null
+    this.detachPairedServerRows = hosts ? pairedServerRows.attach(hosts) : null
     this.mobileRelayHostCatalog = hosts
       ? new MobileRelayHostCatalog({
           hosts,
-          serverRows: pairedServerRows ?? new OnDemandServerWorktreeRows(hosts),
+          serverRows: pairedServerRows,
           hostLabelOverrides: () => getHostDisplayLabelOverrides(this.runtime.getClientSettings()),
           getWorkspaceSession: (hostId) => this.runtime.getWorkspaceSessionForHost(hostId)
         })

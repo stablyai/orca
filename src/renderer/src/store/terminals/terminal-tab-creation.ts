@@ -135,7 +135,7 @@ export function createTerminalTabCreationActions(
           ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
           ...(options?.agentLaunchPane ? { agentLaunchPane: options.agentLaunchPane } : {}),
-          // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
+          // Why: mark click-caused (not work-caused) spawns for the activation-driven PTY lifecycle.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
         }
         // Switch point: a tab main already made is drawn with main's creation facts.

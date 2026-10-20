@@ -20,14 +20,8 @@ import {
   openPhoneFeedList,
   type ListOutline
 } from './helpers/phone-feed-list'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 
 skipUnlessManagedDockerHost()
-test.skip(
-  !SIDEBAR_INPUTS_BUILD,
-  'the phone reads the feed only in an ORCA_SIDEBAR_INPUTS=main build'
-)
-
 type PhoneList = Awaited<ReturnType<typeof openPhoneFeedList>>
 
 /** Both sides inside one poll: either may still be catching up with the last change. */

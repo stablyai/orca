@@ -152,7 +152,6 @@ describe('useRuntimeSessionMirrorEnvironmentKeys', () => {
     expect(initialCallCount).toBe(1)
     act(() => {
       useAppStore.setState({ agentStatusEpoch: useAppStore.getState().agentStatusEpoch + 1 })
-      useAppStore.setState({ sortEpoch: useAppStore.getState().sortEpoch + 1 })
     })
     hook.rerender()
 

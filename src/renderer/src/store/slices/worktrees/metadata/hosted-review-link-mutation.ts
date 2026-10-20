@@ -263,9 +263,7 @@ export function applyHostedReviewLinkClear(
       return s
     }
     return {
-      ...(nextWorktrees !== s.worktreesByRepo
-        ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
-        : {}),
+      ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
       ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
         ? { detectedWorktreesByRepo: nextDetectedWorktrees }
         : {})

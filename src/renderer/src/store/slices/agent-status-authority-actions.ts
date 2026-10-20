@@ -120,8 +120,7 @@ export function createAgentStatusAuthorityActions(
                 ? true
                 : retirementId
             ),
-            agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-            sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
+            agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch
           }
         })
       )
@@ -200,9 +199,7 @@ export function createAgentStatusAuthorityActions(
         })),
         // Why: retention/sidebar consumers gate on the epoch; a moved live row is a
         // pane-key change they must observe, not a silent remap.
-        ...(from in s.agentStatusByPaneKey
-          ? { agentStatusEpoch: s.agentStatusEpoch + 1, sortEpoch: s.sortEpoch + 1 }
-          : {}),
+        ...(from in s.agentStatusByPaneKey ? { agentStatusEpoch: s.agentStatusEpoch + 1 } : {}),
         runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
           s.runtimeAgentOrchestrationByPaneKey,
           from,

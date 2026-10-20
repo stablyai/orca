@@ -1,10 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { withWorkspaceSpaceVisitActivity } from './workspace-space-visit-activity'
 import { sortWorkspaceSpaceRows } from './workspace-space-presentation'
-
-vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
 function row(name: string, lastActivityAt: number): WorkspaceSpaceWorktree {
   return {
@@ -33,7 +31,7 @@ function row(name: string, lastActivityAt: number): WorkspaceSpaceWorktree {
   }
 }
 
-describe('Workspace Space "Last active" with the switch on', () => {
+describe('Workspace Space "Last active"', () => {
   it('shows and sorts a plain-shell workspace by its visit', () => {
     const shells = row('shells', 10)
     const agent = row('agent', 500)

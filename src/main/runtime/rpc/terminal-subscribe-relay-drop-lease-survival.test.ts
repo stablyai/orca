@@ -8,6 +8,7 @@ import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
+import { runtimeDoubleWithSidebarFacts } from './sidebar-facts-double.test-fixture'
 
 const PTY_ID = 'pty-1'
 
@@ -55,7 +56,7 @@ function createRuntime(real: OrcaRuntimeService): {
   runtime: OrcaRuntimeService
 } {
   const registry = createSubscriptionRegistryDouble()
-  const runtime = {
+  const runtime = runtimeDoubleWithSidebarFacts({
     getRuntimeId: () => 'test-runtime',
     requestRendererTerminalTabMount: () => false,
     resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: PTY_ID }),
@@ -80,7 +81,7 @@ function createRuntime(real: OrcaRuntimeService): {
     // The one call under test: the real exit predicate, not a double's opinion of it.
     subscribeToPtyExit: (ptyId: string, listener: () => void) =>
       real.subscribeToPtyExit(ptyId, listener)
-  } as unknown as OrcaRuntimeService
+  })
   return { registry, runtime }
 }
 

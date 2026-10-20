@@ -221,8 +221,7 @@ export function applyWorktreeLineageUpdate(
         result.lineage,
         s.workspaceLineageByChildKey
       ),
-      worktreesByRepo,
-      sortEpoch: s.sortEpoch + 1
+      worktreesByRepo
     }
   })
 }

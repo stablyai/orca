@@ -1,7 +1,6 @@
 import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
-import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -10,6 +9,7 @@ import {
   decodeTerminalStreamFrame
 } from '../../../shared/terminal-stream-protocol'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
+import { runtimeDoubleWithSidebarFacts } from './sidebar-facts-double.test-fixture'
 
 const makeRequest = (params: unknown): RpcRequest => ({
   id: 'req-1',
@@ -30,7 +30,7 @@ describe('terminal.subscribe reconnect rebind (STA-4510)', () => {
     const dataListeners: ((data: string, meta?: { seq?: number; rawLength?: number }) => void)[] =
       []
 
-    const runtime = {
+    const runtime = runtimeDoubleWithSidebarFacts({
       getRuntimeId: () => 'test-runtime',
       subscribeToPtyExit: vi.fn(() => vi.fn()),
       registerRemoteTerminalViewSubscriber: () => () => {},
@@ -64,7 +64,7 @@ describe('terminal.subscribe reconnect rebind (STA-4510)', () => {
             })
           })
       )
-    } as unknown as OrcaRuntimeService
+    })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     // --- connection A: the original mobile socket -------------------------

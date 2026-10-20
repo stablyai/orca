@@ -1,12 +1,7 @@
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { publishWorkspaceViewChanges } from './runtime-workspace-view-change-events'
-import {
-  OrcaRuntimeWithSidebarTemporal,
-  sidebarFactsRuntime
-} from './sidebar-inputs/orca-runtime-sidebar-temporal'
-import { OrcaRuntimeWithAgentTransitions } from './orca-runtime-agent-transitions'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import { OrcaRuntimeWithSidebarTemporal } from './sidebar-inputs/orca-runtime-sidebar-temporal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type {
@@ -49,75 +44,61 @@ import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { CollapseWriteOrder } from './workspace-view-collapse-writes'
 import { SidebarInputsFeed } from './sidebar-inputs/sidebar-inputs-feed'
 import { sidebarInputsFeedDomains } from './sidebar-inputs/sidebar-inputs-feed-domains'
-import { requireSwitchedOn } from './sidebar-inputs/require-switched-on'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 
-// Switch point: a window-fed build keeps no sidebar facts layer.
-const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
-  ? OrcaRuntimeWithSidebarTemporal
-  : OrcaRuntimeWithAgentTransitions
-
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
-class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
-  /** This runtime as its sidebar facts layer; null unless built with ORCA_SIDEBAR_INPUTS=main. */
-  get sidebarFacts() {
-    return sidebarFactsRuntime(this)
+class OrcaRuntimeService extends OrcaRuntimeWithSidebarTemporal {
+  /** This runtime as its sidebar facts layer. */
+  get sidebarFacts(): OrcaRuntimeWithSidebarTemporal {
+    return this
   }
-  // Switch point. Idle until relay hosts attach; the fallback refresh runs while a window shows the sidebar or a phone reads the feed.
-  readonly pairedServerRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? new PairedServerRowsProducer({
-        hasDemand: () =>
-          this.sidebarInputsFeed?.subscribed === true ||
-          (this.authoritativeWindowId !== null &&
-            this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
-            this.store?.getUI?.().sidebarOpen !== false),
-        hostLabelOverrides: () => getHostDisplayLabelOverrides(this.getClientSettings())
-      })
-    : null
-  // Switch point: the phone's icon source.
-  readonly repoIconDataUrls = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? new RepoIconDataUrls({
-        repos: () => this.store?.getRepos() ?? [],
-        // Why not the shared desktop client: its net.fetch rejects every manual redirect.
-        fetch: (url, init) => {
-          const manualRedirectFetch = getRuntimeDesktopSurface().fetchRepoIcon
-          return manualRedirectFetch
-            ? manualRedirectFetch(url, init)
-            : getMainHttpClient().fetch(url, init)
-        },
-        encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
-      })
-    : null
-  // Switch point: the per-writer ordering behind ui.setCollapsed.
-  readonly collapseWriteOrder = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new CollapseWriteOrder() : null
-  // Switch point: this host's workspace rows, from the listing worktree.ps reads.
-  readonly workspaceRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? new WorkspaceRowsProducer({
-        store: this.store,
-        // Merged fresh (git scans keep their own cache): the window's metadata writes emit no
-        // client event, so the shared listing may predate them.
-        listVisibleWorktrees: async () =>
-          this.visibleResolvedWorktreeSnapshot(await this.computeResolvedWorktrees()),
+  // Idle until relay hosts attach; the fallback refresh runs while a window shows the sidebar or a phone reads the feed.
+  readonly pairedServerRows = new PairedServerRowsProducer({
+    hasDemand: () =>
+      this.sidebarInputsFeed.subscribed ||
+      (this.authoritativeWindowId !== null &&
+        this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+        this.store?.getUI?.().sidebarOpen !== false),
+    hostLabelOverrides: () => getHostDisplayLabelOverrides(this.getClientSettings())
+  })
+  // The phone's icon source.
+  readonly repoIconDataUrls = new RepoIconDataUrls({
+    repos: () => this.store?.getRepos() ?? [],
+    // Why not the shared desktop client: its net.fetch rejects every manual redirect.
+    fetch: (url, init) => {
+      const manualRedirectFetch = getRuntimeDesktopSurface().fetchRepoIcon
+      return manualRedirectFetch
+        ? manualRedirectFetch(url, init)
+        : getMainHttpClient().fetch(url, init)
+    },
+    encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
+  })
+  // The per-writer ordering behind ui.setCollapsed.
+  readonly collapseWriteOrder = new CollapseWriteOrder()
+  // This host's workspace rows, from the listing worktree.ps reads.
+  readonly workspaceRows = new WorkspaceRowsProducer({
+    store: this.store,
+    // Merged fresh (git scans keep their own cache): the window's metadata writes emit no
+    // client event, so the shared listing may predate them.
+    listVisibleWorktrees: async () =>
+      this.visibleResolvedWorktreeSnapshot(await this.computeResolvedWorktrees()),
+    onClientEvent: (listener, options) => this.onClientEvent(listener, options)
+  })
+  // The phone's feed of the producers above; idle until this host's own phone reads.
+  readonly sidebarInputsFeed: SidebarInputsFeed = new SidebarInputsFeed(
+    () =>
+      sidebarInputsFeedDomains({
+        facts: this.sidebarFacts,
+        pairedServerRows: this.pairedServerRows,
+        workspaceCreations: this.workspaceCreations,
+        workspaceRows: this.workspaceRows,
+        repoIcons: this.repoIconDataUrls,
+        store: () => this.store,
         onClientEvent: (listener, options) => this.onClientEvent(listener, options)
-      })
-    : null
-  // Switch point: the phone's feed of the producers above; idle until this host's own phone reads.
-  readonly sidebarInputsFeed = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? new SidebarInputsFeed(
-        () =>
-          sidebarInputsFeedDomains({
-            facts: requireSwitchedOn(this.sidebarFacts),
-            pairedServerRows: requireSwitchedOn(this.pairedServerRows),
-            workspaceCreations: requireSwitchedOn(this.workspaceCreations),
-            workspaceRows: requireSwitchedOn(this.workspaceRows),
-            repoIcons: requireSwitchedOn(this.repoIconDataUrls),
-            store: () => this.store,
-            onClientEvent: (listener, options) => this.onClientEvent(listener, options)
-          }),
-        (event) => this.emitClientEvent(event)
-      )
-    : null
+      }),
+    (event) => this.emitClientEvent(event)
+  )
 
   private async selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
     const catalog = listReferenceWorkspaces(
@@ -172,7 +153,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     })
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentTransitions>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithSidebarTemporal>) {
     super(...args)
     // Why: the runtime listing re-runs a scan the worktree-change generation overtook and re-lists
     // through this runtime's scan cache, so a worktree change must reach both. The desktop IPC

@@ -2,7 +2,6 @@
 // creation registry while it runs, and names its workspace before the host announces it.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
   webContents: { fromId: vi.fn(() => null) },

@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 
 /**
- * The same goldens with ORCA_SIDEBAR_INPUTS=main, where Recent and Smart read the owning host's
- * sort stamps; plus every Smart tier, which only a stamping host writes.
+ * The same goldens where Recent and Smart read the owning host's sort stamps; plus every Smart tier, which only a stamping host writes.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
@@ -19,7 +18,6 @@ import {
   initialState
 } from './sidebar-list-golden-suite.test-fixture'
 
-vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 // Main's list session is a runtime call with no bearing on the rows.
 vi.mock('@/lib/sidebar-list-session', () => ({ useSidebarListSession: () => {} }))
 

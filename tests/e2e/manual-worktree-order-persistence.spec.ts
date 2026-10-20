@@ -83,14 +83,31 @@ test('manual drag survives activity and persisted-profile reload', async ({
         { timeout: 30_000 }
       )
       .toBe(true)
-    const initialOrder = (await visibleWorktreeIds(first.page)).filter((id) =>
-      createdIds.includes(id)
-    )
+    // Why settled: main's feed re-sorts the new rows after they first draw, and a drag planned
+    // against the first order can land where it changes nothing.
+    let previousOrder: string[] = []
+    await expect
+      .poll(
+        async () => {
+          const order = (await visibleWorktreeIds(first.page)).filter((id) =>
+            createdIds.includes(id)
+          )
+          const settled = order.join() === previousOrder.join()
+          previousOrder = order
+          return settled
+        },
+        { timeout: 30_000, intervals: [500] }
+      )
+      .toBe(true)
+    const initialOrder = previousOrder
     const sourceId = createdIds.at(-1)!
     // Why: dropping before the row that already follows the source is a no-op that keeps Smart sort.
     const sourceIndex = initialOrder.indexOf(sourceId)
     const targetId = initialOrder.find((id, index) => id !== sourceId && index !== sourceIndex + 1)!
     await dragBefore(first.page, sourceId, targetId)
+    await expect
+      .poll(() => first.page.evaluate(() => window.__store?.getState().sortBy), { timeout: 10_000 })
+      .toBe('manual')
 
     const manualOrderAfterDrag = await first.page.evaluate((ids) => {
       const state = window.__store?.getState()
@@ -126,7 +143,6 @@ test('manual drag survives activity and persisted-profile reload', async ({
       if (!store) {
         throw new Error('store unavailable')
       }
-      store.getState().bumpWorktreeActivity(activityId)
       const orderedIds = store
         .getState()
         .allWorktrees()

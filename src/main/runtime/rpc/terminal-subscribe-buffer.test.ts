@@ -12,11 +12,11 @@ import {
   decodeTerminalStreamJson,
   decodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
+import { runtimeDoubleWithSidebarFacts } from './sidebar-facts-double.test-fixture'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   const registry = createSubscriptionRegistryDouble()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
-  return {
+  return runtimeDoubleWithSidebarFacts({
     getRuntimeId: () => 'test-runtime',
     registerOwnedSubscriptionCleanup: registry.registerOwnedSubscriptionCleanup,
     subscribeToPtyExit: vi.fn(() => vi.fn()),
@@ -25,7 +25,7 @@ function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeSe
     registerRemoteTerminalViewSubscriber: () => () => {},
     requestRendererTerminalTabMount: () => false,
     ...overrides
-  } as OrcaRuntimeService
+  })
 }
 
 const makeRequest = (method: string, params?: unknown): RpcRequest => ({

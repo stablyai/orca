@@ -298,7 +298,6 @@ function setStatusLaneState(): void {
     settings: null,
     showSleepingWorkspaces: true,
     sortBy: 'manual',
-    sortEpoch: 0,
     sshConnectedGeneration: 0,
     sshConnectionStates: new Map(),
     sshTargetLabels: new Map(),

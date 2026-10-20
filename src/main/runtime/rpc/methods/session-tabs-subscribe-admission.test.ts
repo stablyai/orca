@@ -7,6 +7,7 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import { SESSION_TAB_METHODS } from './session-tabs'
 import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
+import { createSidebarFactsDouble } from '../sidebar-facts-double.test-fixture'
 
 const CONNECTION = 'conn-1'
 const KEY = (requestId: string): string => `session.tabs:${CONNECTION}:wt-1:${requestId}`
@@ -34,6 +35,7 @@ function makeHost(options: { structuredChat?: boolean } = {}) {
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the session tab methods reach only these members; a missing one throws and fails the test.
   const runtime = {
+    sidebarFacts: createSidebarFactsDouble(),
     getRuntimeId: () => 'test-runtime',
     getClientSettings: () => ({
       experimentalNativeChat: options.structuredChat === true

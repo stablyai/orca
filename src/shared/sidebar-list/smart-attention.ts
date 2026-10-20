@@ -9,7 +9,6 @@ import { isSyntheticAgentPermissionTitle } from '../synthetic-agent-title'
 import { resolveRuntimePaneTitleLeafId } from '../runtime-pane-title-leaf-id'
 import type { AgentStatus } from '../agent-detection'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
-import type { Worktree } from '../worktree/types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusEvidenceObservedAt,
@@ -41,7 +40,7 @@ export type SmartClass = 1 | 2 | 3 | 4 | 5
  *   - Class 3: `stateStartedAt` of the most recent prior `done`/`blocked`/`waiting` entry,
  *     falling back to the current `working` `stateStartedAt`.
  *   - Class 4: when the evidence was last observed, so the least-silent pane ranks first.
- *   - Class 5: `0` — comparator drops to `effectiveRecentActivity` for idle ordering.
+ *   - Class 5: `0`.
  */
 export type WorktreeAttention = {
   cls: SmartClass
@@ -50,33 +49,8 @@ export type WorktreeAttention = {
 
 export const IDLE: WorktreeAttention = { cls: 5, attentionTimestamp: 0 }
 
-/** The tab fields attention reads, so main can score from its own tab records. */
+/** The tab fields attention reads. */
 export type SmartAttentionTab = Pick<TerminalTab, 'id' | 'title'>
-
-export function hasFreshAttributedAgentStatus(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
-  now: number,
-  tabsByWorktree: Record<string, readonly SmartAttentionTab[]>
-): boolean {
-  const freshUnstampedTabIds = new Set<string>()
-  for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
-    const parsed = parsePaneKey(entry.paneKey)
-    if (parsed === null || !isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-      continue
-    }
-    if (entry.worktreeId) {
-      return true
-    }
-    // Why: hook rows can omit the worktree stamp but still map via paneKey to a mirrored tab — enough to end cold-start.
-    freshUnstampedTabIds.add(parsed.tabId)
-  }
-  if (freshUnstampedTabIds.size === 0) {
-    return false
-  }
-  return Object.values(tabsByWorktree).some((tabs) =>
-    tabs.some((tab) => freshUnstampedTabIds.has(tab.id))
-  )
-}
 
 /**
  * Return the timestamp of the most recent `done`/`blocked`/`waiting` history row, ignoring
@@ -237,24 +211,6 @@ export function buildExplicitEntriesByTabId(
   return byTab
 }
 
-function buildExplicitEntriesByWorktreeId(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined
-): Map<string, AgentStatusEntry[]> {
-  const byWorktree = new Map<string, AgentStatusEntry[]>()
-  for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
-    if (!entry.worktreeId || !parsePaneKey(entry.paneKey)) {
-      continue
-    }
-    const bucket = byWorktree.get(entry.worktreeId)
-    if (bucket) {
-      bucket.push(entry)
-    } else {
-      byWorktree.set(entry.worktreeId, [entry])
-    }
-  }
-  return byWorktree
-}
-
 /**
  * Extract the stable leaf id from a `${tabId}:${leafId}` paneKey.
  */
@@ -342,59 +298,4 @@ export function collectTabPaneInputs(
     panes.push({ kind: 'title', status: detectAgentStatusFromTitle(title), worktreeLastActivityAt })
   }
   return panes
-}
-
-/**
- * Build the per-worktree attention map consumed by the smart comparator.
- * Hook authority is per-pane; panes without a fresh hook fall back to the title heuristic,
- * gated on `tabHasLivePty` so slept tabs' stale working-pattern titles don't leak through.
- */
-export function buildAttentionByWorktree(
-  worktrees: readonly Pick<Worktree, 'id' | 'lastActivityAt'>[],
-  tabsByWorktree: Record<string, readonly SmartAttentionTab[]> | null,
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
-  ptyIdsByTabId: Record<string, string[]>,
-  now: number,
-  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>,
-  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
-): Map<string, WorktreeAttention> {
-  const byTab = buildExplicitEntriesByTabId(agentStatusByPaneKey, migrationUnsupportedByPtyId)
-  const byAttributedWorktree = buildExplicitEntriesByWorktreeId(agentStatusByPaneKey)
-  const mirroredTabIds = new Set<string>()
-  for (const tabs of Object.values(tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      mirroredTabIds.add(tab.id)
-    }
-  }
-  const paneSources: TabPaneInputSources = {
-    entriesByTabId: byTab,
-    ptyIdsByTabId,
-    runtimePaneTitlesByTabId,
-    terminalLayoutsByTabId
-  }
-  const result = new Map<string, WorktreeAttention>()
-
-  for (const worktree of worktrees) {
-    const tabs = tabsByWorktree?.[worktree.id] ?? []
-    // Why: hook stamps can precede tab mirroring; once mirrored, live tab ownership wins so both worktrees aren't promoted.
-    const panes: PaneInput[] = (byAttributedWorktree.get(worktree.id) ?? [])
-      .filter((entry) => {
-        const parsed = parsePaneKey(entry.paneKey)
-        return parsed !== null && !mirroredTabIds.has(parsed.tabId)
-      })
-      // Why hasLivePty false: these entries were filtered to panes with no tab in this renderer,
-      // so there is no live-PTY evidence here to hold them above idle.
-      .map((entry) => ({ kind: 'hook' as const, entry, hasLivePty: false }))
-    if (tabs.length === 0) {
-      result.set(worktree.id, resolveAttention(panes, now))
-      continue
-    }
-    for (const tab of tabs) {
-      panes.push(...collectTabPaneInputs(tab, worktree.lastActivityAt, paneSources, now))
-    }
-    result.set(worktree.id, resolveAttention(panes, now))
-  }
-
-  return result
 }

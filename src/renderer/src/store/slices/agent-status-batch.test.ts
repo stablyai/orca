@@ -121,8 +121,7 @@ function selectBatchState(state: AppState) {
     agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey,
     migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
     retentionSuppressedPaneKeys: state.retentionSuppressedPaneKeys,
-    agentStatusEpoch: state.agentStatusEpoch,
-    sortEpoch: state.sortEpoch
+    agentStatusEpoch: state.agentStatusEpoch
   }
 }
 

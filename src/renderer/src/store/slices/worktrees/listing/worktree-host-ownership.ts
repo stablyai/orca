@@ -214,7 +214,7 @@ export function mergeWorktreesForHost<
   hostId: ExecutionHostId,
   options?: WorktreeHostMatchOptions
 ): T[] {
-  // Why: host-scoped refreshes replace that host in place so alternating local/runtime refreshes don't churn sibling row order or sortEpoch.
+  // Why: host-scoped refreshes replace that host in place so alternating local/runtime refreshes don't churn sibling row order.
   const existing = current ?? []
   const reconciled = reuseEqualCatalogRows(
     existing.filter((worktree) => worktreeMatchesHost(worktree, hostId, options)),

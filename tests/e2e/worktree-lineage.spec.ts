@@ -3,7 +3,6 @@ import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { addRepoWithWorkspaces, linkWorkspaces } from './helpers/repo-with-workspaces'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   markWorkspaceTerminalSlept,
@@ -29,10 +28,6 @@ async function captureEvidence(page: Page, name: string, locator?: Locator): Pro
     return
   }
   await page.screenshot({ path })
-}
-
-async function captureSidebarEvidence(page: Page, name: string): Promise<void> {
-  await captureEvidence(page, name, page.locator('[data-worktree-sidebar]').first())
 }
 
 test.describe('Worktree Lineage', () => {
@@ -107,35 +102,6 @@ test.describe('Worktree Lineage', () => {
       )
       .toBe(false)
     await expect(childRow).toBeVisible()
-  })
-
-  test('renders legacy-only inline lineage when side-map hydration is absent', async ({
-    orcaPage
-  }) => {
-    test.skip(
-      SIDEBAR_INPUTS_BUILD,
-      "the window's legacy inline link is unused when rows come from main"
-    )
-    const { parentId, childId } = await seedLineageScenario(orcaPage, { inlineOnly: true })
-    const parentRow = worktreeOption(orcaPage, parentId)
-    const childRow = worktreeOption(orcaPage, childId)
-
-    await expect(parentRow.getByRole('button', { name: 'Hide 1 child workspace' })).toBeVisible()
-    await expect(childRow).toBeVisible()
-    await expect
-      .poll(async () => {
-        const [parentBox, childBox] = await Promise.all([
-          parentRow.boundingBox(),
-          childRow.boundingBox()
-        ])
-        return parentBox && childBox ? childBox.y > parentBox.y : false
-      })
-      .toBe(true)
-    // The link must come from the records alone, not a side map hydrated after the seed.
-    expect(
-      await orcaPage.evaluate((id) => window.__store!.getState().worktreeLineageById[id], childId)
-    ).toBeUndefined()
-    await captureSidebarEvidence(orcaPage, 'legacy-inline-lineage-nested.png')
   })
 
   test('injects filtered parents structurally without showing a parent badge', async ({

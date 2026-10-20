@@ -54,8 +54,7 @@ function publishSortOrders(sortOrderById: Record<string, number>): void {
         ...worktree,
         sortOrder: sortOrderById[worktree.id] ?? worktree.sortOrder
       }))
-    },
-    sortOrderEpoch: s.sortOrderEpoch + 1
+    }
   }))
 }
 

@@ -1,12 +1,10 @@
 // Runs on plain Node, as orcad does: facts come from the host's persisted PR cache.
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
 import type { PRInfo } from '../../../shared/github/pull-request-types'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-
-vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
 function withSidebarFacts(runtime: OrcaRuntimeService) {
   const facts = runtime.sidebarFacts

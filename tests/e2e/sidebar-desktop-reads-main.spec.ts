@@ -1,16 +1,13 @@
 /**
- * The desktop sidebar drawn from main's feed (ORCA_SIDEBAR_INPUTS=main): it follows main, not the
+ * The desktop sidebar drawn from main's feed: it follows main, not the
  * window's own store, and a drag, create, open or collapse still shows at once from the window's
  * own state.
  */
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { removeWorktreeViaStore } from './helpers/dead-terminal'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-
-test.skip(!SIDEBAR_INPUTS_BUILD, 'the window reads main only in an ORCA_SIDEBAR_INPUTS=main build')
 
 const ROWS = '[data-worktree-sidebar] [role="option"][data-worktree-id]'
 

@@ -44,7 +44,7 @@ describe('updateWorktreeGitIdentity', () => {
       branch: 'refs/heads/main'
     })
 
-    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 3 } as Partial<AppState>)
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
       head: 'new-head',
@@ -55,7 +55,6 @@ describe('updateWorktreeGitIdentity', () => {
       head: 'new-head',
       branch: 'refs/heads/feature'
     })
-    expect(store.getState().sortEpoch).toBe(4)
     expect(mockApi.worktrees.list).not.toHaveBeenCalled()
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
@@ -69,7 +68,7 @@ describe('updateWorktreeGitIdentity', () => {
       head: 'old-head',
       branch: 'refs/heads/main'
     })
-    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 3 } as Partial<AppState>)
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
     let notifications = 0
     const unsubscribe = store.subscribe(() => {
       notifications += 1
@@ -86,7 +85,6 @@ describe('updateWorktreeGitIdentity', () => {
 
     unsubscribe()
     expect(notifications).toBe(0)
-    expect(store.getState().sortEpoch).toBe(3)
   })
 
   it('clears branch-scoped linked reviews when git status observes a branch switch', () => {
@@ -260,7 +258,7 @@ describe('updateWorktreeGitIdentity', () => {
       displayName: 'Restore PR review'
     })
 
-    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 3 } as Partial<AppState>)
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
       head: 'new-head',
@@ -272,7 +270,6 @@ describe('updateWorktreeGitIdentity', () => {
       branch: '',
       displayName: 'Restore PR review'
     })
-    expect(store.getState().sortEpoch).toBe(4)
   })
 
   it('keeps an auto-derived title when detached HEAD clears the branch', () => {

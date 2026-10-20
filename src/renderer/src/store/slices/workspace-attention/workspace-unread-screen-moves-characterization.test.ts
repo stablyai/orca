@@ -84,7 +84,7 @@ describe('arrival without a terminal or chat on screen', () => {
     store.setState({ activeView: 'terminal' })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 sortEpoch=0",
+        "rows a@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -107,7 +107,7 @@ describe('presence', () => {
     await flushPresenceCheck()
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell",
         "panes -",
         "completions -",
@@ -119,7 +119,7 @@ describe('presence', () => {
     pointerDownInTab(store, { ...pane, paneKey: null })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:read:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -152,7 +152,7 @@ describe('presence evidence', async () => {
     await flushPresenceCheck()
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:101000 sortEpoch=1",
+        "rows a@local:UNREAD:101000",
         "tabs tab-a1=terminal-bell",
         "panes -",
         "completions -",
@@ -183,7 +183,7 @@ describe('hosts and groups', () => {
     store.getState().setActiveWorktree(key, 'local')
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 folder-1@local:read:0 folder-1@ssh:remote:UNREAD:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0 folder-1@local:read:0 folder-1@ssh:remote:UNREAD:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -194,7 +194,7 @@ describe('hosts and groups', () => {
     store.getState().setActiveWorktree(key, 'ssh:remote')
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 folder-1@local:read:0 folder-1@ssh:remote:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0 folder-1@local:read:0 folder-1@ssh:remote:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -215,7 +215,7 @@ describe('hosts and groups', () => {
     store.getState().closeTab(pane.tabId)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 folder-1@local:read:0 folder-1@ssh:remote:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0 folder-1@local:read:0 folder-1@ssh:remote:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -285,7 +285,7 @@ describe('hosts and groups', () => {
     ringBell(store, right)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -308,7 +308,7 @@ describe('hosts and groups', () => {
     store.setState({ floatingWorkspacePanelOpen: false })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=1",
+        "rows a@local:read:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",

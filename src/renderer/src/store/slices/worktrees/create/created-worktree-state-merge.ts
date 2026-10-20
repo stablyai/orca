@@ -70,8 +70,7 @@ export function applyCreatedWorktree(
                 s.baseStatusByWorktreeId[result.worktree.id] ?? result.initialBaseStatus
             }
           }
-        : {}),
-      sortEpoch: s.sortEpoch + 1
+        : {})
     }
   })
 }

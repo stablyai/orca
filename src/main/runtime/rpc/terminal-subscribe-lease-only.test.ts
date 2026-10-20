@@ -1,10 +1,10 @@
 import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
+import { runtimeDoubleWithSidebarFacts } from './sidebar-facts-double.test-fixture'
 
 const request: RpcRequest = {
   id: 'req-1',
@@ -23,7 +23,7 @@ describe('terminal lease-only subscription', () => {
     const messages: string[] = []
     const registry = createSubscriptionRegistryDouble()
     const unsubscribeExit = vi.fn()
-    const runtime = {
+    const runtime = runtimeDoubleWithSidebarFacts({
       getRuntimeId: () => 'test-runtime',
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       handleMobileSubscribe: vi.fn().mockResolvedValue(true),
@@ -38,7 +38,7 @@ describe('terminal lease-only subscription', () => {
       registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       subscribeToPtyExit: vi.fn(() => unsubscribeExit)
-    } as unknown as OrcaRuntimeService
+    })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(

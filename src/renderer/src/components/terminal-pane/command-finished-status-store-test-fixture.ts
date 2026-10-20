@@ -13,7 +13,6 @@ export function createCommandFinishedStatusStore(): {
     const state = {
       settings: null,
       tabsByWorktree: {},
-      sortEpoch: 0,
       acknowledgedAgentsByPaneKey: {},
       activityClearedAtByPaneKey: {},
       manuallyUnreadTurnsByPaneKey: {},

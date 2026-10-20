@@ -168,7 +168,7 @@ export function buildRetractedMirroredTabSweepPatch(
   nextTabsByWorktree: WebSessionTabsSyncState['tabsByWorktree'],
   agentStatusPatch: Pick<
     WebSessionTabsSyncState,
-    'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'
+    'agentStatusByPaneKey' | 'agentStatusEpoch'
   > | null,
   removedTerminalResourceIds: readonly string[],
   scopedPaneKeysByTabId: ReadonlyMap<string, ReadonlySet<string>>,
@@ -193,7 +193,6 @@ export function buildRetractedMirroredTabSweepPatch(
     recentlyRetiredAgentStatusPaneKeys: state.recentlyRetiredAgentStatusPaneKeys ?? {},
     retainedAgentsByPaneKey: state.retainedAgentsByPaneKey ?? {},
     retentionSuppressedPaneKeys: state.retentionSuppressedPaneKeys ?? {},
-    sortEpoch: agentStatusPatch?.sortEpoch ?? state.sortEpoch,
     // Keep the sweep state consistent with the accepted host inventory.
     tabsByWorktree: nextTabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree

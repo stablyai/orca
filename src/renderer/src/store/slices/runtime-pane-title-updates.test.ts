@@ -18,47 +18,7 @@ globalThis.window = { api: {} }
 
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 
-describe('runtimePaneTitle → sortEpoch', () => {
-  it('bumps sortEpoch when the new title classifies differently than the previous title', () => {
-    // Why: smart sort's title-heuristic fallback (Edge case 9) reads
-    // runtimePaneTitlesByTabId. A hookless agent transitioning from
-    // 'working' to 'permission' must trigger a re-sort.
-    const store = createTestStore()
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: 'wt-bg', repoId: 'repo1', path: '/path/wt-bg' })]
-      },
-      tabsByWorktree: {
-        'wt-bg': [makeTab({ id: 'tab-1', worktreeId: 'wt-bg' })]
-      }
-    })
-    const before = store.getState().sortEpoch
-    store.getState().setRuntimePaneTitle('tab-1', 1, '⠋ Claude')
-    const afterWorking = store.getState().sortEpoch
-    expect(afterWorking).toBeGreaterThan(before)
-    store.getState().setRuntimePaneTitle('tab-1', 1, '✋ Gemini CLI')
-    expect(store.getState().sortEpoch).toBeGreaterThan(afterWorking)
-  })
-
-  it('does not bump sortEpoch when the classification is unchanged', () => {
-    // Why: incidental title noise (spinner frame, prompt suffix) shouldn't
-    // churn the sidebar order.
-    const store = createTestStore()
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: 'wt-bg', repoId: 'repo1', path: '/path/wt-bg' })]
-      },
-      tabsByWorktree: {
-        'wt-bg': [makeTab({ id: 'tab-1', worktreeId: 'wt-bg' })]
-      }
-    })
-    store.getState().setRuntimePaneTitle('tab-1', 1, '⠋ Claude')
-    const baseline = store.getState().sortEpoch
-    // Spinner frame change — still classifies as 'working'.
-    store.getState().setRuntimePaneTitle('tab-1', 1, '⠙ Claude')
-    expect(store.getState().sortEpoch).toBe(baseline)
-  })
-
+describe('runtimePaneTitle updates', () => {
   it('preserves runtime pane title references when only the spinner frame changes', () => {
     const store = createTestStore()
     seedStore(store, {
@@ -71,13 +31,11 @@ describe('runtimePaneTitle → sortEpoch', () => {
     })
     store.getState().setRuntimePaneTitle('tab-1', 1, '⠋ Codex is thinking')
     const runtimePaneTitlesByTabId = store.getState().runtimePaneTitlesByTabId
-    const sortEpoch = store.getState().sortEpoch
 
     store.getState().setRuntimePaneTitle('tab-1', 1, '⠙ Codex is thinking')
 
     expect(store.getState().runtimePaneTitlesByTabId).toBe(runtimePaneTitlesByTabId)
     expect(store.getState().runtimePaneTitlesByTabId['tab-1']?.[1]).toBe('⠋ Codex is thinking')
-    expect(store.getState().sortEpoch).toBe(sortEpoch)
   })
 
   it('preserves tab map references when only the active pane spinner frame changes', () => {
@@ -94,14 +52,12 @@ describe('runtimePaneTitle → sortEpoch', () => {
     store.getState().updateTabTitle('tab-1', '⠋ Codex is thinking')
     const tabsByWorktree = store.getState().tabsByWorktree
     const unifiedTabsByWorktree = store.getState().unifiedTabsByWorktree
-    const sortEpoch = store.getState().sortEpoch
 
     store.getState().updateTabTitle('tab-1', '⠙ Codex is thinking')
 
     expect(store.getState().tabsByWorktree).toBe(tabsByWorktree)
     expect(store.getState().unifiedTabsByWorktree).toBe(unifiedTabsByWorktree)
     expect(store.getState().tabsByWorktree['wt-bg']?.[0]?.title).toBe('⠋ Codex is thinking')
-    expect(store.getState().sortEpoch).toBe(sortEpoch)
   })
 
   it.each([
@@ -177,7 +133,6 @@ describe('runtimePaneTitle → sortEpoch', () => {
     })
     store.getState().updateTabTitle('tab-1', '⠋ Claude Code')
     store.getState().setRuntimePaneTitle('tab-1', 1, '⠋ Claude Code')
-    const baseline = store.getState().sortEpoch
 
     store.getState().updateTabTitle('tab-1', 'Claude Code - action required')
     store.getState().setRuntimePaneTitle('tab-1', 1, 'Claude Code - action required')
@@ -188,7 +143,6 @@ describe('runtimePaneTitle → sortEpoch', () => {
     expect(store.getState().runtimePaneTitlesByTabId['tab-1']?.[1]).toBe(
       'Claude Code - action required'
     )
-    expect(store.getState().sortEpoch).toBeGreaterThan(baseline)
   })
 
   it('collapses bulk Codex spinner title churn to the first meaningful publication', () => {
@@ -273,7 +227,6 @@ describe('runtimePaneTitle → sortEpoch', () => {
       }
     })
     store.getState().setRuntimePaneTitle('tab-1', 1, '⠋ Claude')
-    const baseline = store.getState().sortEpoch
     store.setState({
       tabsByWorktree: new Proxy(store.getState().tabsByWorktree, {
         ownKeys() {
@@ -285,23 +238,6 @@ describe('runtimePaneTitle → sortEpoch', () => {
     store.getState().setRuntimePaneTitle('tab-1', 1, '⠙ Claude')
 
     expect(store.getState().runtimePaneTitlesByTabId['tab-1']?.[1]).toBe('⠋ Claude')
-    expect(store.getState().sortEpoch).toBe(baseline)
-  })
-
-  it('bumps sortEpoch when clearing a classified title back to none', () => {
-    const store = createTestStore()
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: 'wt-bg', repoId: 'repo1', path: '/path/wt-bg' })]
-      },
-      tabsByWorktree: {
-        'wt-bg': [makeTab({ id: 'tab-1', worktreeId: 'wt-bg' })]
-      }
-    })
-    store.getState().setRuntimePaneTitle('tab-1', 1, '✋ Gemini CLI')
-    const baseline = store.getState().sortEpoch
-    store.getState().clearRuntimePaneTitle('tab-1', 1)
-    expect(store.getState().sortEpoch).toBeGreaterThan(baseline)
   })
 
   it('does not enumerate terminal tabs when clearing an unclassified title', () => {
@@ -315,7 +251,6 @@ describe('runtimePaneTitle → sortEpoch', () => {
       }
     })
     store.getState().setRuntimePaneTitle('tab-1', 1, 'shell prompt')
-    const baseline = store.getState().sortEpoch
     store.setState({
       tabsByWorktree: new Proxy(store.getState().tabsByWorktree, {
         ownKeys() {
@@ -327,56 +262,5 @@ describe('runtimePaneTitle → sortEpoch', () => {
     store.getState().clearRuntimePaneTitle('tab-1', 1)
 
     expect(store.getState().runtimePaneTitlesByTabId['tab-1']).toBeUndefined()
-    expect(store.getState().sortEpoch).toBe(baseline)
-  })
-
-  it('does not bump sortEpoch when the changing pane belongs to the active worktree (set)', () => {
-    // Why: clicking a slept worktree wakes it; the PTY remount briefly
-    // reclassifies its title, which must NOT re-rank the active worktree.
-    // Stability beats freshness when the user is looking at it.
-    const store = createTestStore()
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [
-          makeWorktree({ id: 'wt-a', repoId: 'repo1', path: '/path/wt-a' }),
-          makeWorktree({ id: 'wt-b', repoId: 'repo1', path: '/path/wt-b' })
-        ]
-      },
-      tabsByWorktree: {
-        'wt-a': [makeTab({ id: 'tab-1', worktreeId: 'wt-a' })],
-        'wt-b': [makeTab({ id: 'tab-2', worktreeId: 'wt-b' })]
-      },
-      activeWorktreeId: 'wt-a'
-    })
-    const baseline = store.getState().sortEpoch
-    store.getState().setRuntimePaneTitle('tab-1', 1, '⠋ Claude')
-    expect(store.getState().sortEpoch).toBe(baseline)
-  })
-
-  it('does not bump sortEpoch when the changing pane belongs to the active worktree (clear)', () => {
-    // Why: same no-view-triggered-rerank invariant — when the active worktree's
-    // pane title clears (e.g. on PTY remount during wake), the sidebar must
-    // not reorder underneath the user's current selection.
-    const store = createTestStore()
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [
-          makeWorktree({ id: 'wt-a', repoId: 'repo1', path: '/path/wt-a' }),
-          makeWorktree({ id: 'wt-b', repoId: 'repo1', path: '/path/wt-b' })
-        ]
-      },
-      tabsByWorktree: {
-        'wt-a': [makeTab({ id: 'tab-1', worktreeId: 'wt-a' })],
-        'wt-b': [makeTab({ id: 'tab-2', worktreeId: 'wt-b' })]
-      },
-      activeWorktreeId: 'wt-b'
-    })
-    // Seed the classified title while wt-a is INACTIVE so the gate doesn't
-    // suppress this preparatory write — we only want to test the gate on clear.
-    store.getState().setRuntimePaneTitle('tab-1', 1, '✋ Gemini CLI')
-    store.setState({ activeWorktreeId: 'wt-a' })
-    const baseline = store.getState().sortEpoch
-    store.getState().clearRuntimePaneTitle('tab-1', 1)
-    expect(store.getState().sortEpoch).toBe(baseline)
   })
 })

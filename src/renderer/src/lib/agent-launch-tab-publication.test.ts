@@ -238,10 +238,7 @@ describe('a focused launch into a workspace with no live terminal', () => {
     expect(tab?.pendingActivationSpawn).toBeUndefined()
     expect(tab?.generation).toBeUndefined()
 
-    const epoch = store.getState().sortEpoch
     store.getState().updateTabPtyId(TAB_ID, 'pty-agent-1')
-
-    expect(store.getState().sortEpoch).toBe(epoch + 1)
   })
 })
 

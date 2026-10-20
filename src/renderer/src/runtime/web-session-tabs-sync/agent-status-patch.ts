@@ -70,7 +70,7 @@ export function buildMirroredAgentStatusPatch(
   retractedTabIds: ReadonlySet<string>,
   now: number,
   batchContext?: WebSessionTabsBatchContext
-): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
+): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch'> | null {
   const mirroredTabIds = new Set<string>()
   for (const tab of currentTerminalTabs) {
     if (isWebTerminalSurfaceTabId(tab.id)) {
@@ -162,7 +162,6 @@ export function buildMirroredAgentStatusPatch(
   let nextAgentStatusByPaneKey = state.agentStatusByPaneKey
   let changed = false
   let aggregateRelevantChange = false
-  let sortRelevantChange = false
 
   for (const paneKey of batchAgentPaneKeysForTabs(state, mirroredTabIds, batchContext)) {
     if (!isMirroredAgentPaneKeyForTabs(paneKey, mirroredTabIds)) {
@@ -201,7 +200,6 @@ export function buildMirroredAgentStatusPatch(
     updateBatchAgentPaneKey(paneKey, false, batchContext)
     changed = true
     aggregateRelevantChange = true
-    sortRelevantChange = true
   }
 
   for (const [paneKey, entry] of nextByPaneKey) {
@@ -241,7 +239,6 @@ export function buildMirroredAgentStatusPatch(
       isMirroredCommandCodeTurnBump(existing, entry)
     aggregateRelevantChange =
       aggregateRelevantChange || entrySortRelevantChange || workingModeChanged || verdictChanged
-    sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 
   if (!changed) {
@@ -250,8 +247,7 @@ export function buildMirroredAgentStatusPatch(
 
   return {
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
-    agentStatusEpoch: aggregateRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
-    sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch
+    agentStatusEpoch: aggregateRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch
   }
 }
 

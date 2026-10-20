@@ -11,7 +11,6 @@ import type { AppState } from '../../types'
 import { persistPassiveWorktreeMetaForOwner } from '../worktrees/listing/worktree-owner-settings'
 import type { WorkspaceAttentionGet, WorkspaceAttentionSet } from './workspace-attention-contract'
 import { workspaceHasLiveMarker } from './workspace-live-markers'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
 import { ownerHostOwnsSidebarInputs } from '../worktrees/listing/owner-host-sidebar-inputs'
 
 // The persisted workspace flag `isUnread`. Only the workspace-attention module writes it.
@@ -21,11 +20,7 @@ export function markWorkspaceUnreadFlag(
   get: WorkspaceAttentionGet,
   worktreeId: string
 ): void {
-  if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-    raiseWorkspaceUnreadFlag(set, get, worktreeId)
-    return
-  }
-  // Switch point: the owning host raises the flag from the same news, unless it is older.
+  // The owning host raises the flag from the same news, unless it is older.
   // Why the row's host now: same-id folder rows differ by host, and the screen can move to the
   // other row while the owner is asked.
   const state = get()
@@ -99,8 +94,7 @@ function raiseWorkspaceUnreadFlag(
     set((s) => ({
       folderWorkspaces: s.folderWorkspaces.map((workspace) =>
         workspace === marked ? { ...workspace, isUnread: true, ...stamp } : workspace
-      ),
-      sortEpoch: s.sortEpoch + 1
+      )
     }))
     // Why the row's own host: the row flipped here is the owner updateFolderWorkspace writes.
     void get().updateFolderWorkspace(
@@ -132,9 +126,7 @@ function raiseWorkspaceUnreadFlag(
       }
     )
     return {
-      ...(nextWorktrees !== s.worktreesByRepo
-        ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
-        : {}),
+      ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
       ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
         ? { detectedWorktreesByRepo: nextDetectedWorktrees }
         : {})

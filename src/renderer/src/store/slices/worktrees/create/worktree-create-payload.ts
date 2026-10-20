@@ -1,4 +1,3 @@
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import type { CreateWorktreeArgs } from '../../../../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-types'
@@ -126,10 +125,8 @@ export function buildRuntimeWorktreeCreateParams(
     ...sharedCreateFields(request, attempt),
     // Why: the host defaults a bare `parentWorkspace` to CLI provenance; app picks are manual.
     ...(attempt.parentWorkspace ? { parentWorkspaceOrigin: 'manual' } : {}),
-    // Switch point: a host lists the window's creation under its id only on the dark path.
-    ...(ORCA_SIDEBAR_INPUTS_IS_MAIN && request.creationId
-      ? { creationId: request.creationId }
-      : {}),
+    // A host lists the window's creation under its id.
+    ...(request.creationId ? { creationId: request.creationId } : {}),
     ...(options?.startupDraft ? { startupDraft: options.startupDraft } : {}),
     ...(startup
       ? {

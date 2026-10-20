@@ -9,14 +9,11 @@ import { makeFolderWorkspace } from '../worktrees-slice-test-fixtures'
 import { clearWorkspaceUnreadFlag, markWorkspaceUnreadFlag } from './workspace-unread-flag'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 
-// With the switch on, the window raises the flag exactly where the owning host does not.
+// The window raises the flag exactly where the owning host does not.
 
 const hostCapabilities = vi.hoisted(() => new Map<string, Promise<readonly string[]>>())
 const cachedStatus = vi.hoisted(() => new Map<string, readonly string[]>())
 
-vi.mock('../../../../../shared/sidebar-inputs-switch', () => ({
-  ORCA_SIDEBAR_INPUTS_IS_MAIN: true
-}))
 vi.mock('../worktrees/metadata/worktree-meta-persist', async (importOriginal) => {
   const actual = await importOriginal<typeof WorktreeMetaPersistModule>()
   return { ...actual, persistWorktreeMeta: vi.fn(async () => undefined) }

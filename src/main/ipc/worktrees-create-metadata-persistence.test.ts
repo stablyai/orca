@@ -286,8 +286,8 @@ describe('registerWorktreeHandlers', () => {
 
       await handlers['worktrees:remove'](null, { worktreeId: workspaceId })
       expect(table[workspaceId]).toBeUndefined()
-      // The renderer still lists the row until its teardown runs, so a PTY reattach in that
-      // window stamps activity on the removed id (bumpWorktreeActivity -> updateMeta).
+      // The renderer still lists the row until its teardown runs, so a late metadata write
+      // (an older window's activity stamp, say) can reach the removed id.
       handlers['worktrees:updateMeta'](null, {
         worktreeId: workspaceId,
         updates: { lastActivityAt: 2 }

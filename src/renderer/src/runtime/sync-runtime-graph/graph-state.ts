@@ -1,4 +1,3 @@
-import type { MobileProjectSectionCatalog } from '../../../../shared/mobile-project-sections-contract'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { AppState } from '@/store/types'
 import type {
@@ -32,10 +31,6 @@ export const EMPTY_WORKTREE_OPEN_FILE_IDS: readonly string[] = []
 
 export const mobilePublicationEpoch = `renderer:${createBrowserUuid()}`
 
-function noPublishedProjectSectionCatalog(): MobileProjectSectionCatalog | null {
-  return null
-}
-
 const NO_PUBLISHED_ACTIVE_GROUPS: Readonly<Record<string, string>> = {}
 
 export const graphState = {
@@ -65,7 +60,6 @@ export const graphState = {
   /** Last group grid sizes main accepted, so a refit republishes only when one changed. */
   publishedTerminalGroupGridSizesKey: '',
   /** Last sidebar Project catalog main accepted, so the graph carries it only when it changed. */
-  publishedProjectSectionCatalog: noPublishedProjectSectionCatalog(),
   /** Each workspace's active group as main last accepted it (layout-owner builds). */
   publishedActiveGroups: NO_PUBLISHED_ACTIVE_GROUPS
 }

@@ -67,7 +67,6 @@ function baseState(overrides: Partial<WebSessionTabsSyncState>): WebSessionTabsS
     terminalLayoutsByTabId: {},
     unifiedTabsByWorktree: {},
     unreadTerminalTabs: {},
-    sortEpoch: 0,
     ...overrides
   }
 }

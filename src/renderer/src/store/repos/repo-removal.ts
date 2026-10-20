@@ -283,7 +283,6 @@ export function createRepoRemovalActions(
             detectedWorktreesByRepo: nextDetectedWorktrees,
             lastVisitedAtByWorktreeId: nextLastVisitedAtByWorktreeId,
             folderWorkspacePathStatuses: {},
-            sortEpoch: s.sortEpoch + 1,
             // Why: removing the last repo must reset activeView + clear activeWorktreeId so App renders Landing, not an empty settings/terminal pane.
             ...(nextRepos.length === 0
               ? {

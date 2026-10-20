@@ -3,16 +3,13 @@ import type { WorktreeSortOrderUpdate } from '../../../../../../shared/worktree/
 import type { AppState } from '../../../types'
 import { worktreeHostMatchOptions, worktreeMatchesHost } from './worktree-host-ownership'
 
-/**
- * Applies a host's published order save to one repo's rows in place.
- * Why sortOrderEpoch, not sortEpoch: an order save must not schedule the next live Smart re-sort (#27268).
- */
+/** Applies a host's published order save to one repo's rows in place. */
 export function patchWorktreeSortOrders(
   state: AppState,
   repoId: string,
   hostId: ExecutionHostId,
   sortOrders: readonly WorktreeSortOrderUpdate[]
-): Pick<AppState, 'worktreesByRepo' | 'sortOrderEpoch'> | AppState {
+): Pick<AppState, 'worktreesByRepo'> | AppState {
   const current = state.worktreesByRepo[repoId]
   if (!current || sortOrders.length === 0) {
     return state
@@ -35,8 +32,7 @@ export function patchWorktreeSortOrders(
   })
   return changed
     ? {
-        worktreesByRepo: { ...state.worktreesByRepo, [repoId]: next },
-        sortOrderEpoch: state.sortOrderEpoch + 1
+        worktreesByRepo: { ...state.worktreesByRepo, [repoId]: next }
       }
     : state
 }

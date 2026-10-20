@@ -60,7 +60,6 @@ function baseState(): SyncState {
     terminalLayoutsByTabId: {},
     unifiedTabsByWorktree: {},
     unreadTerminalTabs: {},
-    sortEpoch: 0,
     // Required: without a catalog entry the trailing cleanup deletes the cursor and hides the bug.
     worktreesByRepo: { 'repo-1': [{ id: WORKTREE, path: '/tmp/wt-reveal' }] }
   } as unknown as SyncState

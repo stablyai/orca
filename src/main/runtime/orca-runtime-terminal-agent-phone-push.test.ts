@@ -8,7 +8,6 @@ import type { MobileNotificationEvent } from './runtime-mobile-notification-cont
 import type { RuntimeStore } from './runtime-store-contract'
 
 // Switched on, as it ships next: that build's host reads hookless agents' titles itself.
-vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
 const WT = 'repo-1::/tmp/worktree-a'
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'

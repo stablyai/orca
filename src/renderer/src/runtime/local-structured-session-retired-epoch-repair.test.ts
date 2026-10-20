@@ -78,8 +78,7 @@ function stateWithCoordinatorTerminal(): WebSessionTabsSyncState {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     unifiedTabsByWorktree: { [WORKTREE]: [terminalTab] },
-    unreadTerminalTabs: {},
-    sortEpoch: 0
+    unreadTerminalTabs: {}
   } as unknown as WebSessionTabsSyncState
 }
 

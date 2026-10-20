@@ -314,13 +314,11 @@ describe('agentStatusByPaneKey stays bounded (leak regression #9872)', () => {
       }
     } as Partial<AppState>)
     const statusEpochBefore = store.getState().agentStatusEpoch
-    const sortEpochBefore = store.getState().sortEpoch
 
     setAgentAt(store, existingPaneKey, workingPayload(0), existing.updatedAt)
 
     const state = store.getState()
     expect(Object.keys(state.agentStatusByPaneKey).length).toBe(MAX_LIVE_AGENT_STATUSES)
     expect(state.agentStatusEpoch).toBe(statusEpochBefore + 1)
-    expect(state.sortEpoch).toBe(sortEpochBefore + 1)
   })
 })

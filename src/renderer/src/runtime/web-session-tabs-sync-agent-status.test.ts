@@ -69,7 +69,6 @@ describe('applyWebSessionTabsSnapshot', () => {
     })
     expect(patch.agentStatusByPaneKey?.[hostPaneKey]).toBeUndefined()
     expect(patch.agentStatusEpoch).toBe(1)
-    expect(patch.sortEpoch).toBe(1)
   })
 
   it('clears stale tool-output provenance when a newer host preview is assistant prose', () => {
@@ -201,7 +200,6 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(degraded.agentStatusByPaneKey?.[mirroredPaneKey]?.restoredUnconfirmed).toBe(true)
     expect(degraded.agentStatusEpoch).toBe(2)
-    expect(degraded.sortEpoch).toBe(2)
   })
 
   it('repairs mirrored same-state attribution and retains identity from an older snapshot', () => {
@@ -238,7 +236,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     ) as Partial<WebSessionTabsSyncState>
     const mirroredPaneKey = Object.keys(initial.agentStatusByPaneKey ?? {})[0]!
     const existing = initial.agentStatusByPaneKey![mirroredPaneKey]!
-    const attributionPatch = applyWebSessionTabsSnapshot(
+    const attributionPatch: Partial<WebSessionTabsSyncState> = applyWebSessionTabsSnapshot(
       makeState({
         ...initial,
         agentStatusByPaneKey: {
@@ -248,22 +246,20 @@ describe('applyWebSessionTabsSnapshot', () => {
             tabId: 'stale-tab'
           }
         },
-        agentStatusEpoch: 7,
-        sortEpoch: 11
+        agentStatusEpoch: 7
       }),
       { ...snapshot, snapshotVersion: 2 },
       ENV,
       NOW
-    ) as Partial<WebSessionTabsSyncState>
+    )
 
     expect(attributionPatch.agentStatusByPaneKey?.[mirroredPaneKey]).toMatchObject({
       worktreeId: existing.worktreeId,
       tabId: existing.tabId
     })
     expect(attributionPatch.agentStatusEpoch).toBe(8)
-    expect(attributionPatch.sortEpoch).toBe(12)
 
-    const fresherAttributionPatch = applyWebSessionTabsSnapshot(
+    const fresherAttributionPatch: Partial<WebSessionTabsSyncState> = applyWebSessionTabsSnapshot(
       makeState({
         ...initial,
         agentStatusByPaneKey: {
@@ -275,13 +271,12 @@ describe('applyWebSessionTabsSnapshot', () => {
             providerSession: undefined
           }
         },
-        agentStatusEpoch: 7,
-        sortEpoch: 11
+        agentStatusEpoch: 7
       }),
       { ...snapshot, snapshotVersion: 3 },
       ENV,
       NOW
-    ) as Partial<WebSessionTabsSyncState>
+    )
 
     expect(fresherAttributionPatch.agentStatusByPaneKey?.[mirroredPaneKey]).toMatchObject({
       worktreeId: existing.worktreeId,
@@ -290,7 +285,6 @@ describe('applyWebSessionTabsSnapshot', () => {
       providerSession: { key: 'session_id', id: 'session-1' }
     })
     expect(fresherAttributionPatch.agentStatusEpoch).toBe(8)
-    expect(fresherAttributionPatch.sortEpoch).toBe(12)
 
     const identityPatch = applyWebSessionTabsSnapshot(
       makeState({
@@ -315,7 +309,6 @@ describe('applyWebSessionTabsSnapshot', () => {
     })
     expect(identityPatch.agentStatusByPaneKey?.[mirroredPaneKey]?.updatedAt).toBe(NOW)
     expect(identityPatch.agentStatusEpoch).toBe(8)
-    expect(identityPatch.sortEpoch).toBe(12)
 
     const nextTurnPatch = applyWebSessionTabsSnapshot(
       makeState({
@@ -404,7 +397,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     })
   })
 
-  it('bumps sort epoch for mirrored Command Code same-state turn starts', () => {
+  it('bumps the status epoch for mirrored Command Code same-state turn starts', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
     const initialPatch = applyWebSessionTabsSnapshot(
       makeState(),
@@ -476,10 +469,9 @@ describe('applyWebSessionTabsSnapshot', () => {
       promptInteractionKey: 'command-code-transcript-b'
     })
     expect(patch.agentStatusEpoch).toBe((initialState.agentStatusEpoch ?? 0) + 1)
-    expect(patch.sortEpoch).toBe((initialState.sortEpoch ?? 0) + 1)
   })
 
-  it('bumps sort epoch when a mirrored same-state done update becomes a completion', () => {
+  it('bumps the status epoch when a mirrored same-state done update becomes a completion', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
     const initialSnapshot = makeSnapshot([
       {
@@ -534,6 +526,5 @@ describe('applyWebSessionTabsSnapshot', () => {
     ) as Partial<WebSessionTabsSyncState>
 
     expect(patch.agentStatusEpoch).toBe((initialState.agentStatusEpoch ?? 0) + 1)
-    expect(patch.sortEpoch).toBe((initialState.sortEpoch ?? 0) + 1)
   })
 })

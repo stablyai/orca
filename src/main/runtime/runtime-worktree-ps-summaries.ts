@@ -1,4 +1,3 @@
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 import type { Worktree } from '../../shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
@@ -138,13 +137,10 @@ export function buildRuntimeWorktreePsSummaries(args: {
   return summaries
 }
 
-// Switch point: a stamping host tells clients to sort by its stamps.
+// A stamping host tells clients to sort by its stamps.
 function sortStampSummaryFields(
   worktree: Pick<Worktree, 'smartTier' | 'smartAt'>
 ): Pick<RuntimeWorktreePsSummary, 'smartTier' | 'smartAt' | 'sortedByStamps'> {
-  if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-    return {}
-  }
   return {
     sortedByStamps: true,
     ...(worktree.smartTier !== undefined

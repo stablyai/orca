@@ -130,8 +130,7 @@ export function dropConfirmedHostRow(
             activeWorktreeId: survivingHostId ? worktreeId : null,
             activeWorkspaceExecutionHostId: survivingHostId
           }
-        : {}),
-      sortEpoch: state.sortEpoch + 1
+        : {})
     }
   })
   if (parseExecutionHostId(requiredExecutionHostId)?.kind === 'ssh') {

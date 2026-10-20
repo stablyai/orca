@@ -14,12 +14,6 @@ import {
   type HeadlessPairedRuntimeHost
 } from './helpers/headless-paired-runtime-host'
 import { launchPairedElectronClient } from './helpers/paired-electron-client'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
-
-test.skip(
-  !SIDEBAR_INPUTS_BUILD,
-  'the window defers the unread flag to its host only in an ORCA_SIDEBAR_INPUTS=main build'
-)
 
 const ReposSchema = z.object({
   repos: z.array(z.looseObject({ id: z.string(), path: z.string() }))

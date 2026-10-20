@@ -245,7 +245,6 @@ export type WebSessionTabsSyncState = Pick<
   | 'terminalLayoutsByTabId'
   | 'unifiedTabsByWorktree'
   | 'unreadTerminalTabs'
-  | 'sortEpoch'
 > &
   Partial<
     Pick<

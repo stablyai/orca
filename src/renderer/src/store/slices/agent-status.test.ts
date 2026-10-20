@@ -243,7 +243,6 @@ afterEach(() => {
         .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p', agentType: 'claude' })
 
       const agentEpochBefore = store.getState().agentStatusEpoch
-      const sortEpochBefore = store.getState().sortEpoch
 
       store.getState().dropAgentStatus('tab-1:0')
 
@@ -253,7 +252,6 @@ afterEach(() => {
       // retention sync does not resurrect the row on the next render frame.
       expect(s.retentionSuppressedPaneKeys['tab-1:0']).toBe(true)
       expect(s.agentStatusEpoch).toBe(agentEpochBefore + 1)
-      expect(s.sortEpoch).toBe(sortEpochBefore + 1)
     })
 
     it('on a retained-only entry: removes retained row but does NOT write a suppressor and does NOT bump agentStatusEpoch', () => {
@@ -278,7 +276,6 @@ afterEach(() => {
       store.getState().retainAgents([retained])
 
       const agentEpochBefore = store.getState().agentStatusEpoch
-      const sortEpochBefore = store.getState().sortEpoch
 
       store.getState().dropAgentStatus('tab-retained:0')
 
@@ -290,7 +287,6 @@ afterEach(() => {
       expect(s.retentionSuppressedPaneKeys['tab-retained:0']).toBeUndefined()
       // Why: hasLive is false, so no epoch bumps.
       expect(s.agentStatusEpoch).toBe(agentEpochBefore)
-      expect(s.sortEpoch).toBe(sortEpochBefore)
     })
 
     it('drops both live and retained entries when the same paneKey has both', () => {
@@ -328,7 +324,6 @@ afterEach(() => {
       expect(store.getState().retainedAgentsByPaneKey['tab-1:0']).toBeDefined()
 
       const agentEpochBefore = store.getState().agentStatusEpoch
-      const sortEpochBefore = store.getState().sortEpoch
 
       store.getState().dropAgentStatus('tab-1:0')
 
@@ -343,7 +338,6 @@ afterEach(() => {
       // Why: hasLive=true means both epochs bump in lockstep (same rationale
       // as the live-only case).
       expect(s.agentStatusEpoch).toBe(agentEpochBefore + 1)
-      expect(s.sortEpoch).toBe(sortEpochBefore + 1)
     })
 
     it('closeTab drops completed worktree-attributed orphan rows', () => {
@@ -524,7 +518,6 @@ afterEach(() => {
       const store = createTestStore()
 
       const agentEpochBefore = store.getState().agentStatusEpoch
-      const sortEpochBefore = store.getState().sortEpoch
       const suppressorsBefore = store.getState().retentionSuppressedPaneKeys
       const liveBefore = store.getState().agentStatusByPaneKey
       const retainedBefore = store.getState().retainedAgentsByPaneKey
@@ -533,7 +526,6 @@ afterEach(() => {
 
       const s = store.getState()
       expect(s.agentStatusEpoch).toBe(agentEpochBefore)
-      expect(s.sortEpoch).toBe(sortEpochBefore)
       // Why: the short-circuit `return s` must preserve object identity so
       // consumers selecting on these slices do not re-render spuriously.
       expect(s.retentionSuppressedPaneKeys).toBe(suppressorsBefore)

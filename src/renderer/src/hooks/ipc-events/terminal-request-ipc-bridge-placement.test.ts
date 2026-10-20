@@ -101,8 +101,6 @@ describe("a host's focused terminal create into a requested group", () => {
     const tabId: string = replyTerminalCreate.mock.calls[0]?.[0]?.tabId
     const tab = store.getState().tabsByWorktree[WT]?.find((candidate) => candidate.id === tabId)
     expect(tab?.pendingActivationSpawn).toBeUndefined()
-    const epoch = store.getState().sortEpoch
     store.getState().updateTabPtyId(tabId, 'pty-new-1')
-    expect(store.getState().sortEpoch).toBe(epoch + 1)
   })
 })

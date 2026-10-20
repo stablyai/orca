@@ -10,8 +10,6 @@ import {
   type HostWorktreeTarget
 } from '../../../shared/worktree/host-qualified-identity'
 
-vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
-
 const WT = 'repo-1::/tmp/worktree-a'
 
 function createHeadlessRuntime(

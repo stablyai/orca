@@ -109,7 +109,7 @@ async function sweepRestoredStatusesAgainstLocalPtys(): Promise<void> {
     getPersistedPtyIdForPaneKey: (paneKey) => persistedPtyIdByPaneKey.get(paneKey)
   })
   state.runtime?.agentTransitions.seedRestoredRows()
-  await state.runtime?.sidebarFacts?.reconcileSortStampTiers(provider)
+  await state.runtime?.sidebarFacts.reconcileSortStampTiers(provider)
 }
 
 export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {

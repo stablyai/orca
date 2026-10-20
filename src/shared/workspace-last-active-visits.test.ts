@@ -1,13 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { getWorkspaceLastActiveAt, withCleanupVisitEvidence } from './workspace-last-active'
 import { makeCleanupCandidate as candidate } from './workspace-last-active.test-fixture'
-
-vi.mock('./sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const NOW = 100 * DAY_MS
 
-describe('workspace last active with the switch on', () => {
+describe('workspace last active', () => {
   it('takes the later of the Recent stamp and the last visit', () => {
     expect(getWorkspaceLastActiveAt(5, 9)).toBe(9)
     expect(getWorkspaceLastActiveAt(9, 5)).toBe(9)

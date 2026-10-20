@@ -1,10 +1,10 @@
 import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
+import { runtimeDoubleWithSidebarFacts } from './sidebar-facts-double.test-fixture'
 
 type ExitListener = () => void
 
@@ -36,7 +36,7 @@ const subscriptionCases = [
 
 function createRuntime(exitListeners: ExitListener[]) {
   const registry = createSubscriptionRegistryDouble()
-  const runtime = {
+  const runtime = runtimeDoubleWithSidebarFacts({
     getRuntimeId: () => 'test-runtime',
     requestRendererTerminalTabMount: () => false,
     resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -62,7 +62,7 @@ function createRuntime(exitListeners: ExitListener[]) {
       exitListeners.push(listener)
       return vi.fn()
     })
-  } as unknown as OrcaRuntimeService
+  })
   return { registry, runtime }
 }
 

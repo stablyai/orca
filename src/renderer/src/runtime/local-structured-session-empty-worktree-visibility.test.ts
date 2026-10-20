@@ -47,7 +47,6 @@ function emptyState(overrides: Partial<WebSessionTabsSyncState>): WebSessionTabs
     terminalLayoutsByTabId: {},
     unifiedTabsByWorktree: {},
     unreadTerminalTabs: {},
-    sortEpoch: 0,
     ...overrides
   }
 }

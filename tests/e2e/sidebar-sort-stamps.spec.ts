@@ -1,7 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { postClaudeHook, readHookEndpoint } from './helpers/agent-hook-endpoint'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,
@@ -15,11 +14,6 @@ import {
   WorkspaceRowsSnapshotSchema,
   type WorkspaceRow
 } from '../../src/shared/sidebar-list/workspace-rows'
-
-test.skip(
-  !SIDEBAR_INPUTS_BUILD,
-  'the host stamps sort keys only in an ORCA_SIDEBAR_INPUTS=main build'
-)
 
 async function readMainRow(page: Page, rowKey: string): Promise<WorkspaceRow | undefined> {
   const response = await page.evaluate(() =>

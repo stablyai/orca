@@ -103,13 +103,10 @@ export type TerminalTab = {
   agentLaunchPane?: { leafId: string; operationId?: string; outcome?: AgentLaunchPaneOutcome }
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
-   *  not by the user doing work. Without this flag the resulting
-   *  `updateTabPtyId` call would call `bumpWorktreeActivity` and flip the
-   *  sidebar's recency sort on every click — the reorder-on-click bug. The
-   *  flag is set by `setActiveWorktree` and consumed by the activation-driven
-   *  PTY lifecycle calls that follow, which then suppress activity bumps and
-   *  `sortEpoch` increments. Split layouts use a numeric count because one tab
-   *  can remount several panes. Never persisted — it is a transient handoff. */
+   *  not by the user doing work. Set by `setActiveWorktree` and consumed by the
+   *  activation-driven PTY lifecycle calls that follow. Split layouts use a
+   *  numeric count because one tab can remount several panes. Never persisted —
+   *  it is a transient handoff. */
   pendingActivationSpawn?: boolean | number
   /** Hydrated from the saved session, so its own persisted PTY bindings identify it; a host
    *  surface may retire it only by that identity. Never persisted; dropped once a PTY binds. */

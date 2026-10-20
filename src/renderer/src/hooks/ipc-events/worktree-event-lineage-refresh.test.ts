@@ -126,7 +126,7 @@ describe('remote worktree event lineage refresh', () => {
     for (const row of rows) {
       ;(worktreesByRepo[row.repoId] ??= []).push(row)
     }
-    store.setState({ worktreesByRepo, sortEpoch: 3 })
+    store.setState({ worktreesByRepo })
     const { worktreeChangeRefreshQueue: queue } = createWorktreeEventRuntime(unsubs, () => false)
     const now = 1_800_000_000_000
     const events = Object.entries(worktreesByRepo).map(([repoId, repoRows]) => ({
@@ -144,7 +144,6 @@ describe('remote worktree event lineage refresh', () => {
     await flushPromises()
     expect(store.getState().fetchWorktrees).not.toHaveBeenCalled()
     expect(store.getState().fetchWorktreeLineage).not.toHaveBeenCalled()
-    expect(store.getState().sortEpoch).toBe(3)
     expect(store.getState().worktreesByRepo['repo-0'][0].sortOrder).toBe(now)
     // The save now costs only the pushed events (about 16 KB with real-length ids).
     const eventBytes = events.reduce(
@@ -315,7 +314,6 @@ function createActualActionFixture() {
     settings: null,
     repos: [{ ...TEST_REPO, id: 'repo', executionHostId: 'runtime:env-1' }],
     worktreesByRepo: { repo: [worktree] },
-    sortEpoch: 7,
     purgeWorktreeTerminalState: vi.fn(),
     removeWorkspaceSpaceWorktrees: vi.fn()
   })
@@ -348,13 +346,11 @@ describe('order-only refresh with actual store actions', () => {
     await vi.waitFor(() => expect(isRemoteWorktreeLineageFresh(store.getState, 'env-1')).toBe(true))
     expect(h.lineageReadCount()).toBe(1)
     expect(store.getState().worktreeLineageById[h.worktree.id]).toEqual(h.lineage)
-    const beforeEpoch = store.getState().sortEpoch
     h.setOrder(20)
     h.queue.enqueue({ repoId: 'repo', executionHostId: 'runtime:env-1', sortOrderOnly: true })
     await vi.waitFor(() => expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(20))
     await flushPromises()
     // A sortOrder-only refetch must not schedule the next Smart re-sort and save (#27268).
-    expect(store.getState().sortEpoch).toBe(beforeEpoch)
     expect(h.lineageReadCount()).toBe(1)
   })
 
@@ -362,7 +358,6 @@ describe('order-only refresh with actual store actions', () => {
     const h = createActualActionFixture()
     await h.warm()
     const readsBefore = runtimeEnvironmentCall.mock.calls.length
-    const beforeEpoch = store.getState().sortEpoch
     h.queue.enqueue({
       repoId: 'repo',
       executionHostId: 'runtime:env-1',
@@ -371,7 +366,6 @@ describe('order-only refresh with actual store actions', () => {
     })
     await flushPromises()
     expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(99)
-    expect(store.getState().sortEpoch).toBe(beforeEpoch)
     expect(runtimeEnvironmentCall.mock.calls.length).toBe(readsBefore)
   })
 
@@ -447,9 +441,8 @@ describe('order-only refresh with actual store actions', () => {
     expect(store.getState().worktreesByRepo.repo.map((row) => row.sortOrder)).toEqual([99, 5])
   })
 
-  it('still bumps sortEpoch when a refetch changes more than sortOrder', async () => {
+  it('applies a refetch that changes more than sortOrder', async () => {
     const h = createActualActionFixture()
-    const beforeEpoch = store.getState().sortEpoch
     runtimeEnvironmentCall.mockImplementation(async () => ({
       id: 'rpc',
       ok: true,
@@ -458,7 +451,6 @@ describe('order-only refresh with actual store actions', () => {
     }))
     await store.getState().fetchWorktrees('repo', { executionHostId: 'runtime:env-1' })
     expect(store.getState().worktreesByRepo.repo[0].isUnread).toBe(true)
-    expect(store.getState().sortEpoch).toBe(beforeEpoch + 1)
   })
 
   it('retries failed ordinary and best-effort reads on the next order-only event', async () => {

@@ -100,7 +100,6 @@ function setProjectGroupWithoutWorktreeRowsState(
     renamingWorktreeId: null,
     showSleepingWorkspaces: true,
     sortBy: 'recent',
-    sortEpoch: 0,
     sshConnectedGeneration: 0,
     sshConnectionStates: new Map(),
     sshTargetLabels: new Map(),

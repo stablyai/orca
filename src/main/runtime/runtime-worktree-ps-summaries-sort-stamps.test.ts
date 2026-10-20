@@ -1,10 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { Worktree } from '../../shared/worktree/types'
-
-vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
 describe('buildRuntimeWorktreePsSummaries with sort stamps', () => {
   it('tells clients the host sorts by its stamps, and carries the tier', () => {

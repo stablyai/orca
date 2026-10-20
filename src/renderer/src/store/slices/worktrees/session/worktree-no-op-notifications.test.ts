@@ -31,7 +31,6 @@ describe('worktree no-op notifications', () => {
       { workspaceIds: ['missing'], targets: [{ worktreeId: 'missing', tabId: 'missing' }] },
       { screenArrived: true }
     )
-    before.bumpWorktreeActivity('missing')
     before.clearWorktreeDeleteState('missing')
     before.seedActiveWorktreeLastVisitedIfMissing()
     before.pruneLastVisitedTimestamps()

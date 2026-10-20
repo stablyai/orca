@@ -106,8 +106,7 @@ export function createAgentStatusDropActions(
               }
             : {}),
           agentStatusEpoch:
-            hasLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-          sortEpoch: hasLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
+            hasLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch
         }
       })
       if (liveExisted) {
@@ -244,8 +243,7 @@ export function createAgentStatusDropActions(
               }
             : {}),
           agentStatusEpoch:
-            hasLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-          sortEpoch: hasLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
+            hasLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch
         }
       })
       if (hadLive) {

@@ -320,7 +320,7 @@ async function startOrcadRuntime(
   }
   // Hook rows hydrated and the PTY runtime registered: stored sort tiers can be checked.
   runtime.agentTransitions.seedRestoredRows()
-  void runtime.sidebarFacts?.reconcileSortStampTiers(getLocalPtyProvider())
+  void runtime.sidebarFacts.reconcileSortStampTiers(getLocalPtyProvider())
 
   // Runs after RPC stops (cleanups run reversed); later records save synchronously until exit.
   registerCleanup(() => runtime.closeNotificationDismissals())

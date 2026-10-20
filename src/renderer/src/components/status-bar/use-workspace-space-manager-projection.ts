@@ -15,7 +15,6 @@ import {
   getWorkspaceSpaceWorktreeIdentity
 } from './workspace-space-delete-selection'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import { useAppStore } from '@/store'
 import { getWorkspaceSpaceProgressLabel } from './workspace-space-format'
 import type { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'
@@ -70,10 +69,8 @@ export function useWorkspaceSpaceManagerProjection(args: {
     [decisionDetailsByWorktreeId, isWorktreeDeleting]
   )
 
-  // Switch point: a visit counts as activity once terminals stop stamping Recent.
-  const lastVisitedAtByWorktreeId = useAppStore((s) =>
-    ORCA_SIDEBAR_INPUTS_IS_MAIN ? s.lastVisitedAtByWorktreeId : undefined
-  )
+  // A visit counts as activity: terminals do not stamp Recent.
+  const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
   const rows = useMemo(
     () =>
       sortWorkspaceSpaceRows(

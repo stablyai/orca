@@ -9,15 +9,9 @@ import {
   mutateStoppedProfileState,
   readPersistedProfileState
 } from './helpers/persisted-profile-state'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForSessionReady } from './helpers/store'
 import { postClaudeHook, readHookEndpoint } from './helpers/agent-hook-endpoint'
 import { WorkspaceRowsSnapshotSchema } from '../../src/shared/sidebar-list/workspace-rows'
-
-test.skip(
-  !SIDEBAR_INPUTS_BUILD,
-  'the host stamps sort keys only in an ORCA_SIDEBAR_INPUTS=main build'
-)
 
 function storedTiers(userDataDir: string, ids: readonly string[]): Record<string, unknown> {
   const meta = readPersistedProfileState(userDataDir).worktreeMeta

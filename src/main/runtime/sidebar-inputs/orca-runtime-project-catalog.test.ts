@@ -8,10 +8,7 @@ import { MOBILE_PROJECT_SECTIONS_METHOD } from '../../../shared/mobile-project-s
 import { OrcaRuntimeService } from '../orca-runtime'
 import { ALL_RPC_METHODS } from '../rpc/methods'
 import type { RuntimeStore } from '../runtime-store-contract'
-import { requireSwitchedOn } from './require-switched-on'
 import { TestPhone } from './sidebar-inputs-feed.test-fixture'
-
-vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
 function group(id: string): ProjectGroup {
   return {
@@ -40,7 +37,7 @@ function setup() {
   const runtime = new OrcaRuntimeService(store as RuntimeStore)
   const events: RuntimeClientEvent[] = []
   runtime.onClientEvent((event) => events.push(event))
-  const feed = requireSwitchedOn(runtime.sidebarInputsFeed)
+  const feed = runtime.sidebarInputsFeed
   /** Moves the repo the way a host's IPC write does: store first, then reposChanged. */
   const write = (groupId: string): void => {
     repos = repos.map((entry) => ({ ...entry, projectGroupId: groupId }))

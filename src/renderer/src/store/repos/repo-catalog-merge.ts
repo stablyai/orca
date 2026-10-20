@@ -88,9 +88,9 @@ export function filterSetupsForPrunedRepoRows(
 }
 
 export function reconcileReadoptedSshWorktreeState(
-  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'>,
+  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
   readoptions: readonly SshRepoReadoption[]
-): Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'> {
+): Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'> {
   const worktreesByRepo = reconcileReadoptedSshWorktreesByRepo(state.worktreesByRepo, readoptions)
   const detectedRows = Object.fromEntries(
     Object.entries(state.detectedWorktreesByRepo).map(([repoId, result]) => [
@@ -108,11 +108,7 @@ export function reconcileReadoptedSshWorktreeState(
             { ...result, worktrees: reconciledDetectedRows[repoId] }
           ])
         )
-  return {
-    worktreesByRepo,
-    detectedWorktreesByRepo,
-    sortEpoch: worktreesByRepo === state.worktreesByRepo ? state.sortEpoch : state.sortEpoch + 1
-  }
+  return { worktreesByRepo, detectedWorktreesByRepo }
 }
 
 export function filterTrustedOrcaHooksToValidRepos(

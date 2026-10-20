@@ -66,7 +66,6 @@ export function makeState(
     terminalLayoutsByTabId: {},
     unifiedTabsByWorktree: {},
     unreadTerminalTabs: {},
-    sortEpoch: 0,
     ...overrides
   }
 }

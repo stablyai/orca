@@ -155,8 +155,7 @@ export async function runKnownSshWorktreeFetch(
     return {
       ...(worktreesChanged
         ? {
-            worktreesByRepo: { ...state.worktreesByRepo, [repoId]: worktrees },
-            sortEpoch: state.sortEpoch + 1
+            worktreesByRepo: { ...state.worktreesByRepo, [repoId]: worktrees }
           }
         : {}),
       ...(detectedChanged

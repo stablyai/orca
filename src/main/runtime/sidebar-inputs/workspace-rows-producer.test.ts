@@ -6,10 +6,7 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import { requireSwitchedOn } from './require-switched-on'
 import { TestPhone } from './sidebar-inputs-feed.test-fixture'
-
-vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
 const localRepo: Repo = {
   id: 'repo-1',
@@ -113,7 +110,7 @@ function setup(repos: Repo[] = [localRepo, sshRepo]) {
   const runtime = new Probe(store as RuntimeStore)
   return {
     runtime,
-    rows: requireSwitchedOn(runtime.workspaceRows),
+    rows: runtime.workspaceRows,
     listing,
     write: (domains?: readonly string[]) => onWrite(domains),
     // As the store does: replace the settings in memory, then report a settings-tagged write.
@@ -181,7 +178,7 @@ describe('WorkspaceRowsProducer', () => {
     const { runtime, listing, writeSettings } = setup([localRepo, sshRepo, recentRepo])
     listing.worktrees.push(resolved('repo-3::/external', recentRepo, 'local'))
     writeSettings({ worktreeVisibilityDefaults: { external: 'hide' } })
-    const feed = requireSwitchedOn(runtime.sidebarInputsFeed)
+    const feed = runtime.sidebarInputsFeed
     const events: RuntimeClientEvent[] = []
     runtime.onClientEvent((event) => events.push(event))
     const phone = new TestPhone(feed, 'conn-1')
@@ -215,7 +212,7 @@ describe('WorkspaceRowsProducer', () => {
 
   it('reaches the phone feed as the workspaces domain', async () => {
     const { runtime, listing, write } = setup()
-    const feed = requireSwitchedOn(runtime.sidebarInputsFeed)
+    const feed = runtime.sidebarInputsFeed
     const events: RuntimeClientEvent[] = []
     runtime.onClientEvent((event) => events.push(event))
     const phone = new TestPhone(feed, 'conn-1')

@@ -1,5 +1,4 @@
 import { test, expect } from './helpers/orca-app'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { createDesktopMobilePairingOffer } from './helpers/paired-electron-client'
 import { pairMobileClient, type PairedMobileSocket } from './helpers/paired-mobile-client'
@@ -35,12 +34,7 @@ function pinned(state: SidebarInputsFeedState): unknown {
   return state.installed?.domains.get('desktop')?.get('pinnedWorkspaceIds')
 }
 
-test.describe('switch on', () => {
-  test.skip(
-    !SIDEBAR_INPUTS_BUILD,
-    'sidebarInputs.read exists only in an ORCA_SIDEBAR_INPUTS=main build'
-  )
-
+test.describe('sidebarInputs.read', () => {
   test('the host’s own phone reads a whole snapshot, then a delta after a change', async ({
     orcaPage
   }) => {
@@ -89,21 +83,6 @@ test.describe('switch on', () => {
       expect(second.kinds).toEqual(['delta'])
       expect(second.state.installed?.generation).toBe(installed?.generation)
       expect(pinned(second.state)).toContain(worktreeId)
-    } finally {
-      phone.dispose()
-    }
-  })
-})
-
-test.describe('switch off', () => {
-  test.skip(SIDEBAR_INPUTS_BUILD, 'checks the shipped method set')
-
-  test('a switch-off build refuses sidebarInputs.read to the phone', async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    const phone = pairMobileClient(await createDesktopMobilePairingOffer(orcaPage))
-    try {
-      const response = await phone.request('sidebarInputs.read', { maxBytes: 262_144 })
-      expect(response).toMatchObject({ ok: false })
     } finally {
       phone.dispose()
     }

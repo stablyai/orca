@@ -125,8 +125,7 @@ export function applyRemoveWorktreeSuccessState(
       ),
       // Why: terminal shutdown clears these earlier, but teardown awaits after that and a
       // provider-session event routed by worktree id can write a record in between (#24784).
-      ...omitSleepingAgentSessionsForWorktrees(s, new Set(worktreeIds)),
-      sortEpoch: s.sortEpoch + 1
+      ...omitSleepingAgentSessionsForWorktrees(s, new Set(worktreeIds))
     }
   })
 }

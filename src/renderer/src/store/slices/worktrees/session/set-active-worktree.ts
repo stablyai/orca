@@ -92,7 +92,7 @@ export function createSetActiveWorktree(
 
       // Why: prep is deferred (shell render deferred below) so it waits for input quiet instead of blocking the click.
       // Why first-activation guard, not tab.ptyId==null: reconnectPersistedTerminals repopulates ptyId before mount.
-      // Tag every tab on FIRST activation so reattach/fresh-spawn updateTabPtyId suppresses activity + sortEpoch bumps.
+      // Tag every tab on FIRST activation so reattach/fresh-spawn reads as navigation, not work.
       // Generation is only bumped when no tab has a live PTY — a live remount would kill the user's shell.
       const tabs = s.tabsByWorktree[worktreeId ?? ''] ?? []
       const wakeable = tabs.filter(isWakeable)

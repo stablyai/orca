@@ -6,18 +6,12 @@ import { test, expect } from './helpers/orca-app'
 import { createRestartSession } from './helpers/orca-restart'
 import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
 import { mutateStoppedProfileState } from './helpers/persisted-profile-state'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForSessionReady, waitForStartupWorktreeRefresh } from './helpers/store'
 import { DesktopSidebarFactsSchema } from '../../src/shared/sidebar-list/desktop-sidebar-facts'
 import {
   WorkspaceRowsSnapshotSchema,
   type WorkspaceRow
 } from '../../src/shared/sidebar-list/workspace-rows'
-
-test.skip(
-  !SIDEBAR_INPUTS_BUILD,
-  'main publishes sidebar inputs only in an ORCA_SIDEBAR_INPUTS=main build'
-)
 
 async function readMainRows(page: Page): Promise<Record<string, WorkspaceRow>> {
   const response = await page.evaluate(() =>

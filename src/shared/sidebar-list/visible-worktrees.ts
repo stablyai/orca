@@ -56,8 +56,7 @@ export function selectVisibleSidebarWorktrees({
     }
   }
 
-  // Apply cached sort order. Items not yet in the cache (e.g. brand-new
-  // worktrees before the next sortEpoch bump) are appended at the end.
+  // Apply cached sort order. Items not yet in the cache are appended at the end.
   // Manual placement belongs to the parent, even when a hidden child has a higher rank.
   if (injectLineageAncestors !== false && preserveLineageParentOrder) {
     all = addVisibleLineageAncestors(all, ancestorByIdentity, worktreeLineageById, selectedRepoIds)

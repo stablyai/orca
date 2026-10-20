@@ -1,4 +1,5 @@
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
+import { runtimeDoubleWithSidebarFacts } from './rpc/sidebar-facts-double.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,7 +14,6 @@ import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
 } from '../../shared/runtime-client-events'
-import type { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
 
@@ -44,8 +44,7 @@ describe('remote runtime request connection integration', () => {
           kind: 'git'
         }
       ]
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo.list over the real socket only calls the runtime methods defined below.
-      const runtime = {
+      const runtime = runtimeDoubleWithSidebarFacts({
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'fetch-runtime-test',
         getStartedAt: () => 1,
@@ -53,7 +52,7 @@ describe('remote runtime request connection integration', () => {
         cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
         listVisibleRepos: () => repos
-      } as unknown as OrcaRuntimeService
+      })
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,
@@ -119,7 +118,7 @@ describe('remote runtime request connection integration', () => {
       ]
       const clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
       const subscriptionCleanups = new Map<string, () => void>()
-      const runtime = {
+      const runtime = runtimeDoubleWithSidebarFacts({
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'events-runtime-test',
         getStartedAt: () => 1,
@@ -172,7 +171,7 @@ describe('remote runtime request connection integration', () => {
           }
           return { worktree }
         }
-      } as unknown as OrcaRuntimeService
+      })
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,
@@ -287,7 +286,7 @@ describe('remote runtime request connection integration', () => {
           listener(event)
         }
       }
-      const runtime = {
+      const runtime = runtimeDoubleWithSidebarFacts({
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'remote-sleep-runtime-test',
         getStartedAt: () => 1,
@@ -348,7 +347,7 @@ describe('remote runtime request connection integration', () => {
             postStopVerified: true
           }
         }
-      } as unknown as OrcaRuntimeService
+      })
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,
@@ -516,8 +515,7 @@ describe('remote runtime request connection integration', () => {
         activeTabType: null,
         tabs: []
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries only the surface the shared-control and status paths under test read.
-      const runtime = {
+      const runtime = runtimeDoubleWithSidebarFacts({
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'shared-runtime-test',
         getStartedAt: () => 1,
@@ -615,7 +613,7 @@ describe('remote runtime request connection integration', () => {
           }
           return { worktree }
         }
-      } as unknown as OrcaRuntimeService
+      })
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,

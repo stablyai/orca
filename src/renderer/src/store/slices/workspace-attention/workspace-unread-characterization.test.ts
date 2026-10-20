@@ -74,7 +74,7 @@ describe('bells', () => {
     ringBell(store, first)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell",
         "panes -",
         "completions -",
@@ -87,7 +87,7 @@ describe('bells', () => {
     store.getState().setActiveWorktree(WS_A)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell",
         "panes -",
         "completions -",
@@ -98,7 +98,7 @@ describe('bells', () => {
     typeInPane(store, second)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell",
         "panes -",
         "completions -",
@@ -110,7 +110,7 @@ describe('bells', () => {
     ringBell(store, first)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell",
         "panes -",
         "completions -",
@@ -128,7 +128,7 @@ describe('bells', () => {
     ringBell(store, pane)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -139,7 +139,7 @@ describe('bells', () => {
     pointerDownInTab(store, { ...pane, paneKey: null })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -150,7 +150,7 @@ describe('bells', () => {
     typeInPane(store, pane)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -166,7 +166,7 @@ describe('bells', () => {
     ringBell(store, { worktreeId: WS_A, tabId: 'orphan-tab', paneKey: 'orphan-tab:leaf' })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs -",
         "panes orphan-tab:leaf=terminal-bell",
         "completions -",
@@ -187,7 +187,7 @@ describe('bells', () => {
     store.getState().setActiveTab(first.tabId)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:read:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -202,7 +202,7 @@ describe('bells', () => {
     store.getState().activateTab(`unified-${second.tabId}`)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:1000 b@local:read:0 sortEpoch=2",
+        "rows a@local:read:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -223,7 +223,7 @@ describe('bells', () => {
     store.getState().activateTab(`unified-${pane.tabId}`)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell",
         "panes -",
         "completions -",
@@ -243,7 +243,7 @@ describe('bells', () => {
     expect(store.getState() === before).toBe(false)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs tab-float=terminal-bell",
         "panes -",
         "completions -",
@@ -255,7 +255,7 @@ describe('bells', () => {
     ringBell(store, pane)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs tab-float=terminal-bell",
         "panes -",
         "completions -",
@@ -267,7 +267,7 @@ describe('bells', () => {
     typeInPane(store, pane)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs tab-float=terminal-bell",
         "panes -",
         "completions -",
@@ -281,7 +281,7 @@ describe('bells', () => {
     })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -309,7 +309,7 @@ describe('agent completions', () => {
     const { afterViewed, afterHidden } = await viewedThenHiddenCompletion(false)
     expect(afterViewed).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -318,7 +318,7 @@ describe('agent completions', () => {
     `)
     expect(afterHidden).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions tab-a2:L2=agent-completion",
@@ -332,7 +332,7 @@ describe('agent completions', () => {
     const { afterViewed, afterHidden } = await viewedThenHiddenCompletion(true)
     expect(afterViewed).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -341,7 +341,7 @@ describe('agent completions', () => {
     `)
     expect(afterHidden).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a2=agent-completion",
         "panes tab-a2:L2=agent-completion",
         "completions tab-a2:L2=agent-completion",
@@ -359,7 +359,7 @@ describe('agent completions', () => {
     completeAgentTurn(store, { worktreeId: WS_A, paneKey: null })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -373,7 +373,7 @@ describe('agent completions', () => {
     completeAgentTurn(store, { worktreeId: WS_A, paneKey: null })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:read:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -396,7 +396,7 @@ describe('agent completions', () => {
     completeAgentTurn(store, second)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=2",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions tab-a2:L2=agent-completion",
@@ -410,7 +410,7 @@ describe('agent completions', () => {
     autoAckViewedTab(store, first)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=2",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions tab-a2:L2=agent-completion",
@@ -422,7 +422,7 @@ describe('agent completions', () => {
     autoAckViewedTab(store, second)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:1000 b@local:read:0 sortEpoch=2",
+        "rows a@local:read:1000 b@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -468,7 +468,7 @@ describe('manual, inbound and restart', () => {
     await Promise.resolve()
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:0 a@ssh:ssh-1:read:0 sortEpoch=1",
+        "rows a@local:UNREAD:0 a@ssh:ssh-1:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -481,7 +481,7 @@ describe('manual, inbound and restart', () => {
     await Promise.resolve()
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 a@ssh:ssh-1:read:0 sortEpoch=2",
+        "rows a@local:read:0 a@ssh:ssh-1:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -507,7 +507,7 @@ describe('manual, inbound and restart', () => {
     store.setState(rowsWith(false))
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:1000 b@local:read:0 sortEpoch=1",
+        "rows a@local:read:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell",
         "panes tab-a1:L1=terminal-bell",
         "completions -",
@@ -518,7 +518,7 @@ describe('manual, inbound and restart', () => {
     ringBell(store, pane)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=2",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell",
         "panes tab-a1:L1=terminal-bell",
         "completions -",
@@ -531,7 +531,7 @@ describe('manual, inbound and restart', () => {
     store.setState(rowsWith(true))
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:1000 b@local:read:0 sortEpoch=2",
+        "rows a@local:UNREAD:1000 b@local:read:0",
         "tabs tab-a1=terminal-bell",
         "panes tab-a1:L1=terminal-bell",
         "completions -",
@@ -564,7 +564,7 @@ describe('manual, inbound and restart', () => {
     })
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:0 folder-1@local:UNREAD:0 sortEpoch=0",
+        "rows a@local:UNREAD:0 folder-1@local:UNREAD:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -577,7 +577,7 @@ describe('manual, inbound and restart', () => {
     ringBell(store, folderPane)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:0 folder-1@local:UNREAD:0 sortEpoch=0",
+        "rows a@local:UNREAD:0 folder-1@local:UNREAD:0",
         "tabs tab-f1=terminal-bell",
         "panes -",
         "completions -",
@@ -589,7 +589,7 @@ describe('manual, inbound and restart', () => {
     store.getState().setActiveWorktree(folderKey, 'local')
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:0 folder-1@local:read:0 sortEpoch=0",
+        "rows a@local:UNREAD:0 folder-1@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -602,7 +602,7 @@ describe('manual, inbound and restart', () => {
     typeInPane(store, folderPane)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:UNREAD:0 folder-1@local:read:0 sortEpoch=0",
+        "rows a@local:UNREAD:0 folder-1@local:read:0",
         "tabs -",
         "panes -",
         "completions -",
@@ -637,7 +637,7 @@ describe('manual, inbound and restart', () => {
     completeAgentTurn(store, folderPane)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 folder-1@local:UNREAD:1000 sortEpoch=1",
+        "rows a@local:read:0 b@local:read:0 folder-1@local:UNREAD:1000",
         "tabs -",
         "panes -",
         "completions tab-f1:L1=agent-completion",
@@ -651,7 +651,7 @@ describe('manual, inbound and restart', () => {
     ringBell(store, folderPane)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 folder-1@local:UNREAD:1000 sortEpoch=1",
+        "rows a@local:read:0 b@local:read:0 folder-1@local:UNREAD:1000",
         "tabs tab-f1=terminal-bell",
         "panes -",
         "completions tab-f1:L1=agent-completion",
@@ -702,7 +702,7 @@ describe('an owning host that raises the flag', () => {
     ringBell(store, pane)
     expect(await observeSettled(store, persists)).toMatchInlineSnapshot(`
       [
-        "rows a@local:read:0 b@local:read:0 sortEpoch=0",
+        "rows a@local:read:0 b@local:read:0",
         "tabs tab-a1=terminal-bell",
         "panes -",
         "completions -",

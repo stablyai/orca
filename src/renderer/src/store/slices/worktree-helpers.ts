@@ -128,17 +128,6 @@ export type WorktreeSlice = {
   baseStatusByWorktreeId: Record<string, WorktreeBaseStatusEvent>
   remoteBranchConflictByWorktreeId: Record<string, WorktreeRemoteBranchConflictEvent>
   /**
-   * Monotonically increasing counter that signals when the sidebar sort order
-   * should be recomputed.  Only bumped by events that represent meaningful
-   * external changes (worktree add/remove, terminal activity, backend refresh)
-   * — NOT by selection-triggered side-effects like clearing `isUnread`.
-   */
-  sortEpoch: number
-  /** sortEpoch after the settle window; the sidebar sort reads this (see store/settled-sort-epoch.ts). */
-  settledSortEpoch: number
-  /** Bumped by sortOrder-only changes, which skip sortEpoch so live Smart can't loop on its own saves. */
-  sortOrderEpoch: number
-  /**
    * Worktree IDs that have been activated at least once during this app
    * session. The first activation of a worktree is special: its
    * TerminalPane mounts for the first time, tabs reattach or fresh-spawn
@@ -292,7 +281,6 @@ export type WorktreeSlice = {
     link: TerminalGitHubPRLink,
     context?: WorkspaceReferenceTerminalContext
   ) => void
-  bumpWorktreeActivity: (worktreeId: string) => void
   /**
    * Monotonic stamp of the focus-recency timestamp for a worktree. No-op if
    * the supplied (or current) timestamp is not strictly greater than the

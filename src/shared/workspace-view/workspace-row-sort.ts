@@ -3,40 +3,16 @@ import { compareCodePoints, createSidebarTextComparator } from '../sidebar-list/
 
 export type WorkspaceSortBy = PersistedUIState['sortBy']
 
-/**
- * A new workspace's activity is stamped when setup finishes, and ambient terminal output on other
- * workspaces can push it down a Recent list before the user notices it. It keeps a floor of
- * `createdAt + CREATE_GRACE_MS` until then.
- */
-export const CREATE_GRACE_MS = 5 * 60 * 1000
-
-/** Recency with the create-grace floor, applied only while the window is open; non-finite stamps from a row get none. */
-export function recentActivityWithCreateGrace(
-  lastActivityAt: number,
-  createdAt: number | undefined,
-  now: number
-): number {
-  if (
-    createdAt === undefined ||
-    !Number.isFinite(createdAt) ||
-    now >= createdAt + CREATE_GRACE_MS
-  ) {
-    return lastActivityAt
-  }
-  return Math.max(lastActivityAt, createdAt + CREATE_GRACE_MS)
-}
-
 /** How one surface reads the sort keys from its own rows. */
 export type WorkspaceRowSortReader<Row> = {
   label: (row: Row) => string
   /** Host-qualified id; breaks ties between rows whose labels are equal. */
   identity: (row: Row) => string
   repoLabel: (row: Row) => string
-  /** Already floored by recentActivityWithCreateGrace. */
   recentActivity: (row: Row) => number
   /** Higher ranks sort first; null sorts after every ranked row. */
   manualRank: (row: Row) => number | null
-  /** Agent activity: the desktop ranks live agent attention, the phone the desktop's saved order. Ties fall to the label. */
+  /** Agent activity by the owning host's stamps. Ties fall to the label. */
   compareSmart: (a: Row, b: Row) => number
 }
 
