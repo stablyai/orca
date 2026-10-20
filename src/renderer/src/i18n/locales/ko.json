@@ -5742,6 +5742,9 @@
         "WorktreeCardAgents": {
           "1b0a156717": "에이전트"
         },
+        "WorktreeCardMetaRow": {
+          "notificationsMuted": "알림 음소거됨"
+        },
         "WorktreeCardReviewDetailSection": {
           "reviewHeader": "{{value0}} #{{value1}}",
           "copyLink": "링크 복사"
@@ -5840,7 +5843,9 @@
           "deleteWorktree": "작업 트리 삭제",
           "sleepWithDescendants": "자손과 동침({{value0}})",
           "sleepWithDescendantsDescription": "메모리와 CPU를 확보하려면 이 워크스페이스과 모든 중첩 하위 항목의 활성 패널을 닫으세요.",
-          "deleteWithDescendants": "하위 항목과 함께 삭제…"
+          "deleteWithDescendants": "하위 항목과 함께 삭제…",
+          "muteNotifications": "알림 음소거",
+          "unmuteNotifications": "알림 음소거 해제"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",

@@ -5742,6 +5742,9 @@
         "WorktreeCardAgents": {
           "1b0a156717": "智能体"
         },
+        "WorktreeCardMetaRow": {
+          "notificationsMuted": "通知已静音"
+        },
         "WorktreeCardReviewDetailSection": {
           "reviewHeader": "{{value0}} #{{value1}}",
           "copyLink": "复制链接"
@@ -5840,7 +5843,9 @@
           "deleteWorktree": "删除工作树",
           "sleepWithDescendants": "与后代同眠 ({{value0}})",
           "sleepWithDescendantsDescription": "关闭此工作区中的活动面板以及每个嵌套的后代面板以释放内存和 CPU。",
-          "deleteWithDescendants": "与后代一起删除..."
+          "deleteWithDescendants": "与后代一起删除...",
+          "muteNotifications": "静音通知",
+          "unmuteNotifications": "取消静音通知"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",

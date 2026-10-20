@@ -5742,6 +5742,9 @@
         "WorktreeCardAgents": {
           "1b0a156717": "Agent"
         },
+        "WorktreeCardMetaRow": {
+          "notificationsMuted": "通知はミュート中"
+        },
         "WorktreeCardReviewDetailSection": {
           "reviewHeader": "{{value0}} #{{value1}}",
           "copyLink": "リンクをコピー"
@@ -5840,7 +5843,9 @@
           "deleteWorktree": "ワークツリーを削除",
           "sleepWithDescendants": "子孫と一緒に寝る ({{value0}})",
           "sleepWithDescendantsDescription": "このワークスペースとすべてのネストされた子孫のアクティブなパネルを閉じて、メモリと CPU を解放します。",
-          "deleteWithDescendants": "子孫と一緒に削除…"
+          "deleteWithDescendants": "子孫と一緒に削除…",
+          "muteNotifications": "通知をミュート",
+          "unmuteNotifications": "通知のミュートを解除"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",

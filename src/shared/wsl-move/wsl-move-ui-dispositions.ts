@@ -19,6 +19,10 @@ export const UI_STATE_DISPOSITIONS = {
     newManifestSection: true
   }),
   showDotfilesByWorktree: moveDisposition(38, { rewriteDesktopCopy: true }),
+  notificationsMutedByWorktree: moveDisposition(39, {
+    rewriteDesktopCopy: true,
+    newManifestSection: true
+  }),
   filterRepoIds: moveDisposition(38),
   agentsFilterRepoIds: moveDisposition(38),
   setupScriptPromptDismissedRepoIds: moveDisposition(38),

@@ -173,6 +173,7 @@ export function buildFullWorktreePurgeState(
     gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
     explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
     showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
+    notificationsMutedByWorktree: omitByWorktree(s.notificationsMutedByWorktree),
     expandedDirs: omitByWorktree(s.expandedDirs),
     // Why: keyed by worktreeId; re-keyed on rename but missed by both removal paths (editor-undo / Cmd+Shift+T snapshots).
     recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
