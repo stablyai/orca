@@ -75,7 +75,7 @@ export function launchFailureWithoutEffectsCode(
   if (error instanceof FolderWorkspaceCreateRefusedError) {
     return folderCreateRefusalCode(error)
   }
-  // Raised by the mode preflight, ahead of any create, so it proves no effects for every target.
+  // Raised only before launch effects, including definitive existing-workspace refusals.
   if (error instanceof AgentLaunchSurfaceUnavailableError) {
     return agentLaunchFailureCode(error)
   }

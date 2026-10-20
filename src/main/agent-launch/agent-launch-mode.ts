@@ -7,7 +7,8 @@
  * That default is a preference rather than a demand, so a launch it cannot apply to falls back to a
  * PTY terminal and the receipt says which mode ran and why — a routine launch must never fail
  * because the user happens to have a chat preference on. An explicit chat is a demand: one this
- * host can prove it cannot open is refused before anything is created.
+ * host conclusively refuses before launch effects is rejected. A created workspace keeps its
+ * terminal fallback.
  *
  * The settings default and the per-launch feasibility both come from
  * `shared/structured-native-chat-launch-route`. This module supplies placement facts and formats
@@ -82,7 +83,7 @@ export type AgentLaunchModePlacement = {
    *  `workspacePath`: a cwd that names the root asks for nothing and decides nothing. */
   cwd?: string
   /** The root of the workspace the launch lands in, when the host has resolved it. Without it a
-   *  requested `cwd` cannot be proven to name the root and is read as custom. */
+   *  requested `cwd` remains unresolved until materialization. */
   workspacePath?: string
   /** False when the client asking for the launch cannot show this agent's chat; absent for the
    *  host's own callers, which can. */
@@ -148,15 +149,11 @@ export function decideAgentLaunchMode(args: {
       detail: `Started ${vocabulary.terminal}, as requested.`
     }
   }
-  // Every fact below is known before anything is created, so an explicit chat is refused here.
-  const blocked = (reason: AgentLaunchDowngradeReason): AgentLaunchModeReceipt => {
-    if (surface === 'chat') {
-      throw new AgentLaunchSurfaceUnavailableError(
-        `${formatAgentTypeLabel(agent)} can't open as a chat here because ${DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`
-      )
-    }
-    return downgraded(reason, vocabulary)
-  }
+  const blocked = (reason: AgentLaunchDowngradeReason): AgentLaunchModeReceipt =>
+    unavailableLaunchMode(reason, vocabulary, surface === 'chat', {
+      agent,
+      phase: 'before-effects'
+    })
   if (args.terminalOnly || (surface !== 'chat' && !isNativeChatDefaultFor(settings, agent))) {
     return {
       mode: 'terminal',
@@ -170,6 +167,7 @@ export function decideAgentLaunchMode(args: {
   if (placement.on) {
     return blocked('remote_execution_host')
   }
+  const cwdRelation = launchCwdRelation(placement)
   const support = resolveStructuredNativeChatSupport({
     agent,
     executionHostId: 'local',
@@ -182,10 +180,8 @@ export function decideAgentLaunchMode(args: {
     ...(placement.workspaceKind ? { workspaceKind: placement.workspaceKind } : {}),
     // Mirrors the renderer's own route input (`agent-launch-route-input.ts`): a cwd is terminal-only
     // when it names somewhere other than the workspace root, by the same shared rule.
-    startsOutsideWorkspaceRoot: requestsCwdOutsideWorkspaceRoot(
-      placement.workspacePath,
-      placement.cwd
-    )
+    startsOutsideWorkspaceRoot:
+      cwdRelation === 'custom' || (surface !== 'chat' && cwdRelation === 'unknown')
   })
   if (!support.supported) {
     return blocked(BLOCKER_REASON[support.blocker])
@@ -211,23 +207,37 @@ export function decideAgentLaunchMode(args: {
 
 /**
  * Second half, once the workspace is resolved: the host that will run the agent answers whether it
- * can create a structured session there at all. Asked before anything is created, so a refusal
- * becomes a terminal agent rather than a failed launch.
+ * can create a structured session there. Only a conclusive refusal before launch effects can
+ * reject an explicit chat; a materialized workspace retains its terminal fallback.
  */
 export async function resolveAgentLaunchModeOnHost(
   runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
   receipt: AgentLaunchModeReceipt,
   worktreeId: string | undefined,
   agent: TuiAgent | undefined,
-  vocabulary: AgentLaunchModeVocabulary = DEFAULT_LAUNCH_VOCABULARY
+  vocabulary: AgentLaunchModeVocabulary = DEFAULT_LAUNCH_VOCABULARY,
+  context?: AgentLaunchModeSettlement
 ): Promise<AgentLaunchModeReceipt> {
   if (receipt.mode !== 'structured' || !worktreeId) {
     return receipt
   }
+  if (context && launchCwdRelation(context) !== 'root') {
+    return unavailableLaunchMode(
+      'tui_launch_command',
+      vocabulary,
+      receipt.reason === 'requested',
+      {
+        ...context,
+        agent
+      },
+      launchCwdRelation(context) === 'custom'
+    )
+  }
   return downgradeAgentLaunchModeForHost(
     receipt,
     await readStructuredCreateSupport(runtime, worktreeId, agent),
-    vocabulary
+    vocabulary,
+    context ? { ...context, agent } : undefined
   )
 }
 
@@ -254,7 +264,8 @@ async function readStructuredCreateSupport(
 export function downgradeAgentLaunchModeForHost(
   receipt: AgentLaunchModeReceipt,
   support: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null,
-  vocabulary: AgentLaunchModeVocabulary = DEFAULT_LAUNCH_VOCABULARY
+  vocabulary: AgentLaunchModeVocabulary = DEFAULT_LAUNCH_VOCABULARY,
+  context?: AgentLaunchModeSettlement
 ): AgentLaunchModeReceipt {
   if (receipt.mode !== 'structured' || support?.supported) {
     return receipt
@@ -263,23 +274,62 @@ export function downgradeAgentLaunchModeForHost(
   if (support === null) {
     return downgraded(BLOCKER_REASON['runtime-capability-unknown'], vocabulary, requested)
   }
-  return downgraded(
+  return unavailableLaunchMode(
     support.reason ? HOST_SUPPORT_REASON[support.reason] : 'structured_unsupported_on_host',
     vocabulary,
-    requested
+    requested,
+    context
   )
 }
 
 export function downgradeAgentLaunchModeForStructuredRefusal(
   receipt: AgentLaunchModeReceipt,
-  vocabulary: AgentLaunchModeVocabulary
+  vocabulary: AgentLaunchModeVocabulary,
+  context?: AgentLaunchModeSettlement
 ): AgentLaunchModeReceipt {
+  const fallback = unavailableLaunchMode(
+    'structured_unsupported_on_host',
+    vocabulary,
+    receipt.reason === 'requested',
+    context
+  )
   return {
-    mode: 'terminal',
-    preferred: receipt.preferred,
-    reason: 'structured_unsupported_on_host',
+    ...fallback,
     detail: `${receipt.reason === 'requested' ? 'You asked for' : 'Your default is'} a structured chat session, but the host refused to create one here; started ${vocabulary.terminal} instead.`
   }
+}
+
+/** Phase is derived from successful materialization, never from a support lookup's availability. */
+export type AgentLaunchModeSettlement = {
+  phase: 'before-effects' | 'created-workspace'
+  agent?: TuiAgent
+  workspacePath?: string
+  cwd?: string
+}
+
+function launchCwdRelation(placement: Pick<AgentLaunchModePlacement, 'cwd' | 'workspacePath'>) {
+  if (!placement.cwd?.trim()) {
+    return 'root'
+  }
+  if (!placement.workspacePath) {
+    return 'unknown'
+  }
+  return requestsCwdOutsideWorkspaceRoot(placement.workspacePath, placement.cwd) ? 'custom' : 'root'
+}
+
+function unavailableLaunchMode(
+  reason: AgentLaunchDowngradeReason,
+  vocabulary: AgentLaunchModeVocabulary,
+  requested: boolean,
+  context?: AgentLaunchModeSettlement,
+  conclusive = true
+): AgentLaunchModeReceipt {
+  if (requested && conclusive && context?.phase === 'before-effects') {
+    throw new AgentLaunchSurfaceUnavailableError(
+      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`
+    )
+  }
+  return downgraded(reason, vocabulary, requested)
 }
 
 function downgraded(

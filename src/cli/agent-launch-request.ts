@@ -22,6 +22,7 @@ import type { TuiAgent } from '../shared/tui-agent'
 import { isTuiAgent } from '../shared/tui-agent-config'
 import {
   getOptionalStringFlag,
+  getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty,
   rejectValuelessFlag
 } from './flags'
@@ -44,10 +45,10 @@ export type CliAgentLaunch = {
 }
 
 function readSurfaceFlag(flags: Flags): AgentLaunchSurface | undefined {
-  const surface = getOptionalStringFlag(flags, 'surface')
-  if (surface === undefined) {
+  if (!flags.has('surface')) {
     return undefined
   }
+  const surface = getRequiredStringFlag(flags, 'surface')
   const known = AGENT_LAUNCH_SURFACES.find((candidate) => candidate === surface)
   if (!known) {
     throw new RuntimeClientError('invalid_argument', '--surface must be one of: chat, terminal')

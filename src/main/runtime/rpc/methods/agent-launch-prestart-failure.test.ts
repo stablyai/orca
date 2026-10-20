@@ -192,27 +192,37 @@ describe('a launch whose terminal fails', () => {
     expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
     expect(runtime.createTerminal).toHaveBeenCalledTimes(2)
   })
-  it('refuses an explicit chat it cannot open before creating anything, and replays the refusal', async () => {
-    const runtime = runtimeStub({ settings: {} })
-    const subfolderChat = { ...CREATE_LAUNCH, cwd: 'packages/app', surface: 'chat' }
-
-    const response = await replay(runtime, subfolderChat)
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: {
-        code: AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
-        message: expect.stringContaining("Claude can't open as a chat here")
+  it.each(['cwd', 'wsl', 'remote'] as const)(
+    'refuses conclusive %s before effects and replays it',
+    async (reason) => {
+      const runtime = runtimeStub({
+        settings: {},
+        ...(reason === 'cwd' ? {} : { createSupport: { supported: false, reason } })
+      })
+      const subfolderChat = {
+        ...EXISTING_LAUNCH,
+        ...(reason === 'cwd' ? { cwd: 'packages/app' } : {}),
+        surface: 'chat'
       }
-    })
-    expect(outcomeOf(OPERATION_ID)).toMatchObject({
-      status: 'failed',
-      code: AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE
-    })
-    expect(await replay(runtime, subfolderChat)).toMatchObject(response)
-    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
-    expect(runtime.createTerminal).not.toHaveBeenCalled()
-  })
+
+      const response = await replay(runtime, subfolderChat)
+
+      expect(response).toMatchObject({
+        ok: false,
+        error: {
+          code: AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
+          message: expect.stringContaining("Claude can't open as a chat here")
+        }
+      })
+      expect(outcomeOf(OPERATION_ID)).toMatchObject({
+        status: 'failed',
+        code: AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE
+      })
+      expect(await replay(runtime, subfolderChat)).toMatchObject(response)
+      expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+    }
+  )
 
   it('starts the CLI for an explicit terminal even when chats are the default', async () => {
     const runtime = runtimeStub({ settings: { experimentalNativeChat: true } })
