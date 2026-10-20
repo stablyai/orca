@@ -3,29 +3,14 @@ import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-addres
 
 export const KEEPALIVE_INTERVAL_MS = 10_000
 
-// Why: cap long-polls at half the 32-slot connection budget so they can't starve short RPCs; overflow → runtime_busy. See §7 risk #2.
-export const LONG_POLL_CAP = 16
-
-// Why: orchestration.ask blocks on a human/agent reply for minutes, an order of
-// magnitude longer than terminal.wait or check --wait, so a fleet of asking
-// workers would otherwise hold every slot and starve the mobile/web/CLI/relay
-// clients sharing this runtime. Reserve half the budget for the other classes.
-export const ASK_LONG_POLL_SHARE = 0.5
-// Why: eight host slots preserve four-host overlap for two independently paired desktops.
-export const BROWSER_HOST_LONG_POLL_SHARE = 0.5
-// Why: asks and permanent hosts together retain the prior quarter-budget reservation for waits.
-export const SPECIALIZED_LONG_POLL_SHARE = 0.75
-
-// Why: 'ask' is metered separately from 'wait' — same keepalive/abort wiring, its own sub-cap.
-export type RuntimeLongPollClass = 'ask' | 'browser-host' | 'wait'
-
-// Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
-export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollClass | null {
+// Why: long-polls get keepalive and an abort signal but no admission slot; a shared slot count refused waits
+// whose answer was already pending and let passive waits refuse actions. Transports bound connections.
+export function isRuntimeLongPoll(request: RpcRequest): boolean {
   // Worker start waits for readiness and then verifies the submitted prompt;
   // the complete operation can run for 90–110s. Keep every local transport
   // (Unix sockets and Windows named pipes) alive for that long poll.
   if (request.method === 'orchestration.workerStart') {
-    return 'wait'
+    return true
   }
   // Prompts wait for readiness; workspace creates can also wait a minute for setup without a prompt.
   if (
@@ -39,11 +24,11 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
         'kind' in request.params.target &&
         request.params.target.kind === 'create-worktree'))
   ) {
-    return 'wait'
+    return true
   }
   // An injected task into a chat waits for its agent to accept the turn, up to 60 s; the reply
   // must outlive the 30 s idle timer or a delivered task reads as a dead runtime. A terminal
-  // inject doesn't wait, so it keeps its short-RPC slot.
+  // inject doesn't wait, so it stays a short call.
   if (
     request.method === 'orchestration.dispatch' &&
     typeof request.params === 'object' &&
@@ -54,13 +39,13 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
     typeof request.params.to === 'string' &&
     request.params.to.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
   ) {
-    return 'wait'
+    return true
   }
   if (request.method === 'browser.clientHost.attach') {
-    return 'browser-host'
+    return true
   }
   if (request.method === 'terminal.wait') {
-    return 'wait'
+    return true
   }
   // Agent-prompt submission waits for the PTY's lifecycle transition (up to
   // the verification budget); keep the local socket alive for that wait.
@@ -68,9 +53,10 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
     request.method === 'terminal.send' &&
     typeof request.params === 'object' &&
     request.params !== null &&
-    (request.params as { agentPrompt?: unknown }).agentPrompt === true
+    'agentPrompt' in request.params &&
+    request.params.agentPrompt === true
   ) {
-    return 'wait'
+    return true
   }
   // Why: orchestration.ask blocks unconditionally (default 600 s) holding the
   // RPC open until a reply lands or the deadline passes, so it needs the same
@@ -78,11 +64,15 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   // also relies on the abort signal (only wired for long-polls) to release the
   // waiter when the asking client disconnects.
   if (request.method === 'orchestration.ask') {
-    return 'ask'
+    return true
   }
   if (request.method === 'orchestration.check') {
-    const params = request.params as { wait?: unknown } | undefined
-    return params?.wait === true ? 'wait' : null
+    return (
+      typeof request.params === 'object' &&
+      request.params !== null &&
+      'wait' in request.params &&
+      request.params.wait === true
+    )
   }
-  return null
+  return false
 }

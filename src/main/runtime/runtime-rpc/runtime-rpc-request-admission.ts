@@ -4,7 +4,7 @@ import type { RpcMessageContext } from '../rpc/transport'
 import type { RpcRequest, RpcResponse } from '../rpc/core'
 import { errorResponse } from '../rpc/errors'
 import { RuntimeRpcBinaryRouting } from './runtime-rpc-binary-routing'
-import { classifyRuntimeLongPoll, type RuntimeLongPollClass } from './runtime-rpc-long-poll'
+import { isRuntimeLongPoll } from './runtime-rpc-long-poll'
 import { OWNER_RPC_CALLER_SCOPE, type RpcCallerScope } from '../rpc/rpc-caller-scope'
 
 export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
@@ -24,98 +24,21 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     }
     const { request, callerScope } = parsed
 
-    // Why: long-poll admission fence; short RPCs bypass the counter. See §7 risk #2.
-    const longPoll = classifyRuntimeLongPoll(request)
-    const rejection = this.admitLongPoll(longPoll)
-    if (rejection) {
-      return this.buildError(request.id, 'runtime_busy', rejection)
-    }
+    const longPoll = isRuntimeLongPoll(request)
     if (longPoll) {
       // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
       context?.startKeepalive()
     }
 
-    try {
-      return await this.dispatcher.dispatch(request, {
-        signal:
-          longPoll ||
-          request.method === 'linear.commentEdit' ||
-          request.method === 'linear.commentDelete'
-            ? context?.signal
-            : undefined,
-        callerScope
-      })
-    } finally {
-      this.releaseLongPoll(longPoll)
-    }
-  }
-
-  // Why: one fence for both transports — the total cap protects short RPCs, the ask
-  // sub-cap protects terminal.wait / check --wait from slow reply-blocked asks.
-  // Returns the rejection message, or null once the slot is reserved.
-  protected admitLongPoll(
-    longPoll: RuntimeLongPollClass | null,
-    pairedDeviceId?: string
-  ): string | null {
-    if (!longPoll) {
-      return null
-    }
-    if (this.activeLongPolls >= this.longPollCap) {
-      return 'long-poll capacity reached; retry with backoff'
-    }
-    if (
-      (longPoll === 'ask' || longPoll === 'browser-host') &&
-      this.activeAskLongPolls + this.activeBrowserHostLongPolls >= this.specializedLongPollCap
-    ) {
-      return longPoll === 'ask'
-        ? 'orchestration.ask capacity reached; retry with backoff'
-        : 'browser-host capacity reached; retry with backoff'
-    }
-    if (longPoll === 'ask' && this.activeAskLongPolls >= this.askLongPollCap) {
-      return 'orchestration.ask capacity reached; retry with backoff'
-    }
-    if (
-      longPoll === 'browser-host' &&
-      (this.activeBrowserHostLongPolls >= this.browserHostLongPollCap ||
-        (pairedDeviceId !== undefined &&
-          (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 0) >=
-            this.browserHostLongPollCapPerDevice))
-    ) {
-      return 'browser-host capacity reached; retry with backoff'
-    }
-    this.activeLongPolls += 1
-    if (longPoll === 'ask') {
-      this.activeAskLongPolls += 1
-    } else if (longPoll === 'browser-host') {
-      this.activeBrowserHostLongPolls += 1
-      if (pairedDeviceId !== undefined) {
-        this.activeBrowserHostLongPollsByDevice.set(
-          pairedDeviceId,
-          (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 0) + 1
-        )
-      }
-    }
-    return null
-  }
-
-  protected releaseLongPoll(longPoll: RuntimeLongPollClass | null, pairedDeviceId?: string): void {
-    if (!longPoll) {
-      return
-    }
-    this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
-    if (longPoll === 'ask') {
-      this.activeAskLongPolls = Math.max(0, this.activeAskLongPolls - 1)
-    } else if (longPoll === 'browser-host') {
-      this.activeBrowserHostLongPolls = Math.max(0, this.activeBrowserHostLongPolls - 1)
-      if (pairedDeviceId !== undefined) {
-        const remaining = (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 1) - 1
-        if (remaining > 0) {
-          this.activeBrowserHostLongPollsByDevice.set(pairedDeviceId, remaining)
-        } else {
-          this.activeBrowserHostLongPollsByDevice.delete(pairedDeviceId)
-        }
-      }
-    }
+    return await this.dispatcher.dispatch(request, {
+      signal:
+        longPoll ||
+        request.method === 'linear.commentEdit' ||
+        request.method === 'linear.commentDelete'
+          ? context?.signal
+          : undefined,
+      callerScope
+    })
   }
 
   protected parseAndAuth(

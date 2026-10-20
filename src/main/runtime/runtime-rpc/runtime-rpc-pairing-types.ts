@@ -55,9 +55,8 @@ export type OrcaRuntimeRpcServerOptions = {
    */
   pinnedBindHost?: string
   webClientRoot?: string
-  // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
+  // Why: test-only override for the constant below; production must not pass it (default set by §3.1).
   keepaliveIntervalMs?: number
-  longPollCap?: number
   // Why: test-only override for the ownership reclaim cadence.
   metadataOwnershipPollMs?: number
   // Why: tests may inject inert protocol stages before production authorization registers them.

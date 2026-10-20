@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { readRuntimeMetadata } from './runtime-metadata'
-import { classifyRuntimeLongPoll } from './runtime-rpc/runtime-rpc-long-poll'
+import { isRuntimeLongPoll } from './runtime-rpc/runtime-rpc-long-poll'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { openFramedSession, sleep } from './runtime-rpc-test-harness'
 
@@ -14,16 +14,16 @@ import { openFramedSession, sleep } from './runtime-rpc-test-harness'
 describe('orchestration.dispatch --inject as a long poll', () => {
   it('is a keepalive-backed wait only when it injects into a chat', () => {
     const dispatch = (params: Record<string, unknown>) =>
-      classifyRuntimeLongPoll({
+      isRuntimeLongPoll({
         id: 'req_dispatch',
         authToken: 'token',
         method: 'orchestration.dispatch',
         params
       })
-    expect(dispatch({ task: 'task_1', to: 'orca_session_id:x', inject: true })).toBe('wait')
-    expect(dispatch({ task: 'task_1', to: 'orca_session_id:x' })).toBeNull()
-    // A terminal inject writes and returns; it keeps a short-RPC slot.
-    expect(dispatch({ task: 'task_1', to: 'term_worker', inject: true })).toBeNull()
+    expect(dispatch({ task: 'task_1', to: 'orca_session_id:x', inject: true })).toBe(true)
+    expect(dispatch({ task: 'task_1', to: 'orca_session_id:x' })).toBe(false)
+    // A terminal inject writes and returns; it stays a short RPC.
+    expect(dispatch({ task: 'task_1', to: 'term_worker', inject: true })).toBe(false)
   })
 
   it('emits keepalives while an injected dispatch blocks', async () => {

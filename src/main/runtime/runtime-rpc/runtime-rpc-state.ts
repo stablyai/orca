@@ -17,13 +17,7 @@ import { PushUnregisterOutbox } from '../push/push-unregister-outbox'
 import { RuntimeBinaryMessageRouter } from '../runtime-binary-message-router'
 import type { RuntimeMetadataOwnershipWatch } from '../runtime-metadata-ownership-watch'
 import { RUNTIME_METADATA_OWNERSHIP_POLL_MS } from '../runtime-metadata-ownership-watch'
-import {
-  ASK_LONG_POLL_SHARE,
-  BROWSER_HOST_LONG_POLL_SHARE,
-  KEEPALIVE_INTERVAL_MS,
-  LONG_POLL_CAP,
-  SPECIALIZED_LONG_POLL_SHARE
-} from './runtime-rpc-long-poll'
+import { KEEPALIVE_INTERVAL_MS } from './runtime-rpc-long-poll'
 import type {
   MobilePairingOffer,
   MobileRelayPairingProvider,
@@ -54,12 +48,7 @@ export class RuntimeRpcState {
   protected stopping = false
   protected readonly authToken = randomBytes(24).toString('hex')
   protected readonly keepaliveIntervalMs: number
-  protected readonly longPollCap: number
   protected readonly metadataOwnershipPollMs: number
-  protected readonly askLongPollCap: number
-  protected readonly browserHostLongPollCap: number
-  protected readonly browserHostLongPollCapPerDevice: number
-  protected readonly specializedLongPollCap: number
   protected readonly relayRevokeOutbox: RelayRevokeOutbox
   protected readonly pushUnregisterOutbox: PushUnregisterOutbox
   protected deviceRegistry: DeviceRegistry | null = null
@@ -95,12 +84,6 @@ export class RuntimeRpcState {
     WebSocket,
     { controllers: Set<AbortController>; abortOnClose: () => void }
   >()
-  // Why: separate from server.maxConnections — count only long-running dispatches, not short RPCs. See §3.1 + §7 risk #2.
-  protected activeLongPolls = 0
-  // Why: subset of activeLongPolls held by orchestration.ask, fenced by askLongPollCap.
-  protected activeAskLongPolls = 0
-  protected activeBrowserHostLongPolls = 0
-  protected readonly activeBrowserHostLongPollsByDevice = new Map<string, number>()
   protected clientRequestsInFlight = 0
   protected lastClientRequestAt = Date.now()
 
@@ -117,7 +100,6 @@ export class RuntimeRpcState {
     pinnedBindHost,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
-    longPollCap = LONG_POLL_CAP,
     metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS,
     methods
   }: OrcaRuntimeRpcServerOptions) {
@@ -134,16 +116,7 @@ export class RuntimeRpcState {
     this.pinnedBindHost = pinnedBindHost ?? null
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
-    this.longPollCap = longPollCap
     this.metadataOwnershipPollMs = metadataOwnershipPollMs
-    // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
-    this.askLongPollCap = Math.max(1, Math.floor(longPollCap * ASK_LONG_POLL_SHARE))
-    this.browserHostLongPollCap = Math.max(
-      1,
-      Math.floor(longPollCap * BROWSER_HOST_LONG_POLL_SHARE)
-    )
-    this.browserHostLongPollCapPerDevice = Math.max(1, Math.floor(this.browserHostLongPollCap / 2))
-    this.specializedLongPollCap = Math.max(1, Math.floor(longPollCap * SPECIALIZED_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
     this.pushUnregisterOutbox = new PushUnregisterOutbox(userDataPath)
     this.runtime.configureNotificationDismissalStore(userDataPath)

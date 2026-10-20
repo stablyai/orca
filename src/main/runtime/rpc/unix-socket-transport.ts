@@ -1,7 +1,7 @@
 // Why: this is the original Unix socket / named pipe transport extracted from
 // runtime-rpc.ts. It preserves the exact same behavior: newline-delimited JSON,
 // 30s idle timeout (suspended while a dispatch is in flight), 1MB max message,
-// 32 max connections, chmod 0o600 on Unix.
+// 512 max connections, chmod 0o600 on Unix.
 // It also owns the keepalive timer and per-connection abort signal so the
 // server-side handler can cancel long-poll dispatches when the client goes
 // away. See design doc §3.1.
@@ -11,7 +11,9 @@ import type { RpcMessageContext, RpcTransport } from './transport'
 
 const MAX_RUNTIME_RPC_MESSAGE_BYTES = 1024 * 1024
 const RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS = 30_000
-const MAX_RUNTIME_RPC_CONNECTIONS = 32
+// Why: each held long-poll keeps one socket open and long-polls take no admission slot, so this
+// bounds held work; clients open one socket per request.
+const MAX_RUNTIME_RPC_CONNECTIONS = 512
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 10_000
 
 export type UnixSocketTransportOptions = {
@@ -68,6 +70,10 @@ export class UnixSocketTransport implements RpcTransport {
         server.off('error', reject)
         resolve()
       })
+    })
+    // Why: an accept failure (EMFILE) is otherwise an unhandled 'error' that crashes the runtime.
+    server.on('error', (error) => {
+      console.warn('[unix-socket-transport] accept failed:', error)
     })
 
     if (this.kind === 'unix') {

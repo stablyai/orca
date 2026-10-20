@@ -61,7 +61,7 @@ export async function checkDirectMailbox(args: {
   if (result.count > 0 || !params.wait) {
     return result
   }
-  // Why: signal aborts this waiter when the client socket closes, freeing the long-poll slot immediately rather than after timeoutMs (design doc §3.1).
+  // Why: signal aborts this waiter when the client socket closes, releasing it immediately rather than after timeoutMs (design doc §3.1).
   const waitResult = await runtime.waitForMessage(handle, {
     typeFilter: typeFilter as string[] | undefined,
     timeoutMs: params.timeoutMs ?? undefined,
