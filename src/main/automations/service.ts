@@ -221,7 +221,8 @@ export class AutomationService {
   }
 
   private async evaluateDueRuns(): Promise<void> {
-    if (this.evaluating || this.stopped) {
+    const liveDesktop = !this.headlessDispatcher && this.webContents?.isDestroyed() === false
+    if (this.evaluating || this.stopped || (liveDesktop && !this.rendererReady)) {
       return
     }
     this.evaluating = true

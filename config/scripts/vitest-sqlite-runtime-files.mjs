@@ -46,6 +46,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/automations/retained-run-reconciliation.test.ts',
   'src/main/automations/run-completion-watcher.test.ts',
   'src/main/automations/service-precheck.test.ts',
+  'src/main/automations/service-renderer-readiness.test.ts',
   'src/main/automations/service.test.ts',
   'src/main/claude/claude-api-retry-idle-sweep.test.ts',
   'src/main/claude/claude-api-retry-row.test.ts',
