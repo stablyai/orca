@@ -6,6 +6,7 @@ import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 import { HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS } from './server/program-status/hook-precedence'
+import { createProgramStatusProjector } from '../../shared/program-status/agent-status-projector'
 
 let dir: string
 let server: AgentHookServer
@@ -86,6 +87,34 @@ describe('OSC 7501 status beside hooks', () => {
     programStatus({ state: 'working', agentType: 'opencode' })
     await openCodeHook('SessionIdle')
     expect(paneRow()?.state).toBe('done')
+  })
+
+  it('accepts the DSH session and turn hooks after its program reports working', async () => {
+    const projected = createProgramStatusProjector().process(
+      '\x1b]7501;state=working:app=dsh-tui\x1b\\'
+    )
+    for (const { payload } of projected.payloads) {
+      programStatus(payload)
+    }
+    for (const hookEventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
+      const response = await postHookEvent(
+        server,
+        buildBody({
+          hook_event_name: hookEventName,
+          session_id: 'dsh-native-session',
+          prompt: 'build the manifest'
+        }),
+        '/hook/dsh'
+      )
+      expect(response.status).toBe(204)
+      expect(server.getProviderSessionIdentities()).toContainEqual(
+        expect.objectContaining({ paneKey: PANE, sessionId: 'dsh-native-session' })
+      )
+      expect(paneRow()).toMatchObject({
+        agentType: 'dsh',
+        state: hookEventName === 'UserPromptSubmit' ? 'working' : 'done'
+      })
+    }
   })
 
   it('falls back to OSC 7501 once hooks go silent on a state the program has left', async () => {
