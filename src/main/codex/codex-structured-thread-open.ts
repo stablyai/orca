@@ -64,7 +64,6 @@ export async function openCodexThread(
   launch: {
     cwd: string
     resumeThreadId: string | null
-    resumePath?: string | null
     supersedeIfUnsaved?: boolean
     permissionPolicy?: CodexStructuredPermissionPolicy
     /** Why: Codex renders a thread's base instructions for its opening model; a first turn on
@@ -99,11 +98,8 @@ export async function openCodexThread(
     opened = await startThread()
   } else {
     // No model: naming one makes Codex skip the thread's saved model, provider and effort.
-    const resumeParams = {
-      threadId: resumeThreadId,
-      ...threadSettings,
-      ...(launch.resumePath ? { path: launch.resumePath } : {})
-    }
+    // By id only: Codex picks the thread's current segment, and refuses any other path after a revert.
+    const resumeParams = { threadId: resumeThreadId, ...threadSettings }
     try {
       throwIfSignalAborted(signal)
       opened = await connection.request(

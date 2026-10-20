@@ -5,6 +5,7 @@ import {
   type AiVaultSession,
   type AiVaultSessionPreviewMessage
 } from '../../shared/ai-vault-types'
+import { codexRolloutFileNameOf } from '../codex/codex-rollout-file-name'
 import { buildAiVaultResumeCommand } from '../../shared/ai-vault-resume-command'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type {
@@ -34,7 +35,7 @@ import {
   transcriptMessagesFromContent
 } from './session-transcript-message-content'
 
-const SESSION_PREVIEW_MESSAGE_LIMIT = 5
+export const SESSION_PREVIEW_MESSAGE_LIMIT = 5
 
 export function createAccumulator(args: {
   agent: AiVaultAgent
@@ -353,5 +354,6 @@ export function sessionSortTime(session: AiVaultSession): number {
 export function sessionIdFromFileName(filePath: string): string {
   const fileName = basename(filePath, extname(filePath))
   const match = fileName.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
-  return match?.[0] ?? fileName
+  // A reverted Codex segment ends in its rollout id; the conversation is the thread id before it.
+  return codexRolloutFileNameOf(filePath)?.threadId ?? match?.[0] ?? fileName
 }

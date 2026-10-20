@@ -218,7 +218,7 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
   })
 
-  it('bridges real-home and sibling-account history into the launched account home', async () => {
+  it('puts the launched account on the shared store, with real-home and sibling history', async () => {
     const accountOne = createManagedAccount(
       'account-1',
       'acct-1',
@@ -244,6 +244,9 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     selectManagedAccount(settings, accountTwo.id)
     service.syncForCurrentSelection()
     expect(service.prepareForCodexLaunch()).toBe(accountTwo.managedHomePath)
+    await (
+      await import('../codex/codex-shared-store-migration')
+    ).settleCodexSharedStoreMigrationsForTests()
     await bridge.startCodexAccountSessionBridgeInBackground({
       targetCodexHomePath: accountTwo.managedHomePath,
       sourceCodexHomePaths: [systemHome(), accountOne.managedHomePath]
@@ -257,7 +260,8 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     expect(
       readFileSync(join(accountTwo.managedHomePath, 'sessions', siblingRollout), 'utf-8')
     ).toBe('{"session":"account-one"}\n')
-    expect(existsSync(join(systemHome(), 'sessions', siblingRollout))).toBe(false)
+    // Account two's store is the real home's, so a not-yet-moved sibling's history lands there.
+    expect(existsSync(join(systemHome(), 'sessions', siblingRollout))).toBe(true)
   })
 
   it('does not expose an untrusted persisted home through rollout discovery', async () => {

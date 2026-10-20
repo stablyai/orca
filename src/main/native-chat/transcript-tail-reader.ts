@@ -31,6 +31,10 @@ import {
   transcriptFileStat
 } from './wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+import {
+  codexTranscriptSegments,
+  readCodexTranscriptSegmentsTail
+} from './codex-transcript-lineage'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 
@@ -274,15 +278,31 @@ export async function readNativeChatTranscriptTail(
     return { error: 'Transcript unavailable', notFound: true }
   }
   try {
-    const result = await readNativeChatTranscriptTailFile(
-      filePath,
-      args.limit,
-      decode,
-      true,
-      args.beforeOffset,
-      decodeLifecycle,
-      signal
-    )
+    const segments =
+      resolveNativeChatTranscriptAgent(args.agent) === 'codex'
+        ? await codexTranscriptSegments(filePath, signal)
+        : null
+    const readTail = (path: string, limit: number, endOffset?: number, withLifecycle = true) =>
+      readNativeChatTranscriptTailFile(
+        path,
+        limit,
+        decode,
+        true,
+        endOffset,
+        withLifecycle ? decodeLifecycle : null,
+        signal
+      )
+    // Why: one byte space across inherited prefixes keeps the numeric cursor paging into them.
+    const result =
+      segments && segments.length > 1
+        ? await readCodexTranscriptSegmentsTail({
+            segments,
+            limit: args.limit,
+            beforeOffset: args.beforeOffset,
+            readTail,
+            signal
+          })
+        : await readTail(filePath, args.limit, args.beforeOffset)
     signal?.throwIfAborted()
     return {
       messages: result.messages,

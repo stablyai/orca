@@ -20,6 +20,7 @@ import { observeCodexSettingsBaseline, readCodexSettingsBaseline } from './confi
 import { getCodexConfigSyncStatus, reportCodexConfigSyncOutcome } from './config-sync-stall'
 import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
 import { applyCodexDaemonSocketGuard } from './codex-daemon-socket-path-guard'
+import { applyCodexSharedStoreConfig } from './codex-shared-store-config'
 import { stripRuntimeOwnedTomlSections } from './config-toml-runtime-owned-sections'
 import { mergeSystemCodexConfigIntoRuntime } from './codex-config-mirror-merge'
 
@@ -123,8 +124,13 @@ export function ensureCodexDaemonSocketGuard(runtimeHomePath: string): void {
   }
 }
 
+// Lines Orca owns in a managed home's config: re-applied on every mirror, never promoted.
+function applyManagedHomeConfigGuards(config: string, homePath: string): string {
+  return applyCodexSharedStoreConfig(applyCodexDaemonSocketGuard(config, homePath), homePath)
+}
+
 function writeCodexDaemonSocketGuard(runtimeHomePath: string, runtimeConfig: string | null): void {
-  const guarded = applyCodexDaemonSocketGuard(runtimeConfig ?? '', runtimeHomePath)
+  const guarded = applyManagedHomeConfigGuards(runtimeConfig ?? '', runtimeHomePath)
   if (guarded !== (runtimeConfig ?? '')) {
     writeFileAtomicallyIfUnchanged(join(runtimeHomePath, 'config.toml'), runtimeConfig, guarded)
   }
@@ -254,7 +260,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
 
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
   if (!runtimeConfigExists) {
-    const freshRuntimeConfig = applyCodexDaemonSocketGuard(
+    const freshRuntimeConfig = applyManagedHomeConfigGuards(
       prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir),
       runtimeHomePath
     )
@@ -284,7 +290,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     ),
     promotionPlan.runtimeValuesToPreserve
   )
-  const nextRuntimeConfig = applyCodexDaemonSocketGuard(preserved.content, runtimeHomePath)
+  const nextRuntimeConfig = applyManagedHomeConfigGuards(preserved.content, runtimeHomePath)
   if (nextRuntimeConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, nextRuntimeConfig)
   }

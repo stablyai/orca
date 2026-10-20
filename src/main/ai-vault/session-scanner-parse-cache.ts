@@ -10,6 +10,7 @@ import { createCodebuddySessionResumeState } from './session-scanner-codebuddy-p
 import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parsers'
 import { createCopilotSessionResumeState } from './session-scanner-copilot-parser'
 import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
+import { isMissingInheritedHistory } from './session-scanner-inherited-history'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from './session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
@@ -235,6 +236,10 @@ async function parseCachedInLane(
       signal
     })
     const enriched = await enrichSessionFromSidecar(candidate, read.session, platform, signal)
+    if (isMissingInheritedHistory(read.session)) {
+      // Re-read next scan: the inherited prefix may arrive without this file changing.
+      return enriched.session
+    }
     storeSessionParseCacheEntry(file.path, {
       mtimeMs: file.mtimeMs,
       sizeBytes: file.sizeBytes ?? null,

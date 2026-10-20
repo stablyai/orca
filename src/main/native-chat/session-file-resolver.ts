@@ -1,3 +1,4 @@
+import { selectCurrentCodexRollout } from '../codex/codex-current-rollout-selection'
 import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
@@ -316,5 +317,8 @@ async function findHostSessionFile(
     signal,
     strictErrors
   })
-  return files[0] ?? null
+  // A reverted Codex conversation has several segments; open the one Codex resumes.
+  return agent === 'codex' && files.length > 1
+    ? selectCurrentCodexRollout(files)
+    : (files[0] ?? null)
 }

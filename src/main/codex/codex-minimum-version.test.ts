@@ -130,8 +130,7 @@ describe('Codex structured launch version admission', () => {
           resolveCommand: () => '/host/bin/codex',
           resolveEnvironment: async () => ({ PATH: '/host/bin', HOME: '/host/home' }),
           resolveLaunchArgs: () => [],
-          resolveWorkspacePath: async () => '/folder',
-          resolveRollout: async () => null
+          resolveWorkspacePath: async () => '/folder'
         })
       )
       vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(true, '0.135.0'))
@@ -182,8 +181,7 @@ describe('Codex structured launch version admission', () => {
           resolveCommand: () => '/host/project-aware-codex',
           resolveEnvironment: async () => ({ PATH: '/host/bin' }),
           resolveLaunchArgs: () => [],
-          resolveWorkspacePath: async () => '/workspace',
-          resolveRollout: async () => null
+          resolveWorkspacePath: async () => '/workspace'
         })
       )
       expect(

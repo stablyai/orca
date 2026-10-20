@@ -4,6 +4,7 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
+import { codexRolloutFileNameOf } from './codex-rollout-file-name'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { streamCodexSessionLedgerRecords } from './codex-session-ledger-stream'
 
@@ -20,9 +21,6 @@ export const CODEX_SESSION_INDEX_HEAL_VERSION = 3
 // day is enough to notice an upgrade without a per-startup spawn.
 const HEAL_UNSUPPORTED_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
 const HEAL_FAILED_THREAD_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
-
-const CODEX_ROLLOUT_THREAD_ID_PATTERN =
-  /^rollout-(.+)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl(?:\.zst)?$/i
 
 export type CodexSessionIndexHealPaths = {
   auditLogPath: string
@@ -99,12 +97,8 @@ export async function collectPendingHealThreads(
 export function parseCodexRolloutThreadId(
   filePath: string
 ): { threadId: string; rolloutStamp: string } | null {
-  const match = CODEX_ROLLOUT_THREAD_ID_PATTERN.exec(lastPathSegment(filePath))
-  return match ? { threadId: match[2].toLowerCase(), rolloutStamp: match[1] } : null
-}
-
-function lastPathSegment(filePath: string): string {
-  return filePath.split(/[\\/]/).at(-1) ?? ''
+  const name = codexRolloutFileNameOf(filePath)
+  return name ? { threadId: name.threadId, rolloutStamp: name.timestamp } : null
 }
 
 async function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): Promise<{

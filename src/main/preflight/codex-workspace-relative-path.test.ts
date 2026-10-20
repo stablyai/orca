@@ -75,8 +75,7 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
           resolveCommand: sources.resolveCommand,
           resolveEnvironment: () => environment.resolveAgentEnvironment('codex'),
           resolveLaunchArgs: () => [],
-          resolveWorkspacePath: async () => cwd,
-          resolveRollout: async () => null
+          resolveWorkspacePath: async () => cwd
         })
       )
       for (const resume of [false, true]) {

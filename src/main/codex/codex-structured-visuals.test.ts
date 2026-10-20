@@ -189,7 +189,6 @@ async function acquired(
       resolveEnvironment: async () => launch.env ?? {},
       resolveCommand: () => 'codex',
       resolveLaunchArgs: () => [],
-      resolveRollout: async () => null,
       prepareVisuals: async () => launch.visuals ?? null
     })
   })

@@ -17,6 +17,7 @@ import {
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
 import { decodeTranscriptStream } from './transcript-stream-lines'
+import { codexTranscriptSegments, readCodexTranscriptSegments } from './codex-transcript-lineage'
 
 export type ReadTranscriptResult =
   | {
@@ -70,7 +71,9 @@ export async function readNativeChatTranscript(
       return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
     }
     if (transcriptAgent === 'codex') {
-      return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
+      // A reverted or forked thread's file holds only its own turns; read what it inherits first.
+      const segments = await codexTranscriptSegments(filePath)
+      return { messages: await readCodexTranscriptSegments(segments, decodeCodexTranscriptLine) }
     }
     if (transcriptAgent === 'grok') {
       return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }

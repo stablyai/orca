@@ -115,7 +115,7 @@ describe('openCodexThread', () => {
     await expect(
       openCodexThread(
         connectionFor(request),
-        { cwd: '/workspace', resumeThreadId: 'thread-1', resumePath: '/history/thread-1.jsonl' },
+        { cwd: '/workspace', resumeThreadId: 'thread-1' },
         2_000
       )
     ).resolves.toMatchObject({ threadId: 'thread-1', model: 'gpt-live' })
@@ -125,7 +125,6 @@ describe('openCodexThread', () => {
       {
         threadId: 'thread-1',
         cwd: '/workspace',
-        path: '/history/thread-1.jsonl',
         excludeTurns: true
       },
       { timeoutMs: 2_000 }

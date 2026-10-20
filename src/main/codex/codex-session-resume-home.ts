@@ -1,3 +1,4 @@
+import { parseCodexRolloutFileName } from './codex-rollout-file-name'
 import { lstatSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -306,7 +307,7 @@ export async function findTrustedCodexSessionResume(args: {
           }
         }
       ))
-  const expectedSuffix = `-${args.sessionId}.jsonl`.toLowerCase()
+  const expectedThreadId = args.sessionId.toLowerCase()
   const seenHomes = new Set<string>()
   for (const homePath of rankTrustedCodexHomesForRescan(args, selectedAccountHome)) {
     const comparisonHome = normalizeRuntimePathForComparison(homePath)
@@ -330,12 +331,15 @@ export async function findTrustedCodexSessionResume(args: {
         plainFilePath !== filePath && (args.fileIsRegular ?? isRegularFile)(plainFilePath)
           ? plainFilePath
           : filePath
-      const plainFileName = getRuntimePathBasename(preferredFilePath)
-        .toLowerCase()
-        .replace(/\.zst$/, '')
+      // Any segment of the conversation (a reverted `_<rollout id>` one too) proves its home.
       if (
         isCodexRolloutInsideSessionsRoot(sessionsRoot, preferredFilePath) &&
-        plainFileName.endsWith(expectedSuffix)
+        (parseCodexRolloutFileName(getRuntimePathBasename(preferredFilePath))?.threadId ===
+          expectedThreadId ||
+          getRuntimePathBasename(preferredFilePath)
+            .toLowerCase()
+            .replace(/\.zst$/, '')
+            .endsWith(`-${expectedThreadId}.jsonl`))
       ) {
         return { homePath, transcriptPath: preferredFilePath }
       }

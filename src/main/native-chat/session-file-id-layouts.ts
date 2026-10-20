@@ -1,5 +1,6 @@
 import { win32 } from 'node:path'
 import { GROK_CHAT_HISTORY_FILE } from '../../shared/grok-session-paths'
+import { codexRolloutFileNameOf } from '../codex/codex-rollout-file-name'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
 
 export type SessionIdLookupAgent = 'claude' | 'codex' | 'grok' | 'omp'
@@ -19,11 +20,15 @@ function stem(path: string): string {
 export const SESSION_FILE_ID_LAYOUTS: Record<SessionIdLookupAgent, SessionFileIdLayout> = {
   // `<projects>/<slug>/<id>.jsonl`
   claude: { fileMatchesId: (path, id) => win32.basename(path) === `${id}.jsonl` },
-  // `rollout-<ts>-<id>.jsonl`, date-nested
+  // `rollout-<ts>-<id>[_<rollout id>].jsonl`, date-nested; every segment of a conversation matches
   codex: {
     fileMatchesId: (path, id) => {
       const name = stem(path)
-      return name === id || name.endsWith(`-${id}`)
+      return (
+        name === id ||
+        name.endsWith(`-${id}`) ||
+        codexRolloutFileNameOf(win32.basename(path))?.threadId === id.toLowerCase()
+      )
     }
   },
   // `<sessions>/<cwd group>/<id>/chat_history.jsonl`

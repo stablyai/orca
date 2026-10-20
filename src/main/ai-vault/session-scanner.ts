@@ -24,6 +24,7 @@ import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault-session-depth'
 import { withDevinSessionsDbScan } from './session-scanner-devin-db'
 import { withOpenCodeSqliteScanScope } from './session-scanner-opencode-sqlite-scan-scope'
+import { withCodexCurrentRolloutScan } from './codex-current-rollout'
 
 const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 
@@ -39,7 +40,9 @@ const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 export async function scanAiVaultSessions(
   options: AiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
-  return withOpenCodeSqliteScanScope(() => scanAiVaultSessionStores(options))
+  return withOpenCodeSqliteScanScope(() =>
+    withCodexCurrentRolloutScan(() => scanAiVaultSessionStores(options))
+  )
 }
 
 async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<AiVaultListResult> {

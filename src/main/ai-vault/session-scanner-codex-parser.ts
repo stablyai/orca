@@ -35,6 +35,11 @@ import {
   subtractCodexUsage
 } from './session-scanner-values'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
+import { readCodexHistoryBase } from '../codex/codex-rollout-session-meta'
+import {
+  markMissingInheritedHistory,
+  withInheritedHistory
+} from './session-scanner-inherited-history'
 import { extractCodexSessionMetadataTitle } from './session-scanner-codex-session-meta'
 import {
   readCodexNonUserOrigin,
@@ -75,6 +80,8 @@ type CodexSessionParseState = {
   nonUserOrigin: CodexNonUserOrigin | null
   sawSessionMeta: boolean
   historyMode: string | null
+  // A reverted or forked segment holds only its own turns; the rest is this inherited prefix.
+  historyBase: ReturnType<typeof readCodexHistoryBase>
   // Which source set the current title; an index-file title outranks the raw
   // first user prompt, so finalize must know whether 'meta' already won.
   titleSource: 'meta' | 'user' | null
@@ -95,6 +102,7 @@ function createCodexParseState(
     nonUserOrigin: null,
     sawSessionMeta: false,
     historyMode: null,
+    historyBase: null,
     titleSource: null
   }
 }
@@ -129,6 +137,7 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     }
     state.sawSessionMeta = true
     state.historyMode = extractString(payload.history_mode)
+    state.historyBase = readCodexHistoryBase(payload.history_base)
     const sessionId = extractString(payload.id)
     if (sessionId) {
       accumulator.sessionId = sessionId
@@ -228,6 +237,16 @@ async function finalizeCodexParseState(
   }
   // Finalize a snapshot: the live state keeps accumulating appended lines.
   const snapshot = cloneCodexParseState(state)
+  const inherited = snapshot.historyBase
+    ? await withInheritedHistory(snapshot.accumulator, snapshot.titleSource === 'meta', (file) => {
+        const fold = createCodexParseState(file)
+        return {
+          consumeLine: (line) => consumeCodexRecordLine(fold, line),
+          result: () => fold.accumulator
+        }
+      })
+    : null
+  snapshot.accumulator = inherited?.accumulator ?? snapshot.accumulator
   // Why: Codex names threads lazily in session_index.jsonl, so the lookup runs
   // per finalize (the index read is signature-cached) — a title that appears
   // after the transcript was first parsed must still replace the raw prompt.
@@ -237,11 +256,15 @@ async function finalizeCodexParseState(
       snapshot.accumulator.title = indexedTitle
     }
   }
-  return finalizeSession(snapshot.accumulator, platform, {
+  const session = finalizeSession(snapshot.accumulator, platform, {
     codexHome: args.codexHome,
     executionHostId: args.executionHostId,
     executionHostPlatform: args.executionHostPlatform
   })
+  if (session && inherited && !inherited.complete) {
+    markMissingInheritedHistory(session)
+  }
+  return session
 }
 
 export function createCodexSessionResumeState(

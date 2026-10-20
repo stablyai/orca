@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
@@ -11,10 +11,25 @@ import { toWindowsWslPath } from '../wsl'
 import { runWslProcess } from '../wsl/wsl-runner'
 import type { CodexAccountAddTarget, ManagedCodexHomeLocation } from './codex-account-service-types'
 import { writeFileAtomically } from './fs-utils'
+import { CODEX_CONVERSATION_STORE_DIRS } from '../codex/codex-conversation-store'
+import { linkedCodexConversationStore } from '../codex/codex-shared-store-config'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
 
 const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
+
+function removeAllButConversationStoreLinks(managedHomePath: string): void {
+  for (const entry of readdirSync(managedHomePath)) {
+    if (CODEX_CONVERSATION_STORE_DIRS.some((name) => name === entry)) {
+      continue
+    }
+    try {
+      removeManagedHomeTreeSync(join(managedHomePath, entry))
+    } catch (error) {
+      console.warn('[codex-accounts] Failed to remove part of a managed home:', entry, error)
+    }
+  }
+}
 
 function removeManagedHomeTreeSync(targetPath: string): void {
   // Why: codex login descendants can briefly keep Windows handles on files in
@@ -100,6 +115,12 @@ export class CodexManagedHomeLifecycle {
       return
     }
 
+    if (linkedCodexConversationStore(managedHomePath)) {
+      // Why: the shared store's rows name files through this home's links, so
+      // removing the account removes its credentials and settings, never them.
+      removeAllButConversationStoreLinks(managedHomePath)
+      return
+    }
     try {
       removeManagedHomeTreeSync(managedHomePath)
     } catch (error) {
