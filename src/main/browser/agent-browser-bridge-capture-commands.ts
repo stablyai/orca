@@ -3,6 +3,7 @@ import type { BrowserScreenshotResult, BrowserEvalResult } from '../../shared/ru
 import { BrowserError } from './cdp-bridge'
 import { captureFullPageScreenshot } from './cdp-screenshot'
 import { acquireElectronDebugger } from './electron-debugger-lease'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 import { AgentBrowserBridgeUtilityCommands } from './agent-browser-bridge-utility-commands'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { captureRemoteCliBrowserWorkBound } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
@@ -73,7 +74,7 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
           releaseDebugger = acquireElectronDebugger(wc).release
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime.evaluate with returnByValue always answers this CDP shape; unchanged from before the bound.
           const { result, exceptionDetails } = (await bound(
-            wc.debugger.sendCommand('Runtime.evaluate', {
+            sendGuestCdpCommand(wc, 'Runtime.evaluate', {
               expression,
               returnByValue: true,
               awaitPromise: true

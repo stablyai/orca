@@ -9,8 +9,6 @@
 
 import {
   isSubmissionRejectionFact,
-  type AgentSessionAttachmentProblem,
-  type AgentSessionAttachmentProblemReason,
   type AgentSessionFailureFact,
   type AgentSessionFailureKind,
   type ProviderDiagnostic,
@@ -28,8 +26,14 @@ import {
 } from './agent-session-failure-copy'
 import { START_REFUSAL_RESUMABLE } from './agent-session-start-refusal-resumable'
 import { providerRetryWords, withRetryCause } from './agent-session-provider-retry-words'
+import {
+  usageLimitWords,
+  type AgentSessionUsageLimitResetWords
+} from './agent-session-usage-limit-words'
 import { commandRefusedByReason } from './agent-session-command-refusal-words'
+import { attachmentProblemSentence } from './agent-session-attachment-failure-words'
 import { joinSentences } from './sentence-joining'
+import { requestTimeoutSeconds } from './agent-session-request-timeout'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,
@@ -72,11 +76,12 @@ export type AgentSessionFailureWordsContext = {
   retryControl?: boolean
   /** A direct create has no submitted message to send again. */
   messageSubmitted?: boolean
+  /** How this reader says a usage limit's reset; without it the words name no time. */
+  usageLimitReset?: AgentSessionUsageLimitResetWords
 }
 
 /** Person-facing provider text is quoted, but bounded so the sentence stays one. */
 const MAX_QUOTED_DETAIL_CHARS = 512
-const BYTES_PER_MB = 1024 * 1024
 
 type Sentence = (
   context: AgentSessionFailureWordsContext,
@@ -148,6 +153,18 @@ function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
         ...startRetry(say, context)
       ])
     }
+    if (fact.requestTimeout) {
+      return joinSentences([
+        say('startTimedOut', {
+          ...agent(say, context),
+          method: fact.requestTimeout.method,
+          seconds: requestTimeoutSeconds(fact.requestTimeout)
+        }),
+        ...startRetry(say, context),
+        // No cause named: MCP startup, the network or config can stall a start too.
+        say('startTimedOutKeepsHappening')
+      ])
+    }
     // Only a terminal agent an older build recorded holds a claim; quitting it frees the chat.
     if (fact.refusal?.details?.reason === 'claimConflicted') {
       return joinSentences([failed, say('terminalAgentHoldsChat'), say('quitTerminalAgent')])
@@ -167,35 +184,6 @@ function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
     )
   }
 }
-
-// The number only; each language's sentence carries its own unit.
-function megabytes(bytes: number): string {
-  return String(Math.round((bytes / BYTES_PER_MB) * 10) / 10)
-}
-
-const ATTACHMENT_SENTENCES = {
-  empty: (say) => say('attachmentEmpty'),
-  tooLarge: (say, _, { limit }) =>
-    limit ? say('attachmentLargerThan', { size: megabytes(limit) }) : say('attachmentTooLarge'),
-  tooMany: (say, context, { limit }) =>
-    limit
-      ? say('attachmentAtMost', { ...agent(say, context), limit: String(limit) })
-      : say('attachmentTooMany'),
-  totalTooLarge: (say, _, { limit }) =>
-    limit
-      ? say('attachmentTotalMoreThan', { size: megabytes(limit) })
-      : say('attachmentTotalTooLarge'),
-  unsupportedType: (say, context) => say('attachmentUnsupportedType', agent(say, context)),
-  notAFile: (say) => say('attachmentNotAFile'),
-  noSource: (say) => say('attachmentNoSource')
-} satisfies Record<
-  AgentSessionAttachmentProblemReason,
-  (
-    say: AgentSessionFailureSay,
-    context: AgentSessionFailureWordsContext,
-    problem: AgentSessionAttachmentProblem
-  ) => string
->
 
 const FAILURE_SENTENCES = {
   providerStartFailed: (context, _fact, _surface, say) =>
@@ -242,7 +230,7 @@ const FAILURE_SENTENCES = {
     ),
   attachmentInvalid: (context, fact, _surface, say) =>
     fact.attachment
-      ? ATTACHMENT_SENTENCES[fact.attachment.reason](say, context, fact.attachment)
+      ? attachmentProblemSentence(say, context, fact.attachment)
       : say('attachmentInvalid'),
   attachmentUnreadable: (_context, _fact, _surface, say) => say('attachmentUnreadable'),
   emptyMessage: (_context, _fact, _surface, say) => say('emptyMessage'),
@@ -295,6 +283,11 @@ const FAILURE_SENTENCES = {
           retry?.cause
         )
       : providerRetryWords(say, agent(say, context), retry),
+  usageLimitReached: (context, { usageLimit }, _surface, say) =>
+    usageLimitWords(say, agent(say, context), usageLimit, {
+      resetWords: context.usageLimitReset,
+      continueControl: context.retryControl
+    }),
   previousExitUnverifiable: namingAgent('previousExitUnverifiable'),
   sessionNotRestored: namingAgent('sessionNotRestored')
 } satisfies Record<AgentSessionFailureKind, Sentence>

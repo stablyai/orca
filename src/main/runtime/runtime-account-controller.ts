@@ -114,6 +114,16 @@ export class RuntimeAccountController {
     return hostAccountLaunchEnvFor(this.hostLaunchEnv, agent)
   }
 
+  /** Null where the desktop that owns this host's accounts polls usage instead (a WSL host). */
+  usageRateLimits(): RateLimitService | null {
+    return this.services?.rateLimits ?? null
+  }
+
+  /** Refuses where no poller would read a saved key, so a save is never reported for nothing. */
+  requireUsageRateLimits(): RateLimitService {
+    return this.requireServices().rateLimits
+  }
+
   getClaudeConfigDirectory(target: ClaudeAccountSelectionTarget): string | null {
     return this.services?.claudeAccounts.getRuntimeConfigDir(target) ?? null
   }

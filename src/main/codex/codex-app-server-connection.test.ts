@@ -16,6 +16,7 @@ import {
 } from './codex-app-server-connection'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
 import { isCodexAppServerHandshakeExitUnprovenError } from './codex-app-server-handshake-exit-proof'
 
 // close() waits out the supervisor's own stop before forcing the tree.
@@ -374,7 +375,9 @@ describe('openCodexAppServerConnection', () => {
 
     const slow = rejection(connection.request('turn/interrupt', undefined, { timeoutMs: 50 }))
     await vi.advanceTimersByTimeAsync(60)
-    expect((await slow).name).toBe('CodexAppServerTimeoutError')
+    const timedOut = await slow
+    expect(timedOut.name).toBe('CodexAppServerTimeoutError')
+    expect(providerRequestTimeoutOf(timedOut)).toEqual({ method: 'turn/interrupt', timeoutMs: 50 })
     const id = Number(written.find((frame) => frame.method === 'turn/interrupt')?.id)
     child.stdout.write(`${JSON.stringify({ id, result: {} })}\n`)
     child.stdout.write(`${JSON.stringify({ id: 999, error: { message: 'no such request' } })}\n`)

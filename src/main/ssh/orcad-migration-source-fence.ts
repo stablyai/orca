@@ -235,9 +235,9 @@ export async function releaseUndeployedMigrationFence(args: {
 function fenceStateReason(state: OrcadMigrationFenceState): string {
   switch (state.state) {
     case 'owned-by-deploy':
-      return 'This SSH host already belongs to a managed server.'
+      return 'Orca already runs on this SSH host.'
     case 'fenced-unverifiable':
-      return 'This SSH host is held for a migration whose record is missing. Recover it from the managed server first.'
+      return 'This SSH host is held for a migration whose record is missing. Recover it from this host’s Orca server first.'
     case 'stale-journal':
       return 'A migration record names this SSH host but its fence is gone. Resolve that migration first.'
     case 'fenced':

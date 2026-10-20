@@ -24,6 +24,8 @@ export type PublishedPane = {
   leafId: string
   /** The terminal the pane shows; absent while unbound. */
   ptyId?: string
+  /** Rises on each pty bind, retire and rollback of the pane in this process (a same-id respawn too). */
+  ptyGeneration?: number
   title?: string
   /** The title the pane's terminal shows now. Live state, never saved; the tab's title stays each
    *  view's choice, since it follows that view's focused pane. */
@@ -113,7 +115,10 @@ function publishTab(
   if (tab.kind === 'terminal') {
     const panes = collectLayoutLeafIdsInOrder(tab.panes.root).map((leafId): PublishedPane => {
       const leaf = workspace.leaves?.[leafId]
-      return { leafId, ...(leaf ? pickStoredFields(leaf, ['ptyId', 'title']) : {}) }
+      return {
+        leafId,
+        ...(leaf ? pickStoredFields(leaf, ['ptyId', 'ptyGeneration', 'title']) : {})
+      }
     })
     published.terminal = {
       root: tab.panes.root,

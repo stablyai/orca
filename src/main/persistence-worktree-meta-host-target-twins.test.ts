@@ -212,4 +212,80 @@ describe('worktree meta and lineage writes for same-id twins', () => {
     expect(result).toEqual({ updated: 1 })
     expect(store.getWorktreeMetaForHost(WORKTREE_ID, 'ssh:ssh-1')?.sortOrder).toBe(10)
   })
+
+  it('a host-qualified sort order lands on the named twin only', async () => {
+    const solo = hostWorktreeTarget({ id: 'solo::/a', hostId: 'local' })
+    const store = await createTwinStore({
+      repos: [...twinRepos, { ...twinRepos[0], id: 'solo', path: '/a' }]
+    })
+    store.setWorktreeMeta(LOCAL, { displayName: 'local copy', sortOrder: 100 })
+    store.setWorktreeMeta(SSH, { displayName: 'ssh copy', sortOrder: 1 })
+    store.setWorktreeMeta(solo, { sortOrder: 5 })
+
+    const notifyChanged = vi.fn()
+
+    const result = persistRuntimeManagedWorktreeSortOrder({
+      orderedIds: [WORKTREE_ID, solo.id],
+      hostIds: ['ssh:ssh-1', 'local'],
+      store,
+      invalidateResolved: vi.fn(),
+      notifyChanged
+    })
+
+    expect(result).toEqual({ updated: 2 })
+    expect(store.getWorktreeMetaForHost(WORKTREE_ID, 'local')?.sortOrder).toBe(100)
+    expect(store.getWorktreeMetaForHost(WORKTREE_ID, 'ssh:ssh-1')?.sortOrder).toBeGreaterThan(
+      store.getWorktreeMetaForHost(solo.id, 'local')?.sortOrder ?? Infinity
+    )
+    // An id-keyed patch would land on both copies, so the twinned repo is re-listed instead.
+    expect(notifyChanged).toHaveBeenCalledWith('dup', undefined)
+    expect(notifyChanged).toHaveBeenCalledWith('solo', [
+      expect.objectContaining({ worktreeId: solo.id })
+    ])
+  })
+
+  it("reads a client's local as this server's own runtime stamp", async () => {
+    const stamped = (id: string, path: string): Repo => ({
+      ...twinRepos[0],
+      id,
+      path,
+      executionHostId: 'runtime:env-1'
+    })
+    const store = await createTwinStore({ repos: [stamped('a', '/a'), stamped('b', '/b')] })
+    const first = hostWorktreeTarget({ id: 'a::/a', hostId: 'runtime:env-1' })
+    const second = hostWorktreeTarget({ id: 'b::/b', hostId: 'runtime:env-1' })
+    store.setWorktreeMeta(first, { sortOrder: 1 })
+    store.setWorktreeMeta(second, { sortOrder: 5 })
+
+    const result = persistRuntimeManagedWorktreeSortOrder({
+      orderedIds: [first.id, second.id],
+      hostIds: ['local', 'local'],
+      store,
+      invalidateResolved: vi.fn(),
+      notifyChanged: vi.fn()
+    })
+
+    expect(result).toEqual({ updated: 2 })
+  })
+
+  it('skips a client host no repo row of this store lives on, never redirecting it', async () => {
+    const solo = hostWorktreeTarget({ id: 'solo::/a', hostId: 'local' })
+    const store = await createTwinStore({
+      repos: [twinRepos[0], { ...twinRepos[0], id: 'solo', path: '/a' }]
+    })
+    store.setWorktreeMeta(LOCAL, { displayName: 'local copy', sortOrder: 1 })
+    store.setWorktreeMeta(solo, { sortOrder: 5 })
+
+    const result = persistRuntimeManagedWorktreeSortOrder({
+      orderedIds: [WORKTREE_ID, solo.id],
+      hostIds: ['ssh:removed', 'local'],
+      store,
+      invalidateResolved: vi.fn(),
+      notifyChanged: vi.fn()
+    })
+
+    expect(result).toEqual({ updated: 1 })
+    expect(store.getWorktreeMetaForHost(WORKTREE_ID, 'local')?.sortOrder).toBe(1)
+    expect(store.getWorktreeMetaForHost(WORKTREE_ID, 'ssh:removed')).toBeUndefined()
+  })
 })

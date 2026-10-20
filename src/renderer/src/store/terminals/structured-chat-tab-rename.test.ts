@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
 import { createTestStore, makeWorktree, seedStore } from '../slices/store-test-helpers'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -68,7 +76,7 @@ function colorOf(store: ReturnType<typeof createTestStore>): string | null | und
 }
 
 describe('renaming a terminal tab still resolves', () => {
-  it('routes a terminal rename through its entityId, not the unified id', () => {
+  it('routes a terminal rename through its entityId, not the unified id', async () => {
     const store = createTestStore()
     seedStore(store, {
       repos: [{ id: 'local-repo', path: '/tmp/app', name: 'app' }] as never,
@@ -80,6 +88,7 @@ describe('renaming a terminal tab still resolves', () => {
 
     // Keyed by the TERMINAL's entityId — the structured tab must not absorb it.
     store.getState().setTabCustomTitle(TERMINAL_TAB_ID, 'Build logs')
+    await layoutApplyTestTransport.settle()
 
     const tabs = store.getState().unifiedTabsByWorktree[WORKTREE] ?? []
     expect(tabs.find((t) => t.id === TERMINAL_UNIFIED_ID)?.customLabel).toBe('Build logs')
@@ -88,21 +97,24 @@ describe('renaming a terminal tab still resolves', () => {
 })
 
 describe('recoloring a structured chat tab', () => {
-  it('writes the color onto the agent-session tab', () => {
+  it('writes the color onto the agent-session tab', async () => {
     const store = storeWithStructuredTab()
     store.getState().setTabColor(STRUCTURED_TAB_ID, 'red')
+    await layoutApplyTestTransport.settle()
     expect(colorOf(store)).toBe('red')
   })
 })
 
 describe('renaming a structured chat tab', () => {
-  it('clears the custom label when the rename is emptied', () => {
+  it('clears the custom label when the rename is emptied', async () => {
     const store = storeWithStructuredTab()
     store.getState().setTabCustomTitle(STRUCTURED_TAB_ID, 'Flaky retry test')
+    await layoutApplyTestTransport.settle()
     // Guard: without the intermediate assertion this case passes on a rename
     // that never wrote anything, since the label starts out null too.
     expect(labelOf(store)).toBe('Flaky retry test')
     store.getState().setTabCustomTitle(STRUCTURED_TAB_ID, null)
+    await layoutApplyTestTransport.settle()
     expect(labelOf(store)).toBeNull()
   })
 })

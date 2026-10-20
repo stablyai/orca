@@ -4,7 +4,10 @@ import { act, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import {
+  ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
+  notifyEditorFileCacheStale
+} from './editor-autosave'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { useEditorPanelExternalContentEvents } from './useEditorPanelExternalContentEvents'
 
@@ -103,6 +106,36 @@ describe('useEditorPanelExternalContentEvents', () => {
   afterEach(() => {
     act(() => root.unmount())
     container.remove()
+  })
+
+  it('reloads an evicted cache at once for the visible active tab, once, and lazily for others', () => {
+    const active = makeFile('active')
+    const hidden = makeFile('hidden')
+    const calls = makeCalls()
+    act(() => {
+      root.render(
+        <ExternalContentProbe
+          activeFileId={active.id}
+          calls={calls}
+          isVisible
+          openFiles={[active, hidden]}
+        />
+      )
+    })
+
+    act(() => {
+      notifyEditorFileCacheStale(active.id)
+      notifyEditorFileCacheStale(hidden.id)
+    })
+
+    expect(calls.loadFile).toHaveBeenCalledOnce()
+    expect(calls.loadFile).toHaveBeenCalledWith(
+      active.filePath,
+      active.id,
+      active.worktreeId,
+      active.relativePath,
+      { force: true }
+    )
   })
 
   it('routes one remote change to one visible owner instead of every retained panel', () => {

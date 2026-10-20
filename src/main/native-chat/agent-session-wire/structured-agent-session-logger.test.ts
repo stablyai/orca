@@ -66,6 +66,20 @@ describe('a failure that repeats', () => {
     expect(written()).toHaveLength(2)
   })
 
+  it('writes a timing but does not tell repeats apart by it', () => {
+    const logger = createStructuredAgentSessionLogger({ now: () => clock })
+    for (const openMs of [30_001, 30_002]) {
+      logger.warn('a provider could not finish starting', {
+        scope: 'provider-open-failed',
+        sessionId: 'session-1',
+        openMs,
+        error: new Error('thread/start exceeded 30000ms')
+      })
+    }
+    expect(written()).toHaveLength(1)
+    expect(written()[0]?.attributes).toMatchObject({ openMs: 30_001 })
+  })
+
   it('never merges different sessions, scopes, levels, messages or errors', () => {
     const logger = createStructuredAgentSessionLogger({ now: () => clock })
     for (let round = 0; round < 3; round += 1) {

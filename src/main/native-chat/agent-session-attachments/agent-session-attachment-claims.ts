@@ -2,8 +2,9 @@
 // host transaction that makes it durable, and the sweep may delete only an upload nobody claims:
 // both are synchronous statements on the host's one journal connection, so exactly one wins.
 
-import { existsSync, readdirSync } from 'node:fs'
+import { lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import {
@@ -193,7 +194,18 @@ export function pruneAgentSessionAttachmentClaims(
   let removed = 0
   for (const { uploadId, sessionId } of rows) {
     const chatGone = facts.recordedSessionIds !== null && !facts.recordedSessionIds.has(sessionId)
-    if (chatGone || !existsSync(join(facts.root, uploadId))) {
+    let uploadGone = chatGone
+    try {
+      if (!chatGone) {
+        lstatSync(join(facts.root, uploadId))
+      }
+    } catch (error) {
+      if (!isDefinitiveAbsence(error)) {
+        throw error
+      }
+      uploadGone = true
+    }
+    if (uploadGone) {
       removed += Number(remove.run(uploadId, sessionId).changes)
     }
   }

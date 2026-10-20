@@ -7,7 +7,7 @@ import { agentForksThroughChat } from '../../../../shared/agent-resume-argv'
 import { getAiVaultAgentProviderSession } from '@/lib/ai-vault-resume-command'
 
 /**
- * Where "Switch to Terminal" opens its copy of a conversation native chat owns, or null when the row
+ * Where the terminal opens its copy of a conversation native chat owns, or null when the row
  * does not offer it. A row no chat owns already resumes in the CLI through plain Resume. A row offers
  * it when its chat makes the copy (OpenCode, OMP), or when its CLI's copy command can be built (Pi's
  * needs the session file, which a remote search hit doesn't carry).
@@ -27,7 +27,7 @@ export function aiVaultSessionCliForkWorktreeId(
     : null
 }
 
-/** The toast for a failed "Switch to Terminal". Only a host whose guard predates the fork refuses
+/** The toast for a failed terminal fork. Only a host whose guard predates the fork refuses
  *  the fork as a second writer, so that refusal asks for the update instead of naming a code. */
 export function describeAiVaultCliForkFailure(message: string): string {
   // The desktop preparation's refusal arrives inside Electron's IPC wrapper.

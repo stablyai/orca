@@ -22,7 +22,9 @@ const subscriptionState = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) => selector({})
+  useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector({}), {
+    getState: () => ({ openFiles: [] })
+  })
 }))
 vi.mock('@/runtime/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (id: string, listener: () => void) => {
@@ -34,7 +36,11 @@ vi.mock('@/runtime/runtime-file-watch-client', () => ({
   subscribeRuntimeFileChanges: subscriptionState.subscribeRuntimeFileChanges
 }))
 vi.mock('./editor-external-watch-targets', () => ({
-  selectEditorExternalWatchTargets: () => subscriptionState.snapshot,
+  selectEditorExternalWatchTargets: () => ({
+    unwatchedTargetKeys: new Set<string>(),
+    unwatchedTargetsKey: '',
+    ...subscriptionState.snapshot
+  }),
   getEditorExternalWatchTargetKey: (target: TestWatchTarget) =>
     [
       target.worktreeId,

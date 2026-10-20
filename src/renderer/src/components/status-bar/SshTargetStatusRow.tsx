@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { sshTargetConnectFailureText } from '@/ssh/ssh-host-server-status-copy'
+import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
@@ -42,12 +42,10 @@ export function SshTargetStatusRow({
       await window.api.ssh.connect({ targetId })
       recordFeatureInteraction('ssh')
     } catch (err) {
-      toast.error(
-        sshTargetConnectFailureText(
-          targetId,
-          err,
-          translate('auto.components.status.bar.SshStatusSegment.2c29e2de68', 'Connection failed')
-        )
+      toastSshConnectFailure(
+        targetId,
+        err,
+        translate('auto.components.status.bar.SshStatusSegment.2c29e2de68', 'Connection failed')
       )
     } finally {
       endSshConnect(targetId)

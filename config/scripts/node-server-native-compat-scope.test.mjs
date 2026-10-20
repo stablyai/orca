@@ -327,7 +327,7 @@ it('builds server glibc slots on glibc 2.28 and the compat slot on glibc 2.17 (d
   expect(floor.env).toMatchObject({ CC: 'gcc', CXX: 'g++' })
 
   const compat = workflow.jobs.linux_glibc217_compat
-  expect(compat.needs).toEqual(['changes', 'persistence'])
+  expect(compat.needs).toBe('changes')
   // Only the floor builds orcad, so only it waits for the page.
   expect(compat.if).toContain(
     floor.if.slice(0, -3).replace(" && needs.mobile_web_bundle.result == 'success'", '')
@@ -366,15 +366,19 @@ it.each([
   { expected: true, native: 'false', event: 'workflow_dispatch' },
   { expected: true, native: 'false', template: true },
   { expected: true, native: 'false', ref: 'other-commit' },
-  { expected: false, native: 'true', persistence: 'failure' },
-  { expected: false, native: 'true', persistence: 'cancelled' },
-  { expected: false, native: 'true', persistence: 'skipped' },
+  { expected: true, native: 'true', persistence: 'failure' },
+  { expected: true, native: 'true', persistence: 'cancelled' },
+  { expected: true, native: 'true', persistence: 'skipped' },
+  { expected: false, native: 'true', draft: true },
   { expected: false, native: 'true', qualification: 'false' },
   { expected: false, native: 'true', shouldRun: 'false' },
   { expected: false, native: 'true', cancelled: true }
 ])('evaluates the hosted native job guard with %j', (scenario) => {
   const context = {
-    github: { event_name: scenario.event ?? 'pull_request' },
+    github: {
+      event_name: scenario.event ?? 'pull_request',
+      event: { pull_request: { draft: scenario.draft ?? false } }
+    },
     inputs: { build_template: scenario.template ?? false, ref: scenario.ref ?? '' },
     needs: {
       persistence: { result: scenario.persistence ?? 'success' },

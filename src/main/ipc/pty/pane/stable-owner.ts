@@ -18,7 +18,8 @@ import {
   TerminalSessionOwnerUnverifiedError
 } from '../../../daemon/daemon-errors'
 import { ptyIncarnationById } from '../provider/ownership-state'
-import { releaseAbsentPaneOwner } from './absent-pane-owner'
+import { keepAbsentPaneBindingForSwap, releaseAbsentPaneOwner } from './absent-pane-owner'
+import { excludeReplacedPaneOwner, type ReplacedPaneOwner } from './replaced-pane-owner'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 
 export type StablePaneOwner = {
@@ -179,6 +180,8 @@ export type StablePaneSpawnContext = {
   connectionId?: string | null
   resolveOwner?: () => StablePaneOwner | null
   onFreshSpawn?: (result: PtySpawnResult) => void
+  /** Only a spawn holding the pane's reservation: it binds next, so its bind swaps the dead id. */
+  keepAbsentBinding?: (dead: ReplacedPaneOwner) => void
 }
 
 export function stablePanePersistenceFence(
@@ -263,10 +266,13 @@ export async function attachStablePaneOwner(
     ) {
       throw new Error('terminal_pane_owner_changed')
     }
-    if (!(await releaseAbsentPaneOwner(args, owner))) {
+    const kept = args.keepAbsentBinding ? keepAbsentPaneBindingForSwap(args, owner) : null
+    if (kept) {
+      args.keepAbsentBinding?.(kept)
+    } else if (!(await releaseAbsentPaneOwner(args, owner))) {
       throw new Error('terminal_pane_owner_changed')
     }
-    if (args.resolveOwner?.()) {
+    if (excludeReplacedPaneOwner(args.resolveOwner?.() ?? null, kept)) {
       throw new Error('terminal_pane_owner_changed')
     }
     return null

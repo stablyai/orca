@@ -17,8 +17,9 @@ export function editorTabShowsFile(entityId: string, file: FileOwner, worktreeId
 }
 
 /**
- * A file record's key among its workspace's records: its path, and in a layout-owner build its
- * runtime owner too, since a local and a runtime-environment file can share a path.
+ * A file record's key among its workspace's records in this process: its path, and in a
+ * layout-owner build its runtime owner too, since a local and a runtime-environment file can share
+ * a path. A layout frame's records keep one key in every build (workspace-layout-records.ts).
  */
 export function editorFileKey(file: FileOwner): string {
   // Why no worktree: every record keyed here belongs to one workspace, or moves between two.

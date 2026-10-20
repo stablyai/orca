@@ -62,7 +62,14 @@ export function registerFilesystemWatcherHandlers(): void {
               `[filesystem-watcher] SSH filesystem provider unavailable; retrying watch for ${args.worktreePath} on connection ${args.connectionId}`
             )
           }
-          scheduleRemoteWatcherRetry(event.sender, args.connectionId, args.worktreePath)
+          // Why: writes before the retry lands were never reported, and editor tabs may be stale from an earlier unwatched spell.
+          scheduleRemoteWatcherRetry(
+            event.sender,
+            args.connectionId,
+            args.worktreePath,
+            undefined,
+            true
+          )
           return
         }
         return

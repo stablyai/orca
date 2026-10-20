@@ -116,6 +116,34 @@ export function applyCommandToSession(
   })
 }
 
+/** Renames on one load of the partition, written once; each one main refused, with its code. */
+export function applyRenamesToSession(
+  hostId: ExecutionHostId,
+  session: WorkspaceSessionState,
+  renames: readonly CommandOf<'renameTab'>[]
+): PaneLayoutChange<{ rename: CommandOf<'renameTab'>; code: LayoutRefusalCode }[]> {
+  const loaded = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
+  let layout = loaded.layout
+  const refused: { rename: CommandOf<'renameTab'>; code: LayoutRefusalCode }[] = []
+  for (const rename of renames) {
+    const applied = applyLayoutCommand(layout, rename, RENAME_CONTEXT)
+    if (applied.ok) {
+      layout = applied.model
+    } else {
+      refused.push({ rename, code: applied.code })
+    }
+  }
+  return {
+    value: refused,
+    session:
+      layout === loaded.layout
+        ? null
+        : touchedRecords(session, loaded, saveWorkspaceLayout({ ...loaded, layout }))
+  }
+}
+
+const RENAME_CONTEXT = { mintId: randomUUID, mintLeafId: randomUUID, now: Date.now }
+
 function applyToSession(
   loaded: LoadedWorkspaceLayout,
   command: LayoutCommand,

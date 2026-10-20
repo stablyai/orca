@@ -157,13 +157,15 @@ function localizePendingRowsForHost(
   return localized
 }
 
-function getPendingRowsKey(rows: readonly Extract<Row, { type: 'header' }>[]): string {
-  return rows
-    .map(
-      (pendingRow) =>
-        `${pendingRow.key}:${pendingRow.count}:${pendingRow.worktreeIds?.join(',') ?? ''}`
-    )
-    .join('\0')
+function getPendingRowKey(row: Extract<Row, { type: 'header' }>): string {
+  return `${row.key}:${row.count}:${row.worktreeIds?.join(',') ?? ''}`
+}
+
+/** A project group's header (it names no host itself): its nesting depth, else null. */
+function getProjectGroupHeaderDepth(row: Row): number | null {
+  return row.type === 'header' && row.projectGroup && !row.repo
+    ? (row.projectGroupDepth ?? 0)
+    : null
 }
 
 export function addHostSectionRows(args: {
@@ -200,19 +202,22 @@ export function addHostSectionRows(args: {
   const hostOptionsById = new Map(args.hostOptions.map((host) => [host.id, host]))
   const rowsByHostId = new Map<ExecutionHostId, Row[]>()
   const globalRows: Row[] = []
+  // The headers above the next host-owned row: one lane header, or a project group's path.
   let pendingRows: Extract<Row, { type: 'header' }>[] = []
-  let pendingRowsWereUsed = false
-  const pendingRowsKeyByHostId = new Map<ExecutionHostId, string>()
-  const flushUnusedPendingRows = (): void => {
-    if (pendingRows.length === 0 || pendingRowsWereUsed) {
+  const usedPendingRows = new Set<Row>()
+  // Each host's last emitted header path, so a sibling group repeats only what differs.
+  const emittedPathByHostId = new Map<ExecutionHostId, string[]>()
+  const flushUnusedPendingRows = (rows: readonly Extract<Row, { type: 'header' }>[]): void => {
+    const unused = rows.filter((row) => !usedPendingRows.has(row))
+    if (unused.length === 0) {
       return
     }
-    const hostScopedRow = pendingRows.some((row) => row.hostWorktreeCounts)
+    const hostScopedRow = unused.some((row) => row.hostWorktreeCounts)
     if (!hostScopedRow) {
-      globalRows.push(...pendingRows)
+      globalRows.push(...unused)
       return
     }
-    for (const row of pendingRows) {
+    for (const row of unused) {
       for (const [hostId, count] of row.hostWorktreeCounts ?? []) {
         if (count <= 0) {
           continue
@@ -234,17 +239,19 @@ export function addHostSectionRows(args: {
     const rowHostId = getRowHostId(row, args.defaultHostId)
     if (rowHostId) {
       const hostRows = rowsByHostId.get(rowHostId) ?? []
-      if (pendingRows.length > 0) {
-        const localizedPendingRows = localizePendingRowsForHost(pendingRows, rowHostId)
-        const pendingRowsKey = getPendingRowsKey(localizedPendingRows)
-        if (
-          localizedPendingRows.length > 0 &&
-          pendingRowsKeyByHostId.get(rowHostId) !== pendingRowsKey
-        ) {
-          hostRows.push(...localizedPendingRows)
-          pendingRowsKeyByHostId.set(rowHostId, pendingRowsKey)
-        }
-        pendingRowsWereUsed = pendingRowsWereUsed || localizedPendingRows.length > 0
+      const localizedPendingRows = localizePendingRowsForHost(pendingRows, rowHostId)
+      const path = localizedPendingRows.map(getPendingRowKey)
+      const emitted = emittedPathByHostId.get(rowHostId) ?? []
+      let shared = 0
+      while (shared < path.length && path[shared] === emitted[shared]) {
+        shared += 1
+      }
+      if (shared < path.length || path.length !== emitted.length) {
+        hostRows.push(...localizedPendingRows.slice(shared))
+        emittedPathByHostId.set(rowHostId, path)
+      }
+      if (localizedPendingRows.length > 0) {
+        pendingRows.forEach((pendingRow) => usedPendingRows.add(pendingRow))
       }
       hostRows.push(row)
       rowsByHostId.set(rowHostId, hostRows)
@@ -253,15 +260,20 @@ export function addHostSectionRows(args: {
     // Why: status/"All" headers describe the rows that follow. Buffer them
     // for every host-owned run so host remains above the existing grouping.
     if (row.type === 'header') {
-      flushUnusedPendingRows()
-      pendingRows = [row]
-      pendingRowsWereUsed = false
+      const depth = getProjectGroupHeaderDepth(row)
+      // A nested group keeps its ancestors pending, so each host section gets the whole path.
+      const kept =
+        depth !== null && depth > 0
+          ? pendingRows.filter((pending) => (getProjectGroupHeaderDepth(pending) ?? depth) < depth)
+          : []
+      flushUnusedPendingRows(pendingRows.filter((pending) => !kept.includes(pending)))
+      pendingRows = [...kept, row]
     } else {
       globalRows.push(row)
     }
   }
 
-  flushUnusedPendingRows()
+  flushUnusedPendingRows(pendingRows)
 
   const hostOrder: ExecutionHostId[] = []
   for (const host of args.hostOptions) {

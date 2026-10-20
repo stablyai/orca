@@ -76,18 +76,7 @@ export function getLatestWebSessionTabsPublicationEpoch(
   )
 }
 
-// Why: a replay may repeat the current epoch/version; permit only that exact
-// identity once so an older concurrent frame cannot bypass monotonic ordering.
-export function acceptReplayedWebSessionTabsSnapshot(
-  environmentId: string,
-  worktreeId: string
-): void {
-  const key = sessionTabsFreshnessKey(environmentId, worktreeId)
-  const current = latestSessionTabsSnapshotByWorktree.get(key)
-  if (current) {
-    replayableSessionTabsSnapshotByWorktree.set(key, current)
-  }
-}
+export { acceptReplayedWebSessionTabsSnapshot } from './state'
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
   replayableSessionTabsSnapshotByWorktree.clear()

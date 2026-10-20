@@ -16,6 +16,7 @@ import {
 import {
   AutomationWorkspaceProvenanceRequest,
   CliWorkspaceProvenanceRequest,
+  OptionalExecutionHostId,
   OptionalTuiAgent,
   assertLinkedWorkItemSourceContextMatch
 } from './worktree-params'
@@ -26,6 +27,9 @@ export const WorktreeCreate = z
       .unknown()
       .transform((v) => (typeof v === 'string' ? v : ''))
       .pipe(z.string().min(1, 'Missing repo selector')),
+    /** The host of the repo row `repo` names: one repo id can be set up on several hosts. Absent
+     *  (older clients) keeps the selector-only lookup, which refuses an id on several hosts. */
+    repoHostId: OptionalExecutionHostId,
     name: OptionalString,
     /** Set by clients that fell back to a generated creature name. Absent means user-typed, so the
      *  host neither skips a retired candidate nor retires the name it lands on. */

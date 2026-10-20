@@ -97,6 +97,81 @@ describe('HostSidebarFeedReader', () => {
     expect(host.reads.at(-1)!.installed!.domains.get('workspaces')?.get('c')).toEqual({ id: 'c' })
   })
 
+  it('catches up on its own when a read times out with the connection still up', async () => {
+    vi.useFakeTimers()
+    try {
+      const host = hostWithFeed()
+      host.reader.refresh()
+      await vi.advanceTimersByTimeAsync(0)
+      const first = host.reads.at(-1)!.installed!
+
+      let timeOut: (error: Error) => void = () => {}
+      host.sendRequest.mockImplementationOnce(
+        () => new Promise<RpcResponse>((_resolve, reject) => (timeOut = reject))
+      )
+      host.workspaces.set('b', { id: 'b' })
+      await vi.advanceTimersByTimeAsync(1_000)
+      host.reader.changed(host.notices.at(-1)!)
+      // A newer notice lands while that read waits; nothing else will repeat it.
+      host.workspaces.set('c', { id: 'c' })
+      await vi.advanceTimersByTimeAsync(1_000)
+      host.reader.changed(host.notices.at(-1)!)
+      timeOut(new Error('Request timed out: sidebarInputs.read'))
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      const caughtUp = host.reads.at(-1)!.installed!
+      expect(caughtUp.revision).toBeGreaterThan(first.revision)
+      expect(caughtUp.domains.get('workspaces')?.get('c')).toEqual({ id: 'c' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops retrying a host that keeps failing, and when the screen lets go', async () => {
+    vi.useFakeTimers()
+    try {
+      const host = hostWithFeed()
+      host.sendRequest.mockRejectedValue(new Error('Request timed out: sidebarInputs.read'))
+      host.reader.refresh()
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      const attempts = host.sendRequest.mock.calls.length
+      expect(attempts).toBeGreaterThan(1)
+      expect(attempts).toBeLessThan(10)
+
+      // A fresh trigger gets a fresh budget, which disposal cancels.
+      host.reader.refresh()
+      await vi.advanceTimersByTimeAsync(0)
+      host.reader.dispose()
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      expect(host.sendRequest.mock.calls.length).toBe(attempts + 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stays bounded when a batch’s first page answers but a later page keeps failing', async () => {
+    vi.useFakeTimers()
+    try {
+      const host = hostWithFeed()
+      const answer = host.sendRequest.getMockImplementation()!
+      host.sendRequest.mockImplementation(async (method: string, params: unknown) => {
+        const reply = await answer(method, params)
+        const pageToken = new Map(Object.entries(Object(params))).get('pageToken')
+        if (pageToken !== undefined) {
+          throw new Error('Request timed out: sidebarInputs.read')
+        }
+        // Every first page says more follows, so no batch ever installs.
+        return { ...reply, result: { ...Object(reply.ok ? reply.result : {}), next: 'p#1' } }
+      })
+      host.reader.refresh()
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      expect(host.reads).toEqual([])
+      expect(host.sendRequest.mock.calls.length).toBeLessThan(20)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('drops a reply that lands after the screen let go of its host', async () => {
     const host = hostWithFeed()
     host.reader.refresh()

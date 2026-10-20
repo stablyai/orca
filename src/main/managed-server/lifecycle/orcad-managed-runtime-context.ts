@@ -31,7 +31,7 @@ export function requireManagedOrcadInfrastructure() {
   const targetStore = requireManagedOrcadTargetStore()
   const connectionManager = getSshConnectionManager()
   if (!connectionManager) {
-    throw new Error('SSH is unavailable on this client; the managed Orca server is unverifiable.')
+    throw new Error('SSH is unavailable on this client; this host’s Orca server is unverifiable.')
   }
   return { connectionManager, targetStore, claims: targetStore.getOrcadRuntimeClaims() }
 }
@@ -39,7 +39,7 @@ export function requireManagedOrcadInfrastructure() {
 export function requireManagedOrcadTargetStore() {
   const targetStore = getSshTargetRegistryStore()
   if (!targetStore) {
-    throw new Error('SSH target state is unavailable; the managed Orca server is unverifiable.')
+    throw new Error('SSH target state is unavailable; this host’s Orca server is unverifiable.')
   }
   return targetStore
 }
@@ -68,7 +68,7 @@ export async function resolveLinkedOrcadContext(
     target.generation !== deployment.sshTargetGeneration ||
     getManagedOrcadFenceEnvironmentId(target) !== environment.id
   ) {
-    throw new Error('The managed Orca server SSH registration is no longer valid.')
+    throw new Error('The SSH registration for this host’s Orca server is no longer valid.')
   }
   const connection = await connectionManager.connect(target)
   return resolveOrcadRemoteContext(target, sshOrcadHostTransport(connection), signal)
@@ -129,15 +129,18 @@ export function managedOrcadDeployPolicy(
   force?: boolean
 ): {
   census: OrcadTerminalCensus
+  recountCensus: () => Promise<OrcadTerminalCensus>
   censusRecord: OrcadActivationRecord
   admitRecord: (record: OrcadActivationRecord, candidateVersion: string) => string | null
 } {
+  // Why unknown when a version is active: only the daemon can count its sessions, and
+  // a deploy that guessed zero would restart over live terminals.
+  const census: OrcadTerminalCensus = context.activationRecord.active
+    ? { liveSessions: null, startedSinceActivation: null, daemonProtocolVersion: null }
+    : { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: null }
   return {
-    // Why unknown when a version is active: only the daemon can count its sessions, and
-    // a deploy that guessed zero would restart over live terminals.
-    census: context.activationRecord.active
-      ? { liveSessions: null, startedSinceActivation: null, daemonProtocolVersion: null }
-      : { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: null },
+    census,
+    recountCensus: async () => census,
     censusRecord: context.activationRecord,
     // Why: a host another desktop stopped may hold state its newer build migrated, and this
     // path has no linked record to check first, so only the fenced read can refuse it.

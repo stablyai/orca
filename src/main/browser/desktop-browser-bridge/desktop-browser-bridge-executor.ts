@@ -79,7 +79,9 @@ export async function executeDesktopBrowserBridgeRequest(
   request: DesktopBrowserBridgeRequest,
   deps: DesktopBrowserBridgeExecutorDeps,
   /** Aborted when the bridge detaches; a command not yet dispatched must then never run. */
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /** Aborted only when the bridge detaches, not when this one command is cancelled. */
+  hostRevoked?: AbortSignal
 ): Promise<DesktopBrowserBridgeOutcome> {
   const audit: Omit<DesktopBrowserBridgeAuditEntry, 'outcome' | 'code'> = {
     environmentId: deps.environmentId,
@@ -104,7 +106,9 @@ export async function executeDesktopBrowserBridgeRequest(
       workspaceId,
       () => deps.dispatch(request.method, params),
       signal,
-      (webContentsId) => deps.isHostBrowsingRouted() && deps.isGuestRoutedThroughHost(webContentsId)
+      (webContentsId) =>
+        deps.isHostBrowsingRouted() && deps.isGuestRoutedThroughHost(webContentsId),
+      hostRevoked
     )
     if (!response.ok) {
       deps.audit({ ...audit, outcome: 'failed', code: response.error.code })

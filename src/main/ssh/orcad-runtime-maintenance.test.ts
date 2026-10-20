@@ -145,6 +145,16 @@ describe('updateManagedOrcadEnvironment', () => {
     expect(status.deferredUpdate).toBeNull()
   })
 
+  it('hands the deploy a recount that counts again, so a terminal opened during the upload counts', async () => {
+    const opened = { ...idle, liveSessions: 1, inProcessSessions: 1 }
+    mocks.census.mockResolvedValueOnce(idle).mockResolvedValue(opened)
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
+    await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    const recount = mocks.deploy.mock.calls[0]?.[0]?.recountCensus
+    expect(recount).toBeTypeOf('function')
+    await expect(recount()).resolves.toEqual(opened)
+  })
+
   it('forwards anew after an activation, since the new slot may bind another port', async () => {
     mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
     await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })

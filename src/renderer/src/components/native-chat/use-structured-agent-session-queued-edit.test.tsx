@@ -231,11 +231,18 @@ describe('inline queued editor', () => {
   })
 
   it('moves typing into the chat box without image markers, since the card keeps its images', async () => {
-    const hook = harness()
+    const withImage: AgentSessionQueuedMessage = {
+      ...message,
+      body: {
+        ...message.body,
+        blocks: [{ type: 'image-ref', path: '/tmp/a.png' }, ...message.body.blocks]
+      }
+    }
+    const hook = harness(true, { messages: [withImage] })
     await begin(hook)
-    act(() => hook.result.current.editor?.change('see [Image #1] again'))
+    act(() => hook.result.current.editor?.change('see [Image #1] not [Image #2]'))
     hook.rerender({ messages: [] })
-    expect(readNativeChatDraftCache(SCOPE)).toBe('see  again')
+    expect(readNativeChatDraftCache(SCOPE)).toBe('see  not [Image #2]')
   })
 
   it('a clean edit whose card leaves just closes; an unloaded list proves nothing', async () => {

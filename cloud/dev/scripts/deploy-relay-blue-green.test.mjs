@@ -32,7 +32,8 @@ import {
   taggedRevisionOrigin,
   taggedTraffic,
   trafficTags,
-  waitForEvacuationCapacity
+  waitForEvacuationCapacity,
+  waitForServingInstances
 } from './deploy-relay-blue-green.mjs'
 
 // Terraform declares these values; audited blue/green stamps the same values without targeting
@@ -443,7 +444,8 @@ function directorHarness({
   placements = {},
   callerEmail,
   // The revision template's Cloud SQL transport; a Terraform apply changes it under the serving one.
-  templateTransport
+  templateTransport,
+  spreadFailure
 } = {}) {
   const state = {
     activeRevision: 'relay-00001-old',
@@ -476,6 +478,8 @@ function directorHarness({
   }
   const removed = []
   const healthProtocols = []
+  const trafficMoves = []
+  const spreadWaits = []
   let pendingCleanupFailure = cleanupFailsBeforeRemoval
   const operations = {
     describeService: () => ({
@@ -563,19 +567,25 @@ function directorHarness({
         if (cleanupReportsFailure) throw new Error('gcloud reported failed latest revision')
         return
       }
-      const promote = args.find((argument) => argument.startsWith('--to-tags='))
-      assert.ok(promote)
-      const tag = promote.slice('--to-tags='.length).split('=')[0]
-      state.activeRevision = state.tags.get(tag)
+      const move = args.find((argument) => /^--to-(tags|revisions)=/.test(argument))
+      assert.ok(move)
+      trafficMoves.push(move)
+      const [target, percent] = move.slice(move.indexOf('=') + 1).split('=')
+      if (percent !== '100') return
+      state.activeRevision = move.startsWith('--to-tags=') ? state.tags.get(target) : target
     },
     waitForHealth: async (_origin, connectionCapacityProtocol) => {
       healthProtocols.push(connectionCapacityProtocol)
+    },
+    waitForServingInstances: async (_config, revision, required) => {
+      spreadWaits.push({ revision, required })
+      if (spreadFailure) throw spreadFailure
     },
     readReserveCells: async (_config, origin) => reserveCells[origin],
     readDirectorPlacement: async (_config, origin) => placements[origin] ?? 'unreported',
     adminIdentityToken: () => adminToken(callerEmail)
   }
-  return { state, removed, healthProtocols, operations }
+  return { state, removed, healthProtocols, trafficMoves, spreadWaits, operations }
 }
 
 test('director deploy removes stale and promoted Cloud Run tags', async () => {
@@ -699,6 +709,73 @@ test('director candidate inherits the serving warm-instance floor', async () => 
   // The standby rollback revision must stay cold.
   const rollback = harness.state.revisions.get(harness.state.tags.get('selector-rollback'))
   assert.equal(rollback.minimum, 0)
+})
+
+test('a multi-instance floor moves part of the traffic until every floor instance serves', async () => {
+  const harness = directorHarness({ servingMinimum: 5 })
+  await deployDirector({}, 'candidate-new', harness.operations)
+  assert.deepEqual(harness.trafficMoves, ['--to-tags=candidate-new=20', '--to-tags=candidate-new=100'])
+  assert.deepEqual(harness.spreadWaits, [{ revision: 'relay-00003-new', required: 5 }])
+  assert.equal(harness.state.activeRevision, 'relay-00003-new')
+})
+
+test('a floor of one moves all traffic at once', async () => {
+  const harness = directorHarness()
+  await deployDirector({}, 'candidate-new', harness.operations)
+  assert.deepEqual(harness.trafficMoves, ['--to-tags=candidate-new=100'])
+  assert.deepEqual(harness.spreadWaits, [])
+})
+
+test('a candidate that never spreads returns traffic to the warm serving revision', async () => {
+  const failure = new Error('candidate served from 1 of 5 instances before the deadline')
+  const harness = directorHarness({ servingMinimum: 5, spreadFailure: failure })
+  await assert.rejects(deployDirector({}, 'candidate-new', harness.operations), failure)
+  assert.deepEqual(harness.trafficMoves, [
+    '--to-tags=candidate-new=20',
+    '--to-revisions=relay-00001-old=100'
+  ])
+  assert.equal(harness.state.activeRevision, 'relay-00001-old')
+  assert.equal(harness.state.tags.size, 0)
+})
+
+test('the spread wait counts distinct instances that served since the partial move', async () => {
+  const reads = [new Set(['a']), new Set(['a', 'b']), new Set(['a', 'b', 'c'])]
+  const seen = []
+  await waitForServingInstances({}, 'relay-00003-new', 3, '2026-10-20T05:25:00.000Z', {
+    readInstances: (_config, revision, since) => {
+      seen.push([revision, since])
+      return reads.shift()
+    },
+    pollIntervalMs: 0,
+    timeoutMs: 60_000
+  })
+  assert.equal(seen.length, 3)
+  assert.deepEqual(seen[0], ['relay-00003-new', '2026-10-20T05:25:00.000Z'])
+})
+
+test('the spread wait retries a failed log read', async () => {
+  let reads = 0
+  await waitForServingInstances({}, 'relay-00003-new', 2, '2026-10-20T05:25:00.000Z', {
+    readInstances: () => {
+      reads += 1
+      if (reads === 1) throw new Error('RESOURCE_EXHAUSTED')
+      return new Set(['a', 'b'])
+    },
+    pollIntervalMs: 0,
+    timeoutMs: 60_000
+  })
+  assert.equal(reads, 2)
+})
+
+test('the spread wait fails at its deadline', async () => {
+  await assert.rejects(
+    waitForServingInstances({}, 'relay-00003-new', 5, '2026-10-20T05:25:00.000Z', {
+      readInstances: () => new Set(['a']),
+      pollIntervalMs: 0,
+      timeoutMs: 0
+    }),
+    /served from 1 of 5 instances before the deadline/
+  )
 })
 
 test('director deploy rejects a serving maximum above the checked budget', async () => {

@@ -1,4 +1,8 @@
-import { parseExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId
+} from '../../../shared/execution-host'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
@@ -7,10 +11,7 @@ import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner
 } from './worktree-runtime-owner-index'
-import {
-  getSingleFocusedRuntimeEnvironmentId,
-  type SingleRuntimeLegacyOwnerState
-} from './single-runtime-legacy-owner'
+import type { SingleRuntimeLegacyOwnerState } from './single-runtime-legacy-owner'
 import { getPairedWebClientEnvironmentId } from './paired-web-client-host'
 
 type RuntimeExecutionHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
@@ -113,7 +114,8 @@ export function getRuntimeEnvironmentIdForFolderWorkspace(
   if (restoredRuntimeHost) {
     return restoredRuntimeHost.environmentId
   }
-  return getSingleFocusedRuntimeEnvironmentId(state)
+  // Why not the Active Server focus: the client stamps every server folder on arrival.
+  return getPairedWebClientEnvironmentId(state)
 }
 
 export function getExplicitRuntimeEnvironmentIdForFolderWorkspace(
@@ -179,6 +181,6 @@ export function getExecutionHostIdForFolderWorkspace(
   if (restoredRuntimeHost) {
     return restoredRuntimeHost.id
   }
-  const environmentId = getSingleFocusedRuntimeEnvironmentId(state)
-  return environmentId ? `runtime:${encodeURIComponent(environmentId)}` : 'local'
+  const environmentId = getPairedWebClientEnvironmentId(state)
+  return environmentId ? toRuntimeExecutionHostId(environmentId) : 'local'
 }

@@ -7,7 +7,7 @@ import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairi
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { writeOrcadMigrationSourceCutover } from '../../ssh/orcad-migration-cutover-journal'
 import { orcadMigrationCutoverFixture } from '../../ssh/orcad-migration-cutover-fixture'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments, resolveEnvironment } from '../../../shared/runtime-environment-store'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { SshTargetOrcadClaims } from '../../ssh/targets/ssh-target-orcad-claims'
@@ -174,7 +174,7 @@ beforeEach(() => {
   mocks.probe.mockResolvedValue(readiness())
   mocks.startTunnel.mockResolvedValue(46_768)
   mocks.closeTunnel.mockResolvedValue(undefined)
-  mocks.ensureTunnel.mockResolvedValue(undefined)
+  mocks.ensureTunnel.mockImplementation(resolveEnvironment)
   mocks.localVersion.mockReturnValue(VERSION)
   mocks.wake.mockResolvedValue({ outcome: 'serving' })
 })

@@ -111,7 +111,8 @@ export async function launchAgentBackgroundSession(
     eagerPtyBuffer: EagerPtyHandle | null = null
   let terminalOwnership: ReturnType<typeof bindAutomationTerminal> = null
   let unsubscribeExit = (): void => {},
-    unsubscribeData = (): void => {}
+    unsubscribeData = (): void => {},
+    releaseRuntimeObservers = (): void => {}
   const handleExit = (exitPtyId: string, code: number): void => {
     if (exitHandled) {
       return
@@ -249,11 +250,21 @@ export async function launchAgentBackgroundSession(
         `desktop:background:${tab.id}`,
         handleData
       )
+      const exitWait = new AbortController()
+      // Why: a kept-open terminal never resolves the wait, which would hold one
+      // of the server's long-wait slots for 24h after the run completes.
+      releaseRuntimeObservers = () => {
+        releaseRuntimeObservers = (): void => {}
+        exitWait.abort()
+        const closeData = unsubscribeData
+        unsubscribeData = (): void => {}
+        closeData()
+      }
       void callRuntimeRpc<{ wait: { exitCode?: number | null } }>(
         runtimeTarget,
         'terminal.wait',
         { terminal: runtimeTerminalHandle, for: 'exit' },
-        { timeoutMs: 24 * 60 * 60 * 1000 }
+        { timeoutMs: 24 * 60 * 60 * 1000, signal: exitWait.signal }
       )
         .then((result) => handleExit(ptyId, runtimeWaitExitCode(result.wait)))
         .catch(() => {})
@@ -275,7 +286,14 @@ export async function launchAgentBackgroundSession(
       scheduleAgentBackgroundDraft(tab.id, pasteDraftAfterLaunch, agent)
     }
 
-    return { tabId: tab.id, paneKey, ptyId, startupPlan, terminalOwnership }
+    return {
+      tabId: tab.id,
+      paneKey,
+      ptyId,
+      startupPlan,
+      terminalOwnership,
+      releaseRuntimeObservers: () => releaseRuntimeObservers()
+    }
   } catch (error) {
     // Why: terminal creation and stream subscription are separate remote calls.
     // A failure between them must not strand an invisible runtime terminal.

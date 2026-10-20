@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
 import { flushAsyncTicks } from './pty-connection-test-async'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import {
   LEAF_1,
   LEAF_2,
@@ -259,6 +260,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       expect(onPtyExit).toBeTypeOf('function')
 
       onPtyExit?.('pty-pane-2')
+      // A switch-on build closes it on main's answer.
+      await layoutApplyTestTransport.settle()
 
       expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'pty-pane-2')
       expect(deps.onPtyExitRef.current).not.toHaveBeenCalled()
@@ -760,6 +763,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
       capturedDataCallback.current?.('shell prompt')
       onPtyExit?.('pty-pane-2')
+      // A switch-on build closes it on main's answer.
+      await layoutApplyTestTransport.settle()
 
       expect(manager.closePane).toHaveBeenCalledWith(2)
     })
@@ -809,6 +814,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
       terminalInputHandler?.('exit\r')
       onPtyExit?.('pty-pane-2')
+      // A switch-on build closes it on main's answer.
+      await layoutApplyTestTransport.settle()
 
       expect(manager.closePane).toHaveBeenCalledWith(2)
     })

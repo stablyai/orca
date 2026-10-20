@@ -1,7 +1,7 @@
 // Tab properties in a layout-owner build: main's pin, color or rename, drawn from its frame, must
 // look as the window's own action does today, and must restart the same.
 
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
@@ -22,7 +22,16 @@ import {
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
 import type { AppState } from '../store/types'
+import { layoutApplyTestTransport } from './layout-apply-test-transport.test-fixture'
 import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
+import { installLayoutFrameApplyCheck } from './workspace-layout-frame-apply-check.test-fixture'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
@@ -47,6 +56,15 @@ vi.mock('./runtime-layout-client', () => ({
 createStoreSessionMockApi()
 
 type Store = ReturnType<typeof createTestStore>
+
+let check: ReturnType<typeof installLayoutFrameApplyCheck>
+beforeEach(() => {
+  check = installLayoutFrameApplyCheck()
+})
+afterEach(() => {
+  check.uninstall()
+  expect(check.failures).toEqual([])
+})
 
 const flushMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
@@ -228,6 +246,7 @@ describe('tab properties through main', () => {
       // Today: the window acts on its own copy.
       const today = await boot(stored)
       entry.windowAction(today.getState())
+      await layoutApplyTestTransport.settle()
       const todayTabs = shownTabs(today.getState())
       expect(todayTabs).not.toEqual(shownTabs((await boot(stored)).getState()))
       const expected = { ...todayTabs, ...entry.mainShows }
@@ -245,6 +264,7 @@ describe('tab properties through main', () => {
 
       // Main's answer then runs the window's own action, which leaves what today's action shows.
       entry.windowAction(drawn.getState())
+      await layoutApplyTestTransport.settle()
       expect(shownTabs(drawn.getState())).toEqual(expected)
       sync.close()
 

@@ -445,6 +445,25 @@ export const STATIC_ANALYSIS_SCAN_ROOTS = readStaticAnalysisScanRoots()
 
 const STATIC_ANALYSIS_SCAN_PREFIXES = STATIC_ANALYSIS_SCAN_ROOTS.map((root) => `${root}/`)
 
+// Over-inclusive on purpose: a type oxfmt skips only costs this PR a static run.
+const FORMAT_CHECKED_EXTENSION =
+  /\.(?:[cm]?[jt]sx?|json[c5]?|css|less|scss|md|mdx|ya?ml|vue|html|graphql|gql|toml)$/i
+
+function readFormatIgnoredPrefixes() {
+  let config
+  try {
+    config = JSON.parse(readFileSync(join(import.meta.dirname, '../../.oxfmtrc.json'), 'utf8'))
+  } catch {
+    // Fail closed: with no ignores known, every formatted type keeps the gate.
+    return []
+  }
+  return (config.ignorePatterns ?? [])
+    .filter((pattern) => pattern.endsWith('/**'))
+    .map((pattern) => pattern.slice(0, -2))
+}
+
+const FORMAT_IGNORED_PREFIXES = readFormatIgnoredPrefixes()
+
 export function isDocsOnlyPath(file) {
   if (DOCS_ONLY_FILES.has(file)) {
     return true
@@ -514,7 +533,11 @@ export function classifyPrJobs(
   // Why outside should_run: a mobile-only diff is desktop-irrelevant and skips every job above,
   // but the repo-wide audits lint mobile/, and skipping them lands the violation on main, where
   // it then fails this same gate on every later PR's merge ref.
-  jobs.static_analysis = jobs.static_analysis || changedFiles.some(isStaticAnalysisScannedPath)
+  // Why formatted paths too: the formatting check reads the whole tree, so a docs-only diff that
+  // skipped it would land drift that then fails every later PR.
+  jobs.static_analysis =
+    jobs.static_analysis ||
+    changedFiles.some((file) => isStaticAnalysisScannedPath(file) || isFormatCheckedPath(file))
   // Why outside should_run, for the same reason: a mobile-only diff is desktop-irrelevant, and
   // that is exactly the diff that changes the page this job builds. Gated on should_run it would
   // skip on every PR that can break it and run on none.
@@ -617,6 +640,10 @@ function isStaticAnalysisScannedPath(file) {
   return (
     STATIC_ANALYSIS_SCAN_PREFIXES.length === 0 || matchesPrefix(file, STATIC_ANALYSIS_SCAN_PREFIXES)
   )
+}
+
+function isFormatCheckedPath(file) {
+  return FORMAT_CHECKED_EXTENSION.test(file) && !matchesPrefix(file, FORMAT_IGNORED_PREFIXES)
 }
 
 function isNativeCacheInputPath(file) {

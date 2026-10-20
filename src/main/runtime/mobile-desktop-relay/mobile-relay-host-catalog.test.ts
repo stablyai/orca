@@ -71,6 +71,7 @@ function fakeHosts(
     sshTargetLabels: new Map<string, string>(),
     sshConnectionStates: new Map<string, SshConnectionState>()
   }
+  // worktree.ps only; the producer's catalog reads go unanswered, as an older server's would.
   const call = vi.fn<MobileDesktopRelayHosts['call']>()
   const hosts: MobileDesktopRelayHosts = {
     list: () => ({
@@ -98,7 +99,10 @@ function fakeHosts(
       fence: 'unused',
       pairing: { v: 2, endpoint: 'ws://server', deviceToken: 'desktop', publicKeyB64: 'k' }
     }),
-    call,
+    call: (host, method, params, options) =>
+      method === 'worktree.ps'
+        ? call(host, method, params, options)
+        : Promise.reject(new Error('method_not_found')),
     hostsBrowserPage: () => false,
     onEnvironmentRetired: (listener) => {
       state.retire = listener

@@ -116,7 +116,7 @@ export function useNativeChatExternalAttachments({
     pendingChipsRef.current = pendingChips
   }, [pendingChips])
 
-  const resolveAttachmentOwner = useCallback(() => {
+  const resolveAttachmentOwner = useCallback((): NativeChatAttachmentOwner => {
     const { structuredWorktreeId, structuredSession, terminalTabId } = workspaceRef.current
     if (structuredWorktreeId && structuredSession?.runtimeEnvironmentId) {
       return resolveNativeChatRuntimeSessionAttachmentOwner({
@@ -124,9 +124,16 @@ export function useNativeChatExternalAttachments({
         runtimeEnvironmentId: structuredSession.runtimeEnvironmentId
       })
     }
-    return structuredWorktreeId
-      ? resolveNativeChatAttachmentOwnerForWorktree(useAppStore.getState(), structuredWorktreeId)
-      : resolveNativeChatAttachmentOwner(useAppStore.getState(), terminalTabId)
+    if (!structuredWorktreeId) {
+      return resolveNativeChatAttachmentOwner(useAppStore.getState(), terminalTabId)
+    }
+    const owner = resolveNativeChatAttachmentOwnerForWorktree(
+      useAppStore.getState(),
+      structuredWorktreeId
+    )
+    return owner.kind === 'local' && structuredSession
+      ? { kind: 'local', structuredSessionId: structuredSession.sessionId }
+      : owner
   }, [])
 
   // Captures one intake's owner, destination and chips; its checks and work run against them later.

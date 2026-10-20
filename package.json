@@ -74,7 +74,8 @@
     "typecheck:node": "pnpm run build:packages && node config/scripts/run-typecheck-projects-in-parallel.mjs --project=config/tsconfig.node.json",
     "typecheck:cli": "pnpm run build:packages && node config/scripts/run-typecheck-projects-in-parallel.mjs --project=config/tsconfig.tc.cli.json",
     "typecheck:web": "pnpm run build:packages && node config/scripts/run-typecheck-projects-in-parallel.mjs --project=config/tsconfig.tc.web.json",
-    "typecheck:e2e": "pnpm run build:packages && node node_modules/typescript/bin/tsc --noEmit -p config/tsconfig.e2e.json",
+    "typecheck:e2e": "pnpm run build:packages && node config/scripts/run-e2e-typecheck.mjs",
+    "typecheck:tsc:e2e": "pnpm run build:packages && node config/scripts/run-e2e-typecheck.mjs --compiler=native",
     "typecheck": "pnpm run build:packages && node config/scripts/run-typecheck-projects-in-parallel.mjs",
     "typecheck:ci": "pnpm run build:packages && node config/scripts/run-typecheck-projects-in-parallel.mjs --compiler=bun",
     "typecheck:tsc:node": "pnpm run build:packages && node node_modules/typescript/bin/tsc --noEmit -p config/tsconfig.node.json --composite false",
@@ -104,7 +105,7 @@
     "verify:localization-extraction": "node config/scripts/verify-localization-extraction.mjs",
     "verify:localization-coverage": "node config/scripts/audit-localization-coverage.mjs --check",
     "audit:localization": "node config/scripts/audit-localization-coverage.mjs",
-    "build:cli": "pnpm run build:packages && tsc -p config/tsconfig.build.cli.json --outDir out --composite false --incremental false && pnpm run prepare:cli-output",
+    "build:cli": "pnpm run build:packages && node config/scripts/build-cli.mjs && pnpm run prepare:cli-output",
     "prepare:cli-output": "node config/scripts/verify-cli-bin.mjs --fix-executable --fix-package-json && node config/scripts/install-dev-cli.mjs",
     "test:linux-cli-contract": "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
     "test:repro:skills-cli-runtime": "pnpm run build:cli && pnpm run build:electron-vite && pnpm run verify:built-skills-cli",
@@ -298,6 +299,7 @@
     "marked": "^17.0.1",
     "mermaid": "^11.17.2",
     "monaco-editor": "^0.55.1",
+    "node-gyp": "12.3.0",
     "oxfmt": "^0.73.0",
     "oxlint": "^1.88.0",
     "oxlint-plugin-anti-slop": "github:dmmulroy/anti-slop#c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b",
@@ -354,10 +356,10 @@
     "{*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}}": [
       "oxlint",
       "oxlint --config config/oxlint-react-doctor.json",
-      "oxfmt --write"
+      "oxfmt --write --no-error-on-unmatched-pattern"
     ],
-    "{*.{json,css},!(cloud)/**/*.{json,css}}": [
-      "oxfmt --write"
+    "{*.{json,css,md,mdx,yml,yaml},!(cloud)/**/*.{json,css,md,mdx,yml,yaml}}": [
+      "oxfmt --write --no-error-on-unmatched-pattern"
     ]
   },
   "engines": {

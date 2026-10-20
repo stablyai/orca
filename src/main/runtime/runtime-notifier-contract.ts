@@ -1,4 +1,7 @@
-import type { RuntimeFileOpenPosition } from '../../shared/runtime-file-contracts'
+import type {
+  RuntimeEditorTabReveal,
+  RuntimeFileOpenPosition
+} from '../../shared/runtime-file-contracts'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type {
@@ -139,6 +142,8 @@ export type RuntimeNotifier = {
     navigation?: RuntimeNavigationTarget,
     position?: RuntimeFileOpenPosition
   ): void
+  /** Layout-owner builds: shows a tab main already wrote for a file it opened. */
+  revealEditorTab?(reveal: RuntimeEditorTabReveal): void
   openDiff?(
     worktreeId: string,
     filePath: string,

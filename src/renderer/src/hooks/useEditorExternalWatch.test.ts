@@ -21,7 +21,6 @@ vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
 
 import {
   buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
-  collectOverflowEditorExternalReloadTargets as getOverflowExternalReloadTargets,
   EXTERNAL_MUTATION_DEBOUNCE_MS
 } from './editor-external-watch-event-reconciliation'
 import { getEditorExternalWatchTargetKey as getWatchedTargetKey } from './editor-external-watch-targets'
@@ -71,114 +70,6 @@ describe('getWatchedTargetKey', () => {
         runtimeEnvironmentId: 'env-1'
       })
     )
-  })
-})
-
-describe('getOverflowExternalReloadTargets', () => {
-  const setExternalMutation = vi.fn()
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('clears tombstones and reloads clean edit tabs on overflow', () => {
-    vi.mocked(useAppStore.getState).mockReturnValue({
-      openFiles: [
-        {
-          id: 'file-1',
-          worktreeId: 'wt-1',
-          worktreePath: '/repo',
-          relativePath: 'notes.md',
-          mode: 'edit',
-          isDirty: false,
-          externalMutation: 'deleted'
-        },
-        {
-          id: 'file-2',
-          worktreeId: 'wt-1',
-          worktreePath: '/repo',
-          relativePath: 'dirty.md',
-          mode: 'edit',
-          isDirty: true
-        },
-        {
-          id: 'file-3',
-          worktreeId: 'wt-1',
-          worktreePath: '/repo',
-          relativePath: 'staged.ts',
-          mode: 'diff',
-          diffSource: 'staged',
-          isDirty: false
-        }
-      ],
-      setExternalMutation
-    } as never)
-
-    expect(
-      getOverflowExternalReloadTargets({
-        worktreeId: 'wt-1',
-        worktreePath: '/repo'
-      })
-    ).toEqual([
-      {
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        relativePath: 'notes.md',
-        runtimeEnvironmentId: null
-      },
-      {
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        relativePath: 'staged.ts',
-        runtimeEnvironmentId: null
-      }
-    ])
-    expect(setExternalMutation).toHaveBeenCalledWith('file-1', null)
-  })
-
-  it('limits overflow reload targets to the matching runtime owner', () => {
-    vi.mocked(useAppStore.getState).mockReturnValue({
-      openFiles: [
-        {
-          id: 'local-file',
-          worktreeId: 'wt-1',
-          worktreePath: '/repo',
-          relativePath: 'local.md',
-          mode: 'edit',
-          isDirty: false,
-          externalMutation: 'deleted',
-          runtimeEnvironmentId: null
-        },
-        {
-          id: 'runtime-file',
-          worktreeId: 'wt-1',
-          worktreePath: '/repo',
-          relativePath: 'runtime.md',
-          mode: 'edit',
-          isDirty: false,
-          externalMutation: 'deleted',
-          runtimeEnvironmentId: 'env-1'
-        }
-      ],
-      setExternalMutation
-    } as never)
-
-    expect(
-      getOverflowExternalReloadTargets({
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        runtimeEnvironmentId: 'env-1'
-      })
-    ).toEqual([
-      {
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        relativePath: 'runtime.md',
-        runtimeEnvironmentId: 'env-1'
-      }
-    ])
-    expect(setExternalMutation).toHaveBeenCalledWith('runtime-file', null)
-    expect(setExternalMutation).not.toHaveBeenCalledWith('local-file', null)
   })
 })
 

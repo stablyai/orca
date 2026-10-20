@@ -159,6 +159,7 @@ function scriptWindowsHost(log: string[], activeRecord: string | null = null): v
 }
 
 function options(): OrcadDeployOptions {
+  const census = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 }
   return {
     conn: Object.assign(Object.create(null), { writeFile: vi.fn().mockResolvedValue(undefined) }),
     host,
@@ -169,7 +170,8 @@ function options(): OrcadDeployOptions {
     userDataDir: 'C:/Users/u/.orca',
     bindHost: '127.0.0.1',
     port: 7777,
-    census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 },
+    census,
+    recountCensus: async () => census,
     readinessTimeoutMs: 1_000,
     sleep: async () => {},
     now: () => new Date('2026-10-02T00:00:00.000Z')

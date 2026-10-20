@@ -10,11 +10,9 @@ const mocks = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
 import { recordLayoutApply, sendLayoutApply, type WindowLayoutCommand } from './layout-apply-send'
+import { sendGeneratedTabTitles } from './generated-tab-titles-send'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import {
-  adoptLiveTerminalThroughLayoutOwner,
-  createInitialTerminalThroughLayoutOwner
-} from '@/store/terminals/terminal-tab-create-through-layout-owner'
+import { createInitialTerminalThroughLayoutOwner } from '@/store/terminals/terminal-tab-create-through-layout-owner'
 
 const WORKTREE_ID = 'repo-1::/srv/w'
 const FOLDER_ID = 'folder:f1'
@@ -92,19 +90,22 @@ describe.each(PAIRED_WORKSPACES)('$name', ({ workspaceId, rows }) => {
     expect(handlers.apply).not.toHaveBeenCalled()
   })
 
+  it('a batch of generated titles sends nothing and is the caller’s to show', () => {
+    const answer = vi.fn()
+
+    expect(
+      sendGeneratedTabTitles(rows, [{ worktreeId: workspaceId, tabId: 't', title: 'x' }], answer)
+    ).toEqual([false])
+    expect(layoutApplyCalls()).toEqual([])
+    expect(answer).not.toHaveBeenCalled()
+  })
+
   it('the activation terminal create sends nothing', () => {
     const create = vi.fn()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the paired-server guard returns before anything but the owner rows is read.
     const getState = () => rows as AppState
 
     expect(createInitialTerminalThroughLayoutOwner(getState, workspaceId, create)).toBe(false)
-    expect(layoutApplyCalls()).toEqual([])
-  })
-
-  it('the live terminal adoption sends nothing', async () => {
-    await expect(
-      adoptLiveTerminalThroughLayoutOwner(() => rows, workspaceId, { ptyId: 'pty-1' })
-    ).resolves.toBe('as-today')
     expect(layoutApplyCalls()).toEqual([])
   })
 })
@@ -136,8 +137,11 @@ describe('layout.apply senders', () => {
   // A new sender must go through sendLayoutApply or carry the same guard, plus a case above.
   it('are only the guarded paths pinned above', () => {
     expect(layoutApplySenders(path.resolve(__dirname, '..'))).toEqual({
+      'runtime/generated-tab-titles-send.ts': 1,
       'runtime/layout-apply-send.ts': 1,
-      'store/terminals/terminal-tab-create-through-layout-owner.ts': 2
+      // Tests' stand-in for main: it answers layout.apply, never sends it.
+      'runtime/layout-apply-test-transport.test-fixture.ts': 1,
+      'store/terminals/terminal-tab-create-through-layout-owner.ts': 1
     })
   })
 })

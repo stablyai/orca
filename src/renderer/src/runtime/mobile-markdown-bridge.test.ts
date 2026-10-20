@@ -5,17 +5,21 @@ import {
   MOBILE_MARKDOWN_READ_MAX_BYTES
 } from '../../../shared/mobile-markdown-document'
 import { attachEditorAutosaveController } from '../components/editor/editor-autosave-controller'
+import { ORCA_EDITOR_FILE_CACHE_STALE_EVENT } from '../components/editor/editor-autosave'
 import { registerPendingEditorFlush } from '../components/editor/editor-pending-flush'
 import { useAppStore } from '../store'
+import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { attachMobileMarkdownBridge } from './mobile-markdown-bridge'
+import { MOBILE_STALE_SAVE_MESSAGE } from './mobile-markdown-save-rollback'
 import {
   cleanupMobileMarkdownBridgeHarness,
   markdownUnifiedTab,
   openMarkdownFile,
   resetEditorState,
   sendRequest,
-  setupWindow
+  setupWindow,
+  guardedWriteRefusal
 } from './mobile-markdown-bridge-test-harness'
 
 vi.mock('@/lib/connection-context', () => ({
@@ -210,8 +214,13 @@ describe('mobile markdown bridge', () => {
       content: diskContent,
       isBinary: false
     }))
-    const writeFile = vi.fn().mockImplementation(async ({ content }) => {
+    const writeFile = vi.fn().mockImplementation(async ({ content, diskPrecondition }) => {
+      const refusal = guardedWriteRefusal(diskPrecondition, diskContent)
+      if (refusal) {
+        return refusal
+      }
       diskContent = content
+      return { ok: true }
     })
     setupWindow({ readFile, writeFile })
     const detachBridge = attachMobileMarkdownBridge()
@@ -227,18 +236,130 @@ describe('mobile markdown bridge', () => {
         content: 'mobile edit'
       })
 
-      expect(writeFile).toHaveBeenCalledWith({
-        filePath: '/repo/README.md',
-        content: 'mobile edit',
-        connectionId: undefined,
-        expectedExecutionHostId: 'local'
-      })
+      expect(writeFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: '/repo/README.md',
+          content: 'mobile edit',
+          connectionId: undefined,
+          expectedExecutionHostId: 'local',
+          diskPrecondition: expect.objectContaining({ allowMissing: true })
+        })
+      )
       expect(response).toMatchObject({
         id: 'save-2',
         ok: true,
         result: { content: 'mobile edit', isDirty: false }
       })
     } finally {
+      detachAutosave()
+      detachBridge()
+    }
+  })
+
+  it('reports a refused phone save to the phone only, with its own message', async () => {
+    openMarkdownFile()
+    const tabId = useAppStore.getState().openFiles[0].id
+    // The tab never loaded on the desktop; the phone read 'original', then an agent wrote.
+    let diskContent = 'original'
+    const readFile = vi.fn().mockImplementation(async () => {
+      const content = diskContent
+      diskContent = 'agent rewrite'
+      return { content, isBinary: false }
+    })
+    const writeFile = vi.fn().mockImplementation(async ({ content, diskPrecondition }) => {
+      const refusal = guardedWriteRefusal(diskPrecondition, diskContent)
+      if (refusal) {
+        return refusal
+      }
+      diskContent = content
+      return { ok: true }
+    })
+    setupWindow({ readFile, writeFile })
+    const detachBridge = attachMobileMarkdownBridge()
+    const detachAutosave = attachEditorAutosaveController(useAppStore as never)
+
+    try {
+      const response = await sendRequest({
+        id: 'save-stale',
+        operation: 'save',
+        worktreeId: 'wt-1',
+        tabId: 'tab-md',
+        baseVersion: hashMarkdownContent('original'),
+        content: 'mobile edit'
+      })
+
+      expect(writeFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          diskPrecondition: expect.objectContaining({
+            expectedSignature: getDiskBaselineSignature('original')
+          })
+        })
+      )
+      expect(diskContent).toBe('agent rewrite')
+      expect(response).toMatchObject({
+        id: 'save-stale',
+        ok: false,
+        error: MOBILE_STALE_SAVE_MESSAGE
+      })
+      const tab = useAppStore.getState().openFiles.find((file) => file.id === tabId)
+      expect(tab?.externalMutation).toBeUndefined()
+      expect(tab?.isDirty).toBe(false)
+      // The baseline stamped from the phone's read is withdrawn with the failed save.
+      expect(tab?.lastKnownDiskSignature).toBeUndefined()
+    } finally {
+      detachAutosave()
+      detachBridge()
+    }
+  })
+
+  it('lets the phone save after an external change to a clean desktop tab', async () => {
+    openMarkdownFile()
+    const tabId = useAppStore.getState().openFiles[0].id
+    // The desktop loaded 'A' earlier; an agent then wrote 'B' and the desktop tab is still clean.
+    useAppStore.getState().setLastKnownDiskSignature(tabId, getDiskBaselineSignature('A'))
+    let diskContent = 'B'
+    const readFile = vi.fn().mockImplementation(async () => ({
+      content: diskContent,
+      isBinary: false
+    }))
+    const writeFile = vi.fn().mockImplementation(async ({ content, diskPrecondition }) => {
+      const refusal = guardedWriteRefusal(diskPrecondition, diskContent)
+      if (refusal) {
+        return refusal
+      }
+      diskContent = content
+      return { ok: true }
+    })
+    setupWindow({ readFile, writeFile })
+    const dropped: string[] = []
+    const onStale = (event: Event): void => {
+      if (event instanceof CustomEvent) {
+        dropped.push(event.detail.fileId)
+      }
+    }
+    window.addEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, onStale)
+    const detachBridge = attachMobileMarkdownBridge()
+    const detachAutosave = attachEditorAutosaveController(useAppStore as never)
+
+    try {
+      const response = await sendRequest({
+        id: 'save-after-change',
+        operation: 'save',
+        worktreeId: 'wt-1',
+        tabId: 'tab-md',
+        baseVersion: hashMarkdownContent('B'),
+        content: 'phone edit'
+      })
+
+      expect(response).toMatchObject({ id: 'save-after-change', ok: true })
+      expect(diskContent).toBe('phone edit')
+      // The tab's baseline and text both moved to the write, so nothing needed dropping.
+      expect(useAppStore.getState().openFiles[0]?.lastKnownDiskSignature).toBe(
+        getDiskBaselineSignature('phone edit')
+      )
+      expect(dropped).toEqual([])
+    } finally {
+      window.removeEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, onStale)
       detachAutosave()
       detachBridge()
     }

@@ -55,6 +55,7 @@ import {
 } from '../orca-runtime-postlude'
 import { RuntimeTerminalWait as RuntimeTerminalWaitController } from '../terminal/wait/terminal-wait'
 import type { PtyLivenessVerdict } from '../../../shared/pty-liveness-verdict'
+import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualified-identity'
 
 import { RuntimeConstructionServices } from './runtime-construction-services'
 
@@ -178,15 +179,16 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   protected readonly terminalCreateIdempotency = new RemoteRuntimeTerminalCreateIdempotency()
 
   // Why: concurrent clients sleeping one host workspace must share one physical teardown.
-  protected terminalSleepByWorktreeId = new Map<
-    string,
+  // Both sleep maps key on host + workspace (hostSleepKey), never the bare id.
+  protected terminalSleepByHostWorktree = new Map<
+    HostScopedWorktreeKey,
     Promise<RuntimeWorktreeTerminalSleepResult>
   >()
 
   protected readonly terminalMutationLock = new WorktreeTerminalMutationLock()
 
-  protected terminalSleepStateByWorktreeId = new Map<
-    string,
+  protected terminalSleepStateByHostWorktree = new Map<
+    HostScopedWorktreeKey,
     {
       worktreeId: string
       generation: number

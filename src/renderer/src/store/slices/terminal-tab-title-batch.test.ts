@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
@@ -13,8 +15,9 @@ vi.mock('@/components/terminal-pane/shutdown-buffer-captures', () => ({
   shutdownBufferCaptures: vi.fn()
 }))
 
+const main = layoutApplyTestDouble()
 // @ts-expect-error -- minimal preload API stub for the slice's IPC writes
-globalThis.window = { api: {} }
+globalThis.window = { api: { runtime: { call: main.call } } }
 
 import {
   createTestStore,
@@ -178,7 +181,7 @@ describe('terminal tab title batches', () => {
     expect(store.getState().tabsByWorktree.second?.[0]?.title).toBe('Final')
   })
 
-  it('updates every same-owner backing duplicate but only the first unified row', () => {
+  it('updates every same-owner backing duplicate but only the first unified row', async () => {
     const store = createTestStore()
     seedStore(store, {
       settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
@@ -218,10 +221,13 @@ describe('terminal tab title batches', () => {
       'Final live title',
       'Final live title'
     ])
-    expect(store.getState().tabsByWorktree.owner?.map((tab) => tab.generatedTitle)).toEqual([
-      'Generated duplicate title for remote',
-      'Generated duplicate title for remote'
-    ])
+    // A layout-owner build shows the title once main has it.
+    await vi.waitFor(() =>
+      expect(store.getState().tabsByWorktree.owner?.map((tab) => tab.generatedTitle)).toEqual([
+        'Generated duplicate title for remote',
+        'Generated duplicate title for remote'
+      ])
+    )
     expect(store.getState().unifiedTabsByWorktree.owner?.map((tab) => tab.label)).toEqual([
       'Final live title',
       'Second visible'
@@ -281,7 +287,7 @@ describe('terminal tab title batches', () => {
     expect(batchStore.getState().sortEpoch).toBe(sequentialStore.getState().sortEpoch)
   })
 
-  it('coalesces generated titles while preserving first-write and replacement semantics', () => {
+  it('coalesces generated titles while preserving first-write and replacement semantics', async () => {
     const store = createTestStore()
     const fixture = makeScaleState(100)
     seedStore(store, {
@@ -311,11 +317,17 @@ describe('terminal tab title batches', () => {
       }
     )
 
+    main.commands.length = 0
     store.getState().setGeneratedTabTitlesFromAgentPrompts(updates)
 
+    // A layout-owner build sends main the batch as one rename and shows it once main has it.
+    await vi.waitFor(() => expect(publications).toBe(1))
     unsubscribe()
-    expect(publications).toBe(1)
-    expect(fixture.getIdReads()).toBeLessThanOrEqual(305)
+    expect(main.commands.map((command) => command.type)).toEqual(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? ['renameTabs'] : []
+    )
+    // A layout-owner build adds a second linear pass: the dry run that picks main's renames.
+    expect(fixture.getIdReads()).toBeLessThanOrEqual(ORCA_LAYOUT_OWNER_IS_MAIN ? 710 : 305)
     expect(store.getState().tabsByWorktree['wt-0']?.[0]?.generatedTitle).toBe(
       'Replacement title for a newer dispatch'
     )

@@ -50,6 +50,17 @@ describe('findOrphanedOrcaSshForward', () => {
     expect(findOrphanedOrcaSshForward([row(900, 1, extraLogLevel)], EXPECTED, 'darwin')).toBeNull()
   })
 
+  it('matches an orphan an earlier version spawned without the unmultiplexing -S none', () => {
+    const unmultiplexed = ['-o', 'BatchMode=no', '-T', '-S', 'none', ...EXPECTED.slice(3)]
+    expect(
+      findOrphanedOrcaSshForward([row(900, 1, ORCA_FORWARD)], unmultiplexed, 'darwin')?.pid
+    ).toBe(900)
+    const otherControlPath = ORCA_FORWARD.replace(' -T ', ' -T -S /tmp/cm ')
+    expect(
+      findOrphanedOrcaSshForward([row(900, 1, otherControlPath)], unmultiplexed, 'darwin')
+    ).toBeNull()
+  })
+
   it("never picks a forward whose Orca is still running (another instance's tunnel)", () => {
     const rows = [
       row(400, 1, '/Applications/Orca.app/Contents/MacOS/Orca'),

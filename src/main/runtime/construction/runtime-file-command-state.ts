@@ -32,6 +32,14 @@ import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import type { Repo } from '../../../shared/repo-types'
 import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
+import type { RuntimeRepoSelector } from '../runtime-repo-selector'
+import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import {
+  openEditorFileInWindow,
+  openEditorFileThroughLayoutOwner
+} from '../files/editor-open-through-layout-owner'
 
 export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
   abstract resolveRuntimeFileTarget(worktreeSelector: string): Promise<{
@@ -93,7 +101,7 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
 
   protected abstract resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree>
 
-  protected abstract resolveRepoSelector(selector: string): Promise<Repo>
+  protected abstract resolveRepoSelector(selector: RuntimeRepoSelector): Promise<Repo>
 
   protected readonly fileCommands = new RuntimeFileCommands({
     getRuntimeId: () => this.runtimeId,
@@ -131,17 +139,28 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
       if (isChatScratchWorktreeId(worktreeId)) {
         throw new Error('chat_scratch_not_openable')
       }
-      if (!this.notifier?.openFile) {
-        throw new Error('renderer_unavailable')
-      }
-      this.notifier.openFile(
+      const open = {
         worktreeId,
         filePath,
         relativePath,
         runtimeEnvironmentId,
         navigation,
-        ...(position ? [position] : [])
-      )
+        position
+      }
+      // Switch point: main writes the tab itself, window or none; a window only shows it.
+      return ORCA_LAYOUT_OWNER_IS_MAIN
+        ? openEditorFileThroughLayoutOwner(
+            {
+              applyLayoutCommand: (command) => this.applyLayoutCommand(command),
+              groupFor: (id) => this.editorOpenGroupFor(id),
+              ...(this.notifier?.revealEditorTab
+                ? { revealEditorTab: (shown) => this.notifier?.revealEditorTab?.(shown) }
+                : {}),
+              openInWindow: (inWindow) => openEditorFileInWindow(this.notifier, inWindow)
+            },
+            open
+          )
+        : openEditorFileInWindow(this.notifier, open)
     },
     openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation) => {
       if (isChatScratchWorktreeId(worktreeId)) {
@@ -160,6 +179,11 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
       )
     }
   })
+
+  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+
+  /** The group a file main opens lands in: the window's live one, else the saved view's. */
+  protected abstract editorOpenGroupFor(worktreeId: string): string | undefined
 
   protected readonly fileWatcherRemoval = createRuntimeFileWatcherRemoval(this.fileCommands)
 

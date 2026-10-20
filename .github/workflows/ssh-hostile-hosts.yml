@@ -1,9 +1,9 @@
 name: SSH hostile hosts
 
 # Hostile-host matrix: the real client-side managed orcad deploy against container SSH targets
-# (old glibc, musl, no libstdc++, noexec home, no egress) and against each macOS runner's own
+# (old glibc, musl, no libstdc++, noexec home, no egress on either side) and against each macOS runner's own
 # loopback sshd, asserting the runtime each host resolves and whether orcad activates there.
-# Heavy (three slot builds plus seven images), so it runs only when the deploy, the runtime store
+# Heavy (three slot builds plus eight images), so it runs only when the deploy, the runtime store
 # or the slot build changes, and on demand.
 on:
   pull_request:

@@ -1,4 +1,8 @@
-import { getGitRemoteProviderIdentity } from './project-host-setup-projection'
+import {
+  GIT_REMOTE_PROJECT_ID_PREFIX,
+  getGitRemoteProviderIdentity,
+  getProjectIdForProviderIdentity
+} from './project-host-setup-projection'
 import type { ProjectProviderIdentity } from './project-types'
 import type { Repo } from './repo-types'
 
@@ -28,4 +32,36 @@ export function assertImportedFolderRemoteMatchesProject(
   throw new Error(
     `Imported folder does not match the selected project: its Git remote "${remoteName}" points at ${folderIdentity.owner}/${folderIdentity.repo}, not ${projectIdentity.owner}/${projectIdentity.repo}. Choose the project that matches this folder. If the folder is a fork, add the project's repository as its "upstream" remote; if the repository was renamed, update the folder's remote URL.`
   )
+}
+
+/**
+ * The repo fields that link a folder into `projectId` when it does not project there on its own.
+ * A GitHub project stamps its identity as `upstream`. A project keyed by its Git remote (GitLab,
+ * Bitbucket, a self-hosted host) records the folder's remote once it names the same repository,
+ * since a freshly cloned folder's remote may not have been probed yet.
+ */
+export function resolveImportedFolderProjectLink(
+  folder: Pick<Repo, 'gitRemoteIdentity'>,
+  projectId: string,
+  providerIdentity: ProjectProviderIdentity | undefined
+): Pick<Repo, 'upstream'> | Pick<Repo, 'gitRemoteIdentity'> {
+  if (providerIdentity && getProjectIdForProviderIdentity(providerIdentity) === projectId) {
+    assertImportedFolderRemoteMatchesProject(folder, providerIdentity)
+    return {
+      upstream: {
+        owner: providerIdentity.owner,
+        repo: providerIdentity.repo,
+        ...(providerIdentity.host ? { host: providerIdentity.host } : {})
+      }
+    }
+  }
+  const remote = folder.gitRemoteIdentity
+  if (
+    remote &&
+    // Why exact: SSH and HTTPS forms already share a canonical key, and projection keys on it.
+    `${GIT_REMOTE_PROJECT_ID_PREFIX}${remote.canonicalKey}` === projectId
+  ) {
+    return { gitRemoteIdentity: remote }
+  }
+  throw new Error('Imported folder does not match the selected project identity.')
 }

@@ -186,7 +186,8 @@ describe('registerFilesystemWatcherHandlers', () => {
     await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendMock).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
-      events: [{ path: '/home/me/repo/file.txt', type: 'update' }]
+      events: [{ path: '/home/me/repo/file.txt', type: 'update' }],
+      connectionId: 'conn-1'
     })
     warnSpy.mockRestore()
     handlers['fs:unwatchWorktree'](
@@ -282,7 +283,8 @@ describe('registerFilesystemWatcherHandlers', () => {
     expect(senderOne.send).not.toHaveBeenCalled()
     expect(senderTwo.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
-      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
+      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }],
+      connectionId: 'conn-1'
     })
 
     staleTerminal(new Error('late stale failure'))
@@ -313,7 +315,8 @@ describe('registerFilesystemWatcherHandlers', () => {
     await vi.waitFor(() =>
       expect(sender.send).toHaveBeenCalledWith('fs:changed', {
         worktreePath: '/home/me/repo',
-        events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+        events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+        connectionId: 'conn-1'
       })
     )
 
@@ -321,7 +324,8 @@ describe('registerFilesystemWatcherHandlers', () => {
     await emitRemote(reinstalledEvents, [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
-      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
+      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }],
+      connectionId: 'conn-1'
     })
 
     await closeAllWatchers()
@@ -370,7 +374,8 @@ describe('registerFilesystemWatcherHandlers', () => {
     expect(retryWatchMock).toHaveBeenCalledTimes(1)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
-      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+      connectionId: 'conn-1'
     })
 
     warnSpy.mockRestore()
@@ -441,7 +446,8 @@ describe('registerFilesystemWatcherHandlers', () => {
     for (const sender of [senderOne, senderTwo]) {
       expect(sender.send).toHaveBeenCalledWith('fs:changed', {
         worktreePath: '/home/me/repo',
-        events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+        events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+        connectionId: 'conn-1'
       })
     }
 
@@ -570,13 +576,15 @@ describe('registerFilesystemWatcherHandlers', () => {
     expect(watchMock).toHaveBeenCalledTimes(2)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
-      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+      connectionId: 'conn-1'
     })
     const replacementEvents = watchMock.mock.calls[1][1] as (events: unknown[]) => void
     await emitRemote(replacementEvents, [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
     expect(sender.send).toHaveBeenLastCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
-      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
+      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }],
+      connectionId: 'conn-1'
     })
   })
 

@@ -1,3 +1,4 @@
+import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '../types'
 import {
   applyGeneratedTabTitleUpdates,
@@ -10,6 +11,8 @@ import {
   sendRenamableTabChangeToLayoutOwner,
   type TabChange
 } from './tab-change-through-layout-owner'
+import { findRenamableUnifiedTab } from './renamable-unified-tab'
+import { sendGeneratedTabTitles } from '@/runtime/generated-tab-titles-send'
 
 type RoutedActions = Pick<
   TerminalSlice,
@@ -26,8 +29,17 @@ function terminalTab(state: AppState, tabId: string) {
   return owner ? state.tabsByWorktree[owner]?.find((tab) => tab.id === tabId) : undefined
 }
 
+type GeneratedTitleChange = {
+  tabId: string
+  title: string | null
+  updates: GeneratedTabTitleUpdate[]
+}
+
 /** Each tab's generated title the window would give it now, with the updates that give it. */
-function generatedTitleChanges(state: AppState, updates: readonly GeneratedTabTitleUpdate[]) {
+function generatedTitleChanges(
+  state: AppState,
+  updates: readonly GeneratedTabTitleUpdate[]
+): GeneratedTitleChange[] {
   const patched = applyGeneratedTabTitleUpdates(state, updates).patch?.tabsByWorktree ?? {}
   return Object.values(patched)
     .flat()
@@ -60,32 +72,50 @@ export function routeTerminalTabChangesThroughLayoutOwner(
   }
   /** Tabs whose generated title main has and the window does not yet: the window keeps a first title. */
   const generatedTitleSent = new Map<string, object>()
+  // Why one send: a status batch's titles are one write and one frame in main, and one store update.
   const routeGeneratedTitles = (updates: readonly GeneratedTabTitleUpdate[]): void => {
     const unsent = updates.filter(
       (update) =>
         update.options?.replaceExistingGeneratedTitle === true ||
         !generatedTitleSent.has(getTabIdFromPaneKey(update.paneKey) ?? '')
     )
-    for (const { tabId, title, updates: ofTab } of generatedTitleChanges(get(), unsent)) {
-      const entry = {}
-      const settle = (): void => {
-        if (generatedTitleSent.get(tabId) === entry) {
-          generatedTitleSent.delete(tabId)
+    const state = get()
+    const toMain: (GeneratedTitleChange & { tab: Tab })[] = []
+    // Main is not asked for a tab it has no tab-bar entry for, nor one a paired server owns.
+    const local: GeneratedTabTitleUpdate[] = []
+    for (const change of generatedTitleChanges(state, unsent)) {
+      const tab = findRenamableUnifiedTab(state.unifiedTabsByWorktree, change.tabId)
+      if (tab) {
+        toMain.push({ ...change, tab })
+      } else {
+        local.push(...change.updates)
+      }
+    }
+    const entry = {}
+    const sent = sendGeneratedTabTitles(
+      state,
+      toMain.map(({ tab, title }) => ({ worktreeId: tab.worktreeId, tabId: tab.id, title })),
+      (shown) => {
+        for (const { tabId } of toMain) {
+          if (generatedTitleSent.get(tabId) === entry) {
+            generatedTitleSent.delete(tabId)
+          }
+        }
+        const ofShown = toMain.flatMap((change, index) => (shown[index] ? change.updates : []))
+        if (ofShown.length > 0) {
+          actions.setGeneratedTabTitlesFromAgentPrompts(ofShown)
         }
       }
-      const sent = sendRenamableTabChangeToLayoutOwner(
-        get(),
-        tabId,
-        (id) => ({ type: 'renameTab', tabId: id, kind: 'generated', title }),
-        () => {
-          settle()
-          actions.setGeneratedTabTitlesFromAgentPrompts(ofTab)
-        },
-        settle
-      )
-      if (sent) {
-        generatedTitleSent.set(tabId, entry)
+    )
+    toMain.forEach((change, index) => {
+      if (sent[index]) {
+        generatedTitleSent.set(change.tabId, entry)
+      } else {
+        local.push(...change.updates)
       }
+    })
+    if (local.length > 0) {
+      actions.setGeneratedTabTitlesFromAgentPrompts(local)
     }
   }
   return {

@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AppState } from '../types'
 import { createTestStore, makeUnifiedTab, makeTabGroup } from './store-test-helpers'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 // Mock sonner (imported transitively by repos.ts via the full store).
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -51,25 +59,30 @@ describe('tab view mode', () => {
     seedTwoLeafTabs(store)
   })
 
-  it('toggles a tab to chat and back to terminal', () => {
+  it('toggles a tab to chat and back to terminal', async () => {
     expect(findTab(store, 'left-tab')?.viewMode).toBeUndefined()
 
     store.getState().toggleTabViewMode('left-tab')
+    await layoutApplyTestTransport.settle()
     expect(findTab(store, 'left-tab')?.viewMode).toBe('chat')
 
     store.getState().toggleTabViewMode('left-tab')
+    await layoutApplyTestTransport.settle()
     expect(findTab(store, 'left-tab')?.viewMode).toBe('terminal')
   })
 
-  it('setTabViewMode sets an explicit mode', () => {
+  it('setTabViewMode sets an explicit mode', async () => {
     store.getState().setTabViewMode('left-tab', 'chat')
+    await layoutApplyTestTransport.settle()
     expect(findTab(store, 'left-tab')?.viewMode).toBe('chat')
     store.getState().setTabViewMode('left-tab', 'terminal')
+    await layoutApplyTestTransport.settle()
     expect(findTab(store, 'left-tab')?.viewMode).toBe('terminal')
   })
 
-  it('mutates only the targeted tab, leaving a split sibling unchanged', () => {
+  it('mutates only the targeted tab, leaving a split sibling unchanged', async () => {
     store.getState().toggleTabViewMode('left-tab')
+    await layoutApplyTestTransport.settle()
 
     expect(findTab(store, 'left-tab')?.viewMode).toBe('chat')
     // The sibling leaf's tab keeps its (default) view mode.
@@ -105,16 +118,19 @@ describe('tab view mode', () => {
 
     let rowTabId = ''
 
-    it('toggleTabViewMode patches the row in the same write', () => {
+    it('toggleTabViewMode patches the row in the same write', async () => {
       store.getState().toggleTabViewMode(rowTabId)
+      await layoutApplyTestTransport.settle()
       expect(terminalRow(rowTabId)?.viewMode).toBe('chat')
 
       store.getState().toggleTabViewMode(rowTabId)
+      await layoutApplyTestTransport.settle()
       expect(terminalRow(rowTabId)?.viewMode).toBe('terminal')
     })
 
-    it('setTabViewMode patches the row in the same write', () => {
+    it('setTabViewMode patches the row in the same write', async () => {
       store.getState().setTabViewMode(rowTabId, 'chat')
+      await layoutApplyTestTransport.settle()
       expect(terminalRow(rowTabId)?.viewMode).toBe('chat')
     })
   })

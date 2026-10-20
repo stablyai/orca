@@ -125,15 +125,20 @@ export function openBrowserUrlOnClient(
   host: BrowserClientPageOpeningHost,
   params: { url: string; worktree: string }
 ): Promise<{ browserPageId: string }> {
-  const protocol = new URL(params.url).protocol
-  if (protocol !== 'http:' && protocol !== 'https:') {
-    throw new BrowserError('invalid_argument', 'Only http(s) URLs can be opened on the client.')
-  }
+  assertClientOpenableUrl(params.url)
   return createBrowserPageOnPairedHost(
     host,
     { url: params.url, worktree: params.worktree, activate: true, navigation: 'caller' },
     DEFAULT_BROWSER_PROFILE_ID
   )
+}
+
+/** `orca open-url` opens only web pages, wherever the page ends up rendering. */
+export function assertClientOpenableUrl(url: string): void {
+  const protocol = new URL(url).protocol
+  if (protocol !== 'http:' && protocol !== 'https:') {
+    throw new BrowserError('invalid_argument', 'Only http(s) URLs can be opened on the client.')
+  }
 }
 
 /** A page its caller did not place goes to the one paired desktop hosting this runtime's pages. */

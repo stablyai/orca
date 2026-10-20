@@ -1,8 +1,8 @@
-import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { runE2eTypecheck } from './run-e2e-typecheck.mjs'
 import {
   diffCounts,
   parseCountBaseline,
@@ -15,7 +15,6 @@ import {
 // lane runs it. Counts per file may only go down.
 
 const BASELINE_PATH = 'config/e2e-typecheck-baseline.txt'
-const TSCONFIG = 'config/tsconfig.e2e.json'
 const HEADER = [
   '# Type errors per file under tests/ (tsc -p config/tsconfig.e2e.json).',
   '# This is a RATCHET: counts may only go DOWN. Fix the errors in a file you touch.',
@@ -37,21 +36,11 @@ export function countTestTypeErrors(tscOutput) {
   return counts
 }
 
-function runTsc(root) {
-  const result = spawnSync(
-    process.execPath,
-    ['node_modules/typescript/bin/tsc', '--noEmit', '--pretty', 'false', '-p', TSCONFIG],
-    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
-  )
-  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
-  // tsc exits 2 when it reports errors; anything else without diagnostics means it never ran.
-  if (result.error || (result.status !== 0 && !/error TS\d+:/.test(output))) {
-    throw new Error(`tsc -p ${TSCONFIG} failed to run:\n${result.error ?? output}`)
-  }
-  return output
-}
-
-export function main(root = process.cwd(), arg = undefined, tscOutput = runTsc(root)) {
+export function main(
+  root = process.cwd(),
+  arg = undefined,
+  tscOutput = runE2eTypecheck({ root }).output
+) {
   const current = countTestTypeErrors(tscOutput)
   if (arg === '--prune') {
     const total = pruneCountBaseline(root, BASELINE_PATH, HEADER, current)

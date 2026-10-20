@@ -68,7 +68,8 @@ type PartSources = {
     | Prefixed<'file', keyof LayoutEditorFile>
     | Prefixed<'browserTab', keyof LayoutBrowserTab>
     // `$key`: the map key the entry is stored under.
-    | Prefixed<'leaf', Exclude<keyof LayoutLeaf, 'sleeping'> | '$key'>
+    // `ptyGeneration` is in memory only: a load starts every pane's count afresh.
+    | Prefixed<'leaf', Exclude<keyof LayoutLeaf, 'sleeping' | 'ptyGeneration'> | '$key'>
     | Prefixed<'leaf.sleeping', keyof LayoutSleepingRecord>
     | Prefixed<'closedTab', keyof LayoutClosedTab>
   desktopView:

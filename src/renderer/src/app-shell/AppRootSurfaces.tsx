@@ -44,6 +44,7 @@ const AddProjectFromFolderDialog = lazy(
 )
 const DiagramViewerModal = lazy(() => import('../components/editor/DiagramViewerModal'))
 const ProjectAddedDialog = lazy(() => import('../components/sidebar/ProjectAddedDialog'))
+const NodeDistMirrorDialog = lazy(() => import('../components/settings/NodeDistMirrorDialog'))
 const AiVaultSessionHistoryDialog = lazy(
   () => import('../components/right-sidebar/AiVaultSessionHistoryDialog')
 )
@@ -228,6 +229,12 @@ export function AppRootSurfaces(props: {
         {activeModal === 'agent-session-history' ? (
           <ModalBoundary boundaryId="modal.agent-session-history" resetKey>
             <AiVaultSessionHistoryDialog />
+          </ModalBoundary>
+        ) : null}
+        {/* Root-hosted: a toast, the SSH host row and a terminal pane all open it. */}
+        {activeModal === 'node-dist-mirror' ? (
+          <ModalBoundary boundaryId="modal.node-dist-mirror" resetKey>
+            <NodeDistMirrorDialog />
           </ModalBoundary>
         ) : null}
         {/* Why: chat rows are virtualized, so the viewer must outlive the message that opened it. */}

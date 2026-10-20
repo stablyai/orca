@@ -1,4 +1,8 @@
 import { expect, vi } from 'vitest'
+import {
+  compareDiskWritePrecondition,
+  type FileWriteDiskPrecondition
+} from '../../../shared/file-write-disk-precondition'
 import type { RuntimeMobileMarkdownRequest } from '../../../shared/mobile-markdown-document'
 import { useAppStore } from '../store'
 import type { Tab } from '../../../shared/tab-types'
@@ -133,4 +137,15 @@ export function createDeferred(): { promise: Promise<void>; resolve: () => void 
 export function cleanupMobileMarkdownBridgeHarness(): void {
   vi.unstubAllGlobals()
   mobileMarkdownHandler = null
+}
+
+/** What the real writer answers for `diskContent`: a refusal when the precondition no longer holds. */
+export function guardedWriteRefusal(
+  diskPrecondition: FileWriteDiskPrecondition | undefined,
+  diskContent: string | null
+): { ok: false; diskConflict: 'changed' | 'missing' } | null {
+  const diskConflict = diskPrecondition
+    ? compareDiskWritePrecondition(diskPrecondition, diskContent)
+    : null
+  return diskConflict ? { ok: false, diskConflict } : null
 }

@@ -1,8 +1,9 @@
 import {
   closeTestStores,
-  testState,
   createStore,
-  makeTerminalTab
+  makeTerminalTab,
+  registerWorkspaceRepos,
+  testState
 } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
@@ -68,6 +69,7 @@ describe('Store', () => {
   })
   it('adds a missing split leaf to the durable root when a new pane spawns before layout debounce', async () => {
     const store = await createStore()
+    registerWorkspaceRepos(store, 'wt1')
     store.setWorkspaceSession({
       activeRepoId: 'r1',
       activeWorktreeId: 'wt1',

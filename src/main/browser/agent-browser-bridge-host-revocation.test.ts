@@ -270,6 +270,206 @@ describe('AgentBrowserBridge under a host revocation', () => {
     ])
   })
 
+  describe('a press a finished host command left held', () => {
+    function hostCommand<T>(
+      host: AbortController,
+      run: () => Promise<T>,
+      cancel?: AbortSignal
+    ): Promise<T> {
+      const signal = cancel ? AbortSignal.any([host.signal, cancel]) : host.signal
+      return runInRemoteCliBrowserScope(WORKSPACE, run, signal, undefined, host.signal)
+    }
+
+    function mouseTypes(wc: ReturnType<typeof mockWebContents>): unknown[] {
+      return dispatchedMouseEvents(wc)
+        .map((call) =>
+          typeof call === 'object' && call !== null && 1 in call ? call[1] : undefined
+        )
+        .map((params) =>
+          typeof params === 'object' && params !== null && 'type' in params
+            ? params.type
+            : undefined
+        )
+        .filter((type) => type !== 'mouseMoved')
+    }
+
+    // Why: `mouse down` and `mouse up` are separate host commands, so a host that lost its
+    // attachment between them left the desktop's page with a stuck button.
+    it('is let go of off the page when the host is revoked between commands', async () => {
+      const wc = mockWebContents(100)
+      wc.debugger.sendCommand.mockResolvedValue({})
+      webContentsFromIdMock.mockReturnValue(wc)
+      const host = new AbortController()
+
+      await hostCommand(host, () => bridge.mouseDown('left', undefined, 'tab-1'))
+      expect(mouseTypes(wc)).toEqual(['mousePressed'])
+
+      host.abort()
+
+      await vi.waitFor(() => expect(mouseTypes(wc)).toEqual(['mousePressed', 'mouseReleased']))
+      expect(dispatchedMouseEvents(wc)[1]).toEqual([
+        'Input.dispatchMouseEvent',
+        expect.objectContaining({ type: 'mouseReleased', x: -1, y: -1, button: 'left' })
+      ])
+    })
+
+    it('is not let go of again once a later command of that host released it', async () => {
+      const wc = mockWebContents(100)
+      wc.debugger.sendCommand.mockResolvedValue({})
+      webContentsFromIdMock.mockReturnValue(wc)
+      const host = new AbortController()
+
+      await hostCommand(host, () => bridge.mouseDown('left', undefined, 'tab-1'))
+      await hostCommand(host, () => bridge.mouseUp('left', undefined, 'tab-1'))
+      host.abort()
+      await Promise.resolve()
+
+      expect(mouseTypes(wc)).toEqual(['mousePressed', 'mouseReleased'])
+    })
+
+    it("survives a later command's own cancel, and goes when the host does", async () => {
+      const wc = mockWebContents(100)
+      wc.debugger.sendCommand.mockResolvedValue({})
+      webContentsFromIdMock.mockReturnValue(wc)
+      const host = new AbortController()
+      await hostCommand(host, () => bridge.mouseDown('left', undefined, 'tab-1'))
+      const cancel = new AbortController()
+      cancel.abort()
+
+      await expect(
+        hostCommand(host, () => bridge.mouseMove(30, 40, undefined, 'tab-1'), cancel.signal)
+      ).rejects.toMatchObject({ code: 'desktop_browser_bridge_unavailable' })
+      expect(mouseTypes(wc)).toEqual(['mousePressed'])
+
+      host.abort()
+      await vi.waitFor(() => expect(mouseTypes(wc)).toEqual(['mousePressed', 'mouseReleased']))
+    })
+
+    it("is no longer the host's once the desktop presses that button itself", async () => {
+      const wc = mockWebContents(100)
+      wc.debugger.sendCommand.mockResolvedValue({})
+      webContentsFromIdMock.mockReturnValue(wc)
+      const host = new AbortController()
+      await hostCommand(host, () => bridge.mouseDown('left', undefined, 'tab-1'))
+      await bridge.mouseUp('left', undefined, 'tab-1')
+      await bridge.mouseDown('left', undefined, 'tab-1')
+
+      host.abort()
+      await Promise.resolve()
+
+      // The desktop's own drag keeps its button.
+      expect(mouseTypes(wc)).toEqual(['mousePressed', 'mouseReleased', 'mousePressed'])
+    })
+
+    it("lets go in the page's turn, before a desktop press queued after the host ended", async () => {
+      const wc = mockWebContents(100)
+      wc.debugger.sendCommand.mockResolvedValue({})
+      webContentsFromIdMock.mockReturnValue(wc)
+      const host = new AbortController()
+      await hostCommand(host, () => bridge.mouseDown('left', undefined, 'tab-1'))
+
+      host.abort()
+      await bridge.mouseDown('left', undefined, 'tab-1')
+
+      expect(mouseTypes(wc)).toEqual(['mousePressed', 'mouseReleased', 'mousePressed'])
+      expect(dispatchedMouseEvents(wc)[2]).toEqual([
+        'Input.dispatchMouseEvent',
+        expect.objectContaining({ type: 'mousePressed', buttons: 1 })
+      ])
+    })
+
+    it("is another host's once that host presses it, and stays down when the first ends", async () => {
+      const wc = mockWebContents(100)
+      wc.debugger.sendCommand.mockResolvedValue({})
+      webContentsFromIdMock.mockReturnValue(wc)
+      const first = new AbortController()
+      const second = new AbortController()
+      await hostCommand(first, () => bridge.mouseDown('left', undefined, 'tab-1'))
+      await hostCommand(second, () => bridge.mouseDown('left', undefined, 'tab-1'))
+
+      first.abort()
+      await bridge.mouseMove(1, 2, undefined, 'tab-1')
+      expect(mouseTypes(wc)).toEqual(['mousePressed', 'mousePressed'])
+
+      second.abort()
+      await vi.waitFor(() => expect(mouseTypes(wc)).toHaveLength(3))
+    })
+
+    it('lets go exactly once when the attachment ends during the command that pressed', async () => {
+      const wc = mockWebContents(100)
+      const host = new AbortController()
+      wc.debugger.sendCommand.mockImplementation(async (_method: string, params?: unknown) => {
+        if (typeof params === 'object' && params !== null && 'type' in params) {
+          if (params.type === 'mousePressed') {
+            host.abort()
+          }
+        }
+        return {}
+      })
+      webContentsFromIdMock.mockReturnValue(wc)
+
+      // The press landed before the revocation, so the command itself succeeds.
+      await hostCommand(host, () => bridge.mouseDown('left', undefined, 'tab-1'))
+      await bridge.mouseMove(1, 2, undefined, 'tab-1')
+
+      expect(mouseTypes(wc)).toEqual(['mousePressed', 'mouseReleased'])
+    })
+
+    it("stays the host's when the desktop's own press of it fails", async () => {
+      const wc = mockWebContents(100)
+      wc.debugger.sendCommand.mockResolvedValue({})
+      webContentsFromIdMock.mockReturnValue(wc)
+      const host = new AbortController()
+      await hostCommand(host, () => bridge.mouseDown('left', undefined, 'tab-1'))
+      wc.debugger.sendCommand.mockRejectedValueOnce(new Error('page busy'))
+      await expect(bridge.mouseDown('left', undefined, 'tab-1')).rejects.toThrow()
+
+      host.abort()
+
+      await vi.waitFor(() =>
+        expect(mouseTypes(wc)).toEqual(['mousePressed', 'mousePressed', 'mouseReleased'])
+      )
+    })
+
+    it('keeps reporting a button the desktop still holds when it lets go of the host one', async () => {
+      const wc = mockWebContents(100)
+      wc.debugger.sendCommand.mockResolvedValue({})
+      webContentsFromIdMock.mockReturnValue(wc)
+      const host = new AbortController()
+      await hostCommand(host, () => bridge.mouseDown('left', undefined, 'tab-1'))
+      await bridge.mouseDown('right', undefined, 'tab-1')
+
+      host.abort()
+
+      await vi.waitFor(() => expect(mouseTypes(wc)).toHaveLength(3))
+      expect(dispatchedMouseEvents(wc)[2]).toEqual([
+        'Input.dispatchMouseEvent',
+        expect.objectContaining({ type: 'mouseReleased', button: 'left', buttons: 2 })
+      ])
+    })
+
+    it('lets go, when the host ends, of a press a later command of it made again', async () => {
+      const wc = mockWebContents(100)
+      wc.debugger.sendCommand.mockResolvedValue({})
+      webContentsFromIdMock.mockReturnValue(wc)
+      const host = new AbortController()
+      await hostCommand(host, () => bridge.mouseDown('left', undefined, 'tab-1'))
+      await hostCommand(host, () => bridge.mouseUp('left', undefined, 'tab-1'))
+      await hostCommand(host, () => bridge.mouseDown('left', undefined, 'tab-1'))
+
+      host.abort()
+
+      await vi.waitFor(() =>
+        expect(mouseTypes(wc)).toEqual([
+          'mousePressed',
+          'mouseReleased',
+          'mousePressed',
+          'mouseReleased'
+        ])
+      )
+    })
+  })
+
   it("starts the page's CDP proxy outside the host's scope, so it outlives that host's request", async () => {
     let startedInHostScope: boolean | undefined
     CdpWsProxyMock.mockImplementationOnce(function (this: Record<string, unknown>) {

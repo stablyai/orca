@@ -27,7 +27,10 @@ const DELIBERATE_CHANGES: Record<string, string> = {
   'folder:group-twin-folder': 'D77',
   'rival-repo::wt': 'B: servers contest the SSH host',
   'conflict-repo::wt': 'B',
-  'stale-hub-repo::wt': 'C: reached through the server whose repo row names the target'
+  'stale-hub-repo::wt': 'C: reached through the server whose repo row names the target',
+  'legacy-repo::wt': 'an unstamped row is local; the Active Server focus never claims it',
+  'folder:unstamped-folder': 'same',
+  'folder:missing-folder': 'same'
 }
 
 describe('resolveOwnerWithLegacyFallback acceptance (round-3 design §5)', () => {
@@ -85,12 +88,12 @@ describe('resolveOwnerWithLegacyFallback probes', () => {
     expect(ownerOf(single, 'onboarding-setup::/tmp/skill')).toBe('self@local')
   })
 
-  it('sends a known unstamped repo with no worktree row to the single focused runtime, as spawn does', () => {
+  it('keeps a known unstamped repo with no worktree row local under single focus', () => {
     const noWorktreeRow = {
       ...single,
       worktreesByRepo: { ...single.worktreesByRepo, 'legacy-repo': [] }
     }
-    expect(ownerOf(noWorktreeRow, 'legacy-repo::wt')).toBe('env:focused-env@local')
+    expect(ownerOf(noWorktreeRow, 'legacy-repo::wt')).toBe('self@local')
   })
 
   it('lets a named host win over the single focused runtime', () => {

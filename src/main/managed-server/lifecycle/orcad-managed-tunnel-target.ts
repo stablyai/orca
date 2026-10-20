@@ -4,11 +4,12 @@ import {
   type KnownRuntimeEnvironment
 } from '../../../shared/runtime-environments'
 import {
+  readManagedOrcadPublishedPort,
   resolveManagedOrcadTunnelPort,
   type OrcadTunnelPortInput
 } from './orcad-managed-bound-port'
 import {
-  OrcadManagedIdentityError,
+  orcadIdentityRefusal,
   verifyManagedOrcadTunnelIdentity,
   type OrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
@@ -27,12 +28,15 @@ export type OrcadManagedTunnelTargeting = {
   verifyIdentity: (environment: KnownRuntimeEnvironment) => Promise<OrcadTunnelIdentity>
   /** Starts the active slot only on proven exit, before a foreign answer re-reads the port. */
   wakeStoppedServer?: (input: OrcadTunnelPortInput) => Promise<void>
+  /** The port the host's readiness names now, or null; a tunnel that stopped answering follows it. */
+  readPublishedPort?: (input: OrcadTunnelPortInput) => Promise<number | null>
 }
 
 export const MANAGED_ORCAD_TUNNEL_TARGETING: OrcadManagedTunnelTargeting = {
   resolveRemotePort: resolveManagedOrcadTunnelPort,
   verifyIdentity: verifyManagedOrcadTunnelIdentity,
-  wakeStoppedServer: wakeStoppedManagedOrcadForTunnel
+  wakeStoppedServer: wakeStoppedManagedOrcadForTunnel,
+  readPublishedPort: readManagedOrcadPublishedPort
 }
 
 /**
@@ -101,7 +105,7 @@ export async function environmentForwardChecks(
  * Null when `stillCurrent` turned false mid-setup; the forward is already removed then.
  * An answer from another runtime re-reads the port once, since orcad may have restarted onto a
  * new one or been started there by that re-read, and throws if the port did not move or the new
- * one is foreign too.
+ * one is foreign too. Our own server refusing our token throws at once.
  */
 export async function forwardToVerifiedOrcad(
   args: VerifiedOrcadForwardArgs
@@ -119,7 +123,7 @@ export async function forwardToVerifiedOrcad(
       await args.forwards.removeForwardAndWait(forward.id)
       return null
     }
-    if (identity.verdict !== 'foreign') {
+    if (identity.verdict === 'verified' || identity.verdict === 'unreachable') {
       if (identity.verdict === 'unreachable') {
         // Why not fail: a server that is down or still starting is not a wrong server.
         console.warn(
@@ -129,10 +133,14 @@ export async function forwardToVerifiedOrcad(
       return forward
     }
     await args.forwards.removeForwardAndWait(forward.id)
+    // Why no re-read: our own server refusing our token is not a moved port, and waking it is moot.
+    if (identity.verdict === 'unpaired') {
+      throw orcadIdentityRefusal(remotePort, identity)
+    }
     const reread =
       attempt === 0 && args.rereadRemotePort ? await args.rereadRemotePort() : remotePort
     if (reread === remotePort || !args.stillCurrent()) {
-      throw new OrcadManagedIdentityError(remotePort, identity.detail)
+      throw orcadIdentityRefusal(remotePort, identity)
     }
     remotePort = reread
   }

@@ -40,7 +40,7 @@ import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-k
 import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import { useSidebarExternalWorktreeCards } from './use-external-worktree-cards'
-import { useOrderHeldWhileEngaged } from './use-order-hold'
+import { useOrderHeldWhileEngaged, useProjectRecencyHeldWhileEngaged } from './use-order-hold'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 
 const NO_FEED: SidebarFeedDomains = {
@@ -52,6 +52,7 @@ const NO_FEED: SidebarFeedDomains = {
   pairedServerRows: new Map(),
   repoIcons: new Map(),
   desktop: null,
+  projectCatalog: null,
   retention: null
 }
 // The window renders its own collapse, so planning never re-runs on a toggle.
@@ -150,9 +151,10 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       workspaceHostOrder
     ]
   )
-  const index = useMemo(() => indexSidebarFeed(domains, repos), [domains, repos])
-  const ranked = useMemo(() => rankSidebarFeedWorktrees(index, sortBy), [index, sortBy])
+  const liveIndex = useMemo(() => indexSidebarFeed(domains, repos), [domains, repos])
+  const ranked = useMemo(() => rankSidebarFeedWorktrees(liveIndex, sortBy), [liveIndex, sortBy])
   const rankedIds = useOrderHeldWhileEngaged(useReusedArrayIdentity(ranked), sortBy)
+  const index = useProjectRecencyHeldWhileEngaged(liveIndex, args.projectOrderBy)
 
   const visibleReposForRows = useMemo(
     () =>
@@ -292,6 +294,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     externalWorktreeCards,
     rowModel: {
       occurrencePlan: planned.plan.occurrencePlan,
+      hostOptions: planned.orderedHostOptions,
       effectiveCollapsedGroups,
       rows: rendered.rows,
       sectionRows,

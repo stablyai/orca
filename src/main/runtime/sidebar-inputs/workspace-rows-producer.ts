@@ -9,6 +9,19 @@ import { runtimeVisibleFolderWorkspaces } from '../runtime-visible-catalog'
 import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
 import { ProducerRevision } from './producer-revision'
 
+// The settings the visibility filter reads: the defaults, and the layouts that classify a checkout.
+const VISIBILITY_SETTINGS = [
+  'worktreeVisibilityDefaults',
+  'workspaceDir',
+  'nestWorkspaces',
+  'workspaceDirHistory'
+] as const
+
+function visibilitySettingsKey(store: RuntimeStore): string {
+  const settings = store.getSettings()
+  return JSON.stringify(VISIBILITY_SETTINGS.map((key) => settings[key] ?? null))
+}
+
 export type WorkspaceRowsSources = {
   store: RuntimeStore | null
   /** A freshly merged listing, never the shared cache, through worktree.ps's visibility filters. */
@@ -25,6 +38,8 @@ export type WorkspaceRowsSources = {
  */
 export class WorkspaceRowsProducer {
   readonly revision = new ProducerRevision()
+  // What the last snapshot's visibility filter read; null until a snapshot or settings save.
+  private visibilityKey: string | null = null
 
   constructor(private readonly sources: WorkspaceRowsSources) {
     sources.onClientEvent(
@@ -39,11 +54,19 @@ export class WorkspaceRowsProducer {
     sources.store?.onStateWritten?.((domains) => {
       if (
         domains === undefined ||
-        WORKTREE_METADATA_DOMAINS.some((domain) => domains.includes(domain))
+        WORKTREE_METADATA_DOMAINS.some((domain) => domains.includes(domain)) ||
+        (domains.includes('settings') && this.visibilitySettingsChanged())
       ) {
         this.revision.bump()
       }
     })
+  }
+
+  // Every settings save reports above, whichever path wrote it and whether or not it notified.
+  private visibilitySettingsChanged(): boolean {
+    const previous = this.visibilityKey
+    this.visibilityKey = this.sources.store ? visibilitySettingsKey(this.sources.store) : null
+    return previous !== null && previous !== this.visibilityKey
   }
 
   async snapshot(): Promise<WorkspaceRowsSnapshot> {
@@ -52,6 +75,7 @@ export class WorkspaceRowsProducer {
     if (!store) {
       return { revision, rows: {} }
     }
+    this.visibilityKey = visibilitySettingsKey(store)
     const { worktrees, platformByRepoId } = await this.sources.listVisibleWorktrees()
     const rows = buildWorkspaceRows({
       worktrees,

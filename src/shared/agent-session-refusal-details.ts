@@ -48,6 +48,7 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'conversationCommandInFlight',
     'handoffInFlight',
     'turnActive',
+    'continuationSuperseded',
     'promptPending',
     'backgroundTasksRunning',
     'messagesUnsettled',

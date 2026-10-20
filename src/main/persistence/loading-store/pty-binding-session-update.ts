@@ -38,17 +38,18 @@ export function applyPtyBinding(
       [repoId]: currentRevision + 1
     }
   }
-  if (args.incarnationId) {
-    session.terminalPtyIncarnationsByPaneKey = {
-      ...session.terminalPtyIncarnationsByPaneKey,
-      [paneKey]: args.incarnationId
+  const { [paneKey]: recordedIncarnation, ...otherIncarnations } =
+    session.terminalPtyIncarnationsByPaneKey ?? {}
+  if (args.incarnationId || (args.dropsIncarnation && recordedIncarnation)) {
+    session.terminalPtyIncarnationsByPaneKey = args.incarnationId
+      ? { ...session.terminalPtyIncarnationsByPaneKey, [paneKey]: args.incarnationId }
+      : otherIncarnations
+  }
+  if (args.incarnationId && session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
+    session.terminalSurfaceTombstonesByPaneKey = {
+      ...session.terminalSurfaceTombstonesByPaneKey
     }
-    if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
-      session.terminalSurfaceTombstonesByPaneKey = {
-        ...session.terminalSurfaceTombstonesByPaneKey
-      }
-      delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
-    }
+    delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
   }
   const tabs = session.tabsByWorktree?.[bindingWorktreeId]
   const tab = tabs?.find((t) => t.id === args.tabId)

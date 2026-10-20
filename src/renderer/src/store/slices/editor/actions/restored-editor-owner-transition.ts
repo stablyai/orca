@@ -9,6 +9,7 @@ import {
   removeTabIdsFromGroup,
   rekeyFileIdRecord
 } from '../file-ids/open-file-path-rekey'
+import { rekeyEditorBuffers } from '../buffers/editor-buffer-record'
 import type {
   RestoredEditorOwnerMigration,
   RestoredEditorOwnerResult
@@ -226,6 +227,9 @@ export function buildRestoredEditorOwnerTransition(
                 }
               : file
         ),
+        editorBuffers: rekeyEditorBuffers(s.editorBuffers, s.openFiles, migrations, () => ({
+          pendingOwnerMigration: undefined
+        })),
         editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),
         editorCursorLine: rekeyFileIdRecord(s.editorCursorLine, migrations),
         markdownViewMode: rekeyFileIdRecord(s.markdownViewMode, migrations),

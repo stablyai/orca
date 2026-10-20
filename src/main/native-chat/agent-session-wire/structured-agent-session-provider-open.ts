@@ -11,7 +11,8 @@ export async function openStructuredAgentSessionProviderChild(
     failStartingChild: (
       sessionId: string,
       child: StructuredAgentSessionProviderChildIdentity,
-      error: unknown
+      error: unknown,
+      openMs?: number
     ) => Promise<void>
   },
   sessionId: string,
@@ -21,6 +22,7 @@ export async function openStructuredAgentSessionProviderChild(
     return
   }
   const attempt = context.runtimeState.acquireAborts.begin(sessionId)
+  const openedAt = context.now()
   try {
     attempt.signal.throwIfAborted()
     const acquisitionGeneration = child.generation
@@ -47,13 +49,16 @@ export async function openStructuredAgentSessionProviderChild(
   } catch (error) {
     // Stop, close, quit and expiry already own the child's end.
     if (!attempt.signal.aborted) {
-      await context.failStartingChild(sessionId, child, error).catch((closeError: unknown) =>
-        context.deps.logger.warn('closing a failed provider open did not finish', {
-          scope: 'provider-open-close',
-          sessionId,
-          error: closeError
-        })
-      )
+      const openMs = Math.max(0, context.now() - openedAt)
+      await context
+        .failStartingChild(sessionId, child, error, openMs)
+        .catch((closeError: unknown) =>
+          context.deps.logger.warn('closing a failed provider open did not finish', {
+            scope: 'provider-open-close',
+            sessionId,
+            error: closeError
+          })
+        )
     }
   } finally {
     attempt.end()

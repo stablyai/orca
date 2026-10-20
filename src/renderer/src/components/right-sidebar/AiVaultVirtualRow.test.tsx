@@ -172,7 +172,7 @@ describe('AiVaultVirtualRow resume command actions', () => {
   })
 })
 
-describe('AiVaultVirtualRow Switch to Terminal', () => {
+describe('AiVaultVirtualRow Resume in New Terminal', () => {
   const owner = { sessionId: 'chat-1', workspaceId: 'worktree-1' }
 
   it.each(['claude', 'codex'] as const)(
@@ -183,11 +183,11 @@ describe('AiVaultVirtualRow Switch to Terminal', () => {
       const user = userEvent.setup()
 
       await user.click(screen.getByTestId('ai-vault-session-more-actions'))
-      await user.click(await screen.findByRole('menuitem', { name: 'Switch to Terminal' }))
+      await user.click(await screen.findByRole('menuitem', { name: 'Resume in New Terminal' }))
       expect(onResumeInNewCli).toHaveBeenCalledExactlyOnceWith(session, 'worktree-1')
 
       fireEvent.contextMenu(screen.getByText('CLI session'))
-      await user.click(await screen.findByRole('menuitem', { name: 'Switch to Terminal' }))
+      await user.click(await screen.findByRole('menuitem', { name: 'Resume in New Terminal' }))
       expect(onResumeInNewCli).toHaveBeenCalledTimes(2)
       expect(onResume).not.toHaveBeenCalled()
     }
@@ -205,6 +205,6 @@ describe('AiVaultVirtualRow Switch to Terminal', () => {
 
     await user.click(screen.getByTestId('ai-vault-session-more-actions'))
     await screen.findByRole('menu')
-    expect(screen.queryByRole('menuitem', { name: 'Switch to Terminal' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Resume in New Terminal' })).toBeNull()
   })
 })

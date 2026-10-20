@@ -21,7 +21,7 @@ import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invali
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'
-import { WorkspaceLayoutStream } from './workspace-layout-stream'
+import { WorkspaceLayoutStream, type WorkspaceLayoutReads } from './workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 import {
@@ -261,6 +261,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     listener: Parameters<WorkspaceLayoutStream['subscribe']>[0]
   ): ReturnType<WorkspaceLayoutStream['subscribe']> {
     return this.workspaceLayoutStream.subscribe(listener)
+  }
+
+  /** Main's one layout projection for readers beside the stream, with or without a window. */
+  get workspaceLayoutReads(): WorkspaceLayoutReads {
+    return this.workspaceLayoutStream
   }
 
   /** A window's layout command (`layout.apply`), applied to the partitions that hold its tab. */

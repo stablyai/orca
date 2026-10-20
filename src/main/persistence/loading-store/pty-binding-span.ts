@@ -1,7 +1,16 @@
 import { startSpan } from '../../observability/tracer'
 import type { PtyBindingFastLaneMiss } from './pty-binding-fast-lane'
-import type { TerminalPanePlacementAgreement } from '../terminal-topology/terminal-pane-placement-agreement'
-import type { TerminalOwnerConflictReason } from '../../../shared/workspace-layout/terminal-owner-invariants'
+import {
+  terminalPanePlacementAgreement,
+  type TerminalPanePlacementAgreement
+} from '../terminal-topology/terminal-pane-placement-agreement'
+import {
+  findTerminalBindingConflict,
+  type TerminalOwnerConflictReason
+} from '../../../shared/workspace-layout/terminal-owner-invariants'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { TerminalPanePlacement } from '../../../shared/terminal-pane-placement'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 export type PtyBindingSpanOutcome = 'fast_lane' | 'flushed' | 'refused' | 'threw'
 
@@ -102,4 +111,37 @@ export function startPtyBindingSpan(entry: {
 
 export function _resetPtyBindingSpanSamplingForTests(): void {
   fastLaneWindow = null
+}
+
+/** Report-only: a malformed session must not fail the binding it is reporting on. */
+export function reportPtyBindingPlacement(
+  span: PtyBindingSpan,
+  args: { placement?: TerminalPanePlacement; tabId: string; leafId: string },
+  session: WorkspaceSessionState,
+  worktreeId: string
+): void {
+  try {
+    span.setPlacement(
+      terminalPanePlacementAgreement(args.placement, session, worktreeId, args.tabId, args.leafId)
+    )
+  } catch {
+    span.setPlacement('check_threw')
+  }
+}
+
+/** Report-only: the binding is written even when it breaks an invariant, or the check throws. */
+export function reportPtyBindingOwnerConflict(
+  span: PtyBindingSpan,
+  binding: Parameters<typeof findTerminalBindingConflict>[0],
+  hostId: ExecutionHostId,
+  partitions: Parameters<typeof findTerminalBindingConflict>[2]
+): void {
+  try {
+    const conflict = findTerminalBindingConflict(binding, hostId, partitions)
+    if (conflict) {
+      span.setOwnerConflict(conflict.reason)
+    }
+  } catch {
+    span.setOwnerConflict('check_threw')
+  }
 }

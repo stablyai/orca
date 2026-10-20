@@ -7,7 +7,7 @@ import { resolveOwnerWithLegacyFallback } from './worktree-runtime-owner'
 import { namedHostForOwnerRef, runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import {
-  resolveStrictWorktreeOperationRouteResultForHost,
+  resolveWorktreeOperationRouteResultForHost,
   resolveWorktreeOperationRouteResult,
   type WorktreeOperationRouteResolution
 } from './worktree-operation-route'
@@ -33,9 +33,9 @@ export type TerminalHostOwnership =
   | { kind: 'unresolved'; runtimeEnvironmentId: null }
 
 /**
- * `spawn` asks which host should start a new process, so a merely focused runtime is a fine guess.
- * `teardown` asks which provider can kill an existing one, where that same guess strands the local
- * PTY the surface was actually spawned on.
+ * `spawn` asks which host should start a new process, so a setup terminal may follow the focused
+ * runtime. `teardown` asks which provider can kill an existing one, where that guess strands the
+ * local PTY the surface was actually spawned on.
  */
 export type TerminalHostOwnershipPurpose = 'spawn' | 'teardown'
 
@@ -128,7 +128,7 @@ function resolveGitWorktreeRoute(
 ): WorktreeOperationRouteResolution {
   const hostId = namedHostForOwnerRef(state, { workspaceId: worktreeId })
   return hostId
-    ? resolveStrictWorktreeOperationRouteResultForHost(state, worktreeId, hostId)
+    ? resolveWorktreeOperationRouteResultForHost(state, worktreeId, hostId)
     : resolveWorktreeOperationRouteResult(state, worktreeId)
 }
 
@@ -214,8 +214,9 @@ function resolveFloatingScopeOwnership(
   if (runtimeEnvironmentIdUnlessTwin(state, worktreeId)) {
     return ownershipForRuntimeEnvironmentId(runtimeEnvironmentId)
   }
-  // Why: this surface publishes no runtime owner and only looks runtime-owned because exactly one
-  // runtime is focused — a guess that flips as catalogs hydrate, stranding the local PTY (STA-2639).
+  // Why: this surface publishes no runtime owner and only looks runtime-owned through a guess (the
+  // focused runtime, a web client's server) that flips as catalogs hydrate, stranding the local
+  // PTY (STA-2639).
   return LOCAL_OR_SSH_TERMINAL_HOST
 }
 

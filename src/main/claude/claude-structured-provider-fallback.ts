@@ -1,4 +1,8 @@
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalStatusItem,
+  AgentJournalTurnScope
+} from '../../shared/agent-session-journal-types'
+import type { AgentSessionFailureRowWords } from '../../shared/agent-session-failure-words'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   boundInlineText,
@@ -132,11 +136,12 @@ export function createClaudeProviderFrameFallback(
   /** The frame's turn — the open one once `beforeAppend` ran — or the conversation. */
   turnScope: () => AgentJournalTurnScope
 ): {
-  /** `displayText` leads the row when Claude knows the sentence the frame itself does not name. */
+  /** `display` leads the row when Claude knows the sentence the frame itself does not name; a
+   *  status body in its place also sets the row's tone and fact. */
   append: (
     kind: string,
     payload: unknown,
-    displayText?: string | null,
+    display?: string | null | (AgentSessionFailureRowWords & { tone: string }),
     /** Runs only when a row is actually going to be written, so a frame that
      *  translates to nothing never opens a turn. */
     beforeAppend?: () => void,
@@ -149,7 +154,7 @@ export function createClaudeProviderFrameFallback(
   let sequence = 0
   const retryRun = createClaudeApiRetryRuns()
   return {
-    append: (kind, payload, displayText, beforeAppend, options, stamp) => {
+    append: (kind, payload, display, beforeAppend, options, stamp) => {
       sequence += 1
       const retrying = kind === CLAUDE_API_RETRY_FRAME_KIND ? claudeRecord(payload) : null
       if (retrying) {
@@ -190,14 +195,20 @@ export function createClaudeProviderFrameFallback(
         return false
       }
       beforeAppend?.()
-      const bounded = displayText
-        ? boundInlineText(displayText, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-        : null
+      const bounded =
+        typeof display === 'string' && display
+          ? boundInlineText(display, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+          : null
       const identity = {
         provider: 'orca',
         clientMessageId: `provider-frame:claude:${acquisitionId}:${sequence}`
       } as const
-      const body = bounded ? { ...translated.body, text: bounded } : translated.body
+      const body: AgentJournalStatusItem =
+        display && typeof display === 'object'
+          ? { ...translated.body, ...display }
+          : bounded
+            ? { ...translated.body, text: bounded }
+            : translated.body
       sink.appendItem(identity, body, stamp?.(identity, body) ?? { turnScope: turnScope() })
       sink.publish()
       return true

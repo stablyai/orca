@@ -73,7 +73,7 @@ function expectManagedSshLane(spec) {
   expect(
     lane.steps.some(
       (step) =>
-        step.run?.includes(` ${MANAGED_SSH_E2E_SPEC_PREFIX} `) &&
+        step.run?.includes('selection.selectManagedSshE2eSpecs') &&
         step.env?.ORCA_E2E_SSH_DOCKER === '1'
     )
   ).toBe(true)
@@ -181,7 +181,9 @@ it('publishes conservative hints for malformed evidence and refuses a malformed 
     timeoutMs: 10000
   })
   expect(hints.code, hints.stderr).toBe(0)
-  expect(hints.stdout).toBe('e2e_run_changed=true\ne2e_needs_build=true\n')
+  expect(hints.stdout).toBe(
+    'e2e_run_changed=true\ne2e_needs_build=true\ne2e_ssh_shards=["1/2","2/2"]\n'
+  )
 })
 
 it('classifies PR consumers in the existing detector and passes conservative allocation hints', () => {

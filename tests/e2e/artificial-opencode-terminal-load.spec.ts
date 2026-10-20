@@ -120,7 +120,6 @@ const DEFAULT_HIDDEN_PRESSURE_PANES = 17
 const HIDDEN_PRESSURE_START_DELAY_MS = 1200
 const DEFAULT_FRAME_COUNT = 180
 const DEFAULT_FRAME_INTERVAL_MS = 6
-const TIMER_SAMPLE_MS = 16
 const MAIN_RENDERER_PRESSURE_TARGET_CHARS = 2 * 1024 * 1024
 // Why: these are regression budgets, not observed baselines. Repeated local
 // 100-pane OpenCode-scale runs are below 50ms worst-key latency; keep enough
@@ -139,8 +138,8 @@ const MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS = 3_500
 // same environment-dominated worst-case as typing under load; the unloaded
 // 300ms budget has no margin for this switch-and-focus moment.
 const MAX_REVISIT_LATENCY_UNDER_LOAD_MS = 3_000
-// Why: GitHub's two-worker Electron shards can briefly starve renderer timers
-// without visible typing lag. Keep this as a smoke gate, not a CPU lottery.
+// Why: bounds the longest renderer task while typing and the scroll probe's interval drift; a
+// smoke gate for main-thread stalls, not a CPU lottery.
 const MAX_TIMER_DRIFT_MS = 250
 // Why: under injected multi-pane redraw load the renderer event loop is
 // environment-dominated (seen at ~3.1s on a CPU-starved OSS shard) even when
@@ -252,21 +251,28 @@ async function measureTypingDuringLoad(
   await waitForTerminalOutputForPtyId(page, ptyId, `OPENCODE_TYPING_READY_${runId}`, 10_000)
   await focusActiveTerminalInput(page)
 
-  const eventLoop = await page.evaluateHandle((sampleMs) => {
-    let maxTimerDriftMs = 0
-    let lastTick = performance.now()
-    const timer = window.setInterval(() => {
-      const now = performance.now()
-      maxTimerDriftMs = Math.max(maxTimerDriftMs, now - lastTick - sampleMs)
-      lastTick = now
-    }, sampleMs)
-    return {
-      stop: () => {
-        window.clearInterval(timer)
-        return maxTimerDriftMs
+  // Why: in the hidden E2E renderer a 16ms interval showed 268ms gaps while every key echoed in
+  // <45ms, so drift measured timer scheduling; long tasks measure how long the main thread blocked.
+  const eventLoop = await page.evaluateHandle(() => {
+    if (!PerformanceObserver.supportedEntryTypes.includes('longtask')) {
+      throw new Error('Long-task timing is unavailable in this renderer')
+    }
+    let longestTaskMs = 0
+    const record = (entries: PerformanceEntryList): void => {
+      for (const entry of entries) {
+        longestTaskMs = Math.max(longestTaskMs, entry.duration)
       }
     }
-  }, TIMER_SAMPLE_MS)
+    const observer = new PerformanceObserver((list) => record(list.getEntries()))
+    observer.observe({ type: 'longtask' })
+    return {
+      stop: () => {
+        record(observer.takeRecords())
+        observer.disconnect()
+        return longestTaskMs
+      }
+    }
+  })
 
   const latencies: number[] = []
   for (const [index, char] of [...KEY_LATENCY_SAMPLES].entries()) {
@@ -486,7 +492,9 @@ async function runConfiguredMainPressureScenario({
     testRepoPath,
     maxMedianKeyLatencyMs: MAX_MEDIAN_KEY_LATENCY_MS,
     maxScrollLatencyMs: MAX_SCROLL_LATENCY_MS,
-    maxTimerDriftMs: MAX_TIMER_DRIFT_MS,
+    // Why: background panes are ACK-gate-held, so drift is environment-dominated like every other
+    // under-load scenario; the 75ms median stays the responsiveness guard.
+    maxTimerDriftMs: MAX_TIMER_DRIFT_UNDER_LOAD_MS,
     maxWorstKeyLatencyMs: MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS,
     deps: terminalLoadScenarioDeps
   })

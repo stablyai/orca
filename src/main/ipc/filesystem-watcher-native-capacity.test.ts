@@ -81,6 +81,13 @@ describe('native filesystem watcher capacity recovery', () => {
 
     releases.pop()?.()
     await vi.waitFor(() => expect(subscribeViaWatcherProcessMock).toHaveBeenCalledTimes(2))
+    // Why: the IPC call returned before this install, so a write in between needs a resync.
+    await vi.waitFor(() =>
+      expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+        worktreePath: '/tmp/native-capacity-root',
+        events: [{ kind: 'overflow', absolutePath: '/tmp/native-capacity-root' }]
+      })
+    )
 
     releases.forEach((release) => release())
   })

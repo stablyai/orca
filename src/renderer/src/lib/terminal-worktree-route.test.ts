@@ -179,17 +179,16 @@ describe('resolveTerminalHostOwnership teardown', () => {
     })
   })
 
-  it('keeps a hostless worktree on the focused runtime for teardown too', () => {
-    // Why: unlike the host-agnostic surfaces, an ownerless worktree row really does spawn on the
-    // focused HUB, and its wake hint is `ssh:`-shaped — downgrading it would kill the wrong host.
+  it('spawns and tears down a hostless worktree locally, never on the focused runtime', () => {
+    // Why: the client stamps every server row on arrival, so a row with no host is this machine's.
     const state = focusedState({
       repos: [{ id: 'repo-1', connectionId: null, executionHostId: null }],
       worktreesByRepo: { 'repo-1': [{ id: 'repo-1::/w', repoId: 'repo-1' }] }
     } as unknown as Partial<AppState>)
     for (const purpose of ['spawn', 'teardown'] as const) {
       expect(resolveTerminalHostOwnership(state, 'repo-1::/w', purpose)).toEqual({
-        kind: 'runtime',
-        runtimeEnvironmentId: 'hub-a'
+        kind: 'local-or-ssh',
+        runtimeEnvironmentId: null
       })
     }
   })

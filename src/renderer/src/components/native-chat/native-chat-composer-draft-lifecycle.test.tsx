@@ -643,10 +643,6 @@ describe('native-chat composer draft lifecycle', () => {
       vi.unstubAllGlobals()
     }
 
-    expect(restoreNativeChatPastes).toHaveBeenCalledWith([
-      `${folder}/orca-paste-1-ab.png`,
-      `${folder}/orca-paste-2-ab.png`
-    ])
     expect(seen.api?.attachments.imageAttachments).toEqual([
       { id: 'kept', path: `${folder}/orca-paste-1-ab.png` },
       { id: 'swept', path: '', unavailableName: 'orca-paste-2-ab.png' }

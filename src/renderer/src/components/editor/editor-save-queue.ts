@@ -2,7 +2,6 @@ import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import {
   canAutoSaveOpenFile,
@@ -20,6 +19,20 @@ import {
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
 import { editorTabFileAccess } from '@/lib/local-file-access'
+import { isEditorLargePasteInFlight } from './editor-large-paste-in-flight'
+import {
+  rebaselineAfterEditorWrite,
+  setModelExternalMutation,
+  waitForModelBaselineRestamps
+} from './editor-save-rebaseline'
+import type { FileWriteResult } from '../../../../shared/file-write-disk-precondition'
+import {
+  editorSavePrecondition,
+  editorTabModelUri,
+  writeEditorSave,
+  type EditorSaveResult,
+  type EditorSaveTrigger
+} from './editor-save-disk-precondition'
 
 export type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 
@@ -27,8 +40,8 @@ export type EditorSaveQueue = {
   queueSave: (
     file: OpenFile,
     fallbackContent: string,
-    trigger?: 'autosave' | 'user'
-  ) => Promise<void>
+    trigger?: EditorSaveTrigger
+  ) => Promise<EditorSaveResult>
   quiesceFileSave: (fileId: string) => Promise<void>
   clearAutoSaveTimer: (fileId: string) => void
   bumpSaveGeneration: (fileId: string) => void
@@ -40,8 +53,15 @@ export type EditorSaveQueue = {
 export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   const autoSaveTimers = new Map<string, number>()
   const autoSaveScheduledContent = new Map<string, string>()
-  const saveQueue = new Map<string, Promise<void>>()
+  // Why keyed by model: sibling tabs share one text and baseline, so their saves must run in turn.
+  const saveQueue = new Map<string, Promise<EditorSaveResult>>()
   const saveGeneration = new Map<string, number>()
+
+  const saveQueueKey = (fileId: string): string => {
+    const state = store.getState()
+    const file = state.openFiles.find((openFile) => openFile.id === fileId)
+    return file?.mode === 'edit' ? editorTabModelUri(state, file) : fileId
+  }
 
   const clearAutoSaveTimer = (fileId: string): void => {
     const timerId = autoSaveTimers.get(fileId)
@@ -59,23 +79,25 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   const queueSave = (
     file: OpenFile,
     fallbackContent: string,
-    trigger: 'autosave' | 'user' = 'user'
-  ): Promise<void> => {
+    trigger: EditorSaveTrigger = 'user'
+  ): Promise<EditorSaveResult> => {
     clearAutoSaveTimer(file.id)
     const queuedGeneration = saveGeneration.get(file.id) ?? 0
+    const queueKey = saveQueueKey(file.id)
 
-    const previousSave = saveQueue.get(file.id) ?? Promise.resolve()
+    const previousSave = saveQueue.get(queueKey) ?? Promise.resolve()
     const queuedSave = previousSave
       .catch(() => undefined)
-      .then(async () => {
+      .then(async (): Promise<EditorSaveResult> => {
+        await waitForModelBaselineRestamps(store.getState(), file)
         if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {
-          return
+          return 'failed'
         }
 
         const state = store.getState()
         const liveFile = state.openFiles.find((openFile) => openFile.id === file.id) ?? null
         if (!liveFile) {
-          return
+          return 'failed'
         }
         if (liveFile.csvPreviewOnly === true) {
           throw new Error('Large CSV previews are read-only.')
@@ -83,19 +105,23 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
 
         // Why: read-only tabs (AI Vault View Log) must never write the agent-owned artifact through editor paths.
         if (liveFile.readOnly === true) {
-          return
+          return 'failed'
         }
 
         if (liveFile.pendingOwnerMigration === true) {
           if (trigger === 'autosave') {
-            return
+            return 'failed'
           }
           throw new Error('This file is still restoring its workspace owner. Try saving again.')
         }
 
         // Why: only autosave is blocked while suspended; explicit user saves proceed (the banner warned).
-        if (trigger === 'autosave' && isAutosaveSuspendedForFile(liveFile)) {
-          return
+        if (
+          trigger === 'autosave' &&
+          (isAutosaveSuspendedForFile(liveFile) ||
+            isEditorLargePasteInFlight(editorTabModelUri(state, liveFile)))
+        ) {
+          return 'failed'
         }
 
         flushPendingEditorChange(file.id, trigger === 'autosave')
@@ -105,7 +131,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
           hasPendingEditorChange(file.id) &&
           liveFile.lastKnownDiskSignature === getDiskBaselineSignature(contentToSave)
         ) {
-          return
+          return 'failed'
         }
         const worktree = liveFile.worktreeId
           ? findWorktreeById(state.worktreesByRepo ?? {}, liveFile.worktreeId)
@@ -121,21 +147,46 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
             ? SELF_WRITE_REMOTE_TTL_MS
             : undefined
         )
+        const precondition = editorSavePrecondition(liveFile, trigger)
+        if (precondition.kind === 'blocked') {
+          clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
+          // Why: a mobile refusal is reported to mobile; the desktop tab may not even be dirty.
+          if (trigger !== 'mobile') {
+            setModelExternalMutation(store.getState(), file.id, 'changed')
+          }
+          return 'blocked-stale'
+        }
+        let writeResult: FileWriteResult
         try {
-          await writeRuntimeFile(
+          writeResult = await writeEditorSave(
             fileContext,
             liveFile.filePath,
             contentToSave,
-            editorTabFileAccess(state, liveFile)
+            editorTabFileAccess(state, liveFile),
+            precondition
           )
         } catch (error) {
           // Why: the self-write stamp is only valid after a real write; clear on failure so it can't suppress a real update.
           clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
           throw error
         }
+        if (!writeResult.ok) {
+          clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
+          // Why: the banner (or deleted tombstone) explains the refusal and pauses autosave.
+          if (trigger !== 'mobile') {
+            setModelExternalMutation(
+              store.getState(),
+              file.id,
+              writeResult.diskConflict === 'missing' ? 'deleted' : 'changed'
+            )
+          }
+          return 'blocked-stale'
+        }
 
+        // Why before the superseded check: disk holds this text either way, so the next save compares against it.
+        rebaselineAfterEditorWrite(store.getState(), file.id, contentToSave)
         if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {
-          return
+          return 'written'
         }
 
         const nextState = store.getState()
@@ -147,8 +198,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         if (!stillDirty) {
           nextState.clearEditorDraft(file.id)
         }
-        // Why: disk now holds contentToSave — rebaseline so our own save isn't flagged external; drop pending verification.
-        nextState.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(contentToSave))
+        // Why: disk now holds contentToSave, so a pending restore verification is moot.
         nextState.clearPendingDiskBaselineVerification(file.id)
         // Why: the write made disk match the buffer, so clear any now-stale changed-on-disk conflict.
         const savedFile = nextState.openFiles.find((openFile) => openFile.id === file.id)
@@ -162,22 +212,23 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
             detail: { fileId: file.id, content: contentToSave }
           })
         )
+        return 'written'
       })
 
-    let trackedSave: Promise<void>
+    let trackedSave: Promise<EditorSaveResult>
     trackedSave = queuedSave.finally(() => {
-      if (saveQueue.get(file.id) === trackedSave) {
-        saveQueue.delete(file.id)
+      if (saveQueue.get(queueKey) === trackedSave) {
+        saveQueue.delete(queueKey)
       }
     })
-    saveQueue.set(file.id, trackedSave)
+    saveQueue.set(queueKey, trackedSave)
     return trackedSave
   }
 
   const quiesceFileSave = async (fileId: string): Promise<void> => {
     // Why: rich markdown debounces serialization, so force the pending draft out before we cancel timers.
     flushPendingEditorChange(fileId)
-    const pendingSave = saveQueue.get(fileId)
+    const pendingSave = saveQueue.get(saveQueueKey(fileId))
     clearAutoSaveTimer(fileId)
     bumpSaveGeneration(fileId)
     await pendingSave?.catch(() => undefined)

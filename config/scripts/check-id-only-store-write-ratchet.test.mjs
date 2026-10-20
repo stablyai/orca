@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   collectIdOnlyStoreWrites,
+  findIdOnlyLookups,
   findIdOnlyWrites,
   listStoreOperationClasses,
   NOT_HOST_TWINNED
@@ -80,5 +81,41 @@ describe('collectIdOnlyStoreWrites', () => {
     for (const exempt of NOT_HOST_TWINNED.keys()) {
       expect(entries).not.toContain(exempt)
     }
+  })
+})
+
+const LOOKUP_SOURCE = `export class SetupOps {
+  updateProjectHostSetup(args: Args): Result | null {
+    const repo = setup.repoId
+      ? this.state.repos.find((entry) => entry.id === setup.repoId)
+      : undefined
+    return repo
+  }
+
+  private findSetupRepo(setup: ProjectHostSetup): Repo | undefined {
+    return this.state.repos.find(
+      (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
+    )
+  }
+}
+
+export const pickRepo = (state: State, repoId: string): number =>
+  state.repos.findIndex(
+    (repo) =>
+      repo.id === repoId
+  )
+
+function pickOptional(state: State, repoId: string): Repo | undefined {
+  return state.repos?.find(({ id }) => id === repoId)
+}
+`
+
+describe('findIdOnlyLookups', () => {
+  it('flags a repo-row lookup by id alone (review-5 #10), by its enclosing function', () => {
+    expect(findIdOnlyLookups('ops.ts', LOOKUP_SOURCE)).toEqual([
+      'lookup:ops.ts#updateProjectHostSetup',
+      'lookup:ops.ts#pickRepo',
+      'lookup:ops.ts#pickOptional'
+    ])
   })
 })

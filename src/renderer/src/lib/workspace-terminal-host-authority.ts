@@ -5,7 +5,7 @@ import type { HostLiveTerminalProbeVerdict } from '@/runtime/host-live-terminal-
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { resolveExplicitWorktreeOperationRouteResult } from '@/lib/worktree-operation-catalog-route'
-import { resolveStrictWorktreeOperationRouteResultForHost } from '@/lib/worktree-operation-route'
+import { resolveWorktreeOperationRouteResultForHost } from '@/lib/worktree-operation-route'
 import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
@@ -98,7 +98,7 @@ export function resolveWorkspaceTerminalHostAuthority(
     return isWebRuntimeSessionActive(environmentId) ? 'live' : 'none'
   }
   const resolution = selectedHost
-    ? resolveStrictWorktreeOperationRouteResultForHost(state, worktreeId, selectedHost.id)
+    ? resolveWorktreeOperationRouteResultForHost(state, worktreeId, selectedHost.id)
     : resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
   if (
     resolution.kind === 'ambiguous' ||

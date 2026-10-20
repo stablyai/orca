@@ -208,4 +208,6 @@ export type PtyControllerInventory = Readonly<{
   allLivePtyIds: ReadonlySet<string>
   terminalIdentityByPtyId: ReadonlyMap<string, PtyControllerTerminalIdentity>
   queriedHostIds: ReadonlySet<ExecutionHostId>
+  /** Live PTYs the host is killing: still live work, but no longer any pane's to show. */
+  exitingPtyIds?: ReadonlySet<string>
 }>

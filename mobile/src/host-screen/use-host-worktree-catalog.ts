@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { AppState } from 'react-native'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { useFocusEffect } from 'expo-router'
 import { setCachedWorktrees } from '../cache/worktree-cache'
@@ -33,7 +34,7 @@ export function useHostWorktreeCatalog(args: {
   /** Null in a build that lists without the feed. */
   sidebarFeed: HostSidebarFeedTriggers | null
   state: HostScreenState
-  syncViewSettingsFromDesktop: (options?: { reconnected?: boolean }) => Promise<void>
+  syncViewSettingsFromDesktop: (options?: { resend?: boolean }) => Promise<void>
 }) {
   const {
     client,
@@ -212,13 +213,13 @@ export function useHostWorktreeCatalog(args: {
     if (!client || connState !== 'connected') {
       return
     }
-    void syncViewSettingsFromDesktop()
     return startHostWorktreeRefresh({
       client,
       fetchWorktrees,
       fetchRepoMetadata,
       syncViewSettings: syncViewSettingsFromDesktop,
-      sidebarFeed
+      sidebarFeed,
+      appState: AppState
     })
   }, [
     client,

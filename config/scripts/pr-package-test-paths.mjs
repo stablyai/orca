@@ -1,4 +1,7 @@
 export const LINUX_PACKAGE_TESTS = [
+  'config/scripts/packaged-cloud-source-exclusion.test.mjs',
+  'src/main/browser/popup-origin-chrome.electron.test.ts',
+  'src/main/browser/browser-link-materialization.electron.test.ts',
   'src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts',
   'src/main/browser/browser-route-tcp-egress.electron.test.ts',
   'src/main/browser/browser-route-webrtc-egress.electron.test.ts',

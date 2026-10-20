@@ -34,7 +34,7 @@ import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdic
 import {
   assertWorkspaceTargetFlagsCompatible,
   hasWorkspaceProjectTarget,
-  getCreateRepoSelector
+  getCreateRepoTarget
 } from '../worktree-project-target'
 import {
   assertWorktreeParentFlagsCompatible,
@@ -176,8 +176,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
     const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const name = getRequiredStringFlag(flags, 'name')
-    const repo = await getCreateRepoSelector(flags, cwdParentWorktree, client)
-    await assertGitLabLinkFlagProjectsMatch(flags, client, { repo })
+    const repoTarget = await getCreateRepoTarget(flags, cwdParentWorktree, client)
+    await assertGitLabLinkFlagProjectsMatch(flags, client, repoTarget)
     const linkedItems = referenceInputs
       ? await resolveReferenceInputs(context, referenceInputs)
       : undefined
@@ -185,7 +185,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       await assertReferenceWritesSupported(client)
     }
     const create = {
-      repo,
+      // Older hosts drop `repoHostId` and keep refusing an id on several hosts, as before.
+      ...repoTarget,
       name,
       displayName: name,
       displayNameKind: 'user',

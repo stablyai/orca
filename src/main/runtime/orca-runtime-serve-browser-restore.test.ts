@@ -181,8 +181,13 @@ describe('a saved browser tab on a host with no window', () => {
       page: 'page-new'
     })
 
-    const saved = getSession().browserTabsByWorktree?.[TEST_WORKTREE_ID] ?? []
-    expect(saved.map((tab) => [tab.id, tab.url])).toEqual([['page-new', 'https://example.com/new']])
+    // A switch-on build saves the page once main's layout write lands.
+    await vi.waitFor(() => {
+      const saved = getSession().browserTabsByWorktree?.[TEST_WORKTREE_ID] ?? []
+      expect(saved.map((tab) => [tab.id, tab.url])).toEqual([
+        ['page-new', 'https://example.com/new']
+      ])
+    })
     // Which tab shows is a view's choice; opening one records none.
     expect(getSession().activeBrowserTabIdByWorktree?.[TEST_WORKTREE_ID]).toBeUndefined()
   })

@@ -1,4 +1,7 @@
-import type { RuntimeFileOpenPosition } from '../../shared/runtime-file-contracts'
+import type {
+  RuntimeEditorTabReveal,
+  RuntimeFileOpenPosition
+} from '../../shared/runtime-file-contracts'
 import type { JiraQuickFilterState } from '../../shared/jira-quick-filters'
 import type { JiraSavedFilterState, JiraSavedFilterMutation } from '../../shared/jira-saved-filters'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
@@ -272,6 +275,8 @@ export type UiCommandEventApi = {
       position?: RuntimeFileOpenPosition
     }) => void
   ) => () => void
+  /** Layout-owner builds: shows a tab main wrote for a file it opened. */
+  onRevealEditorTabFromRuntime: (callback: (data: RuntimeEditorTabReveal) => void) => () => void
   onOpenDiffFromMobile: (
     callback: (data: {
       worktreeId: string

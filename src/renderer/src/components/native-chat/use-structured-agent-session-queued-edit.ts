@@ -64,7 +64,13 @@ type Edit = {
 
 /** Unsaved typing goes to the chat box without the card's images, so no marker may name one. */
 function handOffEditText(edit: Edit): void {
-  appendNativeChatDraftCache(edit.draftKey, stripSentImagePromptMarkers(edit.text))
+  appendNativeChatDraftCache(
+    edit.draftKey,
+    stripSentImagePromptMarkers(
+      edit.text,
+      edit.body.blocks.filter((block) => block.type === 'image-ref').length
+    )
+  )
 }
 
 export function useStructuredAgentSessionQueuedEdit(args: {

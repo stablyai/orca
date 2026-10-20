@@ -7,6 +7,7 @@ import {
 import type { KeybindingOverrides } from '../../shared/keybindings'
 import type { BrowserLoadError } from '../../shared/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from './browser-route-guest-popup-ownership'
+import type { BrowserPagePromptTarget } from './browser-page-prompts'
 import type {
   ActiveDownload,
   CdpUserAgentOverrideState,
@@ -225,6 +226,22 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     }
     const renderer = this.resolveRendererForBrowserTab(browserPageId)
     return renderer ? { browserPageId, renderer } : null
+  }
+
+  /** Where a prompt from this page or popup shows; null when it has no window on this machine. */
+  resolvePagePromptTarget(guest: Electron.WebContents): BrowserPagePromptTarget | null {
+    const context = this.getRendererContextForGuest(guest.id)
+    if (context) {
+      return context
+    }
+    // Why: a new tab's webview starts loading before its window registers it.
+    const awaitingRegistration =
+      this.policyAttachedGuestIds.has(guest.id) &&
+      !this.tabIdByWebContentsId.has(guest.id) &&
+      !this.popupOwnerContextByGuestId.has(guest.id) &&
+      !this.offscreenGuestIds.has(guest.id) &&
+      guest.getType() === 'webview'
+    return awaitingRegistration ? 'awaiting-registration' : null
   }
 
   protected resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {

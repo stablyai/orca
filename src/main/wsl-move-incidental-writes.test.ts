@@ -56,8 +56,17 @@ describe('push-target bookkeeping under a WSL move', () => {
   async function push(worktreeId: string, hostId?: ExecutionHostId) {
     const setWorktreeMeta = vi.fn()
     const meta = hostId ? { [worktreeId]: mergeWorktreeMetaForWrite(undefined, { hostId }) } : {}
-    // An unstamped row resolves its host from its repo's only registration.
+    // The record lands only on a host that registers the copy's repo.
     const repos = [
+      { id: 'repo-1', path: '/ws/repo-1', displayName: 'r', badgeColor: '#000', addedAt: 0 },
+      {
+        id: 'repo-1',
+        path: '/ws/repo-1',
+        displayName: 'r',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: 'target-1'
+      },
       { id: 'repo-2', path: '/ws/repo-2', displayName: 'r', badgeColor: '#000', addedAt: 0 }
     ]
     const store = { getAllWorktreeMeta: () => meta, getRepos: () => repos, setWorktreeMeta }
@@ -67,7 +76,7 @@ describe('push-target bookkeeping under a WSL move', () => {
       store,
       undefined,
       {},
-      worktreeId
+      hostWorktreeTarget({ id: worktreeId, hostId: hostId ?? 'local' })
     )
     return { result, setWorktreeMeta }
   }

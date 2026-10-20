@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { captureWorkspaceSelection, restoreWorkspaceSelection } from '@/lib/active-workspace-host'
 import {
   clearWorktreeSleepIntent,
   hasWorktreeSleepIntent,
@@ -124,6 +125,7 @@ export async function sleepWorktreesReportingFailures(
   } = useAppStore.getState()
   const sleptActiveWorktreeId =
     activeWorktreeId && worktreeIds.includes(activeWorktreeId) ? activeWorktreeId : null
+  const selectionBeforeSleep = captureWorkspaceSelection(useAppStore.getState())
   if (sleptActiveWorktreeId) {
     const restoreSidebarPosition = preserveSidebarWorktreePosition(sleptActiveWorktreeId)
     // Why: clearing the active workspace can unmount TerminalPanes before
@@ -202,8 +204,13 @@ export async function sleepWorktreesReportingFailures(
     for (const worktreeId of failedWorktreeIds) {
       clearWorktreeSleepIntent(worktreeId)
     }
-    if (sleptActiveWorktreeId && failedWorktreeIds.has(sleptActiveWorktreeId)) {
-      setActiveWorktree(sleptActiveWorktreeId)
+    // Why still empty: a workspace the user picked during the sleep is theirs to keep.
+    if (
+      sleptActiveWorktreeId &&
+      failedWorktreeIds.has(sleptActiveWorktreeId) &&
+      useAppStore.getState().activeWorktreeId === null
+    ) {
+      restoreWorkspaceSelection(useAppStore.getState(), selectionBeforeSleep)
     }
   }
   return {

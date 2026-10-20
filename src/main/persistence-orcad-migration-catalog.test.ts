@@ -384,6 +384,39 @@ describe('orcad migration catalog persistence', () => {
     expect(store.getRepos()).toHaveLength(1)
   })
 
+  it('aborts by reference from its own staged copy, never a different manifest or a commit', () => {
+    const store = createStore()
+    const input = manifest()
+    const reference = { migrationId: input.migrationId, manifestSha256: input.manifestSha256 }
+
+    expect(store.abortStagedOrcadMigrationCatalogByReference(reference)).toEqual({
+      ...reference,
+      state: 'absent',
+      aborted: false
+    })
+    store.stageOrcadMigrationCatalog(input)
+    expect(() =>
+      store.abortStagedOrcadMigrationCatalogByReference({
+        ...reference,
+        manifestSha256: 'f'.repeat(64)
+      })
+    ).toThrow('orcad_migration_id_reused_with_different_manifest')
+    expect(store.getOrcadMigrationCatalogState(input).state).toBe('staged')
+    expect(store.abortStagedOrcadMigrationCatalogByReference(reference)).toEqual({
+      ...reference,
+      state: 'absent',
+      aborted: true
+    })
+    expect(store.getOrcadMigrationCatalogState(input).state).toBe('absent')
+    commitCatalog(store, input)
+    expect(store.abortStagedOrcadMigrationCatalogByReference(reference)).toEqual({
+      ...reference,
+      state: 'committed',
+      aborted: false
+    })
+    expect(store.getRepos()).toHaveLength(1)
+  })
+
   it('requires a durable stage before commit and bounds concurrent dormant catalogs', () => {
     const store = createStore()
     const input = manifest()

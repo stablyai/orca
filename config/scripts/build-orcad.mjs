@@ -60,6 +60,8 @@ import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from './process-failure-message.mjs'
 import { resolveBuildSourceCommit } from './build-source-commit.mjs'
 
+const { darkBuildMarkers } = createRequire(import.meta.url)('../dark-build-switches.cjs')
+
 const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = process.env.ORCAD_OUT_DIR
   ? resolve(process.env.ORCAD_OUT_DIR)
@@ -159,6 +161,10 @@ function stageNodePty(target) {
 rmSync(OUT_DIR, { recursive: true, force: true })
 mkdirSync(OUT_DIR, { recursive: true })
 writeFileSync(join(OUT_DIR, ORCAD_SERVER_TARGET_FILENAME), `${BUILD_TARGET}\n`)
+// Outside the artifact list, so the version hash and every deploy ignore it.
+for (const marker of darkBuildMarkers()) {
+  writeFileSync(join(OUT_DIR, marker.fileName), marker.text)
+}
 writeFileSync(
   join(OUT_DIR, ORCAD_NODE_RUNTIME_MARKER_FILENAME),
   `${runtimeAsset.executableSha256}\n`

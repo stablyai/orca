@@ -14,7 +14,7 @@ import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cac
 import { notifyReposChanged } from './repos-changed-notification'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../worktree-base-directory-watcher'
 import { ProjectUpdateIpcArgs, parseProjectGroupIpcArgs } from './repo-ipc-arg-schemas'
-import { visibleRepos } from '../../ssh/orcad-retained-source'
+import { visibleProjectHostSetups, visibleRepos } from '../../ssh/orcad-retained-source'
 import {
   assertWslMoveProjectWritable,
   assertWslMoveReposWritable,
@@ -55,7 +55,7 @@ export function registerRepoCatalogHandlers(
 
   ipcMain.handle('projectHostSetups:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged: broadcastReposChanged })
-    return store.getProjectHostSetups()
+    return visibleProjectHostSetups(store)
   })
 
   ipcMain.handle(

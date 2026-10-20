@@ -68,9 +68,9 @@ describe('NativeChatUpgradeTipDialog', () => {
     expect(text).toContain(
       'New chats with supported agents now open in the upgraded chat view. To move between chat and CLI, open Agent Session History in the right sidebar:'
     )
-    expect(text).toContain('Switch to Chat opens a supported CLI conversation in native chat.')
+    expect(text).toContain('Resume in New Chat opens a supported CLI conversation in native chat.')
     expect(text).toContain(
-      'Switch to Terminal copies a Claude or Codex chat into a new CLI session. The original chat stays as it is.'
+      'Resume in New Terminal copies a Claude or Codex chat into a new CLI session. The original chat stays as it is.'
     )
     expect(text).toContain('Manage Chat UI in Settings → Experimental.')
     expect(text).toContain('Got It')
@@ -98,7 +98,7 @@ describe('NativeChatUpgradeTipDialog', () => {
     expect(html).not.toContain('role="switch"')
     expect(html).toContain('27rem')
     // The way back to the terminal stays in the tip.
-    expect(text).toContain('Switch to Terminal copies a Claude or Codex chat')
+    expect(text).toContain('Resume in New Terminal copies a Claude or Codex chat')
   })
 
   it('dismisses with Leave Off and runs the primary action only with Enable Now', () => {
@@ -138,7 +138,7 @@ describe('NativeChatUpgradeTipDialog', () => {
   it('pictures both real menu actions, one at a time', () => {
     const html = renderToStaticMarkup(<NativeChatUpgradeFeatureTipVisual />)
     expect(html).toContain('Agent Session History')
-    expect(html).toMatch(/data-highlighted="true"[^>]*>.*Switch to Terminal/)
-    expect(html).not.toContain('Switch to Chat')
+    expect(html).toMatch(/data-highlighted="true"[^>]*>.*Resume in New Terminal/)
+    expect(html).not.toContain('Resume in New Chat')
   })
 })

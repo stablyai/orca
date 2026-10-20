@@ -158,7 +158,8 @@ export class RuntimeGitLabQueryCommands {
     repoSelector: string,
     iid: number,
     type: 'issue' | 'mr',
-    projectRef?: GitLabProjectRef | null
+    projectRef?: GitLabProjectRef | null,
+    includeReviewDetails?: boolean
   ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return getWorkItemDetails(
@@ -168,7 +169,8 @@ export class RuntimeGitLabQueryCommands {
       repo.issueSourcePreference,
       repo.connectionId ?? null,
       projectRef,
-      ...this.deps.getLocalGitArgs(repo)
+      this.deps.getLocalGitArgs(repo)[0] ?? {},
+      { includeReviewDetails }
     )
   }
 

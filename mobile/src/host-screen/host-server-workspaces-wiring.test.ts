@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
-vi.mock('react-native', () => ({}))
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('../transport/host-removal-lifecycle', () => ({ removeHostAndCloseClient: async () => {} }))
 vi.mock('../host-route-exit', () => ({ leaveHostRoute: () => {} }))
 vi.mock('../cache/worktree-cache', () => ({

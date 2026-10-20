@@ -24,9 +24,16 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   ensurePtyDispatcher: vi.fn()
 }))
 
+const layoutOwner = vi.hoisted(() => ({ isMain: false }))
+vi.mock('../../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.isMain
+  }
+}))
+
 const mockApi = createStoreSessionMockApi()
 
-describe('reconnectPersistedTerminals', () => {
+describe.each([false, true])('reconnectPersistedTerminals (layout owner is main: %s)', (isMain) => {
   let ptyIdCounter: number
 
   // Why: the daemon toggle must be on before hydration, else hydration clears reconnect state and tab.ptyId never rehydrates.
@@ -35,6 +42,7 @@ describe('reconnectPersistedTerminals', () => {
   }
 
   beforeEach(() => {
+    layoutOwner.isMain = isMain
     vi.clearAllMocks()
     ptyIdCounter = 0
     // Mock pty.spawn to return incrementing IDs

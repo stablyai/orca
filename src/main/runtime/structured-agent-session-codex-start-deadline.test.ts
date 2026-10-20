@@ -13,7 +13,12 @@ import {
   hostTestAttachParams,
   hostTestMessage
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import {
+  createStructuredAgentSessionLogger,
+  type StructuredAgentSessionLogger
+} from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { CodexAppServerTimeoutError } from '../codex/codex-app-server-session'
+import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'
 import { recordAgentSessionStartup } from '../observability/agent-session-instrumentation'
 import { readWholeAgentSessionFailureFact } from '../../shared/agent-session-failure'
 import type { ScriptedAgentChild } from './structured-agent-scripted-child.test-fixture'
@@ -61,10 +66,13 @@ function envelope(method: string, fence: number, fields: Record<string, unknown>
   }
 }
 
-async function chatHoldingAMessage(child: ScriptedAgentChild) {
+async function chatHoldingAMessage(
+  child: ScriptedAgentChild,
+  logger: StructuredAgentSessionLogger = createStructuredAgentSessionLogger()
+) {
   root = await mkdtemp(join(tmpdir(), 'orca-codex-start-deadline-'))
   const host = await ensureStructuredAgentSessionHost({
-    logger: createStructuredAgentSessionLogger(),
+    logger,
     stateDirectory: root,
     hostId: 'local',
     claimKeyId: 'key-1',
@@ -118,4 +126,60 @@ it('fails the held message with the startup-failure words when initialize passes
   await vi.waitFor(() => expect(child.closes()).toBe(1))
   expect(child.prompts()).toEqual([])
   expect(child.spawns()).toBe(1)
+})
+
+it('names the request that ran out of time, in the chat and in the log, when thread/start never answers', async () => {
+  const child = codexScriptedChild({
+    'thread/start': () =>
+      new Promise((_resolve, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              withProviderRequestTimeout(
+                new CodexAppServerTimeoutError('codex app-server thread/start exceeded 30000ms'),
+                { method: 'thread/start', timeoutMs: 30_000 }
+              )
+            ),
+          30_000
+        )
+      )
+  })
+  const logger = { warn: vi.fn(), error: vi.fn() }
+  const host = await chatHoldingAMessage(child, logger)
+  child.releaseHandshake()
+  await vi.advanceTimersByTimeAsync(30_000)
+
+  const requestTimeout = { method: 'thread/start', timeoutMs: 30_000 }
+  await vi.waitFor(async () => {
+    await host.flushStreamedEvents(HOST_TEST_SESSION)
+    const [held] = (await host.journalSnapshot(HOST_TEST_SESSION)).submissions
+    expect(held?.dispatchState).toBe('rejected')
+    expect(readWholeAgentSessionFailureFact(held?.rejection)).toEqual({
+      kind: 'startFailed',
+      requestTimeout
+    })
+    expect(held?.reason).toBe(
+      'Codex took too long to start (no response to thread/start after 30s). Send your message to try again. If this keeps happening, the computer running this chat may be overloaded.'
+    )
+  })
+  const rows = (await host.journalSnapshot(HOST_TEST_SESSION)).items.filter(
+    (item) =>
+      item.body.kind === 'status' &&
+      readWholeAgentSessionFailureFact(item.body.failure)?.requestTimeout !== undefined
+  )
+  expect(rows).toHaveLength(1)
+  await vi.waitFor(() => expect(child.closes()).toBe(1))
+
+  const failures = logger.warn.mock.calls.filter(
+    ([, fields]) => fields.scope === 'provider-open-failed'
+  )
+  expect(failures).toHaveLength(1)
+  const logged = failures[0]
+  expect(logged?.[1]).toMatchObject({
+    sessionId: HOST_TEST_SESSION,
+    failure: 'startFailed',
+    ...requestTimeout,
+    error: expect.any(CodexAppServerTimeoutError)
+  })
+  expect(logged?.[1].openMs).toBeGreaterThanOrEqual(30_000)
 })

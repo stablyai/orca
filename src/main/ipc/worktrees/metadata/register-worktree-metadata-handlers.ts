@@ -6,7 +6,10 @@ import { stripOrcaProvenanceMetaUpdates } from '../../../worktree-removal-safety
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { notifyWorktreesChanged } from '../../worktree-remote'
 import { parseWorktreeId } from '../../worktree-logic'
-import { planWorktreeSortOrderUpdates } from '../../../../shared/worktree/sort-order-update'
+import {
+  writeWorktreeSortOrder,
+  type WorktreeSortOrderRequest
+} from '../../../persistence/worktree-sort-order-write'
 import { readBranchRenameFailureOutputForDisplay } from '../../../agent-hooks/branch-rename-failure-output'
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
 import { isRemovedFolderWorkspaceInstance } from '../../../folder-workspace-meta-presence'
@@ -105,21 +108,16 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
     }
   )
 
-  ipcMain.handle('worktrees:persistSortOrder', (_event, args: { orderedIds: string[] }) => {
+  ipcMain.handle('worktrees:persistSortOrder', (_event, args: WorktreeSortOrderRequest) => {
     if (!Array.isArray(args?.orderedIds) || args.orderedIds.length === 0) {
       return
     }
-    const updates = planWorktreeSortOrderUpdates(
-      args.orderedIds,
-      (worktreeId) => store.getWorktreeMeta(worktreeId),
+    writeWorktreeSortOrder(
+      store,
+      args,
+      (worktreeId) => isWslMoveWorkspaceBlocked(store, worktreeId),
       Date.now()
-    ).filter((update) => !isWslMoveWorkspaceBlocked(store, update.worktreeId))
-    for (const update of updates) {
-      const target = resolveWorktreeMetaOwner(store, update.worktreeId)
-      if (target) {
-        store.setWorktreeMeta(target, { sortOrder: update.sortOrder })
-      }
-    }
+    )
   })
 
   ipcMain.handle(

@@ -13,6 +13,7 @@ import type { WorkspaceRowsProducer } from './workspace-rows-producer'
 import type { RepoIconDataUrls } from './repo-icon-data-urls'
 import type { SidebarInputsFeedDomain } from './sidebar-inputs-feed'
 import { readDesktopSidebarFacts } from './desktop-sidebar-facts'
+import { readSidebarProjectCatalog } from './sidebar-project-catalog'
 import { buildPairedServerReviewFacts } from '../../../shared/sidebar-list/workspace-review-facts'
 import { buildPairedServerActivityFacts } from '../../../shared/sidebar-list/paired-server-activity-facts'
 import { parseExecutionHostId } from '../../../shared/execution-host'
@@ -150,6 +151,26 @@ export function sidebarInputsFeedDomains(
         return () => detaches.forEach((detach) => detach?.())
       },
       rereadOnRead: true
+    },
+    {
+      // Each field its own entity, so a reader holds the catalog only once it is whole.
+      name: 'projectCatalog',
+      read: () => readSidebarProjectCatalog(requireStore(), pairedServerRows.catalogs()),
+      watch: (changed) => {
+        const detaches = [
+          watchCatalog(changed),
+          pairedServerRows.revision.onChange(changed),
+          // Manual repo order and project order live in the UI state.
+          sources.store()?.onUIChanged?.(changed),
+          // Catalog writes are full saves, and some (a project rename) announce no event.
+          sources.store()?.onStateWritten?.((domains) => {
+            if (domains === undefined) {
+              changed()
+            }
+          })
+        ]
+        return () => detaches.forEach((detach) => detach?.())
+      }
     },
     {
       // Ids only: a reader fetches the images through sidebarInputs.repoIcons.

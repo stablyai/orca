@@ -249,6 +249,13 @@ describe('registerFilesystemHandlers', () => {
     )
 
     expect(statMock).toHaveBeenCalledWith(targetPath)
+    realpathMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    await expect(
+      handlers.get('fs:pathExists')!(null, {
+        filePath: path.resolve('/state/agent-session-attachments/upload/gone.png'),
+        access: { kind: 'chat-image' }
+      })
+    ).resolves.toBe(false)
   })
 
   it('allows deletePath when a registered worktree parent resolves to a macOS canonical alias', async () => {

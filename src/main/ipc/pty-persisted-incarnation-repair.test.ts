@@ -4,6 +4,7 @@ import { statSyncMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from '../daemon/daemon-errors'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { clearProviderPtyState } from './pty/provider/state-cleanup'
 import { setLocalPtyProvider } from './pty/provider/registry'
@@ -375,8 +376,17 @@ describe('registerPtyHandlers', () => {
       expect(providerSpawn.mock.calls[1]?.[0]).toMatchObject({
         command: 'codex resume exact-dead-provider-session'
       })
-      expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
-      expect(store.flushOrThrow).toHaveBeenCalledOnce()
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // The dead binding stays until the fresh spawn's one bind swaps it.
+        expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+        const [swap] = vi.mocked(store.persistPtyBinding).mock.calls[0] ?? []
+        expect(typeof swap === 'function' ? swap() : swap).toMatchObject({
+          ptyId: 'pty-fresh-recovery'
+        })
+      } else {
+        expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
+        expect(store.flushOrThrow).toHaveBeenCalledOnce()
+      }
       expect(runtime.onPtyExit).toHaveBeenCalledWith(
         'pty-dead-persisted-owner',
         -1,

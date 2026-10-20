@@ -110,7 +110,7 @@ describe('per-job path classification', () => {
   })
 
   it('skips every expensive job for docs-only diffs', () => {
-    expectClassification(['README.md', 'docs/readme/README.zh-CN.md'], {})
+    expectClassification(['docs/assets/wechat-qr-group8.jpg', 'LICENSE'], {})
   })
 
   it('runs packaging and always-on jobs for product source, not git/xterm/shell lanes', () => {
@@ -486,7 +486,7 @@ describe('per-job path classification', () => {
   })
 
   it('leaves diffs the audits never read out of static analysis', () => {
-    expect(classifyPrJobs(['README.md']).static_analysis).toBe(false)
+    expect(classifyPrJobs(['docs/assets/logo.png']).static_analysis).toBe(false)
     expect(classifyPrJobs(['cloud/apps/relay/src/index.ts']).static_analysis).toBe(false)
   })
 

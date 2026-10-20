@@ -1,5 +1,5 @@
 import { SERVE_SUPERVISOR_HEARTBEAT_MS } from '../../shared/serve-bundle-coordination'
-import type { ServeBundlePark } from './serve-bundle-park'
+import type { ServeBundlePark } from '../../shared/serve-bundle-park'
 
 export const SERVE_PARK_POLL_MS = 1_000
 

@@ -66,13 +66,14 @@ describe('ExternalFileChangeBanner', () => {
     mockStoreState({})
   })
 
-  it('renders the overwrite warning, all three actions, and an alert role', () => {
+  it('renders the overwrite warning, all four actions, and an alert role', () => {
     const html = renderToStaticMarkup(
       <ExternalFileChangeBanner file={file} currentContent="buffer" reloadContent={vi.fn()} />
     )
     expect(html).toContain('role="alert"')
     expect(html).toContain('changed on disk')
-    expect(html).toContain('Saving will overwrite')
+    expect(html).toContain('Overwrite replaces')
+    expect(html).toContain('>Overwrite<')
     expect(html).toContain('Compare')
     expect(html).toContain('Reload from Disk')
     expect(html).toContain('Keep My Edits')

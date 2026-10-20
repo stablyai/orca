@@ -5,6 +5,7 @@ import {
   watcherLifecycleState
 } from './filesystem-watcher-lifecycle-state'
 import { isCurrentDesiredRemoteWatcher } from './filesystem-watcher-remote-desired'
+import { getRemoteWatcherKeyConnectionId } from './filesystem-watcher-paths'
 
 function flushRemoteWatcherResync(key: string): void {
   const state = watcherLifecycleState.remoteWatcherResyncStates.get(key)
@@ -30,7 +31,8 @@ function flushRemoteWatcherResync(key: string): void {
     try {
       listener.send('fs:changed', {
         worktreePath: state.worktreePath,
-        events: [{ kind: 'overflow', absolutePath: state.worktreePath }]
+        events: [{ kind: 'overflow', absolutePath: state.worktreePath }],
+        connectionId: getRemoteWatcherKeyConnectionId(key)
       } satisfies FsChangedPayload)
       sent = true
     } catch (error) {

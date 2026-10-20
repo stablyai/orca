@@ -31,6 +31,7 @@ import {
   RelayAssignmentRowBusyError,
   RelayCellInReserveModeError,
   RelayHomeCellUnavailableError,
+  type AssignOptions,
   type CellFenceAttemptEvidence,
   type RelayAssignment,
   type RelayAssignmentStore,
@@ -460,13 +461,14 @@ export function createRelayApp(
         .setExpirationTime('5m')
         .sign(config.assignmentSigningKey)
     // Step 5: switched-on cells answer from the map; anything else keeps today's path below.
-    let step5: { epochFloor?: number; placeFresh?: () => Promise<RelayAssignment | null> } = {}
-    if (operations.reservePlacement && !body.data.regionCorrection) {
+    let step5: Pick<AssignOptions, 'epochFloor' | 'placeFresh' | 'regionReserve'> = {}
+    if (operations.reservePlacement && body.data.regionCorrection?.action !== 'report') {
       let plan: ReservePlan
       try {
         plan = await operations.reservePlacement.plan(identity, {
           reconnect: Boolean(body.data.reconnect),
-          region: targetRegion
+          region: targetRegion,
+          regionCorrection: body.data.regionCorrection !== undefined
         })
       } catch (error) {
         if (!(error instanceof ReservePaceError)) throw error
@@ -492,7 +494,7 @@ export function createRelayApp(
         context.header('Retry-After', String(plan.retryAfterSeconds))
         return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
       }
-      step5 = { epochFloor: plan.epochFloor, placeFresh: plan.placeFresh }
+      step5 = { epochFloor: plan.epochFloor, placeFresh: plan.placeFresh, regionReserve: plan.regionReserve }
     }
     let admission: { release(): void } | null = null
     let lane: AssignmentAdmissionLane = 'placement'

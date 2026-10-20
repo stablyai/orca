@@ -2,16 +2,15 @@ import type { GitPushTarget, Worktree } from '../../shared/worktree/types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { splitWorktreeId } from '../../shared/worktree/id'
-import {
-  planWorktreeSortOrderUpdates,
-  type WorktreeSortOrderUpdate
-} from '../../shared/worktree/sort-order-update'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-update'
 import { stripOrcaProvenanceMetaUpdates } from '../worktree-removal-safety'
 import { isRemovedFolderWorkspaceInstance } from '../folder-workspace-meta-presence'
+import { worktreeRowTarget } from '../persistence/host-qualified-worktree-meta'
 import {
-  resolveWorktreeMetaOwner,
-  worktreeRowTarget
-} from '../persistence/host-qualified-worktree-meta'
+  writeWorktreeSortOrder,
+  type WorktreeSortOrderRequest
+} from '../persistence/worktree-sort-order-write'
 import type { RuntimeStore } from './runtime-store-contract'
 import {
   isWslMoveSourceHost,
@@ -148,26 +147,21 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
 }
 
 export function persistRuntimeManagedWorktreeSortOrder(args: {
-  orderedIds: string[]
+  orderedIds: WorktreeSortOrderRequest['orderedIds']
+  hostIds?: WorktreeSortOrderRequest['hostIds']
   store: RuntimeStore
   invalidateResolved: () => void
-  notifyChanged: (repoId: string, sortOrders: WorktreeSortOrderUpdate[]) => void
+  /** `sortOrders` omitted: the repo has same-id copies, which an id-keyed patch cannot tell apart. */
+  notifyChanged: (repoId: string, sortOrders?: WorktreeSortOrderUpdate[]) => void
 }): { updated: number } {
-  // A moving project keeps its old order; the rest of the batch still lands.
-  const updates = planWorktreeSortOrderUpdates(
-    args.orderedIds,
-    (worktreeId) => args.store.getWorktreeMeta(worktreeId),
+  // A moving project keeps its old order; the rest of the batch still lands. Only what was saved
+  // is reported and published.
+  const updates = writeWorktreeSortOrder(
+    args.store,
+    { orderedIds: args.orderedIds, hostIds: args.hostIds },
+    (worktreeId) => isWslMoveWorkspaceBlocked(args.store, worktreeId),
     Date.now()
-  ).filter((update) => {
-    const target = isWslMoveWorkspaceBlocked(args.store, update.worktreeId)
-      ? undefined
-      : resolveWorktreeMetaOwner(args.store, update.worktreeId)
-    // Only what was saved is reported and published.
-    if (target) {
-      args.store.setWorktreeMeta(target, { sortOrder: update.sortOrder })
-    }
-    return target !== undefined
-  })
+  )
   if (updates.length === 0) {
     return { updated: 0 }
   }
@@ -180,7 +174,13 @@ export function persistRuntimeManagedWorktreeSortOrder(args: {
     }
   }
   for (const [repoId, sortOrders] of updatesByRepo) {
-    args.notifyChanged(repoId, sortOrders)
+    const hosts = new Set(
+      args.store
+        .getRepos()
+        .filter((repo) => repo.id === repoId)
+        .map(getRepoExecutionHostId)
+    )
+    args.notifyChanged(repoId, hosts.size > 1 ? undefined : sortOrders)
   }
   return { updated: updates.length }
 }

@@ -38,7 +38,7 @@ it('dispatches the exact pane with owner-opening intent and shares pending', () 
       <TerminalPaneResumeInChatButton tabId="tab-1" worktreeId="wt-1" paneKey="tab-1:leaf" />
     </TooltipProvider>
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Switch to Chat' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Switch to Chat UI' }))
   expect(mocks.resolve).toHaveBeenCalledWith({
     tab: { id: 'tab-1', worktreeId: 'wt-1' },
     paneKey: 'tab-1:leaf'

@@ -1,6 +1,6 @@
 /* eslint-disable unicorn/no-useless-spread */
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { relistPaneMainBinds } from './layout-owner-close-relisting'
+import { relistPaneMainBinds, withMainTabLayout } from './layout-owner-close-relisting'
 import { OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal } from '../launch/mobile-terminal-owned-create'
 import type { OrcaRuntimeWithResolveTerminalSplitSourceAuthority } from '../launch/terminal-split-source-authority'
 import type {
@@ -145,8 +145,15 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
       relistPaneMainBinds(authority, live.pty, {
         hostId: (tabId) => this.getWorkspaceSessionHostIdsForTab(authority.worktreeId, tabId)[0],
         session: (hostId) => this.store?.getWorkspaceSession?.(hostId),
-        relist: (pty, pane) =>
+        relist: (pty, pane, layout) => {
           this.publishPtyBackedMobileSessionTerminal(authority.worktreeId, pty, pane)
+          const relisted = this.mobileSessionTabsByWorktree.get(authority.worktreeId)
+          const withLayout =
+            relisted && withMainTabLayout(relisted, { tabId: pane.tabId, ptyId: pty.ptyId }, layout)
+          if (withLayout && withLayout !== relisted) {
+            this.storeMobileSessionSnapshot(authority.worktreeId, withLayout)
+          }
+        }
       })
     }
     const surface = this.findMobileTerminalSurfaceForPty(authority.worktreeId, authority.ptyId)

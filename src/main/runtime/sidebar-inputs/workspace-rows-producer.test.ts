@@ -54,8 +54,11 @@ function resolved(id: string, repo: Repo, hostId: ResolvedWorktree['hostId']): R
   }
 }
 
-function setup() {
-  let onWrite: (domains: readonly string[] | undefined) => void = () => {}
+function setup(repos: Repo[] = [localRepo, sshRepo]) {
+  let settings: Partial<ReturnType<RuntimeStore['getSettings']>> = {}
+  const writeListeners = new Set<(domains: readonly string[] | undefined) => void>()
+  const onWrite = (domains: readonly string[] | undefined): void =>
+    writeListeners.forEach((listener) => listener(domains))
   const store: Pick<
     RuntimeStore,
     | 'getRepos'
@@ -69,8 +72,8 @@ function setup() {
     | 'getSettings'
     | 'onStateWritten'
   > = {
-    getRepos: () => [localRepo, sshRepo],
-    getRepo: (id) => [localRepo, sshRepo].find((repo) => repo.id === id),
+    getRepos: () => repos,
+    getRepo: (id) => repos.find((repo) => repo.id === id),
     getWorktreeMeta: () => undefined,
     getAllWorktreeMeta: () => ({}),
     getFolderWorkspaces: () => [],
@@ -78,10 +81,10 @@ function setup() {
     getSshTargets: () => [],
     getAllWorktreeLineage: () => ({}),
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the visibility filter reads only absent fields as defaults.
-    getSettings: () => ({}) as ReturnType<RuntimeStore['getSettings']>,
+    getSettings: () => settings as ReturnType<RuntimeStore['getSettings']>,
     onStateWritten: (listener) => {
-      onWrite = listener
-      return () => {}
+      writeListeners.add(listener)
+      return () => writeListeners.delete(listener)
     }
   }
   const listing: ResolvedWorktreeSnapshot = {
@@ -112,7 +115,12 @@ function setup() {
     runtime,
     rows: requireSwitchedOn(runtime.workspaceRows),
     listing,
-    write: (domains?: readonly string[]) => onWrite(domains)
+    write: (domains?: readonly string[]) => onWrite(domains),
+    // As the store does: replace the settings in memory, then report a settings-tagged write.
+    writeSettings: (updates: Partial<ReturnType<RuntimeStore['getSettings']>>) => {
+      settings = { ...settings, ...updates }
+      onWrite(['settings'])
+    }
   }
 }
 
@@ -135,7 +143,7 @@ describe('WorkspaceRowsProducer', () => {
     expect(snapshot['ssh:box|repo-2::/remote/b']).toMatchObject({ hostId: 'ssh:box', branch: '' })
   })
 
-  it('moves on catalog changes and metadata writes, never on session or settings writes', () => {
+  it('moves on catalog changes and metadata writes, never on session or unrelated settings writes', () => {
     const { runtime, rows, write } = setup()
     const at = (): number => rows.revision.value
     const start = at()
@@ -149,6 +157,48 @@ describe('WorkspaceRowsProducer', () => {
     runtime.emit({ type: 'worktreesChanged', repoId: 'repo-1' })
     runtime.emit({ type: 'reposChanged' })
     expect(at()).toBe(start + 4)
+  })
+
+  it('moves when a settings write changes what the visibility filter reads, and only then', () => {
+    const { rows, writeSettings } = setup()
+    const at = (): number => rows.revision.value
+    const start = at()
+    writeSettings({ compactWorktreeCards: true })
+    expect(at()).toBe(start)
+    writeSettings({ worktreeVisibilityDefaults: { external: 'show' } })
+    expect(at()).toBe(start + 1)
+    writeSettings({ worktreeVisibilityDefaults: { external: 'show' } })
+    expect(at()).toBe(start + 1)
+    writeSettings({ workspaceDir: '/w' })
+    writeSettings({ nestWorkspaces: false })
+    writeSettings({ workspaceDirHistory: [{ path: '/old', nestWorkspaces: true }] })
+    expect(at()).toBe(start + 4)
+  })
+
+  it('republishes rows to the feed when a visibility setting is saved', async () => {
+    // Added after the rollout, so the global default decides whether an external checkout shows.
+    const recentRepo: Repo = { ...localRepo, id: 'repo-3', externalWorktreeVisibilityLegacy: false }
+    const { runtime, listing, writeSettings } = setup([localRepo, sshRepo, recentRepo])
+    listing.worktrees.push(resolved('repo-3::/external', recentRepo, 'local'))
+    writeSettings({ worktreeVisibilityDefaults: { external: 'hide' } })
+    const feed = requireSwitchedOn(runtime.sidebarInputsFeed)
+    const events: RuntimeClientEvent[] = []
+    runtime.onClientEvent((event) => events.push(event))
+    const phone = new TestPhone(feed, 'conn-1')
+    phone.refresh()
+    await phone.settle()
+    expect(Object.keys(phone.view().workspaces)).not.toContain('local|repo-3::/external')
+
+    writeSettings({ worktreeVisibilityDefaults: { external: 'show' } })
+    await vi.advanceTimersByTimeAsync(60)
+    const notice = events.findLast((event) => event.type === 'sidebarInputsChanged')
+    if (notice?.type !== 'sidebarInputsChanged') {
+      throw new Error('no change notice')
+    }
+    phone.notice(notice)
+    await phone.settle()
+    expect(Object.keys(phone.view().workspaces)).toContain('local|repo-3::/external')
+    phone.disconnect()
   })
 
   it('reads past the shared listing cache and leaves it alone', async () => {

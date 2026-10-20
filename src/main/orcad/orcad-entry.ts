@@ -43,6 +43,7 @@ import { adoptWslHostLoginEnvironment } from './orcad-wsl-host-login-environment
 import { installOrcadProcessErrorGuards } from './orcad-process-error-guards'
 import { orcadWsPortOptions } from './orcad-ws-port-policy'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { placeUnshownLiveTerminalsAtStartup } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
 
 export { parseArgs }
 
@@ -303,6 +304,10 @@ async function startOrcadRuntime(
 
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
+  // Switch point: main shows live terminals no pane shows, before any client attaches.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    await placeUnshownLiveTerminalsAtStartup(runtime)
+  }
   // Hook rows hydrated and the PTY runtime registered: stored sort tiers can be checked.
   runtime.agentTransitions.seedRestoredRows()
   void runtime.sidebarFacts?.reconcileSortStampTiers(getLocalPtyProvider())

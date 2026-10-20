@@ -12,8 +12,10 @@ import {
   openMarkdownFile,
   resetEditorState,
   sendRequest,
-  setupWindow
+  setupWindow,
+  guardedWriteRefusal
 } from './mobile-markdown-bridge-test-harness'
+import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: () => null
@@ -64,13 +66,19 @@ describe('mobile markdown bridge save guards', () => {
     const state = useAppStore.getState()
     state.setEditorDraft('/repo/README.md', 'desktop draft')
     state.markFileDirty('/repo/README.md', true)
+    state.setLastKnownDiskSignature('/repo/README.md', getDiskBaselineSignature('desktop draft'))
     let diskContent = 'desktop draft'
     const readFile = vi.fn().mockImplementation(async () => ({
       content: 'verified mismatch',
       isBinary: false
     }))
-    const writeFile = vi.fn().mockImplementation(async ({ content }) => {
+    const writeFile = vi.fn().mockImplementation(async ({ content, diskPrecondition }) => {
+      const refusal = guardedWriteRefusal(diskPrecondition, diskContent)
+      if (refusal) {
+        return refusal
+      }
       diskContent = content
+      return { ok: true }
     })
     setupWindow({ readFile, writeFile })
     const detachBridge = attachMobileMarkdownBridge()
@@ -104,11 +112,16 @@ describe('mobile markdown bridge save guards', () => {
       content: diskContent,
       isBinary: false
     }))
-    const writeFile = vi.fn().mockImplementation(async ({ content }) => {
+    const writeFile = vi.fn().mockImplementation(async ({ content, diskPrecondition }) => {
       if (content === 'first edit') {
         await firstWrite.promise
       }
+      const refusal = guardedWriteRefusal(diskPrecondition, diskContent)
+      if (refusal) {
+        return refusal
+      }
       diskContent = content
+      return { ok: true }
     })
     setupWindow({ readFile, writeFile })
     const detachBridge = attachMobileMarkdownBridge()
@@ -151,11 +164,16 @@ describe('mobile markdown bridge save guards', () => {
       content: diskContent,
       isBinary: false
     }))
-    const writeFile = vi.fn().mockImplementation(async ({ content }) => {
+    const writeFile = vi.fn().mockImplementation(async ({ content, diskPrecondition }) => {
       if (content === 'mobile edit' && diskContent === 'original') {
         await firstWrite.promise
       }
+      const refusal = guardedWriteRefusal(diskPrecondition, diskContent)
+      if (refusal) {
+        return refusal
+      }
       diskContent = content
+      return { ok: true }
     })
     setupWindow({ readFile, writeFile })
     const detachBridge = attachMobileMarkdownBridge()

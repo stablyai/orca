@@ -58,9 +58,9 @@ jobs:
       test_files: ${{ steps.e2e_filter.outputs.test_files }}
       e2e_run_changed: ${{ steps.e2e_filter.outputs.e2e_run_changed }}
       e2e_needs_build: ${{ steps.e2e_filter.outputs.e2e_needs_build }}
+      e2e_ssh_shards: ${{ steps.e2e_filter.outputs.e2e_ssh_shards }}
       native_ime_source_changed: ${{ steps.e2e_filter.outputs.native_ime_source_changed }}
       wsl_source_changed: ${{ steps.e2e_filter.outputs.wsl_source_changed }}
-      layout_owner_switch_on: ${{ steps.e2e_filter.outputs.layout_owner_switch_on }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -83,9 +83,9 @@ jobs:
             /config/.bun-version
             /config/scripts/check-readme-local-links.mjs
             /config/scripts/pr-code-change-scope.mjs
+            /.oxfmtrc.json
             /config/scripts/pr-package-test-paths.mjs
             /config/scripts/pr-layout-oracle-route.mjs
-            /config/scripts/pr-layout-owner-switch-on-route.mjs
             /config/scripts/pr-e2e-source-routing.mjs
             /config/scripts/ci-e2e-job-selection.mjs
             /config/scripts/pr-ready-check-reuse.mjs
@@ -166,8 +166,6 @@ jobs:
           WSL_CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR "$DIFF_BASE" HEAD)"
           WSL_SOURCE_CHANGED="$(printf '%s\n' "$WSL_CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --wsl-source)"
           echo "wsl_source_changed=$WSL_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
-          LAYOUT_OWNER_SWITCH_ON="$(printf '%s\n' "$WSL_CHANGED" | node config/scripts/pr-layout-owner-switch-on-route.mjs)"
-          echo "layout_owner_switch_on=$LAYOUT_OWNER_SWITCH_ON" >> "$GITHUB_OUTPUT"
           echo "Native IME source changed: $NATIVE_IME_SOURCE_CHANGED"
           SHOULD_RUN="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --reusable-workflow "${E2E_SCOPE_ARGS[@]}")"
           if [ "$SHOULD_RUN" = true ]; then
@@ -275,6 +273,11 @@ jobs:
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           node node_modules/oxlint/bin/oxlint --format github
+
+      # Why the full tree: it takes ~2s, and the pre-commit hook is skippable.
+      - name: Check formatting
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node node_modules/oxfmt/bin/oxfmt --check .
 
       - name: Reject low-evidence patterns
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -1176,6 +1179,8 @@ jobs:
           src/main/browser/browser-route-h3-egress.electron.test.ts
           src/main/browser/browser-route-dns-prefetch.electron.test.ts
           src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
+          src/main/browser/popup-origin-chrome.electron.test.ts
+          src/main/browser/browser-link-materialization.electron.test.ts
           src/main/browser/browser-popup-compatibility.electron.test.ts
           src/main/browser/browser-popup-adapter-compatibility.electron.test.ts
           src/main/browser/browser-popup-native-compatibility.electron.test.ts
@@ -1554,6 +1559,7 @@ jobs:
       test_files: ${{ needs.code_paths.outputs.test_files }}
       run_changed_e2e: ${{ needs.code_paths.outputs.e2e_run_changed != 'false' }}
       needs_build: ${{ needs.code_paths.outputs.e2e_needs_build != 'false' }}
+      managed_ssh_shards: ${{ needs.code_paths.outputs.e2e_ssh_shards || '["1/2","2/2"]' }}
 
   # Why its own required job, apart from `e2e`: the rest of the suite is red on main, but the
   # layout oracle is green there, and its known-on-main list absorbs today's findings. Only the two
@@ -1577,28 +1583,6 @@ jobs:
       run_changed_e2e: true
       needs_build: true
       artifact_suffix: -layout-oracle
-
-  # Why not in verify's needs: the layout-owner switch is off in shipped builds, and some of these
-  # specs fail with it on until that work lands. It reports a red X without blocking the merge.
-  layout_owner_switch_on:
-    name: layout owner (switch on)
-    needs: [code_paths, preflight]
-    if: >-
-      !cancelled() &&
-      needs.code_paths.result == 'success' &&
-      needs.code_paths.outputs.layout_owner_switch_on == 'true' &&
-      needs.preflight.result == 'success'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/e2e.yml
-    with:
-      ref: ${{ github.sha }}
-      # LAYOUT_OWNER_SWITCH_ON_E2E_SPECS in config/scripts/pr-layout-owner-switch-on-route.mjs.
-      test_files: '["tests/e2e/workspace-layout-oracle-headless.spec.ts","tests/e2e/workspace-layout-oracle.spec.ts","tests/e2e/cli-file-open-position.spec.ts","tests/e2e/relaunch-first-terminal.spec.ts","tests/e2e/relaunch-sleeping-agents-resume-on-view.spec.ts","tests/e2e/terminal-cold-activation-deferral.spec.ts","tests/e2e/cli-first-worktree-single-terminal.spec.ts","tests/e2e/unopened-workspace-agent-single-resume.spec.ts","tests/e2e/terminal-pane-close-layout-consistency.spec.ts","tests/e2e/golden-file-open-edit-save.spec.ts","tests/e2e/golden-source-control-open-diff.spec.ts","tests/e2e/paired-cli-terminal-graph-sync-tab-retention.spec.ts","tests/e2e/floating-workspace-pane-height.spec.ts","tests/e2e/editor-model-host-isolation.spec.ts","tests/e2e/editor-tab-selection-restore.spec.ts","tests/e2e/finished-agent-ghost-resume.spec.ts","tests/e2e/live-background-terminal-mount-authority.spec.ts","tests/e2e/workspace-back-forward-navigation.spec.ts","tests/e2e/worktree-lineage-toggle-shortcut.spec.ts","tests/e2e/local-cli-terminal-retention.spec.ts","tests/e2e/default-tabs-mark-crash-relaunch.spec.ts","tests/e2e/terminal-cli-split-closed-before-mount.spec.ts","tests/e2e/layout-stream-loss-reopen.spec.ts","tests/e2e/terminal-tab-close-restart-persistence.spec.ts","tests/e2e/artificial-opencode-terminal-load.spec.ts","tests/e2e/ssh-orcad-"]'
-      run_changed_e2e: true
-      needs_build: true
-      artifact_suffix: -layout-owner-switch-on
-      layout_owner: main
 
   # Why this is not in verify's needs: it is the first PR-gate run of a harness whose reliability
   # is only known from nightly main runs (20/20 green, 2026-08-09..2026-08-29, p50 3m25s). It

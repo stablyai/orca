@@ -77,6 +77,7 @@ describe('editor runtime file watch recovery', () => {
         connectionId: undefined
       },
       expect.any(Function),
+      expect.any(Function),
       expect.any(Function)
     )
     expect(onPayload).not.toHaveBeenCalled()
@@ -104,6 +105,7 @@ describe('editor runtime file watch recovery', () => {
         worktreePath: '/notes',
         connectionId: undefined
       },
+      expect.any(Function),
       expect.any(Function),
       expect.any(Function)
     )

@@ -12,11 +12,7 @@ import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-ren
 import type { DiffSection } from '../../diff-section-types'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { useCombinedDiffViewRestore } from '../remember-view/use-combined-diff-view-restore'
-import {
-  combinedDiffScrollAnchorCache,
-  combinedDiffScrollTopCache,
-  combinedDiffViewStateCache
-} from '../remember-view/combined-diff-view-memory'
+import { clearCombinedDiffViewMemory } from '../remember-view/combined-diff-view-cache'
 import { useCombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
 import { useCombinedDiffSectionRetry } from './use-combined-diff-section-retry'
 import { withDiffSectionLoadTimeout } from './combined-diff-section-load-timeout'
@@ -86,7 +82,8 @@ function useViewer(props: Viewer) {
     setSectionHeights,
     setSections,
     setSideBySide,
-    viewStateKey: props.viewStateKey
+    viewStateKey: props.viewStateKey,
+    worktreeId: props.file.worktreeId
   })
   const loader = useCombinedDiffSectionLoader({
     entrySet: props.entrySet,
@@ -201,9 +198,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.useRealTimers()
   mocks.fetch.mockReset()
-  combinedDiffViewStateCache.clear()
-  combinedDiffScrollAnchorCache.clear()
-  combinedDiffScrollTopCache.clear()
+  clearCombinedDiffViewMemory()
 })
 
 describe('combined diff discarded-result analysis budget', () => {

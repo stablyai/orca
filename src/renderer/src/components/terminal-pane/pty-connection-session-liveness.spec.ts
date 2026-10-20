@@ -1,4 +1,5 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
@@ -348,6 +349,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         // Restart rebinds the pane to a new live PTY; its later real exit must not be ignored by a stale guard.
         transport.getPtyId.mockReturnValue('pty-pane-2-restarted')
         onPtyExit?.('pty-pane-2-restarted')
+        // A switch-on build closes it on main's answer.
+        await layoutApplyTestTransport.settle()
 
         expect(manager.closePane).toHaveBeenCalledTimes(1)
         expect(manager.closePane).toHaveBeenCalledWith(2)

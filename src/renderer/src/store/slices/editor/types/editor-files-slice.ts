@@ -21,6 +21,7 @@ import type {
   EditorTabSelection,
   OpenFile
 } from './open-file'
+import type { EditorBufferRecords } from '../buffers/editor-buffer-record'
 import type { EditorOpenLinkIntent, EditorOpenResult } from './editor-open-link-intent'
 import type { OpenFilePathRekey, RekeyOpenFilesResult } from './open-file-path-rekey'
 import type {
@@ -42,6 +43,8 @@ export type OpenFileOptions = {
 export type EditorFilesSlice = {
   // Open files / editor tabs
   openFiles: OpenFile[]
+  /** Buffer state per open tab id; the matching OpenFile fields mirror it. */
+  editorBuffers: EditorBufferRecords
   activeFileId: string | null
   activeFileIdByWorktree: Record<string, string | null> // worktreeId -> last active file
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType> // worktreeId -> last active tab type
@@ -75,7 +78,8 @@ export type EditorFilesSlice = {
       | 'language'
       | 'runtimeEnvironmentId'
       | 'externalSshTargetId'
-    >,
+    > &
+      Partial<Pick<OpenFile, 'terminalArtifactGrantId' | 'readOnly'>>,
     options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
   ) => void
   makePreviewFilePermanent: (fileId: string, tabId?: string) => void
@@ -91,7 +95,8 @@ export type EditorFilesSlice = {
   setActiveFile: (fileId: string, targetWorktreeId?: string) => void
   markFileDirty: (fileId: string, dirty: boolean) => void
   setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
-  setLastKnownDiskSignature: (fileId: string, signature: string) => void
+  /** `undefined` un-records a baseline a failed operation stamped provisionally. */
+  setLastKnownDiskSignature: (fileId: string, signature: string | undefined) => void
   clearPendingDiskBaselineVerification: (fileId: string) => void
   setPendingDiskBaselineVerification: (fileId: string, value: boolean) => void
   setPendingLiveDiskVerification: (fileId: string, value: boolean) => void

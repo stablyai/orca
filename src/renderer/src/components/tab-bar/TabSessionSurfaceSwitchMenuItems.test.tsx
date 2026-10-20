@@ -115,7 +115,7 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     mocks.subject = CHAT_SUBJECT
     renderItemsNow('orca-chat-1')
     expect(mocks.listSessions).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to Terminal' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to Terminal Agent' }))
     expect(mocks.runNativeChatCliFork).toHaveBeenCalledWith(
       expect.objectContaining({
         subject: CHAT_SUBJECT,
@@ -136,7 +136,7 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     }
     mocks.cliSource = source
     renderItemsNow()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to Chat' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to Chat UI' }))
     await act(async () => {})
     expect(mocks.runCliChatResume).toHaveBeenCalledWith(source)
     expect(mocks.listSessions).not.toHaveBeenCalled()
@@ -150,8 +150,8 @@ it('keeps an accepted native action visible with shared disabled spinner feedbac
     mocks.pendingListeners.forEach((listener) => listener())
   })
   await renderItems('orca-chat-1')
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to Terminal' }))
-  const item = screen.getByRole('menuitem', { name: 'Switch to Terminal' })
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to Terminal Agent' }))
+  const item = screen.getByRole('menuitem', { name: 'Switch to Terminal Agent' })
   expect(item.getAttribute('aria-busy')).toBe('true')
   expect(item.getAttribute('data-disabled')).not.toBeNull()
   expect(item.querySelector('.animate-spin')).not.toBeNull()

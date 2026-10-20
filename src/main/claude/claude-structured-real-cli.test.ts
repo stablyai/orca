@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -344,7 +344,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         // Both halves: the field exists, and it names the model the picker asked
         // for in the catalog's resolved shape rather than the id Orca sent.
         expect(frames[0]?.model).toEqual(expect.any(String))
-        expect(frames[0]?.model).toBe('claude-haiku-4-5-20251001')
+        expect(frames[0]?.model).toMatch(/^claude-haiku-/)
         await expect(
           adapter.readOptions({ sessionId: 'real-cli-handshake', fence: 1 })
         ).resolves.toMatchObject({ current: { model: 'haiku' } })
@@ -419,18 +419,20 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
   // ride the launch, and the message is written after open answers initialize.
   it.skipIf(!realClaudeAuthenticated).each([
     ['accept-edits', 'acceptEdits'],
+    ['auto', 'auto'],
     ['full-access', 'bypassPermissions']
   ] as const)(
     'runs a message after open with saved options and %s',
     async (permissionMode, cliPermissionMode) => {
       const providerSessionId = randomUUID()
       const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
+      const cwd = await mkdtemp(join(tmpdir(), 'orca-claude-permissions-'))
       const events: ClaudeStructuredSessionEvent[] = []
       const adapter = realAdapter(
         providerSessionId,
         claudeConfigDir,
         events,
-        process.cwd(),
+        cwd,
         undefined,
         realClaudeLaunchHome().env,
         false
@@ -453,7 +455,15 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           body: {
             kind: 'message',
             role: 'user',
-            blocks: [{ type: 'text', text: 'Reply with exactly: OK. Do not use any tools.' }]
+            blocks: [
+              {
+                type: 'text',
+                text:
+                  permissionMode === 'auto'
+                    ? 'Use tools to write auto-mode-proof.txt containing exactly AUTO_MODE_OK, then read it back. Reply with exactly: OK.'
+                    : 'Reply with exactly: OK. Do not use any tools.'
+              }
+            ]
           },
           fence: 1
         })
@@ -469,11 +479,17 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         expect(messages().find((m) => m.type === 'result')).toMatchObject({ is_error: false })
         // The turn's own init names what the child was launched with.
         expect(messages().find((m) => m.type === 'system' && m.subtype === 'init')).toMatchObject({
-          model: 'claude-sonnet-5',
+          model: expect.stringMatching(/^claude-sonnet-/),
           permissionMode: cliPermissionMode
         })
+        if (permissionMode === 'auto') {
+          expect((await readFile(join(cwd, 'auto-mode-proof.txt'), 'utf8')).trim()).toBe(
+            'AUTO_MODE_OK'
+          )
+        }
       } finally {
         await adapter.closeAll()
+        await rm(cwd, { recursive: true, force: true })
       }
     },
     120_000

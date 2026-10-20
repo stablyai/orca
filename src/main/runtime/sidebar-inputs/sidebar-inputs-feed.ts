@@ -149,7 +149,8 @@ class FeedSession {
       return this.pins.page(params.pageToken) ?? reset()
     }
     for (const domain of this.domains) {
-      if (domain.rereadOnRead) {
+      // A failed read leaves its domain dirty but unmarked; marking it makes this read retry it.
+      if (domain.rereadOnRead || this.dirty.has(domain.name)) {
         this.markDirty(domain.name)
       }
     }
@@ -193,7 +194,7 @@ class FeedSession {
     this.marks += 1
   }
 
-  /** Resolves once everything dirty at the call is published, waiting on at most two flushes. */
+  /** Resolves once everything dirty at the call has been read, waiting on at most two flushes. */
   private async flushDirty(): Promise<void> {
     if (this.timer) {
       clearTimeout(this.timer)
@@ -221,7 +222,13 @@ class FeedSession {
     }
     const changes: FeedRevisionChanges = new Map()
     due.forEach((domain, index) => {
-      const changed = this.publish(domain.name, reads[index])
+      const read = reads[index]
+      if (!read) {
+        // Unmarked, so the next flush or phone read retries it but nothing schedules a retry.
+        this.dirty.add(domain.name)
+        return
+      }
+      const changed = this.publish(domain.name, read)
       if (changed.size > 0) {
         changes.set(domain.name, changed)
       }
@@ -237,12 +244,9 @@ class FeedSession {
     }
   }
 
-  /** Replaces a domain's published entities; returns what changed. A failed read changes nothing. */
-  private publish(name: string, read: Map<string, string> | null): Map<string, FeedEntity | null> {
+  /** Replaces a domain's published entities; returns what changed. */
+  private publish(name: string, read: Map<string, string>): Map<string, FeedEntity | null> {
     const changed = new Map<string, FeedEntity | null>()
-    if (!read) {
-      return changed
-    }
     const before = this.published.get(name) ?? new Map<string, FeedEntity>()
     const after = new Map<string, FeedEntity>()
     for (const [key, json] of read) {
@@ -320,7 +324,7 @@ async function readDomain(domain: SidebarInputsFeedDomain): Promise<Map<string, 
     }
     return entities
   } catch (error) {
-    // The domain keeps what it last published; its next change or read tries again.
+    // The domain keeps what it last published; the next flush or phone read tries again.
     console.warn(`[sidebar-inputs-feed] could not read ${domain.name}`, error)
     return null
   }

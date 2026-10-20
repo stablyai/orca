@@ -6,6 +6,10 @@ import {
 import { buildExecutionHostRegistry } from '../execution-host-registry'
 import type { FolderWorkspace } from '../folder-workspace-types'
 import type { Repo } from '../repo-types'
+import {
+  getWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../worktree/host-qualified-identity'
 import type { Worktree } from '../worktree/types'
 import type { HostSectionOption } from './host-section-rows'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
@@ -85,11 +89,40 @@ export function indexSidebarFeed(
   }
 }
 
-/** The ids in the owning hosts' stamp order for the sort mode; reads no clock. */
-export function rankSidebarFeedWorktrees(index: SidebarFeedIndex, sortBy: SortBy): string[] {
+/** Host identities in the owning hosts' stamp order for the sort mode; reads no clock. */
+export function rankSidebarFeedWorktrees(
+  index: SidebarFeedIndex,
+  sortBy: SortBy
+): HostScopedWorktreeKey[] {
   return sortWorktreesByStamps(
     index.worktrees.filter((worktree) => !worktree.isArchived),
     sortBy,
     index.repoMap
-  ).map((worktree) => worktree.id)
+  ).map(getWorktreeHostIdentity)
+}
+
+/**
+ * Presentation only: `live` with each workspace that `heldFrom` also lists keeping the Recent
+ * stamp it had there, so project sections ordered by Recent hold still. New rows keep theirs.
+ */
+export function withHeldProjectRecency(
+  live: SidebarFeedIndex,
+  heldFrom: SidebarFeedIndex
+): SidebarFeedIndex {
+  const heldAt = new Map(
+    heldFrom.worktrees.map((worktree) => [
+      getWorktreeHostIdentity(worktree),
+      worktree.lastActivityAt
+    ])
+  )
+  let changed = false
+  const worktrees = live.worktrees.map((worktree) => {
+    const lastActivityAt = heldAt.get(getWorktreeHostIdentity(worktree)) ?? worktree.lastActivityAt
+    if (lastActivityAt === worktree.lastActivityAt) {
+      return worktree
+    }
+    changed = true
+    return { ...worktree, lastActivityAt }
+  })
+  return changed ? { ...live, worktrees } : live
 }

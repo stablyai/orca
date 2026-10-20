@@ -3,7 +3,10 @@ import { browserDownloadDestinationReservations } from './browser-download-desti
 import { isWorkspaceDocPageId } from './doc-preview-guest-policy'
 import type { BrowserGuestRegistration } from './browser-manager-types'
 import { BrowserManagerGuestPolicy } from './browser-manager-guest-policy'
-import { cancelBrowserExternalAppRequests } from './browser-external-app-launch'
+import {
+  cancelBrowserPagePrompts,
+  showBrowserPagePromptsAwaitingRegistration
+} from './browser-page-prompts'
 
 export abstract class BrowserManagerRegistration extends BrowserManagerGuestPolicy {
   registerGuest(
@@ -78,6 +81,10 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.flushPendingPermissionEvents(browserTabId, webContentsId)
     this.flushPendingPopupEvents(browserTabId, webContentsId)
     this.flushPendingDownloadRequests(browserTabId, webContentsId)
+    showBrowserPagePromptsAwaitingRegistration(
+      webContentsId,
+      this.getRendererContextForGuest(webContentsId)
+    )
     return true
   }
 
@@ -93,7 +100,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     }
     // Why: teardown mid-grab must cancel it so the renderer gets a signal, not a dangling Promise.
     this.cancelGrabOp(browserTabId, 'evicted')
-    cancelBrowserExternalAppRequests(browserTabId)
+    cancelBrowserPagePrompts(browserTabId)
 
     // Why: remove attachGuestPolicies listeners so their guest-WebContents closures don't block GC.
     const guestWebContentsId = this.webContentsIdByTabId.get(browserTabId)

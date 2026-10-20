@@ -22,6 +22,8 @@ export type HostileHostCellCore = {
   id: string
   /** Managed orcad on a fresh host: the runtime target it resolves, and what the deploy does there. */
   managed: ManagedOrcadExpectation
+  /** This computer's Node download is refused and its cache is empty, so only the host can fetch it. */
+  desktopNoEgress?: boolean
 }
 
 export type ManagedOrcadExpectation =
@@ -141,6 +143,16 @@ export const HOSTILE_HOST_CELLS: readonly HostileHostCell[] = [
     id: 'debian10-no-egress',
     dockerfile: DEBIAN_10_LINES,
     noEgress: true,
+    managed: { outcome: 'activated', runtime: 'linux-x64-glibc' }
+  },
+  {
+    // This computer can't reach nodejs.org, so the host downloads the runtime with its own curl.
+    id: 'almalinux8-desktop-no-egress',
+    dockerfile: [
+      `FROM ${ALMALINUX_8}`,
+      'RUN dnf install -y openssh-server procps-ng tar gzip curl && dnf clean all'
+    ],
+    desktopNoEgress: true,
     managed: { outcome: 'activated', runtime: 'linux-x64-glibc' }
   },
   {

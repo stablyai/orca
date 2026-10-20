@@ -49,7 +49,6 @@ import type {
   WorktreeGroupBy
 } from './row-types'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
-import { readFeedLineage } from './sidebar-feed-worktrees'
 import { planSidebarRows } from './sidebar-row-plan'
 import type { SortBy } from './smart-sort'
 import { selectVisibleSidebarWorktrees } from './visible-worktrees'
@@ -110,13 +109,15 @@ export type SidebarFeedPlan = {
   hostScoped: boolean
 }
 
-/** Filters, groups and nests the feed's workspaces in `rankedIds` order; collapse comes after. */
+const NO_LINEAGE_MAP: Record<string, WorktreeLineage> = {}
+
+/** Filters, groups and nests the feed's workspaces in `rankedIdentities` order; collapse comes after. */
 export function planSidebarFeedRows(
   domains: SidebarFeedDomains,
   index: SidebarFeedIndex,
   catalog: SidebarFeedCatalog,
   view: SidebarFeedView,
-  rankedIds: readonly string[],
+  rankedIdentities: readonly string[],
   extras: SidebarFeedWindowExtras = {}
 ): SidebarFeedPlan {
   const { repos, projectGroups } = catalog
@@ -124,14 +125,14 @@ export function planSidebarFeedRows(
   const { workspaces, worktrees: allWorktrees, folderWorkspaces, repoMap } = index
   const byIdentity = new Map(workspaces.map((entry) => [entry.identity, entry]))
   const worktreeMap = new Map<string, Worktree>()
-  const ancestorById = new Map<string, Worktree>()
+  const ancestorByIdentity = new Map<string, Worktree>()
   const worktreesByRepo: Record<string, Worktree[]> = {}
   for (const worktree of allWorktrees) {
     if (!worktreeMap.has(worktree.id)) {
       worktreeMap.set(worktree.id, worktree)
     }
     if (!worktree.isArchived) {
-      ancestorById.set(worktree.id, worktree)
+      ancestorByIdentity.set(getWorktreeHostIdentity(worktree), worktree)
     }
     const repoWorktrees = worktreesByRepo[worktree.repoId]
     if (repoWorktrees) {
@@ -140,8 +141,10 @@ export function planSidebarFeedRows(
       worktreesByRepo[worktree.repoId] = [worktree]
     }
   }
-  const lineageById = readFeedLineage(workspaces)
+  // Each row carries its own edge (sidebar-feed-worktrees.ts); an id-keyed map would keep one host's.
+  const lineageById = NO_LINEAGE_MAP
   const retained = new Set(domains.retention?.retainedIds ?? [])
+  const rankByIdentity = new Map(rankedIdentities.map((identity, rank) => [identity, rank]))
   const factsOf = (worktree: Worktree) => byIdentity.get(getWorktreeHostIdentity(worktree))?.facts
   const pairedDeviceIdsByEnvironment = new Map(
     [...domains.pairedServerHosts].flatMap(([hostId, { host }]) => {
@@ -154,8 +157,8 @@ export function planSidebarFeedRows(
 
   const visibleWorktrees = selectVisibleSidebarWorktrees({
     rows: allWorktrees,
-    ancestorById,
-    rankById: new Map(rankedIds.map((id, rank) => [id, rank])),
+    ancestorByIdentity,
+    rankOf: (worktree) => rankByIdentity.get(getWorktreeHostIdentity(worktree)),
     filters: view.filters,
     facts: {
       isArchived: (worktree) => worktree.isArchived,
@@ -174,7 +177,10 @@ export function planSidebarFeedRows(
       isMainWorktree: (worktree) => worktree.isMainWorktree,
       isSleeping: (worktree) => {
         const activity = domains.activity.get(worktree.id)
-        return !retained.has(worktree.id) && (!activity || isIdleWorkspaceActivity(activity))
+        return (
+          !retained.has(getWorktreeHostIdentity(worktree)) &&
+          (!activity || isIdleWorkspaceActivity(activity))
+        )
       }
     },
     worktreeLineageById: lineageById,

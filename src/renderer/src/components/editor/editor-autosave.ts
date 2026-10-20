@@ -14,6 +14,14 @@ export const ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT = 'orca:editor-external-file
 export const ORCA_EDITOR_SAVE_FILE_EVENT = 'orca:editor-save-file'
 export const ORCA_EDITOR_SAVE_AND_CLOSE_EVENT = 'orca:save-and-close'
 export const ORCA_EDITOR_FILE_SAVED_EVENT = 'orca:editor-file-saved'
+// Why: a sibling's baseline moved without its cached text, so the panel drops that cache.
+export const ORCA_EDITOR_FILE_CACHE_STALE_EVENT = 'orca:editor-file-cache-stale'
+
+export function notifyEditorFileCacheStale(fileId: string): void {
+  window.dispatchEvent(
+    new CustomEvent<{ fileId: string }>(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, { detail: { fileId } })
+  )
+}
 export const ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT = 'orca:editor-request-cmd-save'
 export const ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT = 'orca:editor-request-file-close'
 
@@ -38,6 +46,16 @@ export type EditorSaveQuiesceDetail = EditorSaveQuiesceTarget & {
 export type EditorSaveFileTarget = {
   fileId: string
   fallbackContent?: string
+  /** Only the conflict banner's Overwrite sets this. */
+  overwrite?: true
+  /** A save sent from the mobile app; its refusal is reported to mobile, not the desktop banner. */
+  origin?: 'mobile'
+}
+
+export type EditorSaveAndCloseDetail = {
+  fileId: string
+  /** Called at once when the tab stays open, so a waiting dialog needn't time out. */
+  onNotClosed?: (reason: 'blocked-stale' | 'not-saved') => void
 }
 
 export type EditorSaveFileDetail = EditorSaveFileTarget & {

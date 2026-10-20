@@ -1,4 +1,3 @@
-import { AppState } from 'react-native'
 import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
 import type { RpcClient } from '../transport/rpc-client'
 import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-reader'
@@ -8,14 +7,22 @@ const WORKTREE_REFRESH_MS = 3000
 type WorktreeRefreshOptions = { allowDuringModal?: boolean; queueIfInFlight?: boolean }
 type RepoRefreshOptions = { force?: boolean; queueIfInFlight?: boolean }
 
+// The part of React Native's AppState this reads, spelled here so importers need no RN types.
+type HostAppState = {
+  currentState: string
+  addEventListener: (type: 'change', listener: (state: string) => void) => { remove: () => void }
+}
+
 type HostWorktreeRefreshArgs = {
-  client: RpcClient
+  client: Pick<RpcClient, 'subscribe'>
   fetchWorktrees: (options?: WorktreeRefreshOptions) => Promise<void>
   fetchRepoMetadata: (options?: RepoRefreshOptions) => Promise<void>
-  /** Re-reads the Workspace options the phone shares with the desktop. */
-  syncViewSettings: (options?: { reconnected?: boolean }) => Promise<void>
+  /** Re-reads the Workspace options the phone shares with the desktop; `resend` retries unanswered changes. */
+  syncViewSettings: (options?: { resend?: boolean }) => Promise<void>
   /** The host's sidebar feed, which replaces the poll: its notices say when anything changed. */
   sidebarFeed?: HostSidebarFeedTriggers | null
+  /** React Native's AppState; passed in so the lifecycle also runs off the device. */
+  appState: HostAppState
 }
 
 export function startHostWorktreeRefresh({
@@ -23,13 +30,14 @@ export function startHostWorktreeRefresh({
   fetchWorktrees,
   fetchRepoMetadata,
   syncViewSettings,
-  sidebarFeed
+  sidebarFeed,
+  appState
 }: HostWorktreeRefreshArgs): () => void {
   let stale = false
   let eventStreamReady = false
 
   const refreshOnForeground = (): void => {
-    if (AppState.currentState !== 'active') {
+    if (appState.currentState !== 'active') {
       return
     }
     sidebarFeed?.refresh()
@@ -37,7 +45,7 @@ export function startHostWorktreeRefresh({
     void fetchRepoMetadata({ queueIfInFlight: true })
   }
 
-  const appStateSubscription = AppState.addEventListener('change', (state) => {
+  const appStateSubscription = appState.addEventListener('change', (state) => {
     if (state === 'active') {
       refreshOnForeground()
     }
@@ -45,7 +53,7 @@ export function startHostWorktreeRefresh({
   const interval = sidebarFeed
     ? null
     : setInterval(() => {
-        if (AppState.currentState !== 'active') {
+        if (appState.currentState !== 'active') {
           return
         }
         void fetchWorktrees()
@@ -73,7 +81,7 @@ export function startHostWorktreeRefresh({
           // Why: client events are not queued while disconnected, so re-read both snapshots after replay.
           void fetchWorktrees()
           void fetchRepoMetadata({ force: true, queueIfInFlight: true })
-          void syncViewSettings({ reconnected: true })
+          void syncViewSettings({ resend: true })
         }
         return
       }
@@ -105,6 +113,9 @@ export function startHostWorktreeRefresh({
   sidebarFeed?.refresh()
   void fetchWorktrees()
   void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+  // Why resend: each connected edge starts a new lifecycle, so a write the last connection lost is
+  // never seen by a replayed ready above.
+  void syncViewSettings({ resend: true })
 
   return () => {
     stale = true

@@ -14,8 +14,6 @@ import { registerFilesystemMutationHandlers } from '../filesystem-mutations'
 import { registerAgentSessionAttachmentUploadHandlers } from '../agent-session-attachment-upload-ipc'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { assertLocalWriteTargetIsRegularFile } from './local-regular-file-read'
-import { runNativeChatScratchSave } from '../../native-chat/native-chat-scratch-folder-lock'
-import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
@@ -58,10 +56,7 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
         }
       }
       await assertLocalWriteTargetIsRegularFile(filePath)
-      const precondition = args.diskPrecondition
-      return runNativeChatScratchSave(getProfileUserDataPath(), filePath, () =>
-        writeLocalTextFileWithDiskPrecondition(filePath, args.content, precondition)
-      )
+      return writeLocalTextFileWithDiskPrecondition(filePath, args.content, args.diskPrecondition)
     }
   )
 

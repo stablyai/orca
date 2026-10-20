@@ -262,7 +262,7 @@ export function orcadTargetBlockerMessage(
       return 'This SSH target is held for this server, but no record explains why. Recover the server before reusing the host.'
     case 'orcad_migration_direct_ssh_repositories':
     case 'orcad_migration_direct_ssh_folder_workspaces':
-      return 'This SSH target owns repositories or folder workspaces. A managed server can only be created on a host with no direct SSH projects yet; keep this host in direct SSH mode.'
+      return 'This SSH target owns repositories or folder workspaces. Orca can only be set up on a host with no direct SSH projects yet; keep this host in direct SSH mode.'
     case 'orcad_migration_direct_ssh_terminal_leases':
       return 'This SSH target still owns terminal sessions. Close them before converting the host.'
     case 'orcad_migration_saved_port_forwards':

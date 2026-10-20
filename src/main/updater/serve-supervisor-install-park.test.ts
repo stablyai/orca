@@ -105,6 +105,8 @@ describe('parkServeSupervisorsForInstall', () => {
     const facts = { now: Date.now(), installerAlive: false, bundleNow: committed!.bundleBefore }
     expect(decideServeParkHold(committed, facts)).toBe('hold')
     expect(decideServeParkHold(committed, { ...facts, bundleNow: 'new' })).toBe('release')
+    // Mid-swap the bundle is briefly absent; that is not a finished install.
+    expect(decideServeParkHold(committed, { ...facts, bundleNow: 'missing' })).toBe('hold')
     expect(
       decideServeParkHold(committed, { ...facts, now: committed!.commitDeadlineAt! + 1 })
     ).toBe('release')

@@ -84,7 +84,12 @@ export type FilterState = WorkspaceRowFilters
 
 /** A repo as Project sections read it: the desktop's catalog record, or one a row stands in for. */
 // repoIcon stays unread wire data until drawn (readMobileRepoIcon).
-export type SectionRepo = ProjectSectionRepo & { badgeColor?: string; repoIcon?: unknown }
+export type SectionRepo = ProjectSectionRepo & {
+  badgeColor?: string
+  repoIcon?: unknown
+  projectGroupId?: string | null
+  projectGroupOrder?: number
+}
 
 /** A workspace the host is still creating; the feed names only its project, null under its own header. */
 export type SectionPendingCreation = { key: string; repoName: string | null }

@@ -24,6 +24,7 @@ const REQUIRED_FILES = [
   'preload/index.js',
   'renderer/index.html',
   'renderer/.vite/manifest.json',
+  'renderer/.orca-web-client-files.json',
   'web/web-index.html',
   'mobile-web/manifest.json',
   'package.json'

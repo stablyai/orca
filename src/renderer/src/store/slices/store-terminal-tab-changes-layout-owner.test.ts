@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
     async (
       _target: unknown,
       _method: string,
-      _params: { command: { viewMode?: string; title?: unknown } }
+      _params: { command: { viewMode?: string; title?: unknown; renames?: { title: unknown }[] } }
     ): Promise<Reply> => ({ ok: true, result: {} })
   )
 }))
@@ -123,12 +123,11 @@ describe('a terminal tab’s own changes in a layout-owner build', () => {
 
     expect(sent()).toEqual([
       {
-        command: expect.objectContaining({
-          type: 'renameTab',
-          tabId: tabBarId,
+        command: {
+          type: 'renameTabs',
           kind: 'generated',
-          title: expect.any(String)
-        })
+          renames: [{ workspace: WORKTREE, tabId: tabBarId, title: expect.any(String) }]
+        }
       }
     ])
     await vi.waitFor(() => expect(row(store).generatedTitle).toBeTruthy())
@@ -137,7 +136,7 @@ describe('a terminal tab’s own changes in a layout-owner build', () => {
   it('sends one agent title while main has not answered the first, as the window keeps it', async () => {
     const { store, tabId } = storeWithTab()
     const second = makePaneKey(tabId, '22222222-2222-4222-8222-222222222222')
-    const titles = () => sent().map((params) => params.command.title)
+    const titles = () => sent().flatMap((params) => params.command.renames!.map((r) => r.title))
 
     store.getState().setGeneratedTabTitleFromAgentPrompt(makePaneKey(tabId, LEAF), 'fix lint')
     store.getState().setGeneratedTabTitleFromAgentPrompt(second, 'write tests')
@@ -262,11 +261,11 @@ describe('a terminal tab’s own changes in a layout-owner build', () => {
 
     expect(sent()).toEqual([
       {
-        command: expect.objectContaining({
-          type: 'renameTab',
+        command: {
+          type: 'renameTabs',
           kind: 'generated',
-          workspace: WORKTREE
-        })
+          renames: [{ workspace: WORKTREE, tabId: expect.any(String), title: expect.any(String) }]
+        }
       }
     ])
     expect(title(remote)).toBeTruthy()
@@ -274,6 +273,84 @@ describe('a terminal tab’s own changes in a layout-owner build', () => {
     answer({ ok: true, result: {} })
     await vi.waitFor(() => expect(title(WORKTREE)).toBeTruthy())
     expect(sent()).toHaveLength(1)
+  })
+
+  it('sends a batch’s titles of several workspaces as one rename, and shows those main gave', async () => {
+    const store = createTestStore()
+    const other = 'repo1::/path/other'
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: WORKTREE, repoId: 'repo1', path: '/path/wt' }),
+          makeWorktree({ id: other, repoId: 'repo1', path: '/path/other' })
+        ]
+      }
+    })
+    const first = store
+      .getState()
+      .createTab(WORKTREE, undefined, undefined, { initialLeafId: LEAF })
+    const second = store.getState().createTab(other, undefined, undefined, { initialLeafId: LEAF })
+    const tabBarId = (worktreeId: string) =>
+      store.getState().unifiedTabsByWorktree[worktreeId]![0]!.id
+    const title = (worktreeId: string) =>
+      store.getState().tabsByWorktree[worktreeId]![0]!.generatedTitle
+    mocks.callRuntimeRpc.mockClear()
+    mocks.callRuntimeRpc.mockResolvedValueOnce({
+      ok: true,
+      result: { untitled: [{ workspace: other, tabId: tabBarId(other), code: 'tab_not_found' }] }
+    })
+    const batch = [
+      { paneKey: makePaneKey(first.id, LEAF), prompt: 'Refactor the auth middleware' },
+      { paneKey: makePaneKey(second.id, LEAF), prompt: 'Fix the login page' }
+    ]
+    let publications = 0
+    const unsubscribe = store.subscribe(() => {
+      publications += 1
+    })
+
+    store.getState().setGeneratedTabTitlesFromAgentPrompts(batch)
+
+    expect(sent()).toEqual([
+      {
+        command: {
+          type: 'renameTabs',
+          kind: 'generated',
+          renames: [
+            { workspace: WORKTREE, tabId: tabBarId(WORKTREE), title: expect.any(String) },
+            { workspace: other, tabId: tabBarId(other), title: expect.any(String) }
+          ]
+        }
+      }
+    ])
+    await vi.waitFor(() => expect(title(WORKTREE)).toBeTruthy())
+    unsubscribe()
+    expect(publications).toBe(1)
+    expect(title(other)).toBeUndefined()
+    expect(console.warn).toHaveBeenCalledWith('[layout-owner] renameTabs refused:', 'tab_not_found')
+    // Settled: the refused tab's next title is sent again.
+    store.getState().setGeneratedTabTitlesFromAgentPrompts([batch[1]!])
+    expect(sent()).toHaveLength(2)
+  })
+
+  it('shows no title when the batch’s call fails, and sends the tab’s next title again', async () => {
+    const { store, tabId } = storeWithTab()
+    mocks.callRuntimeRpc.mockRejectedValueOnce(new Error('main is gone'))
+    const update = { paneKey: makePaneKey(tabId, LEAF), prompt: 'Refactor the auth middleware' }
+
+    store.getState().setGeneratedTabTitlesFromAgentPrompts([update])
+
+    await vi.waitFor(() =>
+      expect(console.warn).toHaveBeenCalledWith(
+        '[layout-owner] renameTabs refused:',
+        'call_failed',
+        'main is gone'
+      )
+    )
+    expect(row(store).generatedTitle).toBeFalsy()
+    store.getState().setGeneratedTabTitlesFromAgentPrompts([update])
+    expect(sent()).toHaveLength(2)
+    await vi.waitFor(() => expect(row(store).generatedTitle).toBeTruthy())
   })
 
   it('acts as today at once for a paired server’s workspace', () => {

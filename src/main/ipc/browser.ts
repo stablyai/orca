@@ -21,10 +21,10 @@ import {
 } from '../browser/browser-webauthn-account-picker'
 import type { BrowserWebAuthnAccountResponse } from '../../shared/browser-webauthn-account'
 import type {
-  BrowserExternalAppResponse,
-  BrowserExternalAppResponseResult
-} from '../../shared/browser-external-app'
-import { respondToBrowserExternalAppRequest } from '../browser/browser-external-app-launch'
+  BrowserPagePromptResponse,
+  BrowserPagePromptResult
+} from '../../shared/browser-page-prompt'
+import { respondToBrowserPagePrompt } from '../browser/browser-page-prompts'
 
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
 
@@ -49,7 +49,7 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:activeTabChanged')
   ipcMain.removeHandler('browser:proceedCertificate')
   ipcMain.removeHandler('browser:respondWebAuthnAccount')
-  ipcMain.removeHandler('browser:respondExternalApp')
+  ipcMain.removeHandler('browser:respondPagePrompt')
 
   const registerGuest = (
     event: Electron.IpcMainInvokeEvent,
@@ -200,12 +200,12 @@ export function registerBrowserHandlers(): void {
   )
 
   ipcMain.handle(
-    'browser:respondExternalApp',
-    (event, response: BrowserExternalAppResponse): Promise<BrowserExternalAppResponseResult> => {
+    'browser:respondPagePrompt',
+    (event, response: BrowserPagePromptResponse): Promise<BrowserPagePromptResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return Promise.resolve('rejected')
       }
-      return respondToBrowserExternalAppRequest(event.sender, response)
+      return respondToBrowserPagePrompt(event.sender, response)
     }
   )
 

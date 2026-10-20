@@ -4,6 +4,7 @@
 // Split out of the translator when that file reached its line budget; the translator still owns
 // the open turn and every collaborator this writes through.
 
+import { writeClaudeTerminalFailure } from './claude-terminal-failure'
 import type { ClaudeContextFacts } from './claude-context-facts'
 import { claudeCommandResultEnd } from './claude-command-turn'
 import type { ClaudeMessageJournalContext } from './claude-message-journaling'
@@ -26,6 +27,7 @@ export type ClaudeResultJournalContext = Pick<
   | 'corrections'
   | 'turn'
   | 'authenticationFailures'
+  | 'usageLimits'
   | 'threadGoal'
 > & {
   prompts: ClaudeJournalPrompts
@@ -44,6 +46,7 @@ export function journalClaudeResult(
     prompts,
     context,
     authenticationFailures,
+    usageLimits,
     threadGoal,
     goalBackgroundWork
   }: ClaudeResultJournalContext,
@@ -55,25 +58,31 @@ export function journalClaudeResult(
   // diagnostic below still runs: a child's failure is reportable even when
   // it ends no turn.
   const settlesTurn = isRootClaudeFrame(message)
+  const endedTurnScope = turn.turnScope
+  const endedTurnIdentity = turn.identity
+  const usageEvidence = turn.usageLimitEvidence
+  const endedTurnStartedAt = turn.startedAt
+  const turnId = settlesTurn ? turn.id : null
+  const leftToStop = turnId !== null && sink.journalStopDecidesTurn?.(turnId, observedAt) === true
+  // Retry owed prompt cancellations before a command result can return.
+  if (settlesTurn) {
+    prompts.retryPendingCancellations()
+  }
   const commandEnd = settlesTurn ? claudeCommandResultEnd(turn, sink, message, observedAt) : null
   if (commandEnd === 'another-input') {
     return
   }
-  // Read before the settle below closes it: the result reports that turn's end.
-  const endedTurnScope = turn.turnScope
-  const endedTurnStartedAt = turn.startedAt
-  // Read before the settle below closes the turn: an error end the journal's Stop rule makes a
-  // person's cancellation is theirs to decide as the end is written (`turnEndAfterStop`).
-  const turnId = settlesTurn ? turn.id : null
-  const leftToStop = turnId !== null && sink.journalStopDecidesTurn?.(turnId, observedAt) === true
+  const failure = claudeResultFailure(message, leftToStop)
+  const usageLimit = settlesTurn
+    ? usageLimits.result(message, failure !== null, usageEvidence)
+    : null
+  if (usageLimit && endedTurnIdentity) {
+    writeClaudeTerminalFailure(sink, endedTurnIdentity, usageLimit)
+  }
   if (settlesTurn) {
-    prompts.retryPendingCancellations()
     turn.suppressReopenOnFailure(message.is_error === true)
     corrections.abandon()
     context.settle(message, commandEnd ?? claudeTurnEndForResult(message, observedAt, leftToStop))
-    // The turn is over. A block still awaiting its final keeps the text the
-    // flush above journaled, but its live state goes: an interrupted turn
-    // would otherwise retain that text for the life of the session.
     streamedBlocks.clear()
     streamedText.settle()
   }
@@ -91,13 +100,15 @@ export function journalClaudeResult(
     sink.publish()
   }
   const kind = claudeProviderFrameKind(message)
-  const failure = claudeResultFailure(message, leftToStop)
+  if (usageLimit && endedTurnIdentity) {
+    return
+  }
   const alreadyShown = authenticationFailures.resultAlreadyShown(message)
   if ((failure || !isSettledClaudeResultKind(kind)) && !alreadyShown) {
     providerFallback.append(
       kind,
       message,
-      failure?.text,
+      usageLimit ?? failure?.text,
       undefined,
       { reportsFailure: failure !== null },
       // A result that settles no turn is a CHILD's result: this

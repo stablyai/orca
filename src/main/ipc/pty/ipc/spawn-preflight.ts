@@ -9,6 +9,7 @@ import {
 import { getProvider } from '../provider/registry'
 import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { keepAbsentBindingForSwap } from './spawn-absent-binding-swap'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
 export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promise<void> {
@@ -47,7 +48,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
           worktreeId: ctx.earlyWorktreeId,
           tabId: ctx.earlyStablePaneOwner.tabId,
           leafId: ctx.earlyStablePaneOwner.leafId,
-          ownsPaneSpawnReservation: true
+          ownsPaneSpawnReservation: true,
+          keepAbsentBinding: keepAbsentBindingForSwap(ctx)
         })
       : null
   ctx.spawnTiming.mark('stable_adoption')

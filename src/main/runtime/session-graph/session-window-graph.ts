@@ -96,6 +96,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
     if (graph.singleGroupWorkspaceGridSize) {
       this.singleGroupWorkspaceGridSize = graph.singleGroupWorkspaceGridSize
     }
+    this.activeGroupViewFacts.merge(graph.activeGroupByWorkspace)
     const graphWasReady = this.graphStatus === 'ready'
     const previousTabs = this.tabs
     const previousLeaves = this.leaves

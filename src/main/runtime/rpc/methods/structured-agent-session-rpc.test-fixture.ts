@@ -21,6 +21,7 @@ import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { resetStructuredAgentSessionClosesBeforeCreateForTests } from './structured-agent-session-close-before-create'
 
 export const SESSION = 'session-alpha'
 export const FINGERPRINT = 'f'.repeat(64)
@@ -210,9 +211,9 @@ export function hostStub(): StructuredAgentSessionHost {
     subscribeTurnCompletions: vi.fn(() => () => undefined),
     unsubscribe: vi.fn()
   })
+  const store = { getOperationRow: vi.fn(() => null), getRecord: vi.fn(() => null) }
   // Not a call: the logger the host hands a runtime caller that reports for it.
-  const logger = recordingStructuredAgentSessionLogger().logger
-  Reflect.set(hostCalls, 'deps', { logger, store: { getOperationRow: vi.fn(() => null) } })
+  Reflect.set(hostCalls, 'deps', { logger: recordingStructuredAgentSessionLogger().logger, store })
   return hostCalls as unknown as StructuredAgentSessionHost
 }
 
@@ -322,6 +323,8 @@ export const STRUCTURED_MOBILE_CLIENT = {
 
 /** Every suite wants the same lifecycle: a fresh stub per test, no host left installed. */
 export function installStructuredHostStub(): void {
+  // A switch-on close remembers the session, refusing its later create; each test starts clean.
+  resetStructuredAgentSessionClosesBeforeCreateForTests()
   setStructuredAgentSessionHost(hostStub())
 }
 

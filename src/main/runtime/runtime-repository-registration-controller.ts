@@ -3,7 +3,6 @@ import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import {
-  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
@@ -18,7 +17,7 @@ import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimePathsEqual } from './runtime-worktree-path-identity'
-import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
+import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -52,19 +51,12 @@ export class RuntimeRepositoryRegistrationController {
     const repoPath = gitInfo?.rootPath ?? path
     const sameHostRepos = store
       .getRepos()
-      .filter((repo) => runtimeRepoMatchesExecutionHost(repo, executionHostId))
+      .filter((repo) => runtimeRepoIsRegistrationCandidate(repo, executionHostId))
     // Why: git's toplevel is already resolved through symlinks, so an alias of a tracked checkout finds it.
     const existing =
       sameHostRepos.find(
         (repo) => runtimePathsEqual(repo.path, path) || runtimePathsEqual(repo.path, repoPath)
-      ) ??
-      (await findProjectAtSameRealPath(
-        // Why: SSH rows name paths on another machine; resolving them here could match an unrelated local dir.
-        sameHostRepos.filter(
-          (repo) => parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'ssh'
-        ),
-        repoPath
-      ))
+      ) ?? (await findProjectAtSameRealPath(sameHostRepos, repoPath))
     if (existing) {
       if (
         existing.executionHostId == null &&
@@ -125,7 +117,15 @@ export class RuntimeRepositoryRegistrationController {
       return { error: 'Parent directory must be an absolute path' }
     }
     const targetPath = join(trimmedParentPath, trimmedName)
-    const existing = store.getRepos().find((repo) => runtimePathsEqual(repo.path, targetPath))
+    // Why host-qualified: an SSH project at this path string is another machine's directory.
+    const findLocalAtTarget = (): Repo | undefined =>
+      store
+        .getRepos()
+        .find(
+          (repo) =>
+            runtimeRepoIsRegistrationCandidate(repo) && runtimePathsEqual(repo.path, targetPath)
+        )
+    const existing = findLocalAtTarget()
     if (existing) {
       return { repo: existing }
     }
@@ -161,7 +161,7 @@ export class RuntimeRepositoryRegistrationController {
         return { error }
       }
     }
-    const raceWinner = store.getRepos().find((repo) => runtimePathsEqual(repo.path, targetPath))
+    const raceWinner = findLocalAtTarget()
     if (raceWinner) {
       return { repo: raceWinner }
     }

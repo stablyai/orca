@@ -236,6 +236,10 @@ export class SshConnection {
   getState(): SshConnectionState {
     return { ...this.state }
   }
+  /** True once disconnect() ran: this session is over, and a new connect makes a new connection. */
+  isDisposed(): boolean {
+    return this.disposed
+  }
   getConnectGeneration(): number {
     return this.connectGeneration
   }

@@ -1,6 +1,5 @@
 /**
- * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone. It never reads
- * the "Active Server" focus setting.
+ * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone.
  */
 import {
   getRepoSshConnectionId,
@@ -23,7 +22,7 @@ import {
 import type { ExecutionHostOwnerMatch } from '../../../shared/worktree-execution-host-resolution'
 import {
   getFloatingWorkspaceOperationRoute,
-  resolveStrictWorktreeOperationRouteResultForHost,
+  resolveWorktreeOperationRouteResultForHost,
   resolveWorktreeOperationRouteResult,
   type WorktreeOperationRouteResolution,
   type WorktreeOperationRouteState
@@ -91,7 +90,7 @@ export function namedHostForOwnerRef(
   )
 }
 
-function resolveRoute(
+export function resolveOwner(
   state: WorktreeOperationRouteState,
   ref: WorkspaceOwnerRef
 ): ExecutionHostOwnerMatch<HostAuthority> {
@@ -107,7 +106,7 @@ function resolveRoute(
   // Why strict: rival servers proxying the same `ssh:t` must not read as a directly dialed target.
   const match = toOwnerMatch(
     hostId
-      ? resolveStrictWorktreeOperationRouteResultForHost(state, ref.workspaceId, hostId)
+      ? resolveWorktreeOperationRouteResultForHost(state, ref.workspaceId, hostId)
       : resolveWorktreeOperationRouteResult(state, ref.workspaceId)
   )
   return match.kind === 'resolved'
@@ -146,36 +145,6 @@ function nestedRepoTargetId(
     toRuntimeExecutionHostId(environmentId)
   )
   return repo ? getRepoSshConnectionId(repo) : null
-}
-
-export function resolveOwner(
-  state: WorktreeOperationRouteState,
-  ref: WorkspaceOwnerRef
-): ExecutionHostOwnerMatch<HostAuthority> {
-  return resolveRoute(focusFreeRouteState(state), ref)
-}
-
-/**
- * Only the fields the route resolvers read, so per-row selectors do not copy the whole store.
- * Focus is the only settings field they read; blanking it makes this focus-free.
- */
-function focusFreeRouteState(state: WorktreeOperationRouteState): {
-  [K in keyof Required<WorktreeOperationRouteState>]: WorktreeOperationRouteState[K]
-} {
-  return {
-    settings: null,
-    runtimeEnvironments: state.runtimeEnvironments,
-    folderWorkspaces: state.folderWorkspaces,
-    projectGroups: state.projectGroups,
-    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
-    activeWorktreeId: state.activeWorktreeId,
-    activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
-    repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-    runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
-    removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds
-  }
 }
 
 /** Two hosts publish this workspace (or contest it), so no host-routed action may pick one. */

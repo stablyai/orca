@@ -35,7 +35,7 @@ export async function resolveOrcadStdioBridge(
 ): Promise<OrcadStdioBridge> {
   const host = await detectRemoteHostPlatform(conn)
   if (!host) {
-    throw new OrcadHostUnsupportedError('This SSH host platform is not supported by managed orcad.')
+    throw new OrcadHostUnsupportedError('Orca’s server doesn’t support this SSH host’s platform.')
   }
   if (!isWindowsRemoteHost(host)) {
     return { command: orcadPosixStdioBridgeCommand(port), mode: 'raw', wrapCommand: true }
@@ -106,7 +106,7 @@ export async function checkOrcadStdioBridge(
     }
     const unavailable = (detail: string): Error =>
       new OrcadStdioBridgeUnavailableError(
-        `The SSH host could not run the managed Orca server's stdio bridge: ${detail}`
+        `The SSH host could not run the stdio bridge for this host’s Orca server: ${detail}`
       )
     decoder.on('signal', (signal: OrcadStdioBridgeSignal) => {
       settle(signal === 'no-node' ? unavailable('no pinned Node runtime') : 'running')

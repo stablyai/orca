@@ -63,7 +63,7 @@ defaults:
 jobs:
   operate:
     if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2204
     # A flip back waits for the cell to lease every control: 8-50 minutes, scaled to its controls.
     timeout-minutes: 60
     environment: production

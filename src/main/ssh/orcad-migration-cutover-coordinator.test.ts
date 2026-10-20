@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import type { SshTarget } from '../../shared/ssh-types'
+import type { OrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest'
 import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import {
@@ -13,7 +14,15 @@ import {
   type OrcadMigrationCutoverContext
 } from './orcad-migration-cutover-coordinator'
 import { ORCAD_MIGRATION_DESTINATION_UNSUPPORTED } from './orcad-migration-catalog-client'
-import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-journal'
+import {
+  listOrcadMigrationSourceCutovers,
+  writeOrcadMigrationSourceCutover
+} from './orcad-migration-cutover-journal'
+import {
+  assertOrcadMigrationRequestFits,
+  createOrcadMigrationManifest
+} from './orcad-migration-manifest-export'
+import { MAX_ORCAD_MIGRATION_MANIFEST_BYTES } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { fenceOrcadMigrationSource } from './orcad-migration-source-fence'
 import { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 import { fakeOrcadMigrationDestination as fakeDestination } from './orcad-migration-destination-fake'
@@ -256,5 +265,100 @@ describe('migration cutover coordinator', () => {
       'orcad_migration_destination_state_mismatch'
     )
     expect(h.journal()?.phase).toBe('source-fenced')
+  })
+
+  describe('a journal fenced before #30836 on a manifest no request can carry', () => {
+    async function stuck(stagedByOlderBuild = false) {
+      const h = await setup()
+      const cutover = h.journal()!
+      const target = {
+        ...h.store.getSshTarget(TARGET.id)!,
+        generation: cutover.sshTargetGeneration
+      }
+      const exportFor = () =>
+        createOrcadMigrationManifest(h.store, target, {
+          migrationId: cutover.migrationId,
+          destinationEnvironmentId: cutover.destinationEnvironmentId
+        })
+      const baseline = JSON.stringify(exportFor()).length
+      // Under the export cap, over the sealed-frame request budget.
+      h.store.updateRepo(h.store.getRepo('repo-1')!, {
+        displayName: 'x'.repeat(MAX_ORCAD_MIGRATION_MANIFEST_BYTES - 200 - baseline)
+      })
+      const manifest = exportFor()
+      expect(() => assertOrcadMigrationRequestFits({ manifest })).toThrow(
+        /orcad_migration_manifest_too_large/
+      )
+      writeOrcadMigrationSourceCutover(h.context.userDataPath, {
+        ...cutover,
+        manifestSha256: manifest.manifestSha256,
+        manifest
+      })
+      if (stagedByOlderBuild) {
+        // A build before the client-side size check sent it whole, and the frame fit.
+        await h.destination.stage(manifest)
+      }
+      // As the real client does: every request that carries the manifest refuses unsent.
+      const refuseUnsent =
+        <T>(real: (sent: OrcadMigrationManifest) => Promise<T>) =>
+        async (sent: OrcadMigrationManifest): Promise<T> => {
+          assertOrcadMigrationRequestFits({ manifest: sent })
+          return real(sent)
+        }
+      const d = h.destination
+      d.readState.mockImplementation(refuseUnsent(d.readState.getMockImplementation()!))
+      d.stage.mockImplementation(refuseUnsent(d.stage.getMockImplementation()!))
+      d.commit.mockImplementation(refuseUnsent(d.commit.getMockImplementation()!))
+      d.abort.mockImplementation(refuseUnsent(d.abort.getMockImplementation()!))
+      return { ...h, manifest }
+    }
+
+    it('releases the fence once the server, asked by reference, proves it holds nothing', async () => {
+      const h = await stuck()
+      await expect(abortOrcadMigrationCutover(h.context, h.migrationId)).resolves.toEqual({
+        outcome: 'released',
+        evidence: 'catalog-absent'
+      })
+      expect(h.destination.abortByReference).toHaveBeenCalledWith(h.manifest)
+      expect(h.owner()).toBeNull()
+      expect(h.journal()).toBeUndefined()
+    })
+
+    it('aborts, by reference, a stage an older build delivered whole', async () => {
+      const h = await stuck(true)
+      await expect(abortOrcadMigrationCutover(h.context, h.migrationId)).resolves.toMatchObject({
+        outcome: 'released'
+      })
+      await expect(h.destination.abortByReference.mock.results[0]?.value).resolves.toMatchObject({
+        state: 'absent',
+        aborted: true
+      })
+      expect(h.owner()).toBeNull()
+    })
+
+    it('keeps the fence when the server cannot answer by reference', async () => {
+      const h = await stuck()
+      h.destination.abortByReference.mockRejectedValueOnce(new Error('update required'))
+      await expect(abortOrcadMigrationCutover(h.context, h.migrationId)).rejects.toThrow(
+        'update required'
+      )
+      expect(h.owner()).toBe('env-1')
+      expect(h.journal()?.migrationId).toBe(h.migrationId)
+    })
+
+    it('never releases a server that already committed it', async () => {
+      const h = await stuck()
+      h.destination.abortByReference.mockResolvedValueOnce({
+        migrationId: h.migrationId,
+        manifestSha256: h.manifest.manifestSha256,
+        state: 'committed',
+        aborted: false
+      })
+      await expect(abortOrcadMigrationCutover(h.context, h.migrationId)).resolves.toMatchObject({
+        outcome: 'refused',
+        code: 'orcad_migration_committed_source_cannot_be_released'
+      })
+      expect(h.owner()).toBe('env-1')
+    })
   })
 })

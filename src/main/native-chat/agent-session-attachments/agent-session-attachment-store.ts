@@ -1,10 +1,12 @@
-// The server-owned store for files a client attaches to a structured chat.
+// The host-owned store for files a client attaches to a structured chat: a paired server's for its
+// clients, and this machine's for its own local chats' pastes.
 //
 // `<root>/<upload id>/<original file name>`: one directory per upload keeps the user's file name
 // intact (agents read meaning into it) without two uploads colliding. Bytes land in a hidden part
 // file and are renamed into place on commit, so a stored name is always complete. Which chats hold
 // an upload is recorded by the message that names it (`agent-session-attachment-claims.ts`).
 
+import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import {
@@ -152,6 +154,23 @@ export class AgentSessionAttachmentStore {
     } finally {
       this.uploads.delete(args.uploadId)
     }
+  }
+
+  /** Stores bytes this process already holds as one committed upload; returns its path. Not in
+   *  flight meanwhile: the sweep leaves a folder this new alone for an hour. */
+  async storeFile(name: string, bytes: Buffer): Promise<string> {
+    const uploadDir = join(this.rootDir, randomUUID())
+    const finalPath = join(uploadDir, sanitizeAgentSessionAttachmentName(name))
+    try {
+      await mkdir(uploadDir, { recursive: true })
+      const partPath = join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+      await writeFile(partPath, bytes, { flag: 'wx' })
+      await renameFileWithWindowsRetryAsync(partPath, finalPath)
+    } catch (error) {
+      await removeQuietly(uploadDir)
+      throw error
+    }
+    return finalPath
   }
 
   async abortUpload(args: { callerKey: string; uploadId: string }): Promise<{ aborted: true }> {

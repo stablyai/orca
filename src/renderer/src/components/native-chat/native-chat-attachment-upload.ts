@@ -38,7 +38,8 @@ export type NativeChatRuntimeSessionAttachmentOwner = {
 }
 
 export type NativeChatAttachmentOwner =
-  | { kind: 'local' }
+  /** `structuredSessionId`: a structured chat on this machine, whose sends claim its pastes. */
+  | { kind: 'local'; structuredSessionId?: string }
   | NativeChatRuntimeSessionAttachmentOwner
   /** Refuses client files: a terminal-backed chat on a paired server (its agent may run on that
    *  server's SSH or WSL host, which the server's store cannot reach), or an `ssh:` host, which

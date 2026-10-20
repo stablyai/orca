@@ -114,7 +114,7 @@ export function NativeChatUpgradeTipDialog({
                   )}
                   action={translate(
                     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-                    'Switch to Chat'
+                    'Resume in New Chat'
                   )}
                 />
                 <ActionLine
@@ -126,7 +126,7 @@ export function NativeChatUpgradeTipDialog({
                   )}
                   action={translate(
                     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
-                    'Switch to Terminal'
+                    'Resume in New Terminal'
                   )}
                 />
               </span>

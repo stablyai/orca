@@ -290,7 +290,9 @@ describe('CI dependency download caches', () => {
     ).jobs
     const warmer = platformJobs['warm-windows'].steps.find((step) => step.uses === installer)
     expect(action.inputs['cache-pnpm-store'].default).toBe('true')
-    expect(persistence.with['cache-pnpm-store']).toBe("${{ runner.os != 'Windows' }}")
+    expect(persistence.with['cache-pnpm-store']).toBe(
+      "${{ !inputs.build_template && runner.os != 'Windows' }}"
+    )
     expect(ssh.with['cache-pnpm-store']).toBe('false')
     expect(warmer.with['cache-pnpm-store']).toBe('false')
     expect(warmer.with['native-runtime']).toBe('node')

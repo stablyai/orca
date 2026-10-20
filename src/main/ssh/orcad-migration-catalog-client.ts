@@ -255,7 +255,7 @@ async function request(
   return response.result
 }
 
-async function sendSupportedMigrationRequest(
+export async function sendSupportedMigrationRequest(
   pairing: NonNullable<ReturnType<typeof parsePairingCode>>,
   method: string,
   params: unknown,

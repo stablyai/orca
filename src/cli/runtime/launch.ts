@@ -44,7 +44,7 @@ import {
 } from './serve-supervisor-relocation'
 import { serverOnlyServeMessage } from './serve-app-launcher'
 import { isSupervisedSpawnHeld } from './serve-supervised-stop'
-import { openServeBundlePark } from './serve-bundle-park'
+import { openServeBundlePark } from '../../shared/serve-bundle-park'
 import {
   redactingSpawn,
   shouldRedactSupervisedStdout,

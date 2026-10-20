@@ -12,6 +12,7 @@ import {
   type ClosedTerminalTabSnapshot
 } from '../../recently-closed-tabs'
 import { renameWorktreeLayoutKeys } from '../../tabs/worktree-layout-lifecycle'
+import { renameCombinedDiffViewOwner } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 
 // Every worktree-id-keyed store map the rename path re-keys, so a new `*ByWorktree` map isn't silently missed.
 // Layout maps are re-keyed by renameWorktreeLayoutKeys. Tab-id/file-id-keyed maps are deliberately
@@ -57,6 +58,7 @@ export function buildWorktreeRenameState(
   if (oldWorktreeId === newWorktreeId) {
     return {}
   }
+  renameCombinedDiffViewOwner(oldWorktreeId, newWorktreeId)
   const renamed: Record<string, unknown> = {}
   const renameKey = <T>(
     key: keyof AppState,

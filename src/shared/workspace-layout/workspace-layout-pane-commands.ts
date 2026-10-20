@@ -175,6 +175,9 @@ export function movePaneToNewTab(
   }
   const { leafId } = command
   const workspace = bindDetachedLeaf(model.workspaces[command.workspace]!, leafId, detach)
+  // An unbound pane's shell starts in the new tab, so it starts in the pane's folder.
+  const startupCwd =
+    (!workspace.leaves?.[leafId]?.ptyId && detach?.startupCwd) || tab.terminal.startupCwd
   const id = detach?.tabId ?? context.mintId()
   const terminals = workspace.tabs.flatMap((entry) => (entry.kind === 'terminal' ? [entry] : []))
   const ordinal = getNextTerminalOrdinal(
@@ -191,7 +194,7 @@ export function movePaneToNewTab(
     kind: 'terminal',
     terminal: {
       defaultTitle: `Terminal ${ordinal}`,
-      ...(tab.terminal.startupCwd ? { startupCwd: tab.terminal.startupCwd } : {}),
+      ...(startupCwd ? { startupCwd } : {}),
       ...(tab.terminal.shellOverride ? { shellOverride: tab.terminal.shellOverride } : {})
     },
     panes: {

@@ -21,7 +21,7 @@ import type { AgentLaunchWorkspaceFactory } from '../../../agent-launch/agent-la
 import { combineLaunchWarnings } from '../../../agent-launch/agent-launch-warnings'
 import type { RpcContext } from '../core'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
-import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
+import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchFolderWorkspaceCreator } from './agent-launch-folder-workspace-creation'
@@ -61,7 +61,7 @@ export function agentLaunchWorkspaceFactory(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: already validated by `AgentLaunch`; the executor only removed the reserved agent fields, so the rest of the payload is the parsed shape.
       const params = create as WorktreeCreateParams
       const { runtime } = context
-      const repo = await runtime.showRepo(params.repo)
+      const repo = await runtime.showRepo(worktreeCreateRepoSelector(params))
       const automationProvenance = resolveAutomationWorkspaceProvenance({
         authority: runtime,
         repoSelector: params.repo,

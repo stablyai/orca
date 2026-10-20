@@ -23,7 +23,11 @@ const DELIBERATE_CHANGES: Record<string, string | null> = {
   'single focus | folder:group-twin-folder': 'ambiguous',
   // B: two servers contest the selected SSH host, so spawn refuses and teardown must too.
   'active ssh:box | rival-repo::wt': 'ambiguous',
-  'active ssh:box | conflict-repo::wt': 'ambiguous'
+  'active ssh:box | conflict-repo::wt': 'ambiguous',
+  // An unstamped row is this machine's; the Active Server focus never claims its PTYs.
+  'single focus | legacy-repo::wt': null,
+  'single focus | folder:unstamped-folder': null,
+  'single focus | folder:missing-folder': null
 }
 
 describe('resolveTerminalPtyOwner acceptance', () => {

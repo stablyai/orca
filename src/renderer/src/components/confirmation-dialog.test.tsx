@@ -165,4 +165,32 @@ describe('ConfirmationDialogProvider', () => {
       'unchecked'
     )
   })
+
+  it('confirms typed fields with Enter and clears them for the next prompt', async () => {
+    const onConfirmed = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 'Sign in',
+      fields: {
+        inputs: [
+          { id: 'username', label: 'Username' },
+          { id: 'password', label: 'Password', type: 'password' }
+        ],
+        onConfirmed
+      }
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await waitFor(() => expect(screen.getByLabelText('Username')).toHaveFocus())
+    await userEvent.keyboard('qa')
+    await userEvent.type(screen.getByLabelText('Password'), 'hunter2{Enter}')
+
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
+    expect(onConfirmed).toHaveBeenCalledWith({ username: 'qa', password: 'hunter2' })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    expect(await screen.findByLabelText('Password')).toHaveValue('')
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(onSettled).toHaveBeenLastCalledWith(false))
+    expect(onConfirmed).toHaveBeenCalledTimes(1)
+  })
 })

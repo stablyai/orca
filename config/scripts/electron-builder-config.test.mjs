@@ -26,6 +26,7 @@ describe('electron-builder config', () => {
       expect.arrayContaining([
         '!src{,/**/*}',
         '!config{,/**/*}',
+        '!cloud{,/**/*}',
         '!docs{,/**/*}',
         '!mobile{,/**/*}',
         '!native{,/**/*}',
@@ -82,6 +83,10 @@ describe('electron-builder config', () => {
       expect(packs(toolingPath)).toBe(false)
     }
     expect(packs('out/main/index.js')).toBe(true)
+    expect(packs('out/web/web-index.html')).toBe(false)
+    expect(packs('out/web/assets/shared.js')).toBe(false)
+    expect(packs('out/renderer/web-index.html')).toBe(true)
+    expect(packs('out/renderer/.orca-web-client-files.json')).toBe(true)
   })
 
   it.each(['file', 'directory'])('keeps a root notes %s out of app.asar', async (kind) => {
@@ -424,8 +429,9 @@ describe('electron-builder config', () => {
     )
     const isUnpacked = matcher.createFilter()
     for (const webPath of [
-      'out/web/web-index.html',
-      'out/web/assets/index-abc123.js',
+      'out/renderer/web-index.html',
+      'out/renderer/assets/index-abc123.js',
+      'out/renderer/.orca-web-client-files.json',
       'out/mobile-web/manifest.json',
       'out/mobile-web/assets/index-abc123.js'
     ]) {
@@ -607,6 +613,24 @@ describe('arch-aware packaging guard', () => {
       } else {
         process.env.ORCA_LAYOUT_OWNER = previous
       }
+    }
+  })
+
+  it('refuses to package an orcad template marked by a dark test build', async () => {
+    const templateDir = join(scratch, 'orcad-template')
+    await mkdir(templateDir, { recursive: true })
+    await writeFile(join(templateDir, 'ORCA_LAYOUT_OWNER_MAIN'), 'dark\n')
+    try {
+      expect(() =>
+        electronBuilderConfig.beforePack(
+          { electronPlatformName: process.platform, arch: HOST_ARCH },
+          bundleDir,
+          () => undefined,
+          templateDir
+        )
+      ).toThrow(`${templateDir} holds an ORCA_LAYOUT_OWNER=main build`)
+    } finally {
+      await rm(templateDir, { recursive: true, force: true })
     }
   })
 

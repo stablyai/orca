@@ -26,14 +26,20 @@ export type WslOrcadIncumbent = {
   census: OrcadTerminalCensus
   /** The incumbent's proven readiness; null when it could not be started or proven. */
   readiness: ServeReadiness | null
-  /** Counts again (no wake) just before activation stops the incumbent; null without readiness. */
-  recount: (() => Promise<OrcadTerminalCensus>) | null
+  /** Counts again (no wake) just before activation stops the incumbent; never zero unread. */
+  recount: () => Promise<OrcadTerminalCensus>
 }
 
 const UNVERIFIABLE: OrcadTerminalCensus = {
   liveSessions: null,
   startedSinceActivation: null,
   daemonProtocolVersion: null
+}
+
+const UNREADABLE: WslOrcadIncumbent = {
+  census: UNVERIFIABLE,
+  readiness: null,
+  recount: async () => UNVERIFIABLE
 }
 
 export type WslOrcadIncumbentDependencies = {
@@ -76,7 +82,7 @@ export async function readWslOrcadIncumbent(
   const record = args.context.activationRecord
   const activatedAt = record.activatedAt ? Date.parse(record.activatedAt) : Number.NaN
   if (!record.active || !Number.isFinite(activatedAt) || activatedAt < 0) {
-    return { census: UNVERIFIABLE, readiness: null, recount: null }
+    return UNREADABLE
   }
   let readiness: ServeReadiness
   try {
@@ -93,10 +99,10 @@ export async function readWslOrcadIncumbent(
         }
       )
     } else {
-      return { census: UNVERIFIABLE, readiness: null, recount: null }
+      return UNREADABLE
     }
   } catch {
-    return { census: UNVERIFIABLE, readiness: null, recount: null }
+    return UNREADABLE
   }
   const recount = (): Promise<OrcadTerminalCensus> =>
     countIncumbentTerminals(args, readiness, activatedAt, dependencies)

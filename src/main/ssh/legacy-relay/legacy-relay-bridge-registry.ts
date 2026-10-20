@@ -27,6 +27,7 @@ import {
   listedAppPtyIds,
   listedLeasesByRelayId
 } from './legacy-relay-bridge-leases'
+import { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
 import { PtyExitProof, type PtyRetirementEvidence } from '../../pty-exit-proof'
 
 /** How long a connect waits for the first look at its relays before publishing the host. */
@@ -65,6 +66,8 @@ const bridges = new Map<string, LegacyRelayTargetBridge>()
  */
 const heldPanes = new Map<string, LegacyRelayBridgedPane[]>()
 const paneStops = new Map<string, LegacyRelayPaneStops>()
+/** Each target's relay-id owners, which outlive a bridge: a reconnect must not forget them. */
+const paneOwners = new Map<string, LegacyRelayPaneOwners>()
 
 export function installLegacyRelayBridge(next: LegacyRelayBridgeHost | null): void {
   for (const bridge of bridges.values()) {
@@ -72,6 +75,7 @@ export function installLegacyRelayBridge(next: LegacyRelayBridgeHost | null): vo
   }
   bridges.clear()
   heldPanes.clear()
+  paneOwners.clear()
   paneStops.forEach((stops) => stops.dispose())
   paneStops.clear()
   watchDailyRelayActivity(next, () =>
@@ -152,10 +156,17 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
       stopsFor(targetId).exited(ptyId)
       installed.onExit(ptyId, code)
     },
-    onTerminalExited: () => installed.report(targetId, 'terminal_exited', 0)
+    onTerminalExited: () => installed.report(targetId, 'terminal_exited', 0),
+    owners: ownersFor(targetId)
   })
   bridges.set(targetId, bridge)
   return bridge
+}
+
+function ownersFor(targetId: string): LegacyRelayPaneOwners {
+  const owners = paneOwners.get(targetId) ?? new LegacyRelayPaneOwners()
+  paneOwners.set(targetId, owners)
+  return owners
 }
 
 function stopsFor(targetId: string): LegacyRelayPaneStops {
@@ -217,6 +228,7 @@ export function forgetLegacyRelayTarget(targetId: string): void {
   releaseHeldPanes(targetId)
   paneStops.get(targetId)?.dispose()
   paneStops.delete(targetId)
+  paneOwners.delete(targetId)
 }
 
 function releaseHeldPanes(targetId: string): void {

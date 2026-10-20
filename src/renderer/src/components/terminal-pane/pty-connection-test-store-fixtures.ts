@@ -114,9 +114,14 @@ export function buildActiveRuntimeEnvironmentState(
 ): StoreState {
   return {
     ...current,
+    // The client stamps a server's rows on arrival; focus alone never names the owner.
+    repos: current.repos.map((repo) => ({
+      ...repo,
+      executionHostId: repo.executionHostId ?? `runtime:${environmentId}`
+    })),
     settings: {
       ...current.settings,
       activeRuntimeEnvironmentId: environmentId
     }
-  } as StoreState
+  }
 }

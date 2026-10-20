@@ -5,7 +5,8 @@ import {
   includesQualifiedSearchRefs,
   projectRepoSearchRefsForClient
 } from './repo-search-ref-projection'
-import { RepoSelector } from '../../../../shared/rpc-contract/github-repo-target-params'
+import { RepoSelector, RepoShow } from '../../../../shared/rpc-contract/github-repo-target-params'
+import { hostQualifiedRepoSelector } from '../../runtime-repo-selector'
 import {
   projectRepoResultVisibilityForClient,
   projectRepoVisibilityForClient
@@ -172,9 +173,12 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'repo.show',
     permission: 'workspace',
-    params: RepoSelector,
+    params: RepoShow,
     handler: async (params, context) => ({
-      repo: projectRepoVisibilityForClient(await context.runtime.showRepo(params.repo), context)
+      repo: projectRepoVisibilityForClient(
+        await context.runtime.showRepo(hostQualifiedRepoSelector(params.repo, params.repoHostId)),
+        context
+      )
     })
   }),
   defineMethod({

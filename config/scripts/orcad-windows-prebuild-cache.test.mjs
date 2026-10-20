@@ -50,11 +50,14 @@ function fixture(arch = 'x64') {
     ['conpty.node', Buffer.concat([peImage({ arch }), CYGWIN_BREAKAWAY_MARKER])],
     ['conpty_console_list.node', peImage({ arch })],
     ['conpty/conpty.dll', peImage({ arch })],
-    ['conpty/OpenConsole.exe', peImage({ arch })]
+    ['conpty/OpenConsole.exe', peImage({ arch })],
+    ['pty.node', peImage({ arch })],
+    ['winpty.dll', peImage({ arch })],
+    ['winpty-agent.exe', peImage({ arch })]
   ]) {
     write(join(slotDir, file), bytes)
     files[file] = sha256Of(join(slotDir, file))
-    if (file === 'conpty_console_list.node') {
+    if (file !== 'conpty.node' && !file.startsWith('conpty/')) {
       write(join(sourceDir, 'prebuilds', slot, file), bytes)
     }
     if (file.startsWith('conpty/')) {
@@ -119,7 +122,7 @@ describe('Windows server prebuild cache validation', () => {
     f.save()
     expect(() => validateWindowsPrebuildCache(f)).toThrow(/exactly the current ConPTY payload/)
     const extra = fixture()
-    writeFileSync(join(extra.slotDir, 'pty.node'), 'upstream fallback')
+    writeFileSync(join(extra.slotDir, 'conpty.pdb'), 'upstream symbols')
     expect(() => validateWindowsPrebuildCache(extra)).toThrow(/exactly the current ConPTY payload/)
     const missing = fixture()
     rmSync(join(missing.slotDir, 'conpty/OpenConsole.exe'))

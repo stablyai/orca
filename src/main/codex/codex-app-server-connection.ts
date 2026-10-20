@@ -12,6 +12,7 @@ import {
 } from './codex-app-server-session'
 import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
 import { createProviderRecordReader } from '../provider-process/provider-record-reader'
+import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -165,7 +166,12 @@ async function connectCodexAppServer(
       // so only the individual call can carry a deadline.
       const timer = setTimeout(() => {
         dispatcher.timeOutPending(id)
-        reject(new CodexAppServerTimeoutError(`codex app-server ${method} exceeded ${timeoutMs}ms`))
+        reject(
+          withProviderRequestTimeout(
+            new CodexAppServerTimeoutError(`codex app-server ${method} exceeded ${timeoutMs}ms`),
+            { method, timeoutMs }
+          )
+        )
       }, timeoutMs)
       dispatcher.addPending(id, { method, resolve, reject, timer, onReply: options.onReply })
       try {

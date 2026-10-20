@@ -66,12 +66,21 @@ export async function teardownSshTargetTransport(targetId: string): Promise<void
   stopLegacyRelayBridge(targetId)
   // Why first: local listeners must be released before disconnect completes, else an immediate
   // reconnect hits EADDRINUSE.
-  const [forwards, disconnect] = await Promise.allSettled([
+  // A managed tunnel's system-SSH `ssh -L` is its own authenticated process, so the session's
+  // disconnect alone would leave it listening.
+  const [forwards, managedTunnels, disconnect] = await Promise.allSettled([
     portForwardManager?.removeAllForwards(targetId),
+    // Why lazy: the managed tunnel module resolves app paths, which SSH-only callers may lack.
+    import('../../managed-server/lifecycle/orcad-managed-tunnel').then((tunnels) =>
+      tunnels.closeOrcadManagedTunnelsForTarget(targetId)
+    ),
     (async () => connectionManager?.disconnect(targetId))()
   ])
   if (forwards.status === 'rejected') {
     throw forwards.reason
+  }
+  if (managedTunnels.status === 'rejected') {
+    throw managedTunnels.reason
   }
   if (disconnect.status === 'rejected') {
     throw disconnect.reason

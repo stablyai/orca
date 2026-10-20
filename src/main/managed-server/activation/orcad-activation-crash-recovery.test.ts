@@ -82,7 +82,8 @@ const deploy = (): Promise<unknown> =>
     ...slot,
     localOrcadDir: '/local/out/orcad',
     target: 'linux-x64-glibc',
-    census
+    census,
+    recountCensus: async () => census
   })
 const deployFromNewerApp = (): Promise<unknown> =>
   deployOrcad({
@@ -90,6 +91,7 @@ const deployFromNewerApp = (): Promise<unknown> =>
     localOrcadDir: '/local/out/orcad',
     target: 'linux-x64-glibc',
     census,
+    recountCensus: async () => census,
     appVersion: '1.9.0'
   })
 const rollback = (): Promise<unknown> =>

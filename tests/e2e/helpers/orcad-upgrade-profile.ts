@@ -92,6 +92,8 @@ export function seedRelayEraProfile(
     targetId?: string
     /** COMPAT(legacy-relay-bridge): the terminal tab still runs this PTY in the host's relay. */
     relayPtyId?: string
+    /** An unsaved buffer on the editor tab, as hot exit persists it. */
+    draftContent?: string
   } = {}
 ): RelayEraProfile {
   const now = Date.now()
@@ -162,7 +164,8 @@ export function seedRelayEraProfile(
           relativePath: 'README.md',
           worktreeId,
           language: 'markdown',
-          runtimeEnvironmentId: null
+          runtimeEnvironmentId: null,
+          ...(options.draftContent === undefined ? {} : { dirtyDraftContent: options.draftContent })
         }
       ]
     },

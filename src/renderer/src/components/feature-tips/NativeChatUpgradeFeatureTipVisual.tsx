@@ -40,7 +40,7 @@ function getSceneMenus(): DemoMenuItem[][] {
         icon: SquareTerminal,
         label: translate(
           'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
-          'Switch to Terminal'
+          'Resume in New Terminal'
         ),
         highlighted: true
       },
@@ -52,7 +52,7 @@ function getSceneMenus(): DemoMenuItem[][] {
         icon: MessagesSquare,
         label: translate(
           'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-          'Switch to Chat'
+          'Resume in New Chat'
         ),
         highlighted: true
       },

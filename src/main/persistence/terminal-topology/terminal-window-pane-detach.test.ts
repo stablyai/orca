@@ -45,7 +45,8 @@ afterEach(closeMoveTestStores)
 function detach(
   store: Store,
   ptyId: string | null,
-  hostIds: ExecutionHostId[] = ['local']
+  hostIds: ExecutionHostId[] = ['local'],
+  startupCwd?: string
 ): ReturnType<Store['applyLayoutCommand']> {
   return store.applyLayoutCommand(
     {
@@ -53,7 +54,7 @@ function detach(
       workspace: WT,
       tabId: SOURCE,
       leafId: MOVED,
-      windowDetach: { ptyId, tabId: TARGET }
+      windowDetach: { ptyId, tabId: TARGET, ...(startupCwd ? { startupCwd } : {}) }
     },
     hostIds
   )
@@ -163,6 +164,29 @@ describe('a window drag-out through layout.apply', () => {
       })
     ).toBe(true)
     expect(tabsHoldingLeaf(store.getWorkspaceSession(), LEFT)).toEqual([SOURCE])
+  })
+
+  it('starts an unbound pane’s new tab in the folder the window sent', async () => {
+    const store = openStore(newDataFile())
+    await seedSplitSource(store)
+    const seeded = store.getWorkspaceSession()
+    store.setWorkspaceSession({
+      ...seeded,
+      terminalLayoutsByTabId: {
+        [SOURCE]: {
+          ...seeded.terminalLayoutsByTabId[SOURCE]!,
+          ptyIdsByLeafId: { [LEFT]: 'pty-left' }
+        }
+      }
+    })
+
+    await expect(detach(store, null, ['local'], '/wt/app')).resolves.toMatchObject({
+      ok: true,
+      result: { tabId: TARGET, ptyId: null }
+    })
+
+    const target = store.getWorkspaceSession().tabsByWorktree[WT]?.find((tab) => tab.id === TARGET)
+    expect(target?.startupCwd).toBe('/wt/app')
   })
 
   it('refuses a terminal no copy names, and a leaf another tab holds', async () => {

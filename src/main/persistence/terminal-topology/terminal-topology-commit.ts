@@ -157,7 +157,7 @@ export function applyLayout(
  * One `persistence.terminal-topology` span per commit, from admission to the in-memory write.
  * Attributes stay low-cardinality: no pane key, PTY id or path; `refusalOf` returns a fixed code.
  */
-function traced<T>(
+export function traced<T>(
   kind: TerminalTopologyCommitKind,
   mutate: () => DurableProfileStateMutation<T>,
   refusalOf: (value: T) => string | undefined

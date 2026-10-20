@@ -57,7 +57,7 @@ export function useWorktreeContextMenuCommands(args: {
     )
   }, [args])
   const handleTogglePin = useCallback(() => {
-    args.setWorktreesPinnedAndReveal([args.worktree.id], !args.worktree.isPinned)
+    args.setWorktreesPinnedAndReveal([args.worktree], !args.worktree.isPinned)
   }, [args])
   const handleCreateGroupFromRepo = useCallback(() => {
     if (!args.repo) {

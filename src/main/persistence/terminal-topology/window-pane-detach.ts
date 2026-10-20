@@ -71,7 +71,11 @@ export function resolveWindowPaneDetach(
   return {
     command: {
       ...command,
-      windowDetach: { ptyId, tabId: command.windowDetach.tabId ?? randomUUID() }
+      windowDetach: {
+        ...command.windowDetach,
+        ptyId,
+        tabId: command.windowDetach.tabId ?? randomUUID()
+      }
     },
     sourceEntityId
   }

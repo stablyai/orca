@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from 'react'
 import { useSoftKeyboard } from '../platform/keyboard-occlusion'
 import { useTerminalViewportRefit } from '../terminal/terminal-viewport-refit'
-import { removeCustomKey, type CustomKey } from '../components/CustomKeyModal'
+import { removeCustomKey, type CustomKey } from '../terminal/terminal-custom-keys'
 import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-repo'
 import { resolveTabStripScrollOffset } from './tab-strip-scroll'
 import type { MobileSessionLifecycleModel } from './use-mobile-session-lifecycle'

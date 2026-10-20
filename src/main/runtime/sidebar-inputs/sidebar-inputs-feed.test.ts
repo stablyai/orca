@@ -328,6 +328,41 @@ describe('sidebar inputs feed', () => {
     expect(phone.view().rows).toEqual({ a: 1 })
   })
 
+  it('re-reads a failed domain on the next read without retrying on its own', async () => {
+    const host = makeHost()
+    const phone = new TestPhone(host.feed, 'conn-1')
+    phone.refresh()
+    await phone.settle()
+    host.rows.fail(true)
+    host.rows.set('a', 2)
+    await flush()
+    const failedReads = host.rows.reads()
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(host.rows.reads()).toBe(failedReads)
+
+    host.rows.fail(false)
+    phone.refresh()
+    await phone.settle()
+    expect(host.rows.reads()).toBe(failedReads + 1)
+    expect(phone.view()).toEqual(host.truth())
+  })
+
+  it('re-reads a failed domain with the next flush another domain causes', async () => {
+    const host = makeHost()
+    const phone = new TestPhone(host.feed, 'conn-1')
+    phone.refresh()
+    await phone.settle()
+    host.rows.fail(true)
+    host.rows.set('a', 2)
+    await flush()
+    host.rows.fail(false)
+    host.view.set('sort', 'recent')
+    await flush()
+    phone.notice(host.lastEvent())
+    await phone.settle()
+    expect(phone.view()).toEqual(host.truth())
+  })
+
   it('bounds pinned batches, evicting the oldest', async () => {
     const host = makeHost({ a: BIG, b: BIG, c: BIG })
     host.feed.acquire('conn-1')

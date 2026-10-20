@@ -55,10 +55,10 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
       await ensureOrcadManagedTunnel(userDataPath, environmentId)
     },
     ensureServing: (environmentId) => verifyOrcadManagedServing(userDataPath, environmentId),
-    retainCommittedSource: (target) => {
+    retainCommittedSource: async (target) => {
       const head = findOrcadMigrationSourceCutoverForTarget(userDataPath, target.id)
       if (head?.phase === 'destination-committed') {
-        retainOrcadMigrationSource(userDataPath, head.migrationId)
+        await retainOrcadMigrationSource(userDataPath, head.migrationId, store)
       }
     },
     hasTemplate: hasOrcadTemplate,

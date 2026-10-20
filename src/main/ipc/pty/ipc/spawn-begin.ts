@@ -16,7 +16,7 @@ import {
   pendingRuntimePaneCreatesByOwnerKey
 } from '../pane/spawn-reservation'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
-import { excludeReplacedPaneOwner } from '../pane/pane-owner-replacement'
+import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import type { PtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcArgs } from './spawn-types'
 

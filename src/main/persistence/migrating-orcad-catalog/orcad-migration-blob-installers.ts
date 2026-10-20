@@ -3,11 +3,10 @@
  * commits, and an installer after the commit is durable that moves the received blob into live
  * state and deletes it. Kinds without an installer are not advertised, so none arrive.
  */
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { OrcadMigrationBlobKind } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
-import { ORCAD_MIGRATION_EDITOR_DRAFTS_KEY } from '../../../shared/orcad-migration/orcad-migration-editor-drafts'
 import {
   ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS_KEY,
   parseOrcadMigrationTerminalRestoreHintsText,
@@ -102,11 +101,7 @@ export type OrcadMigrationBlobInstall = {
 export function installOrcadMigrationReceivedBlobs(install: OrcadMigrationBlobInstall): void {
   let firstError: unknown = null
   // One kind's failure must not hold back the others; each keeps its own blobs for the retry.
-  for (const installKind of [
-    installTerminalRestoreHints,
-    installShellHistory,
-    releaseEditorDrafts
-  ]) {
+  for (const installKind of [installTerminalRestoreHints, installShellHistory]) {
     try {
       installKind(install)
     } catch (error) {
@@ -131,19 +126,6 @@ function installShellHistory(install: OrcadMigrationBlobInstall): void {
     deferredWorktreeIds: install.deferredShellHistoryWorktreeIds,
     now: install.now
   })
-}
-
-// The drafts landed in the committed session; this file only served a commit retry.
-function releaseEditorDrafts(install: OrcadMigrationBlobInstall): void {
-  const path = getOrcadMigrationReceivedBlobPath(install.root, install.migration, {
-    blobKind: 'editor-drafts',
-    key: ORCAD_MIGRATION_EDITOR_DRAFTS_KEY
-  })
-  if (!existsSync(path)) {
-    return
-  }
-  rmSync(path, { force: true })
-  syncDirectoryDurablySync(dirname(path))
 }
 
 function installTerminalRestoreHints(install: OrcadMigrationBlobInstall): void {

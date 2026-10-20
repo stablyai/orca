@@ -7,7 +7,8 @@ import {
   createFakeEditorDisk,
   createUntitledNoteStore,
   stubEditorWindowWithDisk,
-  type FakeEditorDisk
+  type FakeEditorDisk,
+  withLoadedBaselines
 } from './editor-autosave-controller-test-fixture'
 import { discardEditorFileChangesAndClose } from './discard-editor-file-changes'
 import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
@@ -93,7 +94,7 @@ describe('untitled note save lifecycle', () => {
     ]
   ])('keeps the typed note after %s', async (_route, saveAndClose) => {
     loadFromDisk(store, '')
-    const cleanup = attachEditorAutosaveController(store)
+    const cleanup = attachEditorAutosaveController(withLoadedBaselines(store, disk))
     try {
       typeInto(store, 'my note')
 
@@ -111,7 +112,7 @@ describe('untitled note save lifecycle', () => {
   })
 
   it('deletes the note when its last save emptied it', async () => {
-    const cleanup = attachEditorAutosaveController(store)
+    const cleanup = attachEditorAutosaveController(withLoadedBaselines(store, disk))
     try {
       typeInto(store, 'a')
       await vi.advanceTimersByTimeAsync(1500)
@@ -139,7 +140,7 @@ describe('untitled note save lifecycle', () => {
           }
         })
     )
-    const cleanup = attachEditorAutosaveController(store)
+    const cleanup = attachEditorAutosaveController(withLoadedBaselines(store, disk))
     try {
       typeInto(store, 'my note')
       await vi.advanceTimersByTimeAsync(1500)

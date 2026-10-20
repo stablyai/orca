@@ -5,6 +5,14 @@ import {
   stubShallowSelector,
   stubTooltip
 } from './tab-bar-windows-shell-launch-render-stubs'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const appStoreSnapshot: {
   activeTabId: string | null
@@ -452,6 +460,7 @@ describe('TabBar context menu wiring', () => {
     expect(sortable[0].props.isPinned).toBe(true)
 
     ;(sortable[0].props.onTogglePin as () => void)()
+    await layoutApplyTestTransport.settle()
 
     expect(unpinTabMock).toHaveBeenCalledWith('unified-term-1')
     expect(pinTabMock).not.toHaveBeenCalled()

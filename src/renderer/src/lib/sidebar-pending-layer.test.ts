@@ -35,6 +35,7 @@ function domains(
     pairedServerRows: new Map(serverRows.map((row) => [row.key, row])),
     repoIcons: new Map(),
     desktop: null,
+    projectCatalog: null,
     retention: null
   }
 }

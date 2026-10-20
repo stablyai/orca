@@ -206,6 +206,7 @@
     "google_project_iam_member.github_staging_relay_capacity_mutation",
     "google_project_iam_member.github_staging_relay_capacity_viewer",
     "google_project_iam_member.github_staging_relay_deploy_compute_viewer",
+    "google_project_iam_member.github_staging_relay_deploy_logging_viewer",
     "google_project_iam_member.github_staging_relay_power",
     "google_project_iam_member.push_runtime_cloudsql_client",
     "google_project_iam_member.push_runtime_fcm_admin",

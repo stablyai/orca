@@ -20,6 +20,14 @@ const mocks = vi.hoisted(() => {
     settings
   }
 })
+const layoutOwner = vi.hoisted(() => ({ isMain: false }))
+vi.mock('../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.isMain
+  }
+}))
+// This machine's host closes the chat's tab when asked.
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn(async () => ({})) }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionCreateMessage: mocks.supports
@@ -139,6 +147,7 @@ describe('the first message owned by create', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
+    layoutOwner.isMain = false
     localStorage.clear()
     resetStructuredAgentLaunchRegistryForTests()
     resetStructuredAgentLaunchPersistenceForTests()
@@ -466,17 +475,27 @@ describe('the first message owned by create', () => {
     expect(draft(launch.sessionId)).toBe('opening text')
   })
 
-  it('does not revive a closed conversation reader when create replies late', async () => {
-    const create = deferred<unknown>()
-    mocks.call.mockReturnValue(create.promise)
-    const launch = start()
-    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    expect(cancelStructuredAgentLaunch('workspace-1', launch.sessionId)).toBe(true)
-    create.resolve(created())
-    await expect(launch.launchResult).rejects.toThrow('structured session launch cancelled')
-    expect(findStructuredAgentSessionReadOwner(launch.sessionId, target)).toBeUndefined()
-    expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
-  })
+  it.each([
+    // A window-owned build leaves a cancellation record; this machine's host closes the chat itself.
+    ['a window-owned', false, ['agentSession.create']],
+    ['a layout-owner', true, ['agentSession.close', 'agentSession.create']]
+  ])(
+    'does not revive a closed conversation reader when create replies late, in %s build',
+    async (_build, isMain, methods) => {
+      layoutOwner.isMain = isMain
+      const create = deferred<unknown>()
+      mocks.call.mockImplementation((_target, method) =>
+        method === 'agentSession.create' ? create.promise : Promise.resolve({})
+      )
+      const launch = start()
+      await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+      expect(cancelStructuredAgentLaunch('workspace-1', launch.sessionId)).toBe(true)
+      create.resolve(created())
+      await expect(launch.launchResult).rejects.toThrow('structured session launch cancelled')
+      expect(findStructuredAgentSessionReadOwner(launch.sessionId, target)).toBeUndefined()
+      expect(mocks.call.mock.calls.map(([, method]) => method).sort()).toEqual(methods)
+    }
+  )
 
   it('keeps Retry actionable when a published tab starts an unanswered message confirmation', async () => {
     mocks.call.mockReturnValue(new Promise(() => {}))

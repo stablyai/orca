@@ -30,6 +30,7 @@ export function useWorkItemSourceState(textOnly: boolean, value: string) {
     null
   )
   const [settledLinearUrlQuery, setSettledLinearUrlQuery] = useState<string | null>(null)
+  const [linearReadError, setLinearReadError] = useState<string | null>(null)
   const [jiraLoading, setJiraLoading] = useState(false)
   const [commandValue, setCommandValue] = useState('')
   const repoSlugCacheRef = useRef<Map<string, RepoSlug>>(new Map())
@@ -67,6 +68,8 @@ export function useWorkItemSourceState(textOnly: boolean, value: string) {
     setLinearUrlLoadingFeedbackQuery,
     settledLinearUrlQuery,
     setSettledLinearUrlQuery,
+    linearReadError,
+    setLinearReadError,
     jiraLoading,
     setJiraLoading,
     commandValue,

@@ -111,6 +111,8 @@ export function isProjectRemoteIdentityPending(
 }
 
 const HOST_LOCAL_PROJECT_ID_PREFIX = 'repo:'
+/** A project keyed by its primary Git remote rather than a provider identity. */
+export const GIT_REMOTE_PROJECT_ID_PREFIX = 'git:'
 
 export function getProjectIdentityKey(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
@@ -121,7 +123,7 @@ export function getProjectIdentityKey(
   }
   const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
   if (gitRemoteIdentity) {
-    return `git:${gitRemoteIdentity.canonicalKey}`
+    return `${GIT_REMOTE_PROJECT_ID_PREFIX}${gitRemoteIdentity.canonicalKey}`
   }
   return `${HOST_LOCAL_PROJECT_ID_PREFIX}${repo.id}`
 }

@@ -87,7 +87,7 @@ function resolveEditorOwnerRoute(
   worktreeId: string,
   capturedHostId?: ExecutionHostId | null
 ): WorktreeOperationRoute | null {
-  // Workspace focus cannot replace a file's catalog owner.
+  // Neither workspace focus nor the Active Server focus can replace a file's catalog owner.
   const ownerState = { ...state, activeWorktreeId: null, activeWorkspaceExecutionHostId: null }
   const route = resolveWorktreeOperationRoute(ownerState, worktreeId)
   const scope = parseWorkspaceKey(worktreeId)

@@ -68,6 +68,8 @@ export type NativeChatTextBlock = {
   failure?: AgentSessionFailureFact
   /** On the line about a reply Orca's own stop cut off: why, and the turn it cut. */
   orcaStop?: AgentSessionOrcaStop & { turnItemId?: string }
+  /** On a usage-limit line: the turn the limit ended, which its Continue picks up. */
+  usageLimitTurnItemId?: string
 }
 
 /** A tool invocation by the agent. `input` is the (already-serialized) tool

@@ -8,7 +8,12 @@ import {
   setBrowserTabProfile
 } from './workspace-layout-browser-commands'
 import { applied, refuse, type Applied } from './workspace-layout-command-steps'
-import type { LayoutCommand, LayoutContext } from './workspace-layout-command-types'
+import type {
+  CommandOf,
+  LayoutCommand,
+  LayoutContext,
+  RenameTabsCommand
+} from './workspace-layout-command-types'
 import {
   openAgentSessionTab,
   openBrowserTab,
@@ -51,6 +56,17 @@ const CREATES_WORKSPACE = new Set<LayoutCommand['type']>([
   'openAgentSessionTab',
   'openSimulatorTab'
 ])
+
+/** A `renameTabs` as the `renameTab` each of its titles is. */
+export function renameTabCommandsOf(command: RenameTabsCommand): CommandOf<'renameTab'>[] {
+  return command.renames.map(({ workspace, tabId, title }) => ({
+    type: 'renameTab',
+    workspace,
+    tabId,
+    kind: command.kind,
+    title
+  }))
+}
 
 export function applyLayoutCommand(
   model: WorkspaceLayoutModel,

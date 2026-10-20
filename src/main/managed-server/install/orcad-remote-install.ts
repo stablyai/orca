@@ -33,6 +33,8 @@ export async function installOrcadBundle(
     target: NodeRuntimeTarget
     /** The locally verified pinned Node archive, fetched only when the host lacks the runtime. */
     nodeRuntimeArchive: () => Promise<string>
+    /** Where a hand-copied Node archive is used offline; named when no download works. */
+    nodeRuntimeOfflineArchivePath?: string
     /** WSL only: skip re-hashing a runtime whose stat signature is unchanged since it hashed to the pin. */
     recordedNodeRuntimeProbe?: boolean
     signal?: AbortSignal
@@ -47,6 +49,7 @@ export async function installOrcadBundle(
     slotDir: remoteDir,
     target: options.target,
     archivePath: options.nodeRuntimeArchive,
+    offlineArchivePath: options.nodeRuntimeOfflineArchivePath,
     signal: options.signal,
     ...(options.recordedNodeRuntimeProbe
       ? { posixProbeCommand: recordedRemoteNodeRuntimeProbeCommand }

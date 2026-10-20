@@ -89,8 +89,16 @@ describe('a window save in a layout-owner build', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
     store = createStore()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the save handlers never reach the runtime.
-    registerSessionHandlers(store, {} as never)
+    // Main's reconnect facts are pinned elsewhere (window-save-reconnect-facts.test.ts): kept as saved.
+    const runtime = {
+      shutdownReconnectFactsFor: (session: WorkspaceSessionState) => ({
+        activeWorktreeIdsOnShutdown: session.activeWorktreeIdsOnShutdown,
+        remoteSessionIdsByTabId: session.remoteSessionIdsByTabId,
+        activeConnectionIdsAtShutdown: session.activeConnectionIdsAtShutdown
+      })
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the save handlers reach only this runtime method.
+    registerSessionHandlers(store, runtime as never)
   })
   afterEach(async () => {
     await closeTestStores()

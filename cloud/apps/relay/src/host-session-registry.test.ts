@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import type WebSocket from 'ws'
 import type { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
-import type { RelayCredentialStore } from './credential-store.js'
+import { RelayStoreError, type RelayCredentialStore } from './credential-store.js'
 import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from './control-renewal-batch.js'
 import {
   CONTROL_RENEWAL_STATEMENT_OUTCOMES,
@@ -2197,5 +2197,77 @@ describe('controls closed after host proof but before wiring', () => {
     await h.activate(new FakeSocket() as unknown as WebSocket, identity, null, 1, false, 1)
     expect(h.observer.recordPostProofClose).not.toHaveBeenCalled()
     expect(refusedLines()).toEqual([])
+  })
+})
+
+describe('control error codes', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  async function revokeFailure(error: Error): Promise<{ sent: string[]; warned: string[] }> {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const activateControl = vi
+      .fn<RelayAssignmentStore['activateControl']>()
+      .mockResolvedValue('control:production-gce-c3:1')
+    const { registry, activate } = createRegistry(activateControl, {
+      revoke: vi.fn().mockRejectedValue(error)
+    })
+    const socket = new FakeSocket()
+    await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
+    socket.emit(
+      'message',
+      Buffer.from(JSON.stringify({ type: 'device-revoke', reqId: 'revoke-1', relayDeviceId: 'device-1' })),
+      false
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    const sent = socket.send.mock.calls.map((call) => String(call[0]))
+    const warned = warn.mock.calls.map((call) => String(call[0]))
+    warn.mockRestore()
+    registry.drain(0)
+    vi.advanceTimersByTime(0)
+    return { sent, warned }
+  }
+
+  function controlErrors(sent: string[]): unknown[] {
+    return sent
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((message) => message.type === 'control-error')
+  }
+
+  it('never sends a database error message, which can carry the connection URL', async () => {
+    // Assembled at runtime so secret scanners do not flag a fixture URL.
+    const url = ['postgres', '://relay:', 'fake-pw', '@db.internal:5432/relay'].join('')
+    const error = Object.assign(new Error(`connect to ${url} failed: Connection terminated`), {
+      code: '08006'
+    })
+    const { sent, warned } = await revokeFailure(error)
+
+    expect(controlErrors(sent)).toEqual([
+      { type: 'control-error', reqId: 'revoke-1', code: 'database_transient' }
+    ])
+    expect(sent.join('\n')).not.toContain('fake-pw')
+    expect(warned).toContain('[orca-relay] control device-revoke failed: Error: redacted code=08006')
+    expect(warned.join('\n')).not.toContain('fake-pw')
+  })
+
+  it('maps any other unexpected message to a fixed code', async () => {
+    const { sent } = await revokeFailure(new Error('Unexpected token < in JSON'))
+
+    expect(controlErrors(sent)).toEqual([
+      { type: 'control-error', reqId: 'revoke-1', code: 'control_operation_failed' }
+    ])
+  })
+
+  it.each([
+    ['a store code', new RelayStoreError('reject-revoked'), 'reject-revoked'],
+    ['an invariant slug', new Error('authorization_expired'), 'authorization_expired']
+  ])('keeps %s on the wire', async (_kind, error, code) => {
+    const { sent, warned } = await revokeFailure(error)
+
+    expect(controlErrors(sent)).toEqual([{ type: 'control-error', reqId: 'revoke-1', code }])
+    expect(warned.join('\n')).not.toContain('control device-revoke failed')
   })
 })

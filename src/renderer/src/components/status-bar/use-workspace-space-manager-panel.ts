@@ -155,7 +155,10 @@ export function useWorkspaceSpaceManagerPanel() {
   )
 
   const deleteWorktrees = useCallback(
-    (targets: readonly WorkspaceSpaceWorktree[]): void => {
+    (
+      targets: readonly WorkspaceSpaceWorktree[],
+      { forceOnConfirm = false }: { forceOnConfirm?: boolean } = {}
+    ): void => {
       if (targets.length === 0) {
         return
       }
@@ -179,7 +182,7 @@ export function useWorkspaceSpaceManagerPanel() {
       }
       runWorktreeBatchDelete(identities, {
         forceConfirm: true,
-        forceOnConfirm: false,
+        forceOnConfirm,
         onDeleted: handleDeletedWorktrees
       })
     },
@@ -188,8 +191,7 @@ export function useWorkspaceSpaceManagerPanel() {
 
   const forceDeleteWorktree = useCallback(
     (worktree: WorkspaceSpaceWorktree): void => {
-      // Why: Space keeps normal deletes non-force so uncommitted work is not
-      // discarded silently; a failed row gets this explicit recovery path.
+      // Bulk deletion stays non-force; failed rows retain an explicit recovery path.
       // The failure toast is keyed by the store row's host, which a host-less saved Space row lacks.
       const storeRow = getWorktreeOnHostFromState(
         useAppStore.getState(),

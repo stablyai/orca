@@ -54,7 +54,8 @@ test('a backendless managed host offers desktop-hosted pages and refuses its own
     const refused = await call('browser.tabList', {})
     console.log('[managed-browser-command]', JSON.stringify(refused))
     expect(refused).toMatchObject({ ok: false, error: { code: 'browser_unavailable' } })
-    // A managed SSH desktop keeps its SSH-routed tabs, so it never takes this host's pages.
+    // A paired caller's open-url asks for a desktop hosting this host's pages, which a managed SSH
+    // desktop never is; the host's own CLI reaches it through the browser bridge instead.
     const openUrl = await call('browser.openUrl', {
       url: 'https://example.org/',
       worktree: 'active'

@@ -5,11 +5,8 @@ name: Dev Channel Windows Build
 # Windows artifact can be rebuilt for an existing tag without paying for the mac
 # leg's packaging and notarization again.
 #
-# Each mac workflow calls this as a `needs:`-gated job once its release is live,
-# passing the tag it created. Both legs land in that one release, so a tag
-# carries every platform it managed to build. Measured cost of the Windows leg is
-# ~7.5 min (install 2m45, build 35s, NSIS package 3m) against a mac run of ~9.5
-# min, so running it after the mac job keeps an hourly well inside its cron.
+# Adhoc can stage Windows alongside macOS, then publish only after macOS succeeds.
+# Hourly, daily, and manual dispatches keep packaging and publishing together.
 #
 # Why unsigned: Windows release installers are signed by SignPath *after*
 # packaging, and release-cut budgets 1h + 4h for those approval waits. That does
@@ -27,9 +24,8 @@ name: Dev Channel Windows Build
 # installer run. Every way out — to another dev build, or back to Stable — works
 # through the in-app updater. The picker offers a download for exactly that jump.
 #
-# Called as a job by each mac workflow once its release is live, and separately
-# dispatchable by hand to rebuild a Windows artifact for an existing tag without
-# re-running the mac leg's twenty minutes of packaging and notarization:
+# Mac workflows call this directly or stage artifacts for a later publish job.
+# It is also dispatchable to rebuild Windows for an existing tag:
 #
 #   gh workflow run dev-channel-win-build.yml --ref main \
 #     -f channel=adhoc -f tag=v1.4.178-adhoc.20260819010203 \
@@ -47,7 +43,7 @@ on:
         required: true
         type: string
       tag:
-        description: Existing release tag in the channel repo
+        description: Release tag for staged or published artifacts
         required: true
         type: string
       ref:
@@ -58,6 +54,11 @@ on:
         description: Version to package, without the leading v
         required: true
         type: string
+      stage_only:
+        description: Package unsigned artifacts for a later gated publish job
+        required: false
+        type: boolean
+        default: false
       orcad_template:
         description: Ship the orcad-template artifact the calling run built
         required: false
@@ -276,6 +277,7 @@ jobs:
       # Why the token is minted here and not at the top: installation tokens live
       # one hour and nothing before this point writes anything.
       - name: Mint dev channel repo token
+        if: ${{ !inputs.stage_only }}
         id: app_token
         uses: actions/create-github-app-token@v2
         with:
@@ -289,6 +291,7 @@ jobs:
       # while this was building, that would mint a fresh, untitled, Windows-only
       # release. Check first and fail instead.
       - name: Confirm the target release still exists
+        if: ${{ !inputs.stage_only }}
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
@@ -300,6 +303,7 @@ jobs:
           fi
 
       - name: Publish Windows artifacts
+        if: ${{ !inputs.stage_only }}
         uses: nick-fields/retry@v4
         with:
           # 30 is the pack + upload budget; there is no notary queue on this leg.
@@ -323,6 +327,7 @@ jobs:
       # release carrying the installer but not the manifest is one the picker
       # offers and the update 404s on, so assert both.
       - name: Verify Windows update manifest published
+        if: ${{ !inputs.stage_only }}
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
@@ -338,3 +343,41 @@ jobs:
             fi
           done
           echo "Windows artifacts verified on $TAG."
+
+      - name: Package Windows artifacts without publishing
+        if: inputs.stage_only
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 30
+          max_attempts: 2
+          retry_wait_seconds: 30
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+        env:
+          ORCA_BUILD_COMMIT: ${{ inputs.ref }}
+          ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ inputs.orcad_template && '1' || '' }}
+
+      - name: Validate staged Windows artifacts
+        if: inputs.stage_only
+        shell: bash
+        run: |
+          set -euo pipefail
+          for required in orca-windows-setup.exe orca-windows-setup.exe.blockmap latest.yml; do
+            if [[ ! -s "dist/$required" ]]; then
+              echo "::error::Missing or empty staged Windows artifact: $required"
+              exit 1
+            fi
+          done
+
+      - name: Stage Windows artifacts for gated publishing
+        if: inputs.stage_only
+        uses: actions/upload-artifact@v7
+        with:
+          name: dev-channel-windows-${{ inputs.tag }}
+          path: |
+            dist/orca-windows-setup.exe
+            dist/orca-windows-setup.exe.blockmap
+            dist/latest.yml
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+          overwrite: true

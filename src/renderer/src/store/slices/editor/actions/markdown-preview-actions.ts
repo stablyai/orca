@@ -20,6 +20,23 @@ import {
   recordPromotedEditorTabsInLayoutOwner
 } from '../tabs/editor-tab-layout-owner'
 
+type FileReadAuthority = Pick<
+  OpenFile,
+  'externalSshTargetId' | 'terminalArtifactGrantId' | 'readOnly'
+>
+
+/** A preview reads its source's file, so it must read with the same host, grant and client-local flag (#31034). */
+function inheritFileReadAuthority(
+  file: FileReadAuthority,
+  source: FileReadAuthority | undefined
+): FileReadAuthority {
+  return {
+    externalSshTargetId: file.externalSshTargetId ?? source?.externalSshTargetId,
+    terminalArtifactGrantId: file.terminalArtifactGrantId ?? source?.terminalArtifactGrantId,
+    readOnly: file.readOnly === true || source?.readOnly === true ? true : undefined
+  }
+}
+
 export function createMarkdownPreviewActions(
   set: EditorSet,
   get: EditorGet
@@ -96,9 +113,12 @@ export function createMarkdownPreviewActions(
           ['edit']
         )
       const id = `markdown-preview::${sourceFileId}`
-      const externalSshTargetId =
-        file.externalSshTargetId ??
-        initialState.openFiles.find((openFile) => openFile.id === sourceFileId)?.externalSshTargetId
+      // Why: with the source tab closed, a retarget keeps the authority the preview already reads with.
+      const { externalSshTargetId, terminalArtifactGrantId, readOnly } = inheritFileReadAuthority(
+        file,
+        initialState.openFiles.find((openFile) => openFile.id === sourceFileId) ??
+          initialState.openFiles.find((openFile) => openFile.id === id)
+      )
       const anchor = options?.anchor || undefined
       set((s) => {
         const existing = s.openFiles.find((openFile) => openFile.id === id)
@@ -107,11 +127,17 @@ export function createMarkdownPreviewActions(
         const activeResult = buildEditorActiveResult(s, worktreeId, id)
 
         if (existing) {
+          // Why: a fresh grant means the file was re-resolved; cached bytes may predate it.
+          const grantChanged =
+            terminalArtifactGrantId !== undefined &&
+            existing.terminalArtifactGrantId !== terminalArtifactGrantId
           const needsUpdate =
             existing.relativePath !== file.relativePath ||
             existing.filePath !== file.filePath ||
             existing.language !== file.language ||
             existing.externalSshTargetId !== externalSshTargetId ||
+            existing.terminalArtifactGrantId !== terminalArtifactGrantId ||
+            existing.readOnly !== readOnly ||
             existing.markdownPreviewSourceFileId !== sourceFileId ||
             existing.markdownPreviewAnchor !== anchor ||
             existing.mode !== 'markdown-preview'
@@ -127,6 +153,11 @@ export function createMarkdownPreviewActions(
                         language: file.language,
                         runtimeEnvironmentId,
                         externalSshTargetId,
+                        terminalArtifactGrantId,
+                        readOnly,
+                        ...(grantChanged
+                          ? { fileContentReloadNonce: (openFile.fileContentReloadNonce ?? 0) + 1 }
+                          : {}),
                         markdownPreviewSourceFileId: sourceFileId,
                         markdownPreviewAnchor: anchor,
                         mode: 'markdown-preview' as const
@@ -147,6 +178,8 @@ export function createMarkdownPreviewActions(
           isDirty: false,
           runtimeEnvironmentId,
           externalSshTargetId,
+          terminalArtifactGrantId,
+          readOnly,
           markdownPreviewSourceFileId: sourceFileId,
           markdownPreviewAnchor: anchor,
           mode: 'markdown-preview'

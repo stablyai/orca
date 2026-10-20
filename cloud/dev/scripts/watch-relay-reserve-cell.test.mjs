@@ -788,6 +788,33 @@ test('a quiet fleet with zero director 503s watches on and never trips', async (
   }
 })
 
+// 10-20 c29: a hand flip back to db mid-watch crashed the segment ("result.pages is not iterable").
+test('a segment that waits for reserve, then sees a hand flip back to db, stops without crashing', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'relay-reserve-watch-'))
+  try {
+    let clock = START
+    const config = parseAt(
+      watchValues({ 'state-file': join(directory, 'state.json'), 'segment-minutes': '10', 'flipped-at': new Date(START - 2 * MINUTE).toISOString() })
+    )
+    const db = { flagsApplied: { generation: 5, flags: { admitMode: 'db', readinessLocal: true } }, admitModeEffective: 'db' }
+    const lines = []
+    const state = await watchSegment(config, {
+      ...fakeSources({ cell: (sample) => (sample === 1 || sample >= 4 ? db : {}) }),
+      idToken: 'id',
+      retryDelayMs: 0,
+      now: () => clock,
+      sleep: async (ms) => { clock += ms },
+      log: (line) => lines.push(JSON.parse(line))
+    })
+    assert.equal(lines[0].rules.reserve.status, 'pending')
+    assert.equal(state.state, 'stopped')
+    assert.match(state.verdict, /is not in reserve mode \(switch file says db\)/)
+    assert.equal(lines.length, 4)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 // 2026-10-18's false trips: 503s tripled with traffic, nearly all a host re-dialling early.
 const rateLimited = (perLine) => ({ placementRejectionsByReasonDelta: { 'host-rate-limited': perLine }, assign503sByCauseDelta: { 'placement-lane': perLine } })
 

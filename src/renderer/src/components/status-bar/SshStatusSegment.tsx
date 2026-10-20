@@ -19,7 +19,10 @@ import {
 } from '../../../../shared/execution-host'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
 import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution-host'
-import { isListedRemoteServer } from '../../../../shared/runtime-environments'
+import {
+  isListedRemoteServer,
+  runtimePairingRepairRoute
+} from '../../../../shared/runtime-environments'
 import { RuntimeHostStatusRow } from './RuntimeHostStatusRow'
 import { connectedHostCountLabel, connectingHostsLabel } from './ssh-status-segment-copy'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
@@ -96,14 +99,15 @@ export function SshStatusSegment({
       // Why the registry's verdict: it is the same blocked reason the sidebar and Settings show.
       const blockedReason =
         registryHost?.health === 'blocked' ? registryHost.blockedReason : undefined
+      const repairRoute = runtimePairingRepairRoute(environment)
       return {
         id: environment.id,
         label: registryHost?.label || environment.name || environment.id,
         blockedReason,
         blocked: blockedReason
           ? {
-              ...runtimeHostBlockedCopy(blockedReason, registryHost?.compatibility),
-              canRepair: blockedReason === 'access-revoked'
+              ...runtimeHostBlockedCopy(blockedReason, registryHost?.compatibility, repairRoute),
+              canRepair: blockedReason === 'access-revoked' && repairRoute === 'access-link'
             }
           : null,
         snapshot: statusEntry?.snapshot,

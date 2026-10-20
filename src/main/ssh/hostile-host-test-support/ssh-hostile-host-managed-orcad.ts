@@ -3,7 +3,9 @@
  * the cell's runtime, uploaded no other and ran no toolchain. An activated server must be live; an
  * unavailable host must fail with the classified reason the connect reports.
  */
-import { posix } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, posix } from 'node:path'
 import { expect } from 'vitest'
 import { NODE_RUNTIME_ASSETS, pinnedNodeRuntimeAsset } from '../../../shared/node-runtime-pin'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
@@ -15,6 +17,7 @@ import { managedOrcadSlot } from '../../managed-server/lifecycle/orcad-managed-r
 import { orcadSlotDir, type OrcadSlotOptions } from '../orcad-recovery-slot'
 import { resolveOrcadRemoteContext } from '../../managed-server/install/orcad-remote-context'
 import { deployOrcad } from '../orcad-remote-deploy'
+import { getMainHttpClient, setMainHttpClient } from '../../network/http-client'
 import {
   orcadLivenessProbeCommand,
   parseOrcadLiveness
@@ -43,7 +46,14 @@ export async function proveManagedOrcadCell(
     const context = await resolveOrcadRemoteContext(sshTarget, conn)
     expect(context.serverTarget).toBe(expected.runtime)
     const slot = managedOrcadSlot(context, ORCAD_MANAGED_REMOTE_PORT)
-    const deploy = deployOrcad({ ...slot, target: context.serverTarget, census: EMPTY_CENSUS })
+    const desktop = cell.desktopNoEgress ? refuseDesktopDownloads() : null
+    const deploy = deployOrcad({
+      ...slot,
+      target: context.serverTarget,
+      census: EMPTY_CENSUS,
+      recountCensus: async () => EMPTY_CENSUS,
+      ...(desktop ? { runtimeCacheRoot: desktop.cacheRoot } : {})
+    }).finally(() => desktop?.restore())
     if (expected.outcome === 'unavailable') {
       const failure = await deploy.then(
         (deployed) => new Error(`deploy did not fail: ${JSON.stringify(deployed)}`),
@@ -59,6 +69,10 @@ export async function proveManagedOrcadCell(
         outcome: 'installed-and-activated'
       })
       await assertLiveThenDecommissioned(slot, slotDir, deployed.fullVersion)
+    }
+    if (desktop) {
+      // With an empty cache and every fetch refused there was nothing to upload, so the host fetched it.
+      expect(desktop.refusedUrls().length).toBeGreaterThan(0)
     }
     const toolLog = await hostExec(
       target,
@@ -107,4 +121,30 @@ async function assertLiveThenDecommissioned(
     version
   })
   expect(await liveness()).toBe('DEAD')
+}
+
+/** An empty runtime cache and a refusing network on this computer, until `restore`. */
+function refuseDesktopDownloads(): {
+  cacheRoot: string
+  refusedUrls: () => string[]
+  restore: () => void
+} {
+  const cacheRoot = mkdtempSync(join(tmpdir(), 'orca-hostile-desktop-no-egress-'))
+  const refused: string[] = []
+  const previous = getMainHttpClient()
+  setMainHttpClient({
+    fetch: async (url) => {
+      refused.push(url)
+      throw new Error('net::ERR_CONNECTION_REFUSED')
+    },
+    proxySession: () => null
+  })
+  return {
+    cacheRoot,
+    refusedUrls: () => refused,
+    restore: () => {
+      setMainHttpClient(previous)
+      rmSync(cacheRoot, { recursive: true, force: true })
+    }
+  }
 }

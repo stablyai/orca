@@ -128,7 +128,7 @@ jobs:
           fi
 
   persistence:
-    needs: changes
+    needs: [changes, mobile_web_bundle]
     concurrency:
       group: node-server-persistence-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
@@ -136,6 +136,7 @@ jobs:
     # Drafts re-trigger at readiness; inherited caller events must not depend on PR fields.
     if: >-
       ${{ !cancelled() && needs.changes.outputs.should_run != 'false' &&
+      (needs.changes.outputs.qualification == 'false' || needs.mobile_web_bundle.result == 'success') &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     strategy:
       fail-fast: false
@@ -154,7 +155,8 @@ jobs:
         id: dependencies
         with:
           native-runtime: ${{ runner.os == 'Windows' && 'node' || 'none' }}
-          cache-pnpm-store: ${{ runner.os != 'Windows' }}
+          # Template qualification must not wait for large download-cache uploads.
+          cache-pnpm-store: ${{ !inputs.build_template && runner.os != 'Windows' }}
           cache-pnpm-store-lookup-only: 'true'
       # Design D7 upgrade and rollback: the last Bun orcad, built from a main commit that shipped
       # it, using the current Bun pin beside this checkout's Node slot; hand-over skips once PROTOCOL_VERSION
@@ -191,7 +193,14 @@ jobs:
         if: runner.os == 'Windows'
         with:
           arches: ${{ (inputs.build_template && matrix.os == 'windows-2022') && 'x64 arm64' || (runner.arch == 'ARM64' && 'arm64' || 'x64') }}
+      - uses: actions/download-artifact@v8
+        if: needs.changes.outputs.qualification != 'false'
+        with:
+          name: orcad-mobile-web-bundle
+          path: out/mobile-web
+      # Narrow test-only runs skip the shared producer but still need a page.
       - uses: ./.github/actions/build-mobile-web-bundle
+        if: needs.changes.outputs.qualification == 'false'
       - run: pnpm build:orcad
         env:
           ORCA_REUSE_PREPARED_WINDOWS_SECURITY: ${{ github.event_name == 'pull_request' && runner.os == 'Windows' && steps.dependencies.outcome == 'success' }}
@@ -298,8 +307,7 @@ jobs:
           # A rerun attempt re-uploads under the same name, which v4 otherwise refuses.
           overwrite: true
 
-  # The container lanes take the page from here: it is platform-independent, and building it needs
-  # mobile/node_modules, which those images never install.
+  # Every qualification lane tests the same platform-independent page.
   mobile_web_bundle:
     needs: changes
     if: >-
@@ -324,13 +332,13 @@ jobs:
           overwrite: true
 
   linux_glibc_floor:
-    needs: [changes, persistence, mobile_web_bundle]
+    needs: [changes, mobile_web_bundle]
     concurrency:
       group: node-server-linux_glibc_floor-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
-    # A failed smoke already blocks qualification; missing scope still selects every platform.
+    # Each Linux lane owns its inputs; the template still requires every lane to pass.
     if: >-
-      ${{ !cancelled() && needs.persistence.result == 'success' &&
+      ${{ !cancelled() &&
       needs.mobile_web_bundle.result == 'success' &&
       needs.changes.outputs.should_run != 'false' &&
       needs.changes.outputs.qualification != 'false' }}
@@ -397,15 +405,15 @@ jobs:
           overwrite: true
 
   linux_glibc217_compat:
-    needs: [changes, persistence]
+    needs: changes
     concurrency:
       group: node-server-linux_glibc217_compat-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
-    # A failed smoke already blocks qualification; missing scope still selects every platform.
     if: >-
-      ${{ !cancelled() && needs.persistence.result == 'success' &&
+      ${{ !cancelled() &&
       needs.changes.outputs.should_run != 'false' &&
       needs.changes.outputs.qualification != 'false' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft != true) &&
       (github.event_name != 'pull_request' || inputs.build_template || inputs.ref != '' ||
       needs.changes.outputs.native_compatibility != 'false') }}
     runs-on: ubuntu-22.04
@@ -454,13 +462,12 @@ jobs:
           overwrite: true
 
   linux_musl:
-    needs: [changes, persistence, mobile_web_bundle]
+    needs: [changes, mobile_web_bundle]
     concurrency:
       group: node-server-linux_musl-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
-    # A failed smoke already blocks qualification; missing scope still selects every platform.
     if: >-
-      ${{ !cancelled() && needs.persistence.result == 'success' &&
+      ${{ !cancelled() &&
       needs.mobile_web_bundle.result == 'success' &&
       needs.changes.outputs.should_run != 'false' &&
       needs.changes.outputs.qualification != 'false' }}

@@ -2,9 +2,12 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../shared/executi
 import type {
   CommandOf,
   LayoutApplyReply,
-  LayoutCommand
+  LayoutCommand,
+  RenameTabsCommand,
+  UntitledTab
 } from '../../shared/workspace-layout/workspace-layout-command-types'
 import type { TerminalLeafMoveRequest } from '../../shared/terminal-leaf-move'
+import { renameTabCommandsOf } from '../../shared/workspace-layout/workspace-layout-commands'
 import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane-attachment'
 import { isWslMoveWorkspaceSessionFrozen } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -13,21 +16,23 @@ import type { RuntimeStore } from './runtime-store-contract'
  * A window's layout command: one on a tab, which names its partitions, or on the group tree or a
  * browser tab's record, which go to the workspace's routed partition.
  */
-export type WindowLayoutCommand = LayoutCommand &
-  (
-    | { tabId: string }
-    // `automatic`: not the user's close; its terminal ended.
-    | { type: 'closePane'; tabId: string; automatic?: true }
-    | { type: 'setGroupRatios' }
-    | { type: 'closeTabs'; tabIds: [string] }
-    // A browser tab's record lives in its workspace's partition, so it routes by workspace.
-    | { browserTabId: string }
-    | { type: 'moveTabToWorkspace' }
-    // Editor tabs live in their workspace's routed partition.
-    | { type: 'renameEditorFiles' }
-    // So does the workspace's default-tabs mark, which no tab carries.
-    | { type: 'setDefaultTabsApplied' }
-  )
+export type WindowLayoutCommand =
+  | RenameTabsCommand
+  | (LayoutCommand &
+      (
+        | { tabId: string }
+        // `automatic`: not the user's close; its terminal ended.
+        | { type: 'closePane'; tabId: string; automatic?: true }
+        | { type: 'setGroupRatios' }
+        | { type: 'closeTabs'; tabIds: [string] }
+        // A browser tab's record lives in its workspace's partition, so it routes by workspace.
+        | { browserTabId: string }
+        | { type: 'moveTabToWorkspace' }
+        // Editor tabs live in their workspace's routed partition.
+        | { type: 'renameEditorFiles' }
+        // So does the workspace's default-tabs mark, which no tab carries.
+        | { type: 'setDefaultTabsApplied' }
+      ))
 
 /**
  * `layout.apply`: the window's command on the partitions holding its tab, routed partition first;
@@ -42,6 +47,9 @@ export async function applyWindowLayoutCommand(
   /** Agent status and orchestration records follow a pane moved into a new tab. */
   onPaneMoved: (move: TerminalLeafMoveRequest) => void = () => {}
 ): Promise<LayoutApplyReply> {
+  if (command.type === 'renameTabs') {
+    return renameTabs(store, hostIdsFor, command)
+  }
   if (
     isWslMoveWorkspaceSessionFrozen(command.workspace) ||
     // The target's dropped write would lose the tab the source gave up.
@@ -85,7 +93,16 @@ export async function applyWindowLayoutCommand(
     // Read before the move, which re-homes the pane.
     const sourceTabId = terminalIdOf(store, hostIds[0], command.workspace, command.tabId)
     const reply = await store.applyLayoutCommand(
-      { ...command, windowDetach: { ptyId: command.windowDetach?.ptyId ?? null } },
+      {
+        ...command,
+        // Why: main mints the new tab's id, so the window's is not carried.
+        windowDetach: {
+          ptyId: command.windowDetach?.ptyId ?? null,
+          ...(command.windowDetach?.startupCwd
+            ? { startupCwd: command.windowDetach.startupCwd }
+            : {})
+        }
+      },
       holders
     )
     if (reply.ok && reply.result.tabId) {
@@ -121,6 +138,48 @@ export async function applyWindowLayoutCommand(
     { type: 'closePane', workspace, tabId, leafId, userPaneClose: true },
     holders
   )
+}
+
+/**
+ * Each title in its tab's routed partition, as a `renameTab` would be, all in one durable write;
+ * a title main cannot give is named in `untitled` with the code its own `renameTab` would get.
+ */
+async function renameTabs(
+  store: RuntimeStore,
+  hostIdsFor: (worktreeId: string, tabId: string | null) => ExecutionHostId[],
+  command: RenameTabsCommand
+): Promise<LayoutApplyReply> {
+  const untitled: UntitledTab[] = []
+  const byHost = new Map<ExecutionHostId, CommandOf<'renameTab'>[]>()
+  for (const rename of renameTabCommandsOf(command)) {
+    const { workspace, tabId } = rename
+    const [hostId] = hostIdsFor(workspace, tabId)
+    if (isWslMoveWorkspaceSessionFrozen(workspace)) {
+      untitled.push({ workspace, tabId, code: 'wsl_move_in_progress' })
+    } else if (!hostId || parseExecutionHostId(hostId)?.kind === 'runtime') {
+      untitled.push({ workspace, tabId, code: 'host_not_owned' })
+    } else {
+      const renames = byHost.get(hostId) ?? []
+      renames.push(rename)
+      byHost.set(hostId, renames)
+    }
+  }
+  if (byHost.size > 0) {
+    if (!store.applyTabRenames) {
+      throw new Error('layout_store_unavailable')
+    }
+    const refused = await store.applyTabRenames(
+      [...byHost].map(([hostId, renames]) => ({ hostId, renames }))
+    )
+    untitled.push(
+      ...refused.map(({ rename, code }) => ({
+        workspace: rename.workspace,
+        tabId: rename.tabId,
+        code
+      }))
+    )
+  }
+  return { ok: true, result: untitled.length > 0 ? { untitled } : {} }
 }
 
 /**

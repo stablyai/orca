@@ -27,13 +27,18 @@ on:
         required: false
         type: boolean
         default: true
+      managed_ssh_shards:
+        description: JSON shard assignments for the selected managed SSH specs
+        required: false
+        type: string
+        default: '["1/2","2/2"]'
       # Why: artifact names are unique per workflow run, and pr.yml calls this workflow twice.
       artifact_suffix:
         description: Appended to the build and trace artifact names so two calls in one run do not collide
         required: false
         type: string
         default: ''
-      # Why only the app builds read it: the orcad template build refuses a dark switch.
+      # Why: the app, orcad and its test template (--dark-test-template) build with it; releases refuse it.
       layout_owner:
         description: Set to main to build with ORCA_LAYOUT_OWNER=main and record save-divergence reports
         required: false
@@ -49,6 +54,12 @@ on:
         description: JSON array of specs to run; empty runs the full suite
         required: false
         type: string
+      managed_ssh_shards:
+        description: Managed SSH shard assignments (use one for small selections)
+        required: false
+        type: choice
+        default: '["1/2","2/2"]'
+        options: ['["1/2","2/2"]', '["1/1"]']
   schedule:
     # One complete daily reference run; targeted PR coverage remains unchanged.
     - cron: '0 17 * * *'
@@ -460,13 +471,18 @@ jobs:
           slot="$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "$slot"
-          # The headless oracle's orcad host must hold the same layout owner as the Electron host.
+          # The headless oracle's orcad host must hold the same layout owner as the Electron host,
+          # and so must the template `orca serve` materializes its server from.
           if [ -n "$LAYOUT_OWNER" ]; then
-            ORCA_LAYOUT_OWNER="$LAYOUT_OWNER" pnpm build:orcad
+            export ORCA_LAYOUT_OWNER="$LAYOUT_OWNER"
+            pnpm build:orcad
+            node config/scripts/build-orcad-template.mjs --targets "$slot" --dark-test-template
+            test -f out/orcad/ORCA_LAYOUT_OWNER_MAIN
+            test -f out/orcad-template/ORCA_LAYOUT_OWNER_MAIN
           else
             pnpm build:orcad
+            node config/scripts/build-orcad-template.mjs --targets "$slot"
           fi
-          node config/scripts/build-orcad-template.mjs --targets "$slot"
       - name: Switch serve hosts on one profile
         if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')
         env:
@@ -514,7 +530,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # Every managed-orcad SSH spec on a Docker host, including #24979's relay-era conversion. Needs the
+  # Selected managed-orcad SSH specs on a Docker host; daily runs keep the full suite. Needs the
   # orcad template for the fixture's target (Debian, linux-x64-glibc), which only this job builds.
   orcad-ssh-docker:
     name: ssh on managed orcad (Docker ${{ matrix.shard }})
@@ -525,7 +541,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: ['1/2', '2/2']
+        shard: ${{ fromJSON(inputs.managed_ssh_shards || '["1/2","2/2"]') }}
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
@@ -546,15 +562,24 @@ jobs:
           name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
       # Built to a path the app does not look at by default, so the relay-era phase has no template.
+      # The switch-on leg deploys a switch-on server, so both sides of the host run one layout owner.
       - name: Build the linux-x64-glibc orcad template
+        env:
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
         run: |
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc
-          node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
+          if [ -n "$LAYOUT_OWNER" ]; then
+            ORCA_LAYOUT_OWNER="$LAYOUT_OWNER" node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc --dark-test-template
+            test -f out/orcad-template/ORCA_LAYOUT_OWNER_MAIN
+          else
+            node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
+          fi
           mv out/orcad-template "$RUNNER_TEMP/orcad-convert-template"
       # The Windows CLI matrix collects here too and skips: it needs a Windows host descriptor.
       - name: Run managed SSH specs on a Docker host
         env:
+          TEST_FILES_JSON: ${{ inputs.test_files }}
           SKIP_BUILD: '1'
           ORCA_E2E_SSH_DOCKER: '1'
           ORCA_E2E_ORCAD_CONVERT_HOST: docker
@@ -563,6 +588,19 @@ jobs:
           LAYOUT_OWNER: ${{ inputs.layout_owner }}
           SHARD_INDEX: ${{ strategy.job-index }}
         run: |
+          node --input-type=module <<'NODE' > "$RUNNER_TEMP/managed-ssh-specs"
+          import { existsSync } from 'node:fs'
+          const modulePath = './config/scripts/ci-e2e-job-selection.mjs'
+          const selection = existsSync(modulePath) ? await import(modulePath) : {}
+          // Older checkout refs retain their full-suite behavior.
+          const specs = selection.selectManagedSshE2eSpecs
+            ? selection.selectManagedSshE2eSpecs(process.env.TEST_FILES_JSON)
+            : ['tests/e2e/ssh-orcad-']
+          for (const spec of specs) {
+            console.log(spec.endsWith('.spec.ts') ? spec.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$' : spec)
+          }
+          NODE
+          mapfile -t TEST_FILES < "$RUNNER_TEMP/managed-ssh-specs"
           export ORCA_E2E_ORCAD_CONVERT_TEMPLATE="$RUNNER_TEMP/orcad-convert-template"
           REPORT_ARGS=()
           if [ -n "$LAYOUT_OWNER" ]; then
@@ -572,7 +610,7 @@ jobs:
             export PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/managed-ssh-$SHARD_INDEX-results.json"
             REPORT_ARGS=('--reporter=list,json')
           fi
-          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-orcad- --project=electron-headless --workers=1 --shard="$SHARD" "${REPORT_ARGS[@]}"
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts "${TEST_FILES[@]}" --project=electron-headless --workers=1 --shard="$SHARD" "${REPORT_ARGS[@]}"
       - name: Summarize layout save divergence
         if: always() && inputs.layout_owner == 'main'
         continue-on-error: true

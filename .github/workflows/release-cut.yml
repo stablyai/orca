@@ -1227,6 +1227,7 @@ jobs:
       - orcad-template
       - release-preflight
       - release-javascript
+      - build-mac
     # Why not the implicit success(): a tag without the orcad template skips that job on purpose.
     if: >-
       !cancelled() &&
@@ -1235,6 +1236,7 @@ jobs:
       needs.create-release.result == 'success' &&
       needs.release-preflight.result == 'success' &&
       needs.release-javascript.result == 'success' &&
+      needs.build-mac.result == 'success' &&
       (needs.orcad-template.result == 'success' ||
         (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
     env:
@@ -1309,7 +1311,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- config/scripts/assert-github-release-is-draft.mjs
+          git checkout "$WORKFLOW_SHA" -- config/scripts/assert-github-release-is-draft.mjs config/scripts/run-release-mac-build-workflow.mjs
 
       - name: Restore composite actions from the workflow ref
         shell: bash
@@ -1689,9 +1691,26 @@ jobs:
           path: signing-stage/**
           if-no-files-found: error
 
+      # Unsigned packaging overlaps macOS; only successful macOS builds may consume signing quota.
+      - name: Require macOS success before Windows signing
+        id: mac-signing-gate
+        if: matrix.platform == 'win' && github.run_attempt == 1
+        shell: bash
+        run: node config/scripts/run-release-mac-build-workflow.mjs wait
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
+          RELEASE_MAC_BUILD_RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_MAC_BUILD_RUN_ID: ${{ needs.build-mac.outputs.run_id }}
+          RELEASE_MAC_BUILD_WORKFLOW_SHA: ${{ needs.build-mac.outputs.workflow_sha }}
+          RELEASE_MAC_BUILD_RUN_ATTEMPT: ${{ needs.build-mac.outputs.run_attempt }}
+          RELEASE_MAC_BUILD_WAIT_DEADLINE_MS: ${{ needs.build-mac.outputs.wait_deadline_ms }}
+          RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
+
       - name: Submit inner binaries signing request
         id: submit-inner-signing
-        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.upload-unsigned-inner.outcome == 'success'
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.mac-signing-gate.outcome == 'success' && steps.upload-unsigned-inner.outcome == 'success'
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -1927,7 +1946,7 @@ jobs:
       # so the release job waits while the signing request is approved in UI.
       - name: Submit Windows installer signing request
         id: submit-signing-request
-        if: matrix.platform == 'win' && github.run_attempt == 1
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.mac-signing-gate.outcome == 'success' && steps.upload-unsigned-windows-installer.outcome == 'success'
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}

@@ -360,14 +360,14 @@ export function evaluateWatchSample(state, sample, { unverifiableLimit }) {
     if (!seen && at < state.startedAt + RESERVE_WATCH_RULES.reserveApplyWaitMs) {
       // Not judged, and the streak holds: the reserve write may not have applied yet.
       const rules = { reserve: pending(`switch file says ${cell.admitModeConfigured}; waiting for reserve to apply`) }
-      return { state: next, rules, line: sampleLine(next, sample, rules) }
+      return { state: next, rules, line: sampleLine(next, sample, rules), pages: [] }
     }
     // Someone else flipped it back (or it never became reserve): nothing left to watch.
     next.state = seen ? 'stopped' : 'refused'
     next.verdict = seen
       ? `${state.cellId} is not in reserve mode (switch file says ${cell.admitModeConfigured})`
       : `${state.cellId} did not report reserve mode within ${RESERVE_WATCH_RULES.reserveApplyWaitMs / MINUTE_MS} min (switch file says ${cell.admitModeConfigured})`
-    return { state: next, rules: {}, line: sampleLine(next, sample, {}) }
+    return { state: next, rules: {}, line: sampleLine(next, sample, {}), pages: [] }
   }
   if (cell.ok) {
     next.reserveSeenAt = state.reserveSeenAt ?? at

@@ -3,6 +3,7 @@
   "include": [
     "../src/cli/**/*",
     "../src/shared/**/*",
+    "../src/shared/editor-language/monaco-language-associations.json",
     "../src/packages/process-host/src/__fixtures__/**/*",
     "../src/main/agent-state-file-reader.ts",
     "../src/main/gitlab/project-ref-parser.ts",
@@ -181,6 +182,8 @@
     "../src/main/provider-process/provider-process-exit-deadline.ts",
     "../src/main/provider-process/managed-provider-process.ts",
     "../src/main/provider-process/provider-executable-missing.ts",
+    "../src/main/provider-process/provider-group-orphan-guard.ts",
+    "../src/main/provider-process/provider-process-row-read.ts",
     "../src/main/provider-process/provider-process-close.ts",
     "../src/main/provider-process/provider-process-launch.ts",
     "../src/main/provider-process/provider-process-supervisor.ts",

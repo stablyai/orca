@@ -25,6 +25,8 @@ export type WindowPaneDetach = {
   ptyId: string | null
   /** The new tab's id, the same in every partition holding the pane; minted when absent. */
   tabId?: string
+  /** The pane's folder, for the shell an unbound pane starts in its new tab. Older mains drop it. */
+  startupCwd?: string
 }
 
 export type LayoutCommand =
@@ -113,8 +115,9 @@ export type LayoutCommand =
       type: 'openEditorTab'
       /** The window's id for a tab it drew first; minted when absent. */
       tabId?: string
-      /** The editor's file id: the tab's entity. */
-      fileId: string
+      /** The editor's file id: the tab's entity. Absent (main's own opens only; the wire still
+       *  requires it): main picks it for `file`. */
+      fileId?: string
       contentType: Exclude<TabContentType, 'terminal' | 'browser' | 'agent-session' | 'simulator'>
       /** Present for edit-mode files, which are restored after restart. */
       file?: LayoutEditorFile
@@ -246,6 +249,24 @@ export type TabTitle =
   | { kind: 'custom' | 'generated'; title: string | null }
   | { kind: 'aiVault'; title: AiVaultSessionTitle | null }
 
+/** One tab's agent-generated title in a `renameTabs` batch. */
+export type GeneratedTabTitle = { workspace: string; tabId: string; title: string | null }
+
+/**
+ * A window's agent-generated titles for many tabs, of any workspaces, in one `layout.apply`: main
+ * renames them in one write, so one frame shows them all. Each rename is a `renameTab`.
+ */
+export type RenameTabsCommand = {
+  type: 'renameTabs'
+  kind: 'generated'
+  renames: GeneratedTabTitle[]
+}
+
+/** A `renameTabs` title main did not give its tab, and why. */
+export type UntitledTab = Omit<GeneratedTabTitle, 'title'> & {
+  code: Extract<LayoutApplyReply, { ok: false }>['code']
+}
+
 export type LayoutRefusalCode =
   | 'workspace_not_found'
   | 'tab_not_found'
@@ -285,6 +306,8 @@ export type LayoutCommandResult = {
   woken?: string[]
   /** Old tab-bar id → new, for tabs a file rename re-ided; views move their selection with it. */
   renamedTabIds?: Record<string, string>
+  /** `renameTabs`: the titles main did not give; every other tab has its title. */
+  untitled?: UntitledTab[]
 }
 
 /** A command applied to a stored layout: its result, or why it changed nothing. */

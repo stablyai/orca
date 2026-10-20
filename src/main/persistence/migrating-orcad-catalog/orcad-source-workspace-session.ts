@@ -35,6 +35,7 @@ import {
   resolveCopiesForHost,
   type SessionFragment
 } from './orcad-source-session-copy-resolution'
+import { withoutOrcadMigrationDrafts } from './orcad-source-draft-rename'
 import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
@@ -240,8 +241,14 @@ function collectWorkspaceSession(
   if (duplicates.length > 0) {
     return { payload: undefined, snapshots: [], blockedItems: duplicates, leftBehindItems }
   }
+  // Drafts stay on this desktop; the commit renames them to the server (orcad-source-draft-rename).
   return merged.session
-    ? { payload: merged.session, snapshots, blockedItems: [], leftBehindItems }
+    ? {
+        payload: withoutOrcadMigrationDrafts(merged.session),
+        snapshots,
+        blockedItems: [],
+        leftBehindItems
+      }
     : {
         payload: undefined,
         snapshots: [],

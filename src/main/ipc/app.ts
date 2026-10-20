@@ -36,8 +36,11 @@ import { isProfileStateSaveDelayed } from '../startup/profile-state-save-delay'
 import { readCommandStdout, readKeyboardInputSourceId } from './macos-keyboard-input-source'
 import { getWindowsAdministratorStatus } from '../windows/windows-administrator-status'
 
+import type { ReconnectFactsFor } from '../persistence/window-save-view'
+
 type RegisterAppHandlersOptions = {
   quitResumeRecordsFor?: QuitResumeRecordsFor
+  reconnectFactsFor?: ReconnectFactsFor
   onBeforeRelaunch?: () => void | Promise<void>
   /** Only for app:relaunch, whose app.exit(0) is committed and skips will-quit. */
   onBeforeRelaunchExit?: () => void | Promise<void>
@@ -115,7 +118,11 @@ function resolveDevFeatureWallAssetDir(): string {
 }
 
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
-  registerRendererShutdownCheckpointHandler(store, options.quitResumeRecordsFor)
+  registerRendererShutdownCheckpointHandler(
+    store,
+    options.quitResumeRecordsFor,
+    options.reconnectFactsFor
+  )
   registerMacKeyboardLayoutChangeNotifications()
   ipcMain.handle('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)
   ipcMain.handle('app:getWindowsAdministratorStatus', getWindowsAdministratorStatus)

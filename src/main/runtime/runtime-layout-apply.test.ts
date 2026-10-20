@@ -192,7 +192,7 @@ describe('applyWindowLayoutCommand', () => {
       leafId: 'leaf-1',
       groupId: 'g1',
       // The window cannot name the new tab.
-      windowDetach: { ptyId: 'pty-1', tabId: 'tab-window' }
+      windowDetach: { ptyId: 'pty-1', tabId: 'tab-window', startupCwd: '/wt/app' }
     }
 
     await applyWindowLayoutCommand(
@@ -202,10 +202,10 @@ describe('applyWindowLayoutCommand', () => {
       onPaneMoved
     )
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith({ ...move, windowDetach: { ptyId: 'pty-1' } }, [
-      'ssh:t',
-      'local'
-    ])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(
+      { ...move, windowDetach: { ptyId: 'pty-1', startupCwd: '/wt/app' } },
+      ['ssh:t', 'local']
+    )
     expect(onPaneMoved).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       sourceTabId: 'term-1',

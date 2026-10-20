@@ -234,7 +234,7 @@ export async function syncRuntimeBackedSettings(
       updates.prBotAuthorOverrides
     )
   }
-  Object.assign(runtimeUpdates, runtimeChatPermissionSetting(updates))
+  Object.assign(runtimeUpdates, runtimeChatPermissionSetting(updates, false))
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext
   }

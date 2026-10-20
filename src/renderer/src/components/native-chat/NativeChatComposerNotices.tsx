@@ -86,7 +86,7 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
             isHostWarning && 'text-destructive'
           )}
         >
-          {notice.text}
+          {notice.content ?? notice.text}
         </p>
         {notice.action ? (
           <Button

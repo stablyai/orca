@@ -47,6 +47,7 @@ import {
   hostWorktreeTarget,
   type HostWorktreeTarget
 } from '../../shared/worktree/host-qualified-identity'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 const path = '/remote/repository'
 const rows = [{ path, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }]
@@ -68,7 +69,11 @@ function fixture(fields: Pick<Repo, 'connectionId' | 'executionHostId'>) {
     getAllWorktreeLineage: () => ({}),
     getAllWorkspaceLineage: () => ({}),
     removeWorktreeLineage: vi.fn(),
-    captureNativeLocalWorktreeMetadataScanExpectation: () => undefined
+    captureNativeLocalWorktreeMetadataScanExpectation: () => undefined,
+    // Read by main's switch-on layout purge after a listing.
+    getWorkspaceSessionHostIds: () => ['local'],
+    getWorkspaceSession: () => getDefaultWorkspaceSession(),
+    removeWorkspaceSessionStateForWorktree: vi.fn()
   }
   const context = {
     store,

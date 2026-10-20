@@ -48,6 +48,15 @@ describe('classifyOrcadTunnelIdentityFailure', () => {
     expect(classifyOrcadTunnelIdentityFailure(rejected).verdict).toBe('foreign')
   })
 
+  it('reads a sealed token refusal as our own server that dropped this pairing', () => {
+    const refused = new RemoteRuntimeClientError(
+      'unauthorized',
+      'Remote Orca runtime rejected the pairing token.',
+      { pairingStage: 'access-grant' }
+    )
+    expect(classifyOrcadTunnelIdentityFailure(refused).verdict).toBe('unpaired')
+  })
+
   it('reads a different runtime id as another server', () => {
     const mismatch = new Error('The endpoint does not match this paired runtime identity.')
     expect(classifyOrcadTunnelIdentityFailure(mismatch).verdict).toBe('foreign')

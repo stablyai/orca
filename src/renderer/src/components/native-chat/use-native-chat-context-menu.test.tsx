@@ -385,9 +385,9 @@ describe('useNativeChatContextMenu', () => {
     // Keep the assertions tied to the mocked menu item's semantic children.
     const labels = items.list.map((candidate) => childrenText(candidate.children))
 
-    expect(labels.some((label) => label.startsWith('Switch to Terminal'))).toBe(true)
+    expect(labels.some((label) => label.startsWith('Switch to Terminal Agent'))).toBe(true)
     const item = items.list.find((candidate) =>
-      childrenText(candidate.children).startsWith('Switch to Terminal')
+      childrenText(candidate.children).startsWith('Switch to Terminal Agent')
     )
     expect(item).toBeDefined()
     item?.onSelect?.()
@@ -398,7 +398,9 @@ describe('useNativeChatContextMenu', () => {
     renderToStaticMarkup(<Harness />)
 
     expect(
-      items.list.some((candidate) => childrenText(candidate.children) === 'Switch to Terminal')
+      items.list.some(
+        (candidate) => childrenText(candidate.children) === 'Switch to Terminal Agent'
+      )
     ).toBe(false)
   })
 

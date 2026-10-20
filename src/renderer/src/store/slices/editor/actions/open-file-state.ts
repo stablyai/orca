@@ -8,6 +8,7 @@ export function createOpenFileState(
 ): Pick<
   EditorSlice,
   | 'openFiles'
+  | 'editorBuffers'
   | 'activeFileId'
   | 'activeFileIdByWorktree'
   | 'activeTabTypeByWorktree'
@@ -17,6 +18,7 @@ export function createOpenFileState(
 > {
   return {
     openFiles: [],
+    editorBuffers: {},
     activeFileId: null,
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},

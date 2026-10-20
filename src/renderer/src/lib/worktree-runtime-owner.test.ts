@@ -364,10 +364,18 @@ describe('the explicit owner environment (resolveOwner)', () => {
   })
 
   it('does not treat the focused runtime as ownership for legacy-local worktrees', () => {
-    expect(runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, 'legacy-repo::wt-legacy')).toBe(
-      'focused-env'
-    )
+    expect(
+      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, 'legacy-repo::wt-legacy')
+    ).toBeNull()
     expect(ownerEnvironmentId(state, 'legacy-repo::wt-legacy')).toBeNull()
+    expect(getExecutionHostIdForWorktree(state, 'legacy-repo::wt-legacy')).toBe('local')
+    expect(getExecutionHostIdForWorktree(state, 'unknown-repo::wt')).toBe('local')
+  })
+
+  it('keeps a setup terminal on the focused runtime, where it spawns', () => {
+    expect(getExecutionHostIdForWorktree(state, 'ephemeral-setup-terminal:skill-panel')).toBe(
+      'runtime:focused-env'
+    )
   })
 
   it('returns the runtime owner when the repo or folder explicitly names one', () => {

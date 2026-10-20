@@ -9,6 +9,7 @@ import type {
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callAntigravityChatSignIn } from '@/runtime/runtime-antigravity-accounts-client'
 import { AntigravityChatSignInRow } from './AntigravityChatSignInRow'
+import { AntigravityProviderSignInArea } from './AntigravityProviderSignInArea'
 import { TooltipProvider } from '../ui/tooltip'
 
 const url = 'https://accounts.google.com/o/oauth2/v2/auth?state=s'
@@ -156,4 +157,41 @@ it('sends the address pasted from a browser on another computer to the host', as
     flowId: 'remote',
     callbackUrl: pasted
   })
+})
+
+// A host learns its sign-in only when a chat starts, so after launch it has no answer to show.
+it("names the account and why it's needed before the host knows its sign-in", async () => {
+  const owner = { kind: 'environment', environmentId: 'provider-unanswered' } as const
+  render(
+    <AntigravityProviderSignInArea
+      owner={owner}
+      label="this computer"
+      install={{
+        kind: 'active',
+        subject: { target: owner, runtimeId: null, agent: 'antigravity' },
+        removable: true,
+        snapshot: {
+          kind: 'known',
+          state: {
+            agent: 'antigravity',
+            revision: 1,
+            available: true,
+            version: '1.0.0',
+            installedVersion: '1.0.0',
+            installedCurrent: true,
+            source: 'managed',
+            operation: null
+          }
+        }
+      }}
+    />
+  )
+  await act(async () => undefined)
+  expect(screen.getByText('Account')).toBeTruthy()
+  expect(screen.getByRole('status').textContent).toBe(
+    'Chats need an Antigravity sign-in, separate from your agy terminal account.'
+  )
+  expect(screen.getByRole('button', { name: 'Sign in' }).hasAttribute('disabled')).toBe(false)
+  await act(async () => publish(owner, null, 'signedOut'))
+  expect(screen.getByRole('status').textContent).toMatch(/^Not signed in\./)
 })

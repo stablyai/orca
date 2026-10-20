@@ -195,6 +195,7 @@ export function registerRuntimeWindowLifecycle(
         ...(navigation ? { navigation } : {}),
         ...(position ? { position } : {})
       }),
+    revealEditorTab: (reveal) => send('ui:revealEditorTabFromRuntime', reveal),
     openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId?, navigation?) =>
       send('ui:openDiffFromMobile', {
         worktreeId,

@@ -23,7 +23,7 @@ import { PtyRetirementWithoutProof } from '../../pty-exit-proof'
 
 type StopTarget = Pick<
   LegacyRelayTargetBridge,
-  'paneState' | 'liveRoute' | 'listedIncarnation' | 'refresh'
+  'paneState' | 'paneReplaced' | 'liveRoute' | 'listedIncarnation' | 'refresh'
 >
 
 /**
@@ -140,6 +140,9 @@ export class LegacyRelayPaneStops {
       pending = true
       if (state === 'live') {
         void this.send(ptyId, bridge)
+      } else if (bridge.paneReplaced(ptyId)) {
+        // Its process's relay lost its socket to another: no stop can be fenced to it.
+        this.abandon(ptyId, bridge)
       }
     }
     if (pending) {

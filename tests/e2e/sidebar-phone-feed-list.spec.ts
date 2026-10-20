@@ -135,6 +135,59 @@ test.describe('switch on', () => {
     }
   })
 
+  test('a project group move reaches the phone while an earlier read is held, with no refresh', async ({
+    orcaPage
+  }) => {
+    test.setTimeout(180_000)
+    await waitForSessionReady(orcaPage)
+    const activeId = await waitForActiveWorktree(orcaPage)
+    const repoId = activeId.split('::')[0]
+    const [first, second] = await orcaPage.evaluate(async () => {
+      const state = window.__store!.getState()
+      return Promise.all(
+        ['e2e-first', 'e2e-second'].map(
+          async (name) => (await state.createProjectGroup(name, 'local'))?.id
+        )
+      )
+    })
+    expect(first && second).toBeTruthy()
+    const move = (groupId: string) =>
+      orcaPage.evaluate(
+        async ({ repoId, groupId }) => {
+          const state = window.__store!.getState()
+          const repo = state.repos.find((candidate) => candidate.id === repoId)
+          return repo ? state.moveProjectToGroup(repo, groupId) : false
+        },
+        { repoId, groupId }
+      )
+    expect(await move(first!)).toBe(true)
+    const phone = pairMobileClient(await createDesktopMobilePairingOffer(orcaPage))
+    const list = await openPhoneFeedList(phone)
+    const phoneGroupOf = () => {
+      const feed = list.feed()
+      return feed.kind === 'ready'
+        ? feed.domains.projectCatalog?.repos.find((repo) => repo.id === repoId)?.projectGroupId
+        : undefined
+    }
+    try {
+      await expectPhoneMatchesDesktop(orcaPage, list)
+      expect(phoneGroupOf()).toBe(first)
+
+      // A change the phone reads; the host answers that read before the move lands.
+      const hold = list.holdFeedReads()
+      await runtimeCall(orcaPage, 'worktree.set', { worktree: `id:${activeId}`, isPinned: true })
+      await expect.poll(hold.held, { timeout: 30_000 }).toBeGreaterThan(0)
+      expect(await move(second!)).toBe(true)
+      hold.release()
+
+      await expectPhoneMatchesDesktop(orcaPage, list)
+      expect(phoneGroupOf()).toBe(second)
+    } finally {
+      list.close()
+      phone.dispose()
+    }
+  })
+
   test('an old open page keeps its own reads on a host that serves the feed', async ({
     orcaPage
   }) => {

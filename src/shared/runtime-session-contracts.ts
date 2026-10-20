@@ -168,6 +168,9 @@ export type RuntimeSyncWindowGraph = {
   terminalGroupGridSizes?: Record<string, { cols: number; rows: number }>
   /** The grid a workspace with a single tab group gets, for one the window is not showing. */
   singleGroupWorkspaceGridSize?: { cols: number; rows: number }
+  /** Layout-owner builds: the tab group each workspace shows, sent only when it changes. Main merges
+   *  each entry and keeps the last; a send without the field changes nothing. null: none shown. */
+  activeGroupByWorkspace?: Record<string, string | null>
   /** The sidebar's Project grouping inputs for paired phones; sent only when they changed. */
   projectSectionCatalog?: MobileProjectSectionCatalog
 }

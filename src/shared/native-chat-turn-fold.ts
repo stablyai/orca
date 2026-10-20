@@ -66,7 +66,7 @@ export function nativeChatTurnFoldRow(
     reportsFailure: message.blocks.some(
       (block) =>
         block.type === 'text' &&
-        block.tone === 'error' &&
+        (block.tone === 'error' || block.failure?.kind === 'usageLimitReached') &&
         block.presentation !== AGENT_SESSION_ORCA_STOP_PRESENTATION
     ),
     explainsTurn: message.blocks.some(

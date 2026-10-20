@@ -1,5 +1,6 @@
 import type { OpenFile } from '@/store/slices/editor'
 import { canAutoSaveOpenFile } from './editor-autosave'
+import { editorModelSiblingTabs, isWholeEditorState } from './editor-save-disk-precondition'
 import { trackExternalChangeConflictShown } from './editor-external-change-telemetry'
 
 type ChangedOnDiskMarkState = {
@@ -10,17 +11,25 @@ type ChangedOnDiskMarkState = {
 // telemetry only on the first surfacing — but three writers (the watch hook
 // at fs-event time, the autosave controller's notification backstop, and the
 // restored-tab conflict scan). Centralizing keeps the rule from drifting;
-// each writer keeps its own echo/eligibility guard at the call site.
+// each writer keeps its own echo/eligibility guard at the call site. A code
+// model is dirty when any of its tabs is, and the mark reaches all of them.
 export function markFileChangedOnDisk(
   state: ChangedOnDiskMarkState,
   file: OpenFile,
   options: { connectionId: string | undefined; origin: 'live' | 'restore' }
 ): void {
-  if (!file.isDirty || !canAutoSaveOpenFile(file)) {
+  // Why: some writers pass only the setter; the model's other tabs are known only from the whole store.
+  const tabs =
+    isWholeEditorState(state) && state.openFiles.some((tab) => tab.id === file.id)
+      ? editorModelSiblingTabs(state, file)
+      : [file]
+  if (!tabs.some((tab) => tab.isDirty) || !canAutoSaveOpenFile(file)) {
     return
   }
   if (file.externalMutation !== 'changed') {
     trackExternalChangeConflictShown(file, options)
   }
-  state.setExternalMutation(file.id, 'changed')
+  for (const tab of tabs) {
+    state.setExternalMutation(tab.id, 'changed')
+  }
 }

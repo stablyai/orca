@@ -9,7 +9,7 @@ import {
   addManagedOrcadEnvironment,
   removeManagedOrcadEnvironment
 } from '../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments } from '../../shared/runtime-environment-store'
+import { listEnvironments, resolveEnvironment } from '../../shared/runtime-environment-store'
 import type { Repo } from '../../shared/repo-types'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
@@ -100,6 +100,7 @@ function serverDestination(): typeof destination {
       const result = server.abortStagedOrcadMigrationCatalog(manifest)
       return result.aborted ? result : { ...result, durableAbsent: true as const }
     },
+    abortByReference: vi.fn(),
     stageChunk: async (request) => server.stageOrcadMigrationSnapshotChunk(request)
   }
 }
@@ -120,7 +121,7 @@ beforeEach(() => {
   targetStore = new SshConnectionStore(store as never)
   mocks.state.targetStore = targetStore
   destination = serverDestination()
-  mocks.ensureTunnel.mockResolvedValue(undefined)
+  mocks.ensureTunnel.mockImplementation(resolveEnvironment)
   mocks.deploy.mockImplementation(
     async (path: string, args: { name: string; sshTargetId: string }) => {
       const owner = getManagedOrcadFenceEnvironmentId(store.getSshTarget(args.sshTargetId))
@@ -425,9 +426,8 @@ describe('moving the host again after its server was stopped', () => {
       claims: targetStore.getOrcadRuntimeClaims(),
       target: store.getSshTarget(TARGET.id)!,
       environment: listEnvironments(userDataPath)[0]!,
-      destination,
+      connectDestination: async () => destination,
       censusHost: async () => ({ verdict: 'exited', count: 0 }),
-      ensureTunnel: async () => {},
       runTargetLifecycle
     })
   }

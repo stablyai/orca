@@ -6,6 +6,7 @@ import type {
 import { CodexAppServerRequestError } from './codex-app-server-connection'
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import { codexTurnLifecycleFake } from './codex-turn-lifecycle-fake'
+import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'
 
 export const CODEX_SCRIPTED_THREAD = 'scripted-codex-thread'
 const THREAD = CODEX_SCRIPTED_THREAD
@@ -29,7 +30,10 @@ function heldAnswer(
     timer = setTimeout(
       () =>
         reject(
-          new CodexAppServerTimeoutError(`codex app-server ${method} exceeded ${timeoutMs}ms`)
+          withProviderRequestTimeout(
+            new CodexAppServerTimeoutError(`codex app-server ${method} exceeded ${timeoutMs}ms`),
+            { method, timeoutMs }
+          )
         ),
       timeoutMs
     )

@@ -56,8 +56,7 @@ const receivedDirectoryPath: ReceivedBlobPathResolver = (root, manifest, descrip
 const RECEIVED_BLOB_DESTINATIONS: Record<OrcadMigrationBlobKind, ReceivedBlobPathResolver> = {
   'terminal-restore-hints': receivedDirectoryPath,
   'shell-history': receivedDirectoryPath,
-  'agent-session-records': receivedDirectoryPath,
-  'editor-drafts': receivedDirectoryPath
+  'agent-session-records': receivedDirectoryPath
 }
 
 export function getOrcadMigrationReceivedBlobPath(

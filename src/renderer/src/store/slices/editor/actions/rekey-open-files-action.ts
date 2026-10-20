@@ -2,6 +2,7 @@ import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFilePathRekey, RekeyOpenFilesResult } from '../types/open-file-path-rekey'
 import { rekeyFileIdRecord } from '../file-ids/open-file-path-rekey'
+import { rekeyEditorBuffers } from '../buffers/editor-buffer-record'
 import { migrateHydratedEditorTabsAndGroups } from '../file-ids/hydrated-editor-file-ids'
 import { recordRenamedEditorFilesInLayoutOwner } from '../tabs/editor-tab-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
@@ -46,6 +47,7 @@ export function createRekeyOpenFilesAction(
           }
         }
 
+        const echoGatedIds = new Set<string>()
         const nextOpenFiles = s.openFiles.map((f) => {
           const rekey = rekeyByOldId.get(f.id)
           if (!rekey) {
@@ -59,6 +61,9 @@ export function createRekeyOpenFilesAction(
             // A 'changed' tab is already autosave-suspended via externalMutation; gating it would strand the gate (verification skips a 'changed' tab), so leave the banner as terminal.
             f.externalMutation !== 'changed' &&
             (f.mode === 'edit' || (f.mode === 'diff' && f.diffSource === 'unstaged'))
+          if (gatesEcho) {
+            echoGatedIds.add(f.id)
+          }
           return {
             ...f,
             id: rekey.newFileId,
@@ -117,6 +122,9 @@ export function createRekeyOpenFilesAction(
 
         return {
           openFiles: nextOpenFiles,
+          editorBuffers: rekeyEditorBuffers(s.editorBuffers, s.openFiles, migrations, (f) =>
+            echoGatedIds.has(f.id) ? { pendingLiveDiskVerification: true } : undefined
+          ),
           editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),
           editorCursorLine: rekeyFileIdRecord(s.editorCursorLine, migrations),
           markdownViewMode: rekeyFileIdRecord(s.markdownViewMode, migrations),

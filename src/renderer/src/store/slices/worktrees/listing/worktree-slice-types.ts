@@ -73,6 +73,8 @@ export type RepoHostSummary = {
 
 export type WorktreeLineageUpdateResult = {
   target: RuntimeClientTarget
+  /** The written row's host as the store stamps it, so a same-id twin on another host stays put. */
+  hostId: ExecutionHostId
   lineage: WorktreeLineage | null
   updatedRemoteWorktree?: WorktreeWithLineage
 }

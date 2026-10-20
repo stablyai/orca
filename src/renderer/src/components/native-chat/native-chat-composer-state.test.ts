@@ -117,13 +117,81 @@ describe('deriveComposerAutocomplete — one grammar for every agent', () => {
     expect(result.items.map((entry) => entry.token)).toEqual(['$typescript'])
   })
 
-  it('no longer treats `$` as a composer trigger', () => {
-    expect(deriveComposerAutocomplete('use $type', 9, COMMANDS, skills, codex).mode).toBe('none')
-    expect(deriveComposerAutocomplete('$react', 6, COMMANDS, skills, codex).mode).toBe('none')
+  it('tokenises Pi skills as `/skill:<name>`, before and after its session reports them', () => {
+    const pi = getNativeChatAgentProfile('pi')
+    const scanned = [skill({ name: 'caveman', description: 'On disk', sourceKind: 'home' })]
+    const tokens = (sessionSkills?: { name: string }[]) => {
+      const result = deriveComposerAutocomplete(
+        '/cave',
+        5,
+        [],
+        scanned,
+        pi,
+        undefined,
+        null,
+        sessionSkills
+      )
+      return result.mode === 'slash'
+        ? result.items.map((entry) => [entry.token, entry.kind === 'skill' && entry.description])
+        : []
+    }
+    expect(tokens()).toEqual([['/skill:caveman', 'On disk']])
+    expect(tokens([{ name: 'skill:caveman' }])).toEqual([['/skill:caveman', 'On disk']])
+  })
+
+  it('opens only Codex skills under `$`, and a pick keeps Codex `$` token', () => {
+    for (const [draft, query] of [
+      ['use $type', 'type'],
+      ['$', '']
+    ] as const) {
+      const result = deriveComposerAutocomplete(draft, draft.length, COMMANDS, skills, codex)
+      expect(result).toMatchObject({ mode: 'slash', prefix: '$', query, dispatchable: false })
+      if (result.mode !== 'slash') {
+        return
+      }
+      expect(result.items.every((entry) => entry.kind === 'skill')).toBe(true)
+    }
+    const picked = applyPickerSuggestion('use $typ now', 8, {
+      kind: 'skill',
+      id: 'skill:typescript',
+      name: 'typescript',
+      token: '$typescript',
+      description: null,
+      sources: []
+    })
+    expect(picked.draft).toBe('use $typescript  now')
+  })
+
+  it('leaves `$` as prose for agents whose skills use `/`', () => {
+    const claude = getNativeChatAgentProfile('claude')
+    expect(deriveComposerAutocomplete('use $type', 9, COMMANDS, skills, claude).mode).toBe('none')
   })
 
   it('does not fire inside shell-style text', () => {
     expect(deriveComposerAutocomplete('price$tag', 9, COMMANDS, skills, codex).mode).toBe('none')
+  })
+
+  // `echo $HOME` + Enter once swapped `$HOME` for a skill whose description named $CODEX_HOME.
+  it.each(['echo $HOME', 'costs $5', 'run $(pwd)'])('leaves shell `$` in %j as prose', (draft) => {
+    expect(isSkillPickerTriggered(draft, codex)).toBe(false)
+    expect(deriveComposerAutocomplete(draft, draft.length, COMMANDS, skills, codex).mode).toBe(
+      'none'
+    )
+  })
+
+  it('matches `$` on skill names only, while `/` still searches descriptions', () => {
+    const installer = [
+      skill({
+        name: 'skill-installer',
+        description: 'Install Codex skills into $CODEX_HOME/skills'
+      })
+    ]
+    const dollar = deriveComposerAutocomplete('echo $CODEX_HOME', 16, [], installer, codex)
+    expect(dollar.mode === 'slash' && dollar.items).toEqual([])
+    const slash = deriveComposerAutocomplete('use /codex_home', 15, [], installer, codex)
+    expect(slash.mode === 'slash' && slash.items.map((entry) => entry.name)).toEqual([
+      'skill-installer'
+    ])
   })
 })
 
@@ -291,7 +359,7 @@ describe('native skill and command picker', () => {
       expect(isSkillPickerTriggered('validate it with /elec', profile)).toBe(true)
       expect(isSkillPickerTriggered('open /Users/me', profile)).toBe(false)
       // Without a catalog fetch the menu would sit on a permanent loading row.
-      expect(isSkillPickerTriggered('use $elec', profile)).toBe(false)
+      expect(isSkillPickerTriggered('use $elec', profile)).toBe(agent === 'codex')
     }
   )
 

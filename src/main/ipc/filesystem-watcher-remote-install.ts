@@ -189,7 +189,8 @@ async function doInstallRemoteWatcher(
         try {
           listener.send('fs:changed', {
             worktreePath,
-            events
+            events,
+            connectionId
           } satisfies FsChangedPayload)
         } catch (err) {
           // Why: batching moved this send out of the SSH mux's notification try/catch into a bare

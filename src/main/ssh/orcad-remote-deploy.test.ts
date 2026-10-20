@@ -189,6 +189,11 @@ function scriptHost(script: HostScript): void {
 }
 
 function options(overrides: Partial<OrcadDeployOptions> = {}): OrcadDeployOptions {
+  const census = overrides.census ?? {
+    liveSessions: 0,
+    startedSinceActivation: 0,
+    daemonProtocolVersion: 3
+  }
   return {
     conn: Object.create(null),
     host: getRemoteHostPlatform('linux-x64'),
@@ -199,7 +204,9 @@ function options(overrides: Partial<OrcadDeployOptions> = {}): OrcadDeployOption
     userDataDir: '/home/u/.orca',
     bindHost: '127.0.0.1',
     port: 7777,
-    census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 },
+    census,
+    // An unchanged recount unless a test opens a terminal during the upload.
+    recountCensus: async () => census,
     readinessTimeoutMs: 50,
     sleep: async () => {},
     now: () => new Date('2026-02-02T00:00:00.000Z'),
@@ -632,21 +639,31 @@ describe('deployOrcad', () => {
     expect(script.log.indexOf(`stop:${OLD_VERSION}`)).toBeLessThan(script.log.indexOf('snapshot'))
   })
 
-  it('defers on a recount just before the stop when a terminal opened during the upload', async () => {
+  const LIVE = { liveSessions: 1, startedSinceActivation: 1, daemonProtocolVersion: 3 }
+  const UNREAD = { liveSessions: null, startedSinceActivation: null, daemonProtocolVersion: null }
+  it.each([
+    [LIVE, false, 'orcad_update_terminals_running'],
+    [{ ...LIVE, inProcessSessions: 1 }, true, 'orcad_update_ends_in_process_terminals'],
+    [UNREAD, true, 'orcad_update_daemon_protocol_unverifiable'],
+    [new Error('tunnel closed'), false, 'orcad_update_terminal_census_unavailable']
+  ])('defers on a recount of %j just before the stop (force: %s)', async (recount, force, code) => {
     const script: HostScript = {
       activationRecord: ACTIVE_OLD,
       readiness: { [NEW_VERSION]: readyLine({}) },
       log: []
     }
     scriptHost(script)
-    const recountCensus = vi.fn(async () => ({
-      liveSessions: 1,
-      startedSinceActivation: 1,
-      daemonProtocolVersion: 3
-    }))
-    expect(
-      await deployOrcad(options({ censusRecord: JSON.parse(ACTIVE_OLD), recountCensus }))
-    ).toMatchObject({ outcome: 'installed-not-activated', code: 'orcad_update_terminals_running' })
+    const recountCensus = vi.fn(async () => {
+      if (recount instanceof Error) {
+        throw recount
+      }
+      return recount
+    })
+    const counted = { censusRecord: JSON.parse(ACTIVE_OLD), recountCensus, force }
+    expect(await deployOrcad(options(counted))).toMatchObject({
+      outcome: 'installed-not-activated',
+      code
+    })
     expect(recountCensus).toHaveBeenCalledTimes(1)
     expect(script.log).toEqual(['preflight'])
   })

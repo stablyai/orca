@@ -60,9 +60,10 @@ import {
   probeRemoteNodeRuntimeCommand,
   promoteRemoteNodeRuntimeCommand,
   recheckAndPromoteRemoteNodeRuntimeCommand,
-  remoteNodeRuntimePresentCommand,
-  remoteSha256Command
+  remoteNodeRuntimePresentCommand
 } from './install/orcad-remote-node-runtime'
+import { remoteSha256Command } from './install/remote-sha256-command'
+import { hostDownloadNodeRuntimeCommand } from './install/remote-node-runtime-host-download'
 import { remoteOrcadBuildHashCommand } from './install/orcad-remote-build-hash'
 import { remoteFreeSpaceProbeCommand } from './install/remote-install-out-of-space'
 import { sweepStaleRuntimeStagesCommand } from './install/remote-node-runtime-store-gc'
@@ -187,6 +188,8 @@ const BUILDERS: Readonly<Record<string, (c: HostCase) => string>> = {
   orcadLivenessProbeCommand: ({ host }) => orcadLivenessProbeCommand(host, slotDir),
   remoteSha256Command: ({ nodePath }) => remoteSha256Command(`'${nodePath}'`),
   remoteFreeSpaceProbeCommand: ({ nodePath }) => remoteFreeSpaceProbeCommand(nodePath),
+  hostDownloadNodeRuntimeCommand: ({ host, nodePath, target }) =>
+    hostDownloadNodeRuntimeCommand(host, { stageDir: `${nodePath}.stage-${token}`, target }),
   createExecProbedStageCommand: ({ host, nodePath }) =>
     createExecProbedStageCommand(host, `${nodePath}.stage-${token}`),
   probeRemoteNodeRuntimeCommand: ({ host, nodePath, target }) =>

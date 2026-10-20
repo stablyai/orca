@@ -4,6 +4,7 @@ import type { AppState } from '@/store/types'
 const mocks = vi.hoisted(() => {
   const state: {
     activeWorktreeId: string | null
+    activeWorkspaceExecutionHostId?: string | null
     setActiveWorktree: ReturnType<typeof vi.fn>
     shutdownWorktreeBrowsers: ReturnType<typeof vi.fn>
     shutdownWorktreeTerminals: ReturnType<typeof vi.fn>
@@ -267,6 +268,35 @@ describe('runSleepWorktree', () => {
           'The host could not confirm terminal shutdown. The workspace was kept open; check the connection and try again.'
       })
     )
+  })
+
+  it('restores the active twin on the host it was selected on', async () => {
+    mocks.state.activeWorktreeId = 'wt-1'
+    mocks.state.activeWorkspaceExecutionHostId = 'ssh:box'
+    mocks.state.shutdownWorktreeTerminals.mockRejectedValueOnce(
+      new Error('terminal_worktree_sleep_still_live')
+    )
+
+    try {
+      await runSleepWorktree('wt-1')
+    } finally {
+      mocks.state.activeWorkspaceExecutionHostId = null
+    }
+
+    expect(mocks.state.setActiveWorktree).toHaveBeenLastCalledWith('wt-1', 'ssh:box')
+  })
+
+  it('leaves a workspace the user picked during a failed sleep selected', async () => {
+    mocks.state.activeWorktreeId = 'wt-1'
+    mocks.state.shutdownWorktreeTerminals.mockImplementationOnce(async () => {
+      mocks.state.activeWorktreeId = 'wt-picked'
+      throw new Error('terminal_worktree_sleep_still_live')
+    })
+
+    await runSleepWorktree('wt-1')
+
+    expect(mocks.state.setActiveWorktree.mock.calls).toEqual([[null]])
+    expect(mocks.state.activeWorktreeId).toBe('wt-picked')
   })
 
   it('continues sleeping later worktrees when one selected worktree fails', async () => {

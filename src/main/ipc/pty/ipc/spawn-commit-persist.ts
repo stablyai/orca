@@ -66,6 +66,8 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<P
       if (persisted === false) {
         throw new Error('terminal_pane_owner_changed')
       }
+      // The swap holds the live binding now: a later failure must not retire it under the same id.
+      ctx.replacedPaneOwner = null
     } catch (err) {
       console.error('[pty] failed to persist PTY binding after spawn:', err)
       await discardUnpersistedPtySpawn(ctx.provider, ctx.result, ctx.deps.runtime)

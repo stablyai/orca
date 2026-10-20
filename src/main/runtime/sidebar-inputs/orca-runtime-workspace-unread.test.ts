@@ -25,6 +25,7 @@ vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS
 
 const WT = 'repo-1::/tmp/worktree-a'
 const SSH_WT = 'repo-ssh::/home/me/worktree-b'
+const HUB_WT = 'repo-hub::/srv/worktree-c'
 const FOLDER_ID = '11111111-1111-4111-8111-111111111111'
 const FOLDER = folderWorkspaceKey(FOLDER_ID)
 const LEAF = '22222222-2222-4222-8222-222222222222'
@@ -53,12 +54,17 @@ function currentDesktopSockets() {
 function createHeadlessHost() {
   const meta: Record<string, Flag> = { [WT]: { lastActivityAt: 0, isUnread: false } }
   const sshMeta: Record<string, Flag> = { [SSH_WT]: { lastActivityAt: 0, isUnread: false } }
+  // A same-id project this host registered under a server's id and locally.
+  const hubMeta: Record<string, Flag> = { [HUB_WT]: { lastActivityAt: 0, isUnread: false } }
+  meta[HUB_WT] = { lastActivityAt: 0, isUnread: false }
   const folders: Record<string, Flag & { projectGroupId: string }> = {
     [FOLDER_ID]: { lastActivityAt: 0, isUnread: false, projectGroupId: 'group-1' }
   }
   const repos = [
     { id: 'repo-1', connectionId: null },
-    { id: 'repo-ssh', connectionId: 'build-box' }
+    { id: 'repo-ssh', connectionId: 'build-box' },
+    { id: 'repo-hub', connectionId: null, executionHostId: 'runtime:hub' },
+    { id: 'repo-hub', connectionId: null }
   ]
   const store = {
     getRepos: () => repos,
@@ -68,9 +74,16 @@ function createHeadlessHost() {
     getWorktreeMeta: (id: string) => meta[id],
     getAllWorktreeMeta: () => meta,
     setWorktreeMeta: ({ id, hostId }: HostWorktreeTarget, updates: Partial<Flag>) =>
-      Object.assign(hostId === 'ssh:build-box' ? sshMeta[id] : meta[id], updates),
+      Object.assign(
+        hostId === 'ssh:build-box'
+          ? sshMeta[id]
+          : hostId === 'runtime:hub'
+            ? hubMeta[id]
+            : meta[id],
+        updates
+      ),
     getWorktreeMetaForHost: (id: string, hostId: string) =>
-      hostId === 'ssh:build-box' ? sshMeta[id] : undefined,
+      hostId === 'ssh:build-box' ? sshMeta[id] : hostId === 'runtime:hub' ? hubMeta[id] : meta[id],
     getFolderWorkspace: (id: string) => folders[id],
     updateFolderWorkspace: (id: string, updates: Partial<Flag>) =>
       Object.assign(folders[id], updates)
@@ -112,6 +125,7 @@ function createHeadlessHost() {
     runtime,
     meta,
     sshMeta,
+    hubMeta,
     folders,
     finishTurn,
     // The phone's session screen holds this stream while the workspace is open on it.
@@ -172,6 +186,16 @@ describe('workspace unread flag on a headless host', () => {
     host.runtime.cleanupSubscriptionsForConnection('phone-1')
     host.finishTurn(SSH_WT, 'build-box')
     expect(host.sshMeta[SSH_WT].isUnread).toBe(true)
+  })
+
+  // The phone names only an id, so it cannot say which of two same-id copies it shows.
+  it('clears neither copy of a workspace two hosts register', async () => {
+    const host = createHeadlessHost()
+    host.hubMeta[HUB_WT].isUnread = true
+    host.meta[HUB_WT].isUnread = true
+    await host.openOnPhone(HUB_WT)
+    expect(host.hubMeta[HUB_WT].isUnread).toBe(true)
+    expect(host.meta[HUB_WT].isUnread).toBe(true)
   })
 
   it('spares the tab a client window shows while its user is present', async () => {

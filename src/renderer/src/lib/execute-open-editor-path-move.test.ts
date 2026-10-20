@@ -84,6 +84,63 @@ describe('executeOpenEditorPathMove', () => {
     expect(__activeEditorPathMoveCountForTests()).toBe(0)
   })
 
+  it('never retargets the same path open from a same-id workspace on a server', async () => {
+    const localId = openDirtyTab()
+    const state = useAppStore.getState()
+    state.openFile({
+      filePath: '/repo/a.md',
+      relativePath: 'a.md',
+      worktreeId: 'wt-1',
+      runtimeEnvironmentId: 'env-server',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    const remote = useAppStore
+      .getState()
+      .openFiles.find((file) => file.runtimeEnvironmentId === 'env-server')!
+    state.setEditorDraft(remote.id, 'server draft')
+    state.markFileDirty(remote.id, true)
+
+    await executeOpenEditorPathMove({
+      context: { ...CONTEXT, expectedExecutionHostId: 'local' },
+      fromPath: '/repo/a.md',
+      toPath: '/repo/b.md',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo'
+    })
+
+    const files = useAppStore.getState().openFiles
+    expect(files.find((file) => file.runtimeEnvironmentId !== 'env-server')!.filePath).toBe(
+      '/repo/b.md'
+    )
+    expect(files.find((file) => file.id === remote.id)).toMatchObject({
+      filePath: '/repo/a.md',
+      isDirty: true
+    })
+    expect(useAppStore.getState().editorDrafts[remote.id]).toBe('server draft')
+    expect(useAppStore.getState().editorDrafts[localId]).toBeUndefined()
+  })
+
+  it('still moves its own tab when the workspace host focus changes while the rename runs', async () => {
+    openDirtyTab()
+    mocks.renameRuntimePath.mockImplementation(async () => {
+      useAppStore.setState({
+        activeWorktreeId: 'wt-1',
+        activeWorkspaceExecutionHostId: 'runtime:env-other'
+      })
+    })
+
+    await executeOpenEditorPathMove({
+      context: { ...CONTEXT, expectedExecutionHostId: 'local' },
+      fromPath: '/repo/a.md',
+      toPath: '/repo/b.md',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo'
+    })
+
+    expect(useAppStore.getState().openFiles[0]!.filePath).toBe('/repo/b.md')
+  })
+
   it('declares the moved file as the document for a document-scoped rename', async () => {
     openDirtyTab()
 

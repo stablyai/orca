@@ -97,6 +97,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
 export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/ai-vault-search/session-search-query-schema.ts': 'ai-vault-search',
   'src/main/ai-vault-search/session-search-schema.ts': 'ai-vault-search',
+  'src/main/ai-vault-search/session-search-write-buffer.ts': 'ai-vault-search-staging',
   'src/main/ai-vault/session-parse-cache-database.ts': 'ai-vault-parse-cache',
   'src/main/ai-vault/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
   'src/main/browser/browser-cookie-staged-import.ts': 'browser-cookie-import',
@@ -217,6 +218,11 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
       'ai-vault-search',
       ['files', 'messages', 'messages_fts', 'messages_vocab', 'meta', 'sessions'],
       notApplicableDisposition(57, 'AI Vault search index; rebuilt from transcripts.')
+    ),
+    ...tables(
+      'ai-vault-search-staging',
+      ['messages'],
+      notApplicableDisposition(57, 'Read-local search staging; deleted when its connection closes.')
     ),
     ...tables(
       'ai-vault-parse-cache',

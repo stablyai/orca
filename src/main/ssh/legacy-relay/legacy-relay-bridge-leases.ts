@@ -6,9 +6,14 @@ import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import type { LegacyRelayBridgedPane } from '../../../shared/legacy-relay-bridge-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import type { LegacyRelayPty } from './legacy-relay-client'
+import type { LegacyRelayClient, LegacyRelayPty } from './legacy-relay-client'
+import { isEpochScopedRelayPtyId } from '../../../shared/ssh-pending-pty-kill'
+import type { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
 
 export type { LegacyRelayPty }
+
+/** A relay's listing row: the endpoint that answered, and the connection the answer came on. */
+export type ListedRow = LegacyRelayPty & { endpoint: string; client?: LegacyRelayClient }
 
 /** How long an attach waits for an unreachable relay before answering `unverifiable`. */
 export const ATTACH_WAIT_MS = 20_000
@@ -75,9 +80,12 @@ export type Pane = {
   endpoint: string | null
   state: 'live' | 'unverifiable'
   /** What the listing relay claimed about the process, for the relay-era CLI's identity checks. */
-  listed?: LegacyRelayPty
+  listed?: ListedRow
   /** Its tab closed and its stop is still owed: listed for the stop, never served. */
   stopping?: true
+  /** Its relay's socket now runs another relay: no listing can bring it back or prove it gone, so it
+   *  schedules no retry, and a stop owed to it is abandoned rather than sent. */
+  replaced?: true
 }
 
 export function toPane(
@@ -85,7 +93,7 @@ export function toPane(
   relayPtyId: string,
   endpoint: string | null,
   state: Pane['state'],
-  listed?: LegacyRelayPty
+  listed?: ListedRow
 ): Pane {
   return {
     lease,
@@ -95,6 +103,86 @@ export function toPane(
     ...(listed ? { listed } : {}),
     ...(lease.pendingKill ? { stopping: true as const } : {})
   }
+}
+
+/** Every leased pane not yet tracked, as unverifiable; null when all already are. */
+export function seededPanes(
+  targetId: string,
+  panes: ReadonlyMap<string, Pane>,
+  leases: ReadonlyMap<string, SshRemotePtyLease>
+): Map<string, Pane> | null {
+  const seeded = new Map(panes)
+  for (const [relayPtyId, lease] of leases) {
+    const ptyId = toAppSshPtyId(targetId, relayPtyId)
+    if (!seeded.has(ptyId)) {
+      seeded.set(ptyId, toPane(lease, relayPtyId, null, 'unverifiable'))
+    }
+  }
+  return seeded.size !== panes.size ? seeded : null
+}
+
+/**
+ * A leased pane after a listing, or the proof it ended: `exited` is its exit code, or `null` once
+ * every relay that could run it answered without it. `complete`: every relay the host runs was
+ * accounted for and answered.
+ */
+export function relistedPane(
+  lease: SshRemotePtyLease,
+  relayPtyId: string,
+  listedRows: readonly ListedRow[],
+  owners: LegacyRelayPaneOwners,
+  complete: boolean
+): Pane | { exited: number | null } {
+  const rows = listedRows.filter((row) => row.relayPtyId === relayPtyId)
+  if (owners.owner(relayPtyId) === undefined && rows.length > 1) {
+    owners.claimContested(relayPtyId)
+  }
+  const owner = owners.owner(relayPtyId)
+  // Why only on a complete listing: a relay that could not be asked, or that the host's census
+  // could not account for, may be the one running it, and an owner once pinned is never revisited.
+  // An epoch-scoped id names one process on one relay, so its sole lister is its owner regardless.
+  const provable = complete || isEpochScopedRelayPtyId(relayPtyId)
+  const adopted = owner === undefined && provable && rows.length === 1 ? rows[0] : undefined
+  const ownRow = owner ? rows.find((row) => row.endpoint === owner) : undefined
+  // A relay restarted at the owner's socket numbers its shells from pty-1 again: same id, another
+  // process. Never bound, so no attach, input, stop or report ever reaches it.
+  const replaced = ownRow !== undefined && !owners.isOwnerProcess(relayPtyId, ownRow)
+  if (replaced) {
+    owners.markReplaced(relayPtyId)
+  }
+  const listed = replaced ? undefined : (ownRow ?? adopted)
+  // The owner's relay answering without it proves the exit; a replacement's silence proves nothing.
+  const ownerSilent = owner ? !owners.isReplaced(relayPtyId) : rows.length === 0
+  // A listing taken before its relay's exit report must not bring the pane back live.
+  // An epoch-scoped id names one process, so its owner's report counts without a listing row.
+  const exitEndpoint =
+    listed && !replaced ? listed.endpoint : isEpochScopedRelayPtyId(relayPtyId) ? owner : null
+  const exitedFirst = exitEndpoint ? owners.exitBeforeListing(relayPtyId, exitEndpoint) : undefined
+  if (exitedFirst !== undefined || (!listed && complete && ownerSilent)) {
+    owners.forget(relayPtyId)
+    return { exited: exitedFirst ?? null }
+  }
+  if (listed) {
+    owners.bind(relayPtyId, listed)
+    return toPane(lease, relayPtyId, listed.endpoint, 'live', listed)
+  }
+  // Unreachable, contested or replaced: loss of contact is never exit, so the pane waits.
+  const waiting = toPane(lease, relayPtyId, null, 'unverifiable')
+  return owners.isReplaced(relayPtyId) ? { ...waiting, replaced: true } : waiting
+}
+
+/** The connection a live pane's attach, input and stop go to: only one the ledger says speaks for it. */
+export function liveRouteOf(
+  pane: Pane | undefined,
+  endpoints: ReadonlyMap<string, { client: LegacyRelayClient | null }>,
+  owners: LegacyRelayPaneOwners
+): { client: LegacyRelayClient; relayPtyId: string } | null {
+  const client = pane?.endpoint ? endpoints.get(pane.endpoint)?.client : null
+  const speaks =
+    pane?.state === 'live' && pane.endpoint && client
+      ? owners.speaksFor(pane.relayPtyId, pane.endpoint, client)
+      : false
+  return speaks && pane && client ? { client, relayPtyId: pane.relayPtyId } : null
 }
 
 /** The panes a bridge serves; a closed tab's pane, its stop owed or its lease ended, is not one. */

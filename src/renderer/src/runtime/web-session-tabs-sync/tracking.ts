@@ -10,6 +10,7 @@ import {
   setBoundedSessionTabsReceipt,
   trackedSessionTabsWorktreeIdsByEnvironment,
   nextReceivedSessionTabsFrame,
+  sessionTabsFreshnessKey,
   type SnapshotFreshness,
   type SessionTabsListAllResult,
   type TrackedWebSessionTabsWorktree
@@ -34,9 +35,7 @@ export function isSessionTabsListAllResult(value: unknown): value is SessionTabs
   )
 }
 
-export function sessionTabsFreshnessKey(environmentId: string, worktreeId: string): string {
-  return `${environmentId}:${worktreeId}`
-}
+export { sessionTabsFreshnessKey } from './state'
 
 export function advancesSessionTabsFreshness(
   snapshot: RuntimeMobileSessionTabsResult,

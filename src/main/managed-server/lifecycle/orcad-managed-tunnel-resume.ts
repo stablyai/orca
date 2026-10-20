@@ -202,19 +202,22 @@ export class OrcadManagedTunnelResumeRecovery {
       target,
       connection: active.connection
     })
+    const stillCurrent = (): boolean =>
+      active.connection.getConnectGeneration() === transportGeneration &&
+      this.stillOwned(environment.id, active, ownershipGeneration, managerGeneration) &&
+      this.resolveEnvironment(environment.id, active, options) !== null
     const forward = await forwardToVerifiedOrcad({
       targetId: active.targetId,
       connection: active.connection,
       forwards: this.dependencies.forwards,
       localPort: deployment.localPort,
-      label: `Managed Orca server: ${current.environment.name}`,
+      label: `Orca on ${current.environment.name}`,
       ...checks,
-      stillCurrent: () =>
-        active.connection.getConnectGeneration() === transportGeneration &&
-        this.stillOwned(environment.id, active, ownershipGeneration, managerGeneration) &&
-        this.resolveEnvironment(environment.id, active, options) !== null
+      stillCurrent
     })
-    if (!forward) {
+    // Why re-check: a teardown can land between the build's last check and this record.
+    if (!forward || !stillCurrent()) {
+      await (forward && this.dependencies.forwards.removeForwardAndWait(forward.id))
       return
     }
     recordActiveOrcadTunnel(this.dependencies.active, environment.id, forward, {

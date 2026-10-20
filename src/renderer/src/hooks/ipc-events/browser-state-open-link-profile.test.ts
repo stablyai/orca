@@ -102,7 +102,8 @@ describe('link-opened Orca tabs', () => {
     )
   })
 
-  it('leaves the profile unset when the opener tab is gone, so the user default still applies', () => {
+  // Baseline defect: remove .fails when the captured-claim handoff rejects this event.
+  it.fails('rejects a missing source tab without default-profile fallback', () => {
     storeState.value = {
       browserPagesByWorkspace: {
         'workspace-1': [{ id: 'page-1', workspaceId: 'missing', worktreeId: 'worktree-1' }]
@@ -113,8 +114,7 @@ describe('link-opened Orca tabs', () => {
 
     captureOpenLinkHandler()({ browserPageId: 'page-1', url: 'https://docs.example.com/guide' })
 
-    const options = createBrowserTabMock.mock.calls[0][2] as Record<string, unknown>
-    expect('sessionProfileId' in options).toBe(false)
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
   it('creates modifier-click links in the background', () => {

@@ -17,7 +17,10 @@ const store = {
     activeRuntimeEnvironmentId: 'web-runtime' as string | null
   },
   projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' as const } }],
-  repos: [{ id: 'repo-1', connectionId: null, path: '/repo' }],
+  // The client stamps a server's rows on arrival; focus alone never names the owner.
+  repos: [
+    { id: 'repo-1', connectionId: null, path: '/repo', executionHostId: 'runtime:web-runtime' }
+  ],
   worktreesByRepo: {
     'repo-1': [
       {

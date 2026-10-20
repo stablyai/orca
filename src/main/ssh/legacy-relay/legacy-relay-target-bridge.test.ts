@@ -1,122 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import { getRemoteHostPlatform } from '../ssh-remote-platform'
-import type { LegacyRelayClient } from './legacy-relay-client'
 import type { LegacyRelayEndpoint, LegacyRelayEndpointListing } from './legacy-relay-endpoints'
+import {
+  ENDPOINT,
+  type FakeRelay,
+  fakeClient,
+  lease,
+  newFakeRelay,
+  PTY,
+  TARGET
+} from './legacy-relay-fake-relay.test-fixture'
 import { LegacyRelayPaneStops } from './legacy-relay-pane-stops'
+import { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
 import {
   LegacyRelayTargetBridge,
   type LegacyRelayTargetBridgeDeps
 } from './legacy-relay-target-bridge'
 
-const TARGET = 'ssh-box'
-const PTY = toAppSshPtyId(TARGET, 'pty-1')
-
-type FakeRelay = {
-  ptys: Set<string>
-  attachError: Error | null
-  clients: FakeClient[]
-  openError: Error | null
-  shutdowns: string[]
-  shutdownError: Error | null
-  /** The process identity each listed PTY reports, when the relay reports one. */
-  incarnations: Map<string, string>
-  /** Whether a stop reports `pty.exit` (the relay's normal answer). */
-  exitOnShutdown: boolean
-}
-
-type FakeClient = LegacyRelayClient & {
-  emitData: (id: string, data: string) => void
-  emitExit: (id: string, code: number) => void
-  drop: () => void
-  writes: string[]
-}
-
-function fakeClient(relay: FakeRelay): FakeClient {
-  const data = new Set<(id: string, data: string) => void>()
-  const exits = new Set<(id: string, code: number) => void>()
-  const closes = new Set<() => void>()
-  let closed = false
-  const writes: string[] = []
-  const close = (): void => {
-    if (!closed) {
-      closed = true
-      closes.forEach((listener) => listener())
-    }
-  }
-  const client = {
-    ownerClaim: { ownerGeneration: 1, ownerLease: 'lease' },
-    get closed() {
-      return closed
-    },
-    list: async () =>
-      [...relay.ptys].map((relayPtyId) => {
-        const incarnationId = relay.incarnations.get(relayPtyId)
-        return incarnationId ? { relayPtyId, incarnationId } : { relayPtyId }
-      }),
-    attach: async () => {
-      if (relay.attachError) {
-        throw relay.attachError
-      }
-      return { replay: 'SCREEN' }
-    },
-    shutdown: async (id: string, expectedIncarnationId?: string) => {
-      if (relay.shutdownError) {
-        throw relay.shutdownError
-      }
-      relay.shutdowns.push(expectedIncarnationId ? `${id}#${expectedIncarnationId}` : id)
-      relay.ptys.delete(id)
-      if (relay.exitOnShutdown) {
-        exits.forEach((listener) => listener(id, 0))
-      }
-    },
-    write: (_id: string, chunk: string) => writes.push(chunk),
-    resize: () => {},
-    onData: (listener: (id: string, data: string) => void) => {
-      data.add(listener)
-      return () => data.delete(listener)
-    },
-    onExit: (listener: (id: string, code: number) => void) => {
-      exits.add(listener)
-      return () => exits.delete(listener)
-    },
-    onClose: (listener: () => void) => {
-      closes.add(listener)
-      return () => closes.delete(listener)
-    },
-    close,
-    emitData: (id: string, chunk: string) => data.forEach((listener) => listener(id, chunk)),
-    emitExit: (id: string, code: number) => exits.forEach((listener) => listener(id, code)),
-    drop: close,
-    writes
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bridge reads only the members this fake implements.
-  return client as unknown as FakeClient
-}
-
-const ENDPOINT: LegacyRelayEndpoint = {
-  endpoint: '/home/me/.orca-remote/relay-0.1.0+abc/relay-x.sock',
-  connectCommand: 'cd x && node relay.js --connect',
-  wrapCommand: true,
-  host: getRemoteHostPlatform('linux-x64'),
-  nodePath: 'node'
-}
-
-function lease(overrides: Partial<SshRemotePtyLease> = {}): SshRemotePtyLease {
-  return {
-    targetId: TARGET,
-    ptyId: 'pty-1',
-    tabId: 'tab-1',
-    leafId: 'leaf-1',
-    state: 'detached',
-    createdAt: 1,
-    updatedAt: 1,
-    ...overrides
-  }
-}
-
 let relay: FakeRelay
+let owners: LegacyRelayPaneOwners
 let leases: SshRemotePtyLease[]
 let listing: LegacyRelayEndpointListing
 let endpointExited: boolean
@@ -173,6 +76,8 @@ function bridge(overrides: Partial<LegacyRelayTargetBridgeDeps> = {}): LegacyRel
     onTerminalExited: () => {
       events.exitedTelemetry += 1
     },
+    // As the registry keeps them: one target's owners outlive each bridge.
+    owners,
     ...overrides
   })
   return subject
@@ -180,17 +85,9 @@ function bridge(overrides: Partial<LegacyRelayTargetBridgeDeps> = {}): LegacyRel
 
 beforeEach(() => {
   vi.useFakeTimers()
-  relay = {
-    ptys: new Set(['pty-1']),
-    attachError: null,
-    clients: [],
-    openError: null,
-    shutdowns: [],
-    shutdownError: null,
-    incarnations: new Map(),
-    exitOnShutdown: true
-  }
+  relay = newFakeRelay()
   stops = paneStops()
+  owners = new LegacyRelayPaneOwners()
   leases = [lease()]
   listing = { kind: 'listed', endpoints: [ENDPOINT], exhaustive: true }
   endpointExited = false
@@ -449,6 +346,7 @@ describe('one target’s legacy relay bridge', () => {
     const client = fakeClient(relay)
     const recycled = {
       paneState: () => 'live' as const,
+      paneReplaced: () => false,
       liveRoute: () => ({ client, relayPtyId: 'pty-1' }),
       listedIncarnation: () => 'inc-2',
       refresh: async () => {}
@@ -478,6 +376,7 @@ describe('one target’s legacy relay bridge', () => {
     }
     const lostReply = {
       paneState: () => 'live' as const,
+      paneReplaced: () => false,
       liveRoute: () => ({ client, relayPtyId: 'pty2:epoch:1' }),
       listedIncarnation: () => undefined,
       refresh: async () => {}
@@ -717,6 +616,152 @@ describe('one target’s legacy relay bridge', () => {
     successor.detach(PTY, lateResult.status === 'attached' ? lateResult.acquisitionId : -1)
     relay.clients.at(-1)?.emitData('pty-1', 'still viewed')
     expect(events.data).toEqual(['still viewed'])
+  })
+
+  describe('two relays that list the same relay id', () => {
+    const OTHER: LegacyRelayEndpoint = { ...ENDPOINT, endpoint: '/home/me/.orca-remote/b.sock' }
+    let other: FakeRelay
+    const clientOf = (endpoint: LegacyRelayEndpoint) =>
+      (endpoint.endpoint === OTHER.endpoint ? other : relay).clients.at(-1)!
+    const twoRelays = (): LegacyRelayTargetBridge =>
+      bridge({
+        openClient: async (endpoint) => {
+          const owner = endpoint.endpoint === OTHER.endpoint ? other : relay
+          if (owner.openError) {
+            throw owner.openError
+          }
+          const client = fakeClient(owner)
+          owner.clients.push(client)
+          return client
+        }
+      })
+
+    beforeEach(() => {
+      other = { ...relay, ptys: new Set(), clients: [], shutdowns: [], incarnations: new Map() }
+    })
+
+    it('keeps the attached relay when a second one later lists the same id', async () => {
+      const subject = twoRelays()
+      await subject.refresh()
+      await expect(subject.attach(PTY)).resolves.toMatchObject({ status: 'attached' })
+      other.ptys.add('pty-1')
+      listing = { kind: 'listed', endpoints: [ENDPOINT, OTHER], exhaustive: true }
+      await subject.refresh()
+      subject.write(PTY, 'ls\r')
+      expect(clientOf(ENDPOINT).writes).toEqual(['ls\r'])
+      expect(clientOf(OTHER).writes).toEqual([])
+      // Only the owning relay speaks for the pane.
+      clientOf(OTHER).emitData('pty-1', 'foreign')
+      clientOf(OTHER).emitExit('pty-1', 0)
+      expect(events.data).toEqual([])
+      expect(events.exits).toEqual([])
+      expect(leases[0].state).toBe('detached')
+    })
+
+    it('retires the pane when its own relay answers without it, never moving it to the other', async () => {
+      const subject = twoRelays()
+      await subject.refresh()
+      relay.ptys.delete('pty-1')
+      other.ptys.add('pty-1')
+      listing = { kind: 'listed', endpoints: [ENDPOINT, OTHER], exhaustive: true }
+      await subject.refresh()
+      expect(leases[0].state).toBe('terminated')
+      expect(subject.snapshot()).toEqual([])
+    })
+
+    it('serves neither relay when both list the id and neither held it', async () => {
+      other.ptys.add('pty-1')
+      listing = { kind: 'listed', endpoints: [ENDPOINT, OTHER], exhaustive: true }
+      const subject = twoRelays()
+      await subject.refresh()
+      expect(subject.snapshot()).toEqual([expect.objectContaining({ state: 'unverifiable' })])
+      expect(leases[0].state).toBe('detached')
+      // One claimant dropping it settles nothing: the one left may be the stranger.
+      other.ptys.delete('pty-1')
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(subject.snapshot()).toEqual([expect.objectContaining({ state: 'unverifiable' })])
+      subject.write(PTY, 'ls\r')
+      expect(relay.clients.flatMap((client) => client.writes)).toEqual([])
+      // Once no relay lists it, it is gone.
+      relay.ptys.delete('pty-1')
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(leases[0].state).toBe('terminated')
+    })
+
+    it('never adopts the one relay listing an id while another could not be asked', async () => {
+      other.ptys.add('pty-1')
+      relay.openError = new Error('ssh down')
+      listing = { kind: 'listed', endpoints: [ENDPOINT, OTHER], exhaustive: true }
+      const subject = twoRelays()
+      await subject.refresh()
+      expect(subject.snapshot()).toEqual([expect.objectContaining({ state: 'unverifiable' })])
+      // The unreachable relay answers and both list the id: still nobody's.
+      relay.openError = null
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(subject.snapshot()).toEqual([expect.objectContaining({ state: 'unverifiable' })])
+      expect(other.clients.flatMap((client) => client.writes)).toEqual([])
+    })
+
+    it('never adopts the one relay listing an id while the census may have missed another', async () => {
+      listing = { kind: 'listed', endpoints: [ENDPOINT], exhaustive: false }
+      const subject = twoRelays()
+      await subject.refresh()
+      expect(subject.snapshot()).toEqual([expect.objectContaining({ state: 'unverifiable' })])
+      // The census later accounts for every relay, and the missed one runs the same id.
+      other.ptys.add('pty-1')
+      listing = { kind: 'listed', endpoints: [ENDPOINT, OTHER], exhaustive: true }
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(subject.snapshot()).toEqual([expect.objectContaining({ state: 'unverifiable' })])
+      subject.write(PTY, 'ls\r')
+      expect(relay.clients.flatMap((client) => client.writes)).toEqual([])
+    })
+
+    it('serves an epoch-scoped id from its one relay even while the census may have missed one', async () => {
+      const epochPty = toAppSshPtyId(TARGET, 'pty2:epoch:1')
+      leases = [lease({ ptyId: 'pty2:epoch:1' })]
+      relay.ptys = new Set(['pty2:epoch:1'])
+      listing = { kind: 'listed', endpoints: [ENDPOINT], exhaustive: false }
+      const subject = twoRelays()
+      await subject.refresh()
+      expect(subject.snapshot()).toEqual([
+        expect.objectContaining({ ptyId: epochPty, state: 'live' })
+      ])
+    })
+
+    it('keeps the owning relay across a reconnect, when both relays list the id', async () => {
+      const first = twoRelays()
+      await first.refresh()
+      first.dispose()
+      other.ptys.add('pty-1')
+      listing = { kind: 'listed', endpoints: [ENDPOINT, OTHER], exhaustive: true }
+      const successor = twoRelays()
+      await successor.refresh()
+      await expect(successor.attach(PTY)).resolves.toMatchObject({ status: 'attached' })
+      successor.write(PTY, 'ls\r')
+      expect(clientOf(ENDPOINT).writes).toEqual(['ls\r'])
+      expect(clientOf(OTHER).writes).toEqual([])
+    })
+
+    it('keeps an exit the relay reported while its listing was in flight', async () => {
+      const subject = bridge({
+        openClient: async () => {
+          const client = fakeClient(relay)
+          const list = client.list.bind(client)
+          client.list = async () => {
+            const rows = await list()
+            // The shell exits after the relay answered but before the pane has an owner.
+            client.emitExit('pty-1', 3)
+            return rows
+          }
+          relay.clients.push(client)
+          return client
+        }
+      })
+      await subject.refresh()
+      expect(events.exits).toEqual([PTY])
+      expect(leases[0].state).toBe('terminated')
+      expect(subject.snapshot()).toEqual([])
+    })
   })
 
   it('hangs up every connection on dispose and leaves the relays to their own grace', async () => {

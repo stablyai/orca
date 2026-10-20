@@ -6,8 +6,6 @@ import {
   resolveFileExplorerPaths
 } from './file-target'
 import type { RuntimeFileCommandHost } from './file-command-host'
-import { runNativeChatScratchSave } from '../../native-chat/native-chat-scratch-folder-lock'
-import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import { constants, copyFile, mkdir, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
@@ -40,12 +38,10 @@ export class RuntimeFileMutations {
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    return runNativeChatScratchSave(getProfileUserDataPath(), target.path, () =>
-      requireRuntimeFileProvider(target, this.host).writeFileWithDiskPrecondition(
-        target.path,
-        content,
-        diskPrecondition
-      )
+    return requireRuntimeFileProvider(target, this.host).writeFileWithDiskPrecondition(
+      target.path,
+      content,
+      diskPrecondition
     )
   }
 
@@ -64,9 +60,7 @@ export class RuntimeFileMutations {
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    await runNativeChatScratchSave(getProfileUserDataPath(), target.path, () =>
-      requireRuntimeFileProvider(target, this.host).writeFileBase64(target.path, contentBase64)
-    )
+    await requireRuntimeFileProvider(target, this.host).writeFileBase64(target.path, contentBase64)
     return { ok: true }
   }
 
@@ -86,12 +80,10 @@ export class RuntimeFileMutations {
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    await runNativeChatScratchSave(getProfileUserDataPath(), target.path, () =>
-      requireRuntimeFileProvider(target, this.host).writeFileBase64Chunk(
-        target.path,
-        contentBase64,
-        append
-      )
+    await requireRuntimeFileProvider(target, this.host).writeFileBase64Chunk(
+      target.path,
+      contentBase64,
+      append
     )
     return { ok: true }
   }

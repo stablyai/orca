@@ -68,6 +68,9 @@ export function deferredStructuredAgentSessionLogger(
   }
 }
 
+/** Per-attempt timings: written, but a repeat that differs only in them is still a repeat. */
+const UNKEYED_TIMING_FIELDS: ReadonlySet<string> = new Set(['openMs'])
+
 /** The production logger: a failed span in the local trace file, plus the console. A repeat of
  *  the same entry is written at most once per window, carrying how many were swallowed. */
 export function createStructuredAgentSessionLogger(options?: {
@@ -79,11 +82,13 @@ export function createStructuredAgentSessionLogger(options?: {
     (message: string, fields: StructuredAgentSessionLogFields): void => {
       const { scope, error, ...rest } = fields
       const attributes = { level, message, ...rest, ...errorAttributes(error) }
-      // Keyed on all the entry writes but its stack: only a failure writing the same entry repeats.
+      // Keyed on all the entry writes but its stack and timings: only the same failure repeats.
       const suppressed = repeats.admit(
         stableJson([
           scope,
-          attributes,
+          Object.fromEntries(
+            Object.entries(attributes).filter(([name]) => !UNKEYED_TIMING_FIELDS.has(name))
+          ),
           error instanceof Error ? `${error.name}: ${error.message}` : null
         ])
       )

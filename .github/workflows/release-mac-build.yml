@@ -13,6 +13,11 @@ on:
         description: release-cut workflow run that requested this build
         required: true
         type: string
+      qualification_only:
+        description: Sign and notarize both architectures without publishing a release
+        required: false
+        default: false
+        type: boolean
       javascript_source_sha:
         description: Commit of the shared JavaScript artifact; empty keeps the legacy build
         required: false
@@ -25,12 +30,23 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-mac-build-${{ inputs.tag }}
+  # Why: a qualification run that reuses a live tag must never queue behind or replace its release build.
+  group: release-mac-build-${{ inputs.tag }}${{ inputs.qualification_only && '-qualification' || '' }}
   cancel-in-progress: false
 
 jobs:
+  qualification-template:
+    if: inputs.qualification_only
+    permissions:
+      contents: read
+    uses: ./.github/workflows/node-server-tests.yml
+    with:
+      ref: ${{ github.sha }}
+      build_template: true
+
   build-mac:
-    if: github.repository == 'stablyai/orca'
+    needs: qualification-template
+    if: ${{ !cancelled() && (!inputs.qualification_only || needs.qualification-template.result == 'success') && github.repository == 'stablyai/orca' }}
     # Why: this workflow is outside the SignPath signing run, so Blacksmith
     # cannot enter Windows artifact provenance while mac notarization gets the
     # faster runner.
@@ -41,12 +57,13 @@ jobs:
       actions: read
       contents: write
     env:
+      ORCA_BACKGROUND_LAUNCH: '1'
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ inputs.tag }}
+          ref: ${{ inputs.qualification_only && github.sha || format('refs/tags/{0}', inputs.tag) }}
 
       # Why: a relay-era ref (before #27215) needs the Windows relay addon this build no longer compiles.
       - name: Refuse a ref that still ships the SSH relay
@@ -193,7 +210,7 @@ jobs:
         with:
           name: orcad-template
           path: out/orcad-template
-          run-id: ${{ inputs.release_run_id }}
+          run-id: ${{ inputs.qualification_only && github.run_id || inputs.release_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Gate runtime file-watcher process isolation
@@ -204,6 +221,7 @@ jobs:
           ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs
 
       - name: Abort if the parent release-cut run was cancelled
+        if: ${{ !inputs.qualification_only }}
         # Why: this workflow is dispatched separately, so cancelling release-cut
         # does not stop mac `--publish always`. A cancelled parent left v1.4.206
         # public with only a partial mac upload.
@@ -224,10 +242,11 @@ jobs:
           timeout_minutes: 45
           max_attempts: 3
           retry_wait_seconds: 30
-          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always -c.publish.releaseType=draft
+          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && if [ -f config/scripts/build-mac-notarization-overlap.mjs ]; then ORCA_MAC_RELEASE=1 node config/scripts/build-mac-notarization-overlap.mjs --publish "$ORCA_MAC_PUBLISH" --draft; else ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish "$ORCA_MAC_PUBLISH" -c.publish.releaseType=draft; fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ORCA_REQUIRE_ORCAD_TEMPLATE: '1'
+          ORCA_MAC_PUBLISH: ${{ inputs.qualification_only && 'never' || 'always' }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -235,6 +254,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Verify release remains draft after artifact upload
+        if: ${{ !inputs.qualification_only }}
         # Why: re-draft immediately if electron-builder flipped the GitHub
         # release public, then fail. Checking without restoring leaves
         # /releases/latest serving a missing Windows exe.
@@ -249,3 +269,16 @@ jobs:
       # point between pack and upload without splitting those steps.
       - name: Verify telemetry constants present in app.asar
         run: node config/scripts/verify-telemetry-constants.mjs
+
+      - name: Upload qualification artifacts
+        if: inputs.qualification_only
+        uses: actions/upload-artifact@v7
+        with:
+          name: mac-notarization-qualification
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.blockmap
+            dist/*.yml
+          if-no-files-found: error
+          retention-days: 7

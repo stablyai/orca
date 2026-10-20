@@ -119,9 +119,7 @@ export const ORCAD_MIGRATION_REQUEST_PARAMS_BUDGET_BYTES =
 export function assertOrcadMigrationRequestFits(params: {
   manifest: OrcadMigrationManifest
 }): void {
-  if (
-    Buffer.byteLength(JSON.stringify(params), 'utf8') > ORCAD_MIGRATION_REQUEST_PARAMS_BUDGET_BYTES
-  ) {
+  if (!orcadMigrationRequestFits(params)) {
     throw new Error(
       describeOversizedOrcadMigrationPayload(
         params.manifest.payload,
@@ -129,6 +127,12 @@ export function assertOrcadMigrationRequestFits(params: {
       )
     )
   }
+}
+
+export function orcadMigrationRequestFits(params: { manifest: OrcadMigrationManifest }): boolean {
+  return (
+    Buffer.byteLength(JSON.stringify(params), 'utf8') <= ORCAD_MIGRATION_REQUEST_PARAMS_BUDGET_BYTES
+  )
 }
 
 /** The bare code told users nothing (#30126): name the largest parts and what to trim. */

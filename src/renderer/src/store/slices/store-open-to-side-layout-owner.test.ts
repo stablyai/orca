@@ -8,6 +8,7 @@ import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { LayoutApplyParams } from '../../../../shared/rpc-contract/workspace-layout-params'
 import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'
+import { layoutCommandsOf } from '@/runtime/layout-apply-test-double'
 import type { WorkspaceLayoutModel } from '../../../../shared/workspace-layout/workspace-layout-model'
 
 const mocks = vi.hoisted(() => ({
@@ -65,7 +66,9 @@ function applySent() {
   const calls = mocks.callRuntimeRpc.mock.calls
   expect(calls.every(([, method]) => method === 'layout.apply')).toBe(true)
   // Through the RPC's schema, as main receives them.
-  const commands = calls.map(([, , params]) => LayoutApplyParams.parse(params).command)
+  const commands = calls.flatMap(([, , params]) =>
+    layoutCommandsOf(LayoutApplyParams.parse(params).command)
+  )
   mocks.callRuntimeRpc.mockClear()
   let id = 0
   for (const command of commands) {

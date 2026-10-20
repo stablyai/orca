@@ -57,15 +57,19 @@ export function createEditorRestartSaveHandlers({
         return
       }
 
-      await Promise.all(
+      const results = await Promise.all(
         dirtyFiles.map(async (file) => {
           const content = getLatestWritableContent(file)
           if (content === null) {
             throw new Error(`Missing editor buffer for ${file.relativePath}`)
           }
-          await queueSave(file, content)
+          return queueSave(file, content, 'restart')
         })
       )
+      if (results.some((result) => result !== 'written')) {
+        detail.reject('Some unsaved files were not saved. Review them before restarting.')
+        return
+      }
       detail.resolve()
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))

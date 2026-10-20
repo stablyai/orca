@@ -1,6 +1,7 @@
 /** The managed-server status a retained SSH state carries, admitted field by field. */
 import type {
   SshManagedServerLinkedProject,
+  SshManagedServerNodeDownloadBlocked,
   SshManagedServerStatus,
   SshManagedServerUpdateNote
 } from './ssh-types'
@@ -16,6 +17,7 @@ import {
   SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES
 } from './ssh-retained-payload-limits'
 import { clampUtf8TextPrefix } from './utf8-byte-limits'
+import { isNodeDistMirrorAttempt } from './node-dist-mirror'
 
 // Why field-by-field like plainSsh: an unknown kind from a newer host drops alone.
 export function admitSshManagedServerStatus(value: unknown): {
@@ -84,9 +86,24 @@ export function admitSshManagedServerStatus(value: unknown): {
         : {}),
       ...('held' in value && value.held === true ? { held: true } : {}),
       ...('contactLost' in value && value.contactLost === true ? { contactLost: true } : {}),
+      ...admitNodeDownloadBlocked(
+        'nodeDownloadBlocked' in value ? value.nodeDownloadBlocked : null
+      ),
       ...('bridged' in value && value.bridged === true ? { bridged: true } : {})
     }
   }
+}
+
+// Why alone: an unknown mirror state from a newer build drops to the plain try-again line.
+function admitNodeDownloadBlocked(value: unknown): {
+  nodeDownloadBlocked?: SshManagedServerNodeDownloadBlocked
+} {
+  if (!value || typeof value !== 'object' || !('mirror' in value)) {
+    return {}
+  }
+  return isNodeDistMirrorAttempt(value.mirror)
+    ? { nodeDownloadBlocked: { mirror: value.mirror } }
+    : {}
 }
 
 const SSH_MANAGED_SERVER_LINKED_MAX_ENTRIES = 64

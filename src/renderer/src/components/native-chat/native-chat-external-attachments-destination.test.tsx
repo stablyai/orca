@@ -34,7 +34,9 @@ const mocks = vi.hoisted(() => {
   return state
 })
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => ({ tabsByWorktree: mocks.tabsByWorktree }) }
+  useAppStore: Object.assign((select: () => unknown) => select(), {
+    getState: () => ({ tabsByWorktree: mocks.tabsByWorktree })
+  })
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({

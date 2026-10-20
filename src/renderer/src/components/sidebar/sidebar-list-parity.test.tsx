@@ -134,12 +134,10 @@ async function installFeed(state: Partial<AppState>) {
 
 async function phoneList(state: Partial<AppState>): Promise<string[]> {
   const { installed, full } = await installFeed(state)
-  const { catalog, view } = phoneInputsFromWindowState(full)
-  const { sectionRows, activeRowKeys } = phoneAdapter.buildSidebarFeedRows(
-    phoneAdapter.readSidebarFeedDomains(installed),
-    catalog,
-    view
-  )
+  const domains = phoneAdapter.readSidebarFeedDomains(installed)
+  expect(domains.projectCatalog?.repos.length).toBeGreaterThan(0)
+  const { catalog, view } = phoneInputsFromWindowState(full, domains)
+  const { sectionRows, activeRowKeys } = phoneAdapter.buildSidebarFeedRows(domains, catalog, view)
   return projectParityRows(sectionRows, activeRowKeys)
 }
 

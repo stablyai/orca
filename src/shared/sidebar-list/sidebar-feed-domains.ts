@@ -17,6 +17,10 @@ import {
   type WorkspaceReviewFact
 } from './workspace-review-facts'
 import { WorkspaceRowsSnapshotSchema, type WorkspaceRow } from './workspace-rows'
+import {
+  ProjectSectionCatalogSchema,
+  type ServedProjectSections
+} from '../project-section-catalog-schema'
 
 /** One installed feed, typed per domain; an entity this build cannot parse is left out. */
 export type SidebarFeedDomains = {
@@ -33,6 +37,8 @@ export type SidebarFeedDomains = {
   repoIcons: ReadonlyMap<string, string>
   /** Null until the host's desktop facts arrive whole. */
   desktop: DesktopSidebarFacts | null
+  /** Every host's repos, project groups and projects, in header order; null from a host that predates it. */
+  projectCatalog: ServedProjectSections | null
   retention: SidebarRetention | null
 }
 
@@ -77,10 +83,16 @@ export function readSidebarFeedDomains(
     previous && installed.domains.get(name) === previous.installed.domains.get(name)
       ? previous.domains
       : undefined
-  // The desktop and temporal domains publish each field as its own entity.
+  // The desktop, temporal and projectCatalog domains publish each field as its own entity.
   const desktop = DesktopSidebarFactsSchema.safeParse(
     Object.fromEntries(installed.domains.get('desktop') ?? [])
   )
+  const projectCatalog =
+    unchanged('projectCatalog')?.projectCatalog ??
+    ProjectSectionCatalogSchema.safeParse(
+      Object.fromEntries(installed.domains.get('projectCatalog') ?? [])
+    ).data ??
+    null
   const temporal = SidebarTemporalSnapshotSchema.pick({ retention: true }).safeParse(
     Object.fromEntries(installed.domains.get('temporal') ?? [])
   )
@@ -104,6 +116,7 @@ export function readSidebarFeedDomains(
       unchanged('repoIcons')?.repoIcons ??
       readDomain(installed, 'repoIcons', entitySchemas.repoIcons),
     desktop: desktop.success ? desktop.data : null,
+    projectCatalog,
     retention: temporal.success ? temporal.data.retention : null
   }
 }

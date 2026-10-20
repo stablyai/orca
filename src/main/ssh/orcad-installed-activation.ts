@@ -180,11 +180,13 @@ export async function activateInstalledOrcad(
   }
 
   // Last check before anything stops: the census above may predate a long upload.
-  if (incumbent && options.recountCensus && countedLockedRecord(options, record)) {
+  if (incumbent) {
     const recount = planOrcadUpdate({
       record,
       candidateVersion: fullVersion,
-      census: await options.recountCensus(),
+      census: countedLockedRecord(options, record)
+        ? await options.recountCensus().catch(() => UNVERIFIABLE_CENSUS)
+        : UNVERIFIABLE_CENSUS,
       candidateDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL,
       ...(options.force !== undefined ? { force: options.force } : {})
     })

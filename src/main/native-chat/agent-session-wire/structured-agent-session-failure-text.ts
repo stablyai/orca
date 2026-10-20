@@ -21,6 +21,7 @@ import {
 } from '../../../shared/agent-session-wire-refusals'
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
+import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { codexInstallationProblemOf } from '../../codex/codex-cli-installation-error'
 
@@ -95,10 +96,18 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
   if (providerExecutableMissing(cause)) {
     return agentSessionFailureFact('cliMissing')
   }
-  return agentSessionFailureFact(
-    providerExitObserved(cause) ? 'providerStartFailed' : 'startFailed',
-    { detail: providerDiagnosticOf(cause), argumentProblem: argumentProblemOf(cause) }
-  )
+  const detail = providerDiagnosticOf(cause)
+  if (providerExitObserved(cause)) {
+    return agentSessionFailureFact('providerStartFailed', {
+      detail,
+      argumentProblem: argumentProblemOf(cause)
+    })
+  }
+  return agentSessionFailureFact('startFailed', {
+    detail,
+    argumentProblem: argumentProblemOf(cause),
+    requestTimeout: providerRequestTimeoutOf(cause)
+  })
 }
 
 /** A child that ended before it proved its start: an exit is a start that failed, keeping the

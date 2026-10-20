@@ -10,7 +10,10 @@ import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat-shell-environment'
-import { loadedChatPermissionSetting } from '../../../shared/agent-chat-permission-mode'
+import {
+  loadedChatPermissionSetting,
+  normalizeAgentNativeChatPermissionModes
+} from '../../../shared/agent-chat-permission-mode'
 import {
   savedChatUiWithTerminalDefaultView,
   stripRetiredGlobalSettings
@@ -137,6 +140,9 @@ export function normalizeLoadedGlobalSettings(
       parsed.settings?.nativeChatShellEnvironmentVariables
     ),
     // Why: the next settings save stores the seed; until then a reload derives the same one.
+    agentNativeChatPermissionModes: normalizeAgentNativeChatPermissionModes(
+      parsed.settings?.agentNativeChatPermissionModes
+    ),
     nativeChatPermissionMode: loadedChatPermissionSetting(
       parsed.settings?.nativeChatPermissionMode,
       {

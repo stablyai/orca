@@ -43,7 +43,7 @@ vi.mock('@/store', () => ({
 }))
 vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
 vi.mock('./TerminalPaneResumeInChatButton', () => ({
-  TerminalPaneResumeInChatButton: () => <button type="button">Switch to Chat</button>
+  TerminalPaneResumeInChatButton: () => <button type="button">Switch to Chat UI</button>
 }))
 
 const mounted: { container: HTMLDivElement; root: Root }[] = []
@@ -191,11 +191,11 @@ afterEach(() => {
 })
 
 describe('TerminalPaneHeaderOverlay', () => {
-  it('offers Switch to Chat instead of a chat view switch, on the active pane only', () => {
+  it('offers Switch to Chat UI instead of a chat view switch, on the active pane only', () => {
     const { container } = renderOverlay({ paneTitles: {}, canResumeInNewNativeChat: true })
 
     const resumeButtons = [...container.querySelectorAll('button')].filter(
-      (button) => button.textContent === 'Switch to Chat'
+      (button) => button.textContent === 'Switch to Chat UI'
     )
     expect(resumeButtons).toHaveLength(1)
     expect(resumeButtons[0]?.closest('.pane-title-bar')?.hasAttribute('data-active-pane')).toBe(
@@ -212,7 +212,7 @@ describe('TerminalPaneHeaderOverlay', () => {
     })
 
     expect(container.querySelector('button[aria-label="Show terminal"]')).not.toBeNull()
-    expect(container.textContent).not.toContain('Switch to Chat')
+    expect(container.textContent).not.toContain('Switch to Chat UI')
   })
 
   it('keeps the titled split-pane X as remove-title only', () => {

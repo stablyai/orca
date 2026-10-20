@@ -1,6 +1,6 @@
-// The read-only layout stream (design 2.4) and the server snapshot read (design 6.3). Not
-// advertised as a capability and not on the mobile allowlist: no client calls them until the
-// switch, so they are inert.
+// The read-only layout stream (design 2.4) and the server snapshot read (design 6.3). Paired
+// desktops may call them; a desktop relies on them only on a server advertising
+// `layout.intents.v1` (layout-intents-capability.ts). Not on the mobile allowlist.
 
 import {
   LayoutApplyParams,
@@ -30,8 +30,11 @@ export const WORKSPACE_LAYOUT_METHODS = [
         const subscriptionId = `layout-${connectionId ?? 'inproc'}-${++layoutSubscriptionSeq}`
         const cleanupKey = layoutCleanupKey(connectionId, subscriptionId)
         const release = (): void => runtime.cleanupSubscription(cleanupKey)
-        const { snapshot, seq, unsubscribe } = runtime.subscribeWorkspaceLayouts((event) => {
-          if (wanted(event.key)) {
+        const { snapshot, seq, epoch, unsubscribe } = runtime.subscribeWorkspaceLayouts((event) => {
+          if (event.type === 'records') {
+            // Sent even when it names none of them, so the subscriber's positions stay gapless.
+            emit({ ...event, workspaces: event.workspaces.filter((change) => wanted(change.key)) })
+          } else if (wanted(event.key)) {
             emit(event)
           }
         })
@@ -50,7 +53,8 @@ export const WORKSPACE_LAYOUT_METHODS = [
           type: 'snapshot',
           subscriptionId,
           workspaces: snapshot.filter((entry) => wanted(entry.key)),
-          seq
+          seq,
+          ...(epoch ? { epoch } : {})
         })
         if (signal?.aborted) {
           release()

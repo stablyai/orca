@@ -130,7 +130,10 @@ export async function attemptStructuredAgentSessionSend(args: {
     expectedRuntimeFence: fence,
     body: entry.body,
     ...(entry.delivery ? { delivery: entry.delivery } : {}),
-    ...(entry.options ? { options: entry.options } : {})
+    ...(entry.options ? { options: entry.options } : {}),
+    ...(entry.usageLimitContinuationOfTurnItemId
+      ? { usageLimitContinuationOfTurnItemId: entry.usageLimitContinuationOfTurnItemId }
+      : {})
   })
   type SendAnswer = AgentSessionMutationResult<AgentSessionSendResult>
   let answer: StructuredAgentSessionSendAnswer

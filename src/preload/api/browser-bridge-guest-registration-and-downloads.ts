@@ -5,10 +5,10 @@ import type {
   BrowserWebAuthnAccountResponse
 } from '../../shared/browser-webauthn-account'
 import type {
-  BrowserExternalAppRequest,
-  BrowserExternalAppResponse,
-  BrowserExternalAppResponseResult
-} from '../../shared/browser-external-app'
+  BrowserPagePromptRequest,
+  BrowserPagePromptResponse,
+  BrowserPagePromptResult
+} from '../../shared/browser-page-prompt'
 import { readBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
 import { browserClientPageRendererRequests } from '../preload-runtime-support'
 import type { PreloadApi } from '../api-types'
@@ -54,24 +54,20 @@ export const browserGuestRegistrationAndDownloadsApi = {
   },
   respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse): Promise<boolean> =>
     ipcRenderer.invoke('browser:respondWebAuthnAccount', response),
-  onExternalAppRequest: (callback: (request: BrowserExternalAppRequest) => void): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      request: BrowserExternalAppRequest
-    ): void => callback(request)
-    ipcRenderer.on('browser:external-app-requested', listener)
-    return () => ipcRenderer.removeListener('browser:external-app-requested', listener)
+  onPagePromptRequest: (callback: (request: BrowserPagePromptRequest) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: BrowserPagePromptRequest): void =>
+      callback(request)
+    ipcRenderer.on('browser:page-prompt-requested', listener)
+    return () => ipcRenderer.removeListener('browser:page-prompt-requested', listener)
   },
-  onExternalAppRequestClosed: (callback: (event: { requestId: string }) => void): (() => void) => {
+  onPagePromptClosed: (callback: (event: { requestId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { requestId: string }): void =>
       callback(data)
-    ipcRenderer.on('browser:external-app-request-closed', listener)
-    return () => ipcRenderer.removeListener('browser:external-app-request-closed', listener)
+    ipcRenderer.on('browser:page-prompt-closed', listener)
+    return () => ipcRenderer.removeListener('browser:page-prompt-closed', listener)
   },
-  respondExternalApp: (
-    response: BrowserExternalAppResponse
-  ): Promise<BrowserExternalAppResponseResult> =>
-    ipcRenderer.invoke('browser:respondExternalApp', response),
+  respondPagePrompt: (response: BrowserPagePromptResponse): Promise<BrowserPagePromptResult> =>
+    ipcRenderer.invoke('browser:respondPagePrompt', response),
   openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:openDevTools', args),
   setViewportOverride: (args: {

@@ -3,7 +3,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { resolveOwnerWithLegacyFallback } from './worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import {
-  resolveStrictWorktreeOperationRouteResultForHost,
+  resolveWorktreeOperationRouteResultForHost,
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
 import { routeForOwner } from './worktree-owner-route'
@@ -58,11 +58,7 @@ export function resolveWorktreeRowOpenInRuntimeOwner(
     return resolved(endpoint.kind === 'environment' ? endpoint.environmentId : null, at)
   }
   // Why: an inactive row can name its host before the catalog has it, so the explicit host wins.
-  const resolution = resolveStrictWorktreeOperationRouteResultForHost(
-    state,
-    worktree.id,
-    worktree.hostId
-  )
+  const resolution = resolveWorktreeOperationRouteResultForHost(state, worktree.id, worktree.hostId)
   return resolution.kind === 'resolved'
     ? resolved(
         resolution.route.runtimeEnvironmentId,

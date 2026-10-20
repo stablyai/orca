@@ -4,6 +4,7 @@ import type { EditorTabView } from '../editor-tab-view-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { applied, refuse, workspaceOrEmpty, type Applied } from './workspace-layout-command-steps'
 import type { CommandOf, LayoutContext } from './workspace-layout-command-types'
+import { editorOpenFileId } from './workspace-layout-editor-open-file-id'
 import { sameEditorFile } from './workspace-layout-editor-tab-file'
 import { admitsInitialSurface } from './workspace-layout-initial-surface'
 import type {
@@ -41,8 +42,16 @@ export function openEditorTab(
 ): Applied {
   const key = command.workspace
   const workspace = model.workspaces[key]
+  const fileId =
+    command.fileId ??
+    (command.file
+      ? editorOpenFileId(workspace ?? { worktreeId: key, tabs: [] }, command.file)
+      : undefined)
+  if (!fileId) {
+    return refuse('invalid_params')
+  }
   const sameFile = (tab: LayoutTab): boolean =>
-    tab.entityId === command.fileId && tab.kind === command.contentType
+    tab.entityId === fileId && tab.kind === command.contentType
   const drawn = drawnTabOpen(model, key, command.tabId, sameFile, true)
   if (drawn) {
     return drawn.ok ? applied(withEditorFile(drawn.model, key, command.file), drawn.result) : drawn
@@ -78,7 +87,7 @@ export function openEditorTab(
     ...(command.tabId ? { id: command.tabId } : {}),
     ...(command.createdAt !== undefined ? { createdAt: command.createdAt } : {}),
     kind: command.contentType,
-    entityId: command.fileId,
+    entityId: fileId,
     ...(command.preview ? { isPreview: true } : {})
   })
   const placed = placeContentTab(target, key, tab, command, context)

@@ -10,7 +10,9 @@ import {
   type RetainedAgentEntry
 } from './agent-status'
 import type { GeneratedTabTitleUpdate } from './terminal-tab-title-batch'
-import { createTestStore, makeTab } from './store-test-helpers'
+import { createTestStore, makeTab, makeUnifiedTab } from './store-test-helpers'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
 
 const BASE_TIME = 2_000_000
 const FIRST_PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
@@ -128,6 +130,7 @@ describe('setAgentStatuses', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it('matches sequential updates across repeated panes and provider-session records', async () => {
@@ -225,9 +228,11 @@ describe('setAgentStatuses', () => {
     unsubscribe()
   })
 
-  it('coalesces 100 generated tab titles into one post-status publication', () => {
+  it('coalesces 100 generated tab titles into one post-status publication', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(BASE_TIME + 10)
+    const main = layoutApplyTestDouble()
+    vi.stubGlobal('window', { api: { runtime: { call: main.call } } })
     const store = createTestStore()
     const paneCount = 100
     const tabsByWorktree = Object.fromEntries(
@@ -236,10 +241,18 @@ describe('setAgentStatuses', () => {
         return [worktreeId, [makeTab({ id: `tab-${index}`, worktreeId })]]
       })
     )
+    // Tab-bar entries, so a layout-owner build sends the titles to main.
+    const unifiedTabsByWorktree = Object.fromEntries(
+      Array.from({ length: paneCount }, (_, index) => {
+        const worktreeId = `wt-${index}`
+        return [worktreeId, [makeUnifiedTab({ id: `tab-${index}`, worktreeId, groupId: 'g' })]]
+      })
+    )
     store.setState({
       settings: { ...store.getState().settings, tabAutoGenerateTitle: true },
       tabsByWorktree
     } as Partial<AppState>)
+    store.setState({ unifiedTabsByWorktree })
     const updates: AgentStatusBatchUpdate[] = Array.from({ length: paneCount }, (_, index) => ({
       paneKey: `tab-${index}:11111111-1111-4111-8111-111111111111`,
       payload: {
@@ -257,12 +270,18 @@ describe('setAgentStatuses', () => {
 
     const outcomes = store.getState().setAgentStatuses(updates)
 
-    unsubscribe()
     expect(outcomes).toEqual(Array(paneCount).fill(true))
-    expect(publications).toBe(2)
-    expect(store.getState().tabsByWorktree['wt-99']?.[0]?.generatedTitle).toBe(
-      'Refactor remote startup module 99'
+    // A layout-owner build shows the titles once main has them: one layout write for the batch.
+    await vi.waitFor(() =>
+      expect(store.getState().tabsByWorktree['wt-99']?.[0]?.generatedTitle).toBe(
+        'Refactor remote startup module 99'
+      )
     )
+    unsubscribe()
+    expect(publications).toBe(2)
+    expect(
+      main.commands.map((command) => (command.type === 'renameTabs' ? command.renames.length : 0))
+    ).toEqual(ORCA_LAYOUT_OWNER_IS_MAIN ? [paneCount] : [])
   })
 
   it('coalesces batch freshness requests while preserving standalone scheduling', async () => {
