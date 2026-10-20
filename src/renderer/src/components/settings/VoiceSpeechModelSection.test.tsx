@@ -70,6 +70,17 @@ const localModel: SpeechModelManifest = {
   files: ['encoder.onnx']
 }
 
+const appleModel: SpeechModelManifest = {
+  id: 'apple-speech-analyzer',
+  label: 'Apple Speech',
+  description: 'Built into macOS',
+  provider: 'apple',
+  language: 'system',
+  type: 'apple-speech',
+  streaming: true,
+  sampleRate: 16000
+}
+
 const secondLocalModel: SpeechModelManifest = {
   ...localModel,
   id: 'model-b',
@@ -118,6 +129,39 @@ describe('VoiceSpeechModelSection', () => {
   beforeEach(() => {
     toastErrorMock.mockReset()
     menuDismissMock.mockReset()
+  })
+
+  it('offers no delete and no size for the system model macOS owns', () => {
+    const { container, root } = renderSection({
+      deleteModel: () => Promise.resolve(),
+      catalog: [appleModel],
+      modelStates: [{ id: appleModel.id, status: 'ready' }]
+    })
+
+    const row = container.querySelector('[role="option"]')
+    expect(row?.textContent).toContain('Apple Speech')
+    expect(row?.textContent).not.toContain('MB')
+    expect(row?.textContent).not.toContain('streaming')
+    expect(container.querySelector('button[aria-label="Delete Apple Speech"]')).toBeNull()
+
+    act(() => root.unmount())
+  })
+
+  it('asks macOS to install its language files when the row is not ready yet', async () => {
+    const { container, root } = renderSection({
+      deleteModel: () => Promise.resolve(),
+      catalog: [appleModel],
+      modelStates: [{ id: appleModel.id, status: 'not-downloaded' }]
+    })
+
+    const row = container.querySelector('[role="option"]')
+    await act(async () => {
+      row?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(window.api.speech.downloadModel).toHaveBeenCalledWith(appleModel.id)
+
+    act(() => root.unmount())
   })
 
   afterEach(() => {

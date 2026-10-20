@@ -1,7 +1,21 @@
 import type { SpeechModelManifest } from '../../shared/speech-types'
+import { isAppleSpeechDictationAvailable } from './apple-speech-helper-binary'
 import { getSpeechModelDownloadMetadata } from './model-download-catalog'
 
+export const APPLE_SPEECH_MODEL_ID = 'apple-speech-analyzer'
+
 export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
+  {
+    id: APPLE_SPEECH_MODEL_ID,
+    label: 'Apple Speech',
+    description:
+      'Built into macOS 26+. Runs on the Neural Engine in your Mac dictation language — nothing to download from Orca.',
+    type: 'apple-speech',
+    provider: 'apple',
+    language: 'system',
+    sampleRate: 16000,
+    streaming: true
+  },
   {
     id: 'parakeet-tdt-0.6b-v3-int8',
     label: 'Parakeet TDT v3',
@@ -148,6 +162,20 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
 
 export function getCatalogModel(id: string): SpeechModelManifest | undefined {
   return SPEECH_MODEL_CATALOG.find((m) => m.id === id)
+}
+
+/**
+ * What a client may choose from. The full catalog still resolves every id, so a
+ * setting saved on a Mac keeps its label after the user moves to Windows.
+ */
+export function getAvailableSpeechModelCatalog(): SpeechModelManifest[] {
+  return SPEECH_MODEL_CATALOG.filter(
+    (manifest) => manifest.provider !== 'apple' || isAppleSpeechDictationAvailable()
+  )
+}
+
+export function isAppleSpeechModel(manifest: SpeechModelManifest): boolean {
+  return manifest.provider === 'apple'
 }
 
 export function isLocalSpeechModel(manifest: SpeechModelManifest): boolean {

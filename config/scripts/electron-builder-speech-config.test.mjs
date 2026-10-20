@@ -6,6 +6,17 @@ const electronBuilderConfig = require('../electron-builder.config.cjs')
 const { FileMatcher } = require('app-builder-lib/out/fileMatcher')
 
 describe('electron-builder speech resources', () => {
+  it('ships the Apple Speech helper with its speech permission description on macOS', () => {
+    expect(electronBuilderConfig.mac.extendInfo.NSSpeechRecognitionUsageDescription).toBe(
+      'Orca transcribes your dictation on this device with Apple speech recognition.'
+    )
+    expect(electronBuilderConfig.mac.extraFiles).toContainEqual({
+      from: 'native/speech-transcriber-macos/.build/release/orca-speech-transcriber',
+      to: 'MacOS/orca-speech-transcriber'
+    })
+    expect(electronBuilderConfig.mac.signIgnore).toEqual(expect.any(Array))
+  })
+
   it('excludes bundled variants and keeps one target resource per platform', () => {
     expect(electronBuilderConfig.files).toContain('!node_modules/sherpa-onnx*{,/**/*}')
     expect(electronBuilderConfig.asarUnpack).not.toContain('node_modules/sherpa-onnx*/**')
