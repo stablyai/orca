@@ -33,6 +33,7 @@ import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import { routeNativeChatRootKeyToInput } from './native-chat-root-key-routing'
 import * as OsFileDropOwner from '@/hooks/use-os-file-drop-owner'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 
 const externalAttachments = ExternalAttachments.useNativeChatExternalAttachments
 let chips: Parameters<typeof externalAttachments>[0]['pendingChips']
@@ -338,6 +339,7 @@ describe('queued card image edit', () => {
     async (runtimeEnvironmentId) => {
       const owner = vi.spyOn(OsFileDropOwner, 'useOsFileDropOwner')
       try {
+        replaceRuntimeEnvironmentRevisions([{ id: 'paired', createdAt: 1, pairingRevision: 7 }])
         render(<EditedCard imagesCapable runtimeEnvironmentId={runtimeEnvironmentId} />)
         await waitFor(() => expect(screen.getByRole('textbox')).toHaveProperty('readOnly', false))
         const options = owner.mock.calls.at(-1)![1]
@@ -346,6 +348,7 @@ describe('queued card image edit', () => {
           typeof options.consumer === 'function' ? options.consumer(destination) : options.consumer
         expect(consumer).toBe(runtimeEnvironmentId ? 'agent' : 'local-chat')
       } finally {
+        replaceRuntimeEnvironmentRevisions([])
         owner.mockRestore()
       }
     }
