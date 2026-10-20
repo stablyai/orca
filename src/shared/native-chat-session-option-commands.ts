@@ -11,6 +11,7 @@ import {
   flattenNativeChatSessionOptionRecord,
   isFlipOnlyMidSession,
   matchNativeChatCatalogModelId,
+  setTrackedSessionOption,
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
 import { resolveEffectiveNativeChatModelId } from './native-chat-session-option-snapshot'
@@ -134,10 +135,7 @@ function recordCommandApply(args: {
   if (!previousModelId) {
     return true
   }
-  record.valuesByModel[previousModelId] = {
-    ...record.valuesByModel[previousModelId],
-    [optionId]: { value, source: 'dispatched' }
-  }
+  setTrackedSessionOption(record, optionId, value, 'dispatched', previousModelId)
   persist?.(previousModelId, optionId, value)
   return true
 }

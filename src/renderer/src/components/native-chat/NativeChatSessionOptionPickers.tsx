@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -135,6 +135,7 @@ function SessionOptionPopover(props: {
   request: NativeChatOptionPickerRequest | null
   onSet: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
   onAction: (descriptor: SessionOptionDescriptor) => void
+  onOpen: () => void
   focusComposer?: () => void
 }): React.JSX.Element {
   const { model, options, pendingIds } = props
@@ -151,6 +152,13 @@ function SessionOptionPopover(props: {
     }
   }
   const focusReturn = useNativeChatPickerFocusReturn(props.focusComposer)
+  const { onOpen } = props
+  // Why: keyboard and slash-command openings set `open` directly, bypassing onOpenChange.
+  useEffect(() => {
+    if (open) {
+      onOpen()
+    }
+  }, [open, onOpen])
   const modelTitle = translate('components.native-chat.composer.model', 'Model')
   const modelLabel = nativeChatModelPillLabel(model)
   const modelName = pillAccessibleName(modelTitle, modelLabel)
@@ -293,6 +301,8 @@ function NativeChatSessionOptionPickersInner({
   focusComposer
 }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const [pending, setPending] = useState<ReadonlyMap<string, PendingPick>>(() => new Map())
+  // Stable per surface, so the popover's open effect fires on openings only.
+  const refreshModels = useCallback(() => surface?.refreshModels?.(), [surface])
   // Why: the session holds a request across composer remounts; one left standing reopens the
   // picker each time a prompt card gives the composer back. Dropped even when nothing could open.
   useEffect(() => pickerRequest?.consume(), [pickerRequest])
@@ -337,6 +347,7 @@ function NativeChatSessionOptionPickersInner({
             surface.invokeAction(descriptor.id)
           )
         }
+        onOpen={refreshModels}
         focusComposer={focusComposer}
       />
     </div>

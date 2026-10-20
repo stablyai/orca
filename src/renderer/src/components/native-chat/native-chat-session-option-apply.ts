@@ -43,7 +43,8 @@ type SessionOptionApplyContext = {
   setTrackedValue: (
     optionId: string,
     value: SessionOptionValue,
-    source: 'applied' | 'dispatched'
+    source: 'applied' | 'dispatched',
+    target?: CatalogModel
   ) => string | null
 }
 
@@ -184,6 +185,8 @@ async function applySetOption(
     throw new Error(`Unknown session option: ${id}`)
   }
   const { apply, modelId: previousModelId } = resolved
+  const targetModel =
+    id === 'model' ? ctx.getModels().find((model) => model.id === value) : undefined
   if (ctx.mode === 'live' && apply.midSession?.kind === 'agent-picker') {
     throw new Error('This option must be changed in the agent picker.')
   }
@@ -263,7 +266,7 @@ async function applySetOption(
     }
   }
 
-  const modelId = ctx.setTrackedValue(id, value, source)
+  const modelId = ctx.setTrackedValue(id, value, source, targetModel)
   return finish(ctx, { modelId: modelId ?? previousModelId, optionId: id, value })
 }
 

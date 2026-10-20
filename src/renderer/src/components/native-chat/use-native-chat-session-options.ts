@@ -31,12 +31,22 @@ const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 const CLIENT_SETTINGS_TARGET = { kind: 'local' } as const
 
-/**
- * Why: the picker drops a retired model, but the persisted default is what launches
- * become `-m <id>` — every launch site reads it, including the ones that never show
- * the picker. Left alone the id is invisible and still fatal, so an authoritative
- * probe that no longer lists it must retire it here too.
- */
+function ensureHostModels(agent: AgentType, terminalTabId: string, hostKey: string): void {
+  ensureNativeChatModelEnrichment({
+    agent,
+    hostKey,
+    // Why: a re-ask must use the current launch command and routing, not the ones
+    // captured when the tab mounted; a moved host is not this cache entry's answer.
+    discover: async () => {
+      const current = resolveNativeChatModelDiscoveryContext(terminalTabId)
+      return current?.hostKey === hostKey
+        ? discoverNativeChatCatalogModels(agent, current.runtime, hostKey)
+        : null
+    }
+  })
+}
+
+// Retire omitted future launch flags independently of a running session's selection.
 export async function retirePersistedModelMissingFromDiscovery(
   agent: AgentType,
   models: readonly CatalogModel[]
@@ -118,7 +128,7 @@ export function useNativeChatSessionOptions(args: {
       scopeKey,
       ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
       // Why: the catalog seed carries version-neutral family labels, so it is
-      // safe on every host while the once-per-host probe runs or after it fails
+      // safe on every host while the host probe runs or after it fails
       // — without it the whole picker would pop in late or never appear.
       ...(discoveryContext ? { initialModels: discoveredModels ?? undefined } : {}),
       mode: targetPtyId ? 'live' : 'draft',
@@ -126,6 +136,9 @@ export function useNativeChatSessionOptions(args: {
       dispatchCommand,
       canSwitchOmpModel,
       onAgentPicker,
+      ...(discoveryContext
+        ? { refreshModels: () => ensureHostModels(agent, terminalTabId, discoveryContext.hostKey) }
+        : {}),
       persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) =>
         // Paired PTY launches still assemble their launch preferences from client settings.
         enqueueSessionOptionSettingsWrite(CLIENT_SETTINGS_TARGET, {
@@ -176,13 +189,13 @@ export function useNativeChatSessionOptions(args: {
         if (!reportedValues) {
           continue
         }
-        // Why: discovery can land after this read. Keeping the screen that
-        // parsed lets it re-resolve against the host's real ids later, when the
-        // frame itself may have already scrolled out of the buffer.
+        // Why: discovery can land after this read. Keeping a screen parsed before
+        // any listing lets it re-resolve against the host's real ids later, when
+        // the frame itself may have already scrolled out of the buffer.
         if (cancelled) {
           return
         }
-        reportedScreenRef.current = screen
+        reportedScreenRef.current = models ? null : screen
         surface.reportSessionOptions(reportedValues)
         return
       }
@@ -234,6 +247,8 @@ export function useNativeChatSessionOptions(args: {
       (models) => {
         surface.replaceModels(models)
         const screen = agent === 'claude' ? reportedScreenRef.current : null
+        // Once only: a later list change must not replay this frame over newer picks.
+        reportedScreenRef.current = null
         const reportedValues = screen
           ? readClaudeSessionOptionsFromTerminalScreen(screen, models)
           : null
@@ -250,14 +265,9 @@ export function useNativeChatSessionOptions(args: {
     if (cached) {
       void retirePersistedModelMissingFromDiscovery(agent, cached).catch(() => undefined)
     }
-    ensureNativeChatModelEnrichment({
-      agent,
-      hostKey: discoveryContext.hostKey,
-      discover: () =>
-        discoverNativeChatCatalogModels(agent, discoveryContext.runtime, discoveryContext.hostKey)
-    })
+    ensureHostModels(agent, terminalTabId, discoveryContext.hostKey)
     return unsubscribe
-  }, [agent, discoveryContext, surface])
+  }, [agent, discoveryContext, surface, terminalTabId])
 
   const snapshot = useSyncExternalStore(
     surface?.subscribe ?? subscribeEmpty,

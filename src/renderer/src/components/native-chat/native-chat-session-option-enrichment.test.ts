@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { parseGrokModelList } from '../../../../shared/grok-model-list-probe'
+import { parseClaudeModels } from '../../../../shared/commit-message-model-parsers'
+import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
+import { readNativeChatSessionOptionCache } from './native-chat-session-option-cache'
 import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
 import {
   discoverNativeChatCatalogModels,
@@ -9,6 +13,7 @@ import {
   ensureNativeChatModelEnrichment,
   getNativeChatModelEnrichmentEntryCountForTests,
   NATIVE_CHAT_MODEL_ENRICHMENT_MAX_ENTRIES,
+  NATIVE_CHAT_MODEL_LIST_STALE_MS,
   readNativeChatEnrichedModels,
   resolveNativeChatLaunchSessionOptions,
   subscribeNativeChatEnrichedModels
@@ -130,15 +135,44 @@ describe('native chat session option enrichment', () => {
     expect(readNativeChatEnrichedModels('cursor', 'ssh:two')).toBeNull()
   })
 
-  it('falls back permanently to the seed after a failed once-per-host probe', async () => {
-    const discover = vi.fn().mockRejectedValue(new Error('offline'))
-    ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'local', discover })
-    await vi.waitFor(() => expect(discover).toHaveBeenCalledOnce())
-    await Promise.resolve()
+  it('asks again once the list is stale, keeping the last good list through a failure', async () => {
+    vi.useFakeTimers()
+    try {
+      const first = [{ id: 'model-a', label: 'A', options: [] }]
+      const discover = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValueOnce(first)
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValueOnce(first)
+        .mockResolvedValueOnce([...first, { id: 'model-b', label: 'B', options: [] }])
+      const listener = vi.fn()
+      subscribeNativeChatEnrichedModels('cursor', 'local', listener)
+      const ensureAfter = async (ms: number): Promise<void> => {
+        vi.advanceTimersByTime(ms)
+        ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'local', discover })
+        await vi.runAllTimersAsync()
+      }
+      const ids = (): string[] | undefined =>
+        readNativeChatEnrichedModels('cursor', 'local')?.map(({ id }) => id)
 
-    ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'local', discover })
-    expect(discover).toHaveBeenCalledOnce()
-    expect(readNativeChatEnrichedModels('cursor', 'local')).toBeNull()
+      await ensureAfter(0)
+      await ensureAfter(1)
+      expect(discover).toHaveBeenCalledOnce()
+      // A failed probe is retried, not latched; a fresh success is not re-asked.
+      await ensureAfter(NATIVE_CHAT_MODEL_LIST_STALE_MS)
+      await ensureAfter(1)
+      expect(discover).toHaveBeenCalledTimes(2)
+      await ensureAfter(NATIVE_CHAT_MODEL_LIST_STALE_MS)
+      expect(ids()).toContain('model-a')
+      await ensureAfter(NATIVE_CHAT_MODEL_LIST_STALE_MS)
+      expect(listener).toHaveBeenCalledOnce()
+      await ensureAfter(NATIVE_CHAT_MODEL_LIST_STALE_MS)
+      expect(ids()).toContain('model-b')
+      expect(listener).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not probe agents whose catalogs have no discovery command', () => {
@@ -260,16 +294,52 @@ describe('native chat session option enrichment', () => {
       ]
     })
     expect(readNativeChatEnrichedModels('claude', 'local')).toBeNull()
+    const liveArgs = {
+      agent: 'claude' as const,
+      scopeKey: 'claude-definitions',
+      mode: 'live' as const,
+      initialModels: models,
+      reportedValues: { model: 'opus[1m]', effort: 'low' },
+      dispatchCommand: vi.fn()
+    }
+    const live = createNativeChatPtySessionOptions(liveArgs)!
+    const probe = async (json: string) => {
+      mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+        success: true,
+        catalogOrigin: 'probe',
+        models: parseClaudeModels(json)
+      })
+      return (await discover())!
+    }
+    const withdrawn = await probe(
+      '{"type":"control_response","response":{"subtype":"success","response":{"models":[{"value":"opus[1m]","supportsEffort":false}]}}}'
+    )
+    live.replaceModels(withdrawn)
+    expect(withdrawn[0].options).toEqual([])
+    expect(live.getSnapshot().find(({ id }) => id === 'effort')?.kind).toMatchObject({
+      choices: [{ value: 'low' }, { value: 'high' }]
+    })
+    const fresh = createNativeChatPtySessionOptions({
+      ...liveArgs,
+      scopeKey: 'fresh',
+      initialModels: withdrawn
+    })!
+    expect(fresh.getSnapshot().map(({ id }) => id)).toEqual(['model'])
+    live.replaceModels(
+      await probe(
+        '{"type":"control_response","response":{"subtype":"success","response":{"models":[{"value":"opus[1m]","supportsEffort":true,"supportedEffortLevels":["medium","high"]}]}}}'
+      )
+    )
+    expect(live.getSnapshot().find(({ id }) => id === 'effort')?.kind).toMatchObject({
+      choices: [{ value: 'medium' }, { value: 'high' }, { value: 'low' }]
+    })
   })
 
   it('carries grok’s probed default through discovery to the published rows', async () => {
     mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
       success: true,
       catalogOrigin: 'probe',
-      models: [
-        { id: 'grok-build', label: 'Grok Build' },
-        { id: 'grok-5', label: 'Grok 5', isDefault: true }
-      ]
+      models: parseGrokModelList('Available models:\n - grok-build\n * grok-5 (default)')
     })
     const discover = vi.fn(() =>
       discoverNativeChatCatalogModels('grok', {
@@ -278,7 +348,20 @@ describe('native chat session option enrichment', () => {
         worktreePath: '/worktree'
       })
     )
-    const listener = vi.fn()
+    const dispatchCommand = vi.fn()
+    const persistSelection = vi.fn()
+    const create = (scopeKey = 'grok-default', fallbackScopeKey?: string) =>
+      createNativeChatPtySessionOptions({
+        agent: 'grok',
+        scopeKey,
+        fallbackScopeKey,
+        mode: 'live',
+        dispatchCommand,
+        persistSelection,
+        initialModels: readNativeChatEnrichedModels('grok', 'ssh:host') ?? undefined
+      })!
+    const surface = create()
+    const listener = vi.fn((rows: CatalogModel[]) => surface.replaceModels(rows))
     subscribeNativeChatEnrichedModels('grok', 'ssh:host', listener)
 
     ensureNativeChatModelEnrichment({ agent: 'grok', hostKey: 'ssh:host', discover })
@@ -296,6 +379,58 @@ describe('native chat session option enrichment', () => {
       ['effort'],
       ['effort']
     ])
+    await surface.setOption('effort', 'low')
+    const explicit = create('grok-explicit')
+    await explicit.setOption('model', 'grok-build')
+    await explicit.setOption('effort', 'low')
+    subscribeNativeChatEnrichedModels('grok', 'ssh:host', (rows) => explicit.replaceModels(rows))
+    dispatchCommand.mockClear()
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: parseGrokModelList('Available models:\n * grok-next (default)\n - grok-new')
+    })
+    const staleAt = Date.now() + NATIVE_CHAT_MODEL_LIST_STALE_MS
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(staleAt)
+    ensureNativeChatModelEnrichment({ agent: 'grok', hostKey: 'ssh:host', discover })
+    await vi.waitFor(() => expect(listener).toHaveBeenCalledTimes(2))
+    clock.mockRestore()
+    expect(dispatchCommand).not.toHaveBeenCalled()
+    for (const current of [surface, create(), create('handoff', 'grok-default')]) {
+      expect(current.getSnapshot()).toMatchObject([
+        { id: 'model', valueSource: 'default', kind: { currentValue: 'grok-5' } },
+        { id: 'effort', kind: { currentValue: 'low' } }
+      ])
+    }
+    expect(create('new-grok').getSnapshot()[0].kind).toMatchObject({ currentValue: 'grok-next' })
+    expect(readNativeChatSessionOptionCache('grok-default')?.model).toBeUndefined()
+    for (const current of [explicit, create('grok-explicit'), create('copy', 'grok-explicit')]) {
+      expect(current.getSnapshot()[0].kind).toMatchObject({ currentValue: 'grok-build' })
+      expect(current.getSnapshot().find(({ id }) => id === 'effort')?.kind).toMatchObject({
+        currentValue: 'low',
+        choices: [{ value: 'low' }, { value: 'medium' }, { value: 'high' }, { value: 'xhigh' }]
+      })
+    }
+    for (const [current, modelId] of [
+      [surface, 'grok-5'],
+      [explicit, 'grok-build']
+    ] as const) {
+      await current.setOption('effort', 'high')
+      current.recordOutgoingCommand('/effort medium')
+      expect(current.getSnapshot().find(({ id }) => id === 'effort')?.kind).toMatchObject({
+        currentValue: 'medium'
+      })
+      expect(persistSelection.mock.lastCall?.[0]).toMatchObject({
+        modelId,
+        adoptModelAsLaunchDefault: false
+      })
+    }
+    surface.reportSessionOptions({ model: 'grok-next' })
+    expect(create().getSnapshot()[0]).toMatchObject({ valueSource: 'reported' })
+    dispatchCommand.mockResolvedValue({ outcome: 'unknown' })
+    await expect(surface.setOption('model', 'grok-build')).rejects.toThrow('Could not verify')
+    surface.replaceModels(readNativeChatEnrichedModels('grok', 'ssh:host')!)
+    expect(create().getSnapshot()[0]).toMatchObject({ valueSource: 'unknown' })
   })
 
   it('publishes no default when an older host omits the flag entirely', async () => {

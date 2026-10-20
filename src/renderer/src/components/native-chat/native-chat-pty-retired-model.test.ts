@@ -44,35 +44,35 @@ function createGrokSurface(args?: Partial<CreateNativeChatPtySessionOptionsArgs>
   return { surface, persisted: () => persisted }
 }
 
-/** Retirement clears settings, but the session-tracked model is what option writes
- *  re-persist — left tracked, a retired id re-enters the picker via re-injection and
- *  restores the fatal `-m <retired>` the retirement just removed. */
-describe('retired grok model untracking', () => {
+describe('grok inventory and session selection', () => {
   beforeEach(() => clearNativeChatSessionOptionCacheForTests())
 
-  it('untracks a picked model an authoritative discovery dropped', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'grok', { model: 'grok-4.5' })
-    const { surface, persisted } = createGrokSurface()
+  it.each([false, true])('keeps a live model omitted by discovery (cached: %s)', async (cached) => {
+    seedNativeChatAppliedSessionOptions('pty-1', 'grok', { model: 'grok-4.5', effort: 'high' })
+    const tracked = readNativeChatSessionOptionCache('pty-1')
+    if (tracked === null) {
+      throw new Error('Expected the seeded session option cache')
+    }
+    const { surface, persisted } = createGrokSurface({
+      initialModels: cached ? discoveredGrok5() : undefined
+    })
 
     surface.replaceModels(discoveredGrok5())
 
-    // The retired id is gone from the picker, not kept as a reconciled row.
     expect(surface.getSnapshot()[0].kind).toMatchObject({
-      currentValue: 'grok-5',
-      choices: [expect.objectContaining({ value: 'grok-5' })]
+      currentValue: 'grok-4.5',
+      choices: ['grok-5', 'grok-4.5'].map((value) => expect.objectContaining({ value }))
     })
-    expect(readNativeChatSessionOptionCache('pty-1')?.model).toBeUndefined()
+    expect(readNativeChatSessionOptionCache('pty-1')).toMatchObject(tracked)
 
-    // A later option write persists under the surviving default, never the retired id.
+    await surface.setOption('model', 'grok-4.5')
     await surface.setOption('effort', 'low')
-    expect(persisted().grok?.model).toBe('grok-5')
+    expect(persisted().grok?.model).toBeUndefined()
   })
 
-  it('untracks a cached retired model at surface creation', () => {
-    // The probe can settle before this pane mounts; the cache handoff then restores a
-    // tracked id the authoritative list already dropped.
+  it('retires an omitted draft model at surface creation', () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'grok', { model: 'grok-4.5' })
-    const { surface } = createGrokSurface({ initialModels: discoveredGrok5() })
+    const { surface } = createGrokSurface({ mode: 'draft', initialModels: discoveredGrok5() })
 
     expect(surface.getSnapshot()[0].kind).toMatchObject({
       currentValue: 'grok-5',

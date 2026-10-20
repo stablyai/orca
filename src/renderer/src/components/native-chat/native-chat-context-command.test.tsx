@@ -89,6 +89,8 @@ describe('the context window the model listing states', () => {
     expect(surface.contextWindowTokens('openai-codex/gpt-5.4')).toBe(1_000_000)
     expect(surface.contextWindowTokens('anthropic/claude-opus')).toBeNull()
     expect(surface.contextWindowTokens('unlisted/model')).toBeNull()
+    surface.replaceModels(DISCOVERED.slice(1))
+    expect(surface.contextWindowTokens('openai-codex/gpt-5.5')).toBe(272_000)
   })
 
   it('knows no window before discovery', () => {

@@ -176,12 +176,30 @@ export function withTrackedNativeChatModel(
   models: readonly CatalogModel[],
   record: NativeChatSessionOptionRecord
 ): CatalogModel[] {
-  const trackedId = typeof record.model?.value === 'string' ? record.model.value : null
-  if (!trackedId || models.some((model) => model.id === trackedId)) {
+  const trackedId = resolveEffectiveNativeChatModelId(catalog, models, record)
+  if (!trackedId) {
     return [...models]
   }
-  const seeded = catalog.models.find((model) => model.id === trackedId)
-  return [...models, seeded ?? { id: trackedId, label: trackedId, options: [] }]
+  const held = record.currentModel?.id === trackedId ? record.currentModel : undefined
+  const offered = models.find((model) => model.id === trackedId)
+  if (offered) {
+    return models.map((model) =>
+      model.id === trackedId && held
+        ? {
+            ...model,
+            options: [
+              ...model.options,
+              ...held.options.filter((old) => !model.options.some((fresh) => fresh.id === old.id))
+            ]
+          }
+        : model
+    )
+  }
+  const seeded =
+    record.defaultContext?.model?.id === trackedId
+      ? record.defaultContext.model
+      : catalog.models.find((model) => model.id === trackedId)
+  return [...models, held ?? seeded ?? { id: trackedId, label: trackedId, options: [] }]
 }
 
 /** Why: no tracked model means no `-m` was ever emitted, so the CLI is running its
@@ -205,7 +223,12 @@ export function resolveEffectiveNativeChatModelId(
   record: NativeChatSessionOptionRecord
 ): string | null {
   const trackedModelId = typeof record.model?.value === 'string' ? record.model.value : null
-  return trackedModelId ?? cliDefaultModelId(catalog, models, trackedModelId)
+  return (
+    trackedModelId ??
+    (record.defaultContext
+      ? (record.defaultContext.model?.id ?? null)
+      : cliDefaultModelId(catalog, models, trackedModelId))
+  )
 }
 
 export function buildNativeChatSessionOptionSnapshot(args: {
@@ -232,8 +255,8 @@ export function buildNativeChatSessionOptionSnapshot(args: {
     ...(description ? { description } : {})
   }))
   const trackedModelId = typeof modelTracked?.value === 'string' ? modelTracked.value : null
-  const defaultModelId = cliDefaultModelId(catalog, models, trackedModelId)
-  const effectiveModelId = trackedModelId ?? defaultModelId
+  const effectiveModelId = resolveEffectiveNativeChatModelId(catalog, models, record)
+  const defaultModelId = trackedModelId ? null : effectiveModelId
   const modelAction = actionForApply(catalog.modelApply, modelTracked, mode, liveTransport)
   const snapshot: SessionOptionDescriptor[] = [
     {

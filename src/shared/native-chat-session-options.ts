@@ -130,6 +130,8 @@ export type SessionOptionsSurface = {
   /** Invoke the value-less action exposed by the current descriptor. */
   invokeAction(id: string): Promise<SessionOptionSetResult>
   subscribe(listener: (snapshot: SessionOptionDescriptor[]) => void): () => void
+  /** Re-asks the host for its model list when the one shown may be stale. */
+  refreshModels?(): void
 }
 
 /** An effort no list confirms, under a model the list lacks: shown as text, not a control. */

@@ -98,7 +98,7 @@ describe('retirePersistedModelMissingFromDiscovery', () => {
 })
 
 /** The enrichment subscription never replays, so a pane that mounts after the
- *  once-per-host probe settled would otherwise never reach retirement. */
+ *  host probe settled would otherwise never reach retirement. */
 describe('useNativeChatSessionOptions retirement on mount', () => {
   const mountPane = (): void => {
     renderHook(() =>

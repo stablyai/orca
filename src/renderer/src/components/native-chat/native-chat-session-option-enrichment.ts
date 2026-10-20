@@ -14,12 +14,16 @@ import type {
 type CatalogEnrichmentEntry = {
   agent: AgentType
   state: 'idle' | 'pending' | 'settled'
+  settledAt: number
   models: CatalogModel[] | null
   listeners: Set<(models: CatalogModel[]) => void>
 }
 
 const enrichmentByAgentHost = new Map<string, CatalogEnrichmentEntry>()
 export const NATIVE_CHAT_MODEL_ENRICHMENT_MAX_ENTRIES = 256
+/** Why: no host pushes a model-list change, so a list older than this is asked
+ *  again at its next use; the host's own catalog may cache longer behind it. */
+export const NATIVE_CHAT_MODEL_LIST_STALE_MS = 60_000
 
 function retainEnrichmentEntry(key: string, entry: CatalogEnrichmentEntry): void {
   enrichmentByAgentHost.delete(key)
@@ -56,6 +60,7 @@ export function subscribeNativeChatEnrichedModels(
   const entry = enrichmentByAgentHost.get(key) ?? {
     agent,
     state: 'idle' as const,
+    settledAt: 0,
     models: null,
     listeners: new Set<(models: CatalogModel[]) => void>()
   }
@@ -95,42 +100,52 @@ export function ensureNativeChatModelEnrichment(args: {
   }
   const key = enrichmentKey(args.agent, args.hostKey)
   const existing = enrichmentByAgentHost.get(key)
-  if (existing?.state === 'pending' || existing?.state === 'settled') {
+  if (
+    existing?.state === 'pending' ||
+    (existing?.state === 'settled' &&
+      Date.now() - existing.settledAt < NATIVE_CHAT_MODEL_LIST_STALE_MS)
+  ) {
     return
   }
   const entry: CatalogEnrichmentEntry = existing ?? {
     agent: args.agent,
     state: 'idle',
+    settledAt: 0,
     models: null,
     listeners: new Set()
   }
   entry.state = 'pending'
   retainEnrichmentEntry(key, entry)
 
-  // Why: model discovery must never delay rendering or launching; the seed is
-  // immediately usable while this once-per-host probe runs in the background.
+  const settle = (): void => {
+    entry.state = 'settled'
+    entry.settledAt = Date.now()
+    retainEnrichmentEntry(key, entry)
+  }
+  // Why: model discovery must never delay rendering or launching; the last good
+  // list (or the seed) stays usable while this probe runs, and after it fails.
   void args
     .discover()
     .then((discovered) => {
-      entry.state = 'settled'
-      retainEnrichmentEntry(key, entry)
+      settle()
       if (!discovered || discovered.length === 0) {
         return
       }
-      entry.models =
+      const models =
         args.agent === 'claude'
           ? [...discovered]
           : catalog.discoveredModelsAreAuthoritative
             ? mergeDiscoveredAuthoritativeModels(catalog.models, discovered)
             : mergeCatalogModels(catalog.models, discovered)
+      if (JSON.stringify(models) === JSON.stringify(entry.models)) {
+        return
+      }
+      entry.models = models
       for (const listener of entry.listeners) {
-        listener([...entry.models])
+        listener([...models])
       }
     })
-    .catch(() => {
-      entry.state = 'settled'
-      retainEnrichmentEntry(key, entry)
-    })
+    .catch(settle)
 }
 
 export function clearNativeChatModelEnrichmentForTests(): void {

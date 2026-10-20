@@ -4,7 +4,10 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
 import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
-import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
+import {
+  clearNativeChatModelEnrichmentForTests,
+  NATIVE_CHAT_MODEL_LIST_STALE_MS
+} from './native-chat-session-option-enrichment'
 
 const discoverModels = vi.fn<() => Promise<readonly CatalogModel[] | null>>()
 
@@ -137,6 +140,19 @@ describe('useNativeChatSessionOptions model reporting', () => {
       expect(modelDescriptor(result.current.snapshot).choices).toContainEqual(
         expect.objectContaining({ value: reportedModel })
       )
+      discoverModels.mockResolvedValue([
+        ...OMP_DISCOVERED,
+        { id: 'provider/new', label: 'New model', options: [] }
+      ])
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + NATIVE_CHAT_MODEL_LIST_STALE_MS)
+      result.current.surface!.refreshModels?.()
+      await waitFor(() => expect(modelDescriptor(result.current.snapshot).choices).toHaveLength(4))
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe(reportedModel)
+      expect(modelDescriptor(result.current.snapshot).choices).toContainEqual(
+        expect.objectContaining({ value: 'provider/new' })
+      )
+      expect(dispatchCommand).not.toHaveBeenCalled()
+      vi.restoreAllMocks()
     }
   )
 
@@ -252,6 +268,19 @@ describe('useNativeChatSessionOptions model reporting', () => {
       'opus[1m]',
       'haiku'
     ])
+
+    // A later listing adds a model; the startup frame must not undo the user's pick.
+    result.current.surface!.recordOutgoingCommand('/model haiku')
+    discoverModels.mockResolvedValue([...DISCOVERED, { id: 'fable', label: 'Fable', options: [] }])
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + NATIVE_CHAT_MODEL_LIST_STALE_MS)
+    result.current.surface!.refreshModels?.()
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).choices.map((c) => c.value)).toContain(
+        'fable'
+      )
+    )
+    expect(modelDescriptor(result.current.snapshot).currentValue).toBe('haiku')
+    vi.restoreAllMocks()
   })
 
   it('does not re-resolve a late snapshot from the previous pty', async () => {

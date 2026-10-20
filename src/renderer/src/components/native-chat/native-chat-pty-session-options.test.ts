@@ -705,6 +705,8 @@ describe('native chat PTY session options', () => {
     // from the tracked model alone threw `Unknown session option: effort` on click.
     await surface.setOption('effort', 'low')
 
+    surface.replaceModels([{ ...GROK_SESSION_OPTION_CATALOG.models[0], id: 'grok-5' }])
+    expect(surface.getSnapshot()[0].kind).toMatchObject({ currentValue: 'grok-5' })
     expect(dispatch).toHaveBeenCalledWith('/effort low')
     expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
       valueSource: 'dispatched',
@@ -792,6 +794,7 @@ describe('native chat PTY session options', () => {
     // seed's guess; committing under it would file the value against a model that was
     // never running and blank the pill the user just set.
     const persistSelection = vi.fn()
+    let dispatchCount = 0
     let release = (): void => {}
     let markDispatched = (): void => {}
     const dispatched = new Promise<void>((resolve) => {
@@ -805,6 +808,7 @@ describe('native chat PTY session options', () => {
       dispatchCommand: vi.fn(
         () =>
           new Promise<void>((resolve) => {
+            dispatchCount++
             release = () => resolve()
             markDispatched()
           })
@@ -831,6 +835,13 @@ describe('native chat PTY session options', () => {
     expect(persistSelection).toHaveBeenCalledWith(
       expect.objectContaining({ adoptModelAsLaunchDefault: true })
     )
+    const pick = surface.setOption('model', 'grok-build')
+    await vi.waitFor(() => expect(dispatchCount).toBe(2))
+    surface.replaceModels([{ ...GROK_SESSION_OPTION_CATALOG.models[0], id: 'grok-5' }])
+    release()
+    await pick
+    expect(surface.getSnapshot()[0].kind).toMatchObject({ currentValue: 'grok-build' })
+    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toBeDefined()
   })
 
   it('carries an effort set under a probe-confirmed default into later launches', async () => {
