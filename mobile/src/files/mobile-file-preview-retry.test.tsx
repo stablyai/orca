@@ -31,6 +31,9 @@ vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 })
 }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Save: 'Icon' }))
+// Why: the screen renders the PDF handoff branch for PDF/video sources, and that component's
+// expo-sharing/expo-file-system imports would otherwise have to be mocked here too.
+vi.mock('./MobileFileMediaHandoff', () => ({ MobileFileMediaHandoff: 'MobileFileMediaHandoff' }))
 vi.mock('../navigation/route-handoff', () => ({
   useRouteHandoff: () => ({ back: () => {}, canGoBack: () => false })
 }))

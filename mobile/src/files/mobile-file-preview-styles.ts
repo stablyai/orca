@@ -49,6 +49,10 @@ export const filePreviewStyles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.xl
   },
+  mediaHandoffState: {
+    flex: 0,
+    paddingVertical: spacing.sm
+  },
   stateText: {
     color: colors.textSecondary,
     fontSize: typography.bodySize,
