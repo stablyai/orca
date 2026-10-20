@@ -55,10 +55,24 @@ export async function assertExplicitWorkerTerminalUsable(args: {
     )
   }
   if (!(await runtime.isTerminalRunningAgent(terminal))) {
-    throw new OrchestrationError(
-      'agent_unconfigured',
-      `Terminal ${terminal} is not running a recognized agent.`
-    )
+    // A cached shell foreground can outlive agent startup; confirm before refusing reuse.
+    const process = await runtime.inspectTerminalProcess(terminal, {
+      ...(explicitTerminal.incarnationId
+        ? { expectedIncarnationId: explicitTerminal.incarnationId }
+        : {}),
+      scanChildProcesses: true
+    })
+    if (
+      !(await runtime.isTerminalRunningAgent(terminal, {
+        foregroundProcess: process.foregroundProcess,
+        retryForegroundWrappers: false
+      }))
+    ) {
+      throw new OrchestrationError(
+        'agent_unconfigured',
+        `Terminal ${terminal} is not running a recognized agent.`
+      )
+    }
   }
 }
 
