@@ -99,6 +99,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   managementTitle: string | null
   managementTitleAt: number | null
   controllerTitle: string | null
+  /** Set only by a user rename. Absent or null leaves the live OSC title in charge. */
+  customTitle?: string | null
   title: string | null
   titleUpdatedAt: number | null
   lastOutputAt: number | null

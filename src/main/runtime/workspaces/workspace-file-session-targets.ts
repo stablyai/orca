@@ -19,6 +19,7 @@ import {
 import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
+import { getLatestLeafTitle } from '../runtime-worktree-status-projection'
 
 export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends RuntimeHeadlessTabGroups {
   protected abstract getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo>
@@ -56,6 +57,36 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
     tabId: string,
     title: string | null
   ): void {
+    const normalizedTitle = title?.trim() || null
+    let fallbackTitle: string | null = null
+    if (normalizedTitle === null) {
+      for (const leaf of this.leaves.values()) {
+        if (leaf.tabId === tabId) {
+          const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
+          fallbackTitle =
+            getLatestLeafTitle(this.getLeafDisplayRecord(leaf), null) ?? pty?.title ?? null
+          break
+        }
+      }
+    }
+    const inMemoryTab = this.tabs.get(tabId)
+    if (inMemoryTab) {
+      inMemoryTab.customTitle = normalizedTitle
+      inMemoryTab.title = normalizedTitle ?? fallbackTitle ?? 'Terminal'
+    }
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (snapshot) {
+      snapshot.tabs = snapshot.tabs.map((tab) => {
+        if (tab.type === 'terminal' && tab.parentTabId === tabId) {
+          return {
+            ...tab,
+            customTitle: normalizedTitle,
+            title: normalizedTitle ?? fallbackTitle ?? 'Terminal'
+          }
+        }
+        return tab
+      })
+    }
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
       return
@@ -68,7 +99,17 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
       ...session,
       tabsByWorktree: {
         ...session.tabsByWorktree,
-        [worktreeId]: tabs.map((tab) => (tab.id === tabId ? { ...tab, customTitle: title } : tab))
+        [worktreeId]: tabs.map((tab) =>
+          tab.id === tabId
+            ? {
+                ...tab,
+                customTitle: normalizedTitle,
+                ...(normalizedTitle === null && fallbackTitle !== null
+                  ? { title: fallbackTitle }
+                  : {})
+              }
+            : tab
+        )
       }
     })
   }
