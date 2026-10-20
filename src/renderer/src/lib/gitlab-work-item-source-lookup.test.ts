@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import {
-  listGitLabMRsForSource,
+  listGitLabWorkItemsForSource,
   lookupGitLabWorkItemByPathForSource
 } from './gitlab-work-item-source-lookup'
-import type { GitLabWorkItem, ListMergeRequestsResult } from '../../../shared/gitlab-types'
+import type { GitLabPagedResult, GitLabWorkItem } from '../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 
 vi.mock('@/runtime/runtime-rpc-client', async () => {
@@ -47,7 +47,7 @@ describe('GitLab source lookup routing', () => {
       api: {
         gl: {
           workItemByPath: vi.fn(),
-          listMRs: vi.fn()
+          listWorkItems: vi.fn()
         }
       }
     })
@@ -83,8 +83,8 @@ describe('GitLab source lookup routing', () => {
     expect(window.api.gl.workItemByPath).not.toHaveBeenCalled()
   })
 
-  it('routes runtime-owned GitLab MR lists through runtime RPC', async () => {
-    const result: ListMergeRequestsResult = {
+  it('routes runtime-owned GitLab work-item lists through runtime RPC', async () => {
+    const result: GitLabPagedResult<GitLabWorkItem> = {
       items: [gitlabItem({ repoId: 'runtime-returned' })],
       page: 1,
       perPage: 12,
@@ -94,7 +94,7 @@ describe('GitLab source lookup routing', () => {
     vi.mocked(callRuntimeRpc).mockResolvedValue(result)
 
     await expect(
-      listGitLabMRsForSource({
+      listGitLabWorkItemsForSource({
         repoPath: '/workspace/app',
         repoId: 'renderer-repo',
         sourceContext: runtimeSourceContext,
@@ -109,7 +109,7 @@ describe('GitLab source lookup routing', () => {
     // actually filters; previously the field was never threaded through.
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
-      'gitlab.listMRs',
+      'gitlab.listWorkItems',
       expect.objectContaining({
         repo: 'id:runtime-repo',
         state: 'opened',
@@ -119,17 +119,27 @@ describe('GitLab source lookup routing', () => {
       }),
       { timeoutMs: 30_000 }
     )
-    expect(window.api.gl.listMRs).not.toHaveBeenCalled()
+    expect(window.api.gl.listWorkItems).not.toHaveBeenCalled()
   })
 
-  it('forwards the search query to local GitLab MR lists over Electron IPC', async () => {
+  it('returns issues alongside MRs from local GitLab searches over Electron IPC', async () => {
     const localSourceContext: TaskSourceContext = {
       ...runtimeSourceContext,
       hostId: 'local',
       repoId: 'local-repo'
     }
-    vi.mocked(window.api.gl.listMRs).mockResolvedValue({
-      items: [gitlabItem({ repoId: 'local-returned' })],
+    vi.mocked(window.api.gl.listWorkItems).mockResolvedValue({
+      items: [
+        gitlabItem({ repoId: 'local-returned' }),
+        gitlabItem({
+          id: 'gitlab-issue-23',
+          type: 'issue',
+          number: 23,
+          title: 'Login fails',
+          url: 'https://gitlab.com/acme/app/-/issues/23',
+          repoId: 'local-returned'
+        })
+      ],
       page: 1,
       perPage: 12,
       totalCount: 1,
@@ -137,7 +147,7 @@ describe('GitLab source lookup routing', () => {
     })
 
     await expect(
-      listGitLabMRsForSource({
+      listGitLabWorkItemsForSource({
         repoPath: '/workspace/app',
         repoId: 'local-repo',
         sourceContext: localSourceContext,
@@ -146,9 +156,14 @@ describe('GitLab source lookup routing', () => {
         perPage: 12,
         query: 'fix login'
       })
-    ).resolves.toMatchObject({ items: [{ repoId: 'local-repo', number: 7 }] })
+    ).resolves.toMatchObject({
+      items: [
+        { repoId: 'local-repo', type: 'mr', number: 7 },
+        { repoId: 'local-repo', type: 'issue', number: 23 }
+      ]
+    })
 
-    expect(window.api.gl.listMRs).toHaveBeenCalledWith({
+    expect(window.api.gl.listWorkItems).toHaveBeenCalledWith({
       repoPath: '/workspace/app',
       repoId: 'local-repo',
       sourceContext: localSourceContext,
