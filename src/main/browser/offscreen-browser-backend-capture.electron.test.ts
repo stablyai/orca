@@ -72,7 +72,12 @@ it('captures fixture pixels from a real backend-owned hidden page', async () => 
         const wc = webContents.fromId(backend.getWebContentsId(browserPageId))
         await new Promise((resolve, reject) => {
           const timer = setTimeout(() => reject(new Error('page load timed out')), 10000)
-          wc.once('did-finish-load', () => { clearTimeout(timer); resolve() })
+          const onFinish = () => { clearTimeout(timer); resolve() }
+          wc.once('did-finish-load', onFinish)
+          if (!wc.isLoading()) {
+            wc.removeListener('did-finish-load', onFinish)
+            onFinish()
+          }
         })
         if (!(await wc.executeJavaScript('document.body.innerText')).includes('CAPTURE FIXTURE')) {
           throw new Error('fixture DOM missing')
