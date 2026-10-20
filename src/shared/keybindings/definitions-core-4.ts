@@ -1,5 +1,34 @@
-import type { KeybindingDefinition } from './types'
+import type { KeybindingActionId, KeybindingDefinition } from './types'
 import { platformBindings } from './definitions-support'
+
+function tabGroupFocusDefinition(
+  id: KeybindingActionId,
+  direction: 'left' | 'down' | 'up' | 'right',
+  vimKey: 'H' | 'J' | 'K' | 'L'
+): KeybindingDefinition {
+  return {
+    id,
+    title: `Focus tab group ${direction}`,
+    group: 'Tab Navigation',
+    scope: 'tabs',
+    searchKeywords: [
+      'shortcut',
+      'tab',
+      'group',
+      'split',
+      'pane',
+      'focus',
+      'move',
+      direction,
+      vimKey.toLowerCase(),
+      'vim'
+    ],
+    // Why: macOS only — Windows/Linux Ctrl+Alt is AltGr (Ctrl+Alt+K/L type ł/Ł on several layouts) and Linux Ctrl+Alt+L locks the screen.
+    defaultBindings: { darwin: [`Ctrl+Alt+${vimKey}`], linux: [], win32: [] },
+    // Why: group navigation must leave a focused terminal even under terminal-first, like pane focus.
+    allowInTerminal: true
+  }
+}
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
@@ -96,5 +125,9 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     },
     // Why: macOS uses Shift+Space as an input-source shortcut; Orca otherwise rejects Shift-only bindings to avoid stealing typed text.
     allowShiftOnlyKeybindings: true
-  }
+  },
+  tabGroupFocusDefinition('tab.focusGroupLeft', 'left', 'H'),
+  tabGroupFocusDefinition('tab.focusGroupDown', 'down', 'J'),
+  tabGroupFocusDefinition('tab.focusGroupUp', 'up', 'K'),
+  tabGroupFocusDefinition('tab.focusGroupRight', 'right', 'L')
 ]

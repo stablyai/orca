@@ -29,6 +29,8 @@ import {
 } from './agent-tab-launch-context'
 import { handleTerminalWorkspaceEditorShortcut } from './terminal-workspace-editor-shortcuts'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
+import { focusTabGroupInDirection } from '@/lib/tab-group-directional-focus'
+import { matchTabGroupFocusDirection } from '../../../shared/workspace-layout/tab-group-neighbor'
 
 export function handleTerminalWorkspaceKeyDown(
   event: KeyboardEvent,
@@ -232,6 +234,17 @@ export function handleTerminalWorkspaceKeyDown(
     event.stopPropagation()
     event.stopImmediatePropagation()
     dispatchWorkspaceTabCommand({ type: 'previous-recent' })
+    return
+  }
+  const groupFocusDirection = matchTabGroupFocusDirection(matchShortcut)
+  if (groupFocusDirection !== null) {
+    // Why: swallow repeats too so a held chord never leaks escape bytes into the terminal.
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    if (!event.repeat && !floatingWorkspaceFocused) {
+      focusTabGroupInDirection(groupFocusDirection)
+    }
     return
   }
   const switchSameTypeDirection = matchShortcut('tab.nextSameType')
