@@ -5,7 +5,10 @@ import {
   assertEditorBufferInvariant,
   withEditorBufferRecords
 } from './editor-buffer-record-lifecycle'
-import type { EditorBufferRecords } from './slices/editor/buffers/editor-buffer-record'
+import {
+  editorBufferIdOf,
+  type EditorBufferRecords
+} from './slices/editor/buffers/editor-buffer-record'
 import type { OpenFile } from './slices/editor/types/open-file'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
@@ -140,9 +143,9 @@ describe('editor buffer records', () => {
 
     watch.stop()
     expect(result).toEqual({ ok: true })
-    const records = useAppStore.getState().editorBuffers
-    expect(Object.keys(records)).toEqual(['/repo/b.md'])
-    expect(records['/repo/b.md']).toMatchObject({
+    const state = useAppStore.getState()
+    expect(Object.keys(state.editorBuffers)).toEqual([editorBufferIdOf(state, '/repo/b.md')])
+    expect(state.editorBuffers[editorBufferIdOf(state, '/repo/b.md')]).toMatchObject({
       isDirty: true,
       lastKnownDiskSignature: 'sig-a',
       pendingLiveDiskVerification: true

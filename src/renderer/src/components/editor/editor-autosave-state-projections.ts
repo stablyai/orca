@@ -4,6 +4,7 @@ import type { OpenFile } from '@/store/slices/editor'
 export type AutosaveSubscriberInputs = {
   openFiles: AppState['openFiles']
   editorDrafts: AppState['editorDrafts']
+  editorBufferIndex: AppState['editorBufferIndex']
   editorAutoSave: boolean | undefined
   editorAutoSaveDelayMs: number | undefined
 }
@@ -12,6 +13,8 @@ export function getAutosaveSubscriberInputs(state: AppState): AutosaveSubscriber
   return {
     openFiles: state.openFiles,
     editorDrafts: state.editorDrafts,
+    // Why: autosave timers are keyed by buffer record.
+    editorBufferIndex: state.editorBufferIndex,
     editorAutoSave: state.settings?.editorAutoSave,
     editorAutoSaveDelayMs: state.settings?.editorAutoSaveDelayMs
   }
@@ -24,6 +27,7 @@ export function autosaveSubscriberInputsEqual(
   return (
     a.openFiles === b.openFiles &&
     a.editorDrafts === b.editorDrafts &&
+    a.editorBufferIndex === b.editorBufferIndex &&
     a.editorAutoSave === b.editorAutoSave &&
     a.editorAutoSaveDelayMs === b.editorAutoSaveDelayMs
   )

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, renderHook } from '@testing-library/react'
+import { act, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPendingEditorChange } from './editor-pending-flush'
 import { parseIpynb } from './ipynb-parse'
@@ -98,6 +98,67 @@ describe('notebook document editing lifecycle', () => {
     const externalContent = notebookContent('external source')
     hook.rerender({ content: externalContent })
     expect(Object.hasOwn(hook.result.current.sourceDrafts, 'a')).toBe(false)
+  })
+
+  it('two tabs of one notebook editing different cells keep both cells when both flush', () => {
+    // The shared record's draft: every tab's commit lands here at once, as the store fans it out.
+    let shared: string | undefined
+    const initial = notebookContent()
+    const mount = (fileId: string) =>
+      renderHook(() =>
+        useIpynbDocumentEditing({
+          content: initial,
+          fileId,
+          notebook: parseIpynb(initial),
+          onContentChange: (next) => {
+            shared = next
+          },
+          onDirtyStateHint: vi.fn(),
+          onDeactivateEditor: vi.fn(),
+          readSharedContent: () => shared
+        })
+      )
+    const tabA = mount('notebook-tab-a')
+    const tabB = mount('notebook-tab-b')
+
+    act(() => {
+      tabA.result.current.updateCellSource(0, 'edited in A')
+      tabB.result.current.updateCellSource(1, 'edited in B')
+    })
+    // Hot exit flushes both tabs before either re-renders with the other's commit.
+    act(() => {
+      flushPendingEditorChange('notebook-tab-a')
+      flushPendingEditorChange('notebook-tab-b')
+    })
+
+    const cells = parseIpynb(shared ?? '').cells.map((cell) => cell.source)
+    expect(cells).toEqual(['edited in A', 'edited in B'])
+  })
+
+  it('commits pending cell edits when focus leaves the notebook', () => {
+    const onContentChange = vi.fn()
+    const content = notebookContent()
+    let editing: ReturnType<typeof useIpynbDocumentEditing> | null = null
+    function Notebook(): React.JSX.Element {
+      editing = useIpynbDocumentEditing({
+        content,
+        fileId: 'notebook-blur',
+        notebook: parseIpynb(content),
+        onContentChange,
+        onDirtyStateHint: vi.fn(),
+        onDeactivateEditor: vi.fn()
+      })
+      return <div data-testid="notebook" tabIndex={-1} onBlur={editing.onRootBlur} />
+    }
+    const view = render(<Notebook />)
+
+    act(() => editing?.updateCellSource(0, 'typed then left'))
+    fireEvent.blur(view.getByTestId('notebook'))
+
+    expect(parseIpynb(onContentChange.mock.calls[0]?.[0] ?? '').cells[0]?.source).toBe(
+      'typed then left'
+    )
+    view.unmount()
   })
 
   it('flushes drafts before structural work and cancels queued work on detach', () => {

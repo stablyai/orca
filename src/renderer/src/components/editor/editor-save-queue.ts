@@ -11,7 +11,8 @@ import {
   ORCA_EDITOR_FILE_SAVED_EVENT,
   type EditorFileSavedDetail
 } from './editor-autosave'
-import { flushPendingEditorChange, hasPendingEditorChange } from './editor-pending-flush'
+import { hasPendingEditorChange } from './editor-pending-flush'
+import { flushEditorBufferViews } from './editor-buffer-flush'
 import {
   clearSelfWrite,
   recordSelfWrite,
@@ -20,15 +21,27 @@ import {
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
 import { editorTabFileAccess } from '@/lib/local-file-access'
+import {
+  editorBufferIdOf,
+  editorBufferViewIds
+} from '@/store/slices/editor/buffers/editor-buffer-record'
+import { markEditorBufferNewer } from '@/store/slices/editor/buffers/editor-buffer-read-freshness'
 
 export type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
+
+/**
+ * `written`: disk holds the text. `blocked-stale`: a guarded write was refused because the disk
+ * moved on (reserved for guarded saves). `skipped`: nothing was written (read-only, suspended
+ * autosave, superseded). A failed write rejects. Callers treat anything but `written` as unsaved.
+ */
+export type EditorSaveResult = 'written' | 'blocked-stale' | 'skipped'
 
 export type EditorSaveQueue = {
   queueSave: (
     file: OpenFile,
     fallbackContent: string,
     trigger?: 'autosave' | 'user'
-  ) => Promise<void>
+  ) => Promise<EditorSaveResult>
   quiesceFileSave: (fileId: string) => Promise<void>
   clearAutoSaveTimer: (fileId: string) => void
   bumpSaveGeneration: (fileId: string) => void
@@ -36,46 +49,59 @@ export type EditorSaveQueue = {
   dispose: () => void
 }
 
+function hasPendingBufferChange(state: AppState, fileId: string): boolean {
+  return editorBufferViewIds(state, fileId).some((id) => hasPendingEditorChange(id))
+}
+
 // Why: keeping the save queue, quiesce coordination, and the debounce timers that feed it together avoids split-brain saves.
+// Queue, generation and autosave timer are keyed by buffer record, so every tab of a file shares them.
 export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   const autoSaveTimers = new Map<string, number>()
   const autoSaveScheduledContent = new Map<string, string>()
-  const saveQueue = new Map<string, Promise<void>>()
+  const saveQueue = new Map<string, Promise<EditorSaveResult>>()
   const saveGeneration = new Map<string, number>()
+  const completedWrites = new Map<string, number>()
 
-  const clearAutoSaveTimer = (fileId: string): void => {
-    const timerId = autoSaveTimers.get(fileId)
+  const recordIdOf = (fileId: string): string => editorBufferIdOf(store.getState(), fileId)
+
+  const clearRecordAutoSaveTimer = (recordId: string): void => {
+    const timerId = autoSaveTimers.get(recordId)
     if (timerId !== undefined) {
       window.clearTimeout(timerId)
-      autoSaveTimers.delete(fileId)
+      autoSaveTimers.delete(recordId)
     }
-    autoSaveScheduledContent.delete(fileId)
+    autoSaveScheduledContent.delete(recordId)
   }
 
+  const clearAutoSaveTimer = (fileId: string): void => clearRecordAutoSaveTimer(recordIdOf(fileId))
+
   const bumpSaveGeneration = (fileId: string): void => {
-    saveGeneration.set(fileId, (saveGeneration.get(fileId) ?? 0) + 1)
+    const recordId = recordIdOf(fileId)
+    saveGeneration.set(recordId, (saveGeneration.get(recordId) ?? 0) + 1)
   }
 
   const queueSave = (
     file: OpenFile,
     fallbackContent: string,
     trigger: 'autosave' | 'user' = 'user'
-  ): Promise<void> => {
-    clearAutoSaveTimer(file.id)
-    const queuedGeneration = saveGeneration.get(file.id) ?? 0
+  ): Promise<EditorSaveResult> => {
+    const recordId = recordIdOf(file.id)
+    clearRecordAutoSaveTimer(recordId)
+    const queuedGeneration = saveGeneration.get(recordId) ?? 0
+    const queuedAfterWrites = completedWrites.get(recordId) ?? 0
 
-    const previousSave = saveQueue.get(file.id) ?? Promise.resolve()
+    const previousSave = saveQueue.get(recordId) ?? Promise.resolve()
     const queuedSave = previousSave
       .catch(() => undefined)
-      .then(async () => {
-        if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {
-          return
+      .then(async (): Promise<EditorSaveResult> => {
+        if ((saveGeneration.get(recordId) ?? 0) !== queuedGeneration) {
+          return 'skipped'
         }
 
         const state = store.getState()
         const liveFile = state.openFiles.find((openFile) => openFile.id === file.id) ?? null
         if (!liveFile) {
-          return
+          return 'skipped'
         }
         if (liveFile.csvPreviewOnly === true) {
           throw new Error('Large CSV previews are read-only.')
@@ -83,29 +109,34 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
 
         // Why: read-only tabs (AI Vault View Log) must never write the agent-owned artifact through editor paths.
         if (liveFile.readOnly === true) {
-          return
+          return 'skipped'
         }
 
         if (liveFile.pendingOwnerMigration === true) {
           if (trigger === 'autosave') {
-            return
+            return 'skipped'
           }
           throw new Error('This file is still restoring its workspace owner. Try saving again.')
         }
 
         // Why: only autosave is blocked while suspended; explicit user saves proceed (the banner warned).
         if (trigger === 'autosave' && isAutosaveSuspendedForFile(liveFile)) {
-          return
+          return 'skipped'
         }
 
-        flushPendingEditorChange(file.id, trigger === 'autosave')
-        const contentToSave = store.getState().editorDrafts[file.id] ?? fallbackContent
+        flushEditorBufferViews(store.getState, file.id, trigger === 'autosave')
+        const draft = store.getState().editorDrafts[file.id]
+        // Why: a write since this request queued already saved newer text than its fallback.
+        if (draft === undefined && (completedWrites.get(recordId) ?? 0) !== queuedAfterWrites) {
+          return 'written'
+        }
+        const contentToSave = draft ?? fallbackContent
         if (
           trigger === 'autosave' &&
-          hasPendingEditorChange(file.id) &&
+          hasPendingBufferChange(store.getState(), file.id) &&
           liveFile.lastKnownDiskSignature === getDiskBaselineSignature(contentToSave)
         ) {
-          return
+          return 'skipped'
         }
         const worktree = liveFile.worktreeId
           ? findWorktreeById(state.worktreesByRepo ?? {}, liveFile.worktreeId)
@@ -134,72 +165,92 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
           throw error
         }
 
-        if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {
-          return
-        }
-
+        completedWrites.set(recordId, (completedWrites.get(recordId) ?? 0) + 1)
+        // Why: a read of this file that started before the write must not land after it.
+        markEditorBufferNewer(recordId)
+        // Why the record: the tab that started the save may have closed while another still shows the file.
         const nextState = store.getState()
-        const currentDraft = nextState.editorDrafts[file.id]
+        const views = nextState.openFiles.filter(
+          (openFile) => editorBufferIdOf(nextState, openFile.id) === recordId
+        )
+        const view = views.find(canAutoSaveOpenFile) ?? views[0]
+        if (!view) {
+          return 'written'
+        }
+        if ((saveGeneration.get(recordId) ?? 0) !== queuedGeneration) {
+          // Why: disk holds this text even though the save was superseded mid-write.
+          nextState.setLastKnownDiskSignature(view.id, getDiskBaselineSignature(contentToSave))
+          return 'written'
+        }
+        const currentDraft = nextState.editorDrafts[view.id]
         const stillDirty =
           (currentDraft !== undefined && currentDraft !== contentToSave) ||
-          hasPendingEditorChange(file.id)
-        nextState.markFileDirty(file.id, stillDirty)
+          hasPendingBufferChange(nextState, view.id)
+        nextState.markFileDirty(view.id, stillDirty)
         if (!stillDirty) {
-          nextState.clearEditorDraft(file.id)
+          nextState.clearEditorDraft(view.id)
         }
         // Why: disk now holds contentToSave — rebaseline so our own save isn't flagged external; drop pending verification.
-        nextState.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(contentToSave))
-        nextState.clearPendingDiskBaselineVerification(file.id)
+        nextState.setLastKnownDiskSignature(view.id, getDiskBaselineSignature(contentToSave))
+        nextState.clearPendingDiskBaselineVerification(view.id)
         // Why: the write made disk match the buffer, so clear any now-stale changed-on-disk conflict.
-        const savedFile = nextState.openFiles.find((openFile) => openFile.id === file.id)
+        const savedFile = store.getState().openFiles.find((openFile) => openFile.id === view.id)
         if (savedFile?.externalMutation === 'changed') {
           trackExternalChangeConflictAction(savedFile, 'save_overwrite')
-          nextState.setExternalMutation(file.id, null)
+          nextState.setExternalMutation(view.id, null)
         }
 
         window.dispatchEvent(
           new CustomEvent<EditorFileSavedDetail>(ORCA_EDITOR_FILE_SAVED_EVENT, {
-            detail: { fileId: file.id, content: contentToSave }
+            detail: { fileId: view.id, content: contentToSave }
           })
         )
+        return 'written'
       })
 
-    let trackedSave: Promise<void>
+    let trackedSave: Promise<EditorSaveResult>
     trackedSave = queuedSave.finally(() => {
-      if (saveQueue.get(file.id) === trackedSave) {
-        saveQueue.delete(file.id)
+      if (saveQueue.get(recordId) === trackedSave) {
+        saveQueue.delete(recordId)
       }
     })
-    saveQueue.set(file.id, trackedSave)
+    saveQueue.set(recordId, trackedSave)
     return trackedSave
   }
 
   const quiesceFileSave = async (fileId: string): Promise<void> => {
     // Why: rich markdown debounces serialization, so force the pending draft out before we cancel timers.
-    flushPendingEditorChange(fileId)
-    const pendingSave = saveQueue.get(fileId)
-    clearAutoSaveTimer(fileId)
+    flushEditorBufferViews(store.getState, fileId)
+    const recordId = recordIdOf(fileId)
+    const pendingSave = saveQueue.get(recordId)
+    clearRecordAutoSaveTimer(recordId)
     bumpSaveGeneration(fileId)
     await pendingSave?.catch(() => undefined)
   }
 
   const syncAutoSave = (): void => {
     const state = store.getState()
-    const openFilesById = new Map(state.openFiles.map((file) => [file.id, file]))
+    // One autosave candidate per record: the first tab that may write it.
+    const candidates = new Map<string, OpenFile>()
+    if (state.settings?.editorAutoSave) {
+      for (const file of state.openFiles) {
+        const recordId = editorBufferIdOf(state, file.id)
+        if (
+          !candidates.has(recordId) &&
+          file.isDirty &&
+          state.editorDrafts[file.id] !== undefined &&
+          canAutoSaveOpenFile(file) &&
+          // Why: suspension holds until the user picks a side via the banner (or saves manually).
+          !isAutosaveSuspendedForFile(file)
+        ) {
+          candidates.set(recordId, file)
+        }
+      }
+    }
 
-    for (const fileId of Array.from(autoSaveTimers.keys())) {
-      const file = openFilesById.get(fileId)
-      const draft = state.editorDrafts[fileId]
-      const shouldKeepTimer =
-        state.settings?.editorAutoSave &&
-        file &&
-        file.isDirty &&
-        canAutoSaveOpenFile(file) &&
-        // Why: suspension holds until the user picks a side via the banner (or saves manually).
-        !isAutosaveSuspendedForFile(file) &&
-        draft !== undefined
-      if (!shouldKeepTimer) {
-        clearAutoSaveTimer(fileId)
+    for (const recordId of Array.from(autoSaveTimers.keys())) {
+      if (!candidates.has(recordId)) {
+        clearRecordAutoSaveTimer(recordId)
       }
     }
 
@@ -208,32 +259,29 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     }
 
     const autoSaveDelayMs = normalizeAutoSaveDelayMs(state.settings.editorAutoSaveDelayMs)
-    for (const file of state.openFiles) {
+    for (const [recordId, file] of candidates) {
       const draft = state.editorDrafts[file.id]
-      if (
-        !file.isDirty ||
-        draft === undefined ||
-        !canAutoSaveOpenFile(file) ||
-        isAutosaveSuspendedForFile(file)
-      ) {
-        clearAutoSaveTimer(file.id)
+      if (autoSaveTimers.has(recordId) && autoSaveScheduledContent.get(recordId) === draft) {
         continue
       }
 
-      if (autoSaveTimers.has(file.id) && autoSaveScheduledContent.get(file.id) === draft) {
-        continue
-      }
-
-      clearAutoSaveTimer(file.id)
-      autoSaveScheduledContent.set(file.id, draft)
+      clearRecordAutoSaveTimer(recordId)
+      autoSaveScheduledContent.set(recordId, draft)
       const timerId = window.setTimeout(() => {
-        autoSaveTimers.delete(file.id)
-        autoSaveScheduledContent.delete(file.id)
-        void queueSave(file, draft, 'autosave').catch((error) => {
+        autoSaveTimers.delete(recordId)
+        autoSaveScheduledContent.delete(recordId)
+        // Why: the tab that scheduled it may have closed while another tab of the file stays open.
+        const liveState = store.getState()
+        const writer =
+          liveState.openFiles.find(
+            (openFile) =>
+              editorBufferIdOf(liveState, openFile.id) === recordId && canAutoSaveOpenFile(openFile)
+          ) ?? file
+        void queueSave(writer, draft, 'autosave').catch((error) => {
           console.error('[editor] autosave failed', error)
         })
       }, autoSaveDelayMs)
-      autoSaveTimers.set(file.id, timerId)
+      autoSaveTimers.set(recordId, timerId)
     }
   }
 
@@ -245,6 +293,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     autoSaveScheduledContent.clear()
     saveQueue.clear()
     saveGeneration.clear()
+    completedWrites.clear()
   }
 
   return {

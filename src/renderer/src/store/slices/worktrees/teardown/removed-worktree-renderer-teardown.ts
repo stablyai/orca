@@ -10,6 +10,7 @@ import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualized
 import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../../../components/terminal-pane/terminal-parked-watcher-registry'
 import { detachedHeadAutoDerivedDisplayNames } from '../metadata/detached-head-display-name'
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'
+import { flushSharedEditorViewsBeforeClose } from '../../editor/buffers/editor-buffer-close-rule'
 import { purgeOrphanedRuntimeSshProjects } from './orphaned-runtime-ssh-project-purge'
 import { deleteWorkspaceChatDrafts } from './removed-worktree-chat-drafts'
 import type { WorktreeStateBeforeRemoval } from './worktree-state-before-removal'
@@ -48,6 +49,12 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   // Why the captured keys: closing a structured chat keeps its conversation's draft, and a listing
   // refresh may already have dropped these tabs.
   deleteWorkspaceChatDrafts(beforeRemoval.chatDraftKeys)
+  flushSharedEditorViewsBeforeClose(
+    get,
+    get()
+      .openFiles.filter((file) => file.worktreeId === worktreeId)
+      .map((file) => file.id)
+  )
   for (const tab of get().unifiedTabsByWorktree[worktreeId] ?? []) {
     if (tab.contentType === 'agent-session') {
       get().closeUnifiedTab(tab.id, {

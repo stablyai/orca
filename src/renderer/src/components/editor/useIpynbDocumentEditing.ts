@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type FocusEvent,
   type MutableRefObject
 } from 'react'
 import { registerPendingEditorFlush } from './editor-pending-flush'
@@ -14,9 +15,17 @@ import {
   updateIpynbCellKind,
   updateIpynbCellSources
 } from './ipynb-cell-mutations'
-import type { IpynbCell, IpynbCellKind, ParsedIpynb } from './ipynb-parse'
+import { parseIpynb, type IpynbCell, type IpynbCellKind, type ParsedIpynb } from './ipynb-parse'
 
 const NOTEBOOK_SOURCE_COMMIT_DELAY_MS = 400
+
+function parseOrNull(content: string): ParsedIpynb | null {
+  try {
+    return parseIpynb(content)
+  } catch {
+    return null
+  }
+}
 
 export function getIpynbCellKey(cell: IpynbCell, index: number): string {
   return cell.id ?? `${index}:${cell.kind}`
@@ -58,6 +67,8 @@ type UseIpynbDocumentEditingArgs = {
   onContentChange: (content: string) => void
   onDirtyStateHint: (dirty: boolean) => void
   onDeactivateEditor: () => void
+  /** The file's shared unsaved text, which may be newer than `content` when another tab commits. */
+  readSharedContent?: () => string | undefined
 }
 
 export function useIpynbDocumentEditing({
@@ -66,7 +77,8 @@ export function useIpynbDocumentEditing({
   notebook,
   onContentChange,
   onDirtyStateHint,
-  onDeactivateEditor
+  onDeactivateEditor,
+  readSharedContent
 }: UseIpynbDocumentEditingArgs) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [sourceDrafts, setSourceDrafts] = useState<Record<string, string>>({})
@@ -77,18 +89,31 @@ export function useIpynbDocumentEditing({
   const onDirtyStateHintRef = useRef(onDirtyStateHint)
   const sourceCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const structuralFrameIdsRef = useRef<number[]>([])
+  const readSharedContentRef = useRef(readSharedContent)
   useLayoutEffect(() => {
     contentRef.current = content
     notebookRef.current = notebook
     onContentChangeRef.current = onContentChange
     onDirtyStateHintRef.current = onDirtyStateHint
-  }, [content, notebook, onContentChange, onDirtyStateHint])
+    readSharedContentRef.current = readSharedContent
+  }, [content, notebook, onContentChange, onDirtyStateHint, readSharedContent])
+
+  // Why the shared draft: another tab of this notebook may have committed other cells since this
+  // one rendered; this tab's cell edits apply onto that text, matched by cell, not over it.
+  const latestSharedContent = useCallback(
+    (): string => readSharedContentRef.current?.() ?? contentRef.current,
+    []
+  )
 
   const materializeSourceDrafts = useCallback((): string => {
-    const latestNotebook = notebookRef.current
+    const base = latestSharedContent()
     const drafts = sourceDraftsRef.current
-    if (!latestNotebook || Object.keys(drafts).length === 0) {
-      return contentRef.current
+    if (Object.keys(drafts).length === 0) {
+      return base
+    }
+    const latestNotebook = base === contentRef.current ? notebookRef.current : parseOrNull(base)
+    if (!latestNotebook) {
+      return base
     }
     const updates = latestNotebook.cells
       .map((cell, index) => {
@@ -96,21 +121,22 @@ export function useIpynbDocumentEditing({
         return hasIpynbSourceDraft(drafts, key) ? { index, source: drafts[key] ?? '' } : null
       })
       .filter((update): update is { index: number; source: string } => update !== null)
-    return updateIpynbCellSources(contentRef.current, updates)
-  }, [])
+    return updateIpynbCellSources(base, updates)
+  }, [latestSharedContent])
 
   const flushSourceDrafts = useCallback((): string => {
     if (sourceCommitTimerRef.current !== null) {
       clearTimeout(sourceCommitTimerRef.current)
       sourceCommitTimerRef.current = null
     }
+    const base = latestSharedContent()
     const nextContent = materializeSourceDrafts()
-    if (nextContent !== contentRef.current) {
+    if (nextContent !== base || nextContent !== contentRef.current) {
       contentRef.current = nextContent
       onContentChangeRef.current(nextContent)
     }
     return nextContent
-  }, [materializeSourceDrafts])
+  }, [latestSharedContent, materializeSourceDrafts])
 
   const queueSourceDraftCommit = useCallback((): void => {
     if (sourceCommitTimerRef.current !== null) {
@@ -153,6 +179,19 @@ export function useIpynbDocumentEditing({
       }
       void flushSourceDrafts()
       cancelStructuralFrames(structuralFrameIdsRef)
+    },
+    [flushSourceDrafts]
+  )
+
+  // Why: leaving the notebook commits its cells, like rich markdown on blur, so another tab of
+  // the file never serializes over them.
+  const onRootBlur = useCallback(
+    (event: FocusEvent<HTMLDivElement>): void => {
+      if (
+        !(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))
+      ) {
+        void flushSourceDrafts()
+      }
     },
     [flushSourceDrafts]
   )
@@ -209,6 +248,7 @@ export function useIpynbDocumentEditing({
   return {
     rootRef,
     setRootRef,
+    onRootBlur,
     sourceDrafts,
     flushSourceDrafts,
     applyContent,

@@ -72,7 +72,9 @@ export function createTabsCreateActions(
             (tab) =>
               tab.groupId === group.id &&
               tab.isPreview &&
-              canReplacePreviewContentType(contentType, tab.contentType)
+              canReplacePreviewContentType(contentType, tab.contentType) &&
+              // Why: a preview can show another tab's unsaved edits; dropping it would hide them.
+              !state.openFiles.some((file) => file.id === tab.entityId && file.isDirty)
           )
           if (existingPreview) {
             nextTabs = existingTabs.filter((tab) => tab.id !== existingPreview.id)

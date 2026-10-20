@@ -25,6 +25,7 @@ function createSnapshot(
     activeBrowserTabIdByWorktree: {},
     browserUrlHistory: [],
     workspaceDocHistory: [],
+    recoveredEditorDrafts: [],
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
     layoutByWorktree: {},

@@ -206,12 +206,12 @@ describe('ExternalFileChangeBanner', () => {
     mockStoreState({}, [{ ...file, externalMutation: undefined } as OpenFile])
 
     keepTabEditsOverExternalChange(file)
-    await Promise.resolve()
-    await Promise.resolve()
 
-    expect(setLastKnownDiskSignature).toHaveBeenCalledWith(
-      'file-1',
-      getDiskBaselineSignature('agent content')
+    await vi.waitFor(() =>
+      expect(setLastKnownDiskSignature).toHaveBeenCalledWith(
+        'file-1',
+        getDiskBaselineSignature('agent content')
+      )
     )
   })
 

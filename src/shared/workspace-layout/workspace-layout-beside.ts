@@ -34,6 +34,7 @@ export const SESSION_FIELD_OWNERS = {
   activeTabTypeByWorktree: 'view',
   browserUrlHistory: 'carried',
   workspaceDocHistory: 'carried',
+  recoveredEditorDrafts: 'carried',
   activeTabIdByWorktree: 'view',
   unifiedTabs: 'layout',
   tabGroups: 'layout',

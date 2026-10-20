@@ -31,7 +31,10 @@ import {
 } from './workspace-session-browser-schema'
 import { workspaceSessionCloseIntentFieldSchemas } from './workspace-session-close-intent-schema'
 import { persistedClientHostedBrowserPageSchema } from './client-hosted-browser-page-record'
-import { persistedOpenFileSchema } from './workspace-session-editor-schema'
+import {
+  persistedOpenFileSchema,
+  recoveredEditorDraftsSchema
+} from './workspace-session-editor-schema'
 import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
 import {
   tabContentTypeSchema,
@@ -264,6 +267,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   ),
   browserUrlHistory: salvagedOptional('browserUrlHistory', browserHistoryEntriesSchema),
   workspaceDocHistory: salvagedOptional('workspaceDocHistory', workspaceDocHistoryEntriesSchema),
+  recoveredEditorDrafts: salvagedOptional('recoveredEditorDrafts', recoveredEditorDraftsSchema),
   activeTabIdByWorktree: salvagedOptional(
     'activeTabIdByWorktree',
     salvagingRecord(worktreeIdSchema, z.string().nullable())

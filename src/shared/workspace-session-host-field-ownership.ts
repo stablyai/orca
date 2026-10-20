@@ -19,6 +19,8 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   activeTabId: 'global',
   browserUrlHistory: 'global',
   workspaceDocHistory: 'global',
+  // Why global: a recovered draft is this client's notice, offered until the user dismisses it.
+  recoveredEditorDrafts: 'global',
   // Why global rather than per-partition: this is the client's own record of which connections it
   // owed work to at shutdown, not state belonging to any one workspace.
   activeConnectionIdsAtShutdown: 'global',
@@ -103,7 +105,8 @@ export const GLOBAL_WORKSPACE_SESSION_FIELDS = (
  */
 export const HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS = [
   'browserUrlHistory',
-  'workspaceDocHistory'
+  'workspaceDocHistory',
+  'recoveredEditorDrafts'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
 /** Serialize-side sweep over every non-local partition. The load path re-seeds these fields at

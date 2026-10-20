@@ -4,7 +4,9 @@ import { useAppStore } from '../store'
 import {
   ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
-  type EditorRequestFileCloseDetail
+  type EditorRequestFileCloseDetail,
+  type EditorSaveAndCloseDetail,
+  type EditorSaveAndCloseOutcome
 } from './editor/editor-autosave'
 import { discardEditorFileChangesAndClose } from './editor/discard-editor-file-changes'
 import { translate } from '@/i18n/i18n'
@@ -58,15 +60,37 @@ export function useTerminalEditorCloseDialogActions(
     }
 
     setSaveDialogFileId(null)
-    window.dispatchEvent(new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail: { fileId } }))
+    let outcome: EditorSaveAndCloseOutcome | undefined
+    const settled = new Promise<boolean>((resolve) => {
+      const detail: EditorSaveAndCloseDetail = {
+        fileId,
+        onSettled: (result) => {
+          outcome = result
+          resolve(result === 'closed')
+        }
+      }
+      window.dispatchEvent(new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail }))
+    })
     inFlightSaveFileIdRef.current = fileId
     let closed = false
     try {
-      closed = await waitForFileClosed(fileId, 10_000)
+      // Why race: the save reports its result at once; the timeout covers a controller that can't.
+      closed = await Promise.race([settled, waitForFileClosed(fileId, 10_000)])
     } finally {
       if (inFlightSaveFileIdRef.current === fileId) {
         inFlightSaveFileIdRef.current = null
       }
+    }
+    // Why: the save landed, but a sibling's newer edits keep the tab open; that is no failure.
+    // The tab never closed, so its close reaction must not fire. While quitting, ask again.
+    if (outcome === 'kept-open') {
+      closedReactionsRef.current.delete(fileId)
+      pendingEditorCloseQueueRef.current = windowCloseAfterDirtyRef.current
+        ? [fileId, ...pendingEditorCloseQueueRef.current.filter((id) => id !== fileId)]
+        : pendingEditorCloseQueueRef.current.filter((id) => id !== fileId)
+      isClosingRef.current = false
+      advanceEditorCloseQueue()
+      return
     }
     if (!closed) {
       if (!useAppStore.getState().openFiles.some((candidate) => candidate.id === fileId)) {
@@ -103,7 +127,7 @@ export function useTerminalEditorCloseDialogActions(
     isClosingRef.current = true
     const fileId = saveDialogFileId
     setSaveDialogFileId(null)
-    await discardEditorFileChangesAndClose(fileId)
+    await discardEditorFileChangesAndClose(fileId, new Set(pendingEditorCloseQueueRef.current))
     settleQueuedClose(fileId)
     advanceEditorCloseQueue()
     releaseCloseDialogGuardAfterDebounce()

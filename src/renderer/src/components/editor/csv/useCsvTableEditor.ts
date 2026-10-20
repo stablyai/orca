@@ -25,9 +25,11 @@ export function useCsvTableEditor({
   onStructureChange,
   fileId,
   isDirty,
-  onDirtyStateHint
+  onDirtyStateHint,
+  readSharedContent
 }: {
   document: CsvTextDocument | null
+  readSharedContent?: () => string | undefined
   fileId?: string
   isDirty?: boolean
   onDirtyStateHint?: (dirty: boolean) => void
@@ -121,7 +123,9 @@ export function useCsvTableEditor({
     document,
     onContentChange,
     editingRef,
-    onSessionChange: setCellEditing
+    onSessionChange: setCellEditing,
+    onSessionEnd: () => setCellEditing(null),
+    readSharedContent
   })
   const select = (row: number, column: number, extend: boolean): boolean => {
     if (!commit()) {

@@ -3,7 +3,7 @@ import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types
 import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session-state-types'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
-import { reconcileEditorBufferMembership } from '../buffers/editor-buffer-record'
+import { EMPTY_EDITOR_BUFFER_INDEX } from '../buffers/editor-buffer-record'
 import { buildOwnedEditorFileId } from '../file-ids/editor-file-ids'
 import { resolveHydratedEditorFileSelection } from '../file-ids/hydrated-editor-file-selection'
 import { resolveHydratedEditorFrontmatter } from '../file-ids/hydrated-editor-frontmatter'
@@ -17,6 +17,8 @@ export type HydratedEditorSessionState = Pick<
   AppState,
   | 'openFiles'
   | 'editorBuffers'
+  | 'editorBufferIndex'
+  | 'recoveredEditorDrafts'
   | 'editorDrafts'
   | 'markdownFrontmatterVisible'
   | 'activeFileId'
@@ -158,7 +160,9 @@ export function buildHydratedEditorSessionState(
     state: {
       openFiles,
       // Why fresh: a restored tab's buffer state comes from the session, not a same-id tab it replaces.
-      editorBuffers: reconcileEditorBufferMembership({}, openFiles),
+      editorBuffers: {},
+      editorBufferIndex: EMPTY_EDITOR_BUFFER_INDEX,
+      recoveredEditorDrafts: session.recoveredEditorDrafts ?? [],
       editorDrafts,
       markdownFrontmatterVisible,
       activeFileId: nextActiveFileId,

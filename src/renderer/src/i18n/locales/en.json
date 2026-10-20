@@ -16443,6 +16443,17 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "Failed to list Markdown documents."
+        },
+        "RecoveredEditorDraftCompareDialog": {
+          "6f1d2c9a40": "Recovered draft",
+          "a83e57b1c2": "The recovered draft on the left, the file as it is now on the right."
+        },
+        "RecoveredEditorDraftsNotice": {
+          "3c7e0b5d18": "Recovered {{value0}} unsaved draft(s) from an earlier session",
+          "9a51e2f074": "Compare",
+          "d40b6a2c95": "Copy",
+          "71fc3e8b2a": "Dismiss",
+          "5e8c41a7d3": "Too large to keep after restart — Copy or Compare now."
         }
       },
       "diff": {

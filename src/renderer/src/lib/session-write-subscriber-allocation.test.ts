@@ -22,7 +22,8 @@ function makeSessionState(overrides: Partial<AppState> = {}): AppState {
     'repos',
     'openFiles',
     'browserUrlHistory',
-    'workspaceDocHistory'
+    'workspaceDocHistory',
+    'recoveredEditorDrafts'
   ])
   const mapFields = new Set<string>(['sshConnectionStates'])
   for (const key of SESSION_RELEVANT_FIELDS) {

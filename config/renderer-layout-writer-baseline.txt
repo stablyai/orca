@@ -26,11 +26,12 @@
 1 src/renderer/src/lib/pane-manager/client-hosted-browser-row-state.ts
 4 src/renderer/src/lib/session-write-subscriber.ts
 1 src/renderer/src/lib/workspace-session-browser-tabs.ts
+2 src/renderer/src/lib/workspace-session-editor-files.ts
 7 src/renderer/src/lib/workspace-session-host-hydration.ts
 7 src/renderer/src/lib/workspace-session-hydration-keys.ts
 25 src/renderer/src/lib/workspace-session-patch.ts
 3 src/renderer/src/lib/workspace-session-staged-browser-tabs.ts
-17 src/renderer/src/lib/workspace-session.ts
+15 src/renderer/src/lib/workspace-session.ts
 3 src/renderer/src/runtime/local-structured-session-tabs-sync/snapshot-projection.ts
 3 src/renderer/src/runtime/structured-agent-session-tab-retirement.ts
 10 src/renderer/src/runtime/sync-runtime-graph/mobile-session-group-projection.ts

@@ -1,5 +1,6 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorViewMode, MarkdownViewMode } from '../types/open-file'
+import { editorBufferViewIds } from '../buffers/editor-buffer-record'
 import { clampMarkdownTocPanelWidth } from '../../../../../../shared/markdown-toc-panel-width'
 import {
   clampCombinedDiffFileTreeWidth,
@@ -30,7 +31,7 @@ export type EditorDraftState = {
   setCombinedDiffFileTreeWidth: (width: number) => void
 }
 
-export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorDraftState {
+export function createEditorDraftState(set: EditorSet, get: EditorGet): EditorDraftState {
   return {
     editorDrafts: {},
     setCsvPreviewOnly: (fileId, enabled) =>
@@ -52,22 +53,19 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         if (s.editorDrafts[fileId] === content) {
           return s
         }
-        // Why: read-only tabs must never accrue a draft — it seeds dirty/autosave/hot-exit restore that could overwrite an agent transcript.
+        // Why: read-only tabs must never author a draft — it seeds dirty/autosave/hot-exit restore that could overwrite an agent transcript.
         const file = s.openFiles.find((f) => f.id === fileId)
         if (file?.readOnly === true || file?.csvPreviewOnly === true) {
           return s
         }
-        return { editorDrafts: { ...s.editorDrafts, [fileId]: content } }
-      }),
-    clearEditorDraft: (fileId) =>
-      set((s) => {
-        if (!(fileId in s.editorDrafts)) {
-          return s
-        }
+        // Every tab of the file shows the draft, so a sibling mounting later can't push old text.
         const next = { ...s.editorDrafts }
-        delete next[fileId]
+        for (const id of editorBufferViewIds(s, fileId)) {
+          next[id] = content
+        }
         return { editorDrafts: next }
       }),
+    clearEditorDraft: (fileId) => get().clearEditorDrafts([fileId]),
     clearEditorDrafts: (fileIds) =>
       set((s) => {
         if (fileIds.length === 0) {
@@ -75,9 +73,9 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         }
         const next = { ...s.editorDrafts }
         let changed = false
-        for (const fileId of fileIds) {
-          if (fileId in next) {
-            delete next[fileId]
+        for (const id of fileIds.flatMap((fileId) => editorBufferViewIds(s, fileId))) {
+          if (id in next) {
+            delete next[id]
             changed = true
           }
         }

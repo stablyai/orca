@@ -258,6 +258,7 @@ export type WebSessionTabsSyncState = Pick<
       // own and must survive a host republish (#21392); absent here, the host flag wins.
       | 'editorDrafts'
       | 'editorBuffers'
+      | 'editorBufferIndex'
       | 'localOnlyScrollbackByTabId'
       | 'migrationUnsupportedByPtyId'
       | 'manuallyUnreadTurnsByPaneKey'

@@ -182,7 +182,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const nextEditorBuffers =
     nextOpenFiles === state.openFiles
       ? state.editorBuffers
-      : createEditorBuffers(state.editorBuffers ?? {}, mirroredOpenFiles)
+      : createEditorBuffers(state.editorBuffers ?? {}, mirroredOpenFiles, state)
   const retainedUnifiedTabs = currentUnifiedTabs.filter((tab) => {
     if (tab.contentType === 'agent-session') {
       // A matching host row is authoritative; retaining the provisional tab beside its mirror

@@ -96,6 +96,7 @@ export default function RichMarkdownEditor({
   const editorRef = useRef<Editor | null>(null)
   const cancelAutoFocusRef = useRef<(() => void) | null>(null)
   const serializeTimerRef = useRef<number | null>(null)
+  const pendingEditSequenceRef = useRef<number | null>(null)
   // Why: empty-list repair dispatches a ProseMirror transaction inside onCreate
   // which triggers onUpdate. Without this guard the editor immediately marks the
   // file dirty before the user has typed anything.
@@ -173,7 +174,9 @@ export default function RichMarkdownEditor({
     // Why: autosave/restart paths live outside the editor component tree, so a
     // mounted rich editor must expose a synchronous "flush now" hook to avoid
     // a dirty-without-draft window during the debounce period.
-    return registerPendingEditorFlush(fileId, flushPendingSerialization)
+    return registerPendingEditorFlush(fileId, flushPendingSerialization, undefined, () =>
+      serializeTimerRef.current === null ? null : pendingEditSequenceRef.current
+    )
   }, [fileId, flushPendingSerialization])
 
   const { clearTransientReviewState } = review
@@ -227,6 +230,7 @@ export default function RichMarkdownEditor({
     typedEmptyOrderedListMarkerRef,
     cancelAutoFocusRef,
     serializeTimerRef,
+    pendingEditSequenceRef,
     isInitializingRef,
     isApplyingProgrammaticUpdateRef,
     markdownCommentsRef: review.markdownCommentsRef,

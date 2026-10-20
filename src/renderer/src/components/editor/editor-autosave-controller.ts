@@ -4,10 +4,13 @@ import {
   ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT,
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
   ORCA_EDITOR_SAVE_FILE_EVENT,
+  type EditorSaveAndCloseDetail,
+  type EditorSaveAndCloseOutcome,
   type EditorSaveFileDetail,
   type EditorSaveQuiesceDetail
 } from './editor-autosave'
 import { flushPendingEditorChange } from './editor-pending-flush'
+import { flushEditorBufferViews } from './editor-buffer-flush'
 import {
   autosaveSubscriberInputsEqual,
   getAutosaveSubscriberInputs
@@ -19,6 +22,11 @@ import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT
 } from '../../../../shared/editor-save-events'
+
+const STALE_SAVE_MESSAGE =
+  'This file changed on disk since your edits. Review the banner, then save again to overwrite.'
+
+const NOT_SAVED_MESSAGE = "The file wasn't saved. Try saving again."
 
 export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   const saveQueue = createEditorSaveQueue(store)
@@ -38,9 +46,12 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   })
 
   const handleSaveAndClose = async (event: Event): Promise<void> => {
-    const { fileId } = (event as CustomEvent<{ fileId: string }>).detail
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registered only for ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, which is dispatched with this detail.
+    const { fileId, onSettled } = (event as CustomEvent<EditorSaveAndCloseDetail>).detail
+    const settle = (outcome: EditorSaveAndCloseOutcome): void => onSettled?.(outcome)
     const file = store.getState().openFiles.find((openFile) => openFile.id === fileId)
     if (!file) {
+      settle('closed')
       return
     }
 
@@ -48,12 +59,25 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     const draft = store.getState().editorDrafts[fileId]
     if (draft !== undefined) {
       try {
-        await queueSave(file, draft)
+        // Why: only a written save may close the tab; anything else keeps it and its edits.
+        if ((await queueSave(file, draft)) !== 'written') {
+          settle('not-saved')
+          return
+        }
       } catch {
+        settle('not-saved')
         return
       }
     }
+    // Why: a sibling tab of the file may have typed (and closed) while this save ran; those
+    // newer edits now live only here, so the tab stays open to save them.
+    flushEditorBufferViews(store.getState, fileId)
+    if (store.getState().openFiles.find((openFile) => openFile.id === fileId)?.isDirty) {
+      settle('kept-open')
+      return
+    }
     store.getState().closeFile(fileId)
+    settle('closed')
   }
 
   const handleSaveFile = async (event: Event): Promise<void> => {
@@ -82,7 +106,11 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         return
       }
 
-      await queueSave(file, content)
+      const result = await queueSave(file, content)
+      if (result !== 'written') {
+        detail.reject(result === 'blocked-stale' ? STALE_SAVE_MESSAGE : NOT_SAVED_MESSAGE)
+        return
+      }
       detail.resolve()
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))

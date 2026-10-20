@@ -13,7 +13,7 @@ import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
 import { MAX_TOKENIZATION_LINE_LENGTH } from '@/lib/monaco-languages/monarch-embed-entry-budget'
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
 import { toEditorModelUri } from './editor-model-uri'
-import { getEditorModelOwnerKey } from './editor-model-owner'
+import { editorModelOwnerKeyOf } from '@/store/slices/editor/buffers/editor-buffer-identity'
 import { getMonacoAutoHeightForContent, isMonacoAutoHeightCapped } from './monaco-auto-height'
 import { monacoFindOptions } from './monaco-find-options'
 import { useMonacoRevealScheduler } from './use-monaco-reveal-scheduler'
@@ -101,7 +101,7 @@ export default function MonacoEditor({
   const modelOwnerKey = useAppStore((state) => {
     const file = state.openFiles?.find((entry) => entry.id === fileId)
     return file
-      ? getEditorModelOwnerKey(file, state)
+      ? editorModelOwnerKeyOf(state, file)
       : JSON.stringify([null, `unresolved:${fileId}`])
   })
   const modelUri = useMemo(

@@ -1,5 +1,7 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
+import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
+import { flushEditorBufferViews } from './editor/editor-buffer-flush'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { isPinnedActiveEditorTab } from './terminal-workspace-model'
 import { selectWorkspaceSurface } from '@/lib/workspace-surface-reveal'
@@ -59,12 +61,21 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       if (inFlightSaveFileIdRef.current === fileId) {
         return null
       }
-      const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === fileId)
+      const state = useAppStore.getState()
+      const file = state.openFiles.find((candidate) => candidate.id === fileId)
       if (!file) {
         settleQueuedClose(fileId)
         continue
       }
-      if (!file.isDirty) {
+      // Why the queue: a sibling tab queued behind this one closes only after this decision,
+      // so a cancelled quit keeps it open.
+      if (
+        !needsSavePromptOnClose(
+          useAppStore.getState,
+          fileId,
+          new Set(pendingEditorCloseQueueRef.current)
+        )
+      ) {
         closeFile(fileId)
         settleQueuedClose(fileId)
         continue
@@ -107,6 +118,11 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
         fileIds,
         new Set(useAppStore.getState().openFiles.map((file) => file.id))
       )
+      // Why first: a delayed editor's text must be in the draft before any prompt, so the save
+      // a prompt makes is the file's final text and no queued sibling closes over newer edits.
+      for (const fileId of pendingEditorCloseQueueRef.current) {
+        flushEditorBufferViews(useAppStore.getState, fileId)
+      }
       advanceEditorCloseQueue()
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
@@ -119,8 +135,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       if (activeWorktreeId && isPinnedActiveEditorTab(state, activeWorktreeId, fileId)) {
         return
       }
-      const file = state.openFiles.find((candidate) => candidate.id === fileId)
-      if (file?.isDirty) {
+      if (needsSavePromptOnClose(useAppStore.getState, fileId)) {
         queueEditorCloseRequests([fileId])
         return
       }

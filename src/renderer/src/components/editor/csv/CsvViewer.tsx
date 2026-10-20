@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { detectCsvDelimiter } from './csv-parse'
+import { useAppStore } from '@/store'
 import { CsvDelimiterPicker, type CsvDelimiterChoice } from './csv-delimiter-picker'
 import { CsvGrid } from './CsvGrid'
 import { translate } from '@/i18n/i18n'
@@ -72,6 +73,7 @@ export default function CsvViewer({
   const editor = useCsvTableEditor({
     document,
     fileId,
+    readSharedContent: () => (fileId ? useAppStore.getState().editorDrafts[fileId] : undefined),
     isDirty,
     onDirtyStateHint,
     inspectionRows,

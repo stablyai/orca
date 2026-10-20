@@ -12,6 +12,7 @@ const paths = [
   'file:///C:/repo/src/a.ts',
   'file:///repo/src/a.ts',
   '/repo/src/a b.ts',
+  '/repo/src/a%20b.ts',
   '/repo/src/a#b.ts'
 ]
 
@@ -38,12 +39,13 @@ describe('toEditorModelUri', () => {
     expect(toEditorModelUri('/repo/a b.ts')).not.toBe(toEditorModelUri('/repo/a%20b.ts'))
   })
 
-  it.each(paths)('isolates owners while preserving the filesystem path for %s', (path) => {
+  it.each(paths)('isolates owners while keeping the file name last for %s', (path) => {
     const local = URI.parse(toEditorModelUri(path))
     const remoteUri = toEditorModelUri(path, '["hub-a","ssh:target#1"]')
     const remote = URI.parse(remoteUri)
     expect(remote.scheme).toBe('file')
-    expect(remote.fsPath).toBe(local.fsPath)
+    expect(remote.path.endsWith(local.path)).toBe(true)
+    expect(remote.fragment).toBe('')
     expect(remote.toString()).not.toBe(local.toString())
     expect(remote.toString()).toBe(remoteUri)
     expect(toEditorModelUri(remoteUri)).toBe(remoteUri)

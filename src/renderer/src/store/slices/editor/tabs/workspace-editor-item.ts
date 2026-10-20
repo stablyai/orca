@@ -88,12 +88,18 @@ export function getReplaceablePreviewFileId(
     return (
       state.openFiles.find(
         (file) =>
-          file.id === previewTab.entityId && file.worktreeId === worktreeId && file.isPreview
+          file.id === previewTab.entityId &&
+          file.worktreeId === worktreeId &&
+          file.isPreview &&
+          !file.isDirty
       )?.id ?? null
     )
   }
   return (
-    state.openFiles.find((file) => file.worktreeId === worktreeId && file.isPreview)?.id ?? null
+    // Why not dirty: a preview tab can hold the only view of another tab's unsaved edits.
+    state.openFiles.find(
+      (file) => file.worktreeId === worktreeId && file.isPreview && !file.isDirty
+    )?.id ?? null
   )
 }
 

@@ -1,8 +1,19 @@
-import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction
+} from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import {
+  beginEditorBufferFileRead,
+  trackPanelEditorBufferRead
+} from '@/store/slices/editor/buffers/editor-buffer-read-freshness'
+import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
 import { getRuntimeFileReadScope } from '@/runtime/runtime-file-routing'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
@@ -15,11 +26,8 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../../shared/execution-host'
-import {
-  WORKTREE_OWNER_NOT_READY_ERROR,
-  type FileContent,
-  type InFlightContentRead
-} from './editor-panel-content-types'
+import { WORKTREE_OWNER_NOT_READY_ERROR, type FileContent } from './editor-panel-content-types'
+import { inFlightFileReads, inFlightReadKey } from './editor-in-flight-file-reads'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
 import { migrateRestoredEditorFileOwner } from './migrate-restored-editor-file-owner'
 import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
@@ -27,8 +35,8 @@ import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-rou
 import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/local-file-access'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
-
-const inFlightFileReads = new Map<string, InFlightContentRead<FileContent>>()
+import { publishEditorBufferRead } from './use-editor-buffer-content-sync'
+import { useSupersededFileReadRetry } from './use-superseded-file-read-retry'
 
 export type EditorPanelFileContentLoader = (
   filePath: string,
@@ -39,6 +47,8 @@ export type EditorPanelFileContentLoader = (
 ) => Promise<void>
 
 type UseEditorPanelFileContentLoaderParams = {
+  /** What the panel shows now; without it a superseded read always reads again. */
+  fileContentsRef?: MutableRefObject<Record<string, FileContent>>
   fileLoadRetryAttemptsRef: MutableRefObject<Record<string, number>>
   fileReadGenerationCounterRef: MutableRefObject<number>
   fileReadGenerationRef: MutableRefObject<Record<string, number>>
@@ -47,30 +57,8 @@ type UseEditorPanelFileContentLoaderParams = {
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
 }
 
-// Why: a clean load re-baselines what this tab's future edits are based on; a
-// dirty tab keeps its baseline (its draft still derives from the older content
-// the signature was taken over). Best-effort metadata — a failure here must
-// not convert an already-delivered load into an error view, hence the guard.
-function stampCleanTabDiskBaseline(id: string, result: FileContent): void {
-  if (result.isBinary || result.loadError || result.csvPreview) {
-    return
-  }
-  try {
-    const state = useAppStore.getState()
-    const loadedFile = state.openFiles.find((file) => file.id === id)
-    if (loadedFile && !loadedFile.isDirty) {
-      state.setLastKnownDiskSignature(id, getDiskBaselineSignature(result.content))
-    }
-  } catch (err) {
-    console.warn('[editor] failed to stamp disk baseline', err)
-  }
-}
-
-function inFlightReadKey(connectionId: string | undefined, filePath: string): string {
-  return `${connectionId ?? ''}::${filePath}`
-}
-
 export function useEditorPanelFileContentLoader({
+  fileContentsRef,
   fileLoadRetryAttemptsRef,
   fileReadGenerationCounterRef,
   fileReadGenerationRef,
@@ -78,7 +66,13 @@ export function useEditorPanelFileContentLoader({
   outstandingFileReadsRef,
   setFileContents
 }: UseEditorPanelFileContentLoaderParams): EditorPanelFileContentLoader {
-  return useCallback(
+  const loadRef = useRef<EditorPanelFileContentLoader | null>(null)
+  const { retrySuperseded, clearSupersededRetries } = useSupersededFileReadRetry({
+    fileContentsRef,
+    fileReadGenerationRef,
+    setFileContents
+  })
+  const load = useCallback(
     async (
       filePath: string,
       id: string,
@@ -90,6 +84,15 @@ export function useEditorPanelFileContentLoader({
       fileReadGenerationCounterRef.current = generation
       fileReadGenerationRef.current[id] = generation
       outstandingFileReadsRef.current[id] = generation
+      // Why the record owns freshness: any panel's newer read, save or reload of the file
+      // supersedes this read, and closing a panel never cancels it.
+      const read = beginEditorBufferFileRead(useAppStore.getState(), id)
+      trackPanelEditorBufferRead(fileReadGenerationRef, id, read)
+      const isCurrentRead = read.isCurrent
+      const retryIfSuperseded = (): void =>
+        retrySuperseded(id, generation, () => {
+          void loadRef.current?.(filePath, id, worktreeId, relativePath, options)
+        })
       let readConnectionId: string | undefined
       try {
         const resolvedConnectionId = getConnectionIdForFile(worktreeId ?? null, filePath)
@@ -246,9 +249,11 @@ export function useEditorPanelFileContentLoader({
           })
         }
         const result = await pending.promise
-        if (fileReadGenerationRef.current[id] !== generation) {
+        if (!isCurrentRead()) {
+          retryIfSuperseded()
           return
         }
+        clearSupersededRetries(id)
         if (result.csvPreview && useAppStore.getState().editorDrafts[id] !== undefined) {
           throw new Error(
             'CSV grew too large for editing. Your draft has been kept; reopen the file to preview it.'
@@ -258,10 +263,14 @@ export function useEditorPanelFileContentLoader({
           useAppStore.getState().setCsvPreviewOnly(id, Boolean(result.csvPreview))
         }
         delete fileLoadRetryAttemptsRef.current[id]
+        // Why publish: the result belongs to the record, so it reaches every panel showing the
+        // file even if this panel has closed.
+        const viewId = publishEditorBufferRead(read.recordId, id, result)
         setFileContents((prev) => ({ ...prev, [id]: result }))
-        stampCleanTabDiskBaseline(id, result)
+        stampCleanTabDiskBaseline(viewId, result)
       } catch (err) {
-        if (fileReadGenerationRef.current[id] !== generation) {
+        if (!isCurrentRead()) {
+          retryIfSuperseded()
           return
         }
         const hostConnection = selectWorktreeHostConnectionPhase(
@@ -283,15 +292,16 @@ export function useEditorPanelFileContentLoader({
         // classifiers downstream must see the token, not only its rendering (#21041).
         const loadErrorCode =
           !hostConnecting && err instanceof RuntimeRpcCallError ? err.code : undefined
-        setFileContents((prev) => ({
-          ...prev,
-          [id]: {
-            content: '',
-            isBinary: false,
-            loadError: message,
-            ...(loadErrorCode ? { loadErrorCode } : {})
-          }
-        }))
+        const failed: FileContent = {
+          content: '',
+          isBinary: false,
+          loadError: message,
+          ...(loadErrorCode ? { loadErrorCode } : {})
+        }
+        // Why publish: the newest read of the file failed, so no panel may keep showing older text
+        // as current and save over the file.
+        publishEditorBufferRead(read.recordId, id, failed)
+        setFileContents((prev) => ({ ...prev, [id]: failed }))
       } finally {
         if (outstandingFileReadsRef.current[id] === generation) {
           delete outstandingFileReadsRef.current[id]
@@ -299,12 +309,18 @@ export function useEditorPanelFileContentLoader({
       }
     },
     [
+      clearSupersededRetries,
       fileLoadRetryAttemptsRef,
       fileReadGenerationCounterRef,
       fileReadGenerationRef,
       openFilesRef,
       outstandingFileReadsRef,
+      retrySuperseded,
       setFileContents
     ]
   )
+  useLayoutEffect(() => {
+    loadRef.current = load
+  }, [load])
+  return load
 }

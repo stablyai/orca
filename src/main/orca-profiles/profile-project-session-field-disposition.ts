@@ -104,6 +104,8 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
   activeTabTypeByWorktree: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByOwnerKey' },
   browserUrlHistory: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
   workspaceDocHistory: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
+  // Kept until dismissed, even if its project goes: the text is the user's unsaved work.
+  recoveredEditorDrafts: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
   activeTabIdByWorktree: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByOwnerKey' },
   unifiedTabs: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByBespokeRule' },
   tabGroups: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByBespokeRule' },

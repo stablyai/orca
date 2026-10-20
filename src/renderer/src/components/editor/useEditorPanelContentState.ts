@@ -12,6 +12,8 @@ import { useEditorPanelFileContentLoader } from './useEditorPanelFileContentLoad
 import { useEditorPanelDiffContentLoader } from './useEditorPanelDiffContentLoader'
 import { useEditorPanelActiveTabContentLoad } from './useEditorPanelActiveTabContentLoad'
 import { useEditorPanelContentReloadTriggers } from './useEditorPanelContentReloadTriggers'
+import { useEditorBufferContentSync } from './use-editor-buffer-content-sync'
+import { supersedePanelEditorBufferRead } from '@/store/slices/editor/buffers/editor-buffer-read-freshness'
 
 type GitStatusByWorktree = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree']
 type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewMode']
@@ -40,6 +42,7 @@ export function useEditorPanelContentState({
   editorViewMode
 }: UseEditorPanelContentStateParams): UseEditorPanelContentStateResult {
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
+  const fileContentsRef = useRef(fileContents)
   const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>({})
   const diffContentsRef = useRef(diffContents)
   const fileLoadRetryAttemptsRef = useRef<Record<string, number>>({})
@@ -64,16 +67,24 @@ export function useEditorPanelContentState({
   useLayoutEffect(() => {
     // Why: event-driven readers must only observe state from committed renders.
     diffContentsRef.current = diffContents
+    fileContentsRef.current = fileContents
     openFilesRef.current = openFiles
     editorViewModeRef.current = editorViewMode
     isVisibleRef.current = isVisible
     activeContentFileIdRef.current = activeContentFileId
-  }, [activeContentFileId, diffContents, editorViewMode, isVisible, openFiles])
+  }, [activeContentFileId, diffContents, editorViewMode, fileContents, isVisible, openFiles])
+  const tracksFileRead = useCallback(
+    (fileId: string): boolean => fileId in fileReadGenerationRef.current,
+    []
+  )
+  useEditorBufferContentSync(fileContents, setFileContents, openFilesRef, tracksFileRead)
 
   const invalidateFileContent = useCallback((fileIds: string[]): void => {
     const uniqueIds = new Set(fileIds)
     for (const fileId of uniqueIds) {
       fileReadGenerationRef.current[fileId] = ++fileReadGenerationCounterRef.current
+      // Why the panel's own read: a newer read of the file in another panel must stand.
+      supersedePanelEditorBufferRead(fileReadGenerationRef, fileId)
       delete fileLoadRetryAttemptsRef.current[fileId]
     }
     setFileContents((prev) => {
@@ -122,6 +133,7 @@ export function useEditorPanelContentState({
   )
 
   const loadFileContent = useEditorPanelFileContentLoader({
+    fileContentsRef,
     fileLoadRetryAttemptsRef,
     fileReadGenerationCounterRef,
     fileReadGenerationRef,

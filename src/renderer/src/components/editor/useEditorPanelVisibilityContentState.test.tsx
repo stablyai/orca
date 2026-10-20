@@ -42,6 +42,8 @@ vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
 
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
+import { markEditorBufferNewer } from '@/store/slices/editor/buffers/editor-buffer-read-freshness'
+import { getDiskBaselineSignature } from './diff-content-signature'
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -475,5 +477,75 @@ describe('useEditorPanelContentState visibility', () => {
       expect(snapshots.get('main')?.diffContents[file.id]?.modifiedContent).toBe('fresh diff')
     )
     expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2)
+  })
+
+  // A newer read of the same file elsewhere (another record kept apart, an invalidation in another
+  // panel) supersedes this tab's first read without publishing any text to it.
+  it('reads again when a first read is superseded and nothing filled the tab', async () => {
+    const file = makeFile('superseded-first-read')
+    const first = createDeferred<FileContent>()
+    mocks.readRuntimeFileContent
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({ content: 'fresh', isBinary: false })
+
+    await act(async () => root.render(<Probe activeFile={file} />))
+    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce())
+    markEditorBufferNewer(file.id)
+    await act(async () => first.resolve({ content: 'old', isBinary: false }))
+
+    await vi.waitFor(() =>
+      expect(snapshots.get('main')?.fileContents[file.id]?.content).toBe('fresh')
+    )
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops re-reading a file that keeps being superseded and shows a retryable error', async () => {
+    const file = makeFile('always-superseded')
+    mocks.readRuntimeFileContent.mockImplementation(async () => {
+      // Every read is overtaken before it lands.
+      markEditorBufferNewer(file.id)
+      return { content: 'never current', isBinary: false }
+    })
+
+    await act(async () => root.render(<Probe activeFile={file} />))
+
+    await vi.waitFor(() =>
+      expect(snapshots.get('main')?.fileContents[file.id]?.loadError).toMatch(/kept changing/)
+    )
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(4)
+  })
+
+  it("a read landing after its tab closed stamps the surviving tab's disk baseline", async () => {
+    const closing = makeFile('closing-tab', { filePath: '/repo/shared.ts' })
+    const survivor = makeFile('surviving-tab', { filePath: '/repo/shared.ts', worktreeId: 'wt-2' })
+    const setLastKnownDiskSignature = vi.fn()
+    const index = (ids: string[]) => ({
+      recordIdByFileId: Object.fromEntries(ids.map((id) => [id, 'shared-record'])),
+      keyByRecordId: {}
+    })
+    mocks.getState.mockReturnValue({
+      settings: null,
+      openFiles: [closing, survivor],
+      editorBufferIndex: index([closing.id, survivor.id]),
+      setLastKnownDiskSignature
+    })
+    const read = createDeferred<FileContent>()
+    mocks.readRuntimeFileContent.mockReturnValueOnce(read.promise)
+
+    await act(async () => root.render(<Probe activeFile={closing} />))
+    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce())
+    mocks.getState.mockReturnValue({
+      settings: null,
+      openFiles: [survivor],
+      editorBufferIndex: index([survivor.id]),
+      setLastKnownDiskSignature
+    })
+    await act(async () => root.render(null))
+    await act(async () => read.resolve({ content: 'disk text', isBinary: false }))
+
+    expect(setLastKnownDiskSignature).toHaveBeenCalledWith(
+      survivor.id,
+      getDiskBaselineSignature('disk text')
+    )
   })
 })

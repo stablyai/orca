@@ -34,6 +34,25 @@ export type PersistedOpenFile = {
   liveTail?: boolean
 }
 
+/**
+ * An unsaved draft an older session held in a second tab of the same file, kept until the user
+ * dismisses it. Only restore creates these; one file now has one draft.
+ */
+export type RecoveredEditorDraft = {
+  /** Unique per draft; absent only in sessions from before ids were written. */
+  id?: string
+  filePath: string
+  relativePath?: string
+  worktreeId: string
+  runtimeEnvironmentId?: string | null
+  draft: string
+  /** Disk version the draft was based on. */
+  baselineSignature?: string
+  recoveredAt: number
+  /** Over the size cap: offered this launch, never written to the session. */
+  keptForThisLaunchOnly?: true
+}
+
 export type WorkspaceSessionState = {
   activeRepoId: string | null
   /** Scope-aware active owner for folder workspaces. Legacy worktree UI still reads activeWorktreeId. */
@@ -105,6 +124,8 @@ export type WorkspaceSessionState = {
   browserUrlHistory?: BrowserHistoryEntry[]
   /** Previewed workspace documents for the same dropdown — document identities, never URLs. */
   workspaceDocHistory?: WorkspaceDocHistoryEntry[]
+  /** Optional, so an older client loads the session and ignores it. */
+  recoveredEditorDrafts?: RecoveredEditorDraft[]
   /** Per-worktree last-active terminal tab ID at shutdown. */
   activeTabIdByWorktree?: Record<string, string | null>
   /** Unified tab model — present when saved by a build that includes TabsSlice.

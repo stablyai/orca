@@ -42,6 +42,7 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   activeTabTypeByWorktree: true,
   browserUrlHistory: true,
   workspaceDocHistory: true,
+  recoveredEditorDrafts: true,
   activeTabIdByWorktree: true,
   unifiedTabs: true,
   tabGroups: true,

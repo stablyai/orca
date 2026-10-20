@@ -111,6 +111,10 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   activeTabId: notApplicableDisposition(32, 'Tab ids are kept.'),
   browserUrlHistory: notApplicableDisposition(31),
   workspaceDocHistory: moveDisposition(30),
+  recoveredEditorDrafts: notApplicableDisposition(
+    31,
+    'Client-held text recovered from an older session; stays with this client.'
+  ),
   activeConnectionIdsAtShutdown: notApplicableDisposition(60),
   clientHostedBrowserCloseIntentsByEnvironment: moveDisposition(29),
   pairedTerminalTabCloseIntentsByEnvironment: notApplicableDisposition(

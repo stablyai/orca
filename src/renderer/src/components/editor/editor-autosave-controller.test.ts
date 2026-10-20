@@ -662,26 +662,26 @@ describe('attachEditorAutosaveController', () => {
     })
 
     const openFiles = store.getState().openFiles
-    const originalMap = openFiles.map.bind(openFiles)
-    let mapCalls = 0
-    Object.defineProperty(openFiles, 'map', {
+    const originalIterator = openFiles[Symbol.iterator].bind(openFiles)
+    let scans = 0
+    Object.defineProperty(openFiles, Symbol.iterator, {
       configurable: true,
-      value: (...args: Parameters<typeof openFiles.map>) => {
-        mapCalls += 1
-        return originalMap(...args)
+      value: () => {
+        scans += 1
+        return originalIterator()
       }
     })
 
     const cleanup = attachEditorAutosaveController(store)
     try {
-      expect(mapCalls).toBe(1)
-      mapCalls = 0
+      expect(scans).toBe(1)
+      scans = 0
 
-      store.setState({ activeWorktreeId: 'wt-2' } as Partial<AppState>)
-      expect(mapCalls).toBe(0)
+      store.setState({ markdownTocPanelWidth: 320 })
+      expect(scans).toBe(0)
 
-      store.getState().setEditorDraft('/repo/file.ts', 'edited')
-      expect(mapCalls).toBe(1)
+      store.setState({ editorDrafts: { '/repo/file.ts': 'edited' } })
+      expect(scans).toBe(1)
     } finally {
       cleanup()
     }

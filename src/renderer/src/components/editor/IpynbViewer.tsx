@@ -70,6 +70,7 @@ export default function IpynbViewer({
   const {
     rootRef,
     setRootRef,
+    onRootBlur,
     sourceDrafts,
     flushSourceDrafts,
     applyContent,
@@ -84,7 +85,8 @@ export default function IpynbViewer({
     notebook: parsed.notebook,
     onContentChange,
     onDirtyStateHint,
-    onDeactivateEditor: deactivateEditor
+    onDeactivateEditor: deactivateEditor,
+    readSharedContent: () => useAppStore.getState().editorDrafts[fileId]
   })
   const execution = useIpynbCellExecution({
     filePath,
@@ -163,6 +165,7 @@ export default function IpynbViewer({
   return (
     <div
       ref={setRootRef}
+      onBlur={onRootBlur}
       className="h-full min-h-0 overflow-auto bg-editor-surface scrollbar-editor"
       style={{ fontSize }}
       onKeyDownCapture={handleNotebookKeyDownCapture}

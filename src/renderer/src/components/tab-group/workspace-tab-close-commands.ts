@@ -4,6 +4,7 @@ import { requestEditorFileClose } from '../editor/editor-autosave'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { closeWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-close'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 
 export function createWorkspaceTabCloseCommands({
   worktreeId,
@@ -26,8 +27,7 @@ export function createWorkspaceTabCloseCommands({
         isEditorTabContentType(item.contentType)
     )
     if (!otherReference) {
-      const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === entityId)
-      if (file?.isDirty) {
+      if (needsSavePromptOnClose(useAppStore.getState, entityId)) {
         // Why: route through Terminal.tsx so the unsaved-confirmation save/discard queue stays centralized across all close paths.
         requestEditorFileClose(entityId, whenEmptied ? { onClosed: whenEmptied } : undefined)
         return false

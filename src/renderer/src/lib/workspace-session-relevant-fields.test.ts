@@ -25,6 +25,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     activeBrowserTabIdByWorktree: true,
     browserUrlHistory: true,
     workspaceDocHistory: true,
+    recoveredEditorDrafts: true,
     remoteBrowserPageHandlesByPageId: true,
     unifiedTabsByWorktree: true,
     groupsByWorktree: true,

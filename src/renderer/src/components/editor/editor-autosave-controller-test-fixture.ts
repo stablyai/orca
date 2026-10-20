@@ -4,6 +4,7 @@
 import { vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
+import { withEditorBufferRecords } from '@/store/editor-buffer-record-lifecycle'
 import type { AppState } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
@@ -71,25 +72,29 @@ export function stubEditorWindow(): ReturnType<typeof vi.fn> {
 }
 
 export function createEditorStore(): StoreApi<AppState> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createStore<any>()((...args: any[]) => ({
-    activeWorktreeId: 'wt-1',
-    repos: [],
-    worktreesByRepo: {
-      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }]
-    },
-    detectedWorktreesByRepo: {},
-    runtimeEnvironments: [],
-    runtimeEnvironmentCatalogHydrated: true,
-    removedRuntimeEnvironmentIds: new Set(),
-    sshConnectionStates: {},
-    sshStateByEnvironment: {},
-    settings: {
-      editorAutoSave: true,
-      editorAutoSaveDelayMs: 1000
-    },
-    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-  })) as unknown as StoreApi<AppState>
+  // Why the buffer wrapper: the real store shares one buffer record across a file's tabs.
+  // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: the fixture holds only the slices editor tests read; callers never touch the rest of AppState.
+  return createStore<any>()(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    withEditorBufferRecords((...args: any[]) => ({
+      activeWorktreeId: 'wt-1',
+      repos: [],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }]
+      },
+      detectedWorktreesByRepo: {},
+      runtimeEnvironments: [],
+      runtimeEnvironmentCatalogHydrated: true,
+      removedRuntimeEnvironmentIds: new Set(),
+      sshConnectionStates: {},
+      sshStateByEnvironment: {},
+      settings: {
+        editorAutoSave: true,
+        editorAutoSaveDelayMs: 1000
+      },
+      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+    }))
+  ) as unknown as StoreApi<AppState>
 }
 
 /** Store with a local worktree at /repo and an open, untouched untitled note at /repo/`fileName`. */

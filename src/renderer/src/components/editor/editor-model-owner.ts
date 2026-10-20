@@ -1,11 +1,17 @@
 import type { OpenFile } from '@/store/slices/editor'
+import type { AppState } from '@/store/types'
 import {
   resolveWorktreeOperationRoute,
   type WorktreeOperationRouteState
 } from '@/lib/worktree-operation-route'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 
-export function getEditorModelOwnerKey(file: OpenFile, state: WorktreeOperationRouteState): string {
+export type EditorModelOwner = { environmentId: string | null; hostId: string | null }
+
+export function resolveEditorModelOwner(
+  file: OpenFile,
+  state: WorktreeOperationRouteState
+): EditorModelOwner {
   const captured = file.operationProvenance?.generation.route
   const route =
     captured ??
@@ -29,11 +35,47 @@ export function getEditorModelOwnerKey(file: OpenFile, state: WorktreeOperationR
         : environmentId
           ? toRuntimeExecutionHostId(environmentId)
           : null
-  if (hostId === 'local' && !environmentId) {
+  return { environmentId, hostId }
+}
+
+export function editorModelOwnerKeyFor(file: OpenFile, owner: EditorModelOwner): string {
+  if (owner.hostId === 'local' && !owner.environmentId) {
     return ''
   }
   // Unresolved owners must not borrow another host's retained text.
   return JSON.stringify(
-    hostId ? [environmentId, hostId] : [environmentId, 'unresolved', file.worktreeId, file.id]
+    owner.hostId
+      ? [owner.environmentId, owner.hostId]
+      : [owner.environmentId, 'unresolved', file.worktreeId, file.id]
   )
+}
+
+export function getEditorModelOwnerKey(file: OpenFile, state: WorktreeOperationRouteState): string {
+  return editorModelOwnerKeyFor(file, resolveEditorModelOwner(file, state))
+}
+
+/** Store fields an unpinned tab's owner is resolved from. */
+const EDITOR_MODEL_OWNER_INPUTS = [
+  'repos',
+  'worktreesByRepo',
+  'detectedWorktreesByRepo',
+  'folderWorkspaces',
+  'projectGroups',
+  'restoredRuntimeHostIdByWorkspaceSessionKey',
+  'runtimeEnvironmentCatalogHydrated',
+  'removedRuntimeEnvironmentIds',
+  'runtimeEnvironments',
+  'settings',
+  'activeWorktreeId',
+  'activeWorkspaceExecutionHostId'
+] as const satisfies readonly (keyof AppState)[]
+
+type EditorModelOwnerInputs = Partial<Record<(typeof EDITOR_MODEL_OWNER_INPUTS)[number], unknown>>
+
+/** Whether `next` (a full state or a partial write) changes any owner input of `previous`. */
+export function editorModelOwnerInputsChanged(
+  previous: EditorModelOwnerInputs,
+  next: EditorModelOwnerInputs
+): boolean {
+  return EDITOR_MODEL_OWNER_INPUTS.some((key) => key in next && next[key] !== previous[key])
 }

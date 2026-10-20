@@ -137,6 +137,31 @@ describe('splitWorkspaceSessionByHost', () => {
     }
   })
 
+  it('keeps a dismissed recovered draft gone when a stale host partition still lists it', () => {
+    const draft = { filePath: '/repo/a.ts', worktreeId: 'a-wt', draft: 'old', recoveredAt: 1 }
+    const withDraft = splitWorkspaceSessionByHost(
+      {
+        ...getDefaultWorkspaceSession(),
+        recoveredEditorDrafts: [draft],
+        tabsByWorktree: { 'a-wt': [makeTab('t-a', 'a-wt')] }
+      },
+      ownerByPrefix()
+    )
+    expect(Object.hasOwn(withDraft[RUNTIME_A] ?? {}, 'recoveredEditorDrafts')).toBe(false)
+
+    // The user dismissed it; an older write left a copy in the host's partition.
+    const merged = mergeWorkspaceSessionsFromHosts({
+      ...withDraft,
+      [LOCAL_EXECUTION_HOST_ID]: {
+        ...withDraft[LOCAL_EXECUTION_HOST_ID]!,
+        recoveredEditorDrafts: []
+      },
+      [RUNTIME_A]: { ...withDraft[RUNTIME_A]!, recoveredEditorDrafts: [draft] }
+    })
+
+    expect(merged.recoveredEditorDrafts).toEqual([])
+  })
+
   it('routes worktree-keyed maps to their owner host', () => {
     const state: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),

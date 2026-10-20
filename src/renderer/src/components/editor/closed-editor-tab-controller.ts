@@ -9,11 +9,15 @@ import {
 } from './closed-editor-tab-disposal'
 import type { MonacoModelRegistry, DisposableMonacoModel } from './diff-monaco-model-disposal'
 import { toEditorModelUri } from './editor-model-uri'
-import { getEditorModelOwnerKey } from './editor-model-owner'
+import { editorModelOwnerInputsChanged } from './editor-model-owner'
+import { editorModelOwnerKeyOf } from '@/store/slices/editor/buffers/editor-buffer-identity'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import type { EditorBufferIndex } from '@/store/slices/editor/buffers/editor-buffer-record'
 
 type EditorStore = Pick<
-  StoreApi<WorktreeOperationRouteState & { openFiles: OpenFile[] }>,
+  StoreApi<
+    WorktreeOperationRouteState & { openFiles: OpenFile[]; editorBufferIndex?: EditorBufferIndex }
+  >,
   'getState' | 'subscribe'
 >
 type RetainedModel = {
@@ -129,7 +133,7 @@ export function attachClosedEditorTabCleanup(
           openFiles
             .filter((openFile) => openFile.mode === 'edit')
             .map((openFile) =>
-              toEditorModelUri(openFile.filePath, getEditorModelOwnerKey(openFile, currentState))
+              toEditorModelUri(openFile.filePath, editorModelOwnerKeyOf(currentState, openFile))
             )
         )
       }
@@ -209,34 +213,20 @@ export function attachClosedEditorTabCleanup(
     const closedState = previousState
     previousFiles = openFiles
     previousState = currentState
-    if (
-      openFiles === previous &&
-      currentState.repos === closedState.repos &&
-      currentState.worktreesByRepo === closedState.worktreesByRepo &&
-      currentState.detectedWorktreesByRepo === closedState.detectedWorktreesByRepo &&
-      currentState.folderWorkspaces === closedState.folderWorkspaces &&
-      currentState.projectGroups === closedState.projectGroups &&
-      currentState.restoredRuntimeHostIdByWorkspaceSessionKey ===
-        closedState.restoredRuntimeHostIdByWorkspaceSessionKey &&
-      currentState.runtimeEnvironmentCatalogHydrated ===
-        closedState.runtimeEnvironmentCatalogHydrated &&
-      currentState.removedRuntimeEnvironmentIds === closedState.removedRuntimeEnvironmentIds &&
-      currentState.runtimeEnvironments === closedState.runtimeEnvironments &&
-      currentState.settings === closedState.settings
-    ) {
+    if (openFiles === previous && !editorModelOwnerInputsChanged(closedState, currentState)) {
       return
     }
     const liveFiles = new Map(openFiles.map((file) => [file.id, file]))
     let removed = false
     let removedDiff = false
     for (const file of previous) {
-      const priorOwner = getEditorModelOwnerKey(file, closedState)
+      const priorOwner = editorModelOwnerKeyOf(closedState, file)
       const liveFile = liveFiles.get(file.id)
       if (
         !liveFile ||
         liveFile.mode !== file.mode ||
         liveFile.filePath !== file.filePath ||
-        (file.mode === 'edit' && getEditorModelOwnerKey(liveFile, currentState) !== priorOwner)
+        (file.mode === 'edit' && editorModelOwnerKeyOf(currentState, liveFile) !== priorOwner)
       ) {
         const descriptor = {
           id: file.id,

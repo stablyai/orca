@@ -122,7 +122,7 @@ export function createRekeyOpenFilesAction(
 
         return {
           openFiles: nextOpenFiles,
-          editorBuffers: rekeyEditorBuffers(s.editorBuffers, s.openFiles, migrations, (f) =>
+          ...rekeyEditorBuffers(s, migrations, (f) =>
             echoGatedIds.has(f.id) ? { pendingLiveDiskVerification: true } : undefined
           ),
           editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),

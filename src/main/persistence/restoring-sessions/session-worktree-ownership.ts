@@ -41,6 +41,7 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   activeTabTypeByWorktree: 'owner-keyed',
   browserUrlHistory: 'none',
   workspaceDocHistory: 'none',
+  recoveredEditorDrafts: 'none',
   activeTabIdByWorktree: 'owner-keyed',
   unifiedTabs: 'owner-keyed-row-arrays',
   tabGroups: 'owner-keyed-row-arrays',

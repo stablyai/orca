@@ -1,9 +1,36 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import { registerPendingEditorFlush } from '../editor-pending-flush'
 import { ORCA_EDITOR_FILE_SAVED_EVENT } from '../editor-autosave'
-import type { CsvTextDocument } from './csv-text-document'
+import { parseCsvTextDocument, type CsvTextDocument } from './csv-text-document'
 import { editCsvTextCells } from './csv-text-cell-edits'
 import type { CsvCellEditSession } from './csv-grid-interaction'
+
+/**
+ * Why: another tab of this CSV may have committed since this one rendered; its cell edit then
+ * applies onto that newer text, by cell, rather than serializing this tab's stale copy over it.
+ */
+function rebasePendingCellOntoSharedText(
+  latest: {
+    document: CsvTextDocument | null
+    onContentChange?: (content: string) => void
+    readSharedContent?: () => string | undefined
+  },
+  draft: CsvCellEditSession | null
+): boolean {
+  const shared = latest.readSharedContent?.()
+  if (!draft || !latest.document || shared === undefined || shared === latest.document.source) {
+    return false
+  }
+  const base = parseCsvTextDocument(shared, latest.document.delimiter)
+  latest.onContentChange?.(
+    editCsvTextCells(
+      base,
+      [{ row: draft.sourceRow, column: draft.position.column, value: draft.value }],
+      true
+    )
+  )
+  return true
+}
 
 export function useCsvPendingCell({
   fileId,
@@ -11,7 +38,9 @@ export function useCsvPendingCell({
   document,
   onContentChange,
   editingRef,
-  onSessionChange
+  onSessionChange,
+  onSessionEnd,
+  readSharedContent
 }: {
   fileId?: string
   commit: () => boolean
@@ -19,10 +48,27 @@ export function useCsvPendingCell({
   onContentChange?: (content: string) => void
   editingRef: RefObject<CsvCellEditSession | null>
   onSessionChange: (session: CsvCellEditSession) => void
+  onSessionEnd?: () => void
+  /** The file's shared unsaved text, which may be newer than `document` when another tab commits. */
+  readSharedContent?: () => string | undefined
 }) {
-  const latest = useRef({ commit, document, onContentChange, onSessionChange })
+  const latest = useRef({
+    commit,
+    document,
+    onContentChange,
+    onSessionChange,
+    onSessionEnd,
+    readSharedContent
+  })
   useLayoutEffect(() => {
-    latest.current = { commit, document, onContentChange, onSessionChange }
+    latest.current = {
+      commit,
+      document,
+      onContentChange,
+      onSessionChange,
+      onSessionEnd,
+      readSharedContent
+    }
   })
   useEffect(() => {
     if (!fileId) {
@@ -31,6 +77,11 @@ export function useCsvPendingCell({
     const unregister = registerPendingEditorFlush(
       fileId,
       () => {
+        if (rebasePendingCellOntoSharedText(latest.current, editingRef.current)) {
+          editingRef.current = null
+          latest.current.onSessionEnd?.()
+          return
+        }
         if (!latest.current.commit()) {
           throw new Error('Resolve the pending CSV cell edit before saving.')
         }

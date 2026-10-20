@@ -43,13 +43,19 @@ export function createOpenFileAction(
     ) {
       return { fileId: scratch.editorItemFileId, result: null }
     }
+    // Why: a tab joining a file with unsaved edits is promoted like a tab that was typed in.
+    const joinedDirty =
+      get().openFiles.find((openFile) => openFile.id === scratch.editorItemFileId)?.isDirty === true
+    if (joinedDirty) {
+      get().markFileDirty(scratch.editorItemFileId, true)
+    }
     const editorItemViewStateId = openWorkspaceEditorItem(
       get(),
       scratch.editorItemFileId,
       editorItemWorktreeId,
       file.relativePath,
       editorTabContentTypeForMode(file.mode),
-      scratch.editorItemIsPreview,
+      scratch.editorItemIsPreview && !joinedDirty,
       scratch.editorItemTargetGroupId,
       options?.selection
     )

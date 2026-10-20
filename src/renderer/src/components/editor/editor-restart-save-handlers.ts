@@ -1,4 +1,6 @@
+import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
+import { editorBufferIdOf } from '@/store/slices/editor/buffers/editor-buffer-record'
 import { shouldPersistWorkspaceSession } from '@/lib/workspace-session'
 import { canAutoSaveOpenFile } from './editor-autosave'
 import { flushPendingEditorChange } from './editor-pending-flush'
@@ -8,6 +10,22 @@ import type {
   EditorPrepareHotExitDetail,
   EditorSaveDirtyFilesDetail
 } from '../../../../shared/editor-save-events'
+
+// Why: tabs of one buffer record hold one draft, so save it once, through a tab that may write it.
+function dirtyBufferWriters(state: AppState): OpenFile[] {
+  const writers = new Map<string, OpenFile>()
+  for (const file of state.openFiles) {
+    if (!file.isDirty) {
+      continue
+    }
+    const recordId = editorBufferIdOf(state, file.id)
+    const current = writers.get(recordId)
+    if (!current || (!canAutoSaveOpenFile(current) && canAutoSaveOpenFile(file))) {
+      writers.set(recordId, file)
+    }
+  }
+  return [...writers.values()]
+}
 
 type EditorRestartSaveHandlerOptions = {
   store: AppStoreApi
@@ -37,7 +55,7 @@ export function createEditorRestartSaveHandlers({
     try {
       detail.claim()
 
-      const dirtyFiles = store.getState().openFiles.filter((file) => file.isDirty)
+      const dirtyFiles = dirtyBufferWriters(store.getState())
       const unsupportedDirtyFiles = dirtyFiles.filter((file) => !canAutoSaveOpenFile(file))
       if (unsupportedDirtyFiles.length > 0) {
         detail.reject('Some unsaved editor changes cannot be auto-saved before restart.')
@@ -57,15 +75,19 @@ export function createEditorRestartSaveHandlers({
         return
       }
 
-      await Promise.all(
+      const results = await Promise.all(
         dirtyFiles.map(async (file) => {
           const content = getLatestWritableContent(file)
           if (content === null) {
             throw new Error(`Missing editor buffer for ${file.relativePath}`)
           }
-          await queueSave(file, content)
+          return queueSave(file, content)
         })
       )
+      if (results.some((result) => result !== 'written')) {
+        detail.reject('Some unsaved files were not saved. Review them before restarting.')
+        return
+      }
       detail.resolve()
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))

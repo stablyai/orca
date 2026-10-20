@@ -1,4 +1,5 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
+import { flushSharedEditorViewsBeforeClose } from '../buffers/editor-buffer-close-rule'
 import type { EditorSlice } from '../types/editor-slice'
 import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
@@ -74,6 +75,7 @@ export function createCloseFileAction(
 ): Pick<EditorSlice, 'closeFile'> {
   return {
     closeFile: (fileId, opts) => {
+      flushSharedEditorViewsBeforeClose(get, [fileId])
       // Why: capture untitled+dirty state before set() mutates the store, so cleanup of throwaway untitled files can decide after removal.
       const preClose = get().openFiles.find((f) => f.id === fileId)
       // Why: stale same-owner records survive tab close; retain other owners and pending drafts.

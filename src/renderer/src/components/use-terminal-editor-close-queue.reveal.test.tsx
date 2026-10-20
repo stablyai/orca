@@ -42,7 +42,9 @@ const { useTerminalEditorCloseFoundation } = await import('./use-terminal-editor
 const { useTerminalEditorCloseQueue } = await import('./use-terminal-editor-close-queue')
 const { useTerminalEditorCloseDialogActions } =
   await import('./use-terminal-editor-close-dialog-actions')
-const { requestEditorFileClose } = await import('./editor/editor-autosave')
+const { requestEditorFileClose, ORCA_EDITOR_SAVE_AND_CLOSE_EVENT } =
+  await import('./editor/editor-autosave')
+const { registerPendingEditorFlush } = await import('./editor/editor-pending-flush')
 
 const setActiveWorktree = vi.fn()
 const setActiveFile = vi.fn()
@@ -134,5 +136,52 @@ describe('unsaved-changes prompt for a closing file', () => {
     expect(closeFile).toHaveBeenCalledWith('note')
     expect(onClosed).not.toHaveBeenCalled()
     vi.useRealTimers()
+  })
+
+  describe('a save that lands while a sibling keeps the file unsaved', () => {
+    let keptOpen: (event: Event) => void
+    beforeEach(() => {
+      keptOpen = (event) => {
+        if (event instanceof CustomEvent) {
+          event.detail.onSettled?.('kept-open')
+        }
+      }
+      window.addEventListener(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, keptOpen)
+    })
+    afterEach(() => window.removeEventListener(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, keptOpen))
+
+    it('asks again while quitting instead of failing the quit', async () => {
+      store.openFiles = [dirtyFile('note', 'wt-main')]
+      const { result } = mountCloseQueue()
+      act(() => result.current.queueEditorCloseRequests(['note'], { isQuitting: true }))
+
+      await act(() => result.current.handleSaveDialogSave())
+
+      expect(result.current.saveDialogFileId).toBe('note')
+    })
+
+    it("closes the prompt without running the tab's close reaction", async () => {
+      store.openFiles = [dirtyFile('note', 'wt-main')]
+      const onClosed = vi.fn()
+      const { result } = mountCloseQueue()
+      act(() => requestEditorFileClose('note', { onClosed }))
+
+      await act(() => result.current.handleSaveDialogSave())
+
+      expect(result.current.saveDialogFileId).toBeNull()
+      expect(onClosed).not.toHaveBeenCalled()
+    })
+  })
+
+  it("flushes queued tabs' delayed edits before the first prompt", () => {
+    store.openFiles = [dirtyFile('note', 'wt-main')]
+    const flush = vi.fn()
+    const unregister = registerPendingEditorFlush('note', flush)
+    const { result } = mountCloseQueue()
+
+    act(() => result.current.queueEditorCloseRequests(['note'], { isQuitting: true }))
+    unregister()
+
+    expect(flush).toHaveBeenCalled()
   })
 })

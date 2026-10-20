@@ -1,4 +1,5 @@
 import { joinPath } from '@/lib/path'
+import { supersedeEditorBufferReadsForExternalChange } from './editor-external-change-freshness'
 import type { OpenFile } from '@/store/slices/editor'
 import { areLocalWindowsWslPathAliases } from '../../../../shared/cross-platform-path'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
@@ -16,6 +17,14 @@ export const ORCA_EDITOR_SAVE_AND_CLOSE_EVENT = 'orca:save-and-close'
 export const ORCA_EDITOR_FILE_SAVED_EVENT = 'orca:editor-file-saved'
 export const ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT = 'orca:editor-request-cmd-save'
 export const ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT = 'orca:editor-request-file-close'
+
+/** How a save-and-close ended; `kept-open` means the save landed but newer edits keep the tab. */
+export type EditorSaveAndCloseOutcome = 'closed' | 'kept-open' | 'not-saved'
+
+export type EditorSaveAndCloseDetail = {
+  fileId: string
+  onSettled?: (outcome: EditorSaveAndCloseOutcome) => void
+}
 
 export type EditorPathMutationTarget = {
   worktreeId: string
@@ -217,6 +226,10 @@ export function requestEditorFileClose(
 // every consumer MUST skip dirty files per-file. Reloading a dirty tab's
 // content destroys its unsaved draft (the data-loss half of issue #7265).
 export function notifyEditorExternalFileChange(target: EditorPathMutationTarget): void {
+  // Why first: a read that started before the change must not land over the reload it causes.
+  supersedeEditorBufferReadsForExternalChange((openFiles) =>
+    getOpenFilesForExternalFileChange(openFiles, target)
+  )
   window.dispatchEvent(
     new CustomEvent<EditorPathMutationTarget>(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, {
       detail: target

@@ -36,6 +36,7 @@ import { useRuntimeGraphSync } from './app-shell/use-runtime-graph-sync'
 import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-effects'
 import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
 import { installActiveWorktreeRemovalSuccessor } from './lib/active-worktree-removal-successor'
+import { RecoveredEditorDraftsNotice } from './components/editor/RecoveredEditorDraftsNotice'
 
 function App(): React.JSX.Element {
   const layout = useAppChromeLayout()
@@ -110,6 +111,7 @@ function App(): React.JSX.Element {
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
         <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+        <RecoveredEditorDraftsNotice />
       </TooltipProvider>
       <SkillFreshnessNudge />
       <WorktreeBaseFallbackDialog />

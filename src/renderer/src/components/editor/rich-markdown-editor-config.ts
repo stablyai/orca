@@ -1,5 +1,6 @@
 import type { Editor, UseEditorOptions } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
+import { nextEditorEditSequence } from './editor-pending-flush'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
 import { handleRichMarkdownPaste } from './rich-markdown-paste-handler'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
@@ -74,6 +75,8 @@ export type EditorConfigParams = {
   typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
   cancelAutoFocusRef: MutableRefObject<(() => void) | null>
   serializeTimerRef: MutableRefObject<number | null>
+  /** Stamps when the pending edit was made, so a flush of several tabs knows the newest. */
+  pendingEditSequenceRef?: MutableRefObject<number | null>
   isInitializingRef: MutableRefObject<boolean>
   isApplyingProgrammaticUpdateRef: MutableRefObject<boolean>
   markdownCommentsRef: MutableRefObject<DiffComment[]>
@@ -118,6 +121,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     typedEmptyOrderedListMarkerRef,
     cancelAutoFocusRef,
     serializeTimerRef,
+    pendingEditSequenceRef,
     isInitializingRef,
     isApplyingProgrammaticUpdateRef,
     markdownCommentsRef,
@@ -264,6 +268,9 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         return
       }
       onDirtyStateHintRef.current(true)
+      if (pendingEditSequenceRef) {
+        pendingEditSequenceRef.current = nextEditorEditSequence()
+      }
       if (serializeTimerRef.current !== null) {
         window.clearTimeout(serializeTimerRef.current)
       }

@@ -2,16 +2,13 @@ import React, { useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { getConnectionIdForFile } from '@/lib/connection-context'
-import { editorTabFileAccess } from '@/lib/local-file-access'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
-import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import { ExternalFileChangeCompareDialog } from './ExternalFileChangeCompareDialog'
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
+import { readEditorTabDiskSignature } from './editor-tab-disk-read'
 
 // Why: when an external process (usually an agent) rewrites a file while the
 // tab holds unsaved edits, the reload pipeline preserves the buffer and marks
@@ -87,21 +84,14 @@ export function keepTabEditsOverExternalChange(file: OpenFile): void {
   // the dismissed conflict from the stale signature on every launch.
   // Best-effort: a failed read leaves the old signature, which can only
   // re-surface the banner — never lose data.
-  const target = getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
-  if (!target) {
+  const read = readEditorTabDiskSignature(file)
+  if (!read) {
     return
   }
-  void readRuntimeFileContent({
-    target,
-    filePath: file.filePath,
-    relativePath: file.relativePath,
-    worktreeId: file.worktreeId,
-    connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
-    expectedExternalSshTargetId: file.externalSshTargetId,
-    access: editorTabFileAccess(state, file)
-  })
+  void read.content
     .then((result) => {
-      if (result.isBinary) {
+      // Why current: a newer read or write of the file owns the baseline.
+      if (result.isBinary || !read.isCurrent()) {
         return
       }
       const current = useAppStore.getState()
