@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { build } from 'vite'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 it('captures fixture pixels from a real backend-owned hidden page', async () => {
   const root = mkdtempSync(join(tmpdir(), 'orca-offscreen-capture-'))
