@@ -140,6 +140,26 @@ export const getFollowSymlinkedDirectoriesEntry = (): SettingsSearchEntry => ({
   ]
 })
 
+export const getFileExplorerCompactFoldersEntry = (): SettingsSearchEntry => ({
+  title: translate('settings.fileExplorerCompactFolders', 'Compact Folders'),
+  description: translate(
+    'settings.fileExplorerCompactFoldersDescription',
+    'Show nested folders that each contain only one folder on a single row, like com/example/app.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('settings.fileExplorerCompactFoldersKeywords.compact', 'compact'),
+    ...translateSearchKeyword(
+      'settings.fileExplorerCompactFoldersKeywords.nestedFolders',
+      'nested folders'
+    ),
+    ...translateSearchKeyword('settings.fileExplorerCompactFoldersKeywords.packages', 'packages'),
+    ...translateSearchKeyword(
+      'settings.fileExplorerCompactFoldersKeywords.fileExplorer',
+      'file explorer'
+    )
+  ]
+})
+
 export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate(
@@ -165,7 +185,8 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
       ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide')
     ]
   },
-  getFollowSymlinkedDirectoriesEntry()
+  getFollowSymlinkedDirectoriesEntry(),
+  getFileExplorerCompactFoldersEntry()
 ])
 
 export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [

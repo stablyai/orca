@@ -14,6 +14,7 @@ import {
 import { isDotfileRelativePath } from './file-explorer-entries'
 import { splitPathSegments } from './path-tree'
 import { isPathIgnored } from './status-display'
+import { createCompactFileExplorerRowProjection } from './file-explorer-compact-folders'
 
 export type FileExplorerNameFilterProjectionSource = {
   query: string
@@ -116,7 +117,9 @@ export function createNameFilteredFileExplorerProjection({
   showDotfiles,
   showGitIgnoredFiles,
   worktreePath,
-  displayRootPath = worktreePath
+  displayRootPath = worktreePath,
+  compactFolders = false,
+  compactFoldersStopPath = null
 }: {
   collapsedPaths?: ReadonlySet<string>
   ignoredSet: Set<string>
@@ -125,6 +128,8 @@ export function createNameFilteredFileExplorerProjection({
   showGitIgnoredFiles: boolean
   worktreePath: string
   displayRootPath?: string
+  compactFolders?: boolean
+  compactFoldersStopPath?: string | null
 }): FileExplorerRowProjection {
   const visibleFlatRows: TreeNode[] = []
   const rowsByPath = new Map<string, TreeNode>()
@@ -191,6 +196,12 @@ export function createNameFilteredFileExplorerProjection({
     displayChildren = entry.children
   }
   appendNameFilteredEntries(displayChildren.values(), visibleFlatRows, rowsByPath, collapsedPaths)
+  if (compactFolders) {
+    return createCompactFileExplorerRowProjection(
+      visibleFlatRows,
+      (row) => row.path === compactFoldersStopPath
+    )
+  }
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
 }
 
@@ -235,8 +246,10 @@ export function getFileExplorerNameFilterExpandedPaths(
   const count = rowProjection.getVisibleCount()
   for (let index = 0; index < count - 1; index += 1) {
     const row = rowProjection.getRowAtIndex(index)
-    const nextRow = rowProjection.getRowAtIndex(index + 1)
-    if (row?.isDirectory && nextRow && nextRow.depth > row.depth) {
+    if (
+      row?.isDirectory &&
+      rowProjection.getRowDepth(index + 1) > rowProjection.getRowDepth(index)
+    ) {
       expandedPaths.add(row.path)
     }
   }

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
@@ -42,6 +42,7 @@ import { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-stat
 import { useWslHostUnavailableReason } from '../terminal-pane/use-wsl-host-unavailable-reason'
 import { translate } from '@/i18n/i18n'
 import type { RightSidebarExplorerView } from '../../../../shared/ui-chrome-types'
+import type { InlineInput } from './file-explorer-inline-input-row'
 
 /** Coordinates scoped navigation while retaining the actual worktree root for file operations and runtime routing. */
 function FileExplorerFiles(): React.JSX.Element {
@@ -106,6 +107,7 @@ function FileExplorerFiles(): React.JSX.Element {
     [expanded, visibleFilesWorktreePath, displayRootPath, worktreePath]
   )
   const tree = useFileExplorerTree(worktreePath, effectiveExpanded, activeWorktreeId)
+  const [inlineInput, setInlineInput] = useState<InlineInput | null>(null)
   const {
     nameFilterQuery,
     setNameFilterQuery,
@@ -143,7 +145,8 @@ function FileExplorerFiles(): React.JSX.Element {
     showDotfiles,
     nameFilterSource,
     hasNameFilter ? nameFilterCollapsedPaths : null,
-    visibleFilesWorktreePath ? displayRootPath : null
+    visibleFilesWorktreePath ? displayRootPath : null,
+    inlineInput && inlineInput.type !== 'rename' ? inlineInput.parentPath : null
   )
   const rowExpandedPaths = useMemo(
     () =>
@@ -211,7 +214,9 @@ function FileExplorerFiles(): React.JSX.Element {
     selectedNode,
     rowProjection,
     rowExpandedPaths,
-    visibleRowCount
+    visibleRowCount,
+    inlineInput,
+    setInlineInput
   })
   const { inlineInputState, rowScrolling } = paneState
   const {

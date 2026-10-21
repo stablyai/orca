@@ -14,6 +14,8 @@ import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerHandlers } from './useFileExplorerHandlers'
 import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
+import type { InlineInput } from './file-explorer-inline-input-row'
+import { useFileExplorerCompactFolderExpansion } from './use-file-explorer-compact-folder-expansion'
 import { useFileExplorerNodeCommands } from './use-file-explorer-node-commands'
 import { useFileExplorerRowScrolling } from './use-file-explorer-row-scrolling'
 import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
@@ -42,6 +44,8 @@ type UseFileExplorerTreePaneStateParams = {
   rowProjection: FileExplorerRowProjection
   rowExpandedPaths: Set<string>
   visibleRowCount: number
+  inlineInput: InlineInput | null
+  setInlineInput: Dispatch<SetStateAction<InlineInput | null>>
 }
 
 type UseFileExplorerTreePaneStateResult = {
@@ -87,7 +91,9 @@ export function useFileExplorerTreePaneState({
   selectedNode,
   rowProjection,
   rowExpandedPaths,
-  visibleRowCount
+  visibleRowCount,
+  inlineInput,
+  setInlineInput
 }: UseFileExplorerTreePaneStateParams): UseFileExplorerTreePaneStateResult {
   const {
     dirCache,
@@ -132,6 +138,17 @@ export function useFileExplorerTreePaneState({
     runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, activeWorktreeId)
   )
   const toggleDir = useAppStore((s) => s.toggleDir)
+  const compactFolders = useAppStore((s) => s.settings?.fileExplorerCompactFolders === true)
+  const toggleDirOpeningChain = useFileExplorerCompactFolderExpansion({
+    enabled: compactFolders && !hasNameFilter,
+    activeWorktreeId,
+    toggleDir,
+    rowProjection,
+    expanded,
+    loadingDirPaths,
+    dirCache
+  })
+  const toggleRowDir = hasNameFilter ? handleToggleNameFilterDir : toggleDirOpeningChain
   const openFile = useAppStore((s) => s.openFile)
   const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
@@ -172,7 +189,7 @@ export function useFileExplorerTreePaneState({
     displayRootPath,
     activeWorktreeId,
     expanded,
-    toggleDir,
+    toggleDir: toggleDirOpeningChain,
     refreshDir,
     scrollRef,
     getOperationOwnerForPath: (path) => rowProjection.getRowByPath(path)?.operationOwner
@@ -201,7 +218,9 @@ export function useFileExplorerTreePaneState({
     expanded,
     rowProjection,
     scrollRef,
-    refreshDir
+    refreshDir,
+    inlineInput,
+    setInlineInput
   })
 
   useFileExplorerWatch({
@@ -253,7 +272,7 @@ export function useFileExplorerTreePaneState({
     runtimeEnvironmentId: ownerRuntimeEnvironmentId,
     openFile,
     makePreviewFilePermanent,
-    toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
+    toggleDir: toggleRowDir,
     loadDir,
     statPath,
     markPathAsDirectory,
@@ -278,7 +297,7 @@ export function useFileExplorerTreePaneState({
     requestDeleteAll: deletion.requestDeleteAll,
     refreshDir,
     handleClick: handlers.handleClick,
-    toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
+    toggleDir: toggleRowDir,
     scrollToIndex: rowScrolling.scrollToIndex
   })
 

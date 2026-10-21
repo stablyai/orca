@@ -146,6 +146,7 @@ export function buildDefaultSettings(args: {
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
     followSymlinkedDirectories: false,
+    fileExplorerCompactFolders: false,
     sourceControlViewMode: 'list',
     sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
     sourceControlCompareAgainstUpstream: false,
