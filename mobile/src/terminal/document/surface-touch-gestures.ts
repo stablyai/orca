@@ -175,13 +175,6 @@ export function attachSurfaceEventHandlers(
           y = touches[0].clientY
         const now = Date.now(),
           dt = now - scope.touchGesture.lastTime
-        const moveDist = Math.hypot(x - scope.touchGesture.lastX, y - scope.touchGesture.lastY)
-        const totalDist = Math.hypot(x - scope.touchGesture.startX, y - scope.touchGesture.startY)
-        if (moveDist > 2 || totalDist > 5) {
-          scope.touchGesture.hasMoved = true
-          scope.tapCandidate = null
-          clearLongPress(scope)
-        }
 
         // Why: pan horizontally only when content overflows the viewport (larger
         // than fit) — same check clampPan() uses. Vertical always drives buffer
@@ -192,11 +185,19 @@ export function attachSurfaceEventHandlers(
           scope.term.element &&
           scope.term.element.scrollWidth * getTotalScale(scope) > scope.viewportRect().width + 1
         ) {
+          const prevPanX = scope.panX
           scope.panX += x - scope.touchGesture.lastX
           clampPan(scope)
           updateTransform(scope)
-          scope.tapCandidate = null
-          clearLongPress(scope)
+          const panSlop = shouldRouteScrollToTerminalInput(scope) ? 4 : 8
+          if (
+            Math.abs(scope.panX - prevPanX) > 0.5 &&
+            Math.abs(x - scope.touchGesture.startX) > panSlop
+          ) {
+            scope.touchGesture.hasMoved = true
+            scope.tapCandidate = null
+            clearLongPress(scope)
+          }
         }
 
         const deltaY = scope.touchGesture.lastY - y
@@ -225,11 +226,6 @@ export function attachSurfaceEventHandlers(
             clearLongPress(scope)
           } else {
             scope.touchGesture.velY = 0
-            if (Math.abs(deltaY) > 2) {
-              scope.touchGesture.hasMoved = true
-              scope.tapCandidate = null
-              clearLongPress(scope)
-            }
           }
         }
         scope.touchGesture.lastX = x
