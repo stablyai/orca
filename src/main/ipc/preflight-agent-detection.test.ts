@@ -106,8 +106,8 @@ import {
 import { registerPreflightHandlers } from './preflight'
 import { resetPreflightMocks, type HandlerMap } from './preflight-test-harness'
 
-// Verbatim `bob --help` stdout from bobshell 2.0.1 (commit e6a3e508).
-const BOB_SHELL_2_0_1_HELP =
+// Verbatim `bob --help` stdout from bobshell 2.0.6 (commit 88346061a), under an English locale.
+const BOB_SHELL_2_0_6_HELP =
   'Usage: bob [options] [command]\n' +
   '\n' +
   'Bob in your terminal\n' +
@@ -121,12 +121,13 @@ const BOB_SHELL_2_0_1_HELP =
   '                             default 20)\n' +
   '  --show-license             Show full paths to license files for review\n' +
   '  --accept-license           Accept the IBM license agreement and continue\n' +
-  '  -h, --help                 display help for command\n' +
+  '  -h, --help                 Display help for command\n' +
   '\n' +
   'Commands:\n' +
   '  chat [options]             Launch the interactive terminal UI client\n' +
   '  run [options] [prompt...]  Execute a single task in headless mode\n' +
-  '  mcp                        Manage MCP server configurations\n'
+  '  mcp [options]              Manage MCP server configurations\n' +
+  '  acp [options]              Start Bob Shell as an Agent Client Protocol server\n'
 
 describe('preflight', () => {
   const originalPlatform = process.platform
@@ -524,7 +525,7 @@ describe('preflight', () => {
 
   it('detects IBM Bob by probing the executable detection resolved', async () => {
     whichFinds({ bob: BOB_PATH })
-    bobHelpPrints(BOB_SHELL_2_0_1_HELP)
+    bobHelpPrints(BOB_SHELL_2_0_6_HELP)
 
     await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
     expect(runProcessMock).toHaveBeenCalledTimes(1)
@@ -593,7 +594,7 @@ describe('preflight', () => {
 
   it('reuses the identity probe for the same executable across detections', async () => {
     whichFinds({ bob: BOB_PATH })
-    bobHelpPrints(BOB_SHELL_2_0_1_HELP)
+    bobHelpPrints(BOB_SHELL_2_0_6_HELP)
 
     await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
     await expect(detectInstalledAgents()).resolves.toEqual(['bob'])

@@ -12,6 +12,7 @@ import {
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
 import { parseHooksJsonText } from '../agent-hooks/hooks-json-read'
+import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
@@ -60,18 +61,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Why: worktreeId embeds a filesystem path, so hand-building JSON in shell is unsafe (quotes/newlines); post as form fields instead.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/bob" \\',
-    '  --connect-timeout 0.5 --max-time 1.5 \\',
-    '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload@-" >/dev/null 2>&1 || spool_hook_event',
+    ...buildPosixAgentHookPostCommand('bob').map((line, index, lines) =>
+      index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
+    ),
     'exit 0',
     ''
   ].join('\n')
@@ -113,11 +105,16 @@ export class BobHookService {
 
     let state: AgentHookInstallState
     let detail: string | null
-    if (missing.length === 0) {
-      state = 'installed'
-      detail = null
-    } else if (presentCount === 0) {
+    if (presentCount === 0) {
       state = 'not_installed'
+      detail = null
+    } else if (config.disableGlobalHooks === true) {
+      // Why: Bob 2.0.2+ `/hooks` can switch every global hook off; the entries stay in the file,
+      // so presence alone would claim an install Bob ignores.
+      state = 'partial'
+      detail = 'Bob ignores global hooks while disableGlobalHooks is true (toggle with /hooks)'
+    } else if (missing.length === 0) {
+      state = 'installed'
       detail = null
     } else {
       state = 'partial'

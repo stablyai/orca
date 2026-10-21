@@ -115,6 +115,19 @@ describe('BobHookService', () => {
     expect(service.getStatus()).toMatchObject({ state: 'partial', managedHooksPresent: true })
   })
 
+  // Why: Bob's `/hooks` toggle leaves the entries in place but ignores them (2.0.2+).
+  it('reports partial while Bob has global hooks switched off', () => {
+    const service = new BobHookService()
+    service.install()
+    writeSettings({ ...readSettings(), disableGlobalHooks: true })
+
+    expect(service.getStatus()).toMatchObject({
+      state: 'partial',
+      managedHooksPresent: true,
+      detail: expect.stringContaining('disableGlobalHooks')
+    })
+  })
+
   // Why: a malformed settings.json must not be overwritten — the user's file is the source of truth.
   it('refuses to install over an unparseable settings.json', () => {
     const configPath = getBobConfigPath()
