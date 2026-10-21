@@ -30,8 +30,12 @@ const NON_DEFAULT_LOCALE_LOADERS: Record<
   fr: () => import('./locales/fr.json'),
   ja: () => import('./locales/ja.json'),
   ko: () => import('./locales/ko.json'),
-  zh: () => import('./locales/zh.json'),
-  tr: () => import('./locales/tr.json')
+  zh:
+    /** Keeps the Chinese catalog out of the renderer's initial bundle. */
+    () => import('./locales/zh.json'),
+  tr:
+    /** Keeps the Turkish catalog out of the renderer's initial bundle. */
+    () => import('./locales/tr.json')
 }
 
 const lazyLocaleBackend: BackendModule = {

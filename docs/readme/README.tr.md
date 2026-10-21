@@ -17,7 +17,7 @@
 
 <p align="center">
   <strong>100x geliştiriciler için yapay zekâ orkestratörü.</strong><br/>
-  Codex, ClaudeCode, OpenCode veya Pi'yi yan yana çalıştırın - her biri kendi worktree'sinde, hepsi tek yerden takip edilir.
+  Codex, Claude Code, OpenCode veya Pi'yi yan yana çalıştırın - her biri kendi worktree'sinde, hepsi tek yerden takip edilir.
 </p>
 
 <h3 align="center"><a href="https://onorca.dev/download"><ins>Orca'yı indirin</ins></a></h3>

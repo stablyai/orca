@@ -19,20 +19,20 @@ describe('Turkish shortcut search', () => {
     await i18n.changeLanguage('en')
   })
 
-  /** Uses the real definition to exercise translated search without matching a configured chord. */
-  const browserForwardRow = (): ShortcutRowModel => {
-    const item = getKeybindingDefinition('browser.forward')
-    if (!item) {
-      throw new Error('Missing browser.forward definition')
+  const browserForwardRow =
+    /** Uses the real definition to exercise translated search without matching a configured chord. */ (): ShortcutRowModel => {
+      const item = getKeybindingDefinition('browser.forward')
+      if (!item) {
+        throw new Error('Missing browser.forward definition')
+      }
+      return {
+        item,
+        groupTitle: item.group,
+        effective: [],
+        modified: false,
+        warnings: []
+      }
     }
-    return {
-      item,
-      groupTitle: item.group,
-      effective: [],
-      modified: false,
-      warnings: []
-    }
-  }
 
   it.each(['ileri', 'İLERİ', 'tarayıcı', 'TARAYICI'])('finds localized titles for %s', (query) => {
     const normalized = normalizeShortcutLocalSearchQuery(query)

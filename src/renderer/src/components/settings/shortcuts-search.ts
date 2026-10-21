@@ -38,19 +38,21 @@ export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
   })
 )
 
-const getShortcutDefinitionSearchEntries = createLocalizedCatalog(() =>
-  KEYBINDING_DEFINITIONS.map((item) => ({
-    actionId: item.id,
-    searchEntry: {
-      title: translateKeybindingTitle(item),
-      description: translate(
-        'auto.components.settings.shortcuts.search.groupShortcut',
-        '{{value0}} shortcut',
-        { value0: translateKeybindingGroupTitle(item.group) }
-      ),
-      keywords: [item.title, item.group, ...item.searchKeywords]
-    }
-  }))
+const getShortcutDefinitionSearchEntries = createLocalizedCatalog(
+  /** Refreshes translated search labels after locale changes while retaining English aliases. */
+  () =>
+    KEYBINDING_DEFINITIONS.map((item) => ({
+      actionId: item.id,
+      searchEntry: {
+        title: translateKeybindingTitle(item),
+        description: translate(
+          'auto.components.settings.shortcuts.search.groupShortcut',
+          '{{value0}} shortcut',
+          { value0: translateKeybindingGroupTitle(item.group) }
+        ),
+        keywords: [item.title, item.group, ...item.searchKeywords]
+      }
+    }))
 )
 
 export function getShortcutsPaneSearchEntries(options?: {

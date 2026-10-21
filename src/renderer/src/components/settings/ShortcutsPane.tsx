@@ -163,71 +163,71 @@ export function ShortcutsPane(): React.JSX.Element {
     ]
   )
 
-  /** Rejects invalid or conflicting chords and persists overrides, returning false on save failure. */
-  const saveBindings = async (
-    actionId: KeybindingActionId,
-    normalized: string[]
-  ): Promise<boolean> => {
-    const normalizedResult = normalizeKeybindingListForAction(actionId, normalized.join(', '))
-    if (!Array.isArray(normalizedResult)) {
-      setErrors((prev) => ({
-        ...prev,
-        [actionId]: normalizedResult.ok ? getUnableToParseShortcutMessage() : normalizedResult.error
-      }))
-      return false
-    }
-
-    const definition = definitionForAction(actionId)
-    if (!definition) {
-      setErrors((prev) => ({ ...prev, [actionId]: getShortcutUnavailableMessage() }))
-      return false
-    }
-    const defaults = getEffectiveKeybindingsForDefinition(definition, platform, {})
-    const next =
-      sameBindings(normalizedResult, defaults) ||
-      (normalizedResult.length === 0 && defaults.length === 0)
-        ? removeBindingOverride(keybindings, actionId)
-        : { ...keybindings, [actionId]: normalizedResult }
-    const blockingConflict = findKeybindingConflictsForDefinitions(definitions, platform, next, {
-      ignoredActionIds: ignoredConflictActionIds
-    }).find((conflict) => conflict.actionIds.includes(actionId))
-    if (blockingConflict) {
-      const labels = blockingConflict.actionIds
-        .filter((id) => id !== actionId)
-        .map((id) => {
-          const conflictDefinition = definitionsByAction.get(id)
-          return conflictDefinition ? translateKeybindingTitle(conflictDefinition) : id
-        })
-        .join(', ')
-      setErrors((prev) => ({
-        ...prev,
-        [actionId]: getBindingConflictMessage(
-          formatKeybindingList([blockingConflict.binding], platform),
-          labels
-        )
-      }))
-      return false
-    }
-
-    setErrors((prev) => ({ ...prev, [actionId]: undefined }))
-    try {
-      const matchesDefault =
-        sameBindings(normalizedResult, defaults) ||
-        (normalizedResult.length === 0 && defaults.length === 0)
-      await (matchesDefault && !hasCommonBindingOverride(keybindingSnapshot, actionId)
-        ? resetKeybindingOverride(actionId)
-        : setKeybindingOverride(actionId, normalizedResult))
-      return true
-    } catch (error) {
-      if (mountedRef.current) {
+  const saveBindings =
+    /** Rejects invalid or conflicting chords and persists overrides, returning false on save failure. */
+    async (actionId: KeybindingActionId, normalized: string[]): Promise<boolean> => {
+      const normalizedResult = normalizeKeybindingListForAction(actionId, normalized.join(', '))
+      if (!Array.isArray(normalizedResult)) {
         setErrors((prev) => ({
           ...prev,
-          [actionId]: error instanceof Error ? error.message : 'Failed to save shortcut.'
+          [actionId]: normalizedResult.ok
+            ? getUnableToParseShortcutMessage()
+            : normalizedResult.error
         }))
+        return false
       }
-      return false
+
+      const definition = definitionForAction(actionId)
+      if (!definition) {
+        setErrors((prev) => ({ ...prev, [actionId]: getShortcutUnavailableMessage() }))
+        return false
+      }
+      const defaults = getEffectiveKeybindingsForDefinition(definition, platform, {})
+      const next =
+        sameBindings(normalizedResult, defaults) ||
+        (normalizedResult.length === 0 && defaults.length === 0)
+          ? removeBindingOverride(keybindings, actionId)
+          : { ...keybindings, [actionId]: normalizedResult }
+      const blockingConflict = findKeybindingConflictsForDefinitions(definitions, platform, next, {
+        ignoredActionIds: ignoredConflictActionIds
+      }).find((conflict) => conflict.actionIds.includes(actionId))
+      if (blockingConflict) {
+        const labels = blockingConflict.actionIds
+          .filter((id) => id !== actionId)
+          .map((id) => {
+            const conflictDefinition = definitionsByAction.get(id)
+            return conflictDefinition ? translateKeybindingTitle(conflictDefinition) : id
+          })
+          .join(', ')
+        setErrors((prev) => ({
+          ...prev,
+          [actionId]: getBindingConflictMessage(
+            formatKeybindingList([blockingConflict.binding], platform),
+            labels
+          )
+        }))
+        return false
+      }
+
+      setErrors((prev) => ({ ...prev, [actionId]: undefined }))
+      try {
+        const matchesDefault =
+          sameBindings(normalizedResult, defaults) ||
+          (normalizedResult.length === 0 && defaults.length === 0)
+        await (matchesDefault && !hasCommonBindingOverride(keybindingSnapshot, actionId)
+          ? resetKeybindingOverride(actionId)
+          : setKeybindingOverride(actionId, normalizedResult))
+        return true
+      } catch (error) {
+        if (mountedRef.current) {
+          setErrors((prev) => ({
+            ...prev,
+            [actionId]: error instanceof Error ? error.message : 'Failed to save shortcut.'
+          }))
+        }
+        return false
+      }
     }
-  }
 
   const captureBinding = async (
     actionId: KeybindingActionId,

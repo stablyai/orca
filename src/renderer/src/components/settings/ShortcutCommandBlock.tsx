@@ -92,23 +92,26 @@ export function ShortcutCommandBlock({
         : ''
   const helperTone = error || (!isRecording && warnings.length > 0) ? 'error' : 'muted'
 
-  /** Binds each recorder slot to its index while sharing the command's localized title. */
-  const recorderFor = (binding: string | null, index: number): React.JSX.Element => (
-    <ShortcutRecorderButton
-      actionId={item.id}
-      title={title}
-      platform={platform}
-      isDigitIndex={isDigitIndex}
-      binding={binding}
-      bindingIndex={index}
-      bindingCount={effective.length}
-      recording={recordingBindingIndex === index}
-      onStartRecording={onStartRecordingAt}
-      onCancelRecording={onCancelRecording}
-      onCapture={onCapture}
-      onClearError={onClearError}
-    />
-  )
+  const recorderFor =
+    /** Binds each recorder slot to its index while sharing the command's localized title. */ (
+      binding: string | null,
+      index: number
+    ): React.JSX.Element => (
+      <ShortcutRecorderButton
+        actionId={item.id}
+        title={title}
+        platform={platform}
+        isDigitIndex={isDigitIndex}
+        binding={binding}
+        bindingIndex={index}
+        bindingCount={effective.length}
+        recording={recordingBindingIndex === index}
+        onStartRecording={onStartRecordingAt}
+        onCancelRecording={onCancelRecording}
+        onCapture={onCapture}
+        onClearError={onClearError}
+      />
+    )
 
   // Why: ShortcutsPane already filters rows against the global query;
   // forceVisible skips the re-match here that would hide rows it kept.

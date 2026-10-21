@@ -28,8 +28,12 @@ const LAZY_LOCALE_LOADERS: Record<
   fr: () => import('../../renderer/src/i18n/locales/fr.json'),
   ja: () => import('../../renderer/src/i18n/locales/ja.json'),
   ko: () => import('../../renderer/src/i18n/locales/ko.json'),
-  zh: () => import('../../renderer/src/i18n/locales/zh.json'),
-  tr: () => import('../../renderer/src/i18n/locales/tr.json')
+  zh:
+    /** Defers the Chinese catalog until the main process requests that locale. */
+    () => import('../../renderer/src/i18n/locales/zh.json'),
+  tr:
+    /** Defers the Turkish catalog until the main process requests that locale. */
+    () => import('../../renderer/src/i18n/locales/tr.json')
 }
 
 const lazyLocaleBackend: BackendModule = {
