@@ -9,8 +9,14 @@ import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { isNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
-import { createAppMenuQuitItem } from './app-menu-quit-item'
-import { createAppWindowMenu } from './app-menu-window'
+import { createAppFileMenu } from './app-menu-quit-item'
+import { createLocalizedAppWindowMenu } from './app-menu-window'
+import { nativeRoleLabel } from './native-role-label'
+import {
+  buildEditMenuNativeItems,
+  buildMacIdentityMenuItems,
+  buildMacAppMenu
+} from './build-native-role-menu-items'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -67,6 +73,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const isMac = process.platform === 'darwin'
   const appearance = getAppearanceState()
+  const appDisplayName = options.appMenuLabel ?? app.name
   const shortcutLabel = (actionId: KeybindingActionId): string => {
     const bindings = getEffectiveKeybindingsForAction(
       actionId,
@@ -145,47 +152,28 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     click: (_menuItem, window) => onOpenCrashReport(window)
   }
 
-  // Why: the macOS app-menu (named after the app) is mandatory on darwin and
-  // owns hide/hideOthers/unhide/services/quit roles that only make sense in
-  // the system menu bar. On Windows/Linux that menu would render as a
-  // redundant "Orca" entry with roles that don't apply, so we omit it there
-  // and distribute its items across File / Help instead.
-  const macAppMenu: Electron.MenuItemConstructorOptions = {
-    label: options.appMenuLabel ?? app.name,
-    submenu: [
-      { role: 'about' },
-      checkForUpdatesItem,
-      settingsItem,
-      { type: 'separator' },
-      { role: 'services' },
-      { type: 'separator' },
-      { role: 'hide' },
-      { role: 'hideOthers' },
-      { role: 'unhide' },
-      { type: 'separator' },
-      createAppMenuQuitItem(options.onQuit, options.appMenuLabel ?? app.name)
-    ]
-  }
+  // Why: the macOS app-menu is mandatory on darwin and owns roles that only
+  // make sense in the system menu bar; Windows/Linux omit it and distribute
+  // its items across File / Help instead.
+  const [aboutItem] = buildMacIdentityMenuItems(appDisplayName)
+  const macAppMenu = buildMacAppMenu(
+    appDisplayName,
+    checkForUpdatesItem,
+    settingsItem,
+    options.onQuit
+  )
 
-  const fileMenu: Electron.MenuItemConstructorOptions = {
-    label: translateMain('menu.file', 'File'),
-    // Why: on Windows/Linux there is no app-named menu, so Settings and
-    // Quit live under File — matching the common platform convention and
-    // keeping all user-facing actions reachable from the in-window menu bar.
-    submenu: [settingsItem, { type: 'separator' }, createAppMenuQuitItem(options.onQuit)]
-  }
+  // Windows/Linux put Settings and Quit under File instead of an app-named menu.
+  const fileMenu = createAppFileMenu(settingsItem, options.onQuit)
 
-  // Why: keep native menu hints while letting non-macOS Ctrl+Z/Ctrl+Y reach the focused terminal or DOM control.
-  const undoRedoOptions: Electron.MenuItemConstructorOptions = isMac
-    ? {}
-    : { registerAccelerator: false }
+  const [undoItem, redoItem, cutItem] = buildEditMenuNativeItems(isMac)
   const editMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.edit', 'Edit'),
     submenu: [
-      { role: 'undo', ...undoRedoOptions },
-      { role: 'redo', ...undoRedoOptions },
+      undoItem,
+      redoItem,
       { type: 'separator' },
-      { role: 'cut' },
+      cutItem,
       createAppMenuSelectionItem({
         action: 'copy',
         label: translateMain('menu.copy', 'Copy'),
@@ -221,13 +209,9 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     ]
   }
 
-  // Why: mirror VS Code's View > Appearance submenu so users can toggle
-  // sidebar/status-bar/tasks-button/titlebar-activity from the menu bar as
-  // well as from the settings pane. Electron doesn't reactively update
-  // menu items when the backing state changes, so rebuildAppMenu() must be
-  // called after every settings update — each build reads current
-  // appearance state through getAppearanceState() and produces a fresh
-  // template with accurate `checked` values.
+  // Why: mirrors VS Code's View > Appearance submenu. Electron doesn't
+  // reactively update menu items, so rebuildAppMenu() must run after every
+  // settings update to keep `checked` accurate.
   const appearanceSubmenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.appearance', 'Appearance'),
     submenu: [
@@ -291,7 +275,10 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         label: `${translateMain('menu.forceReload', 'Force Reload')}\t${shortcutLabel('app.forceReload')}`,
         click: () => reloadFocusedWindow(true)
       },
-      { role: 'toggleDevTools' },
+      {
+        role: 'toggleDevTools',
+        label: nativeRoleLabel('menu.toggleDevTools', 'Toggle Developer Tools')
+      },
       { type: 'separator' },
       {
         label: `${translateMain('menu.resetSize', 'Reset Size')}\t${shortcutLabel('zoom.reset')}`,
@@ -315,13 +302,14 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         label: `${translateMain('menu.openWorktreePalette', 'Open Worktree Palette')}\t${shortcutLabel('worktree.palette')}`
       },
       { type: 'separator' },
-      { role: 'togglefullscreen' },
+      {
+        role: 'togglefullscreen',
+        label: nativeRoleLabel('menu.toggleFullScreen', 'Toggle Full Screen')
+      },
       { type: 'separator' },
       appearanceSubmenu
     ]
   }
-
-  const windowMenu = createAppWindowMenu(translateMain('menu.window', 'Window'), isMac)
 
   const helpMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.help', 'Help'),
@@ -334,7 +322,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         ? []
         : ([
             { type: 'separator' },
-            { role: 'about' },
+            aboutItem,
             checkForUpdatesItem
           ] satisfies Electron.MenuItemConstructorOptions[]))
     ]
@@ -345,7 +333,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     ...(isMac ? [] : [fileMenu]),
     editMenu,
     viewMenu,
-    windowMenu,
+    createLocalizedAppWindowMenu(isMac),
     helpMenu
   ]
 

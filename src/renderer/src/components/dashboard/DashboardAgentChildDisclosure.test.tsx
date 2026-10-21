@@ -6,6 +6,7 @@ import { TooltipProvider } from '../ui/tooltip'
 import DashboardAgentRow from './DashboardAgentRow'
 import type { DashboardAgentRow as AgentRow } from './useDashboardData'
 import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
+import { setRendererUiLanguage } from '@/i18n/i18n'
 
 vi.mock('./use-agent-row-conversation-name', () => ({ useAgentRowConversationName: () => null }))
 vi.mock('../sidebar/CacheTimer', () => ({
@@ -16,6 +17,7 @@ vi.mock('../sidebar/CacheTimer', () => ({
 afterEach(async () => {
   cleanup()
   await vi.dynamicImportSettled()
+  await setRendererUiLanguage('en')
 })
 
 const agent: AgentRow = {
@@ -44,6 +46,31 @@ const agent: AgentRow = {
 }
 
 describe('agent child disclosure', () => {
+  it('keeps the shared disclosure action in Turkish when expanded', async () => {
+    await setRendererUiLanguage('tr')
+    const toggle = vi.fn()
+    const { rerender } = render(
+      <DashboardAgentChildDisclosure
+        childAgentCount={2}
+        childAgentsExpanded={false}
+        onToggleChildAgents={toggle}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: '2 alt ajan göster' }))
+    expect(toggle).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <DashboardAgentChildDisclosure
+        childAgentCount={2}
+        childAgentsExpanded
+        onToggleChildAgents={toggle}
+      />
+    )
+    expect(
+      screen.getByRole('button', { name: '2 alt ajan gizle' }).getAttribute('aria-expanded')
+    ).toBe('true')
+  })
+
   it('toggles children without activating the surrounding agent or workspace', () => {
     const activate = vi.fn()
     const toggle = vi.fn()

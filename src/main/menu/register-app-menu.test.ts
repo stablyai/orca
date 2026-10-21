@@ -33,6 +33,7 @@ vi.mock('electron', () => ({
 
 import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
 import { markNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
+import { setMainUiLanguage } from '../i18n/main-i18n'
 
 const isMac = process.platform === 'darwin'
 
@@ -73,6 +74,76 @@ function getSubmenu(
 }
 
 describe('registerAppMenu', () => {
+  it('preserves the French quit label when macOS hosts provide a callback', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    await setMainUiLanguage('fr')
+    const onQuit = vi.fn()
+    registerAppMenu({ ...buildMenuOptions(), onQuit })
+    const quit = getSubmenu(getTemplate(), 'Orca').find(
+      (item) => item.accelerator === 'CmdOrCtrl+Q'
+    )
+    expect(quit?.label).toBe('Quitter Orca')
+    quit?.click?.({} as never, {} as never, {} as never)
+    expect(onQuit).toHaveBeenCalledOnce()
+  })
+
+  it.each(['es', 'fr', 'ja', 'ko', 'zh'] as const)(
+    'preserves native role labels when %s has no catalog translation',
+    async (locale) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+      await setMainUiLanguage(locale)
+      registerAppMenu(buildMenuOptions())
+      const entries = getTemplate().flatMap((entry) =>
+        Array.isArray(entry.submenu) ? entry.submenu : []
+      )
+      for (const role of [
+        'about',
+        'services',
+        'hide',
+        'hideOthers',
+        'unhide',
+        'undo',
+        'redo',
+        'cut',
+        'minimize',
+        'zoom',
+        'toggleDevTools',
+        'togglefullscreen',
+        'quit'
+      ]) {
+        const item = entries.find((entry) => entry.role === role)
+        expect(item, role).toBeDefined()
+        expect(item?.label, role).toBeUndefined()
+      }
+    }
+  )
+
+  it.each(['linux', 'win32', 'darwin'] as const)(
+    'keeps Turkish quit labels and host quit callbacks on %s',
+    async (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      await setMainUiLanguage('tr')
+      const label = platform === 'darwin' ? "Orca'dan Çık" : 'Çıkış'
+      const menuLabel = platform === 'darwin' ? 'Orca' : 'Dosya'
+      registerAppMenu(buildMenuOptions())
+      expect(getSubmenu(getTemplate(), menuLabel).find((item) => item.role === 'quit')?.label).toBe(
+        label
+      )
+
+      buildFromTemplateMock.mockClear()
+      const onQuit = vi.fn()
+      registerAppMenu({ ...buildMenuOptions(), onQuit })
+      const quit = getSubmenu(getTemplate(), menuLabel).find((item) => item.label === label)
+      expect(quit?.role).toBeUndefined()
+      expect(quit?.accelerator).toBe(platform === 'win32' ? undefined : 'CmdOrCtrl+Q')
+      const click: unknown = quit?.click
+      if (typeof click === 'function') {
+        click()
+      }
+      expect(onQuit).toHaveBeenCalledOnce()
+    }
+  )
+
   it.each(['linux', 'win32', 'darwin'] as const)(
     'leaves Ctrl+M to the terminal while preserving macOS minimize on %s',
     (platform) => {
@@ -83,10 +154,33 @@ describe('registerAppMenu', () => {
       const minimize = windowSubmenu.find((item) => item.role === 'minimize')
       expect(minimize).toEqual(
         platform === 'darwin'
-          ? { role: 'minimize' }
-          : { role: 'minimize', accelerator: '', registerAccelerator: false }
+          ? { role: 'minimize', label: 'Minimize' }
+          : { role: 'minimize', label: 'Minimize', accelerator: '', registerAccelerator: false }
       )
-      expect(windowSubmenu.find((item) => item.role === 'zoom')).toEqual({ role: 'zoom' })
+      expect(windowSubmenu.find((item) => item.role === 'zoom')).toEqual({
+        role: 'zoom',
+        label: 'Zoom'
+      })
+    }
+  )
+
+  it.each(['linux', 'win32', 'darwin'] as const)(
+    'localizes native window roles without changing minimize shortcuts on %s',
+    async (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      await setMainUiLanguage('tr')
+      registerAppMenu(buildMenuOptions())
+
+      const windowSubmenu = getSubmenu(getTemplate(), 'Pencere')
+      expect(windowSubmenu.find((item) => item.role === 'minimize')).toEqual({
+        role: 'minimize',
+        label: 'Küçült',
+        ...(platform === 'darwin' ? {} : { accelerator: '', registerAccelerator: false })
+      })
+      expect(windowSubmenu.find((item) => item.role === 'zoom')).toEqual({
+        role: 'zoom',
+        label: 'Büyüt'
+      })
     }
   )
 
@@ -119,7 +213,8 @@ describe('registerAppMenu', () => {
     buildFromTemplateMock.mockImplementation((template) => ({ template }))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await setMainUiLanguage('en')
     vi.restoreAllMocks()
   })
 

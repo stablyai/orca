@@ -61,7 +61,8 @@ export function isSettingsSearchQueryTooLarge(
 }
 
 export function normalizeSettingsSearchQuery(query: string): string {
-  return query.trim().toLowerCase()
+  // Fold both Turkish I variants so translated labels and English keywords remain searchable.
+  return query.trim().toLowerCase().replaceAll('i\u0307', 'i').replaceAll('ı', 'i')
 }
 
 function scoreSettingsSearchText(
@@ -72,7 +73,7 @@ function scoreSettingsSearchText(
   if (!value) {
     return SETTINGS_SEARCH_NO_MATCH_SCORE
   }
-  const normalizedValue = value.toLowerCase()
+  const normalizedValue = normalizeSettingsSearchQuery(value)
   if (normalizedValue === normalizedQuery) {
     return tier.exact
   }

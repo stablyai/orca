@@ -1,4 +1,15 @@
 import { translateMain } from '../i18n/main-i18n'
+import { nativeRoleLabel } from './native-role-label'
+
+export function createAppFileMenu(
+  settingsItem: Electron.MenuItemConstructorOptions,
+  onQuit?: () => void
+): Electron.MenuItemConstructorOptions {
+  return {
+    label: translateMain('menu.file', 'File'),
+    submenu: [settingsItem, { type: 'separator' }, createAppMenuQuitItem(onQuit)]
+  }
+}
 
 /**
  * The app menu's Quit entry: "Quit <macAppName>" in the macOS app menu, else File > Exit.
@@ -9,13 +20,22 @@ export function createAppMenuQuitItem(
   onQuit: (() => void) | undefined,
   macAppName?: string
 ): Electron.MenuItemConstructorOptions {
-  const exitLabel = macAppName === undefined ? translateMain('menu.exit', 'Exit') : undefined
+  const label =
+    macAppName === undefined
+      ? translateMain('menu.exit', 'Exit')
+      : (nativeRoleLabel('menu.quit', 'Quit {{appName}}', { appName: macAppName }) ??
+        translateMain('menu.quitApp', 'Quit {{appName}}', { appName: macAppName }))
   if (!onQuit) {
-    return { role: 'quit', ...(exitLabel ? { label: exitLabel } : {}) }
+    return {
+      role: 'quit',
+      label:
+        macAppName === undefined
+          ? label
+          : nativeRoleLabel('menu.quit', 'Quit {{appName}}', { appName: macAppName })
+    }
   }
   return {
-    label:
-      exitLabel ?? translateMain('menu.quitApp', `Quit ${macAppName}`, { appName: macAppName }),
+    label,
     // Same accelerator Electron gives role 'quit' (none on Windows).
     ...(process.platform === 'win32' ? {} : { accelerator: 'CmdOrCtrl+Q' }),
     click: () => onQuit()
