@@ -71,7 +71,7 @@ export abstract class RuntimeWorkspaceSessionCustomTitles extends RuntimeHeadles
     if (!sessionId) {
       return
     }
-    const normalized = title?.trim() || null
+    const normalized = title?.trim().slice(0, 256) || null
     if (normalized) {
       this.inMemorySessionCustomTitles.set(sessionId, normalized)
     } else {
@@ -79,6 +79,10 @@ export abstract class RuntimeWorkspaceSessionCustomTitles extends RuntimeHeadles
     }
     const session = this.store?.getWorkspaceSession?.()
     if (!session || !this.store?.setWorkspaceSession) {
+      return
+    }
+    const current = session.sessionCustomTitles?.[sessionId] ?? null
+    if (current === normalized) {
       return
     }
     const nextTitles = { ...session.sessionCustomTitles }

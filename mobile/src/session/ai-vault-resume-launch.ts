@@ -88,7 +88,7 @@ export function buildMobileAiVaultResumeLaunch(args: {
   hostTerminalWindowsShell?: string | null
   settings?: MobileAiVaultResumeSettings | null
 }): MobileAiVaultResumeLaunch {
-  const title = args.session.customTitle || args.session.title || null
+  const title = args.session.customTitle?.trim() || null
   const shell =
     args.hostPlatform === 'win32'
       ? resolveWindowsShellStartupFamily(args.hostTerminalWindowsShell)
