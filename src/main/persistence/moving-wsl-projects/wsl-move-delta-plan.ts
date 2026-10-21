@@ -211,6 +211,8 @@ export function journalWslMove(args: {
   plan: WslMovePlan
   manifest: OrcadMigrationManifest
   destinationName: string
+  /** Carried disabled; the host turns them back on after commit. */
+  automationsToReenable?: readonly string[]
   now?: () => Date
 }): WslMoveCutover {
   const { plan, manifest } = args
@@ -241,6 +243,9 @@ export function journalWslMove(args: {
     provenExitedSessionIds: [],
     rewrittenStores: [],
     ...(plan.supersedesMigrationId ? { supersedesMigrationId: plan.supersedesMigrationId } : {}),
+    ...(args.automationsToReenable?.length
+      ? { automationsToReenable: [...args.automationsToReenable] }
+      : {}),
     manifest: { ...manifest, source }
   }
   // The journal re-checks under its own read: one in-flight move, extending the current head.

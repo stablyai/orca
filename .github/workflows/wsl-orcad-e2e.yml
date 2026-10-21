@@ -34,6 +34,7 @@ on:
       - '!**/*.test.ts'
       - '!**/*.test.tsx'
       - 'src/main/wsl/wsl-orcad-real-distro-lane.test.ts'
+      - 'src/main/persistence/moving-wsl-projects/wsl-move-real-pause.test.ts'
       - '.github/workflows/wsl-orcad-e2e.yml'
   workflow_dispatch:
 
@@ -314,6 +315,18 @@ jobs:
         run: |
           node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/wsl-orcad-real-distro-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'survive.log')
           if ($global:LASTEXITCODE -ne 0) { throw "survive phase failed: $global:LASTEXITCODE" }
+      # The WSL move's pause on real distro shells: Sleep ends them, the daemon proves the exit,
+      # the journal keeps each pane's folder, and a new shell opens there.
+      - name: 'WSL move: pause real distro terminals'
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
+        timeout-minutes: 10
+        env:
+          ORCA_WSL_MOVE_REAL_PAUSE_DISTRO: ${{ env.PLAIN_DISTRO }}
+        run: |
+          New-Item -ItemType Directory -Force $env:ORCA_WSL_ORCAD_LANE_RECEIPTS | Out-Null
+          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/persistence/moving-wsl-projects/wsl-move-real-pause.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'wsl-move-real-pause.log')
+          if ($global:LASTEXITCODE -ne 0) { throw "WSL move real pause failed: $global:LASTEXITCODE" }
+          wsl.exe --terminate $env:PLAIN_DISTRO
       - name: Real desktop agent configuration is unchanged
         if: always()
         run: |

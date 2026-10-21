@@ -137,7 +137,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     // Desktop-only: a web client never owns a WSL move's desktop stores.
     wslMove: {
       listPendingRendererRewrites: () => Promise.resolve([]),
-      recordStoreRewritten: () => Promise.resolve({ recorded: false, reason: 'gated-off' })
+      recordStoreRewritten: () => Promise.resolve({ recorded: false, reason: 'gated-off' }),
+      preview: () => Promise.resolve({ outcome: 'refused', code: 'wsl_move_unavailable' }),
+      start: () => Promise.resolve({ outcome: 'refused', code: 'wsl_move_unavailable' }),
+      cancel: () => Promise.resolve(false),
+      listUnfinished: () => Promise.resolve([]),
+      onProgress: () => () => {}
     },
     pwsh: {
       isAvailable: () => callRuntimeResult<boolean>('host.pwsh.isAvailable').catch(() => false)

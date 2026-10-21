@@ -57,8 +57,9 @@ export type WslMoveQuiesceRefusalReason =
 export type WslMoveQuiesceResult =
   | {
       outcome: 'quiesced'
+      /** Carries `terminalRestoreHints`, so a crash after quiesce keeps them. */
       cutover: WslMoveCutover
-      // Not in the journal: the schema has no field for them yet, so the caller carries them on.
+      /** The whole capture, including the panes that had no folder to keep, for the preview. */
       restoreHints: WslMoveRestoreHintCapture
     }
   | {
@@ -194,7 +195,8 @@ async function proveAndRecord(
     ...fenced,
     phase: 'quiesced',
     updatedAt: deps.now().toISOString(),
-    provenExitedSessionIds: [...sessionIds]
+    provenExitedSessionIds: [...sessionIds],
+    terminalRestoreHints: restoreHints.hints.map((hint) => ({ ...hint }))
   }
   try {
     deps.writeCutover(quiesced)

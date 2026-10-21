@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerAppHandlers } from '../app'
+import { createWslMoveDriverDeps } from '../wsl-move-driver-wiring'
 import { registerCliHandlers } from '../cli'
 import { registerPreflightHandlers } from '../preflight'
 import type { Store } from '../../persistence'
@@ -271,7 +272,8 @@ export function registerCoreHandlers(
   })
   registerWslMoveHandlers(
     () => app.getPath('userData'),
-    (senderId) => getTrustedUIRendererWebContents()?.id === senderId
+    (senderId) => getTrustedUIRendererWebContents()?.id === senderId,
+    () => createWslMoveDriverDeps(store, runtime)
   )
   registerEphemeralVmHandlers(store, pluginService)
   // Session history and terminal resume are not chats; a refused host leaves nothing to check.

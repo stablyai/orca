@@ -13,7 +13,8 @@ export function wslMoveCutoverFixture(
   phase: WslMoveCutoverPhase = 'prepared',
   extra: Partial<WslMoveCutover> = {},
   scope: { repoIds?: string[]; folderWorkspaceIds?: string[] } = {},
-  dormantState?: OrcadMigrationDormantStatePayload
+  dormantState?: OrcadMigrationDormantStatePayload,
+  distro = 'Ubuntu'
 ): WslMoveCutover {
   const repoIds = scope.repoIds ?? ['repo-1']
   const folderWorkspaceIds = scope.folderWorkspaceIds ?? []
@@ -23,7 +24,7 @@ export function wslMoveCutoverFixture(
     createdAt: '2026-10-13T00:00:00.000Z',
     source: {
       kind: 'local-wsl' as const,
-      distro: 'Ubuntu',
+      distro,
       scopeRepoIds: repoIds,
       scopeFolderWorkspaceIds: folderWorkspaceIds,
       generation: 1
@@ -54,7 +55,7 @@ export function wslMoveCutoverFixture(
       })),
       ...(dormantState ? { dormantState } : {})
     },
-    destinationEnvironmentId: 'wsl:Ubuntu'
+    destinationEnvironmentId: `wsl:${distro}`
   }
   const manifest = { ...unsigned, manifestSha256: computeOrcadMigrationManifestSha256(unsigned) }
   return {
@@ -63,9 +64,9 @@ export function wslMoveCutoverFixture(
     phase,
     startedAt: '2026-10-13T00:00:00.000Z',
     updatedAt: '2026-10-13T00:00:00.000Z',
-    destinationEnvironmentId: 'wsl:Ubuntu',
-    destinationName: 'Ubuntu',
-    journalKey: wslMoveJournalKey('Ubuntu'),
+    destinationEnvironmentId: `wsl:${distro}`,
+    destinationName: distro,
+    journalKey: wslMoveJournalKey(distro),
     manifestSha256: manifest.manifestSha256,
     provenExitedSessionIds: [],
     rewrittenStores: [],

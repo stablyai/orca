@@ -19,6 +19,9 @@ import { installWslMoveRetention } from '../persistence/moving-wsl-projects/wsl-
 import { registerWslMoveMainRewriteStores } from '../persistence/moving-wsl-projects/wsl-move-main-rewrite-stores'
 import { registerWslMoveRendererRewriteStores } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
 import { registerWslMoveOrchestrationHistoryStore } from '../persistence/moving-wsl-projects/wsl-move-orchestration-history-rewrite'
+import { registerWslMoveHostAutomationsStore } from '../persistence/moving-wsl-projects/wsl-move-host-automations-rewrite'
+import { enableWslHostAutomations } from '../ipc/wsl-host-automation-enable'
+import { scheduleWslMoveRewriteRetry } from '../persistence/moving-wsl-projects/wsl-move-rewrite-retry'
 import { orchestrationDbFile } from '../runtime/orchestration/db/orchestration-db-file'
 import {
   productionWslMoveBrowserCookieCopyDependencies,
@@ -170,6 +173,9 @@ export async function initializeReadyFoundation(): Promise<void> {
     orchestrationDbFile(getAppEnvironment().getPath('userData'))
   )
   registerWslMoveRendererRewriteStores()
+  registerWslMoveHostAutomationsStore({
+    enable: (environmentId, ids) => enableWslHostAutomations(userDataPath, environmentId, ids)
+  })
   // Last among main-side stores: it throws until browser sessions exist, pausing any store after it.
   registerWslMoveBrowserCookieStore(productionWslMoveBrowserCookieCopyDependencies(userDataPath))
   // Resets a move interrupted before commit, then finishes one that committed; main-process-ready
@@ -178,7 +184,11 @@ export async function initializeReadyFoundation(): Promise<void> {
     recoverInterruptedWslMoves(userDataPath)
   )
   // Re-marks retained rows a downgrade stripped; never awaited, since nothing it writes gates a read.
-  void state.wslMoveStartupRewriteReady.then(() => installWslMoveRetention({ userDataPath, store }))
+  void state.wslMoveStartupRewriteReady.then(() => {
+    installWslMoveRetention({ userDataPath, store })
+    // A committed move's host step (automations back on) that failed retries until it lands.
+    scheduleWslMoveRewriteRetry(userDataPath)
+  })
   // Why: create pending readiness before the guard can observe the default session.
   // Why parked on state instead of awaited here: Dock/Launchpad launches don't inherit shell
   // proxy env vars, so the persisted proxy must land before any app-owned network fetcher runs —

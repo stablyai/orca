@@ -10,6 +10,11 @@ import type {
 } from '../orcad-migration/orcad-migration-manifest'
 import { isOrcadMigrationLocalWslSource } from '../orcad-migration/orcad-migration-source-kind'
 import { WslMoveBrowserCookieCopySchema } from './wsl-move-browser-cookie-copy'
+import {
+  MAX_ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS,
+  isOrcadMigrationTerminalRestoreHintCwd,
+  isOrcadMigrationTerminalRestoreHintPaneKey
+} from '../orcad-migration/orcad-migration-terminal-restore-hints'
 
 export const WSL_MOVE_CUTOVER_VERSION = 1
 
@@ -48,6 +53,21 @@ const WslMoveCutoverSchema = z.object({
   // make the whole journal unreadable here.
   browserCookieCopy: WslMoveBrowserCookieCopySchema.optional().catch(undefined),
   supersedesMigrationId: z.string().min(1).max(128).optional(),
+  // Each paused pane's last folder, captured at `quiesced`; the restore-hints blob is built from it.
+  // Lenient: a malformed list reads as absent, so it never makes the journal unreadable.
+  terminalRestoreHints: z
+    .array(
+      z.object({
+        paneKey: z.string().refine(isOrcadMigrationTerminalRestoreHintPaneKey),
+        cwd: z.string().refine(isOrcadMigrationTerminalRestoreHintCwd)
+      })
+    )
+    .max(MAX_ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS)
+    .optional()
+    .catch(undefined),
+  // Automations the manifest carries disabled (the wire only takes disabled ones) that were on
+  // here; the host turns them back on after commit. Set with the record, never changed after.
+  automationsToReenable: z.array(z.string().min(1).max(1_024)).max(10_000).optional(),
   manifest: z.unknown()
 })
 

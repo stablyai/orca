@@ -72,7 +72,11 @@ describe('quiesceWslMove', () => {
     expect(removed).toEqual([])
     expect(result).toMatchObject({
       outcome: 'quiesced',
-      cutover: { phase: 'quiesced', provenExitedSessionIds: ['session-1'] },
+      cutover: {
+        phase: 'quiesced',
+        provenExitedSessionIds: ['session-1'],
+        terminalRestoreHints: hints.hints
+      },
       restoreHints: hints
     })
   })

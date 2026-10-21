@@ -110,6 +110,9 @@ export function writeWslMoveCutover(userDataPath: string, cutover: WslMoveCutove
   if (!existing && parsed.rewrittenStores.length > 0) {
     throw new Error('wsl_move_ledger_changed')
   }
+  if (!existing && parsed.terminalRestoreHints !== undefined) {
+    throw new Error('wsl_move_restore_hints_changed')
+  }
   if (!existing) {
     // New moves only: a record already on disk must stay resumable whatever its size.
     assertWslMoveManifestFits(parsed.manifest)
@@ -154,6 +157,35 @@ function assertWslMoveUpdate(
     throw new Error('wsl_move_superseded')
   }
   assertWslMoveLedgerUpdate(existing, next)
+  assertWslMoveRestoreHintsUpdate(existing, next)
+  assertWslMoveAutomationsUpdate(existing, next)
+}
+
+/** Written once, with the `quiesced` record that captured them, and never changed after. */
+/** Part of the move's binding: written with the record and never changed. */
+function assertWslMoveAutomationsUpdate(existing: WslMoveCutover, next: WslMoveCutover): void {
+  if (
+    JSON.stringify(existing.automationsToReenable) !== JSON.stringify(next.automationsToReenable)
+  ) {
+    throw new Error('wsl_move_binding_changed')
+  }
+}
+
+function assertWslMoveRestoreHintsUpdate(existing: WslMoveCutover, next: WslMoveCutover): void {
+  const before = existing.terminalRestoreHints
+  const after = next.terminalRestoreHints
+  if (before === undefined && after === undefined) {
+    return
+  }
+  if (before !== undefined) {
+    if (JSON.stringify(before) !== JSON.stringify(after)) {
+      throw new Error('wsl_move_restore_hints_changed')
+    }
+    return
+  }
+  if (existing.phase !== 'source-fenced' || next.phase !== 'quiesced') {
+    throw new Error('wsl_move_restore_hints_changed')
+  }
 }
 
 /**

@@ -22,6 +22,7 @@ import {
   stageOrcadMigrationCatalogDurably
 } from './orcad-migration-catalog-import'
 import { OrcaRuntimeWithResolveWaiter } from './orca-runtime-resolve-waiter'
+import type { WslMoveLiveTerminal } from '../persistence/moving-wsl-projects/wsl-move-gate-facts'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { SessionReadTerminalScrollbackResult } from '../../shared/rpc-contract/session-terminal-scrollback-params'
 import {
@@ -200,6 +201,27 @@ export abstract class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithRes
       },
       request
     )
+  }
+
+  /** This desktop's live terminals in the workspaces, for a WSL move's gate and pause. */
+  listWslMoveLiveTerminals(workspaceIds: readonly string[]): WslMoveLiveTerminal[] {
+    const terminals = new Map<string, WslMoveLiveTerminal>()
+    for (const workspaceId of workspaceIds) {
+      // Local only: a same-id SSH twin's terminals are another host's.
+      for (const ptyId of this.getLivePtyIdsForWorktree(workspaceId, undefined, {
+        resolvedConnectionId: null
+      })) {
+        const pty = this.ptysById.get(ptyId)
+        terminals.set(ptyId, {
+          ptyId,
+          workspaceId,
+          paneKey: pty?.paneKey ?? null,
+          wslDistro: pty?.wslDistro ?? null,
+          foregroundAgent: pty?.foregroundAgent ?? null
+        })
+      }
+    }
+    return [...terminals.values()]
   }
 
   // The capability check covers the captured Store, not a different virtual return.
