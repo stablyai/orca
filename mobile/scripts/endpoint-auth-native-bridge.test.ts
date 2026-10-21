@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { runInNewContext } from 'node:vm'
 import { updateAndroidSettingsGradle } from 'expo-build-properties/build/android'
@@ -91,6 +91,11 @@ function nativeSocketConstructor(
 }
 
 describe('credential socket native bridge', () => {
+  it('resolves native source paths without Prefab option delimiters', () => {
+    const source = realpathSync(requireNative.resolve('./ReactAndroid/build.gradle.kts'))
+    expect(source).not.toContain('=')
+  })
+
   it.each([null, { supportsNoRedirects: false }])(
     'refuses credentials on an unsupported Android build (%j)',
     (capabilities) => {
