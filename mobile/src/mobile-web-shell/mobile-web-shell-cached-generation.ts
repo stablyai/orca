@@ -146,7 +146,8 @@ function showsCachedGeneration(session: MobileWebShellSession): boolean {
   if (session.state.kind === 'activating' && session.state.source === 'cache') {
     return true
   }
-  return session.state.kind === 'ready' && session.state.buildId === cached.buildId
+  // A ready page is either the cache or a download that landed behind it; both are newer-or-equal.
+  return session.state.kind === 'ready'
 }
 
 /** A refused update. A generation already opening stays up; anything else opens or walls as before. */

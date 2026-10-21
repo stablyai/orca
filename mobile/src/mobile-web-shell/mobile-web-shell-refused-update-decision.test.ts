@@ -254,4 +254,59 @@ describe('an update this shell refused, once it is on screen', () => {
     const dropped = run(served.session, { type: 'shell-failed', reason: 'document-load-failed' })
     expect(dropped.session.updateNotice).toBeNull()
   })
+
+  it('ignores a late cache activation after the manifest already walled an unlisted route', () => {
+    const UNSERVED = manifestFacts({ ...MANIFEST_WIRE, buildId: 'd'.repeat(64), routes: [] })
+    const unserved = run(afterCacheRead(CACHED).session, {
+      type: 'manifest-read',
+      manifest: UNSERVED
+    })
+    expect(unserved.session.state).toEqual({
+      kind: 'wall',
+      verdict: { kind: 'blocked', reason: 'page-route-unlisted' }
+    })
+    const lateActivated = run(unserved.session, {
+      type: 'activated',
+      generationDirectory: CACHED.directory,
+      sessionId: 'session-late',
+      buildId: CACHED.buildId,
+      totalBytes: CACHED.totalBytes,
+      elapsedMs: 5
+    })
+    expect(lateActivated.session.state).toEqual({
+      kind: 'wall',
+      verdict: { kind: 'blocked', reason: 'page-route-unlisted' }
+    })
+  })
+
+  it('keeps a newer downloaded build ready when a subsequent update download fails', () => {
+    const BUILD_B = 'b'.repeat(64)
+    const BUILD_C = 'c'.repeat(64)
+    const afterB = run(
+      afterCacheRead(CACHED).session,
+      {
+        type: 'manifest-read',
+        manifest: manifestFacts({ ...MANIFEST_WIRE, buildId: BUILD_B })
+      },
+      {
+        type: 'activated',
+        generationDirectory: '/gen/b',
+        sessionId: 'session-b',
+        buildId: BUILD_B,
+        totalBytes: 2048,
+        elapsedMs: 12
+      }
+    )
+    expect(afterB.session.state).toMatchObject({ kind: 'ready', buildId: BUILD_B })
+    const afterCFailed = run(
+      afterB.session,
+      {
+        type: 'manifest-read',
+        manifest: manifestFacts({ ...MANIFEST_WIRE, buildId: BUILD_C })
+      },
+      { type: 'download-failed', cause: BUNDLE_REFUSED }
+    )
+    expect(afterCFailed.session.state).toMatchObject({ kind: 'ready', buildId: BUILD_B })
+    expect(afterCFailed.session.updateNotice).toBe('update-failed')
+  })
 })
