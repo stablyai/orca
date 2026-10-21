@@ -191,14 +191,18 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     const firstClaude = deferred<ProviderRateLimits>()
     const firstCodex = deferred<ProviderRateLimits>()
+    const firstCodexStarted = deferred<void>()
 
     vi.mocked(fetchClaudeRateLimits).mockImplementationOnce(() => firstClaude.promise)
     vi.mocked(fetchCodexRateLimits)
-      .mockImplementationOnce(() => firstCodex.promise)
+      .mockImplementationOnce(() => {
+        firstCodexStarted.resolve()
+        return firstCodex.promise
+      })
       .mockResolvedValueOnce(okProvider('codex', 42))
 
     const fullRefresh = service.refresh()
-    await Promise.resolve()
+    await firstCodexStarted.promise
 
     const switchRefresh = service.refreshForCodexAccountChange()
     await Promise.resolve()
@@ -211,6 +215,7 @@ describe('RateLimitService', () => {
 
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+    expect(service.getState().codex?.session?.usedPercent).toBe(42)
   })
 
   it('keeps recent stale data across repeated failures', async () => {

@@ -78,7 +78,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     // Why: a skipped Codex poll must not stop the other providers' cycle, so gate
     // only the Codex slot instead of returning early (#STA-4422).
     const codexHome = await this.resolveCodexHome(codexTarget)
-    const codexFetchGated = codexHome.skip
+    const codexSuperseded =
+      codexGeneration !== this.codexFetchGeneration ||
+      !this.isSameCodexTarget(codexTarget, this.codexFetchTarget)
+    const codexFetchGated = codexHome.skip || codexSuperseded
     const codexHomePath = codexHome.homePath
     const codexStateBeforeFetch =
       previousState.codex?.status === 'fetching' ? null : previousState.codex
@@ -149,9 +152,11 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       ...previousState,
       claude: this.withFetchingStatus(previousState.claude, 'claude'),
       // Why: a gated Codex cycle makes no attempt; a "fetching" chip would never settle.
-      codex: codexFetchGated
-        ? codexStateBeforeFetch
-        : this.withFetchingStatus(previousState.codex, 'codex'),
+      codex: codexSuperseded
+        ? this.state.codex
+        : codexFetchGated
+          ? codexStateBeforeFetch
+          : this.withFetchingStatus(previousState.codex, 'codex'),
       gemini: this.withFetchingStatus(previousState.gemini, 'gemini'),
       opencodeGo: opencodeConfigChanged
         ? this.withFetchingStatus(null, 'opencode-go')
