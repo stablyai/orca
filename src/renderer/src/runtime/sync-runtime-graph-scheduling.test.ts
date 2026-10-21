@@ -119,6 +119,7 @@ describe('scheduleRuntimeGraphSync', () => {
       worktreeId: 'wt-1',
       getIsVisible: () => false,
       getManager: () =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the manager reads used by graph publication; no pane mutations run.
         ({
           getPanes: () => [pane],
           getActivePane: () => pane,
