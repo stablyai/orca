@@ -10,7 +10,7 @@
  * temp file so the worker fixture can pick it up at runtime.
  */
 
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -113,7 +113,16 @@ export default function globalSetup(): void {
 
   // Why: the contributor's global hooks or commit signing would run on these setup commands only.
   const noHooksDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-no-hooks-'))
-  const setupGit = `git -c core.hooksPath="${noHooksDir}" -c commit.gpgsign=false`
+  const setupGit = (args: string[]): void => {
+    execFileSync(
+      'git',
+      ['-c', `core.hooksPath=${noHooksDir}`, '-c', 'commit.gpgsign=false', ...args],
+      {
+        cwd: testRepoDir,
+        stdio: 'pipe'
+      }
+    )
+  }
 
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
@@ -135,19 +144,13 @@ export default function globalSetup(): void {
   writeFileSync(path.join(testRepoDir, 'src', 'diff-note-layout.ts'), 'export const seed = true\n')
 
   execSync('git add -A', { cwd: testRepoDir, stdio: 'pipe' })
-  execSync(`${setupGit} commit -m "Initial commit for E2E tests"`, {
-    cwd: testRepoDir,
-    stdio: 'pipe'
-  })
+  setupGit(['commit', '-m', 'Initial commit for E2E tests'])
 
   // Why: several tests verify worktree-switching behavior (terminal content
   // retention, browser tab retention). They need at least 2 worktrees.
   // Creating one here makes those tests run instead of being skipped.
   const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${randomUUID()}`)
-  execSync(`${setupGit} worktree add "${worktreeDir}" -b e2e-secondary`, {
-    cwd: testRepoDir,
-    stdio: 'pipe'
-  })
+  setupGit(['worktree', 'add', worktreeDir, '-b', 'e2e-secondary'])
   rmSync(noHooksDir, { recursive: true, force: true })
   console.error(`[e2e] Secondary worktree created at ${worktreeDir}`)
 
