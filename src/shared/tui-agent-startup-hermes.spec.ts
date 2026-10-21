@@ -236,6 +236,40 @@ describe('hermes startup plans', () => {
       platform: 'darwin'
     })
 
-    expect(plan?.launchCommand).toBe("hermes --tui '--resume' '20261020_221305_5e3a1c'")
+    expect(plan?.launchCommand).toBe("'hermes' 'chat' '--tui' '--resume' '20261020_221305_5e3a1c'")
+  })
+
+  it('keeps the override and agent args of a prompted Hermes launch when it resumes', () => {
+    const launch = buildAgentStartupPlan({
+      agent: 'hermes',
+      prompt: 'start work',
+      cmdOverrides: { hermes: 'hermes --profile work' },
+      agentArgs: '--yolo',
+      platform: 'linux'
+    })
+    const resume = buildAgentResumeStartupPlan({
+      agent: 'hermes',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { hermes: 'hermes --profile work' },
+      platform: 'linux',
+      agentCommand: launch?.launchConfig.agentCommand,
+      agentArgs: launch?.launchConfig.agentArgs
+    })
+
+    expect(resume?.launchCommand).toBe(
+      "'hermes' 'chat' '--profile' 'work' '--yolo' '--tui' '--resume' 's1'"
+    )
+  })
+
+  it('resumes a classic-CLI Hermes override in the TUI without a stale query', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'hermes',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'linux',
+      agentCommand: 'hermes --cli --query old-prompt'
+    })
+
+    expect(plan?.launchCommand).toBe("'hermes' 'chat' '--tui' '--resume' 's1'")
   })
 })

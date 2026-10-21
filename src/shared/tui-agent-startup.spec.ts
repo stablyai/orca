@@ -190,7 +190,17 @@ describe('tui agent startup plans', () => {
 
     expect(plan?.launchCommand).not.toContain(prompt)
     expect(plan?.followupPrompt).toBeNull()
-    expect(plan?.launchConfig.agentCommand).toBe('hermes --tui')
+    expect(plan?.launchConfig.agentCommand).toBe(
+      buildAgentStartupPlan({
+        agent: 'hermes',
+        prompt: '',
+        allowEmptyPromptLaunch: true,
+        cmdOverrides: {},
+        agentArgs: '--yolo',
+        platform: testCase.platform,
+        shell: testCase.shell
+      })?.launchConfig.agentCommand
+    )
     expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe(prompt)
     const script =
       testCase.shell === 'posix'

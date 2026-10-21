@@ -12,6 +12,7 @@ import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
 import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
+import { normalizeHermesResumeBaseCommand } from './hermes-startup-query'
 
 export function buildAgentResumeStartupPlan(args: {
   agent: ResumableTuiAgent
@@ -69,7 +70,11 @@ export function buildAgentResumeStartupPlan(args: {
     ...args,
     agentCommand: baseCommand.commandWithoutSessionOptions
   })
-  const launchCommand = buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell)
+  const resumeBase =
+    args.agent === 'hermes'
+      ? (normalizeHermesResumeBaseCommand(baseCommand.command, shell) ?? baseCommand.command)
+      : baseCommand.command
+  const launchCommand = buildAgentResumeLaunchCommand(args.agent, resumeBase, argv, shell)
   const applied = baseCommand.appliedSessionOptions
   return {
     agent: args.agent,
