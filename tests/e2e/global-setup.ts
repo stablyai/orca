@@ -12,7 +12,7 @@
 
 import { execSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { prepareDockerSshHostImage } from './helpers/docker-ssh-host-image'
@@ -111,6 +111,10 @@ export default function globalSetup(): void {
   // app canonicalizes repo.path via `git rev-parse --show-toplevel` on add.
   const testRepoDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-')))
 
+  // Why: the contributor's global hooks or commit signing would run on these setup commands only.
+  const noHooksDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-no-hooks-'))
+  const setupGit = `git -c core.hooksPath="${noHooksDir}" -c commit.gpgsign=false`
+
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.name "E2E Test"', { cwd: testRepoDir, stdio: 'pipe' })
@@ -131,16 +135,20 @@ export default function globalSetup(): void {
   writeFileSync(path.join(testRepoDir, 'src', 'diff-note-layout.ts'), 'export const seed = true\n')
 
   execSync('git add -A', { cwd: testRepoDir, stdio: 'pipe' })
-  execSync('git commit -m "Initial commit for E2E tests"', { cwd: testRepoDir, stdio: 'pipe' })
+  execSync(`${setupGit} commit -m "Initial commit for E2E tests"`, {
+    cwd: testRepoDir,
+    stdio: 'pipe'
+  })
 
   // Why: several tests verify worktree-switching behavior (terminal content
   // retention, browser tab retention). They need at least 2 worktrees.
   // Creating one here makes those tests run instead of being skipped.
   const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${randomUUID()}`)
-  execSync(`git worktree add "${worktreeDir}" -b e2e-secondary`, {
+  execSync(`${setupGit} worktree add "${worktreeDir}" -b e2e-secondary`, {
     cwd: testRepoDir,
     stdio: 'pipe'
   })
+  rmSync(noHooksDir, { recursive: true, force: true })
   console.error(`[e2e] Secondary worktree created at ${worktreeDir}`)
 
   // Write the test repo path so the fixture can read it
