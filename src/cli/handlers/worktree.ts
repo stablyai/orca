@@ -150,6 +150,13 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const explicitParentWorktree = explicitParent.parentWorktree
     const explicitParentWorkspace = explicitParent.parentWorkspace
     const startupAgent = getOptionalStartupAgent(flags)
+    const noTerminal = flags.get('no-terminal') === true
+    if (noTerminal && startupAgent) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Choose either --agent or --no-terminal, not both: the agent is the first surface.'
+      )
+    }
     // Read before any request, so a bad prompt, model or effort creates nothing.
     const agentLaunch = startupAgent
       ? readCliAgentLaunch(flags, startupAgent, { createsWorktree: true })
@@ -207,6 +214,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...(envParentWorkspace ? { envParentWorkspace } : {}),
       ...(cwdParentWorktree ? { cwdParentWorktree: cwdParentWorktree.selector } : {}),
       noParent,
+      // Older hosts drop this and seed the first terminal, as before the flag existed.
+      ...(noTerminal ? { callerProvidesSurface: true } : {}),
       callerTerminalHandle,
       // Why: marks the workspace as CLI-created so the sidebar can badge and
       // filter it. Sent on every `worktree create` — hand-typed or agent-run.

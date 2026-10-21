@@ -95,6 +95,37 @@ describe('a folder workspace create with a startup agent', () => {
     expect(createTerminal).toHaveBeenCalledWith(`id:${result.worktree.id}`, { surfaceOwner: false })
   })
 
+  it('seeds no shell when the caller provides the first surface', async () => {
+    const { deps, createTerminal } = createDeps()
+    await createRuntimeFolderWorktree({
+      request: { repoSelector: `id:${repo.id}`, name: 'quiet', callerProvidesSurface: true },
+      repo,
+      deps
+    })
+    expect(createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('tells an activated window the caller provides the first surface', async () => {
+    const { deps } = createDeps()
+    await createRuntimeFolderWorktree({
+      request: {
+        repoSelector: `id:${repo.id}`,
+        name: 'quiet',
+        activate: true,
+        callerProvidesSurface: true
+      },
+      repo,
+      deps
+    })
+    expect(deps.activate).toHaveBeenCalledWith(
+      repo.id,
+      expect.any(String),
+      undefined,
+      undefined,
+      true
+    )
+  })
+
   it('creates the startup terminal under the pane the caller reserved', async () => {
     expect(await startupTerminalOptions(`${TAB_ID}:${LEAF_ID}`)).toMatchObject({
       tabId: TAB_ID,

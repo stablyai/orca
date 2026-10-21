@@ -124,11 +124,13 @@ Agent/setup flags:
 ORCA worktree create --name task --agent codex --prompt "hi" --json
 ORCA worktree create --name task --agent claude --setup run --json
 ORCA worktree create --name task --setup skip --json
+ORCA worktree create --name task --no-parent --no-terminal --json
 ORCA worktree create --name task --run-hooks --json
 ```
 
 - `--agent <id>` starts that agent with the worktree, as a chat or a terminal per the user's Chat UI setting (see Starting agents); `--prompt <text>` sends initial work to it, and `--model <id>` / `--effort <level>` pick its model and reasoning effort, and `--surface chat|terminal` picks chat or terminal for this launch. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed agents.
 - Repo setup or default-terminal settings may still add tabs or splits. Configured default tabs are intentional; never close one without verifying it is an unused shell.
+- `--no-terminal` skips the plain first terminal when you open the first surface yourself (for example with `terminal create`); Setup and configured default tabs still open. It cannot be combined with `--agent`, whose agent is already the first surface.
 - Address the agent through exactly one handle: `launch.outcome.handle`. Handles are runtime-scoped: after an Orca restart or a `terminal_handle_stale` error, re-list and continue with the replacement only; never dual-send to old and replacement handles. `--agent` already started the agent, so do not start it again.
 - `--setup run|skip|inherit` controls repo setup hooks. Default is `inherit`, which follows the repo's setup policy.
 - `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.

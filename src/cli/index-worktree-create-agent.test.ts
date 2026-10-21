@@ -90,6 +90,66 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('asks worktree.create for no first terminal with --no-terminal', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/scripted', 'scripted', 'abc', 'repo-1')
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'scripted',
+        '--no-parent',
+        '--no-terminal',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.create',
+      expect.objectContaining({ noParent: true, callerProvidesSurface: true })
+    )
+  })
+
+  it('rejects --no-terminal with --agent before creating anything', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'child',
+        '--agent',
+        'codex',
+        '--no-terminal',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument', message: expect.stringContaining('--no-terminal') }
+    })
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('starts an agent worktree through agent.launch, in the background unless activation is explicit', async () => {
     queueFixtures(
       callMock,

@@ -86,3 +86,16 @@ describe('worktree setup choice', () => {
     expect(buildManagedWorktreeCreateArgs(params, {})).toMatchObject({ setupOnly })
   })
 })
+
+describe('worktree first surface', () => {
+  it('carries the caller-provided surface across RPC only when sent', () => {
+    const sent = WorktreeCreate.parse({
+      repo: 'repo-1',
+      name: 'quiet',
+      callerProvidesSurface: true
+    })
+    const absent = WorktreeCreate.parse({ repo: 'repo-1', name: 'plain' })
+    expect(buildManagedWorktreeCreateArgs(sent, {})).toMatchObject({ callerProvidesSurface: true })
+    expect(buildManagedWorktreeCreateArgs(absent, {})).not.toHaveProperty('callerProvidesSurface')
+  })
+})

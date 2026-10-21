@@ -96,6 +96,8 @@ export const WorktreeCreate = z
     cwdParentWorktree: OptionalString,
     noParent: OptionalBoolean,
     callerTerminalHandle: OptionalString,
+    // Why: the caller opens its own first surface (CLI --no-terminal); older hosts drop it and seed a shell.
+    callerProvidesSurface: z.boolean().optional(),
     orchestrationContext: z
       .object({
         parentWorktreeId: OptionalString,

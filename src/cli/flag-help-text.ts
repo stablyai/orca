@@ -50,6 +50,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   modifiers: '--modifiers <chord>  Modifier keys held only for this click',
   name: '--name <name>          Name for the new worktree or automation',
   'no-parent': '--no-parent            Force no parent lineage for unrelated work',
+  'no-terminal': '--no-terminal          Skip the first terminal; you open the first surface',
   'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
   pages: '--pages <n>           Number of scroll pages',
   'parent-worktree':
