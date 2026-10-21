@@ -12,6 +12,7 @@ import * as Linking from 'expo-linking'
 import { colors } from '../src/theme/mobile-theme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
+import { rootOwnsHostGroupBackGesture } from '../src/navigation/host-group-back-gesture'
 import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
 import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
 import {
@@ -239,7 +240,13 @@ export default function RootLayout() {
             <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
             <Stack.Screen name="connection-log" options={{ headerShown: false }} />
             <Stack.Screen name="about" options={{ headerShown: false }} />
-            <Stack.Screen name="h" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="h"
+              options={({ route }) => ({
+                headerShown: false,
+                gestureEnabled: rootOwnsHostGroupBackGesture(route)
+              })}
+            />
           </Stack>
         </SideSafeArea>
       </View>

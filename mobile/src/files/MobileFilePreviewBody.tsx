@@ -3,6 +3,7 @@ import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operation
 import { ActivityIndicator, Image, ScrollView, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import type { MobileFilePreviewResult } from './mobile-file-preview-request'
+import { MobileFileHtmlPreview } from './MobileFileHtmlPreview'
 import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
 import { MobileFilePreviewEditableSource } from './MobileFilePreviewEditableSource'
 import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
@@ -96,11 +97,12 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       />
     )
   }
-  if (preview.kind === 'html') {
+  if (preview.kind === 'html' || preview.kind === 'svg') {
     return options.editable ? (
       <EditablePreviewSource {...options} />
     ) : (
-      <MobileFilePreviewSourceText
+      <MobileFileHtmlPreview
+        kind={preview.kind}
         relativePath={options.relativePath}
         content={preview.content}
         truncated={preview.truncated}

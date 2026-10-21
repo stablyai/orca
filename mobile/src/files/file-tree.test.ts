@@ -3,6 +3,7 @@ import {
   flattenDirectoryCache,
   getMobileFileKind,
   isMarkdownPath,
+  isSvgPath,
   shouldIncludeMobileFileExplorerEntry,
   type DirectoryCache,
   type MobileDirEntry
@@ -122,5 +123,12 @@ describe('file-tree', () => {
     expect(isMarkdownPath('docs/readme.md')).toBe(true)
     expect(isMarkdownPath('notes.markdown')).toBe(true)
     expect(isMarkdownPath('app.ts')).toBe(false)
+  })
+
+  it('detects svg paths', () => {
+    expect(isSvgPath('assets/logo.svg')).toBe(true)
+    expect(isSvgPath('ICON.SVG')).toBe(true)
+    expect(isSvgPath('logo.svgz')).toBe(false)
+    expect(isSvgPath('logo.png')).toBe(false)
   })
 })

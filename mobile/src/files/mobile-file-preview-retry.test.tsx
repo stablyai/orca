@@ -40,6 +40,7 @@ vi.mock('./MobileFileMarkdownPreview', () => ({
   MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
 }))
 vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
+vi.mock('./MobileFileHtmlPreview', () => ({ MobileFileHtmlPreview: () => null }))
 // A host the shell has not reached by default: no client, so the screen settles on `waiting`.
 vi.mock('../transport/host-client-hooks', () => ({
   useForceReconnect: () => transport.forceReconnect,

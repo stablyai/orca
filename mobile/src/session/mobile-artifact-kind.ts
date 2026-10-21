@@ -7,7 +7,7 @@ export type MobileArtifactKind = 'image' | 'html' | 'other'
 // Raster image extensions React Native's <Image> can decode from a base64 data
 // URI (host returns these via files.readPreview). SVG is intentionally excluded:
 // RN <Image> can't render image/svg+xml data URIs, so .svg falls through to the
-// text path and renders as (meaningful) XML source instead of a blank image.
+// text path; the file preview draws that text in a WebView instead.
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico'])
 
 const HTML_EXTENSIONS = new Set(['html', 'htm'])
