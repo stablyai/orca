@@ -249,6 +249,7 @@ export async function acquireClaudeSession({
       turnEndLeafUuid: launch.resumeLeafUuid,
       fence: input.fence,
       continuesChain: launch.continuesChain,
+      ...(launch.forkedFromKey ? { forkedFromKey: launch.forkedFromKey } : {}),
       prompts,
       translator,
       events: input.events,

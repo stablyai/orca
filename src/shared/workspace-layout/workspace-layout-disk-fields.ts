@@ -185,7 +185,8 @@ const LAYOUT = {
   ptyIdsByLeafId: { from: 'leaf.ptyId', via: ['tab.panes.root'] },
   buffersByLeafId: { from: 'scrollback.buffer', via: ['tab.panes.root'] },
   scrollbackRefsByLeafId: { from: 'scrollback.scrollbackRef', via: ['tab.panes.root'] },
-  titlesByLeafId: { from: 'leaf.title', via: ['tab.panes.root'] }
+  titlesByLeafId: { from: 'leaf.title', via: ['tab.panes.root'] },
+  lastGridsByLeafId: { from: 'leaf.lastGrid', via: ['tab.panes.root'] }
 } as const satisfies Record<keyof TerminalLayoutSnapshot, DiskFieldWritten>
 
 const FILE = {

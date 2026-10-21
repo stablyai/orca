@@ -5,6 +5,7 @@ import type {
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
+import type { PtyLivenessVerdict } from './pty-liveness-verdict'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
 import type { TabGroupLayoutNode } from './tab-types'
@@ -46,6 +47,11 @@ export type RuntimeTerminalSummary = {
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
   executionHostId?: ExecutionHostId
+  /**
+   * The execution host's word on the pane's terminal. Read this, not `connected`: `connected`
+   * keeps its old meaning, so an unreachable host reads connected. Absent from older hosts.
+   */
+  verdict?: PtyLivenessVerdict['status']
 }
 
 export type RuntimeTerminalVisualTerminalNode = {

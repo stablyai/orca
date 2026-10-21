@@ -81,6 +81,7 @@ describe('remote filesystem watcher re-arm', () => {
     expect(senderOne.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
       events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+      resync: true,
       connectionId: 'conn-1'
     })
 

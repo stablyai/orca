@@ -28,7 +28,7 @@
       "description": "选择聊天的外观和行为方式。",
       "names": {
         "title": "聊天名称",
-        "description": "使用智能体根据首条消息为新聊天生成名称。未生成名称时，聊天仍显示为 Claude Chat 或 Codex Chat。",
+        "description": "使用智能体根据首条消息为新聊天生成名称。生成名称前，聊天显示其首条消息。",
         "enable": "自动为聊天命名",
         "recipe": "聊天名称",
         "recipeDescription": "根据新聊天的首条消息生成简短名称。",
@@ -18600,6 +18600,7 @@
         "permissionFullAccessCodexDescription": "从不询问；可以编辑任何文件并使用网络",
         "permissionFullAccessSharedDescription": "编辑或运行命令前从不询问",
         "pasteFailed": "粘贴失败。",
+        "tooManySkills": "消息未发送给 {{agent}}。请将所选技能文件减少到最多 {{limit}} 个，然后重试。",
         "commandAttachmentsUnsupported": "使用聊天会话命令前，请先移除附件。",
         "optionValueShort": {
           "minimal": "最小",
@@ -20059,6 +20060,7 @@
       "empty": "未找到子智能体。"
     },
     "antigravityReferenceDescription": "使用此记录作为参考继续新的Antigravity CLI 对话。",
+    "searchHitSourceHost": "在 {{value0}} 上找到",
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → 命令行界面",
     "continueInCli": "在 CLI 中继续",
@@ -20477,7 +20479,17 @@
   "tabHoverCard": {
     "browser": "浏览器",
     "editor": "编辑器",
-    "terminal": "终端"
+    "terminal": "终端",
+    "namingFailure": {
+      "regenerating": "正在重新生成…",
+      "regenerate": "重新生成名称",
+      "title": "无法为此聊天命名",
+      "description": "聊天命名代理因错误而停止，因此聊天将保留其第一条消息作为名称。",
+      "viewError": "查看错误",
+      "dialogTitle": "聊天自动命名失败",
+      "dialogDescriptionStart": "Orca 无法根据第一条消息为",
+      "dialogDescriptionEnd": "生成名称。"
+    }
   },
   "jira": {
     "savedFilters": {

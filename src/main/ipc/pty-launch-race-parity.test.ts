@@ -6,6 +6,7 @@ import { ptySizes } from './pty/delivery/visibility-state'
 import { clearProviderPtyState } from './pty/provider/state-cleanup'
 import * as paneSpawnReservations from './pty/pane/spawn-reservation'
 import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../runtime/worktree-terminals-sleeping-error'
+import { RestoredPaneStarter } from '../runtime/terminal/recovery/restored-pane-start'
 import {
   LAUNCH_RACE_LANES,
   createLaunchRaceRuntime,
@@ -186,6 +187,54 @@ describe('launch race parity, both spawn lanes', () => {
       await expect(mount).resolves.toMatchObject({ id: 'pty-user-mount' })
       expect(spawn).toHaveBeenCalledOnce()
     })
+  })
+
+  // C1b: a desktop window's restore, a phone's first view and a CLI send of one restored pane.
+  it('starts a restored pane once for a window restore, a client first view and a CLI send', async () => {
+    const pane = launchRacePane('race-three-starters', '73737373-7373-4373-8373-737373737373')
+    let finishSpawn!: () => void
+    const spawn = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishSpawn = () => resolve({ id: 'pty-restored' })
+          })
+      )
+      .mockRejectedValue(new Error('second_terminal_started'))
+    installDaemonTestProvider({ spawn })
+    const lanes = registerLaunchRaceLanes({
+      handlers,
+      mainWindow,
+      runtime: createLaunchRaceRuntime()
+    })
+    // The pane main holds: bound to the terminal that binds it, live once registered.
+    let bound: string | undefined
+    const window = lanes.spawn.ipc(pane.args).then((reply) => {
+      bound = reply.id
+      return reply
+    })
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce())
+    const joinPaneSpawn = vi.spyOn(paneSpawnReservations, 'joinPaneSpawn')
+    onTestFinished(() => joinPaneSpawn.mockRestore())
+    const starter = new RestoredPaneStarter({
+      boundPtyId: () => bound,
+      isLive: (ptyId) => ptyId === bound,
+      start: async () => (await lanes.spawn.runtime(pane.args)).id
+    })
+    const restored = { worktreeId: pane.worktreeId, tabId: pane.tabId, leafId: pane.leafId }
+    const firstView = starter.ensureStarted(restored)
+    const cliSend = starter.ensureStarted(restored)
+    await vi.waitFor(() => expect(joinPaneSpawn).toHaveBeenCalled())
+    finishSpawn()
+
+    await expect(window).resolves.toMatchObject({ id: 'pty-restored' })
+    await expect(Promise.all([firstView, cliSend])).resolves.toEqual([
+      'pty-restored',
+      'pty-restored'
+    ])
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(mintedFor(pane.worktreeId)).toEqual([])
   })
 
   describe('cleanup when a start fails', () => {

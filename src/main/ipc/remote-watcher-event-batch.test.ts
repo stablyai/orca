@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { createRemoteWatcherEventBatch } from './remote-watcher-event-batch'
+import {
+  WATCH_BATCH_INTERVAL_MS,
+  WATCH_BATCH_LEADING_MS
+} from '../../shared/filesystem-watch-batch-window'
 
 const ROOT = '/home/u/repo'
 
@@ -8,8 +12,6 @@ function makeBatch(deliver: (events: FsChangeEvent[]) => void, maxEvents = 5_000
   return createRemoteWatcherEventBatch({
     rootPath: ROOT,
     deliver,
-    leadingMs: 25,
-    intervalMs: 100,
     maxEvents
   })
 }
@@ -33,7 +35,7 @@ describe('createRemoteWatcherEventBatch', () => {
     }
     expect(deliver).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(5)
+    vi.advanceTimersByTime(WATCH_BATCH_LEADING_MS - 20)
     expect(deliver).toHaveBeenCalledTimes(1)
     expect(deliver.mock.calls[0][0]).toHaveLength(20)
   })
@@ -43,10 +45,10 @@ describe('createRemoteWatcherEventBatch', () => {
     const batch = makeBatch(deliver)
 
     batch.push([{ kind: 'update', absolutePath: `${ROOT}/a.ts` }])
-    vi.advanceTimersByTime(25)
+    vi.advanceTimersByTime(WATCH_BATCH_LEADING_MS)
     expect(deliver).toHaveBeenCalledTimes(1)
     batch.push([{ kind: 'update', absolutePath: `${ROOT}/b.ts` }])
-    vi.advanceTimersByTime(99)
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS - 1)
     expect(deliver).toHaveBeenCalledTimes(1)
     vi.advanceTimersByTime(1)
     expect(deliver).toHaveBeenCalledTimes(2)
@@ -301,8 +303,6 @@ describe('createRemoteWatcherEventBatch', () => {
     const batch = createRemoteWatcherEventBatch({
       rootPath: 'C:\\Repo',
       deliver,
-      leadingMs: 25,
-      intervalMs: 100,
       maxEvents: 5_000
     })
 

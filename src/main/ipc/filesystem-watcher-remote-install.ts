@@ -1,10 +1,6 @@
 import type { WebContents } from 'electron'
 import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
 import { isWatchRootCapacityRefusal } from '../../shared/watch-root-capacity-refusal'
-import {
-  WATCH_BATCH_INTERVAL_MS,
-  WATCH_BATCH_LEADING_MS
-} from '../../shared/filesystem-watch-batch-window'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { MAX_BATCHED_WATCHER_EVENTS } from './filesystem-watcher-event-batch'
 import { createRemoteWatcherEventBatch } from './remote-watcher-event-batch'
@@ -172,8 +168,6 @@ async function doInstallRemoteWatcher(
   // still covers a flush that races a close.
   const batch = createRemoteWatcherEventBatch({
     rootPath: worktreePath,
-    leadingMs: WATCH_BATCH_LEADING_MS,
-    intervalMs: WATCH_BATCH_INTERVAL_MS,
     maxEvents: MAX_BATCHED_WATCHER_EVENTS,
     deliver: (events) => {
       const state = watcherLifecycleState.remoteWatchers.get(key)

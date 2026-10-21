@@ -24,7 +24,7 @@ jobs:
   publish-win:
     if: github.repository == 'stablyai/orca'
     environment: adhoc-mac-build
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 15
     env:
       CHANNEL: ${{ inputs.channel }}

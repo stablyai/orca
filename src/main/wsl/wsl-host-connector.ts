@@ -25,7 +25,7 @@ import {
 } from './wsl-host-server-stop'
 import { createWslOrcadLivenessSupervisor } from './wsl-orcad-liveness-wiring'
 import type { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
-import { confirmsRunning } from './wsl-orcad-liveness-model'
+import { confirmsRunning } from './wsl-orcad-liveness-evidence'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 
 function targetFor(distro: string): WslOrcadHostTarget {

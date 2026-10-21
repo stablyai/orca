@@ -202,6 +202,30 @@ describe('layout.apply', () => {
     ).toBe(false)
   })
 
+  it('accepts divider ratio intents, or an older window’s tree, but not both or neither', async () => {
+    const apply = eraseRpcMethods(LAYOUT_APPLY_METHODS).find(
+      (method) => method.name === 'layout.apply'
+    )
+    const parse = (command: Record<string, unknown>) => apply?.params?.safeParse({ command })
+    const pane = { type: 'setPaneRatios', workspace: WORKTREE, tabId: 'tab-1' }
+    const group = { type: 'setGroupRatios', workspace: WORKTREE }
+    const root = { type: 'leaf', leafId: 'leaf-1' }
+    const groupLayout = { type: 'leaf', groupId: 'g1' }
+    const ratios = [{ path: 'first.second', ratio: 0.3 }]
+
+    expect(parse({ ...pane, ratios })?.success).toBe(true)
+    expect(parse({ ...pane, root })?.success).toBe(true)
+    expect(parse({ ...pane, root, ratios })?.success).toBe(false)
+    expect(parse(pane)?.success).toBe(false)
+    expect(parse({ ...group, ratios })?.success).toBe(true)
+    expect(parse({ ...group, groupLayout })?.success).toBe(true)
+    expect(parse({ ...group, groupLayout, ratios })?.success).toBe(false)
+    expect(parse(group)?.success).toBe(false)
+    expect(parse({ ...pane, ratios: [] })?.success).toBe(false)
+    expect(parse({ ...pane, ratios: [{ path: 'third', ratio: 0.3 }] })?.success).toBe(false)
+    expect(parse({ ...pane, ratios: [{ path: '', ratio: 1 }] })?.success).toBe(false)
+  })
+
   it('accepts the close of one tab with the window’s reason, but no force or refusals', async () => {
     const apply = eraseRpcMethods(LAYOUT_APPLY_METHODS).find(
       (method) => method.name === 'layout.apply'
@@ -621,6 +645,16 @@ describe('layout.apply', () => {
     expect(parses({ kind: 'generated', renames: [] })).toBe(false)
     expect(parses({ kind: 'custom', renames: [titled] })).toBe(false)
     expect(parses({ kind: 'generated', renames: [{ ...titled, workspace: '' }] })).toBe(false)
+    // A title that replaces the tab's first one reaches main as such.
+    const replacing = { ...titled, replaceExisting: true }
+    expect(
+      apply?.params?.safeParse({
+        command: { type: 'renameTabs', kind: 'generated', renames: [replacing] }
+      }).data
+    ).toEqual({ command: { type: 'renameTabs', kind: 'generated', renames: [replacing] } })
+    expect(parses({ kind: 'generated', renames: [{ ...titled, replaceExisting: false }] })).toBe(
+      false
+    )
   })
 
   it('gives each title in its tab’s partition in one write, naming a paired server’s tab', async () => {

@@ -312,6 +312,63 @@ describe('mobile markdown bridge', () => {
     }
   })
 
+  it.each([
+    ['saves', 'D1'],
+    ['types', null]
+  ] as const)(
+    'refuses a phone save when the desktop %s during the phone-verifying read',
+    async (_label, desktopSave) => {
+      openMarkdownFile()
+      const tabId = useAppStore.getState().openFiles[0].id
+      useAppStore.getState().setLastKnownDiskSignature(tabId, getDiskBaselineSignature('D0'))
+      let diskContent = 'D0'
+      const readFile = vi.fn().mockImplementation(async () => {
+        const content = diskContent
+        if (desktopSave) {
+          diskContent = desktopSave
+          useAppStore
+            .getState()
+            .setLastKnownDiskSignature(tabId, getDiskBaselineSignature(desktopSave))
+        } else {
+          useAppStore.getState().setEditorDraft(tabId, 'desktop typing')
+          useAppStore.getState().markFileDirty(tabId, true)
+        }
+        return { content, isBinary: false }
+      })
+      const writeFile = vi.fn().mockImplementation(async ({ content, diskPrecondition }) => {
+        const refusal = guardedWriteRefusal(diskPrecondition, diskContent)
+        if (refusal) {
+          return refusal
+        }
+        diskContent = content
+        return { ok: true }
+      })
+      setupWindow({ readFile, writeFile })
+      const detachBridge = attachMobileMarkdownBridge()
+      const detachAutosave = attachEditorAutosaveController(useAppStore as never)
+
+      try {
+        const response = await sendRequest({
+          id: 'save-race',
+          operation: 'save',
+          worktreeId: 'wt-1',
+          tabId: 'tab-md',
+          baseVersion: hashMarkdownContent('D0'),
+          content: 'phone edit'
+        })
+
+        expect(response).toMatchObject({ id: 'save-race', ok: false })
+        expect(diskContent).toBe(desktopSave ?? 'D0')
+        if (!desktopSave) {
+          expect(useAppStore.getState().editorDrafts[tabId]).toBe('desktop typing')
+        }
+      } finally {
+        detachAutosave()
+        detachBridge()
+      }
+    }
+  )
+
   it('lets the phone save after an external change to a clean desktop tab', async () => {
     openMarkdownFile()
     const tabId = useAppStore.getState().openFiles[0].id

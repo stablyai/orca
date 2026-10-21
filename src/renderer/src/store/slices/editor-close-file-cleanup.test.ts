@@ -123,7 +123,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
   it('closeFile deletes untouched remote untitled files through runtime file RPC', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/remote/wt/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: 'wt-1',
@@ -132,7 +132,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       mode: 'edit'
     })
 
-    store.getState().closeFile('/remote/wt/untitled.md')
+    store.getState().closeFile(fileId)
 
     await vi.waitFor(() => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
@@ -186,7 +186,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
     remoteUntitledFileSize = 42
     const store = createEditorStore()
     seedRemoteWorktree(store)
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/remote/wt/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: 'wt-1',
@@ -195,7 +195,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       mode: 'edit'
     })
 
-    store.getState().closeFile('/remote/wt/untitled.md')
+    store.getState().closeFile(fileId)
 
     await vi.waitFor(() =>
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
@@ -217,7 +217,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       repos: [],
       worktreesByRepo: {}
     } as Partial<AppState>)
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/remote/wt/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: 'wt-1',
@@ -226,7 +226,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       mode: 'edit'
     })
 
-    store.getState().closeFile('/remote/wt/untitled.md')
+    store.getState().closeFile(fileId)
 
     await flushAsyncRemoteRefresh()
 
@@ -237,7 +237,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
   it('closeFile deletes untouched remote untitled files in their owning runtime after switching local', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/remote/wt/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: 'wt-1',
@@ -247,7 +247,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
     })
     store.setState({ settings: { activeRuntimeEnvironmentId: null } as never })
 
-    store.getState().closeFile('/remote/wt/untitled.md')
+    store.getState().closeFile(fileId)
 
     await vi.waitFor(() => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
@@ -269,7 +269,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
   it('closeFile deletes untouched remote untitled files in their owning runtime after switching environments', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/remote/wt/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: 'wt-1',
@@ -279,7 +279,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
     })
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-2' } as never })
 
-    store.getState().closeFile('/remote/wt/untitled.md')
+    store.getState().closeFile(fileId)
 
     await vi.waitFor(() => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
@@ -301,7 +301,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
   it('closeFile keeps untouched templated untitled files on disk', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/remote/wt/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: 'wt-1',
@@ -311,7 +311,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       mode: 'edit'
     })
 
-    store.getState().closeFile('/remote/wt/untitled.md')
+    store.getState().closeFile(fileId)
     await flushAsyncRemoteRefresh()
 
     expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()

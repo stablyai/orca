@@ -3,7 +3,7 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type * as dependencies from '../../orca-runtime-create-terminal-dependencies'
-import { PaneStartStatuses } from '../../pane-start-statuses'
+import { PaneStartStatuses, paneStartFailure } from '../../pane-start-statuses'
 import type { WindowLayoutCommand } from '../../runtime-layout-apply'
 import { allocateTerminalPaneIdentity } from '../../runtime-terminal-pane-identity'
 import { OrcaRuntimeWithCreateTerminal } from './terminal-create'
@@ -14,14 +14,13 @@ export type FailedStartPane = { tabId: string; leafId: string }
 export async function startKeepingFailedPane<T>(
   hinted: { tabId?: string; leafId?: string },
   start: (pane: FailedStartPane) => Promise<T>,
-  keep: (pane: FailedStartPane, reason: string) => Promise<void>
+  keep: (pane: FailedStartPane, error: unknown) => Promise<void>
 ): Promise<T> {
   const { tabId, leafId } = allocateTerminalPaneIdentity(hinted)
   try {
     return await start({ tabId, leafId })
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error)
-    await keep({ tabId, leafId }, reason).catch((keepError: unknown) => {
+    await keep({ tabId, leafId }, error).catch((keepError: unknown) => {
       console.warn('[terminal] could not keep the pane of a failed start:', keepError)
     })
     throw error
@@ -62,10 +61,16 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
           opts.startFailure
             ? Promise.reject(opts.startFailure)
             : super.createTerminal(worktreeSelector, { ...opts, ...pane }, created),
-        (pane, reason) => this.keepFailedStartPane(worktreeSelector, created, pane, opts, reason)
+        (pane, error) => this.keepFailedStartPane(worktreeSelector, created, pane, opts, error)
       )
     }
     return super.createTerminal(worktreeSelector, opts, created)
+  }
+
+  protected notePaneSleeping(paneKey: string): void {
+    if (this.paneStartStatuses && !this.paneStartStatuses.peek(paneKey)) {
+      this.paneStartStatuses.set(paneKey, { status: 'sleeping' })
+    }
   }
 
   /** Through main's create rules, so a pane the user closed meanwhile is refused, not restored. */
@@ -74,14 +79,14 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
     created: dependencies.Worktree | undefined,
     pane: FailedStartPane,
     { title }: dependencies.TerminalCreateOptions,
-    reason: string
+    error: unknown
   ): Promise<void> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, created)
     const create = { type: 'createTerminalTab' as const, workspace: workspace.id, ...pane }
     const reply = await this.applyLayoutCommand(title ? { ...create, title } : create)
     // `tab_exists`: the start wrote this pane before failing and kept it.
     if (reply.ok || reply.code === 'tab_exists') {
-      this.paneStartStatuses?.set(`${pane.tabId}:${pane.leafId}`, { status: 'failed', reason })
+      this.paneStartStatuses?.set(`${pane.tabId}:${pane.leafId}`, paneStartFailure(error))
     }
   }
 }

@@ -43,7 +43,7 @@ vi.mock('child_process', async () => {
 
 import { main } from './index'
 import { okFixture, queueFixtures } from './test-fixtures'
-import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../shared/runtime-capability-constants'
+import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../shared/worktree-runtime-capabilities'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 const ORCA_PROJECT = {

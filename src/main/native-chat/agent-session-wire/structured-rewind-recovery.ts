@@ -32,8 +32,8 @@ export function persistRewindRecord(
 }
 
 /**
- * Claude rewind is unsupported, so a pending one (an older build's, or an interrupted one) is
- * settled refused rather than proven. Bookkeeping only: the chat is already attached either way.
+ * A Claude rewind from a build before rewinds forked never ran, so it is settled refused rather
+ * than proven. Bookkeeping only: the chat is already attached either way.
  */
 async function settleUnsupportedClaudeRewind(
   { store, logger }: RewindRecoveryDeps,
@@ -71,7 +71,7 @@ type RecoveredRewind = Awaited<
  *  caller can read it outside the session's serialize and apply it inside. Null: none in doubt. */
 export type StructuredRewindRecoveryEvidence = {
   rewind: AgentSessionRewindRecord
-  turns?: Pick<StructuredRewindCut, 'beforeTurnId' | 'keptTurnId'>
+  turns?: { beforeTurnId: string; keptTurnId: string | null }
   recovered?: RecoveredRewind
 } | null
 
@@ -138,7 +138,12 @@ export async function readStructuredRewindRecovery(
   }
   const target = parseAgentJournalItemKey(rewind.providerItemId ?? rewind.itemId)
   const { cut } = rewindJournalCut(record, journal, rewind)
-  if (target?.provider === 'claude' || rewind.phase !== 'prepared' || !cut) {
+  if (
+    target?.provider === 'claude' ||
+    rewind.phase !== 'prepared' ||
+    !cut ||
+    !('beforeTurnId' in cut)
+  ) {
     return { rewind }
   }
   const turns = { beforeTurnId: cut.beforeTurnId, keptTurnId: cut.keptTurnId }
@@ -177,7 +182,7 @@ export async function applyStructuredRewindRecovery(
     throw new Error('agent_session_rewind:stale-evidence')
   }
   const target = parseAgentJournalItemKey(rewind.providerItemId ?? rewind.itemId)
-  if (target?.provider === 'claude') {
+  if (target?.provider === 'claude' && !rewind.providerFork) {
     await settleUnsupportedClaudeRewind(deps, sessionId, fence, rewind)
     return
   }
@@ -185,8 +190,12 @@ export async function applyStructuredRewindRecovery(
   if (!alreadyReplaced && !cut) {
     throw new Error('agent_session_rewind:invalid-target')
   }
-  if (rewind.phase === 'prepared') {
-    if (!cut) {
+  if (rewind.phase === 'prepared' && rewind.providerFork) {
+    // New forks are durable already; older records leave the copy to their next launch.
+    rewind = { ...rewind, phase: 'provider-succeeded' }
+    await persistRewindRecord(store, sessionId, fence, rewind)
+  } else if (rewind.phase === 'prepared') {
+    if (!cut || !('beforeTurnId' in cut)) {
       throw new Error('agent_session_rewind:outcome-unknown')
     }
     if (
@@ -213,6 +222,18 @@ export async function applyStructuredRewindRecovery(
     await persistRewindRecord(store, sessionId, fence, rewind)
   }
   if (rewind.phase !== 'provider-succeeded') {
+    return
+  }
+  if (rewind.providerFork?.materialized && !rewind.contextClearOperationId && !alreadyReplaced) {
+    const completed = rewind
+    await journal.replaceEpochItems(
+      'handle_forked',
+      fence,
+      cut!.kept,
+      (cursor) =>
+        receipt?.(completed, fence, cursor) ??
+        store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
+    )
     return
   }
   if (rewind.contextClearOperationId && rewind.contextClearSequence) {

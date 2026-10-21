@@ -112,7 +112,6 @@ function wedgedRecord(overrides: WedgeOverrides): PersistedAgentSessionRecord {
       leaseDeadlineAt: NOW - 9_000,
       lastRenewedAt: NOW - 10_000,
       handoffOperationId: overrides.handoffOperationId ?? null,
-      journalCheckpoint: null,
       claimKeyId: 'key-1',
       claimStatus: overrides.claimStatus,
       unreconciled: false,

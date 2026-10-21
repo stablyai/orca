@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { placeUnshownLiveTerminalsAtStartup } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
+import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './legacy-worker-renderer-recovery'
 import { logStartupMilestone } from './startup-diagnostics'
 import { mainProcessState as state } from './main-process-state'
@@ -61,7 +61,7 @@ export function registerMainProcessIpcHandlers(): void {
           // Switch point: main shows live terminals no pane shows, after workers take their panes,
           // even when that recovery failed: the window no longer adopts them itself.
           if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-            await placeUnshownLiveTerminalsAtStartup(state.runtime)
+            await placeUnshownLiveTerminalsBestEffort(state.runtime)
           }
         }
       },

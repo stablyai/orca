@@ -46,6 +46,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
       'initialize',
       'thread/start',
+      'skills/list',
       'model/list'
     ])
   })

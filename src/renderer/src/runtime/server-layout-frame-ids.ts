@@ -59,18 +59,23 @@ function tabIdRule(kind: string): 'terminal' | 'kept' {
   return rule
 }
 
-/** An editor tab names its file by path, or by the owned id of the server's own (local) file. */
+/** A server editor tab names its file by path or by owned id; the desktop always uses the owned id. */
 function desktopEditorEntityId(
   entityId: string,
   layout: PublishedWorkspaceLayout,
   environmentId: string
 ): string {
-  const file = layout.editorFiles.find(
-    (candidate) =>
-      ownedEditorFileId(candidate.filePath, layout.worktreeId, candidate.runtimeEnvironmentId) ===
-      entityId
-  )
-  return file ? ownedEditorFileId(file.filePath, layout.worktreeId, environmentId) : entityId
+  const filePath =
+    layout.editorFiles.find(
+      (candidate) =>
+        ownedEditorFileId(candidate.filePath, layout.worktreeId, candidate.runtimeEnvironmentId) ===
+        entityId
+    )?.filePath ??
+    // Why only the path: every desktop record of a server file is owned by that server, whichever server record a bare path names.
+    (layout.editorFiles.some((candidate) => candidate.filePath === entityId) ? entityId : null)
+  return filePath === null
+    ? entityId
+    : ownedEditorFileId(filePath, layout.worktreeId, environmentId)
 }
 
 /** The handle session.tabs gives a server terminal tab's pane; null while it has none. */
@@ -172,8 +177,9 @@ function serverEditorEntityId(entityId: string, layout: PublishedWorkspaceLayout
 }
 
 /**
- * A desktop-shaped workspace under the server's ids: the inverse of `serverLayoutForDesktop` for
- * every id it maps. Panes keep no terminal: the desktop binds handles, which the server never takes.
+ * A desktop-shaped workspace under the server's ids: the inverse of `serverLayoutForDesktop`, except
+ * that an editor tab the server named by path comes back under the server's owned id for that file.
+ * Panes keep no terminal: the desktop binds handles, which the server never takes.
  */
 export function desktopLayoutForServer(layout: PublishedWorkspaceLayout): PublishedWorkspaceLayout {
   return {

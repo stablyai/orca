@@ -1,3 +1,4 @@
+import { refreshStructuredAgentSessionCommands } from './structured-agent-session-command-refresh'
 import { useMemo, useRef } from 'react'
 import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
@@ -314,10 +315,7 @@ export function useStructuredAgentSession(args: {
     /** A send made now while the agent works is held as a queued card: the host queues, and this
      *  send asks it to (the setting is on and no pending prompt blocks the queue). */
     sendsQueue: structuredAgentSessionNewSendsQueue(queue),
-    cancel: (
-      turnId: string | undefined,
-      prompt?: Parameters<typeof cancelStructuredAgentSessionPrompt>[3]
-    ) => cancelStructuredAgentSessionPrompt(target, mutate, turnId, prompt),
+    cancel: cancelStructuredAgentSessionPrompt.bind(null, target, mutate),
     stopBackgroundTask: (taskId?: string) =>
       mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',
@@ -329,6 +327,7 @@ export function useStructuredAgentSession(args: {
     optionSnapshot,
     optionSurface,
     sessionCommands: transportEnabled ? (state.commands ?? undefined) : undefined,
+    refreshCommands: () => refreshStructuredAgentSessionCommands(target, sessionId),
     setStructuredOption,
     /** Why the host's catalog probe says no chat can start here; the chat shows it as a notice. */
     unavailable,

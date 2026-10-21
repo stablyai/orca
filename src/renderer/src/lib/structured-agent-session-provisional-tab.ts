@@ -1,3 +1,4 @@
+import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type { Tab } from '../../../shared/tab-types'
 import type {
   AgentSessionLaunchPlan,
@@ -11,7 +12,6 @@ import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
   beginHostAdmittedStructuredLaunch,
-  openDeclinedStructuredLaunchTerminal,
   type DeclinedStructuredLaunchTerminalOptions,
   type HostAdmittedStructuredLaunch,
   type StructuredLaunchTerminal
@@ -21,7 +21,11 @@ import {
   structuredAgentSessionTargetForHost
 } from '@/runtime/structured-agent-session-owner'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+import {
+  openTerminalForDeclinedChat,
+  openDeclinedTerminal,
+  opensAtAction
+} from './structured-agent-session-action-launch'
 import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from './empty-workspace-default-surface-claims'
 import {
   captureStructuredLaunchSurfaceAddress,
@@ -54,7 +58,12 @@ export function structuredLaunchOwner(
   return executionHostId && hostTarget ? { executionHostId, target: hostTarget } : null
 }
 
-type ProvisionalLaunchArgs = {
+/** Only a launch that takes the user to its chat may ask host publication to select it. */
+function launchHooks(args: ProvisionalLaunchArgs): StructuredAgentLaunchHooks {
+  return args.activate === false ? { ...args.hooks, activate: false } : args.hooks
+}
+
+export type ProvisionalLaunchArgs = {
   plan: AgentSessionLaunchPlan
   hooks: StructuredAgentLaunchHooks
   focusIntent?: NativeChatComposerFocusIntent
@@ -70,13 +79,15 @@ type ProvisionalLaunchArgs = {
   beforeOpen?: (sessionId?: string) => boolean | void
   /** The terminal the host's "no" opens; a caller without one gets a new agent tab's. */
   onHostDeclined?: (
-    target: RuntimeClientTarget
+    target: RuntimeClientTarget,
+    activate?: false
   ) => Promise<StructuredLaunchTerminal> | StructuredLaunchTerminal
   /** What that default terminal carries from the caller, e.g. a recipe's saved CLI arguments. */
   declinedTerminal?: DeclinedStructuredLaunchTerminalOptions
 }
 
-/** Binds the launch to a chat tab once its host, this machine included, admits the chat. */
+/** Binds the launch to a chat tab: at once for a New Chat the user asked for, otherwise once its
+ *  host, this machine included, admits the chat. */
 export function beginStructuredAgentSessionProvisionalLaunch(
   args: ProvisionalLaunchArgs
 ): StructuredAgentSessionProvisionalLaunch | null {
@@ -114,6 +125,26 @@ export function beginStructuredAgentSessionProvisionalLaunch(
       // No host to ask: the launch path refuses it with its own message.
       return open(beginLocalProvisionalLaunch(args))
     }
+    if (opensAtAction(args)) {
+      const launch = open(
+        beginLocalProvisionalLaunch({
+          ...args,
+          hooks: { ...args.hooks, activate: false },
+          target: { ...args.target, worktreeId, executionHostId: owner.executionHostId },
+          beforeOpen: undefined
+        })
+      )
+      if (!launch || launch.tab === null) {
+        return launch
+      }
+      const tab = launch.tab
+      return {
+        ...launch,
+        settlement: launch.settlement.then((settlement) =>
+          openTerminalForDeclinedChat(args, worktreeId, owner.target, tab, settlement)
+        )
+      }
+    }
     if (args.deferPublication && !args.target?.surfaceAddress) {
       args = {
         ...args,
@@ -142,15 +173,7 @@ export function beginStructuredAgentSessionProvisionalLaunch(
             beforeOpen: undefined
           })
         ),
-      onHostDeclined:
-        args.onHostDeclined ??
-        (() =>
-          openDeclinedStructuredLaunchTerminal({
-            plan: args.plan,
-            worktreeId,
-            ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
-            ...(args.declinedTerminal ? { terminal: args.declinedTerminal } : {})
-          }))
+      onHostDeclined: (target) => openDeclinedTerminal(args, worktreeId, target)
     })
     void launch.settlement.then(cancelIfNoTab, cancelIfNoTab)
     return launch
@@ -166,7 +189,7 @@ function beginLocalProvisionalLaunch(
   if (args.deferPublication) {
     return beginDeferredPublication(args)
   }
-  const handle = args.plan.begin(args.hooks, args.target)
+  const handle = args.plan.begin(launchHooks(args), args.target)
   if (!handle) {
     return null
   }
@@ -206,7 +229,7 @@ function beginDeferredPublication(
   const releaseHold = holdEmptyWorkspaceDefaultSurfaceForLaunch(worktreeId)
   let handle: StructuredAgentLaunchHandle | null
   try {
-    handle = args.plan.begin(args.hooks, args.target)
+    handle = args.plan.begin(launchHooks(args), args.target)
   } catch (error) {
     releaseHold()
     throw error

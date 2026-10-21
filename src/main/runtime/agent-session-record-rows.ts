@@ -27,12 +27,12 @@ import { AgentSessionTabTable, type PersistedAgentSessionTab } from './agent-ses
  *  no row count can say which. */
 const SESSION_TABS_RECORDED = 'session_tabs_recorded'
 
-/** Latch fields older builds wrote. Nothing reads them, and dropping them keeps a lease this build
- *  writes back from carrying a stale latch to an older build after a downgrade. */
+/** Lease fields older builds wrote and nothing reads, dropped at load so no write carries them on. */
 type RetiredAgentSessionLeaseFields = {
   processlessAt?: unknown
   settlementRetryRequired?: unknown
   settlementRetryId?: unknown
+  journalCheckpoint?: unknown
 }
 
 export function withoutRetiredLeaseLatches(lease: AgentSessionLease): AgentSessionLease {
@@ -40,6 +40,7 @@ export function withoutRetiredLeaseLatches(lease: AgentSessionLease): AgentSessi
     processlessAt: _processlessAt,
     settlementRetryRequired: _settlementRetryRequired,
     settlementRetryId: _settlementRetryId,
+    journalCheckpoint: _journalCheckpoint,
     ...current
   }: AgentSessionLease & RetiredAgentSessionLeaseFields = lease
   return current

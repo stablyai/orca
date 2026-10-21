@@ -1,6 +1,13 @@
+// The window's own view-mode switch, as a paired server's workspace keeps it. A local workspace's
+// switch goes through main and its frame draws it: workspace-layout-frame-held-tabs.test.ts.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AppState } from '../types'
-import { createTestStore, makeUnifiedTab, makeTabGroup } from './store-test-helpers'
+import {
+  createTestStore,
+  makeRuntimeOwnedWorktree,
+  makeUnifiedTab,
+  makeTabGroup
+} from './store-test-helpers'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -9,6 +16,8 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
+
+vi.mock('@/runtime/web-runtime-terminal-actions', () => ({ setWebRuntimeTabProps: vi.fn() }))
 
 // Mock sonner (imported transitively by repos.ts via the full store).
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -26,6 +35,9 @@ const WT = 'repo1::/tmp/feature'
 function seedTwoLeafTabs(store: ReturnType<typeof createTestStore>): void {
   const left = makeUnifiedTab({ id: 'left-tab', worktreeId: WT, groupId: 'g-left' })
   const right = makeUnifiedTab({ id: 'right-tab', worktreeId: WT, groupId: 'g-right' })
+  store.setState({
+    worktreesByRepo: { repo1: [makeRuntimeOwnedWorktree({ id: WT, repoId: 'repo1' })] }
+  })
   store.setState({
     unifiedTabsByWorktree: { [WT]: [left, right] },
     groupsByWorktree: {

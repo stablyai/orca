@@ -1,3 +1,5 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { notifyLocalPtyProviderRebound } from './local-provider-rebound'
 import type { PtyRendererDelivery } from '../session'
 
 // Why: localProvider.onData/onExit return unsubscribe functions. Without
@@ -39,6 +41,10 @@ export let rebindProviderListeners: (() => void) | null = null
 
 export function rebindLocalProviderListeners(): void {
   rebindProviderListeners?.()
+  // Switch point: main shows the live terminals a new or restarted provider reports.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    notifyLocalPtyProviderRebound()
+  }
 }
 
 export function setRebindProviderListeners(fn: (() => void) | null): void {

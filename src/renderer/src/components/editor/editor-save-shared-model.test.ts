@@ -319,6 +319,39 @@ describe('two tabs sharing one model', () => {
     }
   })
 
+  it("Reload from a clean tab offers Undo of the sibling's discarded edits", () => {
+    const { store, a, b, edit } = openSharedTabs('A')
+    edit(b.id, 'mine')
+    for (const id of [a.id, b.id]) {
+      store.getState().setExternalMutation(id, 'changed')
+    }
+    const toastMock = vi.mocked(toast)
+    toastMock.mockClear()
+    reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
+    expect(store.getState().editorDrafts[b.id]).toBeUndefined()
+
+    const undo: unknown = toastMock.mock.calls[0]?.[1]?.action
+    expect(isClickAction(undo)).toBe(true)
+    if (isClickAction(undo)) {
+      undo.onClick()
+    }
+
+    expect(store.getState().editorDrafts[b.id]).toBe('mine')
+  })
+
+  it('Keep clears the conflict on every tab of the model before the disk read settles', () => {
+    const { store, a, b, edit, tab } = openSharedTabs('A')
+    edit(a.id, 'mine')
+    for (const id of [a.id, b.id]) {
+      store.getState().setExternalMutation(id, 'changed')
+    }
+    mocks.readRuntimeFileContent.mockReturnValue(new Promise(() => {}))
+
+    keepTabEditsOverExternalChange(store.getState().openFiles[0])
+
+    expect(tab(b.id)?.externalMutation).toBeUndefined()
+  })
+
   it('Undo of Reload yields to a sibling that typed since, touching neither tab', () => {
     const { store, a, b, edit, tab } = openSharedTabs('A')
     edit(a.id, 'mine')

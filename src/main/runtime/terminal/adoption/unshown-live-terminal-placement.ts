@@ -140,10 +140,15 @@ async function placeOne(
     }
   })
   if (reply.ok) {
-    if (reply.result.paneKey) {
-      ports.recordPane(pty.ptyId, reply.result.paneKey)
-    }
+    // Placed once main bound it; recording the pane on its record is a census convenience.
     placement.placed.push(pty.ptyId)
+    if (reply.result.paneKey) {
+      try {
+        ports.recordPane(pty.ptyId, reply.result.paneKey)
+      } catch (error) {
+        console.warn('[layout] placed terminal kept its old pane record:', reasonOf(error))
+      }
+    }
   } else if (reply.code !== 'host_not_owned') {
     placement.declined.push(pty.ptyId)
   }
@@ -153,14 +158,17 @@ function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** For startup callers: the pass never stops a server from coming up, whatever fails in it. */
-export async function placeUnshownLiveTerminalsAtStartup(
-  runtime: { placeUnshownLiveTerminals: () => Promise<unknown> } | null | undefined
+/**
+ * For startup, client-attach and terminal-service callers: the pass never stops a server from
+ * coming up or a client from attaching, whatever fails in it.
+ */
+export async function placeUnshownLiveTerminalsBestEffort(
+  runtime: { placeUnshownLiveTerminals?: () => Promise<unknown> } | null | undefined
 ): Promise<void> {
   try {
-    await runtime?.placeUnshownLiveTerminals()
+    await runtime?.placeUnshownLiveTerminals?.()
   } catch (error) {
-    console.warn('[layout] showing live terminals at startup failed:', reasonOf(error))
+    console.warn('[layout] showing live terminals failed:', reasonOf(error))
   }
 }
 

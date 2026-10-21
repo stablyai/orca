@@ -23,6 +23,7 @@ const idlePane: WslMovePaneFacts = {
 const hints = {
   hints: [{ paneKey: 'tab-1:leaf-1', cwd: '/home/dev/repo-1' }],
   unreadablePaneKeys: [],
+  noCwdPaneKeys: [],
   staleCwdPaneKeys: []
 }
 
@@ -57,9 +58,15 @@ function harness(overrides: Partial<WslMoveQuiesceDeps> = {}) {
 
 describe('quiesceWslMove', () => {
   it('fences, sleeps, proves exit and records the proven sessions', async () => {
-    const { deps, journal, removed, steps } = harness()
+    const proveExited = vi.fn(async (): Promise<WslMoveExitProof> => ({ verdict: 'exited' }))
+    const { deps, journal, removed, steps } = harness({ proveExited })
     const result = await quiesceWslMove(cutover(), scope, deps)
 
+    expect(proveExited).toHaveBeenCalledWith({
+      distro: cutover().manifest.source.distro,
+      workspaceKeys: scope.workspaceKeys,
+      sessionIds: new Set(['session-1'])
+    })
     expect(journal).toEqual(['source-fenced', 'quiesced'])
     expect(steps).toEqual(['sleep after source-fenced'])
     expect(removed).toEqual([])

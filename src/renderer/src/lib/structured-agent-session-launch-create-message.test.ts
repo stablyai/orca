@@ -50,6 +50,9 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('@/runtime/structured-chat-host-permission', () => ({
+  readStructuredChatHostPermissionVerdict: async () => ({ kind: 'allowed' })
+}))
 
 import {
   startStructuredAgentLaunch,

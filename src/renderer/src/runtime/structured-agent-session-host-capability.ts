@@ -27,15 +27,18 @@ export type StructuredAgentSessionHostCapabilityState = 'unknown' | 'supported' 
 /** Whether the session's host advertises `capability`. A failed probe stays `unknown` and a remote
  *  host is asked again each time this client regains contact with it. */
 export function useStructuredAgentSessionHostCapabilityState(
-  target: RuntimeClientTarget,
+  target: RuntimeClientTarget | null,
   capability: RuntimeCapability
 ): StructuredAgentSessionHostCapabilityState {
-  const key = structuredAgentSessionHostKey(target)
+  const key = target ? structuredAgentSessionHostKey(target) : null
   const [answer, setAnswer] = useState<{
-    key: string
+    key: string | null
     state: StructuredAgentSessionHostCapabilityState
-  }>(() => ({ key, state: target.kind === 'local' ? localCapabilityState(capability) : 'unknown' }))
-  const environmentId = target.kind === 'environment' ? target.environmentId : null
+  }>(() => ({
+    key,
+    state: target?.kind === 'local' ? localCapabilityState(capability) : 'unknown'
+  }))
+  const environmentId = target?.kind === 'environment' ? target.environmentId : null
   const [contact, setContact] = useState(0)
   useEffect(() => {
     if (environmentId === null) {
@@ -44,6 +47,9 @@ export function useStructuredAgentSessionHostCapabilityState(
     return subscribeRuntimeHostContactRegained(environmentId, () => setContact((n) => n + 1))
   }, [environmentId])
   useEffect(() => {
+    if (key === null) {
+      return
+    }
     let cancelled = false
     const probe: Promise<StructuredAgentSessionHostCapabilityState> =
       environmentId === null

@@ -11,7 +11,10 @@ import { createMemoryNativeChatComposerDraftStorage } from './native-chat-compos
 import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
+  translate: (_key: string, fallback: string) => fallback
+}))
 vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false

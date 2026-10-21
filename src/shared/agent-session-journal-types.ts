@@ -107,6 +107,8 @@ export type AgentJournalMessageSendMode = (typeof AGENT_JOURNAL_MESSAGE_SEND_MOD
 export const AGENT_JOURNAL_MESSAGE_STATES = ['running', 'completed'] as const
 export type AgentJournalMessageState = (typeof AGENT_JOURNAL_MESSAGE_STATES)[number]
 
+export type AgentJournalSkillRef = { name: string; path: string }
+
 export type AgentJournalMessageItem = {
   kind: 'message'
   role: NativeChatRole
@@ -117,6 +119,9 @@ export type AgentJournalMessageItem = {
   /** Present on a conversation command the user sent, such as `/compact`. The text is what the
    *  user typed; this names the command so no reader parses it. Open like `sentAs`. */
   command?: { name: string }
+  /** The skills the user picked from the menu for this message, by the file the agent selects
+   *  each by. The text still carries each `$name`; agents that select by name ignore this. */
+  skills?: AgentJournalSkillRef[]
   /** Present on a message another agent sent through Orca; absent, the person's. Host-written,
    *  outside every fingerprint, never sent to the provider. */
   from?: AgentMessageSource

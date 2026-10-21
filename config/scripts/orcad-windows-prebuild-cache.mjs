@@ -46,7 +46,8 @@ export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   'src/packages/process-host/src/process-spec.ts',
   'src/packages/process-host/src/windows-command-line.ts',
   'src/packages/process-host/src/windows-cmd-shim-resolution.ts',
-  'src/packages/process-host/src/windows-system-binary.ts'
+  'src/packages/process-host/src/windows-system-binary.ts',
+  'src/packages/process-host/src/windows-tree-kill.ts'
 ]
 
 function windowsSlot(platform, arch) {

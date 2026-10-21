@@ -15,11 +15,7 @@ import { isReloadableSingleFileDiffTab } from './editor-panel-diff-reload'
 import { createEditorWatcherReloadCoalescer } from './editor-watcher-reload-coalescer'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { hasRecentSelfWrite } from './editor-self-write-registry'
-import {
-  editorModelSiblingTabs,
-  isEditorModelDirty,
-  isWholeEditorState
-} from './editor-save-disk-precondition'
+import { editorModelSiblingTabs, isEditorModelDirty } from './editor-save-disk-precondition'
 
 type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewMode']
 
@@ -93,7 +89,7 @@ export function useEditorPanelExternalContentEvents({
         return 'stale'
       }
       // Why: a clean tab of a model another tab is editing shows that buffer; never reload it alone.
-      if (isWholeEditorState(state) && isEditorModelDirty(state, file)) {
+      if (isEditorModelDirty(state, file)) {
         return null
       }
       return isVisibleRef.current && file.id === activeContentFileIdRef.current ? file : 'stale'
@@ -142,8 +138,7 @@ export function useEditorPanelExternalContentEvents({
         // clean tab of a model another tab is editing shows that buffer too.
         if (
           file.isDirty ||
-          (isWholeEditorState(storeState) &&
-            storeState.openFiles.some((tab) => tab.id === file.id) &&
+          (storeState.openFiles.some((tab) => tab.id === file.id) &&
             isEditorModelDirty(storeState, file))
         ) {
           continue

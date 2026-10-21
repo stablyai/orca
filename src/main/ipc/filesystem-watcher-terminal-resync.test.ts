@@ -36,6 +36,7 @@ const ARGS = { worktreePath: WORKTREE_PATH, connectionId: 'conn-1' }
 const OVERFLOW_PAYLOAD = {
   worktreePath: WORKTREE_PATH,
   events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }],
+  resync: true,
   connectionId: 'conn-1'
 }
 

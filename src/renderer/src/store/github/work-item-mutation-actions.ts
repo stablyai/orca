@@ -7,8 +7,7 @@ import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
-import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
 import type { CacheEntry } from './cache-model'
 import { evictRepoCacheEntries, repoCacheKeyPrefixes } from './cache-identity'
 import { ERROR_TOAST_DURATION } from './cache-policy'
@@ -61,32 +60,18 @@ export const createWorkItemMutationActions = (
     })
   },
 
-  setIssueSourcePreference: async (repoId, repoPath, preference) => {
-    // Why: optimistically patch the local Repo so the segmented control updates this frame; resync via fetchRepos on IPC failure.
+  setIssueSourcePreference: async (repoId, repoPath, preference, hostId) => {
+    // Why: map 'auto' to undefined so persistence drops the key entirely (see main/persistence.ts#updateRepo).
+    const issueSourcePreference = preference === 'auto' ? undefined : preference
+    // Why: optimistically patch the row so the segmented control updates this frame; a twin's other row keeps its own.
     set((s) => ({
       repos: s.repos.map((r) =>
-        r.id === repoId
-          ? {
-              ...r,
-              issueSourcePreference: preference === 'auto' ? undefined : preference
-            }
-          : r
+        repoMatchesHostIdentity(r, repoId, hostId) ? { ...r, issueSourcePreference } : r
       )
     }))
-    try {
-      // Why: use the generic `repos:update` channel so a single write → single `repos:changed` broadcast re-fetches other windows.
-      // Why: map 'auto' to undefined so persistence drops the key entirely (see main/persistence.ts#updateRepo).
-      const updates = { issueSourcePreference: preference === 'auto' ? undefined : preference }
-      // Why: route to the repo's owner host (like updateRepo) so the write lands where the repo lives, not the focused runtime.
-      const target = runtimeTargetForRepoOwner(get(), repoId)
-      if (!target) {
-        throw new Error(`No single host owns project ${repoId}.`)
-      }
-      await (target.kind === 'local'
-        ? window.api.repos.update({ repoId, updates })
-        : callRuntimeRpc(target, 'repo.update', { repo: repoId, updates }, { timeoutMs: 15_000 }))
-    } catch (err) {
-      console.error('Failed to persist issue-source preference:', err)
+    // Why: updateRepo routes by the row's host, so a twin's write lands on the row the user changed.
+    const saved = await get().updateRepo(repoId, { issueSourcePreference }, { hostId })
+    if (!saved) {
       // Why: without this toast the pill silently snaps back (optimistic patch + resync) and the user wouldn't know the write failed.
       toast.error(
         translate('auto.store.slices.github.d49ef4b944', 'Failed to save issue-source preference'),

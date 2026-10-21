@@ -375,7 +375,10 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         isWorking={isWorking}
         isStopping={isStopping}
         afterStop={afterStop}
-        attachDisabled={disabled}
+        attachDisabled={
+          disabled ||
+          (structuredTransport?.runtime === 'remote' && structuredTransport.sessionPending === true)
+        }
         dictationDisabled={dictation.dictationDisabled}
         isDictating={dictation.isDictating}
         isDictationHoldMode={dictation.isDictationHoldMode}

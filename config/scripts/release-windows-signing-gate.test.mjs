@@ -33,7 +33,12 @@ describe('Windows release signing waits for macOS success', () => {
     expect(jobs.build.needs).not.toContain('verify-mac-build')
     expect(jobs['build-mac'].needs).not.toContain('build')
     expect(jobs['verify-mac-build'].needs).toContain('build')
+    const windows = jobs.build.strategy.matrix.include.find((entry) => entry.platform === 'win')
+    expect(windows.release_command).toMatch(
+      /^node config\/scripts\/ensure-native-runtime\.mjs --runtime=electron; if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}; pnpm exec electron-builder /
+    )
     const packaging = steps.findIndex((step) => step.name === 'Build Windows release artifacts')
+    expect(steps[packaging].env.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
     const gateIndex = steps.indexOf(gate)
     expect(packaging).toBeGreaterThanOrEqual(0)
     expect(gateIndex).toBeGreaterThan(packaging)

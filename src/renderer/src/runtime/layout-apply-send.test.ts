@@ -131,7 +131,7 @@ describe('sendLayoutApply', () => {
     sendLayoutApply(
       NO_STATE,
       'wt-1',
-      { type: 'setGroupRatios', groupLayout: { type: 'leaf', groupId: 'g' } },
+      { type: 'setGroupRatios', ratios: [{ path: '', ratio: 0.3 }] },
       {
         apply: keep,
         asToday: keep,
@@ -154,7 +154,10 @@ describe('sendLayoutApply', () => {
 })
 
 describe('sendLayoutApply holds with no answer', () => {
-  const RATIOS = { type: 'setGroupRatios', groupLayout: { type: 'leaf', groupId: 'g' } } as const
+  const RATIOS: Parameters<typeof sendLayoutApply>[2] = {
+    type: 'setGroupRatios',
+    ratios: [{ path: '', ratio: 0.3 }]
+  }
   const NO_ANSWER = 'setGroupRatios hold released: no answer in 15s'
 
   beforeEach(() => {

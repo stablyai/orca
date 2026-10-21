@@ -1,11 +1,8 @@
+import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { canAutoSaveOpenFile } from './editor-autosave'
-import { editorModelSiblingTabs, isWholeEditorState } from './editor-save-disk-precondition'
+import { editorModelSiblingTabs } from './editor-save-disk-precondition'
 import { trackExternalChangeConflictShown } from './editor-external-change-telemetry'
-
-type ChangedOnDiskMarkState = {
-  setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
-}
 
 // Why: the changed-on-disk mark has one rule — dirty, banner-capable tab,
 // telemetry only on the first surfacing — but three writers (the watch hook
@@ -14,15 +11,13 @@ type ChangedOnDiskMarkState = {
 // each writer keeps its own echo/eligibility guard at the call site. A code
 // model is dirty when any of its tabs is, and the mark reaches all of them.
 export function markFileChangedOnDisk(
-  state: ChangedOnDiskMarkState,
+  state: AppState,
   file: OpenFile,
   options: { connectionId: string | undefined; origin: 'live' | 'restore' }
 ): void {
-  // Why: some writers pass only the setter; the model's other tabs are known only from the whole store.
-  const tabs =
-    isWholeEditorState(state) && state.openFiles.some((tab) => tab.id === file.id)
-      ? editorModelSiblingTabs(state, file)
-      : [file]
+  const tabs = state.openFiles.some((tab) => tab.id === file.id)
+    ? editorModelSiblingTabs(state, file)
+    : [file]
   if (!tabs.some((tab) => tab.isDirty) || !canAutoSaveOpenFile(file)) {
     return
   }

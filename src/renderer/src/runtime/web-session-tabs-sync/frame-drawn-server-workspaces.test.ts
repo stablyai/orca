@@ -61,7 +61,6 @@ const LAYOUT_SLICES = [
   'terminalLayoutsByTabId',
   'ptyIdsByTabId',
   'openFiles',
-  'editorBuffers',
   'browserTabsByWorktree',
   'browserPagesByWorkspace',
   'remoteBrowserPageHandlesByPageId',

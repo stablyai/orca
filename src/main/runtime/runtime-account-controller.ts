@@ -1,4 +1,5 @@
 import type { ClaudeAccountService } from '../claude-accounts/service'
+import { retireAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
 import { hasAppEnvironment } from '../../shared/app-environment'
 import { getManagedDataAccountService } from '../managed-data-accounts/service'
 import type {
@@ -89,7 +90,11 @@ export class RuntimeAccountController {
     if (this.services) {
       throw new Error('This host manages its own provider accounts.')
     }
+    const previous = this.hostLaunchEnv
     this.hostLaunchEnv = launchEnv
+    if (JSON.stringify(previous) !== JSON.stringify(launchEnv)) {
+      retireAtRestCommandContext()
+    }
     try {
       this.persistHostLaunchEnv?.(launchEnv)
     } catch (error) {
@@ -105,7 +110,11 @@ export class RuntimeAccountController {
   ): void {
     this.persistHostLaunchEnv = persist
     if (saved && !this.services) {
+      const previous = this.hostLaunchEnv
       this.hostLaunchEnv = saved
+      if (JSON.stringify(previous) !== JSON.stringify(saved)) {
+        retireAtRestCommandContext()
+      }
     }
   }
 

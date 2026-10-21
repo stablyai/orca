@@ -1,4 +1,15 @@
-import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  readlink,
+  rm,
+  symlink,
+  writeFile
+} from 'node:fs/promises'
 import { existsSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -146,6 +157,40 @@ describe('relocateServeSupervisor', () => {
       } finally {
         await chmod(unreadable, 0o755)
       }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'copies contents, symlinks and executable bits verbatim',
+    async () => {
+      const modules = join(resources, 'node_modules')
+      await mkdir(join(modules, '.bin'))
+      await writeFile(join(modules, 'ws', 'cli.js'), '#!/usr/bin/env node\n')
+      await chmod(join(modules, 'ws', 'cli.js'), 0o755)
+      await symlink('../ws/cli.js', join(modules, '.bin', 'ws'))
+      await symlink('../gone/index.js', join(modules, '.bin', 'dangling'))
+      await symlink(join(root, 'outside'), join(modules, 'absolute'))
+      await symlink('ws', join(modules, 'ws-alias'))
+      const d = deps()
+      await expect(relocateServeSupervisor(d)).resolves.toBe('relocated')
+
+      const snapshot = join(String(vi.mocked(d.execve).mock.calls[0][1][1]), '..', '..', '..', '..')
+      const copied = join(snapshot, 'node_modules')
+      expect(await readFile(join(copied, 'ws', 'index.js'), 'utf8')).toBe('ws')
+      expect((await lstat(join(copied, 'ws', 'cli.js'))).mode & 0o777).toBe(0o755)
+      expect(await readlink(join(copied, '.bin', 'ws'))).toBe('../ws/cli.js')
+      expect(await readlink(join(copied, '.bin', 'dangling'))).toBe('../gone/index.js')
+      expect(await readlink(join(copied, 'absolute'))).toBe(join(root, 'outside'))
+      expect(await readlink(join(copied, 'ws-alias'))).toBe('ws')
+      expect((await lstat(join(copied, 'ws-alias'))).isSymbolicLink()).toBe(true)
+      // Why: `cp -R` into an existing directory would nest the tree one level down.
+      expect(await readdir(snapshot)).toEqual(
+        expect.arrayContaining(['app.asar.unpacked', 'node_modules'])
+      )
+      expect(existsSync(join(snapshot, 'node_modules', 'node_modules'))).toBe(false)
+      expect(
+        await readFile(join(snapshot, 'app.asar.unpacked', 'out', 'cli', 'index.js'), 'utf8')
+      ).toBe('cli v1')
     }
   )
 

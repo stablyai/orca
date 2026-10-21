@@ -10,8 +10,13 @@ import type { AgentType } from '../agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault-session-title'
 import type { EditorTabView } from '../editor-tab-view-types'
 import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
-import type { TerminalPaneLayoutNode, TerminalPaneSplitDirection } from '../terminal-tab-types'
+import type {
+  TerminalGrid,
+  TerminalPaneLayoutNode,
+  TerminalPaneSplitDirection
+} from '../terminal-tab-types'
 import type { PaneSide } from './terminal-pane-tree'
+import type { SplitRatioIntent } from './split-ratio-intents'
 import type { PaneOutcomeChanges } from './workspace-layout-pane-outcomes'
 import type { LayoutEditorFile, LayoutTerminalCreation } from './workspace-layout-model'
 
@@ -86,8 +91,19 @@ export type LayoutCommand =
     })
   | (On & { type: 'moveTab'; tabId: string; toGroupId: string; index: number })
   | (On & { type: 'splitGroup'; tabId: string; besideGroupId: string; direction: GroupSide })
-  | (On & { type: 'setGroupRatios'; groupLayout: TabGroupLayoutNode })
-  | (On & { type: 'setPaneRatios'; tabId: string; root: TerminalPaneLayoutNode })
+  /** `ratios`, or from a window older than them, `groupLayout`: exactly one. */
+  | (On & {
+      type: 'setGroupRatios'
+      groupLayout?: TabGroupLayoutNode
+      ratios?: SplitRatioIntent[]
+    })
+  /** `ratios`, or from a window older than them, `root`: exactly one. */
+  | (On & {
+      type: 'setPaneRatios'
+      tabId: string
+      root?: TerminalPaneLayoutNode
+      ratios?: SplitRatioIntent[]
+    })
   | (On & { type: 'movePane'; tabId: string; leafId: string; targetLeafId: string; side: PaneSide })
   | (On & { type: 'equalizePanes'; tabId: string })
   | (On & {
@@ -101,6 +117,10 @@ export type LayoutCommand =
     })
   | (On & { type: 'renameTab'; tabId: string } & TabTitle)
   | (On & { type: 'renamePane'; tabId: string; leafId: string; title: string | null })
+  /** Main only: the grid the pane's terminal was last sized to, which a restart starts it at. */
+  | (On & { type: 'setPaneGrid'; tabId: string; leafId: string; grid: TerminalGrid })
+  /** Main only: unbinds the pane from `ptyId` if it still names it, stopping nothing. */
+  | (On & { type: 'releasePaneTerminal'; tabId: string; leafId: string; ptyId: string })
   | (On & {
       type: 'setTabProps'
       tabId: string
@@ -257,11 +277,17 @@ export type NewGroupSplit = {
 }
 
 export type TabTitle =
-  | { kind: 'custom' | 'generated'; title: string | null }
+  /** A generated title replaces the tab's existing one only with `replaceExisting`: first wins. */
+  | { kind: 'custom' | 'generated'; title: string | null; replaceExisting?: true }
   | { kind: 'aiVault'; title: AiVaultSessionTitle | null }
 
 /** One tab's agent-generated title in a `renameTabs` batch. */
-export type GeneratedTabTitle = { workspace: string; tabId: string; title: string | null }
+export type GeneratedTabTitle = {
+  workspace: string
+  tabId: string
+  title: string | null
+  replaceExisting?: true
+}
 
 /**
  * A window's agent-generated titles for many tabs, of any workspaces, in one `layout.apply`: main
@@ -274,7 +300,7 @@ export type RenameTabsCommand = {
 }
 
 /** A `renameTabs` title main did not give its tab, and why. */
-export type UntitledTab = Omit<GeneratedTabTitle, 'title'> & {
+export type UntitledTab = Omit<GeneratedTabTitle, 'title' | 'replaceExisting'> & {
   code: Extract<LayoutApplyReply, { ok: false }>['code']
 }
 
@@ -299,6 +325,8 @@ export type LayoutRefusalCode =
   | 'pane_in_other_tab'
   | 'pty_mismatch'
   | 'page_exists'
+  /** A generated title without `replaceExisting` for a tab that has one: main keeps the first. */
+  | 'generated_title_kept'
 
 /** What the runtime does after applying: stop or start terminals. The reply never waits on them. */
 export type LayoutEffects = { stopPtyIds: string[]; startPaneKeys: string[] }

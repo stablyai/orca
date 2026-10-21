@@ -72,3 +72,47 @@ describe('a file main opens lands in the group the window shows', () => {
     expect(host.groupOfFile()).toBe('g1')
   })
 })
+
+describe('a file main opens lands in the group a paired desktop shows', () => {
+  it("the latest desktop's group, then the other's when that one's connection closes", async () => {
+    const host = twoGroupHost()
+    host.runtime.reportClientView('desktop-a', { [TEST_WORKTREE_ID]: 'g2' })
+    host.runtime.reportClientView('desktop-b', { [TEST_WORKTREE_ID]: 'g1' })
+    expect(host.runtime.groupForTest(TEST_WORKTREE_ID)).toBe('g1')
+
+    host.runtime.cleanupSubscriptionsForConnection('desktop-b')
+    await host.open()
+
+    expect(host.groupOfFile()).toBe('g2')
+  })
+
+  it("the saved view's once every reporting desktop has gone", async () => {
+    const host = twoGroupHost()
+    host.runtime.reportClientView('desktop-a', { [TEST_WORKTREE_ID]: 'g2' })
+    host.runtime.reportClientView('desktop-a', { [TEST_WORKTREE_ID]: 'g2' })
+    host.runtime.cleanupSubscriptionsForConnection('desktop-a')
+
+    expect(host.runtime.groupForTest(TEST_WORKTREE_ID)).toBe('g1')
+  })
+
+  it('the window, when it reported after the desktop', () => {
+    const host = twoGroupHost()
+    host.runtime.reportClientView('desktop-a', { [TEST_WORKTREE_ID]: 'g1' })
+    host.runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      activeGroupByWorkspace: { [TEST_WORKTREE_ID]: 'g2' }
+    })
+
+    expect(host.runtime.groupForTest(TEST_WORKTREE_ID)).toBe('g2')
+  })
+  it("a desktop's refresh after a reconnect leaves the group another desktop switched to", async () => {
+    const host = twoGroupHost()
+    host.runtime.reportClientView('desktop-a', { [TEST_WORKTREE_ID]: 'g2' })
+    host.runtime.reportClientView('desktop-b', { [TEST_WORKTREE_ID]: 'g1' }, true)
+
+    await host.open()
+
+    expect(host.groupOfFile()).toBe('g2')
+  })
+})

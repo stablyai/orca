@@ -3,6 +3,7 @@
 
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 import {
@@ -92,7 +93,12 @@ export async function readClaudeStartupFacts(input: {
       timer = setTimeout(
         () =>
           reject(
-            new Error(`claude did not answer initialize within ${CLAUDE_INITIALIZE_TIMEOUT_MS}ms`)
+            withProviderRequestTimeout(
+              new Error(
+                `claude did not answer initialize within ${CLAUDE_INITIALIZE_TIMEOUT_MS}ms`
+              ),
+              { method: 'initialize', timeoutMs: CLAUDE_INITIALIZE_TIMEOUT_MS }
+            )
           ),
         CLAUDE_INITIALIZE_TIMEOUT_MS
       )

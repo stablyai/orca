@@ -44,7 +44,7 @@ export class StructuredAgentSessionEventRecovery {
         sessionId: string,
         child: StructuredAgentSessionProviderChildIdentity,
         error: unknown,
-        openMs?: number
+        openMs: number
       ) => Promise<void>
       trackOpen: <T>(open: Promise<T>) => Promise<T>
     }

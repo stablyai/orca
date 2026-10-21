@@ -144,11 +144,19 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
           }
         }))
 
-        store.getState().pinTab(tab.id)
+        const interaction = vi.fn()
+        store.setState({ recordFeatureInteraction: interaction })
+        store.getState().pinTab(tab.id, { recordInteraction: false })
         expect(store.getState().tabsByWorktree[WT][0].isPinned).toBe(true)
-
-        store.getState().unpinTab(tab.id)
+        store.getState().unpinTab(tab.id, { recordInteraction: false })
         expect(store.getState().tabsByWorktree[WT][0].isPinned).toBe(false)
+        store.getState().setTabColor(tab.entityId, '#ff0000', { recordInteraction: false })
+        expect(store.getState().tabsByWorktree[WT][0].color).toBe('#ff0000')
+        expect(interaction).not.toHaveBeenCalled()
+        store.getState().pinTab(tab.id)
+        store.getState().unpinTab(tab.id)
+        store.getState().setTabColor(tab.entityId, null)
+        expect(interaction).toHaveBeenCalledTimes(3)
       })
     })
   })

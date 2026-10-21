@@ -96,6 +96,7 @@ describe('task page cache selectors', () => {
       {
         repoId: 'repo-1',
         repoPath: '/repo/one',
+        hostId: 'local',
         sourceKey: 'repo-1::local',
         sources: null,
         error: null
@@ -233,6 +234,38 @@ describe('task page cache selectors', () => {
         clickedIssue
       )
     ).toBe(origin)
+  })
+
+  it('opens the copy the clicked twin host returned, not the other host cached copy', () => {
+    const local = { ...workItem('pr:7', 'twin'), repoHostId: 'local' as const }
+    const remote = { ...local, repoHostId: 'ssh:builder' as const }
+    const cache = {
+      local: entry<GitHubWorkItem[]>([local]),
+      remote: entry<GitHubWorkItem[]>([remote])
+    }
+
+    expect(
+      findTaskPageDialogWorkItem(cache, {
+        id: remote.id,
+        repoId: remote.repoId,
+        url: remote.url,
+        repoHostId: remote.repoHostId
+      })
+    ).toBe(remote)
+  })
+
+  it('keeps each twin host row on its own copy when the cache syncs the table', () => {
+    const local = { ...workItem('pr:7', 'twin'), repoHostId: 'local' as const }
+    const remote = { ...local, repoHostId: 'ssh:builder' as const }
+    const pages = [[local, { ...remote }]]
+
+    const nextPages = reconcileTaskPagePagesWithWorkItemsCache(pages, [
+      entry<GitHubWorkItem[]>([local]),
+      entry<GitHubWorkItem[]>([remote])
+    ])
+
+    expect(nextPages[0]?.map((item) => item.repoHostId)).toEqual(['local', 'ssh:builder'])
+    expect(nextPages[0]?.[1]).toBe(remote)
   })
 
   it('reconciles paged table rows with patched work-item cache entries', () => {

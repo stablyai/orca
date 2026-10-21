@@ -1,7 +1,7 @@
 import { useAppStore, type AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { isEditorContentUnchanged } from './editor-content-dirty-state'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import type { FileContent } from './editor-panel-content-types'
 import {
   editorModelSiblingTabs,

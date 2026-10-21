@@ -59,6 +59,14 @@ on:
         required: false
         type: boolean
         default: false
+      fast_release:
+        description: Use the faster unsigned-build runner outside signing provenance
+        type: boolean
+        default: false
+      javascript_source_sha:
+        description: Restore this run's shared dev JavaScript instead of rebuilding it
+        type: string
+        default: ''
       orcad_template:
         description: Ship the orcad-template artifact the calling run built
         required: false
@@ -104,12 +112,11 @@ jobs:
     # that can write to the dev-channel repos, and it should be reachable from
     # exactly the same place those secrets already live.
     environment: adhoc-mac-build
-    # Why windows-2022 and not windows-latest: windows-latest moved to the
-    # Windows 2025 / VS 2026 image before node-gyp could detect VS 18, breaking
-    # native dependency install. release-cut pins the same image.
-    runs-on: windows-2022
+    # The fast image has VS Build Tools 2022; signed release provenance stays separate.
+    runs-on: ${{ inputs.fast_release && 'blacksmith-8vcpu-windows-2025' || 'windows-2022' }}
     timeout-minutes: 90
     env:
+      ORCA_BACKGROUND_LAUNCH: '1'
       NODE_OPTIONS: --max-old-space-size=4096
       CHANNEL: ${{ inputs.channel }}
       TAG: ${{ inputs.tag }}
@@ -171,6 +178,11 @@ jobs:
             exit 1
           fi
           echo "Vetted $CHANNEL $TAG at $REQUESTED_SHA"
+
+      - name: Enable parallel checkout
+        if: inputs.fast_release
+        shell: bash
+        run: git config --global checkout.workers 0
 
       - name: Checkout the built commit
         uses: actions/checkout@v6
@@ -250,6 +262,7 @@ jobs:
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
+        if: inputs.javascript_source_sha == ''
 
       # Why the packaging check runs before the 20-minute build: it only needs
       # node_modules, and a stale config should cost seconds rather than a build.
@@ -257,10 +270,25 @@ jobs:
         shell: bash
         run: node config/scripts/verify-dev-channel-packaging.mjs --channel="$CHANNEL" --platform=win32
 
+      - name: Download shared JavaScript
+        if: inputs.javascript_source_sha != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: release-javascript
+          path: .build/release-javascript
+
       - name: Build app
         shell: bash
-        run: pnpm build:release
+        run: |
+          if [[ "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" != '' ]]; then
+            node config/scripts/release-javascript-artifact.mjs restore
+            pnpm run build:release:host
+          else
+            pnpm build:release
+          fi
         env:
+          ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ inputs.javascript_source_sha }}
+          ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: dev
           # Why unset ORCA_BUILD_IDENTITY: telemetry's transport gate accepts only
           # 'stable' or 'rc', so leaving it unset keeps dev builds silent — which
           # is correct for unvetted artifacts. Same as the mac dev channels.

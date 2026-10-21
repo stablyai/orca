@@ -10,6 +10,7 @@ import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-co
 import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { retireAtRestCommandContext } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
 import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-operations'
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
@@ -183,7 +184,11 @@ export class FolderWorkspacePersistenceOperations {
       workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
     }
     if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
+      const previous = workspace.folderPath
       workspace.folderPath = updates.folderPath
+      if (previous !== workspace.folderPath) {
+        retireAtRestCommandContext(folderWorkspaceKey(workspace.id))
+      }
     }
     if (updates.linkedTask !== undefined) {
       workspace.linkedTask = normalizeWorkspaceLinkedItem(updates.linkedTask)

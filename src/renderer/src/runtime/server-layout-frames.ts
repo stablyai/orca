@@ -13,6 +13,7 @@ import {
   runtimeHostConnectionStateForEntry
 } from './runtime-host-connection-state'
 import { createServerLayoutFrameTranslator } from './server-layout-frame-ids'
+import { createServerViewReport, onServerControlConnected } from './server-layout-view-report'
 import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
 import { mirroredRuntimeEnvironmentIdForWorkspace } from './web-session-tabs-sync/mirrored-workspace-owner'
 import {
@@ -85,8 +86,35 @@ function openServerFrames(
     gate(new Set())
   }
   const draws = serverDraws(environmentId)
+  const viewReport = createServerViewReport(environmentId)
+  /** The server may hold none of this window's reports: a new stream or control socket. */
+  const reportCurrent = (): void => {
+    if (live) {
+      viewReport.update(store.getState().activeGroupIdByWorktree, gated)
+    }
+  }
+  const reportAgain = (): void => {
+    viewReport.reset()
+    reportCurrent()
+  }
+  const stopControlWatch = onServerControlConnected(environmentId, reportAgain)
+  /** True while the sync writes a frame: a group it moves is the server's doing, not the user's. */
+  let applyingFrames = false
+  const frameStore: FramesStore = {
+    getState: () => store.getState(),
+    subscribe: (listener) => store.subscribe(listener),
+    setState: (patch) => {
+      const previous = applyingFrames
+      applyingFrames = true
+      try {
+        store.setState(patch)
+      } finally {
+        applyingFrames = previous
+      }
+    }
+  }
 
-  const sync = openWorkspaceLayoutFrameSync(store, {
+  const sync = openWorkspaceLayoutFrameSync(frameStore, {
     target: { kind: 'environment', environmentId },
     // Only gated workspaces: a handed-back one is the mirror's, whatever the frozen frames still hold.
     draws: (state) => {
@@ -96,6 +124,12 @@ function openServerFrames(
     translate: (frame) => {
       const translated = translator.translate(frame)
       live ||= frame.type === 'snapshot'
+      if (frame.type === 'snapshot') {
+        viewReport.reset()
+        // Two hops, past the flush the sync queues after this returns: if applying the snapshot
+        // changed nothing in the store, nothing has re-sent the view yet.
+        queueMicrotask(() => queueMicrotask(reportCurrent))
+      }
       // Before the frame shows: the mirror must not write a workspace the frames now draw.
       regate()
       return translated
@@ -110,6 +144,9 @@ function openServerFrames(
   // gated, then drawn, as the routing that names it arrives.
   let routing: unknown[] = []
   const stopRouting = store.subscribe((state) => {
+    if (live) {
+      viewReport.update(state.activeGroupIdByWorktree, gated, applyingFrames)
+    }
     const next = routingInputs(state)
     if (sameValues(next, routing)) {
       return
@@ -133,6 +170,7 @@ function openServerFrames(
     close: (returnWorkspaces) => {
       stopRouting()
       stopHandles()
+      stopControlWatch()
       sync.close()
       if (returnWorkspaces) {
         handBack()

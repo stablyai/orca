@@ -32,12 +32,21 @@ export type PublishedPane = {
   liveTitle?: string
   /** Main's start of the pane's terminal, while it has none: live state, never saved. */
   status?: PaneStartStatus
-  /** Why a start failed, for the pane's error card. */
+  /** Why a start failed or is held, for the pane's card. */
   statusReason?: string
 }
 
-/** 'starting': main is starting the pane's terminal. 'failed': the start failed; the pane stays. */
-export type PaneStartStatus = 'starting' | 'failed'
+/**
+ * Why the pane shows no live terminal. A pane with a ptyId and no status shows that live terminal;
+ * with a status, its ptyId is only the terminal it restores from, so no view attaches it yet.
+ * - 'starting': main is starting the pane's terminal.
+ * - 'failed': the start failed; the pane stays.
+ * - 'sleeping': nothing runs; main starts it (resuming its agent, if it had one) on first view or
+ *   the first command that needs it.
+ * - 'resuming': main is starting it from its saved terminal or agent.
+ * - 'held': a newer Orca build's terminal service may still run it, so main will not start it.
+ */
+export type PaneStartStatus = 'starting' | 'failed' | 'sleeping' | 'resuming' | 'held'
 
 export type PublishedTerminal = {
   root: TerminalPaneLayoutNode | null

@@ -60,6 +60,7 @@ export function VaultSessionRow({
   onOpenCwd,
   onRequestDelete,
   searchHit,
+  sourceHostLabel,
   onPick
 }: {
   session: AiVaultSession
@@ -92,6 +93,8 @@ export function VaultSessionRow({
   onOpenCwd?: () => void
   onRequestDelete?: (session: AiVaultSession) => void
   searchHit?: AiVaultSearchHit
+  /** The host a search hit came from, set when hits span several hosts. */
+  sourceHostLabel?: string
   /** Set in `/resume`'s picker: a click resumes the row, and the row offers no other action. */
   onPick?: () => void
 }) {
@@ -243,6 +246,7 @@ export function VaultSessionRow({
         updatedAt={updatedAt}
         worktreeInfo={worktreeInfo}
         vaultScope={vaultScope}
+        sourceHostLabel={sourceHostLabel}
       />
       {detailsExpanded ? (
         <SessionInlineDetails

@@ -328,7 +328,8 @@ describe('a chat whose start was never confirmed', () => {
         })
       }),
       expect.any(Function),
-      true
+      true,
+      expect.any(Function)
     )
     expect(lifecycle()).toBeNull()
     expect(rows()).toEqual([])

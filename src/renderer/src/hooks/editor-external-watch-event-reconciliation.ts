@@ -177,7 +177,7 @@ export function buildEditorExternalWatchEventHandler(
     }
 
     if (payload.events.some((event) => event.kind === 'overflow')) {
-      reconcileEditorTabsAfterOverflow(target)
+      reconcileEditorTabsAfterOverflow(target, payload.resync === true)
       return
     }
     if (batchPaths.changes.length === 0) {

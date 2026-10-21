@@ -13,7 +13,7 @@ import type {
 import { getSshTargetIdForExecutionHost, type ExecutionHostId } from '../../shared/execution-host'
 import type { RepoKind } from '../../shared/repo-types'
 import type { RuntimeStatus } from '../../shared/runtime-types'
-import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/runtime-capability-constants'
+import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import {
   formatProjectHostSetupCreateResult,

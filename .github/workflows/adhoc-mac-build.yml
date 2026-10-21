@@ -75,6 +75,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  ORCA_BACKGROUND_LAUNCH: '1'
   ADHOC_REPO: stablyai/orca-adhoc
   # Why age and not a count like hourly: this channel is low-volume and bursty, so
   # a count would either hold one week's experiments forever or evict a build
@@ -89,7 +90,7 @@ jobs:
   # The mac job still vets this commit's reachability before anything is signed.
   resolve-ref:
     if: github.repository == 'stablyai/orca'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     permissions:
       contents: read
@@ -131,7 +132,7 @@ jobs:
   # Resolve shared build identity while detecting whether this ref ships a template.
   orcad-template-support:
     needs: resolve-ref
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     permissions:
       contents: read
@@ -224,13 +225,23 @@ jobs:
     with:
       ref: ${{ needs.resolve-ref.outputs.sha }}
       build_template: true
+      fast_runners: true
+
+  release-javascript:
+    needs: [resolve-ref, orcad-template-support]
+    uses: ./.github/workflows/release-javascript.yml
+    with:
+      ref: ${{ needs.resolve-ref.outputs.sha }}
+      dev_build: true
+      runner: blacksmith-8vcpu-ubuntu-2404
 
   build-adhoc-mac:
-    needs: [resolve-ref, orcad-template-support, orcad-template]
+    needs: [resolve-ref, orcad-template-support, orcad-template, release-javascript]
     # Why not the implicit success(): a ref without the orcad template skips that job on purpose.
     if: >-
       !cancelled() && github.repository == 'stablyai/orca' &&
       needs.orcad-template-support.result == 'success' &&
+      needs.release-javascript.result == 'success' &&
       (needs.orcad-template.result == 'success' ||
         (needs.orcad-template.result == 'skipped' &&
           needs.orcad-template-support.outputs.ships == 'false'))
@@ -376,6 +387,7 @@ jobs:
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
+        if: needs.release-javascript.outputs.supported != 'true'
 
       # Why: signing is what makes an adhoc build installable over an existing
       # Orca, so a missing cert must fail here rather than after a 20-minute build.
@@ -388,9 +400,24 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      - name: Download shared JavaScript
+        if: needs.release-javascript.outputs.supported == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: release-javascript
+          path: .build/release-javascript
+
       - name: Build app
-        run: pnpm build:release
+        run: |
+          if [[ "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" != '' ]]; then
+            node config/scripts/release-javascript-artifact.mjs restore
+            pnpm run build:release:host
+          else
+            pnpm build:release
+          fi
         env:
+          ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
+          ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: dev
           NODE_OPTIONS: --max-old-space-size=4096
           # Why: adhoc builds are not an official channel — telemetry's transport
           # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
@@ -608,10 +635,11 @@ jobs:
 
   # Build unsigned Windows artifacts alongside Mac; publication waits below.
   build-adhoc-win:
-    needs: [resolve-ref, orcad-template-support, orcad-template]
+    needs: [resolve-ref, orcad-template-support, orcad-template, release-javascript]
     if: >-
       !cancelled() && github.repository == 'stablyai/orca' &&
       needs.orcad-template-support.result == 'success' &&
+      needs.release-javascript.result == 'success' &&
       (needs.orcad-template.result == 'success' ||
         (needs.orcad-template.result == 'skipped' &&
           needs.orcad-template-support.outputs.ships == 'false'))
@@ -624,6 +652,8 @@ jobs:
       version: ${{ needs.orcad-template-support.outputs.version }}
       orcad_template: ${{ needs.orcad-template-support.outputs.ships == 'true' }}
       stage_only: true
+      fast_release: true
+      javascript_source_sha: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
 
   # Upload only after Mac succeeds; an unsigned build may overlap its notarization.
   publish-adhoc-win:

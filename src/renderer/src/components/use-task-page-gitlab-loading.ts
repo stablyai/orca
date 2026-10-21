@@ -108,7 +108,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
                 // Why: not_found just means the repo isn't a GitLab project (mixed selection); drop it so the list shows no false errors.
                 const error = typed.error?.type === 'not_found' ? undefined : typed.error
                 return {
-                  repoId: repo.id,
+                  repo,
                   items: typed.items,
                   error
                 }
@@ -133,7 +133,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
                 }
                 const error = typed.error?.type === 'not_found' ? undefined : typed.error
                 return {
-                  repoId: repo.id,
+                  repo,
                   items: typed.items,
                   error
                 }
@@ -141,7 +141,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
           }
     void mapSettledWithConcurrency(eligibleRepos, GITLAB_TASK_FETCH_CONCURRENCY, (repo) =>
       // Why: a stale selection's results are discarded below, so skip the repos not yet started.
-      stale ? Promise.resolve({ repoId: repo.id, items: [], error: undefined }) : fetchItems(repo)
+      stale ? Promise.resolve({ repo, items: [], error: undefined }) : fetchItems(repo)
     )
       .then((results) => {
         if (stale) {
@@ -154,10 +154,13 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
             errs.push(r.reason instanceof Error ? r.reason.message : String(r.reason))
             continue
           }
+          // Why the host: a twin's two rows share the id, so only the stamp names the row that answered.
+          const repoHostId = getRepoExecutionHostId(r.value.repo)
           for (const item of r.value.items) {
             merged.push({
               ...item,
-              repoId: r.value.repoId
+              repoId: r.value.repo.id,
+              repoHostId
             })
           }
           if (r.value.error) {

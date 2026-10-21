@@ -68,7 +68,8 @@ vi.mock('@/store', () => ({
 }))
 
 import { useEditorPanelContentState } from './useEditorPanelContentState'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import { createTestStore } from '@/store/slices/store-test-helpers'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
 
 type Deferred<T> = {
@@ -166,6 +167,7 @@ describe('useEditorPanelContentState', () => {
     mocks.isWorktreeConnectionResolved.mockReturnValue(true)
     mocks.getState.mockReset()
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: null,
       openFiles: [],
       setLastKnownDiskSignature: vi.fn()
@@ -315,6 +317,7 @@ describe('useEditorPanelContentState', () => {
     })
     mocks.getConnectionIdForFile.mockReturnValue(undefined)
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
       openFiles: [],
       setLastKnownDiskSignature: vi.fn()
@@ -883,6 +886,7 @@ describe('useEditorPanelContentState', () => {
     const activeFile = createOpenFile()
     const setLastKnownDiskSignature = vi.fn()
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: null,
       openFiles: [activeFile],
       setLastKnownDiskSignature
@@ -911,6 +915,7 @@ describe('useEditorPanelContentState', () => {
     const activeFile = createOpenFile({ isDirty: true })
     const setLastKnownDiskSignature = vi.fn()
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: null,
       openFiles: [activeFile],
       setLastKnownDiskSignature

@@ -17,7 +17,6 @@ import {
   sanitizeRecentTabIds
 } from '../tab-group-state'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 export function createTabsDropActions(
   set: TabsSliceSet,
@@ -67,8 +66,7 @@ export function createTabsDropActions(
         let resolvedTargetGroupId = target.groupId
 
         if (target.splitDirection) {
-          // Switch point: main minted the new group's id (layout-owner build).
-          const newGroupId = (ORCA_LAYOUT_OWNER_IS_MAIN && target.newGroupId) || createBrowserUuid()
+          const newGroupId = createBrowserUuid()
           const newGroup: TabGroup = {
             id: newGroupId,
             worktreeId,

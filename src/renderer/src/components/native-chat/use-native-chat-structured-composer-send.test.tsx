@@ -1,4 +1,9 @@
 // @vitest-environment happy-dom
+import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
+import {
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from './native-chat-composer-draft-store'
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
@@ -173,6 +178,23 @@ describe("says a failed send in Orca's words, with the error it hit apart", () =
       expect(structuredTransport.onError).toHaveBeenCalledWith('Your message was not sent.', {
         errorText: 'connect ECONNREFUSED /tmp/a.sock'
       })
+    )
+    updateNativeChatComposerDraft('tab-1:pane', { text: '$review' }, 'immediate')
+    const before = readNativeChatComposerDraft('tab-1:pane')
+    vi.mocked(structuredTransport.send).mockImplementation((text) =>
+      Boolean(
+        structuredAgentSessionSendBody(
+          text,
+          [],
+          Array.from({ length: 17 }, (_, path) => ({ name: 'review', path: `/${path}` }))
+        )
+      )
+    )
+    await send('$review', [])
+    expect(readNativeChatComposerDraft('tab-1:pane')).toBe(before)
+    expect(structuredTransport.onError).toHaveBeenLastCalledWith(
+      'Your message was not sent to Claude. Keep at most 16 selected skill files and try again.',
+      { errorText: undefined }
     )
   })
 })
