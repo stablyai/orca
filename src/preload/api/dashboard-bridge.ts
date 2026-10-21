@@ -5,6 +5,7 @@ import type {
   DashboardSnapshot,
   DashboardSpawnAgentArgs
 } from '../../shared/dashboard-snapshot'
+import type { DashboardLaneAction } from '../../shared/dashboard-lanes'
 import type { PreloadApi } from '../api-types'
 
 export const dashboardApi = {
@@ -51,6 +52,12 @@ export const dashboardApi = {
     ipcRenderer.on('ui:sleepDashboardWorkspace', listener)
     return () => ipcRenderer.removeListener('ui:sleepDashboardWorkspace', listener)
   },
+  onLaneAction: (callback: (action: DashboardLaneAction) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, action: DashboardLaneAction): void =>
+      callback(action)
+    ipcRenderer.on('ui:dashboardLaneAction', listener)
+    return () => ipcRenderer.removeListener('ui:dashboardLaneAction', listener)
+  },
 
   // ── Consumer side (pop-out window) ───────────────────────────────────
   requestSnapshot: (): Promise<void> => ipcRenderer.invoke('dashboard:requestSnapshot'),
@@ -67,5 +74,7 @@ export const dashboardApi = {
   spawnAgent: (args: DashboardSpawnAgentArgs): Promise<void> =>
     ipcRenderer.invoke('dashboardPopout:spawnAgent', args),
   sleepWorkspace: (args: DashboardSleepWorkspaceArgs): Promise<void> =>
-    ipcRenderer.invoke('dashboardPopout:sleepWorkspace', args)
+    ipcRenderer.invoke('dashboardPopout:sleepWorkspace', args),
+  laneAction: (action: DashboardLaneAction): Promise<void> =>
+    ipcRenderer.invoke('dashboardPopout:laneAction', action)
 } satisfies PreloadApi['dashboard']

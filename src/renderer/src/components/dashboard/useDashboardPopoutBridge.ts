@@ -6,6 +6,7 @@ import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
 import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
 import { launchDashboardAgent } from './launch-dashboard-agent'
+import { applyDashboardLaneActionToStore } from './apply-dashboard-lane-action'
 
 // Why: cap snapshot rebuilds during bursts of agent-status pings. The board is a
 // glanceable surface, so ~4 updates/sec is plenty and keeps the cross-worktree
@@ -126,6 +127,13 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     return window.api.dashboard.onSleepWorkspace?.(({ worktreeId }) => {
       void runSleepWorktree(worktreeId)
     })
+  }, [enabled])
+
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    return window.api.dashboard.onLaneAction?.(applyDashboardLaneActionToStore)
   }, [enabled])
 
   useEffect(() => {

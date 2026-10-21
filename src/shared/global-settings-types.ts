@@ -7,6 +7,7 @@ import type { AiVaultSearchSettings } from './ai-vault-search-settings'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
+import type { DashboardCustomLane } from './dashboard-lanes'
 import type { AppIconId } from './app-icon'
 import type { SourceControlAiSettings } from './source-control-ai-types'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
@@ -494,6 +495,10 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalAgentDashboardMode?: AgentDashboardMode
   /** Includes stale quiet agents as a fourth Agent Dashboard column. */
   experimentalAgentDashboardShowIdle?: boolean
+  /** User-defined Agent Dashboard lanes that cards can be dragged into. */
+  agentDashboardCustomLanes?: DashboardCustomLane[]
+  /** Agent Dashboard card placements: paneKey → custom lane id. */
+  agentDashboardLaneByPaneKey?: Record<string, string>
   /** One-shot migration guard for defaulting the Agents view off; later explicit opt-ins persist normally. */
   experimentalActivityDefaultedOffForAllUsers?: boolean
   /** Experimental: persistent terminal-pane attention ring for bell + agent-completion events. Opt-in while tuning signal/noise. */

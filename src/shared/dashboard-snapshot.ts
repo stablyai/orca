@@ -1,4 +1,5 @@
 import type { AgentType, AgentWorkingMode } from './agent-status-types'
+import type { DashboardCustomLane } from './dashboard-lanes'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
 import type { TuiAgent } from './tui-agent'
@@ -87,6 +88,9 @@ export type DashboardCard = {
   ptyId: string | null
   agentType: AgentType
   bucket: DashboardBucket
+  /** Custom lane the user parked this card in. Unset (or naming a lane the
+   *  snapshot does not list) means the card renders in `bucket`'s column. */
+  laneId?: string
   dotState: DashboardCardDotState
   /** Additive discriminator; older pop-outs render this as ordinary working. */
   workingMode?: AgentWorkingMode
@@ -192,6 +196,9 @@ export type DashboardSnapshot = {
    *  optional for preload compatibility with older snapshot producers. */
   workspaces?: DashboardWorkspace[]
   showIdle?: boolean
+  /** User-defined lanes, rendered after the status columns. Optional for
+   *  preload-version compatibility. */
+  customLanes?: DashboardCustomLane[]
   /** Available filter dimensions are store-derived so zero-card projects and
    *  statuses remain selectable. Optional for preload-version compatibility. */
   filterOptions?: DashboardFilterOptions

@@ -19960,6 +19960,15 @@
       "ssh": "SSH host",
       "remoteNamed": "Remote Orca host · {{host}}",
       "remote": "Remote Orca host"
+    },
+    "lane": {
+      "placeholder": "e.g. Waiting",
+      "nameLabel": "New lane name",
+      "add": "Add lane",
+      "renameLabel": "Lane name",
+      "renameHint": "Double-click to rename",
+      "remove": "Remove lane {{name}}",
+      "empty": "Drag agents here"
     }
   },
   "dashboard": {

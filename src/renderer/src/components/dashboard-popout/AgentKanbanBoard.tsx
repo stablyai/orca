@@ -1,16 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { XIcon } from 'lucide-react'
+import type { DashboardCard, DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
 import {
-  DASHBOARD_BUCKET_ORDER,
-  type DashboardBucket,
-  type DashboardCard,
-  type DashboardSnapshot
-} from '../../../../shared/dashboard-snapshot'
-import type { RepoIcon } from '../../../../shared/repo-icon'
+  DASHBOARD_MAX_CUSTOM_LANES,
+  type DashboardLaneAction
+} from '../../../../shared/dashboard-lanes'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { AgentKanbanCard } from './AgentKanbanCard'
+import { AgentKanbanColumn } from './AgentKanbanColumn'
+import { AgentKanbanAddLane } from './AgentKanbanAddLane'
+import {
+  agentBoardColumnKeyForCard,
+  buildAgentBoardColumns,
+  groupCardsByColumn,
+  prunePendingPlacements,
+  type AgentBoardColumn,
+  type AgentBoardPendingPlacements
+} from './agent-board-columns'
 import { AgentDashboardToolbar } from './AgentDashboardToolbar'
 import { AgentTerminalDialog, type AgentRevealArgs } from './AgentTerminalDialog'
 import {
@@ -36,86 +43,9 @@ function revealAgentViaPopoutRelay(args: AgentRevealArgs): void {
   void window.api.dashboard.revealAgent?.(args)
 }
 
-function bucketLabel(bucket: DashboardBucket): string {
-  switch (bucket) {
-    case 'attention':
-      return translate('dashboardPopout.bucket.attention', 'Needs You')
-    case 'working':
-      return translate('dashboardPopout.bucket.working', 'Working')
-    case 'done':
-      return translate('dashboardPopout.bucket.done', 'Done')
-    case 'idle':
-      return translate('dashboardPopout.bucket.idle', 'Idle')
-  }
-}
-
-function groupByBucket(cards: DashboardCard[]): Record<DashboardBucket, DashboardCard[]> {
-  const grouped: Record<DashboardBucket, DashboardCard[]> = {
-    attention: [],
-    working: [],
-    done: [],
-    idle: []
-  }
-  for (const card of cards) {
-    grouped[card.bucket].push(card)
-  }
-  // Most-recently-moved first: a card entering a column lands at the top,
-  // matching the view-transition motion the user just watched.
-  for (const bucket of DASHBOARD_BUCKET_ORDER) {
-    grouped[bucket].sort((a, b) => b.stateChangedAt - a.stateChangedAt)
-  }
-  return grouped
-}
-
-function KanbanColumn({
-  bucket,
-  cards,
-  repoIconsByRepoId,
-  now,
-  onOpenTerminal
-}: {
-  bucket: DashboardBucket
-  cards: DashboardCard[]
-  repoIconsByRepoId: Record<string, RepoIcon | null> | undefined
-  now: number
-  onOpenTerminal: (card: DashboardCard) => void
-}): React.JSX.Element {
-  const label = bucketLabel(bucket)
-
-  return (
-    // Why: attention no longer tints the whole column — the cards inside carry
-    // their own state color, so a column border would double-signal it.
-    <section
-      aria-label={label}
-      className="flex min-w-[264px] flex-1 flex-col rounded-xl border border-border/60 bg-muted/30"
-    >
-      <header className="flex items-center gap-2 px-3 py-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          {label}
-        </span>
-        <span className="ml-auto rounded-full bg-background px-1.5 text-[11px] tabular-nums text-muted-foreground">
-          {cards.length}
-        </span>
-      </header>
-      <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-        {cards.length === 0 ? (
-          <p className="px-1 py-2 text-[11px] text-muted-foreground">
-            {translate('dashboardPopout.bucket.empty', 'None')}
-          </p>
-        ) : (
-          cards.map((card) => (
-            <AgentKanbanCard
-              key={card.paneKey}
-              card={card}
-              repoIcon={repoIconsByRepoId?.[card.repoId] ?? null}
-              now={now}
-              onOpenTerminal={onOpenTerminal}
-            />
-          ))
-        )}
-      </div>
-    </section>
-  )
+/** Lane edits from the pop-out: the main renderer owns settings. */
+function laneActionViaPopoutRelay(action: DashboardLaneAction): void {
+  void window.api.dashboard.laneAction?.(action)
 }
 
 type AgentKanbanBoardProps = {
@@ -129,6 +59,9 @@ type AgentKanbanBoardProps = {
   /** Focuses the agent's pane. Defaults to the pop-out IPC relay; the in-window
    *  host activates the worktree/pane locally and closes the overlay. */
   onRevealAgent?: (args: AgentRevealArgs) => void
+  /** Adds/renames/removes custom lanes and parks cards in them. Defaults to
+   *  the pop-out IPC relay; the in-window host writes settings directly. */
+  onLaneAction?: (action: DashboardLaneAction) => void
   /** When provided, renders a close control in the header (in-window mode). The
    *  pop-out relies on its native window controls, so it omits this. */
   onClose?: () => void
@@ -145,17 +78,31 @@ export function AgentKanbanBoard({
   containerClassName = 'h-screen w-screen',
   onAckAgent = ackAgentViaPopoutRelay,
   onRevealAgent = revealAgentViaPopoutRelay,
+  onLaneAction = laneActionViaPopoutRelay,
   onClose,
   headerActions
 }: AgentKanbanBoardProps): React.JSX.Element {
-  const visibleBuckets = useMemo(
-    () =>
-      DASHBOARD_BUCKET_ORDER.filter((bucket) => bucket !== 'idle' || snapshot.showIdle === true),
-    [snapshot.showIdle]
+  const customLanes = useMemo(() => snapshot.customLanes ?? [], [snapshot.customLanes])
+  const columns = useMemo(
+    () => buildAgentBoardColumns(snapshot.showIdle === true, customLanes),
+    [snapshot.showIdle, customLanes]
   )
+  const laneIds = useMemo(() => new Set(customLanes.map((lane) => lane.id)), [customLanes])
+  // Why: a drop round-trips through settings and the next snapshot; holding it
+  // locally keeps the card from snapping back for a frame.
+  const [pending, setPending] = useState<AgentBoardPendingPlacements>({})
+  const [prunedFor, setPrunedFor] = useState(snapshot)
+  if (prunedFor !== snapshot) {
+    setPrunedFor(snapshot)
+    setPending(prunePendingPlacements(pending, snapshot.cards, laneIds))
+  }
+  const columnKeys = useMemo(() => new Set(columns.map((column) => column.key)), [columns])
   const visibleCards = useMemo(
-    () => snapshot.cards.filter((card) => visibleBuckets.includes(card.bucket)),
-    [snapshot.cards, visibleBuckets]
+    () =>
+      snapshot.cards.filter((card) =>
+        columnKeys.has(agentBoardColumnKeyForCard(card, laneIds, pending))
+      ),
+    [snapshot.cards, columnKeys, laneIds, pending]
   )
   const [query, setQuery] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -164,7 +111,36 @@ export function AgentKanbanBoard({
     () => filterDashboardCards(visibleCards, query, filters),
     [visibleCards, filters, query]
   )
-  const grouped = useMemo(() => groupByBucket(filteredCards), [filteredCards])
+  const grouped = useMemo(
+    () => groupCardsByColumn(filteredCards, columns, pending),
+    [filteredCards, columns, pending]
+  )
+  const [draggingCard, setDraggingCard] = useState<DashboardCard | null>(null)
+  const handleCardDragEnd = useCallback(() => setDraggingCard(null), [])
+  const handleDropCard = useCallback(
+    (column: AgentBoardColumn) => {
+      if (!draggingCard) {
+        return
+      }
+      const laneId = column.kind === 'lane' ? column.lane.id : null
+      setPending((previous) => ({ ...previous, [draggingCard.paneKey]: laneId }))
+      onLaneAction({ kind: 'place', paneKey: draggingCard.paneKey, laneId })
+      setDraggingCard(null)
+    },
+    [draggingCard, onLaneAction]
+  )
+  // Status columns only accept a parked card (unparking it); its own status
+  // column is the one it returns to, so any of them reads as "back to auto".
+  const canDropOn = (column: AgentBoardColumn): boolean => {
+    if (!draggingCard) {
+      return false
+    }
+    const currentKey = agentBoardColumnKeyForCard(draggingCard, laneIds, pending)
+    if (column.key === currentKey) {
+      return false
+    }
+    return column.kind === 'lane' || currentKey.startsWith('lane:')
+  }
   const hasRelativeTimestamps = useMemo(
     () => snapshot.cards.some((card) => (card.finishedAt ?? card.startedAt) > 0),
     [snapshot.cards]
@@ -299,16 +275,25 @@ export function AgentKanbanBoard({
         <div className="scrollbar-sleek flex min-h-0 flex-1 overflow-x-auto p-3">
           {/* Auto margins center the capped board and collapse during horizontal overflow. */}
           <div className="mx-auto flex w-full max-w-[1280px] gap-3">
-            {visibleBuckets.map((bucket) => (
-              <KanbanColumn
-                key={bucket}
-                bucket={bucket}
-                cards={grouped[bucket]}
+            {columns.map((column) => (
+              <AgentKanbanColumn
+                key={column.key}
+                column={column}
+                cards={grouped.get(column.key) ?? []}
                 repoIconsByRepoId={snapshot.repoIconsByRepoId}
                 now={now}
                 onOpenTerminal={handleOpenTerminal}
+                canDrop={canDropOn(column)}
+                onCardDragStart={setDraggingCard}
+                onCardDragEnd={handleCardDragEnd}
+                onDropCard={handleDropCard}
+                onRenameLane={(laneId, label) => onLaneAction({ kind: 'rename', laneId, label })}
+                onRemoveLane={(laneId) => onLaneAction({ kind: 'remove', laneId })}
               />
             ))}
+            {customLanes.length < DASHBOARD_MAX_CUSTOM_LANES ? (
+              <AgentKanbanAddLane onAddLane={(label) => onLaneAction({ kind: 'add', label })} />
+            ) : null}
           </div>
         </div>
         <AgentTerminalDialog

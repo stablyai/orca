@@ -4,6 +4,7 @@ import type {
   DashboardSnapshot,
   DashboardSpawnAgentArgs
 } from '../../shared/dashboard-snapshot'
+import type { DashboardLaneAction } from '../../shared/dashboard-lanes'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -20,12 +21,14 @@ export type DashboardApi = {
   onAckAgent: (callback: (paneKey: string, intent: 'view' | 'explicit') => void) => () => void
   onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void) => () => void
   onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void) => () => void
+  onLaneAction: (callback: (action: DashboardLaneAction) => void) => () => void
   requestSnapshot: () => Promise<void>
   onSnapshot: (callback: (snapshot: DashboardSnapshot) => void) => () => void
   revealAgent: (args: DashboardRevealAgentArgs) => Promise<void>
   ackAgent: (paneKey: string, intent: 'view' | 'explicit') => Promise<void>
   spawnAgent: (args: DashboardSpawnAgentArgs) => Promise<void>
   sleepWorkspace: (args: DashboardSleepWorkspaceArgs) => Promise<void>
+  laneAction: (action: DashboardLaneAction) => Promise<void>
 }
 
 export type TerminalPreviewApi = {

@@ -46,6 +46,7 @@ import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter
 import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
 import { selectDashboardOrchestration } from './dashboard-orchestration-selection'
 import { dashboardRowBucketProjection, readAgentRowTurnRecords } from './dashboard-row-bucket'
+import { resolveDashboardCardLaneId } from '../../../../shared/dashboard-lanes'
 
 /** The store slices the snapshot builder reads. Kept as a Pick so unit tests
  *  can pass a partial store without constructing the whole AppState. */
@@ -99,6 +100,8 @@ export function buildDashboardSnapshot(
   const includeCardDetails = options.includeCardDetails !== false
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const showIdle = state.settings?.experimentalAgentDashboardShowIdle === true
+  const customLanes = state.settings?.agentDashboardCustomLanes ?? []
+  const laneByPaneKey = state.settings?.agentDashboardLaneByPaneKey
   const turnRecords = readAgentRowTurnRecords(state)
   const activeWorktrees = collectActiveDashboardWorkspaces(state, includeCardDetails)
   const filterOptions =
@@ -209,6 +212,7 @@ export function buildDashboardSnapshot(
             clientHost.platform
           )
         : undefined
+      const laneId = resolveDashboardCardLaneId(customLanes, laneByPaneKey, row.paneKey, bucket)
       // Only repos that actually contribute a card ship their icon.
       repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
 
@@ -217,6 +221,7 @@ export function buildDashboardSnapshot(
         ptyId,
         agentType: row.agentType,
         bucket,
+        ...(laneId ? { laneId } : {}),
         dotState,
         ...(workingMode ? { workingMode } : {}),
         task: isTitleDerived ? '' : rowTask(row),
@@ -270,6 +275,7 @@ export function buildDashboardSnapshot(
     cards,
     ...(workspaces ? { workspaces } : {}),
     showIdle,
+    customLanes,
     filterOptions,
     // Only the dashboard surfaces offer a launcher; the count-only rebuild that
     // feeds the sidebar must not pay for host-detection lookups.
