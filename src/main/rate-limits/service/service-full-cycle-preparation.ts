@@ -8,6 +8,7 @@ import { readCursorAuthSession } from '../cursor-auth'
 import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
 import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
 import { antigravityUsageDisabledSnapshot } from '../antigravity-usage-snapshot'
+import { antigravityUsageTargetKey } from '../antigravity-usage-runtime'
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/zcode-plan-sites'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
@@ -23,6 +24,8 @@ import type {
 } from './service-types'
 
 export type FetchAllCyclePrepared = {
+  antigravityTargetKey: string
+  antigravityGeneration: number
   claudeTarget: NormalizedClaudeAccountSelectionTarget
   claudeGeneration: number
   claudeAuthPreparation: ClaudeRuntimeAuthPreparation | undefined
@@ -74,7 +77,18 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const codexTarget = this.codexFetchTarget
     // Why: capture before the resolver await; a reset during it bumps the generation and this cycle's result is stale.
     const codexGeneration = this.codexFetchGeneration
+    const antigravityTarget = this.antigravityUsageTargetResolver?.() ?? {
+      runtime: 'host' as const,
+      wslDistro: null
+    }
+    const antigravityTargetKey = antigravityUsageTargetKey(antigravityTarget)
+    const antigravityGeneration = this.antigravityFetchGeneration
     const previousState = this.state
+    const previousAntigravityRuntime = previousState.antigravity?.usageMetadata?.authProvenance
+    const antigravityRuntimeChanged =
+      previousAntigravityRuntime &&
+      previousAntigravityRuntime !== antigravityTargetKey &&
+      !(antigravityTargetKey === 'wsl:__default__' && previousAntigravityRuntime.startsWith('wsl:'))
     // Why: a skipped Codex poll must not stop the other providers' cycle, so gate
     // only the Codex slot instead of returning early (#STA-4422).
     const codexHome = await this.resolveCodexHome(codexTarget)
@@ -123,9 +137,19 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
+    const antigravityUsageEnabled = this.antigravityUsageEnabledResolver?.() ?? true
+    const antigravitySuperseded =
+      antigravityGeneration !== this.antigravityFetchGeneration ||
+      antigravityTargetKey !==
+        antigravityUsageTargetKey(
+          this.antigravityUsageTargetResolver?.() ?? { runtime: 'host', wslDistro: null }
+        )
     const antigravityFetchAllowed =
-      (this.antigravityUsageEnabledResolver?.() ?? true) &&
-      (options?.force || !this.shouldSkipAutomatedFetch('antigravity', previousState.antigravity))
+      antigravityUsageEnabled &&
+      !antigravitySuperseded &&
+      (options?.force ||
+        antigravityRuntimeChanged ||
+        !this.shouldSkipAutomatedFetch('antigravity', previousState.antigravity))
 
     const zcodePlanConfigResult = this.resolveZcodePlanConfig()
     const zcodePlanApiKey = zcodePlanConfigResult.config.apiKey
@@ -159,9 +183,14 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         ? this.withFetchingStatus(null, 'opencode-go')
         : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go'),
       kimi: this.withFetchingStatus(previousState.kimi, 'kimi'),
-      antigravity: antigravityFetchAllowed
-        ? this.withFetchingStatus(previousState.antigravity, 'antigravity')
-        : (previousState.antigravity ?? antigravityUsageDisabledSnapshot()),
+      antigravity: antigravitySuperseded
+        ? this.state.antigravity
+        : antigravityFetchAllowed
+          ? this.withFetchingStatus(
+              antigravityRuntimeChanged ? null : previousState.antigravity,
+              'antigravity'
+            )
+          : (previousState.antigravity ?? antigravityUsageDisabledSnapshot()),
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
@@ -196,7 +225,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     // Hidden meters avoid the CLI spawn; the separate promise keeps other providers responsive.
     const antigravityResultPromise = (
       antigravityFetchAllowed
-        ? fetchAntigravityRateLimits({ signal })
+        ? fetchAntigravityRateLimits({ signal, target: antigravityTarget })
         : Promise.resolve(previousState.antigravity ?? antigravityUsageDisabledSnapshot())
     ).then(
       (value) => ({ status: 'fulfilled', value }) as const,
@@ -285,6 +314,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       }
     }
     return {
+      antigravityTargetKey,
+      antigravityGeneration,
       claudeTarget,
       claudeGeneration,
       claudeAuthPreparation,

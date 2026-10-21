@@ -92,6 +92,13 @@ describe('fetchAntigravityRateLimits', () => {
     resetAntigravityUsageSupportForTests()
   })
 
+  it('retains version-read guidance when a resolved host CLI exits 127', async () => {
+    const result = await harness({ versionResult: processResult({ code: 127 }) }).fetch()
+    expect(result.status).toBe('unavailable')
+    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
+    expect(result.error).toContain('version could not be read')
+  })
+
   it('publishes the CLI reading as Antigravity usage', async () => {
     const result = await harness({ result: processResult({ stdout: USAGE_ENVELOPE }) }).fetch()
 

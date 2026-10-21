@@ -11,12 +11,14 @@ function createServiceTargets(
   return {
     getState: vi.fn(() => state),
     refreshClaudeForTarget: vi.fn(async () => state),
+    invalidateAntigravityUsageTarget: vi.fn(() => false),
+    refresh: vi.fn(async () => state),
     refreshCodexForTarget: vi.fn(async () => state)
   }
 }
 
 describe('createAccountRuntimeTargetSettingsSync', () => {
-  it('retargets only Claude and Codex when auto changes to WSL', async () => {
+  it('retargets Claude and Codex when auto changes to WSL', async () => {
     const service = createServiceTargets(
       { runtime: 'host', wslDistro: null },
       { runtime: 'host', wslDistro: null }

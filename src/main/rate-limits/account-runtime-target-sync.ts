@@ -3,10 +3,15 @@ import type { RateLimitState } from '../../shared/rate-limit-types'
 import type { RateLimitService } from './service'
 import { getInitialClaudeRateLimitTarget } from './claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './codex-rate-limit-target'
+import { antigravityUsageTargetKey, getAntigravityUsageTarget } from './antigravity-usage-runtime'
 
 type AccountRuntimeRateLimitService = Pick<
   RateLimitService,
-  'getState' | 'refreshClaudeForTarget' | 'refreshCodexForTarget'
+  | 'getState'
+  | 'refreshClaudeForTarget'
+  | 'refreshCodexForTarget'
+  | 'invalidateAntigravityUsageTarget'
+  | 'refresh'
 >
 
 type RuntimeTarget = {
@@ -29,12 +34,17 @@ export function createAccountRuntimeTargetSettingsSync(
     const nextSettingsTargets = getSettingsTargets(settings, platform)
     const claudePolicyChanged = !isSameTarget(settingsTargets.claude, nextSettingsTargets.claude)
     const codexPolicyChanged = !isSameTarget(settingsTargets.codex, nextSettingsTargets.codex)
+    const antigravityPolicyChanged =
+      antigravityUsageTargetKey(settingsTargets.antigravity) !==
+      antigravityUsageTargetKey(nextSettingsTargets.antigravity)
     settingsTargets = nextSettingsTargets
-    if (!claudePolicyChanged && !codexPolicyChanged) {
+    if (!claudePolicyChanged && !codexPolicyChanged && !antigravityPolicyChanged) {
       return
     }
 
     const current = rateLimits.getState()
+    const refreshAntigravity =
+      antigravityPolicyChanged && rateLimits.invalidateAntigravityUsageTarget()
     const refreshes: Promise<RateLimitState>[] = []
     if (claudePolicyChanged && !isSameTarget(current.claudeTarget, nextSettingsTargets.claude)) {
       refreshes.push(rateLimits.refreshClaudeForTarget(nextSettingsTargets.claude))
@@ -42,15 +52,19 @@ export function createAccountRuntimeTargetSettingsSync(
     if (codexPolicyChanged && !isSameTarget(current.codexTarget, nextSettingsTargets.codex)) {
       refreshes.push(rateLimits.refreshCodexForTarget(nextSettingsTargets.codex))
     }
-
     await Promise.all(refreshes)
+    // Why: a full refresh queued during targeted refreshes can strand their idle waiters.
+    if (refreshAntigravity) {
+      await rateLimits.refresh()
+    }
   }
 }
 
 function getSettingsTargets(settings: GlobalSettings, platform: NodeJS.Platform) {
   return {
     claude: getInitialClaudeRateLimitTarget(settings, platform),
-    codex: getInitialCodexRateLimitTarget(settings, platform)
+    codex: getInitialCodexRateLimitTarget(settings, platform),
+    antigravity: getAntigravityUsageTarget(settings, platform)
   }
 }
 
