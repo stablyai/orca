@@ -8,6 +8,7 @@ import {
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
 import type { CatalogCommandDelivery } from '../../../src/shared/agent-session-option-catalog'
+import { buildNativeChatPasteBytes } from '../../../src/shared/native-chat-paste-bytes'
 import { isSlashCommandDraft } from '../../../src/shared/native-chat-slash-commands'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
@@ -189,7 +190,9 @@ export function useMobileNativeChatMessageSend(args: {
         : await sendMobileNativeChatMessageWithOutcome({
             client,
             terminal: handle,
-            text,
+            // Why: agent TUIs read a long unframed body in ~1 KiB pieces and can keep only
+            // the last one (#13332). Same multi-line framing as desktop chat.
+            text: buildNativeChatPasteBytes(text),
             ...(requireWriteSettlement ? { requireWriteSettlement } : {}),
             ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
             deadline,
