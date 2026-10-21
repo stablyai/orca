@@ -42,7 +42,6 @@ export async function createOrAttachTerminalSession(
   opts: InternalCreateOrAttachOptions,
   deps: TerminalHostSessionCreateDependencies
 ): Promise<CreateOrAttachResult> {
-  opts.onSessionResolved?.(opts.sessionId)
   let existing = deps.sessions.get(opts.sessionId)
 
   // Why: descendant capture must finish before attach or recreation, or the
@@ -76,7 +75,14 @@ export async function createOrAttachTerminalSession(
   // exit, kill during the await) that produced repeated regressions. Checkpoint
   // readers that need a settled owner use getSettledSnapshot.
   if (existing && existing.isAlive && !existing.isTerminating) {
+    const commit = opts.onSessionResolved?.(opts.sessionId)
+    if (commit === null) {
+      throw new TerminalAttachCanceledError(opts.sessionId)
+    }
     const snapshot = existing.getSnapshot()
+    if (commit && !commit()) {
+      throw new TerminalAttachCanceledError(opts.sessionId)
+    }
     existing.detachAllClients()
     const token = existing.attachClient(opts.streamClient)
     return {
@@ -223,7 +229,10 @@ async function spawnAndPublishSession(
   deps.sessions.set(opts.sessionId, session)
   deps.onSessionCreated(opts.sessionId, opts.agentSessionGeneration, session.isAlive)
   onPublished(opts.sessionId, session.isAlive)
-  const token = session.attachClient(opts.streamClient)
+  const commit = opts.onSessionResolved?.(opts.sessionId)
+  // A stale observation endpoint cannot cancel accepted startup or claimed-owner promotion.
+  const token: symbol | null =
+    commit !== null && (!commit || commit()) ? session.attachClient(opts.streamClient) : null
 
   const startupCommandWritten =
     Boolean(opts.command) && !subprocess.startupCommandDeliveredInShellArgs

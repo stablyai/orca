@@ -22,6 +22,7 @@ import {
   readInFlightCommandCodeTurn
 } from './parked-terminal-command-status'
 import { subscribeToPtyData } from './pty-data-sidecar-subscriptions'
+import type { PtyDataMeta } from './pty-dispatcher'
 import { createPtyOutputProcessor } from './pty-output-processor'
 import { isRendererHiddenPtyDeliveryGateEnabled } from './terminal-hidden-delivery-gate'
 import {
@@ -302,11 +303,11 @@ export function startParkedTerminalByteWatcher(
     ? acquireHiddenRendererPtyDeliveryClaim(ptyId)
     : null
 
-  const processLiveData = (data: string): void => {
+  const processLiveData = (data: string, meta?: PtyDataMeta): void => {
     if (!processor) {
       return
     }
-    processor.processData(data, {})
+    processor.processData(data, {}, {}, meta)
     commandFinishedScanner?.scan(data)
     commandCodeOutputStatusDetector?.observe(data)
     if (observeTerminalGitHubPRLink) {

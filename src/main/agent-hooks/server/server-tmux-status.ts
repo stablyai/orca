@@ -22,7 +22,7 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
       store: () => this.canonicalStatusStore,
       getRoot: (paneKey) => this.tmuxRootResolver(paneKey),
       isRetired: (paneKey) => this.getAgentStatusDisposition(paneKey) === 'suppress',
-      publish: (event, observedAt, subject, stateStartedAt) => {
+      publish: (event, observedAt, subject, stateStartedAt, isCurrent) => {
         if (this.getAgentStatusDisposition(event.paneKey, event) === 'suppress') {
           return
         }
@@ -31,7 +31,7 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
         const status = commitTmuxSelectedStatus(
           this.canonicalStatusStore,
           subject,
-          event,
+          { ...event, launchToken: undefined },
           observedAt,
           stateStartedAt
         )
@@ -51,11 +51,19 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
           source: event.source,
           hookEventName: event.hookEventName,
           hasExplicitPrompt: event.hasExplicitPrompt,
-          launchToken: event.launchToken,
           promptInteractionKey: event.promptInteractionKey
         }
         this.commitStatusRowMutation(previous && structuredStatusLegacyEvent(previous), after)
-        this.recordCurrentAuthorityObservation(after)
+        const parent = this.canonicalStatusStore
+          .getParents()
+          .find((record) => serializeAgentStatusSubject(record.subject) === key)
+        this.recordCurrentAuthorityObservation(
+          { ...after, launchToken: event.launchToken },
+          after,
+          isCurrent,
+          undefined,
+          parent ?? after
+        )
         this.notifyStatusChangeListeners()
         this.emitEnrichedStatus(tmuxCliWriterEvent(after))
       },
@@ -75,6 +83,11 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
       }
     })
     return this.tmuxOwner
+  }
+
+  protected captureTmuxRoot(paneKey: string): (() => boolean) | undefined {
+    const root = this.tmuxOwner?.rootIdentity(paneKey)
+    return () => root !== undefined && this.tmuxOwner?.rootIdentity(paneKey) === root
   }
 
   protected ingestTmuxHook(source: AgentHookSource, body: unknown): Promise<boolean> {

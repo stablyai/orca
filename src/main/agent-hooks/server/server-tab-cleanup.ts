@@ -82,6 +82,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       this.activeHookTurnCompletedAtByPaneKey.delete(paneKey)
       this.runtimeObservedStatusPaneKeys.delete(paneKey)
       this.currentAuthorityObservations.delete(paneKey)
+      this.pendingLaunchAuthority.delete(paneKey)
       this.promptSentDedupeByPaneKey.delete(paneKey)
       this.restartedStatusLaunchTokenHashByPaneKey.delete(paneKey)
       this.evidenceObservedAtByPaneKey.delete(paneKey)
@@ -142,6 +143,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     clearPaneCacheState(this.state, resolvedPaneKey)
     this.activeHookTurnCompletedAtByPaneKey.delete(resolvedPaneKey)
     this.currentAuthorityObservations.delete(resolvedPaneKey)
+    this.pendingLaunchAuthority.delete(resolvedPaneKey)
     this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
     this.restartedStatusLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
     // Why: the pane itself is gone, so its observation clock describes nothing a later pane owns.
@@ -158,6 +160,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
         clearPaneCacheState(this.state, legacyPaneKey)
         this.activeHookTurnCompletedAtByPaneKey.delete(legacyPaneKey)
         this.currentAuthorityObservations.delete(legacyPaneKey)
+        this.pendingLaunchAuthority.delete(legacyPaneKey)
         this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
         this.restartedStatusLaunchTokenHashByPaneKey.delete(legacyPaneKey)
         this.evidenceObservedAtByPaneKey.delete(legacyPaneKey)

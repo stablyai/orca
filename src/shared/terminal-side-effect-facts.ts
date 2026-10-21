@@ -25,6 +25,7 @@ export type TerminalSideEffectFact =
       status?: AgentIdleStatus
     }
   | { kind: 'agent-exited' }
+  | { kind: 'command-started' }
   /** OSC 133;D — foreground shell command exited (exit code best-effort). */
   | { kind: 'command-finished'; exitCode: number | null }
   /** Carries the parsed link so the renderer store consumer never re-parses

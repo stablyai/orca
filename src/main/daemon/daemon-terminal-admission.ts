@@ -21,6 +21,7 @@ import {
   isAgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import { type DaemonRequest, TerminalAttachCanceledError } from './types'
+import { isTerminalSubscriptionId } from '../../shared/terminal-transient-observation'
 
 type CreateOrAttachRequest = Extract<DaemonRequest, { type: 'createOrAttach' }>
 
@@ -71,6 +72,16 @@ export class DaemonTerminalAdmission {
       throw new Error('Daemon client connection is incomplete; reconnect')
     }
     const payload = request.payload
+    const transients = payload.transients
+    const streamSocket = client.streamSocket
+    if (
+      transients &&
+      (transients.streamId !== client.transientStreamId ||
+        !isTerminalSubscriptionId(transients.streamId) ||
+        !isTerminalSubscriptionId(transients.subscriptionId))
+    ) {
+      throw new Error('Terminal observation stream changed; reconnect')
+    }
     const attachOnly = payload.attachOnly === true
     if (!attachOnly && this.options.endpoint.hasLostOwnership()) {
       this.options.requestEndpointRetirement()
@@ -80,6 +91,12 @@ export class DaemonTerminalAdmission {
     let routedSessionId = payload.sessionId
     let result: CreateOrAttachResult
     let spawnPreparation: PendingPtySpawnPreparation | null = null
+    const isCurrentStream = (): boolean =>
+      this.options.connections.get(clientId) === client &&
+      client.authenticatedPairEstablished &&
+      client.streamSocket === streamSocket &&
+      (!transients || client.transientStreamId === transients.streamId)
+    const streamClient = this.createStreamClient(clientId, () => routedSessionId, isCurrentStream)
     try {
       if (
         payload.agentSessionEnsure !== undefined &&
@@ -137,9 +154,38 @@ export class DaemonTerminalAdmission {
         cancelSignal: spawnPreparation.controller.signal,
         onSessionResolved: (sessionId) => {
           routedSessionId = sessionId
+          if (!isCurrentStream()) {
+            return null
+          }
+          if (!transients) {
+            return
+          }
+          const commit = this.options.streamDataBatcher.prepareTransients(
+            clientId,
+            sessionId,
+            transients.subscriptionId,
+            transients.streamId
+          )
+          if (!commit) {
+            return null
+          }
+          return () => {
+            if (!isCurrentStream()) {
+              return false
+            }
+            const sink = commit()
+            if (!sink) {
+              return false
+            }
+            streamClient.transients = sink
+            return true
+          }
         },
-        streamClient: this.createStreamClient(clientId, () => routedSessionId)
+        streamClient
       })
+    } catch (error) {
+      streamClient.transients?.dispose?.()
+      throw error
     } finally {
       if (spawnPreparation) {
         this.options.preparations.finish(payload.sessionId, spawnPreparation)
@@ -149,17 +195,18 @@ export class DaemonTerminalAdmission {
     }
 
     routedSessionId = result.agentSessionEnsure?.owner.ptyId ?? payload.sessionId
-    if (
-      this.options.connections.get(clientId) !== client ||
-      !client.authenticatedPairEstablished ||
-      client.streamSocket === null
-    ) {
-      this.options.host.detach(routedSessionId, result.attachToken)
+    if (!isCurrentStream() || result.attachToken === null) {
+      if (result.attachToken !== null) {
+        this.options.host.detach(routedSessionId, result.attachToken)
+      }
       throw new TerminalAttachCanceledError(routedSessionId)
     }
     this.options.attachments.attach(routedSessionId, clientId, result.attachToken)
     this.options.streamDataBatcher.refreshSessionDroppability(routedSessionId)
-    if (this.options.transientFactRelay.isBackgrounded(routedSessionId)) {
+    if (
+      !streamClient.transients &&
+      this.options.transientFactRelay.isBackgrounded(routedSessionId)
+    ) {
       this.options.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
         type: 'event',
         event: 'sessionBackgroundMarker',
@@ -177,6 +224,11 @@ export class DaemonTerminalAdmission {
       pid: result.pid,
       shellState: result.shellState,
       incarnationId: result.incarnationId,
+      ...(streamClient.transients && transients
+        ? {
+            transients: { ...transients, sessionId: routedSessionId }
+          }
+        : {}),
       ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
       wslDistro: result.wslDistro,
       ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
@@ -189,12 +241,18 @@ export class DaemonTerminalAdmission {
 
   private createStreamClient(
     clientId: string,
-    sessionId: () => string
+    sessionId: () => string,
+    streamIsCurrent: () => boolean = () => true
   ): CreateOrAttachOptions['streamClient'] {
-    return {
+    const streamClient: CreateOrAttachOptions['streamClient'] = {
       onData: (data, rawLength = data.length, transformed = false, seq) => {
+        if (!streamIsCurrent()) {
+          return
+        }
         const routedSessionId = sessionId()
-        this.options.transientFactRelay.onSessionData(routedSessionId, data)
+        if (!streamClient.transients) {
+          this.options.transientFactRelay.onSessionData(routedSessionId, data)
+        }
         const lastInputAt = this.options.attachments.lastInputAt(routedSessionId)
         const isInteractiveOutput =
           data.length <= DaemonTerminalAdmission.INTERACTIVE_OUTPUT_MAX_CHARS &&
@@ -231,5 +289,6 @@ export class DaemonTerminalAdmission {
         this.options.reevaluateIdleShutdown()
       }
     }
+    return streamClient
   }
 }

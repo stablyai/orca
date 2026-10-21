@@ -205,7 +205,7 @@ describe('shell showing through a hibernation kill', () => {
     return {
       paneKey,
       record,
-      finishCommand: () => dataCallbackRef.current?.('\x1b]133;D;0\x07'),
+      finishCommand: () => dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07'),
       rebindPty: (id: string | null) => transport.getPtyId.mockReturnValue(id),
       exitPty: () => {
         const onPtyExit = createdTransportOptions[0]?.onPtyExit

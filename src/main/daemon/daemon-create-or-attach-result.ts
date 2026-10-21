@@ -4,6 +4,7 @@ import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 export type DaemonCreateOrAttachResult = {
+  transients?: { streamId: string; subscriptionId: string; sessionId: string }
   isNew: boolean
   snapshot: TerminalSnapshot | null
   pid: number | null

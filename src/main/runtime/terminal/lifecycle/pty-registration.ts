@@ -15,6 +15,8 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { startedMainTerminalSurfaces } from '../surface/main-terminal-surfaces'
 
 export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHandlesForPty {
+  protected abstract notifyAgentLaunchAuthority(paneKey: string | null | undefined): void
+
   protected abstract ensurePtyBackedMobileSurfaceForRendererTab(
     worktreeId: string,
     tabId: string
@@ -181,6 +183,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
         this.registerPreAllocatedHandleForPty(ptyId, replacementHandle)
       }
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
+      this.notifyAgentLaunchAuthority(paneKey)
     }
   }
 

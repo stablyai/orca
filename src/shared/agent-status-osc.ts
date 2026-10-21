@@ -22,6 +22,39 @@ function findAgentStatusPrefixCarry(data: string): string {
   return ''
 }
 
+/**
+ * Length of the run of complete OSC 9999 frames at the start of `text`. Main strips these before
+ * its other scanners, so a raw-byte reader must not count them as output either.
+ */
+export function leadingAgentStatusFramesLength(text: string): number {
+  let offset = 0
+  while (text.startsWith(OSC_AGENT_STATUS_PREFIX, offset)) {
+    const payloadStart = offset + OSC_AGENT_STATUS_PREFIX.length
+    const bel = text.indexOf('\x07', payloadStart)
+    const st = text.indexOf('\x1b\\', payloadStart)
+    if (bel === -1 && st === -1) {
+      break
+    }
+    offset = bel !== -1 && (st === -1 || bel < st) ? bel + 1 : st + 2
+  }
+  return offset
+}
+
+/** True while `text` could still become one complete OSC 9999 frame. */
+export function couldBecomeAgentStatusFrame(text: string): boolean {
+  if (text.length === 0) {
+    return false
+  }
+  if (OSC_AGENT_STATUS_PREFIX.startsWith(text)) {
+    return true
+  }
+  return (
+    text.startsWith(OSC_AGENT_STATUS_PREFIX) &&
+    !text.includes('\x07') &&
+    !text.slice(0, -1).includes('\x1b\\')
+  )
+}
+
 export type ProcessedAgentStatusChunk = {
   cleanData: string
   payloads: ParsedAgentStatusPayload[]

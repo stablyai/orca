@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { LEAF_1 } from './server.test-fixtures'
+import { LEAF_1, installTestLaunchAuthority } from './server.test-fixtures'
 
 const REMOVED = 'repo::/removed'
 const KEPT = 'repo::/kept'
@@ -50,6 +50,9 @@ describe('removed-worktree foreign authority', () => {
 
   it('keeps foreign hydrated evidence when a removed commitment outlives its row', async () => {
     const seed = new AgentHookServer()
+    installTestLaunchAuthority(seed, [
+      { paneKey: PANE, token: TOKEN, connectionId: 'user@box', worktreeId: KEPT }
+    ])
     await seed.start({ env: 'production', userDataPath })
     seed.ingestRemote(
       {
@@ -64,6 +67,9 @@ describe('removed-worktree foreign authority', () => {
     seed.flushStatusPersistSync()
     seed.stop()
     const server = new AgentHookServer()
+    installTestLaunchAuthority(server, [
+      { paneKey: PANE, token: 'removed-launch', connectionId: null, worktreeId: REMOVED }
+    ])
     await server.start({ env: 'production', userDataPath })
     try {
       server.ingestRemote(
@@ -116,6 +122,7 @@ describe('removed-worktree foreign authority', () => {
       const token = connectionId === null ? 'removed-launch' : TOKEN
       const hash = createHash('sha256').update(token).digest('hex')
       const seed = new AgentHookServer()
+      installTestLaunchAuthority(seed, [{ paneKey: PANE, token, connectionId, worktreeId: owner }])
       await seed.start({ env: 'production', userDataPath })
       seed.ingestRemote(
         {
@@ -131,6 +138,9 @@ describe('removed-worktree foreign authority', () => {
       seed.stop()
 
       const server = new AgentHookServer()
+      installTestLaunchAuthority(server, [
+        { paneKey: PANE, token: TOKEN, connectionId: 'user@box', worktreeId: KEPT }
+      ])
       await server.start({ env: 'production', userDataPath })
       const attest = () =>
         server.attestCompatibilityAuthority({
@@ -202,6 +212,9 @@ describe('removed-worktree foreign authority', () => {
     'keeps a foreign claim after removed OSC with disconnect=%s',
     async (disconnect) => {
       const server = new AgentHookServer()
+      installTestLaunchAuthority(server, [
+        { paneKey: PANE, token: TOKEN, connectionId: 'user@box', worktreeId: KEPT }
+      ])
       await server.start({ env: 'production', userDataPath })
       const remote = (state: 'working' | 'done') =>
         server.ingestRemote(

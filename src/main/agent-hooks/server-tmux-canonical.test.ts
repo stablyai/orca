@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
-import { postHookEvent } from './server.test-fixtures'
+import { postHookEvent, installTestLaunchAuthority } from './server.test-fixtures'
 import {
   TMUX_TEST_PANE,
   TMUX_TEST_ROOT,
@@ -28,33 +28,52 @@ beforeEach(async () => {
 })
 afterEach(() => server.stop())
 describe('main canonical tmux projection', () => {
-  it('publishes one canonical outer row, blocks legacy overwrites, and cleans the exact outer and inner subjects', async () => {
-    expect((await postHookEvent(server, tmuxTestBody(), '/hook/opencode')).status).toBe(204)
-    expect(server.hasLegacyRow()).toBe(false)
-    expect(
-      server.attestCompatibilityAuthority({
+  it.each([false, true])(
+    'publishes one canonical outer row with delayed verifier=%s, blocks legacy overwrites, and cleans the exact outer and inner subjects',
+    async (delayed) => {
+      const admit = () =>
+        installTestLaunchAuthority(server, [
+          { paneKey: TMUX_TEST_PANE, token: 'generation', connectionId: null }
+        ])
+      if (!delayed) {
+        admit()
+      }
+      expect((await postHookEvent(server, tmuxTestBody(), '/hook/opencode')).status).toBe(204)
+      expect(server.hasLegacyRow()).toBe(false)
+      if (delayed) {
+        expect(server.getCurrentAuthorityObservations()).toHaveLength(0)
+        admit()
+      }
+      expect(
+        server.attestCompatibilityAuthority({
+          paneKey: TMUX_TEST_PANE,
+          launchTokenHash: createHash('sha256').update('generation').digest('hex'),
+          connectionId: null,
+          terminalProvenance: 'current_runtime'
+        })
+      ).toEqual({ paneKey: TMUX_TEST_PANE, source: 'current_hook' })
+      expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(2)
+      expect(server.getStatusSnapshot()).toMatchObject([{ paneKey: TMUX_TEST_PANE, state: 'done' }])
+      server.ingestTerminalStatus({
         paneKey: TMUX_TEST_PANE,
-        launchTokenHash: createHash('sha256').update('generation').digest('hex'),
-        connectionId: null,
-        terminalProvenance: 'current_runtime'
+        worktreeId: 'workspace',
+        payload: { state: 'working', prompt: 'untrusted repaint', agentType: 'opencode' }
       })
-    ).toEqual({ paneKey: TMUX_TEST_PANE, source: 'current_hook' })
-    expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(2)
-    expect(server.getStatusSnapshot()).toMatchObject([{ paneKey: TMUX_TEST_PANE, state: 'done' }])
-    server.ingestTerminalStatus({
-      paneKey: TMUX_TEST_PANE,
-      worktreeId: 'workspace',
-      payload: { state: 'working', prompt: 'untrusted repaint', agentType: 'opencode' }
-    })
-    expect(server.hasLegacyRow()).toBe(false)
-    expect(server.getStatusSnapshot()[0]?.state).toBe('done')
-    server.clearPaneState(TMUX_TEST_PANE)
-    expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(0)
-    expect(server.getStatusSnapshot()).toHaveLength(0)
-  })
-  it('removes canonical tmux status on certified retirement', async () => {
+      expect(server.hasLegacyRow()).toBe(false)
+      expect(server.getStatusSnapshot()[0]?.state).toBe('done')
+      server.clearPaneState(TMUX_TEST_PANE)
+      expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(0)
+      expect(server.getStatusSnapshot()).toHaveLength(0)
+    }
+  )
+  it('captures canonical retirement before delayed credential admission without replacing its subject', async () => {
     await postHookEvent(server, tmuxTestBody(), '/hook/opencode')
-    server.retirePaneAuthority(TMUX_TEST_PANE)
+    const retire = server.capturePaneAuthorityRetirement(TMUX_TEST_PANE)
+    installTestLaunchAuthority(server, [
+      { paneKey: TMUX_TEST_PANE, token: 'generation', connectionId: null }
+    ])
+    expect(server.getStatusSnapshot()[0]?.launchToken).toBe('generation')
+    retire()
     expect(server.getStatusSnapshot()).toHaveLength(0)
     expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(0)
   })

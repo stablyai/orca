@@ -306,6 +306,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
         }
       }
       titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
+        commandScanData: data,
         titleScanData: titleInput,
         programActivity: agentStatusChunk.programActivity
       })

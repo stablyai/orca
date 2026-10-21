@@ -13,6 +13,11 @@ function sendMode2031Reply(
   return transport.sendInputImmediate(mode2031SequenceFor(mode))
 }
 
+// Why off: this client-side check carries no host-admitted subscription revision, so a flip queued
+// as the program withdraws reaches its shell as typed `?997;Nn` (#9993). Real queries still get
+// answers; flips return once the host admits mode writes itself (STA-11321 slice 4).
+const UNSOLICITED_MODE_2031_FLIPS_ENABLED = false
+
 // Appearance updates include font and opacity changes, so only report actual
 // color-mode flips to programs that still have mode 2031 enabled.
 export function maybePushMode2031Flip(
@@ -22,7 +27,7 @@ export function maybePushMode2031Flip(
   paneMode2031: Map<number, boolean>,
   paneLastThemeMode: Map<number, TerminalColorSchemeMode>
 ): boolean {
-  if (!transport.isConnected()) {
+  if (!UNSOLICITED_MODE_2031_FLIPS_ENABLED || !transport.isConnected()) {
     return false
   }
   if (!paneMode2031.get(paneId)) {

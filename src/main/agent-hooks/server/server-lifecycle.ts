@@ -164,7 +164,6 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
             statusDisposition === 'restart'
               ? {
                   ...normalized.event,
-                  launchToken: undefined,
                   ...(restartedAuthority
                     ? {
                         ...restartedAuthority,
@@ -178,7 +177,6 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
             // same key — later observations must not be ordered against the retired one.
             this.observations.rebind(event.paneKey)
           }
-          this.recordCurrentAuthorityObservation(event)
           const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
           if (enriched) {
             this.checkAgentPresenceAfterHook(event, enriched)
@@ -286,6 +284,10 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.persistedAuthorityCommitmentsByPaneKey.clear()
     this.revokedHydratedAuthorityCommitments = new WeakSet()
     this.currentAuthorityObservations.clear()
+    this.pendingLaunchAuthority.clear()
+    this.unsubscribeLaunchAuthority?.()
+    this.unsubscribeLaunchAuthority = null
+    this.launchAuthorityVerifier = null
     this.promptSentDedupeByPaneKey.clear()
     this.closedAgentStatusTabIds.clear()
     this.closedAgentStatusPaneKeys.clear()

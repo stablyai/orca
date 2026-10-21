@@ -8,7 +8,7 @@ import {
 } from '../../shared/pty-write-settlement'
 
 export type NotifySettlementRequest = {
-  socket: Socket
+  socket: Socket | null
   message: unknown
   timeoutMs: number
   // Why: a notify that never drains is the only local evidence a dead endpoint leaves.
@@ -20,6 +20,9 @@ export async function writeNotifyWithSettlement(
   request: NotifySettlementRequest
 ): Promise<WriteSettlement> {
   const { socket, message, timeoutMs, onUndeliverable } = request
+  if (!socket) {
+    return writeRefused('endpoint_disconnected')
+  }
   let encoded: string
   try {
     encoded = encodeNdjson(message)
@@ -62,4 +65,14 @@ export async function writeNotifyWithSettlement(
       disconnectAndSettle(writeUnverifiable('endpoint_write_threw', true))
     }
   })
+}
+
+export function writeDaemonNotify(socket: Socket, message: unknown): boolean {
+  try {
+    socket.write(encodeNdjson(message))
+    return true
+  } catch {
+    // Notifications are best-effort; an oversized payload must not tear down the caller.
+    return false
+  }
 }

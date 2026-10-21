@@ -1,11 +1,7 @@
 import { resolvePaneTitleDecision } from '../terminal-title-evidence'
 import { useAppStore } from '@/store'
 import { shouldSeedCacheTimerOnInitialTitle } from '../cache-timer-seeding'
-import {
-  cancelCommandCodeDoneSettle,
-  openCommandCodeDoneSettle,
-  setCommandCodeDoneSettleExecutor
-} from '../command-code-done-settle'
+import { createTerminalCommandCodeStatusPolicy } from '../parked-terminal-command-status'
 import { canCommandCodeOutputOwnPane } from '../command-code-output-ownership'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
@@ -118,101 +114,17 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     })
   }
 
-  session.seedCommandCodeOutputWorkingStatus = (prompt: string): void => {
-    if (!session.canApplyCommandCodeOutputStatus()) {
-      return
-    }
-    session.clearCommandCodeOutputDoneTimer()
-    const routing = session.resolveCurrentAgentStatusRouting()
-    if (!routing) {
-      return
-    }
-    const currentState = useAppStore.getState()
-    const currentEntry = currentState.agentStatusByPaneKey[session.cacheKey]
-    const currentTitle =
-      currentState.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
-    const normalizedPrompt = prompt.trim()
-    if (
-      currentEntry?.agentType === 'command-code' &&
-      currentEntry.state === 'done' &&
-      (!normalizedPrompt || normalizedPrompt === currentEntry.prompt.trim())
-    ) {
-      return
-    }
-    currentState.setAgentStatus(
-      session.cacheKey,
-      {
-        state: 'working',
-        prompt: normalizedPrompt || (currentEntry?.state === 'working' ? currentEntry.prompt : ''),
-        agentType: 'command-code',
-        observation: rendererAgentStatusObservations.observe(session.cacheKey, {
-          origin: 'process',
-          observedAt: Date.now(),
-          kind: 'transition'
-        })
-      },
-      currentTitle,
-      undefined,
-      routing
-    )
-  }
-
-  // Why the settle window lives outside this binding: park unmounts the pane
-  // mid-settle, so a pane-owned timer would be cancelled with nothing left to
-  // complete the turn — the row would stick at 'working'. Only the row write
-  // (routing + title slot) is pane-local; the deadline transfers to whichever
-  // owner (parked watcher or remounted pane) holds the pane next.
-  session.releaseCommandCodeDoneSettleExecutor = setCommandCodeDoneSettleExecutor(
-    session.cacheKey,
-    (normalizedPrompt) => {
-      const routing = session.resolveCurrentAgentStatusRouting()
-      if (!routing) {
-        return
-      }
-      const currentState = useAppStore.getState()
-      const currentEntry = currentState.agentStatusByPaneKey[session.cacheKey]
-      if (currentEntry?.agentType !== 'command-code' || currentEntry.state !== 'working') {
-        return
-      }
-      const currentPrompt = currentEntry.prompt.trim()
-      if (currentPrompt && currentPrompt !== normalizedPrompt) {
-        return
-      }
-      const currentTitle =
-        currentState.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
-      currentState.setAgentStatus(
-        session.cacheKey,
-        {
-          state: 'done',
-          prompt: currentPrompt || normalizedPrompt,
-          agentType: 'command-code',
-          observation: rendererAgentStatusObservations.observe(session.cacheKey, {
-            origin: 'process',
-            observedAt: Date.now(),
-            kind: 'transition'
-          })
-        },
-        currentTitle,
-        undefined,
-        routing
-      )
-    }
-  )
-  session.clearCommandCodeOutputDoneTimer = (): void =>
-    cancelCommandCodeDoneSettle(session.cacheKey)
-  session.scheduleCommandCodeOutputDoneStatus = (prompt: string): void => {
-    if (!session.canApplyCommandCodeOutputStatus()) {
-      return
-    }
-    const normalizedPrompt = prompt.trim()
-    if (!normalizedPrompt) {
-      cancelCommandCodeDoneSettle(session.cacheKey)
-      return
-    }
-    // Why: Command Code keeps rendering the composer while tools run. Only
-    // complete the row if no active status repaint arrives during this window.
-    openCommandCodeDoneSettle(session.cacheKey, normalizedPrompt)
-  }
+  const commandCode = createTerminalCommandCodeStatusPolicy({
+    paneKey: session.cacheKey,
+    resolveRouting: () => session.resolveCurrentAgentStatusRouting(),
+    canApply: session.canApplyCommandCodeOutputStatus,
+    readTitle: () =>
+      useAppStore.getState().runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
+  })
+  session.seedCommandCodeOutputWorkingStatus = commandCode.onCommandCodeWorking
+  session.scheduleCommandCodeOutputDoneStatus = commandCode.onCommandCodeDone
+  session.releaseCommandCodeDoneSettleExecutor = commandCode.dispose
+  session.clearCommandCodeOutputDoneTimer = commandCode.clearDoneTimer
 
   installPanePtyVisibilityBind(session)
 }

@@ -1,4 +1,6 @@
 import type { Socket } from 'node:net'
+import { randomUUID } from 'node:crypto'
+import { TERMINAL_TRANSIENTS_CAPABILITY } from '../../shared/terminal-transient-observation'
 import { StringDecoder } from 'node:string_decoder'
 import { isDaemonRequestFrame, isHelloFrame } from './daemon-client-frame-guards'
 import type { DaemonFileLog } from './daemon-file-log'
@@ -17,6 +19,7 @@ export type ConnectedDaemonClient = {
   streamSocket: Socket | null
   /** Set per stream socket by its hello; absent means NDJSON. */
   streamFraming?: DaemonStreamFraming
+  transientStreamId?: string
   authenticatedPairEstablished: boolean
 }
 
@@ -153,12 +156,21 @@ export class DaemonClientConnections {
       ...(hello.role === 'stream' ? { streamFraming } : {})
     })
     const identity = this.options.identity
+    const transientStreamId =
+      hello.role === 'stream' &&
+      Array.isArray(hello.capabilities) &&
+      hello.capabilities.includes(TERMINAL_TRANSIENTS_CAPABILITY)
+        ? randomUUID()
+        : undefined
     socket.write(
       encodeNdjson({
         type: 'hello',
         ok: true,
         // Why: this hello line is the socket's last NDJSON; the client switches readers on this field.
         ...(streamFraming === BINARY_STREAM_FRAMING ? { streamFraming } : {}),
+        ...(transientStreamId
+          ? { streamId: transientStreamId, capabilities: [TERMINAL_TRANSIENTS_CAPABILITY] }
+          : {}),
         ...(identity.launchNonce && identity.startedAtMs
           ? {
               daemonIdentity: {
@@ -185,6 +197,7 @@ export class DaemonClientConnections {
         return
       }
       this.installStreamSocket(socket, client, streamFraming)
+      client.transientStreamId = transientStreamId
       client.authenticatedPairEstablished = true
       this.options.onAuthenticatedPair()
       return

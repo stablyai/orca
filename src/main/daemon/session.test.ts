@@ -3,6 +3,10 @@ import { Session } from './session'
 import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
 import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type {
+  TerminalTransientObservation,
+  TerminalTransientSink
+} from '../../shared/terminal-transient-observation'
 import {
   _resetPtyOwnerHostColorsForTest,
   setPtyOwnerHostColors
@@ -169,6 +173,50 @@ describe('Session', () => {
   })
 
   describe('data flow', () => {
+    it('keeps physical interpretation through detach and installs current evidence without replaying attention', () => {
+      createSession()
+      const marker = (value: string): string => `\x1b]133;${value}\x07`
+      const staged: TerminalTransientObservation[] = []
+      const delivered: TerminalTransientObservation[] = []
+      const order: string[] = []
+      const installs: TerminalTransientObservation[] = []
+      const transients: TerminalTransientSink = {
+        install: (current, incarnation) => {
+          expect(incarnation).toBe(session.incarnationId)
+          installs.push(current)
+        },
+        stage: (observation) => staged.push(observation),
+        commit: () => {
+          order.push('effects')
+          delivered.push(...staged.splice(0))
+        }
+      }
+      subprocess.simulateData(marker('B') + marker('C'))
+      const attach = (): symbol =>
+        session.attachClient({
+          transients,
+          onExit: () => {},
+          onData: () => order.push('display')
+        })
+      const first = attach()
+      subprocess.simulateData('\x1b]133;D;')
+      session.detachClient(first)
+      subprocess.simulateData('0\x07OMP reply\x07')
+      const second = attach()
+      expect(delivered).toEqual([])
+      expect(installs).toHaveLength(2)
+      subprocess.simulateData(`${marker('C')}sleep 60`)
+      subprocess.simulateData(`${marker('D;0')}${marker('A')}\x07`)
+      expect(
+        delivered.filter((entry) => entry.kind === 'observation').map((entry) => entry.fact.kind)
+      ).toEqual(['command-started', 'command-finished', 'bell'])
+      expect(order).toEqual(['display', 'effects', 'display', 'effects', 'display', 'effects'])
+      session.detachClient(second)
+      attach()
+      expect(installs.at(-1)).toMatchObject({ kind: 'install', current: { command: 'prompt' } })
+      expect(delivered).toHaveLength(3)
+    })
+
     it('does not confirm shell ownership from historical replay bytes', () => {
       createSession({
         historySeedChunks: ['\x1b[?1049hOLD-TUI\x1b]133;D;137\x07old-shell-marker']

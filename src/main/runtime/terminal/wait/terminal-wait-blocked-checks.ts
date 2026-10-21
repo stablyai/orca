@@ -210,6 +210,9 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
     mode2031PendingSubscribe?: true
   ): void {
     const entry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
+    if (entry.transientIncarnationId) {
+      return
+    }
     entry.tracker.setTransientFactScanningSuppressed(delegated)
     if (!delegated && scanSeedAnsi) {
       // Prime the freshly reset scanner carry with the emulator's dangling

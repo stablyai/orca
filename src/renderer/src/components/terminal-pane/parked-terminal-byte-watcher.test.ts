@@ -389,7 +389,7 @@ describe('startParkedTerminalByteWatcher', () => {
   it('scans OSC 133;D bytes into the parked command policy and disposes it with the watcher', async () => {
     const { dispose } = await startWatcher()
 
-    emit('\x1b]133;D;0\x07')
+    emit('\x1b]133;D;0\x07\x1b]133;A\x07')
     expect(commandStatusPolicy.onCommandFinished).toHaveBeenCalledWith(0)
 
     dispose()

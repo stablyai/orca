@@ -15,7 +15,7 @@ export type TerminalShellRecoveryBarrierOptions = {
   /** Fresh execution-host proof that the spawned shell owns the PTY foreground. */
   confirmShellForeground: () => Promise<boolean>
   /** Ordered downstream sink (emulator write + record + client broadcast). */
-  release: (emission: PtyIngressEmission) => void
+  release: (emission: PtyIngressEmission, genuinePrefixLength?: number) => void
   isAlive: () => boolean
   maxQueuedBytes?: number
   maxPendingMs?: number
@@ -41,7 +41,7 @@ export type TerminalShellRecoveryBarrierOptions = {
 export class TerminalShellRecoveryBarrier {
   private readonly scanner = new TerminalShellLifecycleScanner()
   private readonly confirmShellForeground: () => Promise<boolean>
-  private readonly releaseDownstream: (emission: PtyIngressEmission) => void
+  private readonly releaseDownstream: TerminalShellRecoveryBarrierOptions['release']
   private readonly isAlive: () => boolean
   private readonly maxQueuedBytes: number
   private readonly maxPendingMs: number
@@ -343,7 +343,8 @@ export class TerminalShellRecoveryBarrier {
               data: mark.data + this.scanner.groundProcessBoundary(),
               transformed: true
             }
-          : mark
+          : mark,
+        grounded ? mark.data.length : undefined
       )
     } catch {
       // Why swallowed: a throwing downstream client must not strand the

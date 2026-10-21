@@ -91,7 +91,50 @@ describe('OpenCode run process lifetime in the runtime', () => {
     await vi.advanceTimersByTimeAsync(FOREGROUND_COMMAND_READS.settleMs)
     runtime.onPtyData('pty-1', 'done\x1b]133;D;0\x07', 101)
 
-    expect(channelOrder).toEqual(['status:working', 'fact:command-finished', 'status:done'])
+    expect(channelOrder).toEqual([
+      'fact:command-started',
+      'status:working',
+      'fact:command-finished',
+      'status:done'
+    ])
+  })
+
+  it('keeps installed observations authoritative across a display gap and later visibility marker', async () => {
+    const { runtime, statuses, channelOrder } = createRuntime()
+    runtime.applyTerminalTransientObservation('pty-1', 'incarnation', {
+      kind: 'install',
+      revision: 1,
+      rawEndSeq: 0,
+      current: { command: 'prompt', commandRevision: 1, mode2031: 'unknown', modeRevision: 0 }
+    })
+    await vi.advanceTimersByTimeAsync(FOREGROUND_COMMAND_READS.settleMs)
+    expect(statuses).toEqual([])
+    expect(channelOrder).toEqual([])
+    runtime.onPtyData('pty-1', '\x1b]133;C\x07', 100)
+    runtime.applyTerminalTransientObservation('pty-1', 'incarnation', {
+      kind: 'observation',
+      revision: 2,
+      rawEndSeq: 8,
+      fact: { kind: 'command-started' }
+    })
+    await vi.advanceTimersByTimeAsync(FOREGROUND_COMMAND_READS.settleMs)
+    runtime.notePtyDataGap('pty-1', 1000)
+    runtime.setPtyTransientFactDelegation('pty-1', false)
+    runtime.onPtyData('pty-1', '\x1b]133;D;0\x07\x1b]133;A\x07', 101)
+    expect(summary(statuses)).toEqual([`${PANE_KEY}:working:process`])
+    runtime.applyTerminalTransientObservation('pty-1', 'incarnation', {
+      kind: 'observation',
+      revision: 3,
+      rawEndSeq: 1028,
+      fact: { kind: 'command-finished', exitCode: 0 }
+    })
+    expect(summary(statuses)).toEqual([`${PANE_KEY}:working:process`, `${PANE_KEY}:done:process`])
+    expect(channelOrder).toEqual([
+      'fact:command-started',
+      'status:working',
+      'fact:command-finished',
+      'status:done'
+    ])
   })
 
   it('posts Done from the daemon fact when the pane finished while hidden', async () => {
@@ -129,7 +172,7 @@ describe('OpenCode run process lifetime in the runtime', () => {
 
       runtime.onPtyData('pty-1', '\x1b]133;C\x07', 100)
       await vi.advanceTimersByTimeAsync(FOREGROUND_COMMAND_READS.settleMs)
-      runtime.onPtyData('pty-1', '\x1b]133;D;0\x07', 101)
+      runtime.onPtyData('pty-1', '\x1b]133;D;0\x07\x1b]133;A\x07', 101)
 
       expect(summary(statuses)).toEqual([`${PANE_KEY}:working:process`, `${PANE_KEY}:done:process`])
     } finally {

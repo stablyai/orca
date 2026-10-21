@@ -337,6 +337,10 @@ describe.each([false, true])('real automation Claude wake-up oracle remote=%s', 
         },
         { getAgentStatusSnapshot: () => server.desktop.getStatusSnapshot() }
       )
+      server.desktop.setLaunchAuthorityVerifier(
+        (candidate, handle) => pane.runtime.verifyAgentHookLaunchAuthority(candidate, handle),
+        (listener) => pane.runtime.subscribeAgentLaunchAuthority(listener)
+      )
       const observer = createRuntimeAutomationRunTerminalObserver(pane.runtime)
       const settled = vi.fn()
       vi.useFakeTimers({

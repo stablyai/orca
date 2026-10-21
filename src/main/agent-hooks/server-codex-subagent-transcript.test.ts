@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { AgentHookServer } from './server'
+import { installTestLaunchAuthority } from './server.test-fixtures'
+import { agentHookRuntimeDeps } from './agent-hook-runtime-deps'
+import { selectExactWorkerProviderSession } from '../runtime/orchestration/worker-provider-session'
 import { makePaneKey } from '../../shared/stable-pane-id'
 
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
@@ -37,64 +40,143 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
     dirs.length = 0
   })
 
-  it('publishes rollout-only children and removes them after their task completes', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'agent-hook-codex-subagent-'))
-    dirs.push(dir)
-    const parentPath = join(dir, 'rollout-parent.jsonl')
-    const childPath = join(dir, `rollout-child-${CHILD_ID}.jsonl`)
-    writeFileSync(
-      parentPath,
-      line({
-        type: 'event_msg',
-        payload: {
-          type: 'sub_agent_activity',
-          occurred_at_ms: 1234,
-          agent_thread_id: CHILD_ID,
-          agent_path: '/root/pr_review',
-          kind: 'started'
-        }
-      })
-    )
-    writeFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_started' } }))
-    const server = new AgentHookServer()
-    await server.start({ env: 'production' })
-    try {
-      const env = server.buildPtyEnv()
-      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
-        },
-        body: JSON.stringify({
-          paneKey: PANE_KEY,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
+  it.each(['immediate', 'delayed', 'revoked'])(
+    'keeps file-backed child continuation through credential %s',
+    async (mode) => {
+      const dir = mkdtempSync(join(tmpdir(), 'agent-hook-codex-subagent-'))
+      dirs.push(dir)
+      const parentPath = join(dir, 'rollout-parent.jsonl')
+      const childPath = join(dir, `rollout-child-${CHILD_ID}.jsonl`)
+      writeFileSync(
+        parentPath,
+        line({
+          type: 'event_msg',
           payload: {
-            hook_event_name: 'PostToolUse',
-            session_id: 'root-session',
-            transcript_path: parentPath,
-            tool_name: 'collaborationspawn_agent'
+            type: 'sub_agent_activity',
+            occurred_at_ms: 1234,
+            agent_thread_id: CHILD_ID,
+            agent_path: '/root/pr_review',
+            kind: 'started'
           }
         })
-      })
-
-      expect(response.status).toBe(204)
-      expect(server.getStatusSnapshot()[0]?.subagents).toEqual([
-        expect.objectContaining({ id: CHILD_ID, description: '/root/pr_review' })
-      ])
-
-      appendFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_complete' } }))
-      await vi.waitFor(
-        () => {
-          expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
-        },
-        { timeout: 2_000, interval: 50 }
       )
-    } finally {
-      server.stop()
+      writeFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_started' } }))
+      const server = new AgentHookServer()
+      const admit = () =>
+        installTestLaunchAuthority(server, [
+          { paneKey: PANE_KEY, token: 'current-launch', connectionId: null, worktreeId: 'wt-1' }
+        ])
+      if (mode !== 'delayed') {
+        admit()
+      }
+      await server.start({ env: 'production' })
+      try {
+        if (mode === 'revoked') {
+          server.ingestRemote(
+            {
+              paneKey: PANE_KEY,
+              worktreeId: 'wt-1',
+              launchToken: 'current-launch',
+              providerSession: { key: 'session_id', id: 'previous' },
+              payload: { state: 'working', prompt: 'previous', agentType: 'codex' }
+            },
+            null
+          )
+        }
+        const retire =
+          mode === 'revoked' ? server.capturePaneAuthorityRetirement(PANE_KEY) : undefined
+        const env = server.buildPtyEnv()
+        const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify({
+            paneKey: PANE_KEY,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            launchToken: 'current-launch',
+            payload: {
+              hook_event_name: 'PostToolUse',
+              session_id: 'root-session',
+              transcript_path: parentPath,
+              tool_name: 'collaborationspawn_agent'
+            }
+          })
+        })
+
+        expect(response.status).toBe(204)
+        expect(server.getStatusSnapshot()[0]?.subagents).toEqual([
+          expect.objectContaining({ id: CHILD_ID, description: '/root/pr_review' })
+        ])
+        const baseline = server.getStatusSnapshot()[0]
+        const original = server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY)
+        const updates = vi.fn()
+        const enriched = vi.fn()
+        server.setListener(updates)
+        server.subscribeEnrichedStatus(enriched)
+        updates.mockClear()
+        if (mode === 'delayed') {
+          admit()
+          expect(updates).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              isReplay: true,
+              launchToken: 'current-launch',
+              receivedAt: baseline?.receivedAt
+            })
+          )
+          expect(enriched).not.toHaveBeenCalled()
+        }
+        expect(server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY)).toBe(original)
+        expect(original?.launchToken).toBeUndefined()
+        expect(server.getStatusSnapshot()[0]?.launchToken).toBe('current-launch')
+        const deps = agentHookRuntimeDeps(
+          server,
+          { read: () => ({ kind: 'unobserved' as const }) },
+          () => ({})
+        )
+        const selected = () =>
+          selectExactWorkerProviderSession({
+            paneKey: PANE_KEY,
+            processIncarnation: 'test-incarnation',
+            connectionId: null,
+            launchToken: 'current-launch',
+            observedAfter: 0,
+            statuses: deps.getAgentStatusSnapshot()
+          })
+        expect(selected()?.providerSession.id).toBe('root-session')
+        if (retire) {
+          server.setLaunchAuthorityVerifier(
+            () => false,
+            () => () => {}
+          )
+          retire()
+          expect(server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY)).toBe(original)
+          expect(server.getStatusSnapshot()[0]?.launchToken).toBeUndefined()
+          expect(selected()).toBeNull()
+          expect(updates).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              isReplay: true,
+              launchToken: undefined,
+              receivedAt: baseline?.receivedAt
+            })
+          )
+          expect(enriched).not.toHaveBeenCalled()
+        }
+
+        appendFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_complete' } }))
+        await vi.waitFor(
+          () => {
+            expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
+          },
+          { timeout: 2_000, interval: 50 }
+        )
+      } finally {
+        server.stop()
+      }
     }
-  })
+  )
 
   // Why: the poll re-arms off the object it just stored; if that identity ever drifts it stops after the first change.
   it('keeps polling across successive roster changes', async () => {

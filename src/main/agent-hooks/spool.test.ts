@@ -183,6 +183,13 @@ describe('agent hook spool', () => {
     const second = new AgentHookServer()
     try {
       await first.start({ env: 'production', userDataPath })
+      first.setLaunchAuthorityVerifier(
+        (candidate) =>
+          candidate.paneKey === paneKey &&
+          candidate.connectionId === 'ssh-1' &&
+          candidate.launchTokenHash === launchTokenHash('old-generation'),
+        () => () => {}
+      )
       first.ingestRemote(
         {
           paneKey,

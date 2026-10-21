@@ -1,4 +1,5 @@
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
+import type { TerminalTransientObservation } from '../../shared/terminal-transient-observation'
 
 export type PtyDataEvent = {
   id: string
@@ -11,6 +12,7 @@ export type PtyDataEvent = {
 /** Notification-bearing fact a thinning transport detected while it held
  *  scan authority for a backgrounded PTY (see onBackgroundStreamEvent). */
 export type PtyTransientFact =
+  | { kind: 'command-started' }
   | { kind: 'bell' }
   | { kind: 'command-finished'; exitCode: number | null }
   | { kind: 'pr-link'; link: TerminalGitHubPRLink }
@@ -18,6 +20,12 @@ export type PtyTransientFact =
   | { kind: '2031-unsubscribe' }
 
 export type PtyBackgroundStreamEvent =
+  | {
+      id: string
+      kind: 'terminalObservation'
+      incarnationId: string
+      observation: TerminalTransientObservation
+    }
   | {
       id: string
       kind: 'backgroundMarker'

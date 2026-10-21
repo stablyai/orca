@@ -3,7 +3,7 @@ import type { PtyDataMeta } from './pty-dispatcher'
 import { PtyShutdownOutputQueue, type PtyShutdownOutputEvent } from './pty-shutdown-output-queue'
 
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
-export const ptyDataSidecars = new Map<string, Set<(data: string) => void>>()
+export const ptyDataSidecars = new Map<string, Set<(data: string, meta?: PtyDataMeta) => void>>()
 export const ptyReplayHandlers = new Map<string, (data: string) => void>()
 export const ptyExitHandlers = new Map<string, (code: number) => void>()
 export const ptyTeardownHandlers = new Map<string, () => void>()
@@ -147,7 +147,7 @@ function settlePtyDataHandlerShutdown(ptyId: string, committed: boolean): void {
     ptyDataHandlers.get(ptyId)?.(data, meta)
     const sidecars = ptyDataSidecars.get(ptyId)
     for (const sidecar of sidecars ? Array.from(sidecars) : []) {
-      sidecar(data)
+      sidecar(data, meta)
     }
   })
   const dataHandler = ptyDataHandlers.get(ptyId)
@@ -191,6 +191,6 @@ function deliverShutdownEvent(
   }
   dataHandler(event.data, event.meta)
   for (const sidecar of Array.from(ptyDataSidecars.get(ptyId) ?? [])) {
-    sidecar(event.data)
+    sidecar(event.data, event.meta)
   }
 }

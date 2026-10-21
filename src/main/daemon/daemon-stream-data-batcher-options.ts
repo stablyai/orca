@@ -10,5 +10,10 @@ export type DaemonStreamDataBatcherOptions = {
   /** True for sessions whose queued output may be keep-tail dropped (main-marked background sessions). */
   isSessionDroppable?: (sessionId: string) => boolean
   /** Carve reply-eliciting query bytes (DSR/DA/DECRQM/OSC probes) out of dropped data — the hidden program blocks on the reply, so they must still be delivered even when their flood is not. */
-  salvageDroppedData?: (dropped: string) => string
+  salvageDroppedData?: (
+    dropped: string,
+    maxChars: number,
+    end?: number,
+    accept?: (chars: number) => boolean
+  ) => string
 }

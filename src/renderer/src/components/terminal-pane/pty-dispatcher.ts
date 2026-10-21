@@ -158,7 +158,7 @@ function handleDispatchedPtyData(payload: {
       // Why: snapshot before iterating — watchers often unsubscribe (or subscribe siblings) mid-iteration, and mutating the live Set would skip or double-fire.
       const snapshot = Array.from(sidecars)
       for (const watcher of snapshot) {
-        watcher(payload.data)
+        watcher(payload.data, meta)
       }
     }
   }

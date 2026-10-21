@@ -4,7 +4,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { LEAF_1, LEAF_2, LEAF_3, LEAF_4, LEAF_5, recentTs } from './server.test-fixtures'
+import {
+  LEAF_1,
+  LEAF_2,
+  LEAF_3,
+  LEAF_4,
+  LEAF_5,
+  recentTs,
+  installTestLaunchAuthority
+} from './server.test-fixtures'
 
 const REMOVED = 'repo-1::/workspace/removed'
 const KEPT = 'repo-1::/workspace/kept'
@@ -56,6 +64,14 @@ describe('AgentHookServer removed-worktree retirement', () => {
 
   it('retires only the removing host rows and commitments, then persists the pruned map', async () => {
     const server = new AgentHookServer()
+    installTestLaunchAuthority(server, [
+      {
+        paneKey: SSH_COMMITMENT_PANE,
+        token: 'idle-launch',
+        connectionId: 'idle@box',
+        worktreeId: REMOVED
+      }
+    ])
     await server.start({ env: 'production', userDataPath })
     try {
       // An SSH commitment recorded this session outlives its row across a disconnect clear.
@@ -131,6 +147,9 @@ describe('AgentHookServer removed-worktree retirement', () => {
       await server.start({ env: 'production', userDataPath })
       try {
         const pane = makePaneKey('tab-reused', '77777777-7777-4777-8777-777777777777')
+        installTestLaunchAuthority(server, [
+          { paneKey: pane, token: 'ssh', connectionId: 'user@box', worktreeId: sshWorktree }
+        ])
         const working = { state: 'working', prompt: 'live', agentType: 'codex' } as const
         const reportLocally = (state: 'working' | 'done') =>
           server.ingestTerminalStatus({

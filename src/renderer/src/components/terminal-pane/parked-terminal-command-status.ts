@@ -11,9 +11,9 @@ import { isShellProcess } from '../../../../shared/shell-process-detection'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
 import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store'
+import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
 import {
   cancelCommandCodeDoneSettle,
   openCommandCodeDoneSettle,
@@ -51,7 +51,6 @@ export function createParkedTerminalCommandStatusPolicy(options: {
 }): ParkedTerminalCommandStatusPolicy {
   const { ptyId, worktreeId, tabId, paneId, paneKey } = options
   let disposed = false
-  const clearCommandCodeOutputDoneTimer = (): void => cancelCommandCodeDoneSettle(paneKey)
 
   const resolveRouting = (): ReturnType<typeof resolveLiveAgentStatusConnectionRouting> => {
     if (disposed) {
@@ -112,48 +111,12 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     }
   }
 
-  // Complete the row only while it is still this turn's command-code/working entry.
-  const settleCommandCodeDone = (normalizedPrompt: string): void => {
-    const routing = resolveRouting()
-    if (!routing) {
-      return
-    }
-    const currentState = useAppStore.getState()
-    const currentEntry = currentState.agentStatusByPaneKey[paneKey]
-    if (currentEntry?.agentType !== 'command-code' || currentEntry.state !== 'working') {
-      return
-    }
-    const currentPrompt = currentEntry.prompt.trim()
-    if (currentPrompt && currentPrompt !== normalizedPrompt) {
-      return
-    }
-    const currentTitle = currentState.runtimePaneTitlesByTabId?.[tabId]?.[paneId]
-    currentState.setAgentStatus(
-      paneKey,
-      {
-        state: 'done',
-        prompt: currentPrompt || normalizedPrompt,
-        agentType: 'command-code',
-        observation: rendererAgentStatusObservations.observe(paneKey, {
-          origin: 'process',
-          observedAt: Date.now(),
-          kind: 'transition'
-        })
-      },
-      currentTitle,
-      undefined,
-      routing
-    )
-  }
-
-  // Why the shared window: reveal disposes this watcher mid-settle and the remounted pane
-  // cannot re-observe the already-passed idle composer, so the deadline outlives whichever
-  // side owns the row — cancelling would strand 'working', flushing would complete the turn
-  // unrecoverably early (the same-prompt-done guard then drops a genuine working repaint).
-  const releaseCommandCodeDoneSettleExecutor = setCommandCodeDoneSettleExecutor(
+  const commandCode = createTerminalCommandCodeStatusPolicy({
     paneKey,
-    settleCommandCodeDone
-  )
+    resolveRouting,
+    canApply: canApplyCommandCodeOutputStatus,
+    readTitle: () => useAppStore.getState().runtimePaneTitlesByTabId?.[tabId]?.[paneId]
+  })
 
   // Why: a full-screen agent's nested shells leak 133;D, so make one confirming read (no retry
   // ladder, unlike the mounted tracker) and retire the process read only on a shell or no answer.
@@ -200,19 +163,83 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       dropCommandFinishedStatusIfSameTurn(useAppStore.getState().agentStatusByPaneKey[paneKey])
     },
 
-    // Port of pty-connection's seedCommandCodeOutputWorkingStatus (store-level only).
+    onCommandCodeWorking: commandCode.onCommandCodeWorking,
+    onCommandCodeDone: commandCode.onCommandCodeDone,
+
+    dispose: (): void => {
+      // Why release, not flush: the settle window belongs to the turn and outlives this
+      // watcher, so the remounted pane inherits the remaining deadline and a working
+      // repaint arriving before it still cancels the completion.
+      commandCode.dispose()
+      disposed = true
+    }
+  }
+}
+
+export function createTerminalCommandCodeStatusPolicy(options: {
+  paneKey: string
+  resolveRouting: () => ReturnType<typeof resolveLiveAgentStatusConnectionRouting>
+  canApply: () => boolean
+  readTitle: () => string | undefined
+}) {
+  const { paneKey } = options
+  const clearCommandCodeOutputDoneTimer = (): void => cancelCommandCodeDoneSettle(paneKey)
+  // Complete the row only while it is still this turn's command-code/working entry.
+  const settleCommandCodeDone = (normalizedPrompt: string): void => {
+    const routing = options.resolveRouting()
+    if (!routing) {
+      return
+    }
+    const currentState = useAppStore.getState()
+    const currentEntry = currentState.agentStatusByPaneKey[paneKey]
+    if (currentEntry?.agentType !== 'command-code' || currentEntry.state !== 'working') {
+      return
+    }
+    const currentPrompt = currentEntry.prompt.trim()
+    if (currentPrompt && currentPrompt !== normalizedPrompt) {
+      return
+    }
+    const currentTitle = options.readTitle()
+    currentState.setAgentStatus(
+      paneKey,
+      {
+        state: 'done',
+        prompt: currentPrompt || normalizedPrompt,
+        agentType: 'command-code',
+        observation: rendererAgentStatusObservations.observe(paneKey, {
+          origin: 'process',
+          observedAt: Date.now(),
+          kind: 'transition'
+        })
+      },
+      currentTitle,
+      undefined,
+      routing
+    )
+  }
+
+  // Why the shared window: reveal disposes this watcher mid-settle and the remounted pane
+  // cannot re-observe the already-passed idle composer, so the deadline outlives whichever
+  // side owns the row — cancelling would strand 'working', flushing would complete the turn
+  // unrecoverably early (the same-prompt-done guard then drops a genuine working repaint).
+  const releaseCommandCodeDoneSettleExecutor = setCommandCodeDoneSettleExecutor(
+    paneKey,
+    settleCommandCodeDone
+  )
+
+  return {
     onCommandCodeWorking: (prompt: string): void => {
-      if (!canApplyCommandCodeOutputStatus()) {
+      if (!options.canApply()) {
         return
       }
       clearCommandCodeOutputDoneTimer()
-      const routing = resolveRouting()
+      const routing = options.resolveRouting()
       if (!routing) {
         return
       }
       const currentState = useAppStore.getState()
       const currentEntry = currentState.agentStatusByPaneKey[paneKey]
-      const currentTitle = currentState.runtimePaneTitlesByTabId?.[tabId]?.[paneId]
+      const currentTitle = options.readTitle()
       const normalizedPrompt = prompt.trim()
       if (
         currentEntry?.agentType === 'command-code' &&
@@ -240,10 +267,9 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       )
     },
 
-    // Port of pty-connection's scheduleCommandCodeOutputDoneStatus: Command Code keeps rendering
-    // the composer while tools run, so only complete the row if no active repaint arrives.
+    // The composer repaints during tools; a fresh active repaint cancels completion.
     onCommandCodeDone: (prompt: string): void => {
-      if (!canApplyCommandCodeOutputStatus()) {
+      if (!options.canApply()) {
         return
       }
       const normalizedPrompt = prompt.trim()
@@ -253,13 +279,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       }
       openCommandCodeDoneSettle(paneKey, normalizedPrompt)
     },
-
-    dispose: (): void => {
-      // Why release, not flush: the settle window belongs to the turn and outlives this
-      // watcher, so the remounted pane inherits the remaining deadline and a working
-      // repaint arriving before it still cancels the completion.
-      releaseCommandCodeDoneSettleExecutor()
-      disposed = true
-    }
+    clearDoneTimer: clearCommandCodeOutputDoneTimer,
+    dispose: releaseCommandCodeDoneSettleExecutor
   }
 }

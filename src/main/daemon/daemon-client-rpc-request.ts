@@ -1,3 +1,4 @@
+import type { DaemonTransientReader } from './daemon-transient-reader'
 import type { Socket } from 'node:net'
 import { encodeNdjson } from './ndjson'
 import {
@@ -9,6 +10,8 @@ import { isTerminalAttachCanceledMessage } from './daemon-errors'
 import type { DaemonPendingRequests } from './daemon-client-pending-requests'
 
 type DaemonRpcRequestOptions = {
+  transientReader?: DaemonTransientReader
+
   socket: Socket
   pendingRequests: DaemonPendingRequests
   id: string
@@ -53,7 +56,32 @@ function wedgedDaemonError(requestError: Error, cancelError: unknown): Error | n
   return wedged
 }
 
-export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
+export async function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
+  const { transientReader, type, payload } = opts
+  const subscription = type === 'createOrAttach' ? transientReader?.begin() : undefined
+  const result = await sendDaemonRpc<T>({
+    ...opts,
+    payload:
+      subscription && payload && typeof payload === 'object'
+        ? { ...payload, transients: subscription }
+        : payload
+  })
+  if (subscription) {
+    transientReader?.finish(subscription.subscriptionId, result)
+  }
+  if (
+    type === 'detach' &&
+    payload &&
+    typeof payload === 'object' &&
+    'sessionId' in payload &&
+    typeof payload.sessionId === 'string'
+  ) {
+    transientReader?.detach(payload.sessionId)
+  }
+  return result
+}
+
+function sendDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
   // A stalled event loop can deliver a daemon cancellation before its overdue timer runs.
   const { payload, type } = opts
   const createTimeoutError = (): DaemonRequestTimeoutError =>

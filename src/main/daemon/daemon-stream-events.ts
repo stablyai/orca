@@ -2,6 +2,19 @@
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalTransientObservation } from '../../shared/terminal-transient-observation'
+
+export type TerminalObservationEvent = {
+  type: 'event'
+  event: 'terminalObservation'
+  /** Assigned only after ordered DATA/gap or the matching create result establishes routing. */
+  sessionId?: string
+  subscriptionId: string
+  streamId: string
+  incarnationId: string
+  epoch: number
+  payload: TerminalTransientObservation
+}
 
 export type DataEvent = {
   type: 'event'
@@ -9,6 +22,7 @@ export type DataEvent = {
   sessionId: string
   payload: {
     data: string
+    subscriptionId?: string
     seq?: number
     rawLength?: number
     transformed?: boolean
@@ -64,7 +78,7 @@ export type DataGapEvent = {
   type: 'event'
   event: 'dataGap'
   sessionId: string
-  payload: { droppedChars: number; sequenceChars?: number }
+  payload: { droppedChars: number; sequenceChars?: number; subscriptionId?: string }
 }
 
 /** Notification-bearing fact detected by the daemon while it holds scan
@@ -87,6 +101,7 @@ export type TransientFactEvent = {
 }
 
 export type DaemonEvent =
+  | TerminalObservationEvent
   | DataEvent
   | ExitEvent
   | TerminalErrorEvent

@@ -735,7 +735,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         await flushAsyncTicks(20)
 
         const cacheKey = makePaneKey(tabId, LEAF_1)
-        dataCallbackRef.current?.('\x1b]133;D;0\x07')
+        dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
 
         await advanceVisibleForegroundRead()
 

@@ -69,6 +69,28 @@ describe('an OSC 133 zone a running app closes for itself', () => {
     expect(triggers([stream])).toEqual([stream.length])
   })
 
+  it('does not read a bubble close as death when an Orca status frame sits between its markers', () => {
+    const status = '\x1b]9999;{"state":"working"}\x07'
+    const stream = `${SHELL_LAUNCH}${ARM_MODIFY_OTHER_KEYS}${B}${C}${status}${D0}OMP reply`
+    expect(triggers([stream])).toEqual([])
+    expect(triggers(splitEvery(stream, 5))).toEqual([])
+  })
+
+  it('makes a reader that joined mid-bubble wait for the prompt before trusting a D', () => {
+    const adopted = (): TerminalShellLifecycleScanner => {
+      const scanner = new TerminalShellLifecycleScanner({ joinsMidStream: true })
+      scanner.seedOwner(undefined, { alternateScreen: true })
+      return scanner
+    }
+    expect(adopted().scan(`${D0}OMP reply`)).toEqual({})
+    const prompt = `${D0}${A}$ `
+    expect(adopted().scan(prompt)).toMatchObject({
+      uncleanDeathTriggerStart: D0.length,
+      uncleanDeathTriggerEnd: D0.length
+    })
+    expect(adopted().scan('\x1b]133;D;1\x07')).toMatchObject({ uncleanDeathTriggerEnd: 10 })
+  })
+
   it('passes OMP output through the recovery barrier without holding it for a process probe', () => {
     const released: string[] = []
     const confirmShellForeground = vi.fn(async () => false)

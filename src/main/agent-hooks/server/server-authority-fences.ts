@@ -1,5 +1,7 @@
+import { isSameAgentProcess } from '../../../shared/agent-process-presence'
 import { clearPaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { structuredStatusLegacyEvent } from './server-structured-status-row'
 import { AgentHookServerAuthorityAliases } from './server-authority-aliases'
 import type {
   EnrichedAgentHookEventPayload,
@@ -8,6 +10,76 @@ import type {
 } from './server-types'
 
 export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuthorityAliases {
+  /** Capture the execution before an asynchronous proof, independently of the row's later paints. */
+  capturePaneAuthorityRetirement(paneKey: string): () => void {
+    const owner = this.resolvePaneKeyAlias(paneKey)
+    const subject = this.authoritySubject(owner)
+    const canonical = this.canonicalStatusStore.getParents().find((parent) => parent === subject)
+    const rootIsCurrent = canonical && this.captureTmuxRoot(owner)
+    const row =
+      this.state.lastStatusByPaneKey.get(owner) ??
+      (canonical?.status && structuredStatusLegacyEvent(canonical.status))
+    const host = row && { connectionId: row.connectionId, worktreeId: row.worktreeId }
+    const agentType = row?.payload.agentType
+    const session = row?.providerSession && { ...row.providerSession }
+    const process = row?.agentPresence?.process && { ...row.agentPresence.process }
+    const hash =
+      this.hydratedLaunchTokenHashByPaneKey.get(owner) ??
+      this.pendingLaunchAuthority.get(owner)?.evidence.launchTokenHash
+    return () => {
+      const currentSubject = this.authoritySubject(owner)
+      const currentCanonical = this.canonicalStatusStore
+        .getParents()
+        .find((parent) => parent === currentSubject)
+      const current =
+        this.state.lastStatusByPaneKey.get(owner) ??
+        (currentCanonical?.status && structuredStatusLegacyEvent(currentCanonical.status))
+      const sameHost = current && row && this.sameTerminalOwner(current, host!)
+      const sameExecution =
+        sameHost &&
+        (!canonical || (currentSubject === subject && rootIsCurrent?.())) &&
+        current.payload.agentType === agentType &&
+        (!process ||
+          (current.agentPresence?.process !== undefined &&
+            isSameAgentProcess(current.agentPresence.process, process))) &&
+        (session
+          ? current.providerSession?.id === session.id &&
+            current.providerSession.key === session.key
+          : process !== undefined || currentSubject === subject)
+      const currentHash =
+        this.currentAuthorityObservations.get(owner)?.evidence.launchTokenHash ??
+        this.pendingLaunchAuthority.get(owner)?.evidence.launchTokenHash
+      if (
+        sameExecution &&
+        this.resolvePaneKeyAlias(paneKey) === owner &&
+        (!currentHash || currentHash === hash)
+      ) {
+        this.retirePaneAuthority(paneKey)
+        return
+      }
+      if (!hash) {
+        return
+      }
+      const keys = new Set([
+        paneKey,
+        owner,
+        this.resolvePaneKeyAlias(paneKey),
+        this.resolvePaneKeyAlias(owner)
+      ])
+      this.revokeHydratedAuthorityForPaneKeys(keys, hash)
+      for (const key of keys) {
+        if (this.currentAuthorityObservations.get(key)?.evidence.launchTokenHash === hash) {
+          this.currentAuthorityObservations.delete(key)
+        }
+        if (this.pendingLaunchAuthority.get(key)?.evidence.launchTokenHash === hash) {
+          this.pendingLaunchAuthority.delete(key)
+        }
+      }
+      this.scheduleStatusPersist()
+      this.publishAuthorityCorrelation(owner)
+    }
+  }
+
   // Why: retirement fences a pane and every alias of it, then deletes those aliases.
   retirePaneAuthority(paneKey: string, retirementId?: string): void {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
@@ -52,6 +124,7 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
       this.clearTmuxInnerSubjects(key)
       this.markPaneClosedForAgentStatus(key)
       this.restartedStatusLaunchTokenHashByPaneKey.delete(key)
+      this.pendingLaunchAuthority.delete(key)
       this.clearAssistantMessageRetry(key)
       this.clearTranscriptPoll(key)
       clearPaneCacheState(this.state, key)
@@ -217,27 +290,6 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
 
   protected resolvePaneKeyAlias(paneKey: string): string {
     return this.legacyPaneKeyAliases.get(paneKey)?.stablePaneKey ?? paneKey
-  }
-
-  protected revokeHydratedAuthorityForPaneKeys(paneKeys: ReadonlySet<string>): boolean {
-    let changed = false
-    for (const commitment of this.hydratedAuthorityCommitments) {
-      if (
-        paneKeys.has(commitment.paneKey) ||
-        paneKeys.has(this.resolvePaneKeyAlias(commitment.paneKey))
-      ) {
-        this.revokedHydratedAuthorityCommitments.add(commitment)
-        changed = true
-      }
-    }
-    for (const paneKey of paneKeys) {
-      const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
-      changed = this.hydratedLaunchTokenHashByPaneKey.delete(paneKey) || changed
-      changed = this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey) || changed
-      changed = this.persistedAuthorityCommitmentsByPaneKey.delete(paneKey) || changed
-      changed = this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey) || changed
-    }
-    return changed
   }
 
   protected normalizeHookBodyPaneKeyAlias(body: unknown): unknown {

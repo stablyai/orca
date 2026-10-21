@@ -10,7 +10,9 @@ export function accountDaemonStreamEntry(
 ): StreamQueueEntry {
   entry.retainedBytes =
     STREAM_ENTRY_OVERHEAD_BYTES +
-    (entry.control ? Buffer.byteLength(encodeNdjson(entry.control)) : 0)
+    (entry.observation?.bytes ??
+      entry.lease?.bytes ??
+      (entry.control ? Buffer.byteLength(encodeNdjson(entry.control)) : 0))
   batch.queuedMetadataBytesBySession.set(
     entry.sessionId,
     (batch.queuedMetadataBytesBySession.get(entry.sessionId) ?? 0) + entry.retainedBytes

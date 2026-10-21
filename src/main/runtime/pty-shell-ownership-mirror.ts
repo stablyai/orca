@@ -14,7 +14,8 @@ const SETTLE_DEADLINE_MS = 750
  * Fed the same bytes the emulator parses, in the same order.
  */
 export class PtyShellOwnershipMirror {
-  private readonly scanner = new TerminalShellLifecycleScanner()
+  // Why mid-stream: main adopts this view from snapshots, gaps and reattach; harmless at PTY birth.
+  private readonly scanner = new TerminalShellLifecycleScanner({ joinsMidStream: true })
   private confirmInFlight = false
   private confirmAttempt = 0
   private latestCandidateGeneration: number | undefined

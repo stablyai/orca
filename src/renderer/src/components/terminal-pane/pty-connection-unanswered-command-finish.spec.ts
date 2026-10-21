@@ -103,7 +103,7 @@ export function registerPtyConnectionUnansweredCommandFinishTests(): void {
           identity: { agentType: 'codex' }
         }
 
-        dataCallbackRef.current?.('\x1b]133;D;0\x07')
+        dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
         await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
         await flushAsyncTicks()
 

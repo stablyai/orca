@@ -88,7 +88,9 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       return
     }
     const update = transcriptPollUpdate(source, original, normalized)
-    const next = update ? this.applyNormalizedStatus(update) : original
+    const next = update
+      ? this.applyNormalizedStatus(update, undefined, 'hook', undefined, undefined, false, original)
+      : original
     if (next) {
       this.scheduleTranscriptPoll(source, body, next)
     }

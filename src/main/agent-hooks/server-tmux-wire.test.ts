@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
-import { PANE } from './server.test-fixtures'
+import { PANE, installTestLaunchAuthority } from './server.test-fixtures'
 import { buildRelayHookEnvelope } from '../../wsl-guest/agent-hook-envelope-build'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
@@ -23,6 +23,9 @@ describe('optional tmux projection wire metadata', () => {
     vi.useFakeTimers()
     vi.setSystemTime(time)
     server = new AgentHookServer()
+    installTestLaunchAuthority(server, [
+      { paneKey: PANE, token: 'generation', connectionId: 'connection', worktreeId: 'workspace' }
+    ])
   })
   afterEach(() => {
     server.stop()

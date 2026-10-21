@@ -302,8 +302,10 @@ export async function getProcessTableSnapshot(): Promise<ProcessTableRow[]> {
   return (await processTableReader.getSnapshot()).lenient()
 }
 
-export async function getFreshProcessTableSnapshot(): Promise<ProcessTableRow[]> {
-  return (await processTableReader.getFreshSnapshot()).lenient()
+/** `strict` refuses a capture with any malformed row, as absence evidence must. */
+export async function getFreshProcessTableSnapshot(strict = false): Promise<ProcessTableRow[]> {
+  const snapshot = await processTableReader.getFreshSnapshot()
+  return strict ? snapshot.strict() : snapshot.lenient()
 }
 
 export async function getStrictProcessTableSnapshot(): Promise<ProcessTableRow[]> {

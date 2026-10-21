@@ -49,6 +49,7 @@ export class Session {
     this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.onSessionExit = opts.onExit
     const pipeline = createSessionOutputPipeline({
+      incarnationId: this.incarnationId,
       cols: opts.cols,
       rows: opts.rows,
       scrollback: opts.scrollback,

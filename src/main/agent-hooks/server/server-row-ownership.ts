@@ -92,6 +92,9 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     after: EnrichedAgentHookEventPayload | null | undefined,
     emit = true
   ): boolean {
+    if (before && !after) {
+      this.pendingLaunchAuthority.delete(before.paneKey)
+    }
     if (
       before?.terminalHandle &&
       this.paneKeyByTerminalHandle.get(before.terminalHandle) === before.paneKey
@@ -121,7 +124,10 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     if (!row || row.providerSessionOnly === true) {
       return
     }
-    this.onAgentStatus?.({ ...this.programStatusFacets.stitch(row), programStatusOnly: true })
+    this.onAgentStatus?.({
+      ...this.programStatusFacets.stitch(this.projectLaunchAuthority(row)),
+      programStatusOnly: true
+    })
     const identity = toMutationIdentity(row)
     this.notifyStatusRowMutationListeners({ before: identity, after: identity })
   }

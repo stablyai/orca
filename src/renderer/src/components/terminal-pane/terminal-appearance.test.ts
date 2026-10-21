@@ -26,106 +26,16 @@ function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {
 }
 
 describe('maybePushMode2031Flip', () => {
-  it('does nothing when the pane has not subscribed to mode 2031', () => {
-    const transport = fakeTransport()
-    const subs = new Map<number, boolean>()
-    const last = new Map<number, 'dark' | 'light'>()
-
-    const pushed = maybePushMode2031Flip(1, 'dark', transport, subs, last)
-
-    expect(pushed).toBe(false)
-    expect(transport.sendInputImmediate).not.toHaveBeenCalled()
-    expect(last.has(1)).toBe(false)
-  })
-
-  it('pushes the current mode once after subscribe and records it', () => {
+  it('sends a subscribed program no unsolicited theme flip until the host admits mode writes', () => {
+    // A flip queued as the program withdraws reaches its shell as typed `?997;Nn` (#9993).
     const transport = fakeTransport()
     const subs = new Map([[1, true]])
     const last = new Map<number, 'dark' | 'light'>()
 
-    const pushed = maybePushMode2031Flip(1, 'dark', transport, subs, last)
-
-    expect(pushed).toBe(true)
-    expect(transport.sendInputImmediate).toHaveBeenCalledTimes(1)
-    expect(transport.sendInputImmediate).toHaveBeenCalledWith('\x1b[?997;1n')
+    expect(maybePushMode2031Flip(1, 'dark', transport, subs, last)).toBe(false)
+    expect(maybePushMode2031Flip(1, 'light', transport, subs, last)).toBe(false)
+    expect(transport.sendInputImmediate).not.toHaveBeenCalled()
     expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(last.get(1)).toBe('dark')
-  })
-
-  it('suppresses repeat pushes when the resolved mode has not changed', () => {
-    // Spam-gate: applyTerminalAppearance re-runs on every font/opacity/cursor tweak; don't emit CSI 997 each time.
-    const transport = fakeTransport()
-    const subs = new Map([[1, true]])
-    const last = new Map<number, 'dark' | 'light'>()
-
-    maybePushMode2031Flip(1, 'dark', transport, subs, last)
-    maybePushMode2031Flip(1, 'dark', transport, subs, last)
-    maybePushMode2031Flip(1, 'dark', transport, subs, last)
-
-    expect(transport.sendInputImmediate).toHaveBeenCalledTimes(1)
-    expect(last.get(1)).toBe('dark')
-  })
-
-  it('emits again when the theme actually flips', () => {
-    const transport = fakeTransport()
-    const subs = new Map([[1, true]])
-    const last = new Map<number, 'dark' | 'light'>()
-
-    maybePushMode2031Flip(1, 'dark', transport, subs, last)
-    maybePushMode2031Flip(1, 'light', transport, subs, last)
-    maybePushMode2031Flip(1, 'dark', transport, subs, last)
-
-    expect(transport.sendInputImmediate.mock.calls.map((c) => c[0])).toEqual([
-      '\x1b[?997;1n',
-      '\x1b[?997;2n',
-      '\x1b[?997;1n'
-    ])
-    expect(last.get(1)).toBe('dark')
-  })
-
-  it('does not push when the transport is disconnected', () => {
-    const transport = fakeTransport({ connected: false })
-    const subs = new Map([[1, true]])
-    const last = new Map<number, 'dark' | 'light'>()
-
-    const pushed = maybePushMode2031Flip(1, 'dark', transport, subs, last)
-
-    expect(pushed).toBe(false)
-    expect(transport.sendInputImmediate).not.toHaveBeenCalled()
-    expect(last.has(1)).toBe(false)
-  })
-
-  it('leaves last-mode untouched when immediate input reports failure', () => {
-    // So a reconnect / retry will re-emit on the next appearance pass.
-    const transport = fakeTransport({ sendOk: false })
-    const subs = new Map([[1, true]])
-    const last = new Map<number, 'dark' | 'light'>()
-
-    const pushed = maybePushMode2031Flip(1, 'dark', transport, subs, last)
-
-    expect(pushed).toBe(false)
-    expect(transport.sendInputImmediate).toHaveBeenCalledTimes(1)
-    expect(last.has(1)).toBe(false)
-  })
-
-  it('tracks flip state per-pane', () => {
-    const transportA = fakeTransport()
-    const transportB = fakeTransport()
-    const subs = new Map([
-      [1, true],
-      [2, true]
-    ])
-    const last = new Map<number, 'dark' | 'light'>()
-
-    maybePushMode2031Flip(1, 'dark', transportA, subs, last)
-    maybePushMode2031Flip(2, 'light', transportB, subs, last)
-    maybePushMode2031Flip(1, 'dark', transportA, subs, last) // suppressed
-    maybePushMode2031Flip(2, 'dark', transportB, subs, last) // flip
-
-    expect(transportA.sendInputImmediate).toHaveBeenCalledTimes(1)
-    expect(transportB.sendInputImmediate).toHaveBeenCalledTimes(2)
-    expect(last.get(1)).toBe('dark')
-    expect(last.get(2)).toBe('dark')
   })
 })
 describe('applyTerminalAppearance theme assignment', () => {

@@ -19,20 +19,63 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
+import type { TerminalTransientObservation } from '../../../../shared/terminal-transient-observation'
+import { parseTerminalGitHubPRUrl } from '../../../../shared/terminal-github-pr-link-detector'
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
-  protected abstract retirePtyAgentLaunchAuthority(ptyId: string): void
+  protected abstract retirePtyAgentLaunchAuthorityOnConfirmedExit(ptyId: string): void
+  protected abstract recheckHookAgentPresenceForPty(
+    ptyId: string,
+    exitedSince?: number
+  ): Promise<'live' | 'unverifiable' | 'exited' | null>
+
+  applyTerminalTransientObservation(
+    ptyId: string,
+    incarnationId: string,
+    observation: TerminalTransientObservation
+  ): void {
+    const entry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
+    if (observation.kind === 'install') {
+      entry.transientIncarnationId = incarnationId
+      entry.tracker.setTransientFactScanningSuppressed(true)
+      // Current evidence prompts a fresh process read, never a remembered completion or attention.
+      void this.recheckHookAgentPresenceForPty(ptyId)
+      if (observation.current.mode2031 !== 'unknown') {
+        this.recordTerminalSideEffectFact(ptyId, {
+          kind:
+            observation.current.mode2031 === 'subscribed' ? '2031-subscribe' : '2031-unsubscribe'
+        })
+      }
+      return
+    }
+    if (entry.transientIncarnationId !== incarnationId) {
+      return
+    }
+    const fact = observation.fact
+    if (fact.kind === 'pr-link') {
+      const link = parseTerminalGitHubPRUrl(fact.url)
+      if (link) {
+        this.emitDaemonPtyTransientFact(ptyId, { kind: 'pr-link', link })
+      }
+    } else {
+      this.emitDaemonPtyTransientFact(ptyId, fact)
+    }
+  }
 
   /** A transient fact the daemon detected while it held scan authority —
    *  emitted through the same fact channel as byte-scanned facts. Arrives
    *  between chunks, so recordTerminalSideEffectFact emits it immediately. */
   emitDaemonPtyTransientFact(ptyId: string, fact: PtyTransientFact): void {
     switch (fact.kind) {
+      case 'command-started':
+        this.openCodeRunLifetime.onCommandStarted(ptyId)
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-started' })
+        return
       case 'bell':
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         return
       case 'command-finished':
-        this.retirePtyAgentLaunchAuthority(ptyId)
+        this.retirePtyAgentLaunchAuthorityOnConfirmedExit(ptyId)
         this.recordTerminalSideEffectFact(ptyId, {
           kind: 'command-finished',
           exitCode: fact.exitCode
@@ -71,6 +114,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.tailPendingAnsi = ''
     }
+    this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.forgetCommandFinishedContext()
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)

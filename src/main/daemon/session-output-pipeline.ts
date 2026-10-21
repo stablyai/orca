@@ -7,6 +7,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
  *  plane's snapshots publish, and the plane's emit is the barrier's sink. */
 export function createSessionOutputPipeline(opts: {
   cols: number
+  incarnationId?: string
   rows: number
   scrollback?: number | undefined
   wslDistro?: string | undefined
@@ -18,6 +19,7 @@ export function createSessionOutputPipeline(opts: {
   let barrier: TerminalShellRecoveryBarrier | null = null
   const output = new SessionOutputPlane({
     cols: opts.cols,
+    incarnationId: opts.incarnationId,
     rows: opts.rows,
     scrollback: opts.scrollback,
     wslDistro: opts.wslDistro,
@@ -26,7 +28,7 @@ export function createSessionOutputPipeline(opts: {
   })
   const recoveryBarrier = new TerminalShellRecoveryBarrier({
     confirmShellForeground: async () => (await subprocess.confirmShellForeground?.()) ?? false,
-    release: (emission) => output.emit(emission),
+    release: (emission, genuinePrefixLength) => output.emit(emission, genuinePrefixLength),
     isAlive
   })
   barrier = recoveryBarrier

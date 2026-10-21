@@ -250,7 +250,7 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     const { paneKey, sendData, confirmExit } = await connectAgentPane({ ptyId: 'pty-zsh-claude' })
     // A live hook icon makes the 133;D defer its drop behind a confirming read.
     await seedHookRow(paneKey, 'claude', 'working')
-    sendData('\x1b]133;D;0\x07')
+    sendData('\x1b]133;D;0\x07\x1b]133;A\x07')
 
     confirmExit('claude')
     await flushAsyncTicks()

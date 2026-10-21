@@ -6,6 +6,7 @@ export type HelloMessage = {
   role: 'control' | 'stream'
   /** Stream framing the client can read. Daemons that predate it ignore it and stay on NDJSON. */
   streamFraming?: string
+  capabilities?: string[]
 }
 
 export type DaemonEndpointIdentity = {
@@ -25,4 +26,6 @@ export type HelloResponse = {
   daemonIdentity?: DaemonEndpointIdentity
   /** Echoed only when the daemon switches this stream socket to that framing after this line. */
   streamFraming?: string
+  capabilities?: string[]
+  streamId?: string
 }

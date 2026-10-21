@@ -1,3 +1,5 @@
+import { DaemonTransientReader } from './daemon-transient-reader'
+import type { DaemonHelloOutcome } from './daemon-client-hello-handshake'
 import type { Socket } from 'node:net'
 import { StringDecoder } from 'node:string_decoder'
 import { createNdjsonParser } from './ndjson'
@@ -64,4 +66,23 @@ export function attachStreamEventReader(
     (chunk) => parser.feed(decoder.write(chunk)),
     remainder
   )
+}
+
+export function attachTransientStreamReader(
+  socket: Socket,
+  hello: DaemonHelloOutcome,
+  emit: (event: DaemonEvent) => void,
+  resolveSession?: (incarnationId: string) => string | undefined
+): { transientReader: DaemonTransientReader | undefined; streamReader: TurnBoundedSocketReader } {
+  const transientReader = hello.transientStreamId
+    ? new DaemonTransientReader(hello.transientStreamId, emit, resolveSession)
+    : undefined
+  const streamReader = attachStreamEventReader(socket, hello, (event) => {
+    if (transientReader) {
+      transientReader.accept(event)
+    } else {
+      emit(event)
+    }
+  })
+  return { transientReader, streamReader }
 }

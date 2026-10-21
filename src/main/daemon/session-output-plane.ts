@@ -7,6 +7,8 @@ import type { PendingOutputRecord, TakePendingOutputResult, TerminalSnapshot } f
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { nudgePowerShellPromptRepaint } from './session-powershell-prompt-repaint'
+import { SessionTransientObservations } from './session-transient-observations'
+import type { TerminalTransientSink } from '../../shared/terminal-transient-observation'
 
 // Why: bounds in-memory pending output when no client drains it; past the cap we drop records and flag
 // overflow so the next take falls back to one full snapshot. UTF-16 units; worst-case wire is ~6x, under NDJSON_MAX_LINE_BYTES (16MB).
@@ -14,6 +16,7 @@ const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
 
 export type AttachedClient = {
   token: symbol
+  transients?: TerminalTransientSink
   onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
   onExit: (code: number, incarnationId: string, cause?: TerminalExitCause) => void
 }
@@ -27,6 +30,7 @@ export type SessionOutputPlaneOptions = {
   /** Read from the recovery barrier at snapshot time; the barrier scans bytes
    *  before this plane receives them, so its owner never lags the emulator. */
   getTerminalOwner?: (() => TerminalOwner | undefined) | undefined
+  incarnationId?: string
 }
 
 /** Everything downstream of the PTY: the scrollback emulator, the pending-output record buffer that
@@ -43,8 +47,16 @@ export class SessionOutputPlane {
   private _outputSequence = 0
   private deviceAttributesQueryFilter: StartupDeviceAttributesQueryFilter | null = null
   private disposed = false
+  private readonly incarnationId: string
+  private readonly transients: SessionTransientObservations
 
   constructor(opts: SessionOutputPlaneOptions) {
+    this.incarnationId = opts.incarnationId ?? ''
+    this.transients = new SessionTransientObservations((observation) => {
+      for (const client of this.attachedClients) {
+        client.transients?.stage(observation)
+      }
+    }, opts.historySeedChunks !== undefined)
     const size = normalizePtySize(opts.cols, opts.rows)
     this.emulator = new HeadlessEmulator({
       cols: size.cols,
@@ -76,6 +88,9 @@ export class SessionOutputPlane {
 
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
     const token = Symbol('attach')
+    client.transients?.install(this.transients.snapshot(), this.incarnationId, () =>
+      this.transients.snapshot()
+    )
     this.attachedClients.push({ token, ...client })
     return token
   }
@@ -83,12 +98,16 @@ export class SessionOutputPlane {
   detachClient(token: symbol): void {
     const idx = this.attachedClients.findIndex((c) => c.token === token)
     if (idx !== -1) {
+      this.attachedClients[idx].transients?.dispose?.()
       this.attachedClients.splice(idx, 1)
     }
   }
 
   /** Drops every client WITHOUT touching producer flow control; the caller owns that ordering. */
   clearClients(): void {
+    for (const client of this.attachedClients) {
+      client.transients?.dispose?.()
+    }
     this.attachedClients = []
   }
 
@@ -197,24 +216,31 @@ export class SessionOutputPlane {
       return
     }
     this.record({ kind: 'output', data: pending })
+    this.transients.observe(pending, this._outputSequence)
     for (const client of this.attachedClients) {
       client.onData(pending, 0, true, this._outputSequence)
+      client.transients?.commit()
     }
   }
 
-  emit(emission: PtyIngressEmission): void {
+  emit(emission: PtyIngressEmission, genuinePrefixLength = emission.data.length): void {
     let { data } = emission
+    let genuine = data.slice(0, genuinePrefixLength)
     const rawLength = emission.rawEndSeq - emission.rawStartSeq
     // Why: absolute raw count (daemon stream thinning can drop bytes) lets a snapshot cover the gaps while the renderer dedups the tail.
     this._outputSequence += rawLength
     if (data.length > 0) {
       this.emulator.write(data)
-      data = this.deviceAttributesQueryFilter?.accept(data) ?? data
+      genuine = this.deviceAttributesQueryFilter?.accept(genuine) ?? genuine
+      // A grounded D ends its escape, flushing genuine DA carry before the synthetic suffix.
+      const synthetic = data.slice(genuinePrefixLength)
+      data = genuine + (this.deviceAttributesQueryFilter?.accept(synthetic) ?? synthetic)
     }
     if (data.length > 0) {
       this.record({ kind: 'output', data })
     }
 
+    this.transients.observe(genuine, this._outputSequence)
     // Broadcast to attached clients
     for (const client of this.attachedClients) {
       if (emission.transformed || rawLength !== data.length) {
@@ -222,6 +248,7 @@ export class SessionOutputPlane {
       } else {
         client.onData(data)
       }
+      client.transients?.commit()
     }
   }
 
@@ -279,6 +306,10 @@ export class SessionOutputPlane {
    *  which outlives fd teardown so an already-exited session can still be snapshotted. */
   markDisposed(): void {
     this.disposed = true
+    this.transients.dispose()
+    for (const client of this.attachedClients) {
+      client.transients?.dispose?.()
+    }
   }
 
   disposeEmulator(): void {

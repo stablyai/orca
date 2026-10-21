@@ -9,6 +9,7 @@
  */
 
 import { ownRetainedString } from './own-retained-string'
+import { TerminalStatusFrameCursor } from './terminal-status-frame-cursor'
 
 type OscTerminator = {
   index: number
@@ -60,6 +61,21 @@ export function closesAppOsc133Zone(adjacentMarkers: string, payload: string): b
   return sequence === 'D' && exitCode === '0' && adjacentMarkers.endsWith('BC')
 }
 
+// Adjacency of a scanner that joined the stream mid-flight (new reader, scan handoff, reset).
+export const UNSEEN_OSC133_MARKERS = '?'
+
+/**
+ * A `D;0` a mid-flight scanner sees before any other output may end a `B C` it never saw. Orca's
+ * shell hooks print the next prompt's `A` straight after a real `D`, while OMP follows its zone
+ * close with output, so the next thing seen decides.
+ */
+export function mayCloseUnseenAppZone(adjacentMarkers: string, payload: string): boolean {
+  return (
+    closesAppOsc133Zone('BC', payload) &&
+    (adjacentMarkers === UNSEEN_OSC133_MARKERS || adjacentMarkers === `${UNSEEN_OSC133_MARKERS}C`)
+  )
+}
+
 export type Osc133CommandFinishedScanner = {
   /** Feed one raw PTY chunk; fires once per complete OSC 133;D sequence. */
   scan: (data: string) => void
@@ -76,20 +92,30 @@ export function createOsc133CommandFinishedScanner(
    */
   onCommandStarted?: (endInChunk: number) => void
 ): Osc133CommandFinishedScanner {
+  const framing = new TerminalStatusFrameCursor()
   let carry = ''
   // OSC 133 markers seen back to back since the last other output, e.g. 'BC'.
-  let adjacentMarkers = ''
+  let adjacentMarkers = UNSEEN_OSC133_MARKERS
+  let unseenZoneFinishPending = false
 
   const noteOutput = (): void => {
     adjacentMarkers = ''
+    unseenZoneFinishPending = false
   }
 
   const handleOsc133 = (payload: string, endInChunk: number): void => {
     const [sequence, exitCode] = payload.split(';')
+    if (unseenZoneFinishPending) {
+      unseenZoneFinishPending = false
+      if (sequence === 'A') {
+        onCommandFinished(0)
+      }
+    }
     // Why: read as the command's exit, that `D` retired a live agent's status.
     const closesAppZone = closesAppOsc133Zone(adjacentMarkers, payload)
+    unseenZoneFinishPending = mayCloseUnseenAppZone(adjacentMarkers, payload)
     adjacentMarkers = (adjacentMarkers + sequence.slice(0, 1)).slice(-2)
-    if (closesAppZone) {
+    if (closesAppZone || unseenZoneFinishPending) {
       return
     }
     if (sequence === 'C') {
@@ -101,10 +127,10 @@ export function createOsc133CommandFinishedScanner(
     }
   }
 
-  const scan = (data: string): void => {
+  const scanSpan = (data: string, sourceStart: number): void => {
     let combined = carry + data
     // `combined` starts at this index in `data`; negative while it still holds the carry.
-    let combinedStartInChunk = -carry.length
+    let combinedStartInChunk = sourceStart - carry.length
     carry = ''
 
     while (combined.length > 0) {
@@ -142,10 +168,18 @@ export function createOsc133CommandFinishedScanner(
   }
 
   return {
-    scan,
+    scan(data) {
+      framing.scan(data, scanSpan, () => {
+        carry = ''
+        adjacentMarkers = UNSEEN_OSC133_MARKERS
+        unseenZoneFinishPending = false
+      })
+    },
     reset() {
+      framing.reset()
       carry = ''
-      adjacentMarkers = ''
+      adjacentMarkers = UNSEEN_OSC133_MARKERS
+      unseenZoneFinishPending = false
     }
   }
 }

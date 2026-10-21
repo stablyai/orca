@@ -45,6 +45,14 @@ export function bindProviderListeners(session: PtyIpcSession): void {
   // Daemon keep-tail thinning facts, in byte order with onData: markers flip transient-fact scan authority; a gap forces renderer restore from the snapshot.
   setLocalBackgroundStreamUnsub(
     localProvider.onBackgroundStreamEvent?.((payload) => {
+      if (payload.kind === 'terminalObservation') {
+        session.runtime?.applyTerminalTransientObservation(
+          payload.id,
+          payload.incarnationId,
+          payload.observation
+        )
+        return
+      }
       if (payload.kind === 'backgroundMarker') {
         session.runtime?.setPtyTransientFactDelegation(
           payload.id,

@@ -9,6 +9,7 @@ import type {
 } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalTransientSink } from '../../shared/terminal-transient-observation'
 
 export type CreateOrAttachOptions = {
   sessionId: string
@@ -36,12 +37,12 @@ export type CreateOrAttachOptions = {
     surface: AgentSessionSurfaceBinding
   }
   streamClient: {
+    transients?: TerminalTransientSink
     onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
     onExit: (code: number, incarnationId: PtyIncarnationId, cause?: TerminalExitCause) => void
   }
-  /** Lets the daemon route output under the adopted owner's canonical id before
-   *  attaching its stream callbacks. */
-  onSessionResolved?: (sessionId: string) => void
+  /** Prepare without mutation; a returned commit synchronously revalidates before replacement. */
+  onSessionResolved?: (sessionId: string) => (() => boolean) | null | void
 }
 
 export type CreateOrAttachResult = {
@@ -52,7 +53,7 @@ export type CreateOrAttachResult = {
   historySeeded?: boolean
   launchAgent?: TuiAgent
   wslDistro: string | null
-  attachToken: symbol
+  attachToken: symbol | null
   incarnationId: PtyIncarnationId
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
   /** Daemon-process verdict on the spawn cwd; only set on a fresh spawn that was given a cwd. */

@@ -41,6 +41,7 @@ export type TerminalTitleFactMeta = {
 export type AgentIdleEdgeMeta = TerminalTitleFactMeta & { status?: AgentIdleStatus }
 
 type TerminalTitleTrackerChunkOptions = {
+  commandScanData?: string
   titleScanData?: string
   mode2031PendingSubscribe?: boolean
   /** The chunk's OSC 7501 activity changes, offsets in `data`; applied in byte order with its titles. */
@@ -105,6 +106,8 @@ export type TerminalTitleTracker = {
    * Titles are unaffected; un-suppressing resets the scanners' cross-chunk carry.
    */
   setTransientFactScanningSuppressed: (suppressed: boolean) => void
+  /** Dropped output: the OSC 133 scanner no longer knows which markers came just before. */
+  forgetCommandFinishedContext: () => void
   /** Enable consumer-only bell, PR-link, and mode-2031 scans without resetting title state. */
   setTransientSideEffectScanningEnabled: (enabled: boolean) => void
   /** Cancel the stale-title timer and clear accumulated tracker state. */
@@ -255,7 +258,7 @@ export function createTerminalTitleTracker(
     }
     // Fact order (matches renderer drain): titles → command-finished → pr-link → 2031-subscribe → bell; bell last.
     if (!transientFactScanningSuppressed) {
-      commandFinishedScanner?.scan(data)
+      commandFinishedScanner?.scan(options.commandScanData ?? data)
       if (prLinkDetector) {
         for (const link of prLinkDetector(data)) {
           onPrLink?.(link)
@@ -318,6 +321,9 @@ export function createTerminalTitleTracker(
       return agentTracker?.restoreLastExit(confirmedStatus) ?? null
     },
     getLastNormalizedTitle: () => lastEmittedTitle,
+    forgetCommandFinishedContext(): void {
+      commandFinishedScanner?.reset()
+    },
     setTransientFactScanningSuppressed(suppressed: boolean): void {
       if (suppressed === transientFactScanningSuppressed) {
         return

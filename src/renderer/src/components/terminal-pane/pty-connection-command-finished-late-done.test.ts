@@ -183,7 +183,7 @@ describe('command-finished drop and a Done that lands after it', () => {
     })
     return {
       paneKey,
-      finishCommand: () => dataCallbackRef.current?.('\x1b]133;D;0\x07'),
+      finishCommand: () => dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07'),
       startCommand: () => dataCallbackRef.current?.('\x1b]133;C\x07'),
       typeKey: (data) => {
         for (const [listener] of pane.terminal.onData.mock.calls) {

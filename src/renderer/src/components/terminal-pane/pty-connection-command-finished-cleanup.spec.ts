@@ -141,7 +141,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         await flushAsyncTicks()
 
         sendTerminalInputThroughPane(pane, 'droid\r')
-        dataCallbackRef.current?.('\x1b]133;C\x07\x1b]133;D;0\x07')
+        dataCallbackRef.current?.('\x1b]133;C\x07\x1b]133;D;0\x07\x1b]133;A\x07')
 
         expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toBeUndefined()
         expect(mockStoreState.setPaneForegroundAgent).not.toHaveBeenCalledWith(
@@ -184,7 +184,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       })
 
       const readsBeforeFinish = getForegroundProcess.mock.calls.length
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
       expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
 
@@ -234,7 +234,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         delete mockStoreState.agentLaunchConfigByPaneKey[key]
       })
 
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
       await vi.advanceTimersByTimeAsync(350)
       expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
       expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
@@ -292,7 +292,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         mockStoreState.suppressedPtyExitIds[ptyId] = true
       }
 
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
       await vi.advanceTimersByTimeAsync(350)
 
       if (stoppingOnPurpose) {
@@ -347,7 +347,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         updatedAt: 1
       }
 
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
       await flushAsyncTicks()
 
@@ -404,7 +404,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         realStore.dropAgentStatus(key)
       })
 
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
       await vi.advanceTimersByTimeAsync(350)
 
       expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
@@ -441,7 +441,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         identity: { agentType: 'droid' }
       }
 
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
       // Run the whole confirm ladder. At 350ms the unavailable branch has not settled yet, so
       // asserting there proves nothing — it would pass just as happily if this path DID tear the
       // pane down a moment later.
@@ -494,7 +494,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       // A SIGKILLed agent emits no mode teardown; only the shell's next prompt
       // mark arrives. The bare 133;D must not disarm yet — the foreground read
       // has not confirmed the agent is gone.
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
       expect(writes.some((w) => w.includes(POST_REPLAY_REATTACH_RESET))).toBe(false)
       expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(5)
 
@@ -542,7 +542,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         launchConfig: { agentArgs: '', agentEnv: {} },
         identity: { agentType: 'droid' }
       }
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
       await vi.advanceTimersByTimeAsync(350)
       await flushAsyncTicks()
       expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalled()
@@ -599,7 +599,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       // A full-screen agent's nested command shell leaks a 133;D onto the main
       // PTY; the confirming read republishes the live agent, so its armed
       // mouse/kitty modes must survive untouched.
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
       await flushAsyncTicks()
 
@@ -639,7 +639,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         delete mockStoreState.agentLaunchConfigByPaneKey[key]
       })
 
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
       await flushAsyncTicks()
 
@@ -681,12 +681,12 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         delete mockStoreState.agentLaunchConfigByPaneKey[key]
       })
 
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
       dataCallbackRef.current?.('\x1b]133;C\x07')
       expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
 
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
       expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)

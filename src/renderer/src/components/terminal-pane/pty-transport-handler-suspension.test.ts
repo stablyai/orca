@@ -206,7 +206,7 @@ describe('createIpcPtyTransport', () => {
 
     restorePtyDataHandlersAfterFailedShutdown(second)
     expect(onDataCallback).toHaveBeenCalledWith('buffered while both owners are pending')
-    expect(sidecar).toHaveBeenCalledWith('buffered while both owners are pending')
+    expect(sidecar).toHaveBeenCalledWith('buffered while both owners are pending', undefined)
     ptyDataSidecars.delete('pty-1')
   })
 

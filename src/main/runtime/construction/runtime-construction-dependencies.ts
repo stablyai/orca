@@ -41,6 +41,7 @@ export type RuntimeConstructionDependencies = {
     connectionId: string | null
     terminalProvenance: 'current_runtime' | 'restored'
   }) => AgentHookAuthorityAttestation | null
+  captureAgentHookCompatibilityRetirement?: (paneKey: string) => () => void
   retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
   readHookCliWriterObservation?: (row: AgentStatusIpcPayload) => CliWriterObservation | null
   /** `exitedSince`: also answer `exited` for an exit the hook store proved at or after it. */

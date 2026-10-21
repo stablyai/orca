@@ -132,6 +132,12 @@ vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {
     readonly sidebarFacts = null
     readonly agentTransitions = { seedRestoredRows() {} }
+    subscribeAgentLaunchAuthority() {
+      return () => {}
+    }
+    verifyAgentHookLaunchAuthority() {
+      return false
+    }
     attachAgentStatusStore() {
       return () => {}
     }

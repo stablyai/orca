@@ -74,3 +74,15 @@ export function waitForDaemonConnectionAttempt(
     )
   })
 }
+
+export function assertDaemonConnectionAttempt(
+  attemptGeneration: number,
+  currentGeneration: number,
+  socket?: Socket
+): void {
+  if (attemptGeneration === currentGeneration) {
+    return
+  }
+  socket?.destroy()
+  throw new DaemonProtocolError('Disconnected')
+}

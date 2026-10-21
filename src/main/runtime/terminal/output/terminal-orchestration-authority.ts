@@ -143,26 +143,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     }
   }
 
-  protected retirePtyAgentLaunchAuthority(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
-    if (!pty) {
-      return
-    }
-    const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
-    if (!pty.launchToken && !receipt && !pty.launchAgent) {
-      return
-    }
-    // Why: collect before the delete below, which drops the restored-authority receipt a
-    // receipt-only pane's key comes from.
-    const paneKeys = this.collectPaneKeysForPty(ptyId)
-    this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
-    pty.launchToken = null
-    pty.launchIncarnationId = null
-    pty.launchAgent = null
-    for (const paneKey of paneKeys) {
-      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
-    }
-  }
+  protected abstract retirePtyAgentLaunchAuthority(ptyId: string): void
 
   async resolveTerminalCwd(handle: string): Promise<string | null> {
     const ptyId = this.resolveLeafForHandle(handle)?.ptyId

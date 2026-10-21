@@ -125,6 +125,8 @@ export type RuntimePtyTabCloseAuthority = {
 }
 
 export type RuntimePtyTitleTrackerEntry = {
+  /** In-memory physical observer ownership; display gaps and view changes cannot revoke it. */
+  transientIncarnationId?: string
   tracker: TerminalTitleTracker
   applyingChunk: boolean
   lastMobileTitleGateKey: string | null

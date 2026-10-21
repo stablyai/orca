@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Socket } from 'node:net'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import { createNdjsonParser } from './ndjson'
+import { extractOrderedRendererQueryData } from '../../shared/terminal-reply-query-extraction'
 
 function createBatcher(options?: ConstructorParameters<typeof DaemonStreamDataBatcher>[1]) {
   const streamSocket = {
@@ -417,10 +418,10 @@ describe('DaemonStreamDataBatcher', () => {
   it('salvages reply-eliciting query bytes out of dropped data', () => {
     vi.useFakeTimers()
     try {
-      const dsr = '\x1b[6n'
+      const dsr = '\x1b[6n\x1b[5n\x1b]10;?\x07\x1b[?2026$p'
       const { batcher, streamSocket } = createBatcher({
         isSessionDroppable: () => true,
-        salvageDroppedData: (dropped) => (dropped.includes(dsr) ? dsr : '')
+        salvageDroppedData: extractOrderedRendererQueryData
       })
       // The DSR probe sits in the oldest (dropped) region.
       batcher.enqueue('client-1', 'session-bg', `flood${dsr}${'x'.repeat(900 * 1024)}`)
@@ -439,6 +440,10 @@ describe('DaemonStreamDataBatcher', () => {
       expect(messages[1]?.event).toBe('data')
       expect(messages[1]?.payload.data).toBe(dsr)
       expect(messages[1]?.payload.sequenceChars).toBe(0)
+      expect(extractOrderedRendererQueryData(dsr, dsr.length - 1)).toBe(
+        '\x1b[6n\x1b[5n\x1b]10;?\x07'
+      )
+      expect(extractOrderedRendererQueryData(`\x1b[${'1'.repeat(4096)}c${dsr}`, 4096)).toBe('')
       const originalSequenceChars = messages.reduce(
         (sum, message) =>
           sum +

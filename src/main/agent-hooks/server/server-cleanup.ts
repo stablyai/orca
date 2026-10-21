@@ -224,7 +224,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
         const observation = this.currentAuthorityObservations.get(paneKey)
         const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
         clearPaneCacheState(this.state, paneKey)
-        if (observation && !ownedByRemoved(observation)) {
+        if (observation && !ownedByRemoved(observation.evidence)) {
           this.currentAuthorityObservations.set(paneKey, observation)
         }
         this.restartedStatusLaunchTokenHashByPaneKey.set(paneKey, {
@@ -247,7 +247,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
           this.scheduleStatusPersist()
         }
         const observation = this.currentAuthorityObservations.get(paneKey)
-        if (observation && ownedByRemoved(observation)) {
+        if (observation && ownedByRemoved(observation.evidence)) {
           this.currentAuthorityObservations.delete(paneKey)
         }
         continue
@@ -335,6 +335,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     this.clearTranscriptPoll(resolvedPaneKey)
     this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
     this.currentAuthorityObservations.delete(resolvedPaneKey)
+    this.pendingLaunchAuthority.delete(resolvedPaneKey)
     if (existing.payload.state === 'done') {
       this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
     }

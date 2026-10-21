@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto'
-
 import { isValidPaneKey } from './server-status-identity'
 import {
   HYDRATE_MAX_AGE_MS,
@@ -12,7 +10,6 @@ import type {
   PersistedAgentHookAuthorityCommitment,
   PersistedAgentHookEventPayload
 } from './server-types'
-import { authorityCommitmentsMatch } from './server-persistence-validation'
 import { AgentHookServerHydration } from './server-hydration'
 import { pruneAgentExits, serializeAgentExits } from './agent-exit-evidence'
 import { AtomicSnapshotWriter } from '../../persistence/atomic-snapshot-writer'
@@ -25,7 +22,6 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
   protected serializeStatusFile(): string {
     const entries: Record<string, PersistedAgentHookEventPayload> = {}
     const authorityCommitments: Record<string, PersistedAgentHookAuthorityCommitment> = {}
-    const conflictedCommitments = new Set<string>()
     for (const [paneKey, commitment] of this.persistedAuthorityCommitmentsByPaneKey) {
       authorityCommitments[paneKey] = { ...commitment }
     }
@@ -55,30 +51,16 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         // rejoin a row to somebody else's terminal.
         terminalHandle: _terminalHandle,
         hostTurnRevision: _hostTurnRevision,
-        launchToken,
+        launchToken: _launchToken,
         ...persistedPayload
       } = enrichedPayload
-      const launchTokenHash = launchToken?.trim()
-        ? createHash('sha256').update(launchToken.trim()).digest('hex')
-        : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
       // `payload.mainAgent` rides inside the payload; the legacy `claudeLeadBoundaryChildOnly` flag it
       // replaced is read at hydrate and never written again.
       const { claudeTaskWakeupPending: _pendingWakeup, ...persistedStatus } =
         persistedPayload.payload
       entries[paneKey] = {
         ...persistedPayload,
-        payload: persistedStatus,
-        ...(launchTokenHash ? { launchTokenHash } : {})
-      }
-      const commitment = this.toAuthorityEvidence(payload, launchTokenHash)
-      if (commitment && !conflictedCommitments.has(paneKey)) {
-        const existing = authorityCommitments[paneKey]
-        if (existing && !authorityCommitmentsMatch(existing, commitment)) {
-          delete authorityCommitments[paneKey]
-          conflictedCommitments.add(paneKey)
-        } else {
-          authorityCommitments[paneKey] = { ...commitment }
-        }
+        payload: persistedStatus
       }
     }
     // Why: only a successor claim forgets an exit, so a pane that never runs another agent would keep it.
@@ -185,17 +167,9 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     return this.statusSnapshotWriter
   }
 
-  /** Cheap per-event check: revision counters plus live launch tokens, no hashing or serialization. */
+  /** Only independently admitted commitments make authority persistence urgent. */
   protected currentAuthorityFingerprint(): string {
-    let fingerprint = `${this.hydratedLaunchTokenHashByPaneKey.revision}:${this.persistedAuthorityCommitmentsByPaneKey.revision}`
-    for (const [paneKey, payload] of this.state.lastStatusByPaneKey) {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
-      const launchToken = (payload as EnrichedAgentHookEventPayload).launchToken?.trim()
-      if (launchToken) {
-        fingerprint += `\n${paneKey}\t${launchToken}`
-      }
-    }
-    return fingerprint
+    return `${this.persistedAuthorityCommitmentsByPaneKey.revision}`
   }
 
   private startStatusPersist(): void {

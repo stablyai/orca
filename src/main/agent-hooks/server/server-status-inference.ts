@@ -94,6 +94,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (existing.restoredUnconfirmed) {
       return false
     }
+    const launchToken = this.projectLaunchAuthority(existing).launchToken
     const payload = existing.payload
     const agentType: AgentType | undefined = payload.agentType
     if (shouldIgnoreInterruptIntent(agentType, request.intent)) {
@@ -154,13 +155,13 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
         : undefined
     const state = local?.state ?? relayed?.stateName ?? 'done'
     const workingMode = local?.workingMode ?? relayed?.workingMode
-    const inferred = this.applyNormalizedStatus({
+    const inferred = this.applyDerivedStatus(existing, {
       paneKey: existing.paneKey,
       tabId: existing.tabId,
       worktreeId: existing.worktreeId,
       connectionId: existing.connectionId,
       providerSession: existing.providerSession,
-      launchToken: existing.launchToken,
+      launchToken,
       hostTurnRevision: existing.hostTurnRevision,
       source: existing.source,
       // Why: a cancel leaves the shell fact as it was; dropping it would stop restart from seeding
@@ -207,7 +208,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
         request: {
           paneKey: existing.paneKey,
           hostTurnRevision: existing.hostTurnRevision,
-          launchToken: existing.launchToken,
+          launchToken,
           providerSession: existing.providerSession,
           intent: 'ctrl-c'
         }
@@ -243,6 +244,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (existing.restoredUnconfirmed) {
       return false
     }
+    const launchToken = this.projectLaunchAuthority(existing).launchToken
     const payload = existing.payload
     // Why: only Claude's interactive question clears on typed input — tool name (not hook event) discriminates; real permission waits stay sticky.
     if (
@@ -263,13 +265,13 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     }
     // Why: sync the listener's lead-turn record too, or a later child event re-emits the stale waiting state and resurrects the card.
     const restored = clearClaudeAnsweredQuestionWait(this.state, existing.paneKey)
-    const inferred = this.applyNormalizedStatus({
+    const inferred = this.applyDerivedStatus(existing, {
       paneKey: existing.paneKey,
       tabId: existing.tabId,
       worktreeId: existing.worktreeId,
       connectionId: existing.connectionId,
       providerSession: existing.providerSession,
-      launchToken: existing.launchToken,
+      launchToken,
       hostTurnRevision: existing.hostTurnRevision,
       source: existing.source,
       payload: {

@@ -19,10 +19,66 @@ export function extractHiddenStartupRendererQueryData(
   data: string,
   pending: string
 ): ExtractedRendererQueryData {
-  const input = pending + data
   let statelessQueryData = ''
   let statefulQueryData = ''
   let oscColorQueryData = ''
+  const nextPending = visitRendererReplyQueries(data, pending, (input, start, end, kind) => {
+    const sequence = input.slice(start, end)
+    if (kind === 'stateless') {
+      statelessQueryData += sequence
+    } else if (kind === 'stateful') {
+      statefulQueryData += sequence
+    } else {
+      oscColorQueryData += sequence
+    }
+    return true
+  })
+  return { statelessQueryData, statefulQueryData, oscColorQueryData, pending: nextPending }
+}
+
+/** Complete queries in source order, bounded before copying any retained sequence. */
+export function extractOrderedRendererQueryData(
+  data: string,
+  maxChars: number,
+  endAt = data.length,
+  accept: (chars: number) => boolean = () => true
+): string {
+  let result = ''
+  visitRendererReplyQueries(data, '', (input, start, end) => {
+    if (end > endAt || end - start > maxChars - result.length || !accept(end - start)) {
+      return false
+    }
+    result += input.slice(start, end)
+    return true
+  })
+  return result
+}
+
+type RendererQueryKind = 'stateless' | 'stateful' | 'oscColor'
+
+function rendererQueryKind(input: string, start: number, end: number): RendererQueryKind | null {
+  if (input[end - 1] === 'c') {
+    return 'stateless'
+  }
+  if (input.startsWith('\x1b[?', start) && input[end - 2] === '$' && input[end - 1] === 'p') {
+    return 'stateful'
+  }
+  if (end - start > 6) {
+    return null
+  }
+  const sequence = input.slice(start, end)
+  if (isStatelessRendererReplyCsiQuery(sequence)) {
+    return 'stateless'
+  }
+  return isStatefulRendererReplyCsiQuery(sequence) ? 'stateful' : null
+}
+
+function visitRendererReplyQueries(
+  data: string,
+  pending: string,
+  emit: (input: string, start: number, end: number, kind: RendererQueryKind) => boolean
+): string {
+  const input = pending ? pending + data : data
   let offset = 0
 
   while (offset < input.length) {
@@ -31,31 +87,21 @@ export function extractHiddenStartupRendererQueryData(
       break
     }
     if (candidateIndex + 1 >= input.length) {
-      return {
-        statelessQueryData,
-        statefulQueryData,
-        oscColorQueryData,
-        pending: input.slice(candidateIndex)
-      }
+      return input.slice(candidateIndex)
     }
     if (input.startsWith('\x1b[', candidateIndex)) {
       const finalByteIndex = findCsiFinalByteIndex(input, candidateIndex + 2)
       if (finalByteIndex === -1) {
-        return {
-          statelessQueryData,
-          statefulQueryData,
-          oscColorQueryData,
-          pending: input.slice(
-            candidateIndex,
-            candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
-          )
-        }
+        return input.slice(
+          candidateIndex,
+          candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
+        )
       }
-      const sequence = input.slice(candidateIndex, finalByteIndex + 1)
-      if (isStatelessRendererReplyCsiQuery(sequence)) {
-        statelessQueryData += sequence
-      } else if (isStatefulRendererReplyCsiQuery(sequence)) {
-        statefulQueryData += sequence
+      const end = finalByteIndex + 1
+      // Inspect endpoints before copying: a bounded sink must never materialize an oversized query.
+      const kind = rendererQueryKind(input, candidateIndex, end)
+      if (kind && !emit(input, candidateIndex, end, kind)) {
+        return ''
       }
       offset = finalByteIndex + 1
       continue
@@ -64,32 +110,24 @@ export function extractHiddenStartupRendererQueryData(
     if (input.startsWith('\x1b]', candidateIndex)) {
       const query = parseTerminalOscColorQuery(input, candidateIndex)
       if (query.kind === 'partial') {
-        return {
-          statelessQueryData,
-          statefulQueryData,
-          oscColorQueryData,
-          pending: input.slice(
-            candidateIndex,
-            candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
-          )
-        }
+        return input.slice(
+          candidateIndex,
+          candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
+        )
       }
       if (query.kind === 'none') {
         offset = candidateIndex + 2
         continue
       }
-      oscColorQueryData += input.slice(candidateIndex, query.endIndex)
+      if (!emit(input, candidateIndex, query.endIndex, 'oscColor')) {
+        return ''
+      }
       offset = query.endIndex
       continue
     }
 
     if (parseTerminalOscColorQuery(input, candidateIndex).kind === 'partial') {
-      return {
-        statelessQueryData,
-        statefulQueryData,
-        oscColorQueryData,
-        pending: input.slice(candidateIndex)
-      }
+      return input.slice(candidateIndex)
     }
 
     {
@@ -98,7 +136,7 @@ export function extractHiddenStartupRendererQueryData(
     }
   }
 
-  return { statelessQueryData, statefulQueryData, oscColorQueryData, pending: '' }
+  return ''
 }
 
 export function containsCsiRendererQuery(data: string): boolean {

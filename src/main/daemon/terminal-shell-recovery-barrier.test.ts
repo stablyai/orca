@@ -20,15 +20,19 @@ function createBarrier(opts?: {
   maxPendingMs?: number
 }) {
   const released: PtyIngressEmission[] = []
+  const genuineLengths: (number | undefined)[] = []
   const confirm = vi.fn(opts?.confirm ?? (async () => true))
   const barrier = new TerminalShellRecoveryBarrier({
     confirmShellForeground: confirm,
-    release: (emission) => released.push(emission),
+    release: (emission, genuinePrefixLength) => {
+      released.push(emission)
+      genuineLengths.push(genuinePrefixLength)
+    },
     isAlive: opts?.isAlive ?? (() => true),
     ...(opts?.maxQueuedBytes !== undefined ? { maxQueuedBytes: opts.maxQueuedBytes } : {}),
     ...(opts?.maxPendingMs !== undefined ? { maxPendingMs: opts.maxPendingMs } : {})
   })
-  return { barrier, released, confirm }
+  return { barrier, released, confirm, genuineLengths }
 }
 
 describe('TerminalShellRecoveryBarrier', () => {
@@ -44,7 +48,7 @@ describe('TerminalShellRecoveryBarrier', () => {
 
   it('pauses at the unclean-death boundary and delivers the queued prompt after the injected reset', async () => {
     let resolveConfirm: ((confirmed: boolean) => void) | undefined
-    const { barrier, released, confirm } = createBarrier({
+    const { barrier, released, confirm, genuineLengths } = createBarrier({
       confirm: () => new Promise((resolve) => void (resolveConfirm = resolve))
     })
 
@@ -68,6 +72,7 @@ describe('TerminalShellRecoveryBarrier', () => {
       rawEndSeq: 100 + TRIGGER.length + 'SHELL-PROMPT'.length,
       transformed: false
     })
+    expect(genuineLengths).toEqual([undefined, MARK.length, undefined])
     expect(barrier.getOwner()).toBe('shell')
   })
 

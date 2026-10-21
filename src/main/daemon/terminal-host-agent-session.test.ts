@@ -91,6 +91,50 @@ describe('TerminalHost agent-session claims', () => {
     expect(spawnSubprocess).toHaveBeenCalledOnce()
   })
 
+  it('finishes accepted startup and claim promotion after observation cancellation, preserving later adopters', async () => {
+    const first = await host.createOrAttach({
+      sessionId: 'accepted-execution',
+      cols: 80,
+      rows: 24,
+      command: 'typed-agent-command',
+      streamClient: { onData: vi.fn(), onExit: vi.fn() },
+      agentSessionEnsure: { claim, surface },
+      onSessionResolved: () => () => false
+    })
+    expect(first.attachToken).toBeNull()
+    expect(first.agentSessionEnsure).toMatchObject({
+      disposition: 'created',
+      owner: { ptyId: 'accepted-execution' }
+    })
+    expect(subprocess?.write).toHaveBeenCalledExactlyOnceWith('typed-agent-command\r')
+    const retainedData = vi.fn()
+    const adopted = await host.createOrAttach({
+      sessionId: 'different-request-id',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: retainedData, onExit: vi.fn() },
+      agentSessionEnsure: { claim, surface }
+    })
+    expect(adopted.attachToken).toEqual(expect.any(Symbol))
+    expect(adopted.agentSessionEnsure?.disposition).toBe('adopted')
+    for (const prepare of [() => null, () => () => false]) {
+      await expect(
+        host.createOrAttach({
+          sessionId: 'another-request-id',
+          cols: 80,
+          rows: 24,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() },
+          agentSessionEnsure: { claim, surface },
+          onSessionResolved: prepare
+        })
+      ).rejects.toThrow('canceled')
+      subprocess?.emitData('predecessor-live')
+    }
+    expect(retainedData.mock.calls).toEqual([['predecessor-live'], ['predecessor-live']])
+    expect(spawnSubprocess).toHaveBeenCalledOnce()
+    expect(subprocess?.write).toHaveBeenCalledOnce()
+  })
+
   it('cannot adopt a live session that predates provider-session claims', async () => {
     const subprocesses: ReturnType<typeof createClaimedSubprocess>[] = []
     host = new TerminalHost({

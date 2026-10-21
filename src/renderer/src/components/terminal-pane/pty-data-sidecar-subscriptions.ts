@@ -1,9 +1,12 @@
 import { acquirePtyDeliveryInterest } from './pty-delivery-interest'
-import { ensurePtyDispatcher, ptyDataSidecars } from './pty-dispatcher'
+import { ensurePtyDispatcher, ptyDataSidecars, type PtyDataMeta } from './pty-dispatcher'
 
 /** Register a side-channel data watcher for a PTY without taking ownership
  *  of the primary handler. Returns an unsubscribe fn. */
-export function subscribeToPtyData(ptyId: string, watcher: (data: string) => void): () => void {
+export function subscribeToPtyData(
+  ptyId: string,
+  watcher: (data: string, meta?: PtyDataMeta) => void
+): () => void {
   ensurePtyDispatcher()
   // Why: a sidecar is, by definition, a raw-byte consumer — its registration
   // doubles as the delivery-interest signal that suppresses main's

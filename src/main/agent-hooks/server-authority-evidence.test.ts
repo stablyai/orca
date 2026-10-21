@@ -46,6 +46,25 @@ describe('AgentHookServer authority evidence', () => {
         observedAt: 100
       }
     ])
+    // Independently registered execution-host secrets, separate from incoming hook bodies.
+    const admitted = new Map<string, Set<string>>([
+      [
+        PANE_KEY,
+        new Set(
+          ['launch-before-restart', 'launch-after-restart'].map((token) =>
+            createHash('sha256').update(token).digest('hex')
+          )
+        )
+      ],
+      [
+        SECOND_PANE_KEY,
+        new Set([createHash('sha256').update('launch-before-restart').digest('hex')])
+      ]
+    ])
+    server.setLaunchAuthorityVerifier(
+      (candidate) => admitted.get(candidate.paneKey)?.has(candidate.launchTokenHash) === true,
+      () => () => {}
+    )
     expect(Object.isFrozen(commitments)).toBe(true)
     expect(Object.isFrozen(commitments[0])).toBe(true)
     expect(server.getCurrentAuthorityObservations()).toEqual([])
@@ -220,5 +239,50 @@ describe('AgentHookServer authority evidence', () => {
         terminalProvenance: 'restored'
       })
     ).toEqual({ paneKey: PANE_KEY, source: 'current_hook' })
+  })
+
+  it('revokes the captured launch through a later alias move while preserving its successor', async () => {
+    const server = new AgentHookServer()
+    servers.push(server)
+    const launchToken = 'inherited-launch'
+    const launchTokenHash = createHash('sha256').update(launchToken).digest('hex')
+    let currentLaunch = true
+    server.setLaunchAuthorityVerifier(
+      () => currentLaunch,
+      () => () => {}
+    )
+    await server.start()
+    const post = (paneKey: string, id: string): void =>
+      server.ingestRemote(
+        {
+          paneKey,
+          launchToken,
+          source: 'opencode',
+          worktreeId: 'repo::same',
+          providerSession: { key: 'session_id', id },
+          payload: { state: 'working', prompt: id, agentType: 'opencode' }
+        },
+        null
+      )
+    post(PANE_KEY, 'session-1')
+    const retire = server.capturePaneAuthorityRetirement(PANE_KEY)
+    post(PANE_KEY, 'session-2')
+    server.transferPaneAuthority(PANE_KEY, SECOND_PANE_KEY, 'same-pty')
+    currentLaunch = false
+    retire()
+    post(PANE_KEY, 'session-2')
+    expect(server.getStatusSnapshotForPane(SECOND_PANE_KEY)[0]).toMatchObject({
+      state: 'working',
+      providerSession: { id: 'session-2' }
+    })
+    expect(server.resolvePaneAuthorityOwner(PANE_KEY)).toBe(SECOND_PANE_KEY)
+    expect(
+      server.attestCompatibilityAuthority({
+        paneKey: SECOND_PANE_KEY,
+        launchTokenHash,
+        connectionId: null,
+        terminalProvenance: 'current_runtime'
+      })
+    ).toBeNull()
   })
 })

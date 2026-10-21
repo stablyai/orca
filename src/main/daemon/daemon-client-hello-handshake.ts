@@ -1,9 +1,14 @@
+import { readFileSync } from 'node:fs'
 import type { Socket } from 'node:net'
 import { encodeNdjson, NDJSON_MAX_LINE_BYTES } from './ndjson'
 import { BINARY_STREAM_FRAMING, type DaemonStreamFraming } from './daemon-stream-binary-framing'
 import { CLEAN_DISCONNECT_PROTOCOL_VERSION, DaemonProtocolError } from './types'
 import type { DaemonEndpointIdentity, HelloMessage, HelloResponse } from './types'
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
+import {
+  isTerminalSubscriptionId,
+  TERMINAL_TRANSIENTS_CAPABILITY
+} from '../../shared/terminal-transient-observation'
 
 export type DaemonHelloRequest = {
   socket: Socket
@@ -24,6 +29,7 @@ export type DaemonHelloOutcome = {
   streamFraming: DaemonStreamFraming
   /** Bytes after the hello line in the same read; the socket's next reader must start with them. */
   remainder: Buffer
+  transientStreamId?: string
 }
 
 export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHelloOutcome> {
@@ -37,7 +43,8 @@ export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHell
       token,
       clientId,
       role,
-      ...(requestBinaryStream ? { streamFraming: BINARY_STREAM_FRAMING } : {})
+      ...(requestBinaryStream ? { streamFraming: BINARY_STREAM_FRAMING } : {}),
+      ...(role === 'stream' ? { capabilities: [TERMINAL_TRANSIENTS_CAPABILITY] } : {})
     }
 
     const chunks: Buffer[] = []
@@ -100,7 +107,17 @@ export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHell
             requestBinaryStream && response.streamFraming === BINARY_STREAM_FRAMING
               ? BINARY_STREAM_FRAMING
               : 'ndjson'
-          finish(undefined, { identity, streamFraming, remainder })
+          finish(undefined, {
+            identity,
+            streamFraming,
+            remainder,
+            ...(role === 'stream' &&
+            Array.isArray(response.capabilities) &&
+            response.capabilities.includes(TERMINAL_TRANSIENTS_CAPABILITY) &&
+            isTerminalSubscriptionId(response.streamId)
+              ? { transientStreamId: response.streamId }
+              : {})
+          })
         } else {
           finish(
             new DaemonProtocolError(addNodePtyRecoveryHint(response.error ?? 'Hello rejected'))
@@ -178,4 +195,16 @@ export function sameDaemonIdentity(
       left.startedAtMs === right.startedAtMs &&
       left.launchNonce === right.launchNonce)
   )
+}
+
+// Why: a missing token must not preempt the connect that proves whether the endpoint is gone.
+export function readDaemonToken(tokenPath: string): string {
+  try {
+    return readFileSync(tokenPath, 'utf-8').trim()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
+      return ''
+    }
+    throw error
+  }
 }
