@@ -9,8 +9,8 @@ export const getTerminalClipboardSearchEntries = createLocalizedCatalog(() => [
       'Copy on Select'
     ),
     description: translate(
-      'auto.components.settings.terminal.clipboard.search.603818e8d8',
-      'Automatically copy terminal selections to the clipboard as soon as a selection is made.'
+      'components.settings.terminal.clipboard.search.copyOnSelectDescription',
+      'Automatically copy text you select in a terminal or chat to the clipboard as soon as the selection is made.'
     ),
     keywords: [
       ...translateSearchKeyword(
@@ -29,6 +29,11 @@ export const getTerminalClipboardSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.terminal.clipboard.search.c38c18be15',
         'selection'
       ),
+      ...translateSearchKeyword(
+        'components.settings.terminal.clipboard.search.highlight',
+        'highlight'
+      ),
+      ...translateSearchKeyword('components.settings.terminal.clipboard.search.chat', 'chat'),
       ...translateSearchKeyword(
         'auto.components.settings.terminal.clipboard.search.664789b73a',
         'auto'
@@ -113,6 +118,43 @@ export const getTerminalClipboardSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword(
         'auto.components.settings.terminal.clipboard.search.a38508c419',
         'copy'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.clipboard.search.5fb3512e8c',
+        'paste'
+      )
+    ]
+  },
+  {
+    title: translate(
+      'components.settings.TerminalInteraction.copyTrimsGutter',
+      'Trim Gutter on Copy'
+    ),
+    description: translate(
+      'components.settings.TerminalInteraction.copyTrimsGutterDescription',
+      'Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.clipboard.search.10d73e22d3',
+        'clipboard'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.clipboard.search.a38508c419',
+        'copy'
+      ),
+      ...translateSearchKeyword('components.settings.terminal.clipboard.search.gutter', 'gutter'),
+      ...translateSearchKeyword('components.settings.terminal.clipboard.search.indent', 'indent'),
+      ...translateSearchKeyword('components.settings.terminal.clipboard.search.margin', 'margin'),
+      ...translateSearchKeyword('components.settings.terminal.clipboard.search.leading', 'leading'),
+      ...translateSearchKeyword(
+        'components.settings.terminal.clipboard.search.whitespace',
+        'whitespace'
+      ),
+      ...translateSearchKeyword('components.settings.terminal.clipboard.search.spaces', 'spaces'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.clipboard.search.c38c18be15',
+        'selection'
       ),
       ...translateSearchKeyword(
         'auto.components.settings.terminal.clipboard.search.5fb3512e8c',

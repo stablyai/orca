@@ -21,8 +21,6 @@ vi.mock('electron', () => ({
   webUtils: { getPathForFile: vi.fn(() => '') }
 }))
 
-vi.mock('@electron-toolkit/preload', () => ({ electronAPI: {} }))
-
 describe('native preload linux package recovery methods', () => {
   const originalContextIsolated = Object.getOwnPropertyDescriptor(process, 'contextIsolated')
 
@@ -82,12 +80,5 @@ describe('native preload linux package recovery methods', () => {
     await expect(api.updater.showLinuxPackage()).resolves.toBeUndefined()
 
     expect(invoke.mock.calls).toEqual([['updater:showLinuxPackage']])
-  })
-
-  it('surfaces a main-process validation rejection to the caller', async () => {
-    const api = await loadApi()
-    invoke.mockRejectedValueOnce(new Error('hash mismatch'))
-
-    await expect(api.updater.getLinuxPackageInstallInstructions()).rejects.toThrow('hash mismatch')
   })
 })

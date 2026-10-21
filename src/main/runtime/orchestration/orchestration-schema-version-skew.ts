@@ -42,7 +42,12 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 36, table: 'dispatch_contexts', column: 'consumer_generation' },
   { version: 36, table: 'remote_dispatch_attachments', column: 'consumer_generation' },
   { version: 37, table: 'dispatch_contexts', column: 'creator_handle' },
-  { version: 37, table: 'dispatch_contexts', column: 'creator_pane_key' }
+  { version: 37, table: 'dispatch_contexts', column: 'creator_pane_key' },
+  { version: 40, table: 'remote_dispatch_attachments', column: 'home_run_id' },
+  { version: 42, table: 'runs', column: 'coordinator_orca_session_id' },
+  { version: 42, table: 'runs', column: 'coordinator_orca_session_id_generation' },
+  { version: 42, table: 'dispatch_contexts', column: 'assignee_orca_session_id' },
+  { version: 42, table: 'dispatch_contexts', column: 'creator_orca_session_id' }
 ] as const
 
 // Why: v34 shipped without these two, so a v34 stamp proves nothing about them; v35 repairs both
@@ -122,15 +127,22 @@ function messagesAllowQuestions(db: Database.Database): boolean {
 
 function hasConsistentLegacyAdoption(db: Database.Database): boolean {
   const sourceRunId = 'run_legacy_local'
+  // Misfiled federated mail is not evidence of a pre-Runs database.
+  const notFederatedMailbox = (handle: string): string =>
+    `NOT EXISTS (SELECT 1 FROM remote_dispatch_attachments AS attachment
+      WHERE 'dispatch:' || attachment.dispatch_id = ${handle})`
+  const deliveryFilter = hasOrchestrationColumn(db, 'deliveries', 'mailbox_handle')
+    ? ` AND ${notFederatedMailbox('mailbox_handle')}`
+    : ''
   const sourceGraph = db
     .prepare(
       `SELECT 1
        WHERE EXISTS(SELECT 1 FROM tasks WHERE run_id = ?)
           OR EXISTS(SELECT 1 FROM dispatch_contexts WHERE run_id = ?)
           OR EXISTS(SELECT 1 FROM decision_gates WHERE run_id = ?)
-          OR EXISTS(SELECT 1 FROM messages WHERE run_id = ?)
+          OR EXISTS(SELECT 1 FROM messages WHERE run_id = ? AND ${notFederatedMailbox('to_handle')})
           OR EXISTS(SELECT 1 FROM question_threads WHERE run_id = ?)
-          OR EXISTS(SELECT 1 FROM deliveries WHERE run_id = ?)`
+          OR EXISTS(SELECT 1 FROM deliveries WHERE run_id = ?${deliveryFilter})`
     )
     .get(sourceRunId, sourceRunId, sourceRunId, sourceRunId, sourceRunId, sourceRunId)
   const adoption = db

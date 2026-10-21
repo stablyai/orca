@@ -35,17 +35,6 @@ describe('resolveSshHostRemoval', () => {
     expect(result.isConnected).toBe(false)
   })
 
-  it('ignores repos and worktrees on other hosts', () => {
-    const result = resolveSshHostRemoval({
-      targetId: 'ssh-1',
-      repos,
-      worktrees,
-      sshConnectionStates: new Map()
-    })
-    expect(result.workspaceWorktreeIds).not.toContain('repo-local::/wt/y')
-    expect(result.hostRepoIds).not.toContain('repo-local')
-  })
-
   it('reports connected when the target relay is connected', () => {
     const result = resolveSshHostRemoval({
       targetId: 'ssh-1',

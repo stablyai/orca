@@ -1,10 +1,11 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import { clampUtf8TextPrefix } from '../../../src/shared/utf8-byte-limits'
 import type {
   ConnectionLogEntry,
   ConnectionState,
   MobileConnectionDiagnosticPath
 } from '../transport/types'
-import { normalizeHostAppVersion } from '../transport/host-app-version-store'
+import { normalizeHostAppVersion } from '../transport/host-app-version'
 import { formatEndpoint } from './host-reachability'
 import { diagnoseConnection } from './connection-diagnostics-analysis'
 import { redactConnectionLogEntry, redactConnectionLogText } from './connection-log-redaction'
@@ -27,6 +28,8 @@ export function buildConnectionDiagnosticsReport(args: {
   entries: readonly ConnectionLogEntry[]
   activePath?: MobileConnectionDiagnosticPath
   pendingPath?: MobileConnectionDiagnosticPath | null
+  /** The page bridge version this shell speaks. */
+  bridgeProtocolVersion: number
   nowMs?: number
 }): string {
   const now = args.nowMs ?? Date.now()
@@ -42,6 +45,7 @@ export function buildConnectionDiagnosticsReport(args: {
   lines.push('Orca Mobile connection diagnostics')
   lines.push(`Generated: ${new Date(now).toISOString()}`)
   lines.push(`App: Orca Mobile ${args.appVersion} · ${args.platform}`)
+  lines.push(`Bridge protocol: ${args.bridgeProtocolVersion}`)
   const desktopAppVersion = normalizeHostAppVersion(args.desktopAppVersion)
   lines.push(`Host Orca version: ${desktopAppVersion ?? 'unknown'}`)
   lines.push(`Host: ${redactConnectionLogText(args.hostName)}`)
@@ -87,17 +91,7 @@ function truncateUtf8WithMarker(value: string, maxBytes: number, marker: string)
     return value
   }
   const markerBytes = new TextEncoder().encode(marker).byteLength
-  const characters: string[] = []
-  let bytes = 0
-  for (const character of value) {
-    const characterBytes = new TextEncoder().encode(character).byteLength
-    if (bytes + characterBytes + markerBytes > maxBytes) {
-      break
-    }
-    characters.push(character)
-    bytes += characterBytes
-  }
-  return `${characters.join('')}${marker}`
+  return `${clampUtf8TextPrefix(value, maxBytes - markerBytes)}${marker}`
 }
 
 function formatAgo(ms: number): string {

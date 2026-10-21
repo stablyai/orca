@@ -125,6 +125,16 @@ export class SessionOutputPlane {
     })
   }
 
+  /** Grounds the emulator and the cold-restore records without a client
+   *  broadcast; attached renderers ground themselves (Reset Terminal). */
+  applyInputModeGround(ground: string): void {
+    if (this.disposed) {
+      return
+    }
+    this.emulator.write(ground)
+    this.record({ kind: 'output', data: ground })
+  }
+
   isCursorOnEmptyPromptLine(): boolean {
     return this.emulator.isCursorOnEmptyPromptLine()
   }

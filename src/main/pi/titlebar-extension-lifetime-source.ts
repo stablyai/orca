@@ -1,0 +1,30 @@
+export function getPiTitlebarLifetimeSourceLines(): string[] {
+  return [
+    '  // Why: replacement factories share the process realm; retire the old owner before painting.',
+    "  const ownersKey = Symbol.for('orca.pi.titlebar.owners')",
+    '  const owners = globalThis[ownersKey] ??= new Map()',
+    '  const paneKey = process.env.ORCA_PANE_KEY',
+    '  owners.get(paneKey)?.()',
+    '  let disposed = false',
+    '  function clearOwnedTimers() {',
+    '    clearPendingAgentEndCheck()',
+    '    clearAnimation()',
+    '    stopMarkerReassert()',
+    '  }',
+    '',
+    '  function dispose() {',
+    '    disposed = true',
+    '    clearOwnedTimers()',
+    '    resetPromptState()',
+    '    if (owners.get(paneKey) === dispose) owners.delete(paneKey)',
+    '  }',
+    '  owners.set(paneKey, dispose)',
+    '',
+    '  function on(name, handler) {',
+    '    pi.on(name, (event, ctx) => {',
+    '      if (!disposed) return handler(event, ctx)',
+    '    })',
+    '  }',
+    ''
+  ]
+}

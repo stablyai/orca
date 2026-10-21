@@ -42,7 +42,7 @@ async function stubFolderPicker(
 }
 
 async function selectCodexAndSkipToProject(page: Page): Promise<void> {
-  const codexButton = page.getByRole('button', { name: /^Codex\s/ }).first()
+  const codexButton = page.getByRole('button', { name: 'Codex', exact: true }).first()
   if (!(await codexButton.isVisible())) {
     await page.getByText(/Show \d+ more agents/).click()
   }

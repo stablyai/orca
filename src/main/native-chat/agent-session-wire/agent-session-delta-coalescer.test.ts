@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_DELTA_COALESCE_MS,
   createAgentSessionDeltaCoalescer
@@ -242,5 +242,42 @@ describe('agent-session delta coalescer', () => {
     expect(snapshots.map((snapshot) => snapshot?.observedBytes)).toEqual([80, 80, 160])
     expect(snapshots.map((snapshot) => snapshot?.truncated)).toEqual([false, true, true])
     expect(emitted.get('item-3')).toEqual({ text: '', observedBytes: 80, truncated: true })
+  })
+})
+
+describe('snapshot admission before assembly', () => {
+  it('reports retained UTF-16 length after Unicode appends and byte truncation', () => {
+    const clock = manualClock()
+    const shouldEmit = vi.fn(() => true)
+    const emitted: [string, string][] = []
+    const instance = createAgentSessionDeltaCoalescer({
+      schedule: clock.schedule,
+      maxRetainedBytes: 40,
+      shouldEmit,
+      emit: (key, text) => emitted.push([key, text])
+    })
+    instance.append('unicode', 'éé')
+    instance.append('surrogate', '\ud83d')
+    instance.append('surrogate', '\ude00')
+    clock.fire()
+    expect(shouldEmit.mock.calls).toEqual([
+      ['unicode', 2],
+      ['surrogate', 2]
+    ])
+    expect(emitted).toEqual([
+      ['unicode', 'éé'],
+      ['surrogate', '😀']
+    ])
+
+    instance.append('unicode', `${'é'.repeat(20)}more`)
+    clock.fire()
+    const truncated = 'ééé\n[Orca: streamed output truncated]'
+    expect(shouldEmit).toHaveBeenLastCalledWith('unicode', truncated.length)
+    expect(emitted.at(-1)).toEqual(['unicode', truncated])
+    const calls = shouldEmit.mock.calls.length
+    instance.append('unicode', 'ignored')
+    clock.fire()
+    expect(shouldEmit).toHaveBeenCalledTimes(calls)
+    instance.dispose()
   })
 })

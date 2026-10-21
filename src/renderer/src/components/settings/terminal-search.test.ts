@@ -8,6 +8,17 @@ import {
 import { matchesSettingsSearch } from './settings-search'
 
 describe('getTerminalPaneSearchEntries', () => {
+  it('indexes desktop administrator mode only for Windows clients', () => {
+    const windows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
+    const remoteWindows = getTerminalPaneSearchEntries({
+      isWindows: false,
+      isWindowsTerminalHost: true,
+      isMac: true
+    })
+    expect(windows.some((entry) => entry.title === 'Administrator mode')).toBe(true)
+    expect(matchesSettingsSearch('uac', windows)).toBe(true)
+    expect(remoteWindows.some((entry) => entry.title === 'Administrator mode')).toBe(false)
+  })
   it('includes the Windows right-click setting on Windows', () => {
     const entries = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
     expect(entries.some((entry) => entry.title === 'Right-click to paste')).toBe(true)
@@ -86,6 +97,16 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(entries.some((entry) => entry.title === 'Scrollback Size')).toBe(false)
   })
 
+  it('indexes the Unix terminal shell profile without exposing it on Windows', () => {
+    const unixEntries = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+    const windowsEntries = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
+    const shellEntry = unixEntries.find((entry) => entry.title === 'Terminal shell')
+
+    expect(shellEntry).toBeDefined()
+    expect(matchesSettingsSearch('rcfile', [shellEntry!])).toBe(true)
+    expect(windowsEntries.some((entry) => entry.title === 'Terminal shell')).toBe(false)
+  })
+
   it('includes the OSC 52 clipboard setting on all platforms', () => {
     const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
     const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
@@ -156,14 +177,17 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(matchesSettingsSearch(query, getAppearancePaneSearchEntries())).toBe(true)
   })
 
-  it('omits the Warp import appearance entry when desktop-only controls are hidden', () => {
-    const desktopEntries = getAppearancePaneSearchEntries({ showWarpImport: true })
-    const webEntries = getAppearancePaneSearchEntries({ showWarpImport: false })
+  it.each(['ghostty', 'warp', 'yaml'])(
+    'omits desktop-only %s search results on web clients',
+    (query) => {
+      const desktopEntries = getAppearancePaneSearchEntries()
+      const webEntries = getAppearancePaneSearchEntries({ showDesktopThemeImports: false })
 
-    expect(desktopEntries.some((entry) => entry.title === 'Import from Warp')).toBe(true)
-    expect(webEntries.some((entry) => entry.title === 'Import from Warp')).toBe(false)
-    expect(webEntries.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
-  })
+      expect(matchesSettingsSearch(query, desktopEntries)).toBe(true)
+      expect(matchesSettingsSearch(query, webEntries)).toBe(false)
+      expect(matchesSettingsSearch('font size', webEntries)).toBe(true)
+    }
+  )
 
   it('includes the system tray appearance entry only when desktop tray controls are shown', () => {
     const desktopEntries = getAppearancePaneSearchEntries({ showSystemTray: true })

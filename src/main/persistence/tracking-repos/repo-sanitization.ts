@@ -3,6 +3,9 @@ import type { Repo } from '../../../shared/repo-types'
 import type { GitRemoteIdentity } from '../../../shared/git-remote-identity'
 import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
+import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
+import { normalizeJiraProjectReference } from '../../../shared/jira-project-reference'
+import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
@@ -76,12 +79,23 @@ export function sanitizeRepoUpdatesForPersistence<
       | 'worktreeBasePath'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
+      | 'defaultJiraProject'
       | 'customWorktreeVisibilitySources'
       | 'worktreeVisibilitySourcePreferences'
     >
-  >
+  > & {
+    ghAccount?: GhAccountBinding | null
+  }
 >(updates: T): T {
   const sanitized = { ...updates }
+  if ('defaultJiraProject' in sanitized) {
+    const reference = normalizeJiraProjectReference(sanitized.defaultJiraProject)
+    if (reference === undefined) {
+      delete sanitized.defaultJiraProject
+    } else {
+      sanitized.defaultJiraProject = reference
+    }
+  }
   if ('badgeColor' in sanitized) {
     const badgeColor = normalizeRepoBadgeColor(sanitized.badgeColor)
     if (!badgeColor) {
@@ -136,6 +150,15 @@ export function sanitizeRepoUpdatesForPersistence<
       delete sanitized.forkSyncMode
     } else {
       sanitized.forkSyncMode = forkSyncMode
+    }
+  }
+  // Why: `null` is the clear sentinel for updateRepo; only malformed shapes are dropped.
+  if ('ghAccount' in sanitized && sanitized.ghAccount != null) {
+    const ghAccount = normalizeGhAccountBinding(sanitized.ghAccount)
+    if (!ghAccount) {
+      delete sanitized.ghAccount
+    } else {
+      sanitized.ghAccount = ghAccount
     }
   }
   if ('customWorktreeVisibilitySources' in sanitized) {

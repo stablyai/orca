@@ -1,11 +1,15 @@
 import { StringDecoder } from 'node:string_decoder'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type {
+  PipedChildProcess,
+  PipedProcessSpawner,
+  PipedProcessSpec
+} from '@orca/process-host/process-spec'
+import { ownRetainedString } from '../../shared/own-retained-string'
 
-/** The all-pipes child `spawnProcess` returns; avoids a node:child_process import. */
-export type RuntimeChildProcess = ReturnType<typeof spawnProcess>
+/** The child streams required by the serve protocol; avoids a node:child_process import. */
+export type RuntimeChildProcess = PipedChildProcess
 
-export type RuntimeProcessSpawn = (spec: ProcessSpec) => RuntimeChildProcess
+export type RuntimeProcessSpawn = PipedProcessSpawner
 
 /** UTF-16 units, not bytes — this bounds the buffer, it is not a payload contract. */
 const MAX_RESPONSE_CHARS = 20 * 1024 * 1024
@@ -112,13 +116,20 @@ export class DesktopScriptServeChannel {
     if (this.closed) {
       return
     }
-    this.buffer += typeof chunk === 'string' ? chunk : this.decoder.write(chunk)
+    const decoded = typeof chunk === 'string' ? chunk : this.decoder.write(chunk)
+    const retainedLength = this.buffer.length
+    this.buffer += decoded
     if (this.buffer.length > MAX_RESPONSE_CHARS) {
       this.buffer = ''
       this.handlers.onOverflow()
       return
     }
-    for (let newline = this.buffer.indexOf('\n'); newline >= 0;) {
+    // The retained tail has no newline, so only the new chunk needs scanning for the first one.
+    const firstNewline = decoded.indexOf('\n')
+    if (firstNewline === -1) {
+      return
+    }
+    for (let newline = retainedLength + firstNewline; newline >= 0;) {
       // Slice a trailing CR off by index; trimming copies the whole payload.
       const end = newline > 0 && this.buffer.charCodeAt(newline - 1) === 13 ? newline - 1 : newline
       const line = this.buffer.slice(0, end)
@@ -133,11 +144,13 @@ export class DesktopScriptServeChannel {
       }
       newline = this.buffer.indexOf('\n')
     }
+    // Why own: the tail is a slice that would pin the whole drained buffer until the next newline.
+    this.buffer = ownRetainedString(this.buffer)
   }
 }
 
 export function startServeChannel(
-  spec: ProcessSpec,
+  spec: PipedProcessSpec,
   spawn: RuntimeProcessSpawn,
   handlers: ServeChannelHandlers
 ): DesktopScriptServeChannel {

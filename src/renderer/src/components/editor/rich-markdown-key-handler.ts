@@ -1,3 +1,4 @@
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -70,7 +71,7 @@ export type KeyHandlerContext = {
 }
 
 function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): boolean {
-  return event.isComposing || editor?.view.composing === true
+  return isImeOwnedKeyboardEvent(event) || editor?.view.composing === true
 }
 
 /**
@@ -81,6 +82,16 @@ export function createRichMarkdownKeyHandler(
   ctx: KeyHandlerContext
 ): (_view: unknown, event: KeyboardEvent) => boolean {
   return (_view, event) => {
+    if (isImeOwnedKeyboardEvent(event)) {
+      return false
+    }
+    // Save must flush pending text even while the editor's composition state lingers.
+    if (handleRichMarkdownSaveShortcut(ctx, event)) {
+      return true
+    }
+    if (isComposingMarkdownInput(event, ctx.editorRef.current)) {
+      return false
+    }
     const mod = ctx.isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
     if (
       handleRichMarkdownCitationKey({
@@ -101,9 +112,6 @@ export function createRichMarkdownKeyHandler(
     ) {
       event.preventDefault()
       ctx.openSearchRef.current()
-      return true
-    }
-    if (handleRichMarkdownSaveShortcut(ctx, event)) {
       return true
     }
     if (handleRichMarkdownAddReviewNoteShortcut(ctx, event)) {

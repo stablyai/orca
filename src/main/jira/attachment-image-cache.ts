@@ -1,19 +1,27 @@
-// Why: description and comments fetch attachments independently; comments also
-// refetch after every post. Cache finished data URLs in main so the second path
-// does not re-download or re-base64 the same attachment bytes.
+// Description, comments, and lazy image reads share one bounded cache.
+
+import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 
 const CACHE_TTL_MS = 30 * 60_000
 const MAX_CACHE_ENTRIES = 96
 const MAX_CACHE_BYTES = 24 * 1024 * 1024
 
+export type AttachmentImageBytes = { data: Uint8Array<ArrayBuffer>; mimeType: string }
+type ImageValue = string | AttachmentImageBytes
+
 type CacheEntry = {
-  dataUrl: string
+  image: ImageValue
   byteSize: number
   storedAt: number
 }
 
 const cache = new Map<string, CacheEntry>()
-const inFlight = new Map<string, Promise<string | null>>()
+const inFlight = new Map<
+  string,
+  { promise: Promise<ImageValue | null>; signal?: AbortSignal; generation: symbol }
+>()
+let expiryTimer: ReturnType<typeof setTimeout> | null = null
+let scheduledExpiryAt = Infinity
 // Why: mid-flight downloads must not repopulate cache after disconnect/clearToken.
 // Why ONE ticker across both scopes: summing separate counters lets distinct clear
 // states collide, passing the guard and re-inserting credentialed bytes.
@@ -30,8 +38,42 @@ function nextEpoch(): number {
   return epochTicker
 }
 
-function currentEpoch(siteId: string): number {
+export function attachmentImagesEpoch(siteId: string): number {
   return Math.max(globalEpoch, siteEpoch.get(siteId) ?? 0)
+}
+
+function clearExpiryTimer(): void {
+  if (expiryTimer !== null) {
+    clearTimeout(expiryTimer)
+    expiryTimer = null
+  }
+  scheduledExpiryAt = Infinity
+}
+
+function scheduleAttachmentExpiry(): void {
+  let nextExpiryAt = Infinity
+  for (const entry of cache.values()) {
+    nextExpiryAt = Math.min(nextExpiryAt, entry.storedAt + CACHE_TTL_MS)
+  }
+  if (nextExpiryAt === Infinity) {
+    clearExpiryTimer()
+    return
+  }
+  if (expiryTimer !== null && scheduledExpiryAt <= nextExpiryAt) {
+    return
+  }
+  clearExpiryTimer()
+  scheduledExpiryAt = nextExpiryAt
+  expiryTimer = setTimeout(
+    () => {
+      expiryTimer = null
+      scheduledExpiryAt = Infinity
+      pruneExpired()
+      scheduleAttachmentExpiry()
+    },
+    Math.min(MAX_TIMER_DELAY_MS, Math.max(0, nextExpiryAt - Date.now()))
+  )
+  expiryTimer.unref()
 }
 
 function pruneExpired(now = Date.now()): void {
@@ -39,6 +81,9 @@ function pruneExpired(now = Date.now()): void {
     if (now - entry.storedAt >= CACHE_TTL_MS) {
       cache.delete(key)
     }
+  }
+  if (cache.size === 0) {
+    clearExpiryTimer()
   }
 }
 
@@ -60,7 +105,7 @@ function evictUntilWithinBounds(): void {
   }
 }
 
-export function getCachedAttachmentDataUrl(siteId: string, attachmentId: string): string | null {
+function getCachedImage(siteId: string, attachmentId: string): ImageValue | null {
   pruneExpired()
   const key = cacheKey(siteId, attachmentId)
   const entry = cache.get(key)
@@ -74,7 +119,108 @@ export function getCachedAttachmentDataUrl(siteId: string, attachmentId: string)
   // Why: delete-then-set refreshes insertion order for LRU-style eviction.
   cache.delete(key)
   cache.set(key, entry)
-  return entry.dataUrl
+  return entry.image
+}
+
+function setCachedImage(args: {
+  siteId: string
+  attachmentId: string
+  image: ImageValue
+  byteSize: number
+}): void {
+  pruneExpired()
+  const key = cacheKey(args.siteId, args.attachmentId)
+  const entry: CacheEntry = {
+    image: args.image,
+    byteSize: args.byteSize,
+    storedAt: Date.now()
+  }
+  cache.delete(key)
+  cache.set(key, entry)
+  evictUntilWithinBounds()
+  scheduleAttachmentExpiry()
+}
+
+/**
+ * Singleflight loader: concurrent cold misses share one download within their
+ * cancellation domain. Failed loads are not cached so a later retry can succeed.
+ */
+async function loadImageWithCache(args: {
+  siteId: string
+  attachmentId: string
+  load: () => Promise<{ image: ImageValue; byteSize: number } | null>
+  signal?: AbortSignal
+}): Promise<ImageValue | null> {
+  const cached = getCachedImage(args.siteId, args.attachmentId)
+  if (cached) {
+    return cached
+  }
+
+  // Legacy waiters must not inherit a cancellable reader's download.
+  const key = `${cacheKey(args.siteId, args.attachmentId)}::${args.signal ? 'cancellable' : 'legacy'}`
+  const existing = inFlight.get(key)
+  if (existing && !existing.signal?.aborted) {
+    return existing.promise
+  }
+
+  const epochAtStart = attachmentImagesEpoch(args.siteId)
+  const generation = Symbol()
+  const promise = (async (): Promise<ImageValue | null> => {
+    try {
+      const loaded = await args.load()
+      if (!loaded) {
+        return null
+      }
+      // Why: return bytes to the waiter but skip cache if site was cleared mid-flight.
+      if (!args.signal?.aborted && attachmentImagesEpoch(args.siteId) === epochAtStart) {
+        setCachedImage({
+          siteId: args.siteId,
+          attachmentId: args.attachmentId,
+          image: loaded.image,
+          byteSize: loaded.byteSize
+        })
+      }
+      return loaded.image
+    } finally {
+      // A cleared generation no longer owns the current download's singleflight slot.
+      if (inFlight.get(key)?.generation === generation) {
+        inFlight.delete(key)
+      }
+    }
+  })()
+
+  inFlight.set(key, { promise, signal: args.signal, generation })
+  return promise
+}
+
+function imageDataUrl(image: ImageValue): string {
+  return typeof image === 'string'
+    ? image
+    : `data:${image.mimeType};base64,${Buffer.from(image.data).toString('base64')}`
+}
+
+function imageBytes(image: ImageValue): AttachmentImageBytes | null {
+  if (typeof image !== 'string') {
+    return image
+  }
+  const match = /^data:(image\/[^;]+);base64,(.*)$/s.exec(image)
+  if (!match?.[1] || match[2] === undefined) {
+    return null
+  }
+  return { data: Uint8Array.from(Buffer.from(match[2], 'base64')), mimeType: match[1] }
+}
+
+export function getCachedAttachmentBytes(
+  siteId: string,
+  attachmentId: string
+): AttachmentImageBytes | null {
+  const image = getCachedImage(siteId, attachmentId)
+  return image === null ? null : imageBytes(image)
+}
+
+export function getCachedAttachmentDataUrl(siteId: string, attachmentId: string): string | null {
+  const image = getCachedImage(siteId, attachmentId)
+  return image === null ? null : imageDataUrl(image)
 }
 
 export function setCachedAttachmentDataUrl(args: {
@@ -83,70 +229,44 @@ export function setCachedAttachmentDataUrl(args: {
   dataUrl: string
   byteSize: number
 }): void {
-  pruneExpired()
-  const key = cacheKey(args.siteId, args.attachmentId)
-  const entry: CacheEntry = {
-    dataUrl: args.dataUrl,
-    byteSize: args.byteSize,
-    storedAt: Date.now()
-  }
-  cache.delete(key)
-  cache.set(key, entry)
-  evictUntilWithinBounds()
+  setCachedImage({ ...args, image: args.dataUrl })
 }
 
-/**
- * Singleflight loader: concurrent cold misses for the same attachment share one
- * download. Failed loads are not cached so a later retry can succeed.
- */
 export async function loadAttachmentDataUrlWithCache(args: {
   siteId: string
   attachmentId: string
   load: () => Promise<{ dataUrl: string; byteSize: number } | null>
 }): Promise<string | null> {
-  const cached = getCachedAttachmentDataUrl(args.siteId, args.attachmentId)
-  if (cached) {
-    return cached
-  }
-
-  const key = cacheKey(args.siteId, args.attachmentId)
-  const existing = inFlight.get(key)
-  if (existing) {
-    return existing
-  }
-
-  const epochAtStart = currentEpoch(args.siteId)
-  const promise = (async (): Promise<string | null> => {
-    try {
+  const image = await loadImageWithCache({
+    ...args,
+    load: async () => {
       const loaded = await args.load()
-      if (!loaded) {
-        return null
-      }
-      // Why: return bytes to the waiter but skip cache if site was cleared mid-flight.
-      if (currentEpoch(args.siteId) === epochAtStart) {
-        setCachedAttachmentDataUrl({
-          siteId: args.siteId,
-          attachmentId: args.attachmentId,
-          dataUrl: loaded.dataUrl,
-          byteSize: loaded.byteSize
-        })
-      }
-      return loaded.dataUrl
-    } finally {
-      // A cleared generation no longer owns the current download's singleflight slot.
-      if (currentEpoch(args.siteId) === epochAtStart) {
-        inFlight.delete(key)
-      }
+      return loaded && { image: loaded.dataUrl, byteSize: loaded.byteSize }
     }
-  })()
+  })
+  return image === null ? null : imageDataUrl(image)
+}
 
-  inFlight.set(key, promise)
-  return promise
+export async function loadAttachmentBytesWithCache(args: {
+  siteId: string
+  attachmentId: string
+  load: () => Promise<AttachmentImageBytes | null>
+  signal?: AbortSignal
+}): Promise<AttachmentImageBytes | null> {
+  const image = await loadImageWithCache({
+    ...args,
+    load: async () => {
+      const loaded = await args.load()
+      return loaded && { image: loaded, byteSize: loaded.data.byteLength }
+    }
+  })
+  return image === null ? null : imageBytes(image)
 }
 
 export function clearAttachmentImagesForSite(siteId?: string): void {
   if (siteId == null || siteId === '') {
     cache.clear()
+    clearExpiryTimer()
     inFlight.clear()
     globalEpoch = nextEpoch()
     siteEpoch.clear()
@@ -164,10 +284,14 @@ export function clearAttachmentImagesForSite(siteId?: string): void {
       inFlight.delete(key)
     }
   }
+  if (cache.size === 0) {
+    clearExpiryTimer()
+  }
 }
 
 /** @internal — test-only */
 export function _resetAttachmentImageCache(): void {
+  clearExpiryTimer()
   cache.clear()
   inFlight.clear()
   epochTicker = 0

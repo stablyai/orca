@@ -45,47 +45,9 @@ export async function countSubagentTranscripts(transcriptFilePath: string): Prom
   return entries.filter((entry) => isSubagentTranscriptFileName(entry.name, entry.isFile())).length
 }
 
-// Direct child of a subagents dir: `<parent>/<uuid>/subagents/agent-<id>.jsonl`.
-// The `agent-` prefix mirrors the local count/list predicate so remote badges
-// can't over-count. Greedy prefix means nested subagent trees attribute to their
-// nearest parent, matching the local direct-children-only readdir semantics.
-const SUBAGENT_DIRECT_CHILD_PATTERN = /^(.*)[\\/]subagents[\\/]agent-[^\\/]+\.jsonl$/i
-const SUBAGENT_SUBTREE_PATTERN = /[\\/]subagents[\\/]/i
-
 // One walked-listing partition: transcripts that are real session candidates,
 // and per-parent counts for the subagent transcripts that were excluded.
 export type SubagentTranscriptPartition = {
   sessionFilePaths: string[]
   subagentTranscriptCounts: Map<string, number>
-}
-
-/**
- * Partition a recursively walked transcript listing into session candidates and
- * per-parent sibling subagent transcript counts. Remote (SSH) scans cannot
- * readdir the transcript's sibling directory, but their walk already enumerates
- * subagent paths — counting from the listing costs no extra round-trips.
- * Subagent transcripts share the parent sessionId and are not independently
- * resumable, so they are excluded from candidates (mirrors the local discovery
- * pruning in session-scanner-source-discovery.ts).
- */
-export function partitionSubagentTranscriptPaths(
-  paths: readonly string[]
-): SubagentTranscriptPartition {
-  const sessionFilePaths: string[] = []
-  const subagentTranscriptCounts = new Map<string, number>()
-  for (const path of paths) {
-    if (!SUBAGENT_SUBTREE_PATTERN.test(path)) {
-      sessionFilePaths.push(path)
-      continue
-    }
-    const directChild = SUBAGENT_DIRECT_CHILD_PATTERN.exec(path)
-    if (directChild) {
-      const parentTranscriptPath = `${directChild[1]}.jsonl`
-      subagentTranscriptCounts.set(
-        parentTranscriptPath,
-        (subagentTranscriptCounts.get(parentTranscriptPath) ?? 0) + 1
-      )
-    }
-  }
-  return { sessionFilePaths, subagentTranscriptCounts }
 }

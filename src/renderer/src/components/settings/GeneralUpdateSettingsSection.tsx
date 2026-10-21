@@ -1,3 +1,4 @@
+import { getUpdateInstallBlockGuidance } from '../maintenance/update-card/update-install-block-guidance'
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Download, Loader2, RefreshCw } from 'lucide-react'
@@ -138,8 +139,21 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
               )}
               {updateStatus.version})
             </Button>
-          ) : updateStatus.state === 'downloaded' ? (
+          ) : updateStatus.state === 'error' &&
+            updateStatus.retryAction === 'install' &&
+            updateStatus.retryable !== false ? (
             <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
+              <RefreshCw className="size-3.5" />
+              {translate('auto.components.UpdateCard.2c2d3e03ca', 'Try Again')}
+            </Button>
+          ) : updateStatus.state === 'downloaded' ? (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleRestartToUpdate}
+              disabled={updateStatus.installing}
+              className="gap-2"
+            >
               <Download className="size-3.5" />
               {translate(
                 'auto.components.settings.GeneralUpdateSettingsSection.f44299636f',
@@ -234,19 +248,21 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             </>
           )}
           {updateStatus.state === 'error' &&
-            (updateStatus.recovery?.kind === 'linux-package-install'
-              ? updateStatus.message
-              : updateVersionRef.current
-                ? translate(
-                    'auto.components.settings.GeneralUpdateSettingsSection.b9ad70c30d',
-                    'Update error. {{value0}}',
-                    { value0: updateStatus.message }
-                  )
-                : translate(
-                    'auto.components.settings.GeneralUpdateSettingsSection.bd79d412f0',
-                    'Update check failed. {{value0}}',
-                    { value0: updateStatus.message }
-                  ))}
+            (updateStatus.installBlock
+              ? getUpdateInstallBlockGuidance(updateStatus.installBlock).explainer
+              : updateStatus.recovery?.kind === 'linux-package-install'
+                ? updateStatus.message
+                : updateVersionRef.current
+                  ? translate(
+                      'auto.components.settings.GeneralUpdateSettingsSection.b9ad70c30d',
+                      'Update error. {{value0}}',
+                      { value0: updateStatus.message }
+                    )
+                  : translate(
+                      'auto.components.settings.GeneralUpdateSettingsSection.bd79d412f0',
+                      'Update check failed. {{value0}}',
+                      { value0: updateStatus.message }
+                    ))}
         </p>
       </SearchableSetting>
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}

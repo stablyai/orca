@@ -22,7 +22,7 @@ import type {
   TaskSort
 } from './mobile-tasks-view-state-types'
 import type { ActionableTaskItem } from './mobile-tasks-project-workspace-types'
-import type { DetailComment, LinearIssue } from './mobile-tasks-provider-detail-types'
+import type { LinearIssue } from './mobile-tasks-provider-detail-types'
 
 export const PROVIDER_OPTIONS: PickerOption<TaskProvider>[] = [
   {
@@ -60,6 +60,18 @@ export const PROVIDER_OPTIONS: PickerOption<TaskProvider>[] = [
         color={selected ? colors.textPrimary : colors.textSecondary}
       />
     )
+  },
+  {
+    value: 'jira',
+    label: 'Jira',
+    subtitle: 'Assigned and reported issues',
+    renderIcon: (selected) => (
+      <TaskProviderLogo
+        provider="jira"
+        size={16}
+        color={selected ? colors.textPrimary : colors.textSecondary}
+      />
+    )
   }
 ]
 
@@ -86,6 +98,9 @@ export function taskWorkspaceFallback(item: ActionableTaskItem): string {
   if (item.provider === 'github' || item.provider === 'gitlab') {
     return `${item.source.type}-${item.source.number}`
   }
+  if (item.provider === 'jira') {
+    return item.source.key.toLowerCase()
+  }
   return item.source.identifier.toLowerCase()
 }
 
@@ -93,10 +108,13 @@ export function taskWorkspaceSuggestedName(item: ActionableTaskItem): string {
   return getLinkedWorkItemSuggestedName(item) || taskWorkspaceFallback(item)
 }
 
-export const COMMENT_REACTION_EMOJI: Record<
-  NonNullable<DetailComment['reactions']>[number]['content'],
-  string
-> = {
+/**
+ * Keyed by a vocabulary no provider sends: GitHub's reactions arrive as `'+1'` / `'-1'` and
+ * GitLab's carry no content at all, so every real reaction misses this map and the chip renders
+ * without a glyph. Left as it is on purpose — the reply reader forwards `content` untouched, so
+ * fixing the map is a visible change to what the sheet draws and belongs to its own PR.
+ */
+export const COMMENT_REACTION_EMOJI: Record<string, string> = {
   thumbs_up: '+1',
   thumbs_down: '-1',
   laugh: 'laugh',

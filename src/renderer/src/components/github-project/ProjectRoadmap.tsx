@@ -3,10 +3,11 @@ import { CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { cn } from '@/lib/utils'
-import { i18n, translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRoadmapBar from './ProjectRoadmapBar'
 import { ProjectTitleCell } from './ProjectCellIdentity'
+import { ProjectItemsEmptyState } from './ProjectViewStates'
 import { formatRoadmapTick } from './roadmap-tick-format'
 import { loadRoadmapZoom, saveRoadmapZoom } from './roadmap-zoom-preference'
 import { groupRows, sortRows } from '../../../../shared/github/project-group-sort'
@@ -47,7 +48,7 @@ export default function ProjectRoadmap({
 }: Props): React.JSX.Element {
   const view = table.selectedView
   const prefersReducedMotion = usePrefersReducedMotion()
-  const locale = i18n.resolvedLanguage ?? i18n.language
+  const locale = getIntlLocale()
   // Why: the grid lives on UTC calendar days (parseRoadmapDate), so "today"
   // must be the viewer's LOCAL calendar date mapped to UTC midnight — the raw
   // instant would shift the marker into the wrong day off UTC.
@@ -145,14 +146,7 @@ export default function ProjectRoadmap({
   }
 
   if (table.rows.length === 0) {
-    return (
-      <div className="flex min-h-[120px] items-center justify-center p-6 text-sm text-muted-foreground">
-        {translate(
-          'auto.components.github.project.ProjectViewList.4f57d2e0b1',
-          "No items match this view's filter."
-        )}
-      </div>
-    )
+    return <ProjectItemsEmptyState filter={view.filter} />
   }
 
   const undatedCount = table.rows.length - spans.size

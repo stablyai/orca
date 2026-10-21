@@ -1,0 +1,370 @@
+{
+  "node": "v26.6.0",
+  "platform": "darwin",
+  "bundles": {
+    "before": "95425d0894ed107d85a671238f0229e6db3e229c0fa94286d1bea1a52db7112f",
+    "after": "e1e5f58ddba3aeea88922be927509754b766247b81b6dcf7675b49a25c3a8d29"
+  },
+  "results": [
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "flat",
+      "retention": "live",
+      "phase": "before",
+      "visibleTextChars": 16384,
+      "retainedHeapBytes": 2159976,
+      "afterClearHeapBytes": 32392
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "flat",
+      "retention": "live",
+      "phase": "after",
+      "visibleTextChars": 16384,
+      "retainedHeapBytes": 97680,
+      "afterClearHeapBytes": 51600
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "flat",
+      "retention": "settled",
+      "phase": "before",
+      "visibleTextChars": 16384,
+      "retainedHeapBytes": 2140416,
+      "afterClearHeapBytes": 15320
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "flat",
+      "retention": "settled",
+      "phase": "after",
+      "visibleTextChars": 16384,
+      "retainedHeapBytes": 55816,
+      "afterClearHeapBytes": 12976
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "flat",
+      "retention": "removed",
+      "phase": "before",
+      "visibleTextChars": 0,
+      "retainedHeapBytes": 2112656,
+      "afterClearHeapBytes": 5200
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "flat",
+      "retention": "removed",
+      "phase": "after",
+      "visibleTextChars": 0,
+      "retainedHeapBytes": 36568,
+      "afterClearHeapBytes": 11832
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "cons",
+      "retention": "live",
+      "phase": "before",
+      "visibleTextChars": 16384,
+      "retainedHeapBytes": 2125456,
+      "afterClearHeapBytes": -304
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "cons",
+      "retention": "live",
+      "phase": "after",
+      "visibleTextChars": 16384,
+      "retainedHeapBytes": 42736,
+      "afterClearHeapBytes": -304
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "cons",
+      "retention": "settled",
+      "phase": "before",
+      "visibleTextChars": 16384,
+      "retainedHeapBytes": 2127096,
+      "afterClearHeapBytes": 464
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "cons",
+      "retention": "settled",
+      "phase": "after",
+      "visibleTextChars": 16384,
+      "retainedHeapBytes": 43896,
+      "afterClearHeapBytes": 368
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "cons",
+      "retention": "removed",
+      "phase": "before",
+      "visibleTextChars": 0,
+      "retainedHeapBytes": 2123696,
+      "afterClearHeapBytes": 16216
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "cons",
+      "retention": "removed",
+      "phase": "after",
+      "visibleTextChars": 0,
+      "retainedHeapBytes": 39672,
+      "afterClearHeapBytes": 15064
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "json",
+      "retention": "live",
+      "phase": "before",
+      "visibleTextChars": 16384,
+      "retainedHeapBytes": 2125672,
+      "afterClearHeapBytes": -32
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "json",
+      "retention": "live",
+      "phase": "after",
+      "visibleTextChars": 16384,
+      "retainedHeapBytes": 43536,
+      "afterClearHeapBytes": 544
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "json",
+      "retention": "settled",
+      "phase": "before",
+      "visibleTextChars": 16384,
+      "retainedHeapBytes": 2127072,
+      "afterClearHeapBytes": 1424
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "json",
+      "retention": "settled",
+      "phase": "after",
+      "visibleTextChars": 16384,
+      "retainedHeapBytes": 44296,
+      "afterClearHeapBytes": 1248
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "json",
+      "retention": "removed",
+      "phase": "before",
+      "visibleTextChars": 0,
+      "retainedHeapBytes": 2108136,
+      "afterClearHeapBytes": 1072
+    },
+    {
+      "count": 32,
+      "size": 65536,
+      "ingress": "json",
+      "retention": "removed",
+      "phase": "after",
+      "visibleTextChars": 0,
+      "retainedHeapBytes": 25360,
+      "afterClearHeapBytes": 8832
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "flat",
+      "retention": "live",
+      "phase": "before",
+      "visibleTextChars": 4096,
+      "retainedHeapBytes": 33562624,
+      "afterClearHeapBytes": -320
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "flat",
+      "retention": "live",
+      "phase": "after",
+      "visibleTextChars": 4096,
+      "retainedHeapBytes": 11048,
+      "afterClearHeapBytes": -320
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "flat",
+      "retention": "settled",
+      "phase": "before",
+      "visibleTextChars": 4096,
+      "retainedHeapBytes": 33563960,
+      "afterClearHeapBytes": 912
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "flat",
+      "retention": "settled",
+      "phase": "after",
+      "visibleTextChars": 4096,
+      "retainedHeapBytes": 12384,
+      "afterClearHeapBytes": 464
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "flat",
+      "retention": "removed",
+      "phase": "before",
+      "visibleTextChars": 0,
+      "retainedHeapBytes": 33559744,
+      "afterClearHeapBytes": 1112
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "flat",
+      "retention": "removed",
+      "phase": "after",
+      "visibleTextChars": 0,
+      "retainedHeapBytes": 7512,
+      "afterClearHeapBytes": 552
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "cons",
+      "retention": "live",
+      "phase": "before",
+      "visibleTextChars": 4096,
+      "retainedHeapBytes": 33562624,
+      "afterClearHeapBytes": -384
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "cons",
+      "retention": "live",
+      "phase": "after",
+      "visibleTextChars": 4096,
+      "retainedHeapBytes": 11048,
+      "afterClearHeapBytes": -384
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "cons",
+      "retention": "settled",
+      "phase": "before",
+      "visibleTextChars": 4096,
+      "retainedHeapBytes": 33563960,
+      "afterClearHeapBytes": 784
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "cons",
+      "retention": "settled",
+      "phase": "after",
+      "visibleTextChars": 4096,
+      "retainedHeapBytes": 12384,
+      "afterClearHeapBytes": 416
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "cons",
+      "retention": "removed",
+      "phase": "before",
+      "visibleTextChars": 0,
+      "retainedHeapBytes": 32432128,
+      "afterClearHeapBytes": -1126504
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "cons",
+      "retention": "removed",
+      "phase": "after",
+      "visibleTextChars": 0,
+      "retainedHeapBytes": 7008,
+      "afterClearHeapBytes": 48
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "json",
+      "retention": "live",
+      "phase": "before",
+      "visibleTextChars": 4096,
+      "retainedHeapBytes": 33562624,
+      "afterClearHeapBytes": -384
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "json",
+      "retention": "live",
+      "phase": "after",
+      "visibleTextChars": 4096,
+      "retainedHeapBytes": 11048,
+      "afterClearHeapBytes": -384
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "json",
+      "retention": "settled",
+      "phase": "before",
+      "visibleTextChars": 4096,
+      "retainedHeapBytes": 33563960,
+      "afterClearHeapBytes": 432
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "json",
+      "retention": "settled",
+      "phase": "after",
+      "visibleTextChars": 4096,
+      "retainedHeapBytes": 11656,
+      "afterClearHeapBytes": -392
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "json",
+      "retention": "removed",
+      "phase": "before",
+      "visibleTextChars": 0,
+      "retainedHeapBytes": 33558584,
+      "afterClearHeapBytes": -48
+    },
+    {
+      "count": 8,
+      "size": 4194304,
+      "ingress": "json",
+      "retention": "removed",
+      "phase": "after",
+      "visibleTextChars": 0,
+      "retainedHeapBytes": 7008,
+      "afterClearHeapBytes": 48
+    }
+  ]
+}

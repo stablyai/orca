@@ -32,7 +32,7 @@ const os = require('node:os')
 const path = require('node:path')
 const { Worker, isMainThread, workerData } = require('node:worker_threads')
 
-const REPO_ROOT = path.resolve(__dirname, '..', '..')
+const REPO_ROOT = path.resolve(__dirname, '..', '..', '..')
 // The exact bundled native module (@parcel/watcher 2.5.6 + watcher-win32-x64).
 const watcherPath = path.join(REPO_ROOT, 'node_modules', '@parcel', 'watcher')
 

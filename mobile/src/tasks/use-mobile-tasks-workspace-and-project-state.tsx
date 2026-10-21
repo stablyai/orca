@@ -1,4 +1,5 @@
 import type { RouteAndItemStateModel } from './use-mobile-tasks-route-and-item-state'
+import type { WorkspaceSshRecord } from './workspace-ssh-gate'
 import {
   type BaseRefSearchResult,
   type GitHubProjectPartialFailure,
@@ -8,7 +9,6 @@ import {
   type GitHubProjectViewSummary,
   type PersistedTrustedOrcaHooks,
   type SparsePreset,
-  type SshConnectionState,
   type WorkspaceAgentChoice,
   useState
 } from './mobile-tasks-dependencies'
@@ -31,9 +31,11 @@ import {
 } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateModel) {
+  // Both repo-unscoped providers land here: neither Linear nor Jira carries a repo, so the
+  // target has to be picked rather than defaulted to the first one.
   const [workspaceRepoPickerItem, setWorkspaceRepoPickerItem] = useState<Extract<
     TaskItem,
-    { provider: 'linear' }
+    { provider: 'linear' | 'jira' }
   > | null>(null)
   const [workspaceCreateDraft, setWorkspaceCreateDraft] = useState<WorkspaceCreateDraft | null>(
     null
@@ -66,7 +68,7 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [workspaceDetectedAgentIds, setWorkspaceDetectedAgentIds] = useState<Set<string> | null>(
     null
   )
-  const [workspaceSshState, setWorkspaceSshState] = useState<SshConnectionState | null>(null)
+  const [workspaceSshState, setWorkspaceSshState] = useState<WorkspaceSshRecord | null>(null)
   const [workspaceSshConnecting, setWorkspaceSshConnecting] = useState(false)
   const [showWorkspaceAgentPicker, setShowWorkspaceAgentPicker] = useState(false)
   const [showWorkspaceCreateRepoPicker, setShowWorkspaceCreateRepoPicker] = useState(false)

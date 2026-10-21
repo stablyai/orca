@@ -1,4 +1,5 @@
 import type { JiraIssue } from '../../../shared/jira-types'
+import { parseJiraStatusError } from '../../../shared/jira-status-error'
 
 export type TaskPageJiraLoadError = {
   title: string
@@ -14,11 +15,7 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Failed to load Jira issues.'
 }
 
-function getErrorCode(message: string): number | null {
-  const explicit = /^Error\s+(\d{3})\b/i.exec(message)?.[1]
-  if (explicit) {
-    return Number(explicit)
-  }
+function inferErrorCode(message: string): number | null {
   if (/\bforbidden\b/i.test(message)) {
     return 403
   }
@@ -32,12 +29,6 @@ function getErrorCode(message: string): number | null {
     return 503
   }
   return null
-}
-
-function getErrorDetails(message: string, code: number | null): string | null {
-  const normalized =
-    code === null ? message : message.replace(new RegExp(`^Error\\s+${code}:\\s*`, 'i'), '')
-  return normalized.trim() || null
 }
 
 function getIssueSearchErrorSummary(message: string, code: number | null): string {
@@ -62,15 +53,22 @@ function getIssueSearchErrorSummary(message: string, code: number | null): strin
   return "Couldn't load Jira issues. Try again in a moment."
 }
 
+/** Jira's reason when it rejected the request as malformed (HTTP 400); null for other failures. */
+export function getJiraBadRequestReason(error: unknown): string | null {
+  const status = parseJiraStatusError(getErrorMessage(error))
+  return status?.code === 400 ? status.details : null
+}
+
 export function createTaskPageJiraLoadFailureState(error: unknown): TaskPageJiraLoadFailureState {
   const message = getErrorMessage(error)
-  const code = getErrorCode(message)
+  const status = parseJiraStatusError(message)
+  const code = status?.code ?? inferErrorCode(message)
   const summary = getIssueSearchErrorSummary(message, code)
   return {
     issues: [],
     error: {
       title: code === null ? summary : `Error ${code}: ${summary}`,
-      details: getErrorDetails(message, code)
+      details: (status?.details ?? message).trim() || null
     }
   }
 }

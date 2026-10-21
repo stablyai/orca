@@ -18,7 +18,7 @@ type DiffOperation =
 
 const EXACT_DIFF_CELL_LIMIT = 160_000
 
-function splitContentLines(value: string): string[] {
+function splitContentLines(value: string | undefined): string[] {
   if (!value) {
     return []
   }
@@ -118,8 +118,8 @@ export function buildGitHubPrFileDiffLines(
 }
 
 export function buildGitHubPrFileDiffPreview(
-  originalContent: string,
-  modifiedContent: string,
+  originalContent: string | undefined,
+  modifiedContent: string | undefined,
   maxLines = Number.POSITIVE_INFINITY
 ): GitHubPrFileDiffPreview {
   const originalLines = splitContentLines(originalContent)

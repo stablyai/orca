@@ -1,3 +1,4 @@
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
 export function createRuntimeRpcAbortError(): Error {
@@ -12,7 +13,8 @@ export async function callAbortableRuntimeEnvironment(
   params: unknown,
   timeoutMs: number | undefined,
   signal: AbortSignal,
-  expectedEnvironmentPairingRevision?: number
+  expectedEnvironmentPairingRevision?: number,
+  expectedEnvironmentRuntimeId?: string
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (signal.aborted) {
     throw createRuntimeRpcAbortError()
@@ -20,6 +22,7 @@ export async function callAbortableRuntimeEnvironment(
   // Why: the one-shot runtime call bridge cannot cancel host work; the
   // subscription bridge closes its request context when we unsubscribe.
   return new Promise((resolve, reject) => {
+    const subscriptionId = createBrowserUuid()
     let handle: { unsubscribe: () => void } | null = null
     let settled = false
     // Why: the subscription transport's own timeout only bounds subscription
@@ -41,13 +44,26 @@ export async function callAbortableRuntimeEnvironment(
       }
       signal.removeEventListener('abort', onAbort)
       handle?.unsubscribe()
+      if (!handle) {
+        void window.api.runtimeEnvironments
+          .cancelSubscription({ subscriptionId })
+          .catch(() => undefined)
+      }
       complete()
     }
     const onAbort = (): void => finish(() => reject(createRuntimeRpcAbortError()))
     signal.addEventListener('abort', onAbort, { once: true })
     void window.api.runtimeEnvironments
       .subscribe(
-        { selector: environmentId, method, params, timeoutMs, expectedEnvironmentPairingRevision },
+        {
+          subscriptionId,
+          selector: environmentId,
+          method,
+          params,
+          timeoutMs,
+          expectedEnvironmentPairingRevision,
+          expectedEnvironmentRuntimeId
+        },
         {
           onResponse: (response) => finish(() => resolve(response)),
           onError: (error) => finish(() => reject(new Error(error.message))),

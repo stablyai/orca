@@ -12,6 +12,8 @@ import { aiVaultScanIssueResult } from '../ai-vault/session-list-results'
 export type RuntimeAiVaultHostInfo = {
   environmentId: string
   executionHostId: `runtime:${string}`
+  /** The saved environment's own record of how it is reached; picks the all-hosts scan budget. */
+  connectionDependency?: 'ssh-tunnel'
 }
 
 export type RuntimeAiVaultScanOptions = {
@@ -68,6 +70,9 @@ function runtimeScanArgs(
   listArgs: AiVaultListArgs | undefined
 ): AiVaultListArgs {
   const scanArgs: AiVaultListArgs = { executionHostScope: hostInfo.executionHostId }
+  if (listArgs?.afterFingerprint !== undefined) {
+    scanArgs.afterFingerprint = listArgs.afterFingerprint
+  }
   if (listArgs?.limit !== undefined) {
     scanArgs.limit = listArgs.limit
   }
@@ -79,6 +84,9 @@ function runtimeScanArgs(
   }
   if (listArgs?.scopePaths !== undefined) {
     scanArgs.scopePaths = listArgs.scopePaths
+  }
+  if (listArgs?.includeAntigravityIdeSessions === true) {
+    scanArgs.includeAntigravityIdeSessions = true
   }
   return scanArgs
 }

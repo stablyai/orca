@@ -1,3 +1,5 @@
+import { getPiStateTitleStatus } from './pi-state-title-marker'
+
 export type PiCompatibleSyntheticAgentLabel = 'Pi' | 'OMP'
 export type PiCompatibleSyntheticAgentStatus = 'working' | 'permission' | 'idle'
 
@@ -71,6 +73,10 @@ export function isLegacyPiCompatibleTitle(title: string): boolean {
 export function getPiCompatibleTitleSeparatorStatus(
   title: string
 ): PiCompatibleSyntheticAgentStatus | null {
+  const nativeState = getPiStateTitleStatus(title)
+  if (nativeState) {
+    return nativeState
+  }
   // Why: a spinner anywhere means the agent is working, and that outranks the separator —
   // the frame is drawn over the idle separator position while a turn runs.
   if (containsBrailleSpinner(title)) {

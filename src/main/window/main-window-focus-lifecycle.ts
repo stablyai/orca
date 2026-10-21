@@ -9,6 +9,7 @@ import {
   DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
   RendererRecoveryCircuitBreaker
 } from '../crash-reporting/renderer-recovery-circuit-breaker'
+import { createLowCommitOomRecoveryGate } from '../crash-reporting/low-commit-oom-recovery-gate'
 import {
   buildEditableContextMenuTemplate,
   matchingRichMarkdownContextMenuTableTarget,
@@ -22,6 +23,8 @@ import {
 } from '../browser/browser-client-page-renderer-runtime'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { createRendererRecoveryReloadWatchdog } from './renderer-recovery-reload-watchdog'
+import { createRendererLaunchFailureBackoff } from './renderer-launch-failure-backoff'
+import { trackRendererLivenessAtDeath } from './renderer-liveness-at-death'
 
 export type MainWindowFocusLifecycle = {
   dispose: () => void
@@ -159,6 +162,8 @@ export function installMainWindowFocusLifecycle(args: {
     windowMs: DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
     maxRecoveries: DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES
   })
+  const launchFailureBackoff = createRendererLaunchFailureBackoff()
+  const lowCommitOomGate = createLowCommitOomRecoveryGate()
   const clearRendererRecoveryTimer = (): void => {
     if (rendererRecoveryTimer) {
       clearTimeout(rendererRecoveryTimer)
@@ -187,6 +192,12 @@ export function installMainWindowFocusLifecycle(args: {
     ) {
       return
     }
+    const launchFailed = details.reason === 'launch-failed'
+    const useLaunchBackoff = launchFailed && process.platform !== 'win32'
+    const launchRetryDelayMs = useLaunchBackoff ? launchFailureBackoff.nextDelayMs() : null
+    const goneAt = Date.now()
+    // Why read at gone time: the sampler's next tick would see commit the corpse just released.
+    const lowCommit = lowCommitOomGate.assess(details, goneAt)
     rendererRecoveryTimer = setTimeout(() => {
       rendererRecoveryTimer = null
       if (
@@ -197,6 +208,29 @@ export function installMainWindowFocusLifecycle(args: {
       ) {
         return
       }
+      lowCommitOomGate.recordRecoveredDeath(details, goneAt)
+      if (lowCommit) {
+        // Why: a reload would OOM again on the starved host; only the user can free commit.
+        recoveryReloadWatchdog.escalate(
+          {
+            details,
+            recentRecoveryCount: rendererRecoveryCircuitBreaker.recentRecoveryCount(Date.now())
+          },
+          'low-commit',
+          lowCommit
+        )
+        return
+      }
+      // Why outside the breaker: a refused spawn is not a crash loop; its own bounded backoff owns the budget.
+      if (useLaunchBackoff) {
+        const subject = { details, recentRecoveryCount: launchFailureBackoff.attempts() }
+        if (launchRetryDelayMs === null) {
+          recoveryReloadWatchdog.escalate(subject, 'launch-failed')
+        } else {
+          recoveryReloadWatchdog.issue(details, subject.recentRecoveryCount)
+        }
+        return
+      }
       const recovery = rendererRecoveryCircuitBreaker.registerRecoveryAttempt(Date.now())
       if (!recovery.allowed) {
         // Why: too many reloads means it will just crash again; stop and let the host surface a recovery prompt.
@@ -204,15 +238,17 @@ export function installMainWindowFocusLifecycle(args: {
         // recovery reload too — unwatched, one that stalls leaves a blank window and no further prompt.
         recoveryReloadWatchdog.escalate(
           { details, recentRecoveryCount: recovery.recentRecoveryCount },
-          'crash-loop'
+          launchFailed ? 'launch-failed' : 'crash-loop'
         )
         return
       }
       // Why: a transient renderer/Network Service loss can blank Chromium; reload the app document once to recover.
       recoveryReloadWatchdog.issue(details, recovery.recentRecoveryCount)
-    }, 250)
+    }, launchRetryDelayMs ?? 250)
   }
+  const rendererLiveness = trackRendererLivenessAtDeath(mainWindow)
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    const liveness = rendererLiveness.takeAtRendererGone()
     rendererProcessGone = true
     retireBrowserClientPageRenderer(rendererWebContents)
     browserRouteWebContentsRegistry.retireRenderer(rendererWebContentsId)
@@ -223,7 +259,7 @@ export function installMainWindowFocusLifecycle(args: {
     // Why: macOS reports BrowserWindow teardown as renderer killed/SIGKILL after close — window noise, not a crash.
     if (!isWindowClosing()) {
       // Why: the recorder owns crash classification; filtering here made expected-teardown evidence unreachable.
-      opts?.onRendererProcessGone?.(details, rendererWebContentsId)
+      opts?.onRendererProcessGone?.(details, rendererWebContentsId, liveness)
     }
     if (!isWindowClosing()) {
       console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
@@ -241,6 +277,7 @@ export function installMainWindowFocusLifecycle(args: {
     rendererProcessGone = false
     attachBrowserClientPageRenderer(rendererWebContents)
     clearRendererRecoveryTimer()
+    launchFailureBackoff.reset()
     recoveryReloadWatchdog.notifyDocumentLoaded()
   })
 

@@ -16,17 +16,19 @@ export type WorktreeForceDeleteReason =
   | 'missing-registration'
   | 'unstopped-pty'
   | 'running-agent-session'
+  | 'submodules'
 
 // Why: everything before this separator is the worktree id — a user-chosen filesystem path.
 // Only the detail after it is Orca's own wording, so verdict matchers anchor on the boundary
 // rather than scanning the whole message and letting a path spell out a verdict.
 export const UNSTOPPED_PTY_DETAIL_SEPARATOR = ' — '
 
-// Why: verification distinguishes a PTY it watched stay alive from one it could not reach,
+// Why: verification distinguishes a process it watched stay alive from one it could not reach,
 // and the delete toast must not flatten the two — a user waiving "we could not confirm" is
-// making a different decision than one killing a terminal Orca just saw running. The marker
-// and its matcher stay together for the same reason the force hint does.
-export const UNSTOPPED_PTY_LIVE_DETAIL_PREFIX = 'still live:'
+// making a different decision than one killing something Orca just saw running. The marker
+// and its matcher stay together for the same reason the force hint does. Shared by the PTY
+// sweep and the structured-session sweep, which both re-observe after their stop.
+export const STILL_LIVE_DETAIL_PREFIX = 'still live:'
 
 // Why (#11960): a sweep that never answers wedges removal exactly like a stop that could not
 // be proven, and the waiver clears both — but this error carries different words, so without
@@ -54,7 +56,15 @@ export function isUnstoppedPtyRemovalError(error: string): boolean {
 export function isProvenLivePtyRemovalError(error: string): boolean {
   return (
     isUnstoppedPtyRemovalError(error) &&
-    error.includes(`${UNSTOPPED_PTY_DETAIL_SEPARATOR}${UNSTOPPED_PTY_LIVE_DETAIL_PREFIX}`)
+    error.includes(`${UNSTOPPED_PTY_DETAIL_SEPARATOR}${STILL_LIVE_DETAIL_PREFIX}`)
+  )
+}
+
+/** True only when the observation AFTER the close found the session still attached. */
+export function isProvenLiveStructuredSessionRemovalError(error: string): boolean {
+  return (
+    isRunningAgentSessionRemovalError(error) &&
+    error.includes(`${UNSTOPPED_PTY_DETAIL_SEPARATOR}${STILL_LIVE_DETAIL_PREFIX}`)
   )
 }
 
@@ -95,6 +105,21 @@ export function getLockedWorktreeRemovalReason(error: string): string | null {
   return reason || null
 }
 
+// Why: Orca's dirty check refuses before Git's submodule refusal can, so it says submodules itself.
+// Keeps the dirty sentence so older classifiers still offer Force Delete.
+export const SUBMODULE_DIRTY_REMOVAL_DETAIL =
+  'Worktree has uncommitted or untracked changes, and it contains submodules.'
+
+// Why: non-force `git worktree remove` refuses any checkout with an initialized submodule, clean or
+// not; only --force deletes it, and with it the submodule's never-pushed history. Git output is
+// pinned to English on every host, and the renderer classifies, so older hosts get this too.
+export function isSubmoduleWorktreeRemovalRefusal(error: string): boolean {
+  return (
+    error.includes('working trees containing submodules cannot be moved or removed') ||
+    error.includes(SUBMODULE_DIRTY_REMOVAL_DETAIL)
+  )
+}
+
 const FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN =
   /Failed to delete worktree at [^\n]*\.\s*(?:(?:[MADRCUT][ MADRCUT]| [MADRCUT]|\?\?)\s+\S)/
 
@@ -123,6 +148,9 @@ export function classifyWorktreeForceDeleteReason(
   }
   if (force) {
     return null
+  }
+  if (isSubmoduleWorktreeRemovalRefusal(error)) {
+    return 'submodules'
   }
   if (error.includes('Worktree is no longer registered with Git but its directory remains')) {
     return 'orphan-directory'

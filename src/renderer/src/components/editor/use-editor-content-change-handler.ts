@@ -24,6 +24,7 @@ export function useEditorContentChangeHandler({
 }): (file: OpenFile | null, content: string) => void {
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const setEditorDraft = useAppStore((s) => s.setEditorDraft)
+  const clearEditorDraft = useAppStore((s) => s.clearEditorDraft)
   const fileContentsRef = useRef(fileContents)
   const diffContentsRef = useRef(diffContents)
   useLayoutEffect(() => {
@@ -33,7 +34,10 @@ export function useEditorContentChangeHandler({
 
   return useCallback(
     (file: OpenFile | null, content: string) => {
-      if (!file) {
+      if (
+        !file ||
+        !useAppStore.getState().openFiles.some((candidate) => candidate.id === file.id)
+      ) {
         return
       }
       setEditorDraft(file.id, content)
@@ -44,12 +48,16 @@ export function useEditorContentChangeHandler({
           file.id,
           !isEditorContentUnchanged(content, original, ignoreTrailingWhitespace)
         )
+        // Why: back at the saved text, a kept draft could later restore stale text into the model.
+        if (content === original) {
+          clearEditorDraft(file.id)
+        }
         return
       }
       const diffContent = diffContentsRef.current[file.id]
       const original = diffContent?.kind === 'text' ? diffContent.modifiedContent : ''
       markFileDirty(file.id, !isEditorContentUnchanged(content, original, ignoreTrailingWhitespace))
     },
-    [markFileDirty, setEditorDraft]
+    [clearEditorDraft, markFileDirty, setEditorDraft]
   )
 }

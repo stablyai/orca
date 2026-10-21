@@ -1,7 +1,15 @@
+import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
+import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
+import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
+import type {
+  RuntimeHostStatusSnapshot,
+  RuntimeHostStatusResponse
+} from '../../../shared/runtime-host-status'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { WebRuntimeConnectionTransport } from './web-runtime-connection-transport'
+import type { WebRuntimeCredentialSource } from './web-runtime-credential-source'
 import { subscribeWebRuntimeFileWatch } from './web-runtime-file-watch-subscription'
-import type { WebPairingOffer } from './web-pairing'
 import type { WebRuntimeConnectionState } from './web-runtime-connection-frame-router'
 import type {
   WebRuntimeSubscribeOptions,
@@ -24,19 +32,84 @@ export class WebRuntimeClient {
   private readonly fileWatchTeardownRetries = new Map<string, Set<() => Promise<void>>>()
   private readonly childClients = new Set<WebRuntimeClient>()
 
-  constructor(private readonly pairing: WebPairingOffer) {
-    this.transport = new WebRuntimeConnectionTransport(pairing, {
-      now: () => this.now(),
-      isDocumentVisible: () => this.isDocumentVisible()
-    })
+  readonly statusOwner?: RuntimeHostStatusOwner
+
+  private readonly credential: WebRuntimeCredentialSource | undefined
+
+  constructor(
+    private readonly connection: PairedRuntimeConnection,
+    options: {
+      reconnect?: boolean
+      // Absent: the connection's token over legacy framing, as before device keys.
+      credential?: WebRuntimeCredentialSource
+      allowKeyMigration?: boolean
+      status?: {
+        environmentId: string
+        pairingRevision: number
+        publish: (snapshot: RuntimeHostStatusSnapshot) => void
+        verified: (response: RuntimeHostStatusResponse) => void
+      }
+    } = {}
+  ) {
+    this.credential = options.credential
+    this.transport = new WebRuntimeConnectionTransport(
+      connection,
+      {
+        now: () => this.now(),
+        isDocumentVisible: () => this.isDocumentVisible()
+      },
+      {
+        reconnect: options.reconnect,
+        credential: options.credential,
+        allowKeyMigration: options.allowKeyMigration,
+        onStateChanged: (state) => {
+          if (state === 'auth-failed') {
+            this.statusOwner?.authenticationRejected()
+          }
+          this.statusOwner?.connectionChanged(
+            state === 'connected'
+              ? 'ready'
+              : state === 'disconnected' || state === 'auth-failed'
+                ? 'disconnected'
+                : 'connecting'
+          )
+        }
+      }
+    )
+    if (options.status) {
+      const status = options.status
+      this.statusOwner = new RuntimeHostStatusOwner({
+        ...status,
+        persistent: true,
+        request: (signal) =>
+          this.transport.call('status.get', undefined, {
+            timeoutMs: 15_000,
+            signal
+          }) as Promise<RuntimeHostStatusResponse>,
+        verified: (response) => {
+          status.verified(response)
+          return true
+        }
+      })
+      this.statusOwner.connectionChanged(
+        this.transport.state === 'connected' ? 'ready' : 'connecting'
+      )
+      this.statusOwner.activate()
+    }
+  }
+
+  get connectionEpoch(): number {
+    return this.transport.requestRegistry.connectionEpoch
   }
 
   call(
     method: string,
     params?: unknown,
-    options?: { timeoutMs?: number }
+    options?: { timeoutMs?: number; expectedConnectionEpoch?: number }
   ): Promise<RuntimeRpcResponse<unknown>> {
-    return this.transport.call(method, params, options)
+    return method === 'status.get' && this.statusOwner
+      ? this.statusOwner.refresh(options)
+      : this.transport.call(method, params, options)
   }
 
   async subscribe(
@@ -45,6 +118,7 @@ export class WebRuntimeClient {
     callbacks: WebRuntimeSubscriptionCallbacks,
     options?: SubscribeOptions
   ): Promise<WebRuntimeSubscriptionHandle> {
+    throwIfSignalAborted(options?.signal)
     if (SHARED_CONNECTION_SUBSCRIPTION_METHODS.has(method)) {
       return subscribeWebRuntimeFileWatch({
         params,
@@ -56,12 +130,15 @@ export class WebRuntimeClient {
         teardownRetries: this.fileWatchTeardownRetries
       })
     }
-    const client = new WebRuntimeClient(this.pairing)
+    const client = new WebRuntimeClient(this.connection, { credential: this.credential })
     this.childClients.add(client)
     const closeChild = (notifySubscriptions = false): void => {
+      options?.signal?.removeEventListener('abort', onAbort)
       this.childClients.delete(client)
       client.close({ notifySubscriptions })
     }
+    const onAbort = (): void => closeChild()
+    options?.signal?.addEventListener('abort', onAbort, { once: true })
     try {
       const wrappedCallbacks: WebRuntimeSubscriptionCallbacks = {
         ...callbacks,
@@ -82,18 +159,21 @@ export class WebRuntimeClient {
       )
       return {
         unsubscribe: () => {
+          options?.signal?.removeEventListener('abort', onAbort)
           handle.unsubscribe()
           closeChild()
         },
         sendBinary: (bytes) => handle.sendBinary(bytes)
       }
     } catch (error) {
+      options?.signal?.removeEventListener('abort', onAbort)
       closeChild()
       throw error
     }
   }
 
   close(options: { notifySubscriptions?: boolean } = {}): void {
+    this.statusOwner?.dispose()
     const shouldNotifySubscriptions = options.notifySubscriptions ?? true
     for (const child of Array.from(this.childClients)) {
       child.close({ notifySubscriptions: shouldNotifySubscriptions })
@@ -109,11 +189,19 @@ export class WebRuntimeClient {
     callbacks: WebRuntimeSubscriptionCallbacks,
     options?: SubscribeOptions
   ): Promise<WebRuntimeTransportSubscriptionHandle> {
-    await this.waitForConnected(options?.timeoutMs)
+    await waitForPromiseWithSignal(this.waitForConnected(options?.timeoutMs), options?.signal)
+    throwIfSignalAborted(options?.signal)
     const id = this.nextId()
     const subscription = { id, method, params, callbacks, needsReplay: false }
     this.subscriptions.set(id, subscription)
-    if (!this.sendEncrypted({ id, deviceToken: this.pairing.deviceToken, method, params })) {
+    if (
+      !this.sendEncrypted({
+        id,
+        deviceToken: this.connection.credential.deviceToken,
+        method,
+        params
+      })
+    ) {
       this.subscriptions.delete(id)
       throw new Error('Remote Orca runtime is not connected.')
     }
@@ -124,7 +212,7 @@ export class WebRuntimeClient {
         if (teardown) {
           this.sendEncrypted({
             id: this.nextId(),
-            deviceToken: this.pairing.deviceToken,
+            deviceToken: this.connection.credential.deviceToken,
             method: teardown.method,
             params: teardown.params
           })
@@ -152,12 +240,12 @@ export class WebRuntimeClient {
     this.transport.ws = socket
   }
 
-  protected get sharedKey(): Uint8Array | null {
-    return this.transport.sharedKey
+  protected get handshake(): PairedE2EEClientHandshake | null {
+    return this.transport.handshake
   }
 
-  protected set sharedKey(key: Uint8Array | null) {
-    this.transport.sharedKey = key
+  protected set handshake(handshake: PairedE2EEClientHandshake | null) {
+    this.transport.handshake = handshake
   }
 
   protected get state(): WebRuntimeConnectionState {

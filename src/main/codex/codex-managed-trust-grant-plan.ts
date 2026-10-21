@@ -1,4 +1,3 @@
-import type { CodexTrustGrantTelemetryLane } from './codex-trust-grant-telemetry'
 import {
   readCodexTrustGrantLedgerHomeMatchingStamp,
   type CodexTrustGrantHost
@@ -24,9 +23,6 @@ export type CodexManagedTrustGrantPlan = {
   /** Managed trust identities Orca just wrote (no trustedHash). */
   managedEntries: readonly CodexTrustEntry[]
   host: CodexTrustGrantHost
-  telemetryLane: CodexTrustGrantTelemetryLane
-  /** Match a pane where CODEX_HOME is absent instead of an explicit managed home. */
-  useDefaultCodexHome?: boolean
 }
 
 export type ExpectedManagedEntry = {
@@ -44,7 +40,9 @@ export function buildExpectedEntries(plan: CodexManagedTrustGrantPlan): Expected
 }
 
 /** Windows fallback writes equivalent separator variants that Codex's canonical
- *  RPC key may not overwrite, leaving conflicting logical trust behind. */
+ *  RPC key may not overwrite, leaving conflicting logical trust behind. Only for a
+ *  home whose fallback writes that trust back: in ~/.codex a matching record is
+ *  Codex's own, and nothing would restore it. */
 export function removeSelfComputedTrustBeforeGrant(plan: CodexManagedTrustGrantPlan): void {
   const trustStates = readHookTrustEntries(plan.tomlPath)
   const ownedKeys = plan.managedEntries

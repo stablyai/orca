@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { WindowsProcessTableTimeoutError } from './windows-process-table-timeout-error'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -318,12 +319,15 @@ describe('windows process table', () => {
     getAllProcesses.mockImplementation(() => {})
     resetWindowsProcessTableForTests()
     const wedge = readWindowsProcessIdentityTableFresh()
-    const wedgeAssertion = expect(wedge).rejects.toThrow(/timed out/)
+    const wedgeAssertion = expect(wedge).rejects.toBeInstanceOf(WindowsProcessTableTimeoutError)
     await vi.advanceTimersByTimeAsync(3_000)
     await wedgeAssertion
 
     await expect(readWindowsProcessTableFresh()).rejects.toThrow(/wedged/)
-    await expect(readWindowsProcessIdentityTableFresh()).rejects.toThrow(/wedged/)
+    // Both are slowness, which a caller may treat apart from an unreadable table.
+    await expect(readWindowsProcessIdentityTableFresh()).rejects.toBeInstanceOf(
+      WindowsProcessTableTimeoutError
+    )
     expect(getAllProcesses).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
   })
@@ -479,6 +483,29 @@ describe('PowerShell fallback when the native binding is absent', () => {
     }))
     await expect(readWindowsProcessTableFresh()).rejects.toThrow(/unreadable/)
     expect(cimScan).not.toHaveBeenCalled()
+  })
+
+  it('says so in the log, once, rather than falling back silently', async () => {
+    // #16905 was this path running as the daemon's steady state with nothing to
+    // notice it. Absence is legitimate on a relay; being quiet about it is not.
+    const fallbackWarnings = (): number =>
+      warn.mock.calls.filter((call) =>
+        String(call[0]).includes('falling back to a powershell.exe CIM scan')
+      ).length
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    __setWindowsProcessTreeLoaderForTests(() => null)
+
+    await readWindowsProcessTableFresh()
+    await readWindowsProcessTableFresh()
+    expect(fallbackWarnings()).toBe(1)
+
+    // Re-injecting resets the reader, so the next process-equivalent warns again.
+    // Asserting only the first count passes even with that reset removed, as long
+    // as an earlier test in this file happened to trip the fallback first.
+    __setWindowsProcessTreeLoaderForTests(() => null)
+    await readWindowsProcessTableFresh()
+    expect(fallbackWarnings()).toBe(2)
+    warn.mockRestore()
   })
 
   it('rejects a scan missing our own pid instead of reporting an idle machine', async () => {

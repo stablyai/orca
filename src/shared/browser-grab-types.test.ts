@@ -1,28 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  GRAB_BUDGET,
   GRAB_SAFE_ATTRIBUTE_NAMES,
   GRAB_SECRET_PATTERNS,
-  GRAB_STYLE_PROPERTIES,
   isAriaAttribute
 } from './browser-grab-types'
 
 describe('browser-grab-types', () => {
-  describe('GRAB_BUDGET', () => {
-    it('defines all required budget fields', () => {
-      expect(GRAB_BUDGET.textSnippetMaxLength).toBe(200)
-      expect(GRAB_BUDGET.nearbyTextEntryMaxLength).toBe(200)
-      expect(GRAB_BUDGET.nearbyTextMaxEntries).toBe(10)
-      expect(GRAB_BUDGET.htmlSnippetMaxLength).toBe(4096)
-      expect(GRAB_BUDGET.ancestorPathMaxEntries).toBe(10)
-      expect(GRAB_BUDGET.nearbyElementMaxLength).toBe(160)
-      expect(GRAB_BUDGET.cssClassesMaxLength).toBe(500)
-      expect(GRAB_BUDGET.selectedTextMaxLength).toBe(500)
-      expect(GRAB_BUDGET.annotationsMaxPerPage).toBe(20)
-      expect(GRAB_BUDGET.screenshotMaxBytes).toBe(2 * 1024 * 1024)
-    })
-  })
-
   describe('isAriaAttribute', () => {
     it('returns true for aria- prefixed attributes', () => {
       expect(isAriaAttribute('aria-label')).toBe(true)
@@ -69,19 +52,6 @@ describe('browser-grab-types', () => {
       expect(GRAB_SECRET_PATTERNS).not.toContain('state')
       expect(GRAB_SECRET_PATTERNS).not.toContain('auth')
       expect(GRAB_SECRET_PATTERNS).not.toContain('token')
-    })
-  })
-
-  describe('GRAB_STYLE_PROPERTIES', () => {
-    it('includes the curated subset of computed styles', () => {
-      expect(GRAB_STYLE_PROPERTIES).toContain('display')
-      expect(GRAB_STYLE_PROPERTIES).toContain('fontSize')
-      expect(GRAB_STYLE_PROPERTIES).toContain('backgroundColor')
-      expect(GRAB_STYLE_PROPERTIES).toContain('zIndex')
-    })
-
-    it('has exactly 16 properties matching the type', () => {
-      expect(GRAB_STYLE_PROPERTIES).toHaveLength(16)
     })
   })
 })

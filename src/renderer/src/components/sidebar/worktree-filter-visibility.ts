@@ -6,7 +6,8 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { buildVisibleWorktreeOptionsFromState, computeVisibleWorktrees } from './visible-worktrees'
+import { computeVisibleWorktrees } from './visible-worktrees'
+import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
 
 /**
  * Filter-only visibility for one worktree id: runs the sidebar filter pipeline

@@ -13,7 +13,7 @@ import { getSourceControlDirectoryActionPaths } from './directory-action-paths'
 import { SourceControlTreeDirectoryRow } from './tree-directory-rows'
 import { SubmodulePlaceholderRow } from './submodule-placeholder-row'
 import { UncommittedEntryRow } from './uncommitted-entry-row'
-import { SourceControlVirtualFileList } from './virtual-file-list'
+import { VirtualizedList } from '../../../virtualized-list'
 
 export function SourceControlSectionFileList({
   sourceControlViewMode,
@@ -66,12 +66,12 @@ export function SourceControlSectionFileList({
   activeConnectionId: string | null
   handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   handleStage: (path: string) => Promise<void>
-  handleUnstage: (path: string) => Promise<void>
+  handleUnstage: (path: string, oldPath?: string) => Promise<void>
   requestDiscardEntry: (entry: GitStatusEntry) => void
   diffCommentCountByPath: Map<string, number>
 }): React.JSX.Element {
   return sourceControlViewMode === 'tree' ? (
-    <SourceControlVirtualFileList
+    <VirtualizedList
       rows={treeRows}
       scrollElement={fileListScrollElement}
       getRowKey={(node) => node.key}
@@ -134,7 +134,7 @@ export function SourceControlSectionFileList({
       }}
     />
   ) : (
-    <SourceControlVirtualFileList
+    <VirtualizedList
       rows={listRows}
       scrollElement={fileListScrollElement}
       getRowKey={(row) =>

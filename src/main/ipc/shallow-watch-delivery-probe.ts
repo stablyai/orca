@@ -19,17 +19,22 @@ export async function measureShallowWatchDelivery(timeoutMs = PROBE_TIMEOUT_MS):
     directory = await mkdtemp(join(tmpdir(), 'orca-shallow-probe-'))
     const { promise, resolve } = Promise.withResolvers<boolean>()
     const watcher = watch(directory, { persistent: false }, () => resolve(true))
-    watcher.on('error', () => resolve(false))
-    // Deliberately not unref'd: this one-shot must resolve even if the child
-    // has no other pending work at probe time.
-    const timer = setTimeout(() => resolve(false), timeoutMs)
-    // Two writes: some backends coalesce the creation of the first entry.
-    await writeFile(join(directory, 'probe'), '1')
-    await writeFile(join(directory, 'probe'), '2')
-    const delivered = await promise
-    clearTimeout(timer)
-    watcher.close()
-    return delivered
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      watcher.on('error', () => resolve(false))
+      // Deliberately not unref'd: this one-shot must resolve even if the child
+      // has no other pending work at probe time.
+      timer = setTimeout(() => resolve(false), timeoutMs)
+      // Two writes: some backends coalesce the creation of the first entry.
+      await writeFile(join(directory, 'probe'), '1')
+      await writeFile(join(directory, 'probe'), '2')
+      return await promise
+    } finally {
+      if (timer !== undefined) {
+        clearTimeout(timer)
+      }
+      watcher.close()
+    }
   } catch {
     return false
   } finally {

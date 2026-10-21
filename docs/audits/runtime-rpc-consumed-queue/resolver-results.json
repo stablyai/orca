@@ -1,0 +1,10 @@
+{
+  "node": "v26.6.0",
+  "electron": null,
+  "v8": "14.6.202.34-node.26",
+  "proofSha256": "725087b61b9d79bc2daff4fe45f52951c531dcf9d23137a4939508957848350e",
+  "payloads": 8,
+  "bytesPerPayload": 1048576,
+  "retainedWithResolveFunctions": 0,
+  "retainedAfterResolveFunctionsReleased": 0
+}

@@ -1,4 +1,12 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -7,6 +15,7 @@ import { describe, expect, it } from 'vitest'
 
 const action = parse(readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8'))
 const installScript = action.runs.steps.find((step) => step.name === 'Install dependencies').run
+const storeScript = action.runs.steps.find((step) => step.id === 'pnpm-store').run
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, { encoding: 'utf8', ...options })
@@ -35,7 +44,10 @@ function createFixture() {
   ).toBe(0)
 
   const pnpm = join(bin, 'pnpm')
-  writeFileSync(pnpm, '#!/bin/sh\nexit 0\n')
+  writeFileSync(
+    pnpm,
+    '#!/bin/sh\nif [ "$1" = store ]; then printf "%s\\n" "$PNPM_TEST_STORE_PATH"; fi\nexit 0\n'
+  )
   chmodSync(pnpm, 0o755)
   return { bin, detachedCwd, root, workspace }
 }
@@ -52,6 +64,60 @@ function executeInstallScript(fixture) {
 }
 
 describe('install-node-dependencies action', () => {
+  it.each([
+    ['/home/runner/pnpm store/v11', 'true'],
+    ['/home/runner/pnpm store/v11', 'false'],
+    ['C:\\Users\\runner\\pnpm store\\v11', 'true'],
+    ['C:\\Users\\runner\\pnpm store\\v11', 'false']
+  ])('preserves setup-node store path %s with producer lookup %s', (storePath, lookupOnly) => {
+    const fixture = createFixture()
+    const output = join(fixture.root, 'github-output')
+    const environment = join(fixture.root, 'github-env')
+    try {
+      const result = run('bash', ['-e', '-o', 'pipefail', '-c', storeScript], {
+        env: {
+          ...process.env,
+          GITHUB_OUTPUT: output,
+          GITHUB_ENV: environment,
+          STORE_LOOKUP_ONLY: lookupOnly,
+          LOCKFILE_HASH: 'lockfile-digest',
+          PNPM_TEST_STORE_PATH: storePath,
+          PATH: `${fixture.bin}${delimiter}${process.env.PATH}`
+        }
+      })
+      expect(result.status, result.stderr || result.stdout).toBe(0)
+      expect(readFileSync(output, 'utf8')).toBe(`path=${storePath}\narch=${process.arch}\n`)
+      if (lookupOnly === 'true') {
+        expect(readFileSync(environment, 'utf8')).toBe(`ORCA_PNPM_STORE_CACHE_PATH=${storePath}\n`)
+      } else {
+        expect(existsSync(environment)).toBe(false)
+      }
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    ['', 'store'],
+    ['lockfile-digest', '']
+  ])('rejects a missing lockfile hash or store path (%s, %s)', (hash, storePath) => {
+    const fixture = createFixture()
+    try {
+      const result = run('bash', ['-e', '-o', 'pipefail', '-c', storeScript], {
+        env: {
+          ...process.env,
+          GITHUB_OUTPUT: join(fixture.root, 'github-output'),
+          LOCKFILE_HASH: hash,
+          PNPM_TEST_STORE_PATH: storePath,
+          PATH: `${fixture.bin}${delimiter}${process.env.PATH}`
+        }
+      })
+      expect(result.status).toBe(1)
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true })
+    }
+  })
+
   it('skips the lockfile diff when a job container has no Git metadata', () => {
     const fixture = createFixture()
     try {

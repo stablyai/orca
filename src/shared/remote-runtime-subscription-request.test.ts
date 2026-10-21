@@ -1,3 +1,7 @@
+import {
+  pairedRuntimeConnectionFromOffer,
+  type PairedRuntimeConnection
+} from './paired-runtime-connection'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer, type WebSocket } from 'ws'
@@ -9,7 +13,7 @@ import {
   publicKeyFromBase64,
   publicKeyToBase64
 } from './e2ee-crypto'
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
+import { encodePairingOffer, parsePairingCode } from './pairing'
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
@@ -214,6 +218,26 @@ describe('remote runtime subscription JSON requests', () => {
       )
     }
   )
+
+  // Why: `ws.on('message')` calls the frame router directly, so before this was guarded a consumer
+  // throw here left the emitter and became main_uncaught_exception, killing the whole app.
+  it('fails the subscription instead of crashing the process when a consumer throws', async () => {
+    const server = await createServer()
+    const onError = vi.fn<(error: unknown) => void>()
+    const onClose = vi.fn<() => void>()
+    await subscribe(server.pairing, {
+      onResponse: () => {
+        throw new Error('Unknown environment: env-1')
+      },
+      onError,
+      onClose
+    })
+
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce())
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'runtime_error', message: 'Unknown environment: env-1' })
+    )
+  })
 })
 
 function requireSender(subscription: RemoteRuntimeSubscription) {
@@ -224,7 +248,7 @@ function requireSender(subscription: RemoteRuntimeSubscription) {
 }
 
 async function subscribe(
-  pairing: PairingOffer,
+  pairing: PairedRuntimeConnection,
   callbacks: {
     onResponse?: (response: unknown) => void
     onError?: (error: unknown) => void
@@ -254,7 +278,7 @@ type ServerOptions = {
 }
 
 async function createServer(options: ServerOptions = {}): Promise<{
-  pairing: PairingOffer
+  pairing: PairedRuntimeConnection
   nextRequest: Promise<unknown>
 }> {
   const keyPair = generateKeyPair()
@@ -338,7 +362,7 @@ async function createServer(options: ServerOptions = {}): Promise<{
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
-  return { pairing, nextRequest }
+  return { pairing: pairedRuntimeConnectionFromOffer(pairing), nextRequest }
 }
 
 function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): void {

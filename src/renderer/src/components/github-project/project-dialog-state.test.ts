@@ -3,33 +3,68 @@ import {
   resolveMissingRepoProjectDialogState,
   resolveRepoBackedProjectDialogState
 } from './project-dialog-state'
+import type { Repo } from '../../../../shared/repo-types'
+
+const localRow: Repo = {
+  id: 'repo-1',
+  path: '/laptop/repo',
+  displayName: 'Repo',
+  badgeColor: '#000',
+  addedAt: 1
+}
+const sshRow: Repo = { ...localRow, path: '/remote/repo', connectionId: 'builder' }
+const sshDialog = {
+  repoId: 'repo-1',
+  workItem: { repoId: 'repo-1', repoHostId: 'ssh:builder' as const }
+}
 
 describe('resolveRepoBackedProjectDialogState', () => {
   it('keeps a repo-backed dialog when the repo still exists', () => {
-    const dialog = { repoId: 'repo-1', label: 'Issue 1' }
+    const dialog = { repoId: 'repo-1', workItem: { repoId: 'repo-1' }, label: 'Issue 1' }
+
+    expect(resolveRepoBackedProjectDialogState(dialog, [localRow], new Set(['repo-1']))).toEqual({
+      dialog,
+      repo: localRow
+    })
+  })
+
+  it('resolves a twin to the row the project item matched, not the other host', () => {
+    const dialog = sshDialog
 
     expect(
-      resolveRepoBackedProjectDialogState(dialog, new Set(['repo-1']), new Set(['repo-1']))
-    ).toBe(dialog)
+      resolveRepoBackedProjectDialogState(dialog, [localRow, sshRow], new Set(['repo-1'])).repo
+    ).toBe(sshRow)
+    expect(
+      resolveRepoBackedProjectDialogState(dialog, [sshRow, localRow], new Set(['repo-1'])).repo
+    ).toBe(sshRow)
+  })
+
+  it('clears the dialog when its host row leaves, even while the twin stays', () => {
+    const dialog = sshDialog
+    const otherTwin: Repo = { ...localRow, executionHostId: 'runtime:env-1' }
+
+    expect(
+      resolveRepoBackedProjectDialogState(dialog, [localRow, otherTwin], new Set(['repo-1']))
+    ).toEqual({ dialog: null, repo: null })
   })
 
   it('clears a repo-backed dialog when its repo is removed', () => {
     expect(
       resolveRepoBackedProjectDialogState(
-        { repoId: 'repo-1' },
-        new Set(['repo-2']),
+        { repoId: 'repo-1', workItem: { repoId: 'repo-1' } },
+        [{ ...localRow, id: 'repo-2' }],
         new Set(['repo-1'])
-      )
+      ).dialog
     ).toBeNull()
   })
 
   it('clears a repo-backed dialog when its repo is no longer selected', () => {
     expect(
       resolveRepoBackedProjectDialogState(
-        { repoId: 'repo-1' },
-        new Set(['repo-1']),
+        { repoId: 'repo-1', workItem: { repoId: 'repo-1' } },
+        [localRow],
         new Set(['repo-2'])
-      )
+      ).dialog
     ).toBeNull()
   })
 })

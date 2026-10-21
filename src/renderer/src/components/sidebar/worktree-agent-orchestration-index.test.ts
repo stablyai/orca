@@ -306,12 +306,16 @@ describe('selectWorktreeAgentOrchestration', () => {
     }
     let liveReads = 0
     let retainedReads = 0
-    const countReads = (target: object, onRead: () => void): object =>
+    const countReads = (
+      target: Record<string, unknown>,
+      onRead: () => void
+    ): Record<string, unknown> =>
       new Proxy(target, {
         get(source, key, receiver) {
           if (typeof key === 'string') {
             onRead()
           }
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
           return Reflect.get(source, key, receiver)
         }
       })

@@ -15,6 +15,8 @@ import {
 } from '../ai-vault/session-scanner-values'
 import { imageSourcePathFromText } from '../../shared/native-chat-image-transcript-markers'
 import { claudeContentBlocks } from './transcript-record-blocks'
+import { unwrapClaudePastedContentBlock } from '../../shared/claude-pasted-content'
+import { unwrapClaudeBashInputBlock } from '../../shared/claude-bash-input'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
 
 const MAX_EDIT_PATCH_HUNKS = 40
@@ -74,16 +76,20 @@ export function decodeClaudeTranscriptLine(
   line: string,
   fallbackId: string
 ): NativeChatMessage | null {
-  const record = parseJsonObject(line)
-  if (!record) {
+  const parsed = parseJsonObject(line)
+  if (!parsed) {
     return null
   }
+  const record = claudeQueuedPromptAsUserRecord(parsed) ?? parsed
   const role = record.type
   if (role !== 'user' && role !== 'assistant') {
     return null
   }
   const timestamp = parseTimestamp(record.timestamp)
   const recordMessageId = extractString(record.uuid) ?? fallbackId
+  // Why: the row link pairs a local command's reply with its command row.
+  const parentUuid = extractString(record.parentUuid)
+  const parent = parentUuid ? { parentId: parentUuid } : {}
   if (claudeInterruptedMessageId(record)) {
     // Why: keep Claude's injected boilerplate out of the user-bubble path while
     // preserving the interruption as a quiet, replayable conversation status.
@@ -92,7 +98,8 @@ export function decodeClaudeTranscriptLine(
       role: 'system',
       blocks: [{ type: 'text', text: NATIVE_CHAT_INTERRUPTED_STATUS_TEXT }],
       timestamp,
-      source: 'transcript'
+      source: 'transcript',
+      ...parent
     }
   }
   const message = asRecord(record.message)
@@ -124,10 +131,43 @@ export function decodeClaudeTranscriptLine(
   return {
     id: messageId ?? fallbackId,
     role: claudeMessageRole(role, blocks),
-    blocks,
+    // Why: a `!` command's echo reads `!cmd`; left as harness markup the row was
+    // hidden as noise and the echo stayed pinned at the tail (#25956).
+    blocks:
+      role === 'user'
+        ? blocks.map((block) => unwrapClaudeBashInputBlock(unwrapClaudePastedContentBlock(block)))
+        : blocks,
     timestamp,
-    source: 'transcript'
+    source: 'transcript',
+    ...parent
   }
+}
+
+/** A prompt sent mid-turn is recorded only as a `queued_command` attachment, never
+ *  a `type:"user"` row; without one its echo had nothing to match and stayed
+ *  pinned below every later turn (#14308, #20846). Task notifications and
+ *  peer-agent messages share the attachment type but were not typed by the user. */
+function claudeQueuedPromptAsUserRecord(
+  record: Record<string, unknown>
+): Record<string, unknown> | null {
+  if (record.type !== 'attachment') {
+    return null
+  }
+  const attachment = asRecord(record.attachment)
+  if (attachment?.type !== 'queued_command' || attachment.commandMode !== 'prompt') {
+    return null
+  }
+  // Why: older Claude versions omit `origin`; their prompt-mode queue entries
+  // were all typed by the user.
+  const originKind = asRecord(attachment.origin)?.kind
+  if (originKind !== undefined && originKind !== 'human') {
+    return null
+  }
+  const prompt = attachment.prompt
+  if (typeof prompt !== 'string' && !Array.isArray(prompt)) {
+    return null
+  }
+  return { ...record, type: 'user', message: { role: 'user', content: prompt } }
 }
 
 // Keep only genuine image companion records; a marker mixed with prose must

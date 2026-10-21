@@ -1,7 +1,8 @@
 import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import { endSubprocessStdin } from '../../../shared/subprocess-stdin-write'
-import { runProcess } from '../../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
+import { resolveSelectedLocalCommand } from '../../ipc/command-path-resolver'
 import type { WslProcessGroupTermination } from '../wsl-process-group-termination'
 import { createAbortError } from './abort-error'
 import { killSpawnedCommandTree } from './spawned-command-tree-kill'
@@ -17,6 +18,7 @@ type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   createTimeoutError?: () => Error
   /** Called once when the deadline — not an abort — is what ended the process. */
   onDeadlineKill?: () => void
+  onStderr?: (chunk: string) => void
 }
 
 const GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS = 2_147_000_000
@@ -24,15 +26,24 @@ const GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS = 2_147_000_000
 export async function execFileCaptureToTermination(
   command: string,
   args: string[],
-  options: ExecFileCaptureOptions,
+  // Why: runProcess owns this child's streams; git-exec-file refuses onStderr with a barrier.
+  options: Omit<ExecFileCaptureOptions, 'onStderr'>,
   termination?: WslProcessGroupTermination
 ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
-  // Why measured here: runProcess spawns inside its promise executor, which runs
-  // synchronously, so this brackets exactly the main-thread block execFileCapture
-  // reports for its own spawns.
-  const spawnStartedAt = performance.now()
+  // Spawn cost is reported by spawnProcess's observer, which runProcess goes
+  // through; recording it again here would double-count every capture.
+  let program: string
+  try {
+    program = resolveSelectedLocalCommand(command, {
+      env: options.env,
+      cwd: typeof options.cwd === 'string' ? options.cwd : undefined
+    })
+  } catch (error) {
+    options.onChildTerminated?.()
+    throw error
+  }
   const pending = runProcess({
-    program: command,
+    program,
     args,
     cwd: typeof options.cwd === 'string' ? options.cwd : undefined,
     env: options.env,
@@ -43,7 +54,6 @@ export async function execFileCaptureToTermination(
     onChildTerminated: options.onChildTerminated,
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
-  recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
   const result = await pending
   const stdout = options.encoding === 'buffer' ? Buffer.from(result.stdout) : result.stdout
   const cleanStderr = termination?.stripControlOutput(result.stderr) ?? result.stderr
@@ -78,6 +88,7 @@ export async function execFileCaptureToTermination(
     code: result.code,
     killed: result.timedOut || result.signal !== null || options.signal?.aborted === true,
     signal: result.signal,
+    outputTruncated: result.outputTruncated,
     stdout,
     stderr
   })
@@ -97,6 +108,21 @@ function isExecFileResultObject(
     'stdout' in value &&
     'stderr' in value
   )
+}
+
+/** A second, passive stderr listener: execFile still captures every byte. */
+function observeStderr(child: ChildProcess, observer: (chunk: string) => void): void {
+  const onData = (chunk: string | Buffer): void => {
+    try {
+      observer(typeof chunk === 'string' ? chunk : chunk.toString('utf8'))
+    } catch (error) {
+      // Why: a throw inside a stream listener is an uncaught main-process
+      // exception; an observer must never be able to fail the command.
+      child.stderr?.off('data', onData)
+      console.warn('git stderr observer failed; detaching it', error)
+    }
+  }
+  child.stderr?.on('data', onData)
 }
 
 export function execFileCapture(
@@ -209,6 +235,9 @@ export function execFileCapture(
       }
     })
     child.once('close', reportChildTerminated)
+    if (options.onStderr) {
+      observeStderr(child, options.onStderr)
+    }
 
     if (options.stdin !== undefined) {
       endSubprocessStdin(child.stdin, options.stdin)

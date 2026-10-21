@@ -76,6 +76,17 @@ describe('terminalOutputPrefersRenderRefresh', () => {
       false
     )
   })
+
+  it('skips the SGR scan for escape-free ASCII output', () => {
+    expect(terminalOutputPrefersRenderRefresh('plain ascii progress 42%')).toBe(false)
+  })
+
+  it('keeps the shared SGR scan stateless across calls', () => {
+    // Why: the module-level pattern is global and the background hit returns
+    // mid-loop, so a dropped lastIndex reset would resume past the next match.
+    expect(terminalOutputPrefersRenderRefresh('\x1b[41m selected \x1b[0m')).toBe(true)
+    expect(terminalOutputPrefersRenderRefresh('\x1b[44m x\x1b[0m')).toBe(true)
+  })
 })
 
 describe('terminalOutputContainsEastAsianRendererRisk', () => {

@@ -1,3 +1,4 @@
+import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import { writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { test, expect } from './helpers/orca-app'
@@ -25,7 +26,7 @@ test('Create more clears the GitHub PR source before the next worktree', async (
     const state = store.getState()
     store.setState({ settings: { ...state.settings!, defaultTuiAgent: 'blank' } })
   })
-  await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(orcaPage)
   await orcaPage.evaluate(() => {
     const store = window.__store!
     const repoId = store.getState().repos[0].id

@@ -19,7 +19,7 @@ const lazyArabicShapingJoinerByTerminal = new WeakMap<
 // Every strong-RTL block sits at/above U+0590, so ASCII/Latin bails out with a single charCodeAt sweep.
 const RTL_SCAN_FLOOR = 0x0590
 
-export function isStrongRtlCodePoint(codePoint: number): boolean {
+function isStrongRtlCodePoint(codePoint: number): boolean {
   return (
     // One contiguous strong-RTL span (Hebrew through Arabic Extended-A).
     (codePoint >= 0x0590 && codePoint <= 0x08ff) ||

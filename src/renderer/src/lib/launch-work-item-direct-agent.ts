@@ -1,5 +1,4 @@
 import { toast } from 'sonner'
-import { deliverLaunchPromptToAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import {
   buildAgentDraftLaunchPlan,
@@ -11,13 +10,12 @@ import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-re
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
-import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
-import type { PersistedNativeChatSessionOptions } from '../../../shared/native-chat-session-options'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
@@ -29,14 +27,12 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
         agentCmdOverrides?: Partial<Record<TuiAgent, string>>
         agentDefaultArgs?: Partial<Record<TuiAgent, string>>
         agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
-        experimentalNativeChat?: boolean
-        openAgentTabsInChatByDefault?: boolean
-        nativeChatSessionOptions?: PersistedNativeChatSessionOptions
       }
     | null
     | undefined
   launchPlatform: NodeJS.Platform
-  nativeChatTranscriptIsLocalReadable?: boolean
+  /** Unset keeps the platform default: PowerShell on win32, POSIX elsewhere. */
+  shell?: AgentStartupShell
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must not be applied for remote launches. */
   isRemote?: boolean
@@ -54,13 +50,6 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
       ? resolveTuiAgentLaunchArgs(args.agent, args.settings?.agentDefaultArgs)
       : args.agentArgs
   const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings?.agentDefaultEnv)
-  const sessionOptions = resolveInitialNativeChatSessionOptions(args.settings, {
-    agent: args.agent,
-    ...(args.promptDelivery === 'draft'
-      ? { promptDelivery: 'draft' as const, launchDraftText: args.draftContent }
-      : {}),
-    nativeChatTranscriptIsLocalReadable: args.nativeChatTranscriptIsLocalReadable
-  })
   const draftLaunchPlan =
     args.promptDelivery === 'submit-after-ready'
       ? null
@@ -69,10 +58,10 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
           draft: args.draftContent,
           cmdOverrides: args.settings?.agentCmdOverrides ?? {},
           platform: args.launchPlatform,
+          ...(args.shell ? { shell: args.shell } : {}),
           isRemote: args.isRemote,
           agentArgs: effectiveAgentArgs,
-          agentEnv: effectiveAgentEnv,
-          sessionOptions
+          agentEnv: effectiveAgentEnv
         })
 
   if (draftLaunchPlan) {
@@ -83,9 +72,6 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
         launchConfig: draftLaunchPlan.launchConfig,
-        ...(draftLaunchPlan.sessionOptions
-          ? { sessionOptions: draftLaunchPlan.sessionOptions }
-          : {}),
         ...(draftLaunchPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
           : {}),
@@ -101,10 +87,10 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     prompt: '',
     cmdOverrides: args.settings?.agentCmdOverrides ?? {},
     platform: args.launchPlatform,
+    ...(args.shell ? { shell: args.shell } : {}),
     isRemote: args.isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv: effectiveAgentEnv,
-    sessionOptions,
     allowEmptyPromptLaunch: true
   })
   if (startupPlan && args.promptDelivery === 'draft') {
@@ -120,10 +106,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
 export function buildDirectWorkItemStartupOpts(
   agent: TuiAgent | null,
   plan: AgentStartupPlan | null,
-  launchSource: LaunchSource,
-  /** Unsent launch context, for the view-mode decision only. Set it for every
-   *  draft launch — a natively-prefilled plan carries no `draftPrompt`. */
-  launchDraftText?: string
+  launchSource: LaunchSource
 ): {
   startup?: {
     command: string
@@ -131,7 +114,6 @@ export function buildDirectWorkItemStartupOpts(
     launchConfig?: SleepingAgentLaunchConfig
     launchAgent?: TuiAgent
     draftPrompt?: string
-    launchDraftText?: string
     sessionOptions?: AgentStartupPlan['sessionOptions']
     startupCommandDelivery?: StartupCommandDelivery
     telemetry?: AgentStartedTelemetry
@@ -152,7 +134,6 @@ export function buildDirectWorkItemStartupOpts(
       ...(plan.sessionOptions ? { sessionOptions: plan.sessionOptions } : {}),
       ...(agent ? { launchAgent: agent } : {}),
       ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
-      ...(launchDraftText ? { launchDraftText } : {}),
       ...(plan.startupCommandDelivery
         ? { startupCommandDelivery: plan.startupCommandDelivery }
         : {}),
@@ -161,35 +142,16 @@ export function buildDirectWorkItemStartupOpts(
   }
 }
 
-export async function pasteDirectWorkItemDraftWhenAgentReady(args: {
-  primaryTabId: string
-  startupPlan: AgentStartupPlan
-  content: string
-  submit?: boolean
-  forcePaste?: boolean
-}): Promise<void> {
-  const { primaryTabId, startupPlan, content, submit = false, forcePaste = false } = args
-  await deliverLaunchPromptToAgentTab({
-    tabId: primaryTabId,
-    content,
-    agent: startupPlan.agent,
-    submit,
-    forcePaste,
-    onTimeout: () => {
-      const label = submit ? 'prompt' : 'work item context'
-      toast.message(
-        translate(
-          'auto.lib.launch.work.item.direct.agent.ceeeb509b5',
-          'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.',
-          { value0: label }
-        )
-      )
-      // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
-      // on the dashboard is the trigger to add one.
-      track('agent_error', {
-        error_class: 'unknown',
-        agent_kind: tuiAgentToAgentKind(startupPlan.agent)
-      })
-    }
-  })
+/** Timeout notice for the post-launch paste; the workspace itself is ready. */
+export function notifyDirectWorkItemAgentStartTimeout(agent: TuiAgent, submit: boolean): void {
+  toast.message(
+    translate(
+      'auto.lib.launch.work.item.direct.agent.ceeeb509b5',
+      'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.',
+      { value0: submit ? 'prompt' : 'work item context' }
+    )
+  )
+  // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
+  // on the dashboard is the trigger to add one.
+  track('agent_error', { error_class: 'unknown', agent_kind: tuiAgentToAgentKind(agent) })
 }

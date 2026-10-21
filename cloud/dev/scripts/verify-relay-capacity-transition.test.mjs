@@ -135,7 +135,8 @@ test('parses a paired reviewed capacity', () => {
       '--activity', 'restart-safe',
       '--expected-image-digests', imageDigest,
       '--hard-cap', '1000',
-      '--unobserved-bound', '60'
+      '--unobserved-bound', '60',
+      '--pace-window-ms', '300000'
     ]),
     {
       ...config,
@@ -144,6 +145,7 @@ test('parses a paired reviewed capacity', () => {
       activity: 'restart-safe',
       runtime: 'required',
       expectedImageDigests: [imageDigest],
+      paceWindowMs: 300_000,
       timeoutMs: 180_000
     }
   )
@@ -572,7 +574,7 @@ test('restart-safe settling resets after data-plane admission appears', async ()
     timeoutMs: 20_000
   }
   const safe = harness({ active: 1, activityLeases: 0 })
-  const unsafe = harness({ active: 1, activityLeases: 0, preAuthConnections: 1 })
+  const unsafe = harness({ active: 1, activityLeases: 0, controls: 1 })
   let runtimeReads = 0
   let now = 0
   const result = await verifyCapacityTransition(restartConfig, {
@@ -593,7 +595,7 @@ test('restart-safe settling resets after data-plane admission appears', async ()
   assert.equal(runtimeReads, 4)
 })
 
-test('restart-safe settling resets after director activity appears', async () => {
+test('restart-safe settling resets after a migration opens', async () => {
   const restartConfig = {
     ...config,
     admission: 'migration-only',
@@ -607,10 +609,11 @@ test('restart-safe settling resets after director activity appears', async () =>
     restartBlockingReservedRequests: 0
   })
   const unsafe = harness({
-    activityLeases: 840,
-    restartBlockingActivityLeases: 1,
-    restartBlockingActivityRequestUnits: 1,
-    restartBlockingReservedRequests: 1
+    activityLeases: 839,
+    restartBlockingActivityLeases: 0,
+    restartBlockingActivityRequestUnits: 0,
+    restartBlockingReservedRequests: 0,
+    incomingMigrations: 1
   })
   let directorReads = 0
   let runtimeReads = 0
@@ -764,7 +767,7 @@ test('negative restart reservation accounting cannot mask real work', async () =
       },
       {
         fetch: harness({
-          restartBlockingActivityLeases: 1,
+          controls: 1,
           restartBlockingReservedRequests: -1
         }),
         token: 'masked-token'
@@ -786,28 +789,13 @@ test('restart gate rejects live or durable cell work', async (t) => {
     ['splice', { active: 1, activityLeases: 0, splices: 1 }],
     ['pending splice', { active: 1, activityLeases: 0, pendingSplices: 1 }],
     ['queued data', { active: 1, activityLeases: 0, queuedBytes: 1 }],
-    ['pre-auth connection', { active: 1, activityLeases: 0, preAuthConnections: 1 }],
-    ['in-flight connection', {
+    ['control beside a reserved data unit', {
+      active: 2,
       activityLeases: 0,
-      inFlightConnections: 1,
-      enforcedConnectionUnits: 1
-    }],
-    ['reserved data unit', {
-      active: 1,
-      activityLeases: 0,
+      controls: 1,
       reservedConnectionUnits: 1,
-      enforcedConnectionUnits: 2
+      enforcedConnectionUnits: 3
     }],
-    ['activity lease', { activityLeases: 1 }],
-    ['misaccounted pending control lease', {
-      activityLeases: 1,
-      activityRequestUnits: 2,
-      reservedRequests: 2,
-      restartBlockingActivityLeases: 0,
-      restartBlockingActivityRequestUnits: 1,
-      restartBlockingReservedRequests: 1
-    }],
-    ['cell reservation', { reservedRequests: 1 }],
     ['outgoing migration', { outgoingMigrations: 1 }],
     ['incoming migration', { incomingMigrations: 1 }]
   ]
@@ -818,7 +806,8 @@ test('restart gate rejects live or durable cell work', async (t) => {
           fetch: harness(state),
           token: 'masked-token'
         }),
-        /timed out/
+        // A zero timeout can never collect two samples; the blocker must stop the first one.
+        /timed out.*"restartSafeSamples":0/
       )
     })
   }
@@ -867,8 +856,7 @@ test('restart timeout reports one of two safe settling samples', async () => {
       { fetch: base, token: 'masked-token' }
     ),
     (error) => {
-      assert.match(error.message, /"restartSafeSamples":1/)
-      assert.match(error.message, /"requiredRestartSafeSamples":2/)
+      assert.match(error.message, /"restartSafeSamples":1,"paceWindowRemainingMs":0/)
       return true
     }
   )
@@ -1167,4 +1155,357 @@ test('fails when both director health attempts return a transient 503', async ()
     /director health returned 503/
   )
   assert.equal(healthCalls, 2)
+})
+
+// Production-gce-c28 on 2026-10-01: drained to an empty runtime while four hosts with no free
+// slot anywhere kept redialling and held director leases on it.
+const strandedCell = {
+  activityLeases: 10,
+  activityRequestUnits: 10,
+  reservedRequests: 4,
+  restartBlockingActivityLeases: 4,
+  restartBlockingActivityRequestUnits: 4,
+  restartBlockingReservedRequests: -2,
+  pendingControlReservations: 6
+}
+const pacedRestartConfig = {
+  ...config,
+  admission: 'migration-only',
+  activity: 'restart-safe',
+  paceWindowMs: 300_000,
+  timeoutMs: 1_200_000
+}
+
+function fakeClock(start = 0) {
+  let now = start
+  return {
+    now: () => now,
+    wait: async (milliseconds) => {
+      now += milliseconds
+    }
+  }
+}
+
+test('requires the drain pace window exactly for a live restart-safe wait', () => {
+  const base = [
+    '--director-origin', 'https://relay.example.com',
+    '--cell-origin', 'https://c3.relay.example.com',
+    '--cell-id', 'staging-gce-c3',
+    '--heartbeat', 'either',
+    '--admission', 'migration-only',
+    '--draining', 'required'
+  ]
+  assert.equal(
+    parseCapacityTransitionArguments([
+      ...base, '--activity', 'restart-safe', '--pace-window-ms', '300000'
+    ]).paceWindowMs,
+    300_000
+  )
+  assert.throws(
+    () => parseCapacityTransitionArguments([...base, '--activity', 'restart-safe']),
+    /required exactly for restart-safe/
+  )
+  assert.throws(
+    () => parseCapacityTransitionArguments([
+      ...base, '--activity', 'allowed', '--pace-window-ms', '300000'
+    ]),
+    /required exactly for restart-safe/
+  )
+  assert.throws(
+    () => parseCapacityTransitionArguments([
+      ...base, '--activity', 'restart-safe', '--pace-window-ms', '-1'
+    ]),
+    /--pace-window-ms is invalid/
+  )
+})
+
+test('passes after one pace window of an empty runtime and reports stranded leases', async () => {
+  const lines = []
+  let runtimeReads = 0
+  const base = harness(strandedCell)
+  const result = await verifyCapacityTransition(pacedRestartConfig, {
+    fetch: async (url, options) => {
+      if (new URL(url).pathname === '/v1/admin/runtime-status') runtimeReads += 1
+      return await base(url, options)
+    },
+    token: 'masked-token',
+    progress: (line) => lines.push(line),
+    // A late start catches a window measured from zero instead of from the verifier's start.
+    ...fakeClock(1_000_000)
+  })
+  // One sample at each end of a full five-minute pace window.
+  assert.equal(runtimeReads, 61)
+  assert.deepEqual(result.stranded, {
+    restartBlockingActivityLeases: 4,
+    restartBlockingActivityRequestUnits: 4,
+    restartBlockingReservedRequests: -2,
+    outgoingMigrations: 0,
+    incomingMigrations: 0
+  })
+  // Every sample but the passing one prints its progress with the stranded counts.
+  assert.equal(lines.length, 60)
+  assert.ok(lines.every((line) =>
+    line.event === 'relay_capacity_transition_restart_progress' &&
+    line.stranded.restartBlockingActivityLeases === 4))
+  assert.deepEqual(lines.slice(0, 2).map((line) => line.restartSafeSamples), [1, 2])
+  assert.deepEqual(
+    lines.slice(0, 2).map((line) => line.paceWindowRemainingMs),
+    [300_000, 295_000]
+  )
+})
+
+test('a non-zero runtime sample restarts the quiet count', async () => {
+  const quiet = harness(strandedCell)
+  const busy = harness({ ...strandedCell, controls: 1 })
+  let runtimeReads = 0
+  const lines = []
+  await verifyCapacityTransition(pacedRestartConfig, {
+    fetch: async (url, options) => {
+      if (new URL(url).pathname === '/v1/admin/runtime-status') runtimeReads += 1
+      return await (runtimeReads === 30 ? busy : quiet)(url, options)
+    },
+    token: 'masked-token',
+    progress: (line) => lines.push(line),
+    ...fakeClock()
+  })
+  // A mid-window reset adds no time; the quiet after it still reaches the window's end.
+  assert.equal(runtimeReads, 61)
+  assert.deepEqual(lines.slice(28, 31).map((line) => line.restartSafeSamples), [29, 0, 1])
+  await assert.rejects(
+    verifyCapacityTransition(
+      { ...pacedRestartConfig, timeoutMs: 295_000 },
+      { fetch: quiet, token: 'masked-token', progress: () => {}, ...fakeClock() }
+    ),
+    /"restartSafeSamples":60,"paceWindowRemainingMs":5000/
+  )
+})
+
+// c27 on 2026-10-13: the 20-minute paced drain emptied the runtime as its window closed, and the
+// old gate then waited a second full window of quiet samples before the restart.
+test('a runtime that empties as the pace window ends passes after two quiet samples', async () => {
+  let runtimeReads = 0
+  const lines = []
+  await verifyCapacityTransition(pacedRestartConfig, {
+    fetch: async (url, options) => {
+      if (new URL(url).pathname === '/v1/admin/runtime-status') runtimeReads += 1
+      return await harness({ ...strandedCell, controls: runtimeReads <= 60 ? 1 : 0 })(url, options)
+    },
+    token: 'masked-token',
+    progress: (line) => lines.push(line),
+    ...fakeClock()
+  })
+  // Busy through 295 s; quiet at 300 s and 305 s, the first eligible pair.
+  assert.equal(runtimeReads, 62)
+  assert.deepEqual(lines.slice(59).map((line) => line.restartSafeSamples), [0, 1])
+})
+
+test('restart-safe fails on live runtime work or an open migration regardless of leases', async (t) => {
+  for (const blocker of [
+    { controls: 1 },
+    { splices: 1 },
+    { pendingSplices: 1 },
+    { queuedBytes: 1 },
+    { outgoingMigrations: 1 },
+    { incomingMigrations: 1 }
+  ]) {
+    await t.test(Object.keys(blocker)[0], async () => {
+      await assert.rejects(
+        verifyCapacityTransition(pacedRestartConfig, {
+          fetch: harness({ ...strandedCell, ...blocker }),
+          token: 'masked-token',
+          progress: () => {},
+          ...fakeClock()
+        }),
+        /timed out.*"restartSafeSamples":0/
+      )
+    })
+  }
+})
+
+test('unauthenticated redials do not restart the quiet count', async () => {
+  let runtimeReads = 0
+  const lines = []
+  const result = await verifyCapacityTransition(pacedRestartConfig, {
+    fetch: async (url, options) => {
+      if (new URL(url).pathname === '/v1/admin/runtime-status') runtimeReads += 1
+      return await harness({
+        ...strandedCell,
+        active: runtimeReads % 4,
+        enforcedConnectionUnits: 0,
+        preAuthConnections: runtimeReads % 2
+      })(url, options)
+    },
+    token: 'masked-token',
+    progress: (line) => lines.push(line),
+    ...fakeClock()
+  })
+  assert.equal(runtimeReads, 61)
+  assert.equal(result.stranded.restartBlockingActivityLeases, 4)
+  assert.deepEqual(
+    lines.slice(0, 4).map((line) => [line.totalConnections, line.preAuthConnections]),
+    [[1, 1], [2, 0], [3, 1], [0, 0]]
+  )
+})
+
+// c29 2026-10-01: a phone redialling the drained cell holds one physical socket and one
+// reserved host-data unit until the cell refuses it; a host control redial holds an in-flight unit.
+const refusedPhoneDial = {
+  active: 1,
+  preAuthConnections: 1,
+  reservedConnectionUnits: 1,
+  enforcedConnectionUnits: 2
+}
+const refusedControlDial = { inFlightConnections: 1, enforcedConnectionUnits: 1 }
+
+test('a draining cell reaches the pace window through refused redials', async () => {
+  let runtimeReads = 0
+  const lines = []
+  const result = await verifyCapacityTransition(pacedRestartConfig, {
+    fetch: async (url, options) => {
+      if (new URL(url).pathname === '/v1/admin/runtime-status') runtimeReads += 1
+      const redial = runtimeReads % 3 === 0
+        ? refusedPhoneDial
+        : runtimeReads % 3 === 1 ? refusedControlDial : {}
+      return await harness({ ...strandedCell, ...redial })(url, options)
+    },
+    token: 'masked-token',
+    progress: (line) => lines.push(line),
+    ...fakeClock()
+  })
+  assert.equal(runtimeReads, 61)
+  assert.equal(result.cellId, config.cellId)
+  assert.deepEqual(lines.slice(0, 3).map((line) => line.restartSafeSamples), [1, 2, 3])
+})
+
+test('a refused redial cannot hide a persistent control on a draining cell', async () => {
+  let runtimeReads = 0
+  const lines = []
+  await assert.rejects(
+    verifyCapacityTransition(pacedRestartConfig, {
+      fetch: async (url, options) => {
+        if (new URL(url).pathname === '/v1/admin/runtime-status') runtimeReads += 1
+        const redial = runtimeReads % 2 === 0 ? refusedPhoneDial : {}
+        return await harness({ ...strandedCell, ...redial, controls: 1 })(url, options)
+      },
+      token: 'masked-token',
+      progress: (line) => lines.push(line),
+      ...fakeClock()
+    }),
+    /timed out.*"restartSafeSamples":0/
+  )
+  assert.ok(lines.length > 61)
+  assert.ok(lines.every((line) => line.restartSafeSamples === 0 && line.runtime.controls === 1))
+})
+
+test('a runtime that is not draining never passes restart-safe', async (t) => {
+  for (const [name, state] of [
+    ['idle', {}],
+    ['refused phone dial', refusedPhoneDial],
+    ['refused control dial', refusedControlDial]
+  ]) {
+    await t.test(name, async () => {
+      await assert.rejects(
+        verifyCapacityTransition(pacedRestartConfig, {
+          fetch: harness({ ...strandedCell, ...state, draining: 'forbidden' }),
+          token: 'masked-token',
+          progress: () => {},
+          ...fakeClock()
+        }),
+        /timed out.*"draining":false.*"restartSafeSamples":0/
+      )
+    })
+  }
+})
+
+test('quiescent transitions still reject refused redials', async (t) => {
+  for (const [name, state] of [
+    ['refused phone dial', refusedPhoneDial],
+    ['refused control dial', refusedControlDial]
+  ]) {
+    await t.test(name, async () => {
+      await assert.rejects(
+        verifyCapacityTransition(config, { fetch: harness(state), token: 'masked-token' }),
+        /timed out/
+      )
+    })
+  }
+})
+
+test('restart progress prints every counter the gate reads', async () => {
+  const lines = []
+  await assert.rejects(
+    verifyCapacityTransition(
+      { ...pacedRestartConfig, timeoutMs: 0 },
+      {
+        fetch: harness({
+          ...strandedCell,
+          active: 7,
+          preAuthConnections: 1,
+          inFlightConnections: 2,
+          reservedConnectionUnits: 3,
+          enforcedConnectionUnits: 12,
+          controls: 4,
+          splices: 5,
+          pendingSplices: 6,
+          queuedBytes: 8,
+          incomingMigrations: 9,
+          outgoingMigrations: 10
+        }),
+        token: 'masked-token',
+        progress: (line) => lines.push(line),
+        ...fakeClock()
+      }
+    ),
+    /timed out/
+  )
+  assert.equal(lines.length, 1)
+  assert.deepEqual(lines[0], {
+    event: 'relay_capacity_transition_restart_progress',
+    restartSafeSamples: 0,
+    paceWindowRemainingMs: 300_000,
+    totalConnections: 7,
+    preAuthConnections: 1,
+    runtimeAvailable: true,
+    admissionState: 'migration-only',
+    draining: true,
+    runtime: {
+      totalConnections: 7,
+      preAuthConnections: 1,
+      inFlightConnections: 2,
+      reservedConnectionUnits: 3,
+      enforcedConnectionUnits: 12,
+      controls: 4,
+      splices: 5,
+      pendingSplices: 6,
+      queuedBytes: 8
+    },
+    directorHeartbeatFresh: true,
+    stranded: {
+      restartBlockingActivityLeases: 4,
+      restartBlockingActivityRequestUnits: 4,
+      restartBlockingReservedRequests: -2,
+      outgoingMigrations: 10,
+      incomingMigrations: 9
+    }
+  })
+})
+
+test('a draining cell still fails closed on malformed handshake counters', async (t) => {
+  for (const [name, state] of [
+    ['negative in-flight', { inFlightConnections: -1 }],
+    ['fractional reserved', { reservedConnectionUnits: 0.5 }],
+    ['non-numeric reserved', { reservedConnectionUnits: 'unknown' }]
+  ]) {
+    await t.test(name, async () => {
+      await assert.rejects(
+        verifyCapacityTransition(pacedRestartConfig, {
+          fetch: harness({ ...strandedCell, ...state }),
+          token: 'masked-token',
+          progress: () => {},
+          ...fakeClock()
+        }),
+        /live runtime count is invalid/
+      )
+    })
+  }
 })

@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /* Adopting daemon sessions that already exist: reattach, attach-only, inventory, tombstones, startup reconcile. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
@@ -151,6 +152,16 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           generation: 'continued'
         }
       })
+    })
+
+    // A restarted server adopts surviving sessions this way and must not reset their tab titles.
+    it('returns the session title from attach-only adoption', async () => {
+      const sessionId = 'attach-title-handoff'
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      lastSubprocess._simulateData('\x1b]0;first\x07\x1b]0;⠋ Claude\x07')
+      await new Promise((r) => setTimeout(r, 50))
+
+      await expect(adapter.attach(sessionId)).resolves.toMatchObject({ lastTitle: '⠋ Claude' })
     })
 
     it('returns plain result for new sessionId', async () => {

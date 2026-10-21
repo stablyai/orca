@@ -4,7 +4,8 @@ import type {
 } from '../../../../shared/terminal-tab-types'
 import { isTerminalLeafId, type TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { mintStablePaneId } from '@/lib/pane-manager/mint-stable-pane-id'
-import { normalizeTerminalLayoutPtyOwnership } from './terminal-layout-pty-ownership'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/terminal-layout-pty-ownership'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
 
 const EMPTY_TERMINAL_LAYOUT: TerminalLayoutSnapshot = {
   root: null,
@@ -77,16 +78,6 @@ function hasLeafPtyBinding(
   leafId: string
 ): boolean {
   return ptyIdsByLeafId ? Object.hasOwn(ptyIdsByLeafId, leafId) : false
-}
-
-export function resolveRootlessTerminalLayoutLeafId(
-  snapshot: Pick<TerminalLayoutSnapshot, 'activeLeafId' | 'ptyIdsByLeafId'>
-): string | null {
-  if (snapshot.activeLeafId && isTerminalLeafId(snapshot.activeLeafId)) {
-    return snapshot.activeLeafId
-  }
-  const boundLeafIds = Object.keys(snapshot.ptyIdsByLeafId ?? {}).filter(isTerminalLeafId)
-  return boundLeafIds.length === 1 ? boundLeafIds[0] : null
 }
 
 export function resolveTerminalLayoutActiveLeafId(opts: {
@@ -182,6 +173,7 @@ function normalizeTerminalLayoutLeafIds(snapshot: TerminalLayoutSnapshot | null 
   // selection ids must not strand focus on a missing pane.
   const remappedActiveLeafId = getRemappedLeafId(activeLeafId, rewrite) ?? firstLeafId(root)
   const remappedExpandedLeafId = getRemappedLeafId(expandedLeafId, rewrite)
+  const remappedChatLeafId = getRemappedLeafId(snapshot.chatLeafId, rewrite)
   const ptyIdsByLeafId = remapLeafRecord(snapshot.ptyIdsByLeafId, rewrite)
   const buffersByLeafId = remapLeafRecord(snapshot.buffersByLeafId, rewrite)
   const scrollbackRefsByLeafId = remapLeafRecord(snapshot.scrollbackRefsByLeafId, rewrite)
@@ -191,6 +183,7 @@ function normalizeTerminalLayoutLeafIds(snapshot: TerminalLayoutSnapshot | null 
     buffersByLeafId: _oldBuffersByLeafId,
     scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
     titlesByLeafId: _oldTitlesByLeafId,
+    chatLeafId: _oldChatLeafId,
     ...snapshotWithoutLeafRecords
   } = snapshot
   return {
@@ -203,6 +196,7 @@ function normalizeTerminalLayoutLeafIds(snapshot: TerminalLayoutSnapshot | null 
         ptyIdsByLeafId
       }),
       expandedLeafId: remappedExpandedLeafId,
+      ...(remappedChatLeafId ? { chatLeafId: remappedChatLeafId } : {}),
       ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
       ...(buffersByLeafId ? { buffersByLeafId } : {}),
       ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),

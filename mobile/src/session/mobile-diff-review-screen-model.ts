@@ -9,7 +9,7 @@ import type {
 } from './mobile-diff-review-queue'
 import type { MobileDiffReviewFileDescriptor } from './mobile-diff-review-state'
 import type { MobileHighlightedDiffLine } from './mobile-file-syntax'
-import type { MobileReviewTerminalTab } from './mobile-diff-review-rpc'
+import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 
 export type ReviewScreenState =
   | { kind: 'loading' }

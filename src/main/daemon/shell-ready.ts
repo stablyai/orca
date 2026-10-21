@@ -6,7 +6,9 @@ import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
-import { getFishCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
+import { getFishCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
+import { getFishClaudeShellFunction } from '../../shared/claude-shell-function'
+import { getFishXdgDataDirsLaunchEnv } from '../fish-xdg-data-dirs-handoff'
 import { getFishShellReadyInitCommand } from '../shell-templates'
 import {
   encodeShellStartupFeatures,
@@ -101,6 +103,18 @@ export function resolvePtyShellPath(env: Record<string, string>): string {
   return env.SHELL || process.env.SHELL || '/bin/zsh'
 }
 
+/**
+ * The shell a Unix pane asks for, before the executable fallback: the pane's own override, the
+ * host's default-shell setting, then SHELL.
+ */
+export function resolveUnixPaneShellPath(
+  env: Record<string, string>,
+  shellOverride: string | undefined,
+  defaultShell: string | undefined
+): string {
+  return shellOverride || defaultShell?.trim() || resolvePtyShellPath(env)
+}
+
 export function shellPathSupportsPtyStartupBarrier(shellPath: string): boolean {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
   // Why fish: markerless, its startup command is written before fish's reader owns
@@ -126,7 +140,12 @@ const UNWRAPPED: ShellLaunchConfig = {
  */
 export function getShellLaunchConfig(
   shellPath: string,
-  features: readonly ShellStartupFeature[]
+  features: readonly ShellStartupFeature[],
+  options?: {
+    hasStartupCommand?: boolean
+    inheritedXdgDataDirs: string | undefined
+    shellArgs?: readonly string[]
+  }
 ): ShellLaunchConfig {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
 
@@ -177,17 +196,30 @@ export function getShellLaunchConfig(
     }
   }
 
-  // Why: mirrors local-pty-shell-ready.ts; markerless fish stays unwrapped. The
-  // selection is baked into the init command, so fish needs no feature env var.
-  if (shellName === 'fish' && features.includes('ready')) {
+  // Why: mirrors local-pty-shell-ready.ts; only these need the -C init, plain fish gets
+  // the env-only handoff below. The selection is baked in, so no feature env var.
+  if (shellName === 'fish' && (features.includes('ready') || options?.hasStartupCommand)) {
     return {
       args: [
         '-l',
         '-C',
-        `${getFishShellReadyInitCommand(SHELL_READY_MARKER)}\n${getFishCodexShellLaunchPreflight()}`
+        `${getFishShellReadyInitCommand(SHELL_READY_MARKER, features.includes('ready'))}\n${getFishCodexShellLaunchPreflight() + getFishClaudeShellFunction()}`
       ],
       env: {},
-      supportsReadyMarker: true
+      supportsReadyMarker: features.includes('ready')
+    }
+  }
+
+  // Why env only: mirrors local-pty-shell-ready.ts; a plain fish pane keeps fish's own argv.
+  if (shellName === 'fish' && ensureShellReadyWrappers()) {
+    return {
+      args: null,
+      env: getFishXdgDataDirsLaunchEnv(
+        getShellReadyWrapperRoot(),
+        options?.inheritedXdgDataDirs,
+        options?.shellArgs
+      ),
+      supportsReadyMarker: false
     }
   }
 

@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createStore,
-  getRuntimeCodexHomePath,
   setupRuntimeHomeTest,
   teardownRuntimeHomeTest,
   testState
@@ -98,11 +97,14 @@ describe('host system default session migration pass preparation', () => {
   it('does not demand a full scan when the same history home is spelled differently', async () => {
     writeBaselineMarker(CUSTOM_HISTORY_HOME)
     const store = createStore(
-      createSettings({ codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} } })
+      createSettings({
+        codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} },
+        realHomeRoutable: true
+      })
     )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
-    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
+    expect(service.beginHostSystemDefaultSessionMigrationLaunch(null, { reattached: true })).toBe(
       false
     )
 
@@ -132,11 +134,14 @@ describe('host system default session migration pass preparation', () => {
   it('still demands a full scan when the history home really moves', async () => {
     writeBaselineMarker(CUSTOM_HISTORY_HOME)
     const store = createStore(
-      createSettings({ codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} } })
+      createSettings({
+        codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} },
+        realHomeRoutable: true
+      })
     )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
-    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
+    expect(service.beginHostSystemDefaultSessionMigrationLaunch(null, { reattached: true })).toBe(
       false
     )
 

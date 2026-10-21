@@ -1,7 +1,8 @@
 import type { CodexRateLimitResetOutcome, ProviderRateLimits } from '../../shared/rate-limit-types'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
 import {
-  createCodexBackendRequestSignal,
+  CODEX_BACKEND_TIMEOUT_MS,
   getCodexBackendAuthHeaders,
   type CodexBackendRequest
 } from './codex-backend-auth'
@@ -138,7 +139,7 @@ async function fetchBackendRateLimitResetCredits(
   if (options?.signal?.aborted) {
     return null
   }
-  const signal = createCodexBackendRequestSignal(options?.signal)
+  const signal = abortSignalWithTimeout(options?.signal, CODEX_BACKEND_TIMEOUT_MS)
   const headers = await getCodexBackendAuthHeaders(options, signal)
   if (!headers || signal.aborted) {
     return null
@@ -201,7 +202,7 @@ export async function consumeCodexRateLimitResetCreditFromBackend(
   if (!options.idempotencyKey.trim()) {
     throw new Error('Codex reset idempotency key is required')
   }
-  const signal = createCodexBackendRequestSignal(undefined, REDEEM_BACKEND_TIMEOUT_MS)
+  const signal = AbortSignal.timeout(REDEEM_BACKEND_TIMEOUT_MS)
   const headers = await getCodexBackendAuthHeaders(options, signal)
   if (!headers) {
     throw new Error('Codex not signed in')

@@ -1,5 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// These transport fixtures never read abandoned-launch ownership from the app store.
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 // Regression for #7329: terminal query replies must NOT sit behind the remote
 // input debounce (REMOTE_TERMINAL_INPUT_FLUSH_MS). transport.sendInputImmediate
@@ -40,11 +54,7 @@ describe('remote transport sendInputImmediate (#7329)', () => {
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
   })
 
   function terminalSendCalls(): unknown[] {
@@ -71,7 +81,7 @@ describe('remote transport sendInputImmediate (#7329)', () => {
       await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
 
       // Typed input: debounced — nothing sent before the 8ms flush.
-      expect(transport.sendInput('yes')).toBe(true)
+      expect(transport.sendInput('yes', 'driving')).toBe(true)
       expect(terminalSendCalls()).toEqual([])
 
       // Query reply (OSC 11 background color): sent immediately, no timer.
@@ -139,10 +149,10 @@ describe('remote transport sendInputImmediate (#7329)', () => {
     // A paste above CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS forces the async
     // validation path, so its bytes are captured in validationTail, not pending.
     const paste = 'p'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
-    expect(transport.sendInput(paste)).toBe(true)
+    expect(transport.sendInput(paste, 'driving')).toBe(true)
     // Immediately (validation still pending) a TUI emits a CPR reply.
     expect(transport.sendInputImmediate('\x1b[3;1R')).toBe(true)
-    expect(transport.sendInput('z')).toBe(true)
+    expect(transport.sendInput('z', 'driving')).toBe(true)
 
     // Wait until the reply is actually flushed instead of sleeping a fixed
     // interval: the reply legitimately trails the paste's async validation plus

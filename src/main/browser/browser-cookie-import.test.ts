@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CookiesGetFilter } from 'electron'
 import type * as NodeFs from 'node:fs'
 
 const {
@@ -30,7 +31,7 @@ vi.mock('./browser-session-registry', () => ({
 
 // Why mock the chokepoint: command timeouts and hidden-console handling belong to
 // runProcessSync, while this suite only needs to control the credential output.
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcessSync: runProcessSyncMock
 }))
 vi.mock('node:fs', async (importOriginal) => {
@@ -53,11 +54,11 @@ vi.mock('electron', () => ({
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
-      get: (filter: object) => Promise<unknown>
+      get: (filter: CookiesGetFilter) => Promise<unknown>
       remove: (url: string, name: string) => Promise<void>
     }
   }) => ({
-    get: (filter: object) => targetSession.cookies.get(filter),
+    get: (filter: CookiesGetFilter) => targetSession.cookies.get(filter),
     remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
     snapshotClearIdentities: async (items: { cookie: Record<string, unknown>; url: string }[]) =>
       items.map(({ cookie, url }) => ({ url, ...cookie })),

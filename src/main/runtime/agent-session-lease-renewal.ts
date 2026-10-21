@@ -1,7 +1,7 @@
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { renewAgentSessionLease } from './agent-session-lease-transitions'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 
 export type AgentSessionLeaseRenewal = {
   sessionId: string

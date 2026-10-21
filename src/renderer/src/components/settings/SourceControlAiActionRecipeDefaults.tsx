@@ -21,7 +21,7 @@ import { useRepos } from '@/store/selectors'
 import {
   summarizeReposOverridingActionRecipe,
   type SourceControlActionRecipeOverrideSummary
-} from '@/lib/source-control-launch-agent-selection'
+} from '../../../../shared/source-control-launch-agent-selection'
 import { SearchableSetting } from './SearchableSetting'
 import { getRepositorySourceControlAiActionRecipeSectionId } from './repository-settings-targets'
 import { matchesSettingsSearch } from './settings-search'

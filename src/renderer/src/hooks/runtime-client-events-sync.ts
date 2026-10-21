@@ -13,7 +13,9 @@ export type RuntimeClientEventsSyncDeps = {
   subscribe: (
     environmentId: string,
     onEvent: (event: RuntimeClientEvent) => void,
-    onError: (error: unknown) => void
+    onError: (error: unknown) => void,
+    /** Use for subscription-side recovery that runs before event delivery. */
+    isCurrent: () => boolean
   ) => Promise<RuntimeClientEventSubscriptionHandle>
   onEvent: (environmentId: string, event: RuntimeClientEvent) => void
   /** Base retry delay; doubles per consecutive failure up to retryMaxDelayMs. */
@@ -49,8 +51,12 @@ export type RuntimeClientEventsSync = {
 export function createRuntimeClientEventsSync(
   deps: RuntimeClientEventsSyncDeps
 ): RuntimeClientEventsSync {
-  const subscriptions = new Map<string, { key: string; unsubscribe: () => void }>()
-  const pending = new Map<string, { key: string; generation: number }>()
+  type SubscriptionToken = { key: string; generation: number }
+  const subscriptions = new Map<
+    string,
+    { key: string; token: SubscriptionToken; unsubscribe: () => void }
+  >()
+  const pending = new Map<string, SubscriptionToken>()
   const retryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   const consecutiveFailures = new Map<string, { key: string; count: number }>()
   const retryDelayMs = deps.retryDelayMs ?? 1_000
@@ -58,6 +64,7 @@ export function createRuntimeClientEventsSync(
   const random = deps.random ?? Math.random
   const getSubscriptionKey = deps.getSubscriptionKey ?? ((environmentId: string) => environmentId)
   let generation = 0
+  let syncInvocation = 0
 
   const clearRetryTimer = (environmentId: string): void => {
     const retryTimer = retryTimers.get(environmentId)
@@ -109,9 +116,7 @@ export function createRuntimeClientEventsSync(
 
   const stop = (): void => {
     generation += 1
-    for (const subscription of subscriptions.values()) {
-      subscription.unsubscribe()
-    }
+    const stoppedSubscriptions = [...subscriptions.values()]
     subscriptions.clear()
     pending.clear()
     for (const retryTimer of retryTimers.values()) {
@@ -119,9 +124,14 @@ export function createRuntimeClientEventsSync(
     }
     retryTimers.clear()
     consecutiveFailures.clear()
+    for (const subscription of stoppedSubscriptions) {
+      subscription.unsubscribe()
+    }
   }
 
   const sync = (): void => {
+    const syncGeneration = generation
+    const currentSyncInvocation = ++syncInvocation
     const desiredIds = new Set(deps.getDesiredEnvironmentIds())
     for (const environmentId of retryTimers.keys()) {
       if (desiredIds.has(environmentId)) {
@@ -136,14 +146,20 @@ export function createRuntimeClientEventsSync(
     }
 
     for (const [environmentId, subscription] of subscriptions) {
+      if (syncGeneration !== generation || currentSyncInvocation !== syncInvocation) {
+        return
+      }
       if (desiredIds.has(environmentId) && subscription.key === getSubscriptionKey(environmentId)) {
         continue
       }
-      subscription.unsubscribe()
       subscriptions.delete(environmentId)
+      subscription.unsubscribe()
     }
 
     for (const environmentId of desiredIds) {
+      if (syncGeneration !== generation || currentSyncInvocation !== syncInvocation) {
+        return
+      }
       const subscriptionKey = getSubscriptionKey(environmentId)
       const pendingSubscription = pending.get(environmentId)
       if (pendingSubscription && pendingSubscription.key !== subscriptionKey) {
@@ -159,13 +175,23 @@ export function createRuntimeClientEventsSync(
       const subscribeGeneration = generation
       const pendingSubscriptionToken = { key: subscriptionKey, generation: subscribeGeneration }
       pending.set(environmentId, pendingSubscriptionToken)
+      const isCurrent = (): boolean =>
+        subscribeGeneration === generation &&
+        (pending.get(environmentId) === pendingSubscriptionToken ||
+          subscriptions.get(environmentId)?.token === pendingSubscriptionToken)
       void deps
         .subscribe(
           environmentId,
-          (event) => deps.onEvent(environmentId, event),
+          (event) => {
+            // Initial frames arrive before setup settles; only the owning attempt may deliver.
+            if (isCurrent()) {
+              deps.onEvent(environmentId, event)
+            }
+          },
           (error) => {
             console.warn('[runtime-client-events] subscription error:', error)
-          }
+          },
+          isCurrent
         )
         .then((subscription) => {
           const isCurrentPending = pending.get(environmentId) === pendingSubscriptionToken
@@ -192,6 +218,7 @@ export function createRuntimeClientEventsSync(
           consecutiveFailures.delete(environmentId)
           subscriptions.set(environmentId, {
             key: subscriptionKey,
+            token: pendingSubscriptionToken,
             unsubscribe: subscription.unsubscribe
           })
         })
@@ -224,6 +251,9 @@ export function createRuntimeClientEventsSync(
         })
     }
 
+    if (syncGeneration !== generation || currentSyncInvocation !== syncInvocation) {
+      return
+    }
     for (const [environmentId, pendingSubscription] of pending) {
       if (
         desiredIds.has(environmentId) &&

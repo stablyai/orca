@@ -347,3 +347,86 @@ describe('groupRows', () => {
     expect(groups.map((g) => g.key)).toEqual(['opt_a', '__empty__'])
   })
 })
+
+it('indexes field ordering once for grouping and sorting a large project table', () => {
+  let reads = 0
+  const field: GitHubProjectField = {
+    kind: 'single-select',
+    id: 'field',
+    name: 'Status',
+    dataType: 'SINGLE_SELECT',
+    options: Array.from({ length: 1000 }, (_, i) => ({
+      get id() {
+        reads++
+        return `option-${i}`
+      },
+      name: String(i),
+      color: 'GRAY'
+    }))
+  }
+  const rows = Array.from({ length: 1000 }, (_, i) =>
+    makeRow(String(i), i, {
+      field: {
+        kind: 'single-select',
+        fieldId: 'field',
+        optionId: `option-${(i * 173) % 1000}`,
+        name: String((i * 173) % 1000),
+        color: 'GRAY'
+      }
+    })
+  )
+  const view = { ...makeView(field, { field, direction: 'ASC' }), groupByFields: [field] }
+  const table = makeTable(view, rows)
+  const sorted = sortRows(table, rows)
+  expect(reads).toBe(1000)
+  expect(
+    sorted.map((row) =>
+      Number(
+        row.fieldValuesByFieldId.field.kind === 'single-select' &&
+          row.fieldValuesByFieldId.field.name
+      )
+    )
+  ).toEqual(Array.from({ length: 1000 }, (_, i) => i))
+  reads = 0
+  const groups = groupRows(table, rows)
+  expect(reads).toBe(1000)
+  expect(groups.map((group) => group.key)).toEqual(
+    Array.from({ length: 1000 }, (_, i) => `option-${i}`)
+  )
+})
+
+it('uses the first iteration ordering and metadata when legacy field IDs repeat', () => {
+  const field: GitHubProjectField = {
+    kind: 'iteration',
+    id: 'iteration',
+    name: 'Iteration',
+    dataType: 'ITERATION',
+    iterations: [
+      { id: 'a', title: 'First', startDate: '2026-01-01', duration: 7, completed: true },
+      { id: 'b', title: 'Second', startDate: '2026-02-01', duration: 14, completed: false },
+      { id: 'a', title: 'Duplicate', startDate: '2026-03-01', duration: 21, completed: false }
+    ]
+  }
+  const rows = ['b', 'a'].map((id, index) =>
+    makeRow(id, index, {
+      iteration: {
+        kind: 'iteration',
+        fieldId: 'iteration',
+        iterationId: id,
+        title: id,
+        startDate: '2026-01-01',
+        duration: 7
+      }
+    })
+  )
+  const table = makeTable(
+    { ...makeView(field, { field, direction: 'ASC' }), groupByFields: [field] },
+    rows
+  )
+  expect(sortRows(table, rows).map((row) => row.id)).toEqual(['a', 'b'])
+  expect(groupRows(table, rows)[0].iteration).toEqual({
+    startDate: '2026-01-01',
+    duration: 7,
+    completed: true
+  })
+})

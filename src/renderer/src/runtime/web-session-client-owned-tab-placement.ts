@@ -1,3 +1,4 @@
+import { structuredLaunchSlotIds } from '@/lib/structured-agent-session-launch-persistence'
 import type { TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import {
   pickNextActiveTab,
@@ -109,9 +110,12 @@ export function reconcileClientOwnedTabPlacement(
             activeTabId: group.activeTabId ? rekeyTabId(group.activeTabId) : group.activeTabId,
             recentTabIds: (group.recentTabIds ?? []).map(rekeyTabId)
           }
+    const slots = structuredLaunchSlotIds(input.worktreeId, group.id)
     working.set(group.id, {
       group: rekeyed,
-      tabOrder: rekeyed.tabOrder.filter((tabId) => input.validUnifiedTabIds.has(tabId))
+      tabOrder: rekeyed.tabOrder.filter(
+        (tabId) => input.validUnifiedTabIds.has(tabId) || slots.has(tabId)
+      )
     })
     groupOrder.push(group.id)
   }
@@ -195,31 +199,37 @@ export function reconcileClientOwnedTabPlacement(
       continue
     }
     const { group, tabOrder } = entry
+    const realOrder = tabOrder.filter((id) => input.validUnifiedTabIds.has(id))
     const intentActive =
-      input.intentTabId && tabOrder.includes(input.intentTabId) ? input.intentTabId : null
+      input.intentTabId && realOrder.includes(input.intentTabId) ? input.intentTabId : null
     const displacedActive =
-      group.activeTabId && !tabOrder.includes(group.activeTabId) ? group.activeTabId : null
+      group.activeTabId && !realOrder.includes(group.activeTabId) ? group.activeTabId : null
     // Why: a host-side close (or a placement move away) must land the user where a local
     // close would (MRU, then neighbor), picking only among tabs surviving this snapshot.
     const repairOrder = displacedActive
-      ? group.tabOrder.filter((tabId) => tabOrder.includes(tabId) || tabId === displacedActive)
+      ? group.tabOrder.filter((tabId) => realOrder.includes(tabId) || tabId === displacedActive)
       : null
     const activeTabId =
       intentActive ??
       (displacedActive && repairOrder
         ? (pickNextActiveTab(repairOrder, group.recentTabIds, displacedActive) ??
-          tabOrder[0] ??
+          realOrder[0] ??
           null)
-        : (group.activeTabId ?? tabOrder[0] ?? null))
+        : (group.activeTabId ?? realOrder[0] ?? null))
     const validActiveTabId =
-      activeTabId && tabOrder.includes(activeTabId) ? activeTabId : (tabOrder[0] ?? null)
+      activeTabId && realOrder.includes(activeTabId) ? activeTabId : (realOrder[0] ?? null)
+    const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, realOrder)
+    // Why: only explicit intent or a close/move successor is a visit; retaining the active tab or
+    // structurally filling an empty group must not reorder MRU.
+    const recordsVisit = validActiveTabId === intentActive || displacedActive !== null
     reconciled.push({
       ...group,
       tabOrder,
       activeTabId: validActiveTabId,
-      recentTabIds: validActiveTabId
-        ? pushRecentTabId(sanitizeRecentTabIds(group.recentTabIds, tabOrder), validActiveTabId)
-        : []
+      recentTabIds:
+        validActiveTabId && recordsVisit
+          ? pushRecentTabId(sanitizedRecent, validActiveTabId)
+          : sanitizedRecent
     })
   }
 

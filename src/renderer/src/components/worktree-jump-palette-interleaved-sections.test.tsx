@@ -314,7 +314,7 @@ function perfTabsPaletteProps(count: number): Partial<AppState> {
 
 /** Each primary row paired with the section header rendered above it, in DOM order. */
 function getPrimaryRowsBySectionHeader(): { header: string; rowId: string }[] {
-  const headerLabels = new Set(['Open Tabs', 'Worktrees'])
+  const headerLabels = new Set(['Open Tabs', 'Workspaces'])
   const pairs: { header: string; rowId: string }[] = []
   let header = ''
   for (const node of testContainer.querySelectorAll<HTMLElement>(
@@ -366,7 +366,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     expect(rows.filter((row) => isWorkspaceTabItemId(row.rowId))).toHaveLength(8)
     expect(rows.filter((row) => isWorktreeItemId(row.rowId))).toHaveLength(5)
     for (const { header, rowId } of rows) {
-      expect(header).toBe(isWorkspaceTabItemId(rowId) ? 'Open Tabs' : 'Worktrees')
+      expect(header).toBe(isWorkspaceTabItemId(rowId) ? 'Open Tabs' : 'Workspaces')
     }
   })
 
@@ -420,7 +420,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const rows = getPrimaryRowsBySectionHeader()
     expect(rows).toEqual([{ header: 'Open Tabs', rowId: workspaceTabItemId('wt-tabs', 'tab-0') }])
     expect(testContainer.textContent).toContain('Open Tabs')
-    expect(testContainer.textContent).not.toContain('Worktrees')
+    expect(testContainer.textContent).not.toContain('Workspaces')
   })
 
   it('puts the tab title on the left and the worktree name in the badge rail', async () => {
@@ -448,14 +448,19 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const title = row?.querySelector('[data-slot="palette-open-tab-title"]')
     const worktree = row?.querySelector('[data-slot="palette-open-tab-worktree"]')
     expect(title?.textContent).toBe(longTitle)
-    expect(title?.classList.contains('flex-auto')).toBe(true)
+    expect(title?.classList.contains('min-w-0')).toBe(true)
+    expect(title?.classList.contains('shrink-0')).toBe(false)
     expect(worktree?.textContent).toBe('user-support')
+    const locationChip = worktree?.closest('[data-slot="palette-location-chip"]')
+    expect(locationChip).not.toBeNull()
+    expect(locationChip?.parentElement?.classList.contains('max-w-[40%]')).toBe(true)
+    expect(locationChip?.parentElement?.classList.contains('min-w-0')).toBe(true)
     expect(worktree?.compareDocumentPosition(title ?? document.createElement('span'))).toBe(
       Node.DOCUMENT_POSITION_PRECEDING
     )
   })
 
-  it('tags the worktree rail label as a branch when the visible name is the branch', async () => {
+  it('shows the branch in the location chip when the workspace display name is empty', async () => {
     await renderPalette({
       worktreesByRepo: {
         'repo-1': [makeWorktree('wt-tabs', '', { displayName: '' })]

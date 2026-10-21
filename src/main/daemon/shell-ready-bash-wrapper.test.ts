@@ -2,8 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as DaemonBashRcfileModule from './daemon-bash-shell-ready-rcfile'
+import { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready-bash-rcfile'
+import { getDaemonBashShellReadyRcfileContent } from './daemon-bash-shell-ready-rcfile'
+import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
 import {
   OVERLAY_ONLY_FEATURES,
   STARTUP_COMMAND_FEATURES
@@ -55,6 +58,45 @@ describePosix('daemon shell-ready bash wrapper', () => {
     }
     rmSync(userDataPath, { recursive: true, force: true })
     vi.restoreAllMocks()
+  })
+
+  itWithBash.each([
+    ['daemon', getDaemonBashShellReadyRcfileContent],
+    ['local', getBashShellReadyRcfileContent]
+  ] as const)('keeps this app CLI first after %s Bash profiles reset PATH', (_lane, content) => {
+    const cliBin = join(userDataPath, 'cli', 'bin')
+    const ambientBin = join(userDataPath, 'ambient-bin')
+    mkdirSync(cliBin, { recursive: true })
+    mkdirSync(ambientBin)
+    for (const bin of [cliBin, ambientBin]) {
+      const launcher = join(bin, 'orca-dev')
+      writeFileSync(launcher, '#!/bin/sh\nexit 0\n')
+      chmodSync(launcher, 0o755)
+    }
+    const env: Record<string, string> = {
+      HOME: userDataPath,
+      USERPROFILE: userDataPath,
+      PATH: `${ambientBin}:/usr/bin:/bin`,
+      ORCA_BACKGROUND_LAUNCH: '1'
+    }
+    const expectedLauncher = prependOrcaCliDirToChildPath(env, {
+      isPackaged: false,
+      userDataPath
+    })
+    writeFileSync(
+      join(userDataPath, '.bash_profile'),
+      'export PATH="$HOME/ambient-bin:/usr/bin:/bin:$HOME/cli/bin"\n'
+    )
+    const rcfile = join(userDataPath, 'cli-path-rcfile')
+    writeFileSync(rcfile, content())
+    const result = spawnSync('bash', ['-c', '. "$1"; command -v orca-dev', 'bash', rcfile], {
+      env,
+      encoding: 'utf8',
+      timeout: 5000
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout.split('\x1b]133;C\x07').join('').trim()).toBe(expectedLauncher)
   })
 
   // Why: regression guard for issue #2422 — bash wrapper must emit OSC 133 C/D so SSH sessions clear stale 'working' agent rows.

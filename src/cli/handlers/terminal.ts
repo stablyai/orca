@@ -4,6 +4,7 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
+  RuntimeTerminalSetPaneTitle,
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
   RuntimeTerminalWait
@@ -16,6 +17,7 @@ import {
   formatTerminalList,
   formatTerminalRead,
   formatTerminalRename,
+  formatTerminalSetPaneTitle,
   formatTerminalShow,
   formatTerminalSplit,
   formatTerminalWait,
@@ -24,7 +26,8 @@ import {
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
-  getRequiredStringFlag
+  getRequiredStringFlag,
+  getRequiredStringFlagAllowingEmpty
 } from '../flags'
 import {
   annotateOmittedHostScope,
@@ -32,11 +35,17 @@ import {
 } from '../omitted-host-scope-selectors'
 import { RuntimeClientError } from '../runtime-client'
 import {
+  isSupportedWindowsShellOverride,
+  listSupportedWindowsShellOverrides
+} from '../../shared/windows-terminal-shell'
+import { TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
   getBrowserWorktreeSelector,
   getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
   getTerminalHandle
 } from '../selectors'
+import { revealPairedTerminalOnLocalDesktop } from '../paired-terminal-desktop-reveal'
 import { terminalCloseHandler } from './terminal-close'
 import { terminalSendHandler } from './terminal-send'
 
@@ -46,10 +55,14 @@ import { terminalSendHandler } from './terminal-send'
 const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
 
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
+  const terminal = await getTerminalHandle(flags, cwd, client)
   const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
-    terminal: await getTerminalHandle(flags, cwd, client),
+    terminal,
     navigation: 'host'
   })
+  if (client.isRemote && result.result.focus.navigated === false) {
+    result.result.focus.navigated = await revealPairedTerminalOnLocalDesktop(client, terminal)
+  }
   printResult(result, json, formatTerminalFocus)
 }
 
@@ -64,7 +77,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
         includeVisualLayouts: !json || flags.has('include-visual-layouts')
       }
     )
-    await annotateOmittedHostScope(client, result.result)
+    await annotateOmittedHostScope(result.result)
     printResult(result, json, formatTerminalList)
   },
   'terminal show': async ({ flags, client, cwd, json }) => {
@@ -142,6 +155,14 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, formatTerminalRename)
   },
+  'terminal set-pane-title': async ({ flags, client, cwd, json }) => {
+    const title = getRequiredStringFlagAllowingEmpty(flags, 'title')
+    const result = await client.call<{ paneTitle: RuntimeTerminalSetPaneTitle }>(
+      'terminal.setPaneTitle',
+      { terminal: await getTerminalHandle(flags, cwd, client), title }
+    )
+    printResult(result, json, formatTerminalSetPaneTitle)
+  },
   'terminal create': async ({ flags, client, cwd, json }) => {
     if (client.isRemote && !flags.has('worktree')) {
       throw new RuntimeClientError(
@@ -153,15 +174,46 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     const useRendererBackedInteractiveTerminal =
       !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
     const focus = flags.get('focus') === true
+    const shell = getOptionalStringFlag(flags, 'shell')
+    if (shell !== undefined) {
+      if (!isSupportedWindowsShellOverride(shell)) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          `--shell must be one of: ${listSupportedWindowsShellOverrides().join(', ')}`
+        )
+      }
+      // Why refused rather than sent hopefully: an older host strips the unknown param and hands
+      // back a healthy terminal running its DEFAULT shell. Nothing in that reply says the shell
+      // was ignored, so a caller that wanted cmd would drive a PowerShell session believing it won.
+      const status = await client.getCliStatus()
+      // An unreachable host reports no capabilities at all; that is not evidence it lacks --shell.
+      if (!status.result.runtime.reachable) {
+        throw new RuntimeClientError(
+          'runtime_unavailable',
+          'Orca could not verify --shell support on the execution host, so no terminal was created. Wait for the execution host to become reachable and retry.'
+        )
+      }
+      if (
+        status.result.runtime.capabilities?.includes(
+          TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY
+        ) !== true
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'This Orca host does not support --shell, and would silently create a terminal running its default shell instead. No terminal was created; update Orca on the execution host.'
+        )
+      }
+    }
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
       worktree: await getBrowserWorktreeSelector(flags, cwd, client),
       command,
+      ...(shell !== undefined ? { shell } : {}),
       title: getOptionalStringFlag(flags, 'title'),
-      // Why: interactive local agent TUIs need the renderer-backed terminal
-      // path for browser-side features, but CLI creates must stay backgrounded
-      // unless the caller explicitly asks for focus.
       focus,
       ...(focus ? { presentation: 'focused' } : {}),
+      // Compat: hosts before v1.4.211 (#22384) leave a background-started agent's startup queries
+      // unanswered, so they need this to start it in the window; newer hosts ignore it. Delete
+      // once the minimum supported host version is v1.4.211 or later.
       ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
     })
     printResult(result, json, formatTerminalCreate)

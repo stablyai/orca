@@ -130,15 +130,27 @@ describe('client session-tab selection', () => {
     expect(store.project(initial, 'device-a').activeTabId).toBe('terminal-a::leaf-a')
   })
 
-  it('does not expose host focus when initializing a new paired device', () => {
+  it('lands a device that has not picked a tab on the host focus', () => {
     const store = new ClientSessionTabSelectionStore()
-    const hostFocusedBrowser = snapshot('browser-unified')
 
-    const projected = store.project(hostFocusedBrowser, 'new-device')
+    const projected = store.project(snapshot('browser-unified'), 'new-device')
 
-    expect(projected.activeTabId).toBe('terminal-a::leaf-a')
-    expect(projected.activeGroupId).toBe('group-left')
-    expect(projected.tabs.find((tab) => tab.isActive)?.id).toBe('terminal-a::leaf-a')
+    expect(projected.activeTabId).toBe('browser-unified')
+    expect(projected.activeGroupId).toBe('group-right')
+    expect(projected.tabs.find((tab) => tab.isActive)?.id).toBe('browser-unified')
+    // A later open follows where the host moved, not the first projection.
+    expect(store.project(snapshot('terminal-a::leaf-b'), 'new-device').activeTabId).toBe(
+      'terminal-a::leaf-b'
+    )
+  })
+
+  it('keeps a device on its own pick when the host moves', () => {
+    const store = new ClientSessionTabSelectionStore()
+    store.activate(snapshot(), 'device-a', 'browser-unified')
+
+    expect(store.project(snapshot('terminal-a::leaf-b'), 'device-a').activeTabId).toBe(
+      'browser-unified'
+    )
   })
 
   it('persists activations and restores them across a store rebuild (host restart)', () => {

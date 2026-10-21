@@ -59,19 +59,37 @@ vi.mock('@/store/slices/worktree-helpers', () => ({
   findWorktreeById: (_worktrees: unknown, id: string) =>
     worktreeLookup.value.find((worktree) => worktree.id === id) ?? null
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: (settings: unknown) => settings
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const getRuntimeTargetForFileOwner = (
+    _state: unknown,
+    _worktreeId: string | null | undefined,
+    owner: string | null | undefined
+  ) => (owner ? { kind: 'environment' as const, environmentId: owner } : { kind: 'local' as const })
+  return {
+    FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
+    getRuntimeTargetForFileOwner,
+    requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
+    getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
+      getRuntimeTargetForFileOwner(state, worktreeId, undefined)
+  }
+})
+vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+  useFileOwnerRuntimeTarget: (_worktreeId: unknown, runtimeEnvironmentId?: string | null) =>
+    runtimeEnvironmentId
+      ? { kind: 'environment', environmentId: runtimeEnvironmentId }
+      : { kind: 'local' }
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
-  statRuntimePath: statRuntimePathMock
-}))
+vi.mock('@/runtime/runtime-file-metadata-client', () => ({ statRuntimePath: statRuntimePathMock }))
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: (worktreeId: string) => targetConnectionOwners.get(worktreeId)
 }))
 vi.mock('@/lib/connection-owner-resolution', () => ({
   createConnectionIdForFileSelector: () => () => connectionOwner.value
 }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
+  translate: (_key: string, fallback: string) => fallback
+}))
 vi.mock('./useLocalImageSrc', () => ({ useLocalImageSrc: (src?: string) => src }))
 vi.mock('./MermaidBlock', () => ({ default: () => null }))
 vi.mock('./CodeBlockCopyButton', () => ({

@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type {
   WorktreeCreationPhase,
@@ -25,7 +26,6 @@ export function buildWorktreeCreationStartupOpt(
     ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
     // Why: view-mode only. An argv-prefill plan sets no draftPrompt, so this is
     // the sole signal that this launch starts with unsent context in the TUI.
-    ...(request.launchDraftPrompt ? { launchDraftText: request.launchDraftPrompt } : {}),
     ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
     // Why: command-code shows its prompt in the tab status before the first
     // hook fires, so the prompt is threaded through here.
@@ -40,11 +40,18 @@ export function getWorktreeCreationIndeterminate(request: WorktreeCreationReques
   if (request.worktreeCreateProgressMode) {
     return request.worktreeCreateProgressMode === 'indeterminate'
   }
-  return getActiveRuntimeTarget(useAppStore.getState().settings).kind !== 'local'
+  // Why: progress follows the host the workspace is created on, not the focused one.
+  const target = request.executionHostId
+    ? ipcOrRuntimeTargetForHostId(request.executionHostId)
+    : runtimeTargetForRepoOwner(useAppStore.getState(), request.repoId)
+  return target?.kind !== 'local'
 }
 
 export function getInitialWorktreeCreationPhase(
   request: WorktreeCreationRequest
 ): WorktreeCreationPhase {
+  if (request.hookPreparation) {
+    return 'preparing'
+  }
   return request.ephemeralVmRecipe && !request.ephemeralVmRuntimeId ? 'provisioning-vm' : 'fetching'
 }

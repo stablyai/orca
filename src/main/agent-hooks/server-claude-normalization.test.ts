@@ -146,21 +146,6 @@ describe('Claude hook normalization', () => {
     expect(result?.payload.toolInput).toBeUndefined()
   })
 
-  it('PostToolUse for TaskUpdate does not produce a misleading input preview', () => {
-    // Why: TaskUpdate's tool_input has no meaningful preview (rendering "3" is confusing), so the allowlist leaves toolInput undefined.
-    const result = _internals.normalizeHookPayload(
-      'claude',
-      buildBody({
-        hook_event_name: 'PostToolUse',
-        tool_name: 'TaskUpdate',
-        tool_input: { task_id: '3', status: 'in_progress' }
-      }),
-      'production'
-    )
-    expect(result?.payload.toolName).toBe('TaskUpdate')
-    expect(result?.payload.toolInput).toBeUndefined()
-  })
-
   it('PostToolUseFailure clears stale tool fields until the next PreToolUse', () => {
     _internals.normalizeHookPayload(
       'claude',

@@ -1,9 +1,10 @@
 import React from 'react'
 import { ChevronDown, MessageSquare, Minus, Plus, Trash, Undo2 } from 'lucide-react'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
 import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { ActionButton } from './action-button'
@@ -63,14 +64,13 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   connectionId?: string | null
   onOpen: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   onStage: (filePath: string) => Promise<void>
-  onUnstage: (filePath: string) => Promise<void>
+  onUnstage: (filePath: string, oldPath?: string) => Promise<void>
   onDiscard: (entry: GitStatusEntry) => void
   commentCount: number
   showPathHint?: boolean
   // When set, the row is a dirty submodule: clicking toggles lazy expansion instead of opening an uninformative gitlink diff.
   submoduleExpansion?: { isExpanded: boolean; onToggle: () => void }
 }): React.JSX.Element {
-  const FileIcon = getFileTypeIcon(entry.path)
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -91,6 +91,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
       relativePath={entry.path}
+      hasWorkingTreeFile={entry.status !== 'deleted'}
       connectionId={connectionId}
       onView={() => onOpen(entry)}
       onRevealInExplorer={onRevealInExplorer}
@@ -122,6 +123,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           }
           const absolutePath = joinPath(worktreePath, entry.path)
           e.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, absolutePath)
+          writeWorkspaceFileDragSourceForWorkspace(e.dataTransfer, currentWorktreeId)
           e.dataTransfer.effectAllowed = 'copy'
         }}
         onClick={(e) => {
@@ -154,7 +156,8 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             )}
           />
         )}
-        {React.createElement(FileIcon, {
+        {React.createElement(FileTypeIcon, {
+          filePath: entry.path,
           className: 'size-3.5 shrink-0',
           style: { color: STATUS_COLORS[entry.status] }
         })}
@@ -247,7 +250,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               title={translate('auto.components.right.sidebar.SourceControl.df5040e3c3', 'Unstage')}
               onClick={(event) => {
                 event.stopPropagation()
-                void onUnstage(entry.path)
+                void onUnstage(entry.path, entry.status === 'renamed' ? entry.oldPath : undefined)
               }}
             />
           )}

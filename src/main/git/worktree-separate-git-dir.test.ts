@@ -177,6 +177,42 @@ describe('git worktree separate git dir paths', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32').each([
+    ['bare', 'bare'],
+    ['separate-git-dir', 'separate-git-dir']
+  ] as const)(
+    'leaves the main entry unchanged when a %s repo is scanned via its linked worktree',
+    async (_label, kind) => {
+      // Here the main entry IS the git-common-dir, so only the repo path's own git dir shows it is
+      // a linked worktree; relabelling would give two rows the linked folder's path (#23631).
+      let mainPath: string
+      let repoForAdd: string
+      if (kind === 'bare') {
+        const root = await mkdtemp(path.join(tmpdir(), 'orca-bare-linked-'))
+        tempRoots.push(root)
+        const sourcePath = await createCommittedRepo(root, 'source')
+        mainPath = path.join(root, 'project.git')
+        execFileSync('git', ['clone', '--bare', '--quiet', sourcePath, mainPath])
+        mainPath = await realpath(mainPath)
+        repoForAdd = mainPath
+      } else {
+        const { gitDirPath, worktreePath } = await createSeparateGitDirRepo()
+        mainPath = gitDirPath
+        repoForAdd = worktreePath
+      }
+      const linkedWorktreePath = path.join(path.dirname(mainPath), 'linked')
+      git(repoForAdd, ['worktree', 'add', '--quiet', linkedWorktreePath, '-b', 'feature'])
+      const resolvedLinked = await realpath(linkedWorktreePath)
+
+      const worktrees = await listWorktrees(resolvedLinked)
+
+      expect(worktrees.find((worktree) => worktree.isMainWorktree)?.path).toBe(mainPath)
+      expect(worktrees.filter((worktree) => worktree.path === resolvedLinked)).toEqual([
+        expect.objectContaining({ branch: 'refs/heads/feature', isMainWorktree: false })
+      ])
+    }
+  )
+
   it.skipIf(process.platform === 'win32')('does not throw for a bare repo', async () => {
     const repoPath = await createBareRepo()
 

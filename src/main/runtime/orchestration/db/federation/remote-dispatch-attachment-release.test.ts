@@ -16,6 +16,7 @@ describe('the remote attachment release guard', () => {
 
   function settledAttachment(dispatchId: string): void {
     db.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId,
       taskId: `task_${dispatchId}`,
       homePeerFingerprint: 'home-peer',

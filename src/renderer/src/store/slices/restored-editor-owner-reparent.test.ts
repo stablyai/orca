@@ -5,11 +5,12 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { useAppStore } from '@/store'
 import { buildEditorSessionData } from '@/lib/workspace-session'
+import { useEditorExternalWatch } from '@/hooks/useEditorExternalWatch'
 import {
-  createExternalWatchEventHandler,
-  getEditorExternalWatchTargets,
-  useEditorExternalWatch
-} from '@/hooks/useEditorExternalWatch'
+  buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
+  EXTERNAL_MUTATION_DEBOUNCE_MS
+} from '@/hooks/editor-external-watch-event-reconciliation'
+import { selectEditorExternalWatchTargets as getEditorExternalWatchTargets } from '@/hooks/editor-external-watch-targets'
 import {
   captureEditorFileOperationProvenance,
   getEditorFileOperationContext
@@ -733,7 +734,7 @@ describe('restored editor owner reparent', () => {
       worktreePath: '/repo-b',
       events: [{ kind: 'delete', absolutePath: FILE_PATH }]
     })
-    vi.advanceTimersByTime(100)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
     expect(
       useAppStore.getState().openFiles.find((file) => file.id === result.fileId)?.externalMutation
     ).toBe('deleted')

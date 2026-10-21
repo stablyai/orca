@@ -164,6 +164,19 @@ describe('buildHiddenDirExcludeGlobs', () => {
 })
 
 describe('buildRgArgsForQuickOpen', () => {
+  it.each([
+    { searchRoot: '.', excludePathPrefixes: [], forceSlashSeparator: false },
+    {
+      searchRoot: '/root',
+      excludePathPrefixes: ['packages/app', 'feature[1]'],
+      forceSlashSeparator: true
+    }
+  ])('broadens only VCS ignore handling for $searchRoot', (options) => {
+    const { primary, ignoredPass } = buildRgArgsForQuickOpen(options)
+    expect(ignoredPass).toContain('--no-ignore-vcs')
+    expect(ignoredPass.filter((arg) => arg !== '--no-ignore-vcs')).toEqual(primary)
+  })
+
   it('primary pass includes --files, --hidden, hidden-dir excludes, no --follow', () => {
     const { primary } = buildRgArgsForQuickOpen({
       searchRoot: '/root',
@@ -212,6 +225,18 @@ describe('buildRgArgsForQuickOpen', () => {
   })
 })
 
+it('pins both Quick Open passes to config-independent NUL output', () => {
+  const { primary, ignoredPass } = buildRgArgsForQuickOpen({
+    searchRoot: '.',
+    excludePathPrefixes: [],
+    forceSlashSeparator: true
+  })
+  for (const args of [primary, ignoredPass]) {
+    expect(args).toContain('--no-config')
+    expect(args).toContain('--null')
+  }
+})
+
 describe('normalizeQuickOpenRgLine', () => {
   it('strips absolute root prefix', () => {
     expect(
@@ -253,9 +278,9 @@ describe('normalizeQuickOpenRgLine', () => {
     expect(normalizeQuickOpenRgLine('..', { kind: 'cwd-relative' })).toBeNull()
   })
 
-  it('strips CRLF', () => {
+  it('preserves a trailing carriage return in a NUL-delimited filename', () => {
     expect(normalizeQuickOpenRgLine('/root/a.ts\r', { kind: 'absolute', rootPath: '/root' })).toBe(
-      'a.ts'
+      'a.ts\r'
     )
   })
 

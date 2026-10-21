@@ -23,11 +23,8 @@ function primeGitExecWithDefaultBranch(defaultRef = 'refs/remotes/origin/main'):
     if (args[0] === 'remote') {
       return { stdout: 'git@bitbucket.org:team/repo.git\n', stderr: '' }
     }
-    if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
-      return { stdout: `${defaultRef}\n`, stderr: '' }
-    }
-    if (args[0] === 'rev-parse' && args[1] === '--verify' && args.includes(defaultRef)) {
-      return { stdout: 'default-oid\n', stderr: '' }
+    if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+      return { stdout: `refs/remotes/origin/HEAD\0${defaultRef}\n`, stderr: '' }
     }
     throw new Error(`unexpected git call: ${args.join(' ')}`)
   })

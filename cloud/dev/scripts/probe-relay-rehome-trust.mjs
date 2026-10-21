@@ -1,10 +1,13 @@
 import { pathToFileURL } from 'node:url'
 import { fetchAdminOnceMore } from './relay-admin-transient-retry.mjs'
 
-// Every general cell that carries the rehome identity: the sixteen US cells and the
-// three asia-east2 cells that drain mis-homed hosts back the other way.
-const PRODUCTION_CELL = /^production-gce-c(?:7|8|9|10|13|14|15|16|19|20|21|22|23|24|25|26|27|28|29)$/
+// Every cell that carries the rehome identity: the eighteen US cells and the
+// seven asia-east2 cells that drain mis-homed hosts back the other way.
+const PRODUCTION_CELL =
+  /^production-gce-c(?:7|8|9|10|13|14|15|16|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35)$/
 const DIRECTOR_ORIGIN = 'https://relay.onorca.dev'
+const SOURCE_TRANSIENT_RETRIES = 12
+const SOURCE_TRANSIENT_RETRY_DELAY_MS = 10_000
 
 export function parseRehomeTrustProbeArguments(argv, environment = process.env) {
   const values = {}
@@ -38,7 +41,7 @@ export function parseRehomeTrustProbeArguments(argv, environment = process.env) 
 
 export async function probeRehomeTrust(config, dependencies = {}) {
   const fetchImpl = dependencies.fetch ?? fetch
-  const response = await fetchAdminOnceMore(
+  const request = () => fetchAdminOnceMore(
     fetchImpl,
     `${config.directorOrigin}/v1/admin/regional-rehome-trust-probe`,
     {
@@ -55,9 +58,34 @@ export async function probeRehomeTrust(config, dependencies = {}) {
     },
     { wait: dependencies.wait }
   )
-  const body = await response.json().catch(() => ({}))
+  const wait = dependencies.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
+  let response = await request()
+  let body = await response.json().catch(() => ({}))
+  // The director wraps source HTTP failures in 409; retry only explicit transient statuses. The
+  // load balancer can answer 503 for a minute after a fresh instance is ready (c10, 2026-10-20).
+  for (
+    let retry = 0;
+    retry < SOURCE_TRANSIENT_RETRIES &&
+    response.status === 409 &&
+    /^regional_rehome_trust_probe_source_(500|502|503|504)$/.test(body?.error ?? '');
+    retry++
+  ) {
+    await wait(SOURCE_TRANSIENT_RETRY_DELAY_MS)
+    response = await request()
+    body = await response.json().catch(() => ({}))
+  }
   if (!response.ok) {
-    throw new Error(`application-mediated rehome trust probe returned ${response.status}`)
+    const safeReasons = new Set([
+      'invalid_token', 'director_only', 'invalid_request',
+      'regional_rehome_trust_not_configured',
+      'regional_rehome_trust_probe_source_unavailable',
+      'regional_rehome_trust_probe_source_invalid_response',
+      'regional_rehome_trust_probe_not_proven',
+      ...[400, 401, 403, 404, 409, 429, 500, 502, 503, 504]
+        .map((status) => `regional_rehome_trust_probe_source_${status}`)
+    ])
+    const reason = safeReasons.has(body?.error) ? body.error : 'unrecognized_error'
+    throw new Error(`application-mediated rehome trust probe returned ${response.status}: ${reason}`)
   }
   if (
     body.v !== 1 ||

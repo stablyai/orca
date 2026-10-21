@@ -8,14 +8,14 @@ const tailByTomlPath = new Map<string, Promise<void>>()
 const heldKeys = new AsyncLocalStorage<ReadonlySet<string>>()
 
 /**
- * Serializes everything that mutates one Codex `config.toml` — hook installs,
- * trust grants, and user-hook rebases — as a single lane per file.
+ * Serializes Orca's own multi-step mutations of one Codex `config.toml` — hook
+ * installs and their trust fallbacks, trust moves, and project trust — as a
+ * single lane per file. A Codex trust session holds no lane: Codex writes its
+ * own records.
  *
  * Why (#16441): these used to block the main thread, so two of them could
  * never be in flight at once. Now that they await, a second run could write
- * the file between another run's capture and its restore-on-failure, undoing
- * a mutation that run never made and resurrecting trust it deliberately
- * removed.
+ * the file between another run's read and its dependent write.
  */
 export function runExclusivelyForCodexTrustConfig<T>(
   tomlPath: string,

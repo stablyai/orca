@@ -145,8 +145,8 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     if (!enabled) {
       return
     }
-    return window.api.dashboard.onAckAgent?.((paneKey) => {
-      useAppStore.getState().acknowledgeAgents([paneKey])
+    return window.api.dashboard.onAckAgent?.((paneKey, intent) => {
+      useAppStore.getState().acknowledgeAgents([paneKey], undefined, intent)
     })
   }, [enabled])
 

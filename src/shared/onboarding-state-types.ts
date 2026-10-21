@@ -9,6 +9,8 @@ export type OnboardingChecklistState = {
   ranFirstAgent: boolean
   ranSecondAgentOnSameTask: boolean
   triedCmdJ: boolean
+  // Persisted field, also a telemetry enum member in ./telemetry-onboarding-foundation-schemas;
+  // renaming it would orphan saved state. Rule exemption: config/oxlint-anti-slop.json.
   shapedSidebar: boolean
   reviewedDiff: boolean
   openedPr: boolean

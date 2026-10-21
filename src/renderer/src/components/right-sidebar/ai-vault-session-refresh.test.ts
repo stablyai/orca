@@ -4,7 +4,11 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultListArgs,
+  AiVaultListResult,
+  AiVaultSession
+} from '../../../../shared/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import {
@@ -13,6 +17,7 @@ import {
   useAiVaultSessionRefresh
 } from './ai-vault-session-refresh'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT, type AiVaultSessionLimit } from './ai-vault-session-limit'
+import { withNonSecureContextCrypto } from '@/lib/non-secure-context-crypto-stub'
 
 const EMPTY_RESULT: AiVaultListResult = {
   sessions: [],
@@ -22,8 +27,8 @@ const EMPTY_RESULT: AiVaultListResult = {
 
 const THROTTLE_MS = 30_000
 
-const listSessionsMock = vi.fn<(args: unknown) => Promise<AiVaultListResult>>()
-const cancelListSessionsMock = vi.fn<() => Promise<void>>()
+const listSessionsMock = vi.fn<(args: AiVaultListArgs) => Promise<AiVaultListResult>>()
+const cancelListSessionsMock = vi.fn<(args: { requestToken: string }) => Promise<void>>()
 
 // Captures the hook's subscription to the main-process window-focus push.
 let windowFocusCallback: (() => void) | null = null
@@ -257,6 +262,19 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(lastCallArgs()).toMatchObject({ limit: 1000, force: false })
   })
 
+  // A deeper scan keeps every scoped row, so reusing it would ignore the lowered depth.
+  it('rescans a scoped view at a lowered depth instead of reusing the deeper scan', async () => {
+    listSessionsMock.mockResolvedValue({ ...EMPTY_RESULT, sessions: [makeVaultSession(1)] })
+    await renderHook(['/repo'], 'ssh:dev-box', 'unlimited')
+    await flushMicrotasks()
+
+    await rerenderHook(['/repo'], 'ssh:dev-box', 250)
+    await flushMicrotasks()
+
+    expect(listSessionsMock).toHaveBeenCalledTimes(2)
+    expect(lastCallArgs()).toMatchObject({ limit: 250, scopePaths: ['/repo'] })
+  })
+
   it('reuses a loaded larger depth when lowering and raising within its coverage', async () => {
     const loaded = {
       ...EMPTY_RESULT,
@@ -358,16 +376,6 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
 
     await fireWindowFocused()
 
-    expect(listSessionsMock).toHaveBeenCalledTimes(2)
-    expect(lastCallArgs()).toMatchObject({ force: false })
-  })
-
-  it('does not force transcript scans for refocus events', async () => {
-    await renderHook()
-    await flushMicrotasks()
-    expect(listSessionsMock).toHaveBeenCalledTimes(1)
-
-    await fireWindowFocused()
     expect(listSessionsMock).toHaveBeenCalledTimes(2)
     expect(lastCallArgs()).toMatchObject({ force: false })
   })
@@ -669,6 +677,49 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(lastCallArgs()).toMatchObject({ force: true })
   })
 
+  it('replaces a stuck scan on manual Refresh without cancelling an automatic rescan', async () => {
+    let resolveInitial: ((result: AiVaultListResult) => void) | null = null
+    let resolveReplacement: ((result: AiVaultListResult) => void) | null = null
+    listSessionsMock
+      .mockImplementationOnce(
+        () => new Promise<AiVaultListResult>((resolve) => (resolveInitial = resolve))
+      )
+      .mockImplementationOnce(
+        () => new Promise<AiVaultListResult>((resolve) => (resolveReplacement = resolve))
+      )
+    await renderHook()
+    expect(latest?.loading).toBe(true)
+
+    await setAgentStatuses({ 'pane-1': makeAgentEntry('new-session') })
+    expect(listSessionsMock).toHaveBeenCalledTimes(1)
+    expect(cancelListSessionsMock).not.toHaveBeenCalled()
+
+    cancelListSessionsMock.mockImplementationOnce(async () => {
+      resolveInitial?.({
+        ...EMPTY_RESULT,
+        sessions: [makeVaultSession(1)],
+        cancelled: true
+      })
+    })
+    await act(async () => {
+      await latest?.refresh({ force: true })
+    })
+    await flushMicrotasks()
+
+    expect(cancelListSessionsMock).toHaveBeenCalledExactlyOnceWith({
+      requestToken: listSessionsMock.mock.calls[0]?.[0].requestToken
+    })
+    expect(listSessionsMock).toHaveBeenCalledTimes(2)
+    expect(listSessionsMock.mock.calls[1]?.[0]).toMatchObject({ force: true })
+    expect(latest?.scanResult).toBeNull()
+    expect(latest?.error).toBeNull()
+
+    await act(async () => {
+      resolveReplacement?.({ ...EMPTY_RESULT, sessions: [makeVaultSession(2)] })
+    })
+    expect(latest?.sessions.map((session) => session.id)).toEqual(['session-2'])
+  })
+
   it('keeps refocus cache-backed after a manual force refresh', async () => {
     await renderHook()
     await flushMicrotasks()
@@ -799,5 +850,23 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
     await flushMicrotasks()
 
     expect(listSessionsMock.mock.calls.length).toBe(callsWhileHealthy)
+  })
+})
+
+// Regression for #18096: over plain HTTP the browser hides crypto.randomUUID, so minting
+// the request token with a raw call threw during render and the panel showed "The right
+// sidebar hit an error". The fallback must still be a well-formed v4 UUID.
+describe('useAiVaultSessionRefresh in a non-secure context', () => {
+  it('mints a request token when crypto.randomUUID is unavailable', async () => {
+    await withNonSecureContextCrypto(async () => {
+      await renderHook()
+      await flushMicrotasks()
+
+      expect(lastCallArgs()).toMatchObject({
+        requestToken: expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+        )
+      })
+    })
   })
 })

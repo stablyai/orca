@@ -47,9 +47,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.rpc
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
@@ -63,7 +61,6 @@ function storeState(): Record<string, unknown> {
     closeArtifactsPage: mocks.closePage,
     connectCurrentOrcaProfile: mocks.connect,
     orcaProfileAuthStatus: mocks.authStatus,
-    orcaProfileConnecting: false,
     refreshCurrentOrcaProfileAuth: mocks.refreshAuth,
     settings: mocks.settings,
     updateSettings: mocks.updateSettings,

@@ -14,6 +14,7 @@ export type MonacoEditorPropsRef = MutableRefObject<{
 }>
 
 export type MonacoEditorMountParams = {
+  modelOwnerKey?: string
   fileId: string
   filePath: string
   viewStateKey: string
@@ -37,7 +38,8 @@ export type MonacoEditorMountParams = {
     line: number,
     column: number,
     matchLength: number,
-    onApplied?: () => void
+    onApplied?: () => void,
+    canApply?: () => boolean
   ) => void
   contentSync: {
     contentRef: MutableRefObject<string>

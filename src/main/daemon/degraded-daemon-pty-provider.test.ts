@@ -3,7 +3,11 @@ import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { DEGRADED_DAEMON_RECOVERY_RETRY_MS } from './degraded-daemon-fresh-spawn-routing'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { settledWriteStub, stubWriteSettlement } from '../providers/settled-pty-write-stub'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type {
+  IPtyProvider,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/pty-provider-contract'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 
@@ -50,6 +54,7 @@ function createProvider(
     getCwd: vi.fn(async () => ''),
     getInitialCwd: vi.fn(async () => ''),
     clearBuffer: vi.fn(async () => {}),
+    resetInputModes: vi.fn(async () => {}),
     acknowledgeDataEvent: vi.fn(),
     hasChildProcesses: vi.fn(async () => false),
     getForegroundProcess: vi.fn(async () => null),
@@ -474,7 +479,7 @@ describe('DegradedDaemonPtyProvider', () => {
       exitedBeforeSpawnReply: true
     })
 
-    expect(provider.getCurrentDaemonSessionIds()).toEqual([])
+    expect(provider.getSessionIdsRoutedTo('current-daemon')).toEqual([])
   })
 
   it('routes a previously daemon-backed id to fallback after daemon exit removes the mapping', async () => {
@@ -661,11 +666,15 @@ describe('DegradedDaemonPtyProvider', () => {
     provider.onExit(exitSpy)
 
     await provider.discoverDaemonSessions()
-    provider.fanoutCurrentDaemonSyntheticExits(-1)
+    provider.fanoutCurrentDaemonSyntheticExits(-1, { replacedByRestart: true })
 
     expect(exitSpy).toHaveBeenCalledOnce()
-    expect(exitSpy).toHaveBeenCalledWith({ id: 'current-session', code: -1 })
-    expect(provider.getCurrentDaemonSessionIds()).toEqual([])
+    expect(exitSpy).toHaveBeenCalledWith({
+      id: 'current-session',
+      code: -1,
+      replacedByRestart: true
+    })
+    expect(provider.getSessionIdsRoutedTo('current-daemon')).toEqual([])
     expect(provider.hasPty('legacy-session')).toBe(true)
   })
 
@@ -683,4 +692,18 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(current.listProcesses).toHaveBeenCalledTimes(3)
     expect(fallback.listProcesses).toHaveBeenCalledTimes(3)
   })
+})
+
+it('lists the in-process terminals a census must count, apart from the daemon inventory', async () => {
+  const current = createDaemonAdapter('current')
+  const fallback = createProvider('fallback')
+  const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+  const fresh = await provider.spawn({ cols: 80, rows: 24 })
+
+  expect(fallback.spawn).toHaveBeenCalledOnce()
+  expect(await provider.fallback.listProcesses()).toEqual([
+    expect.objectContaining({ id: fresh.id })
+  ])
+  expect(provider.getAllAdapters()).toEqual([current])
 })

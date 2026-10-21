@@ -17,6 +17,12 @@ import type * as Os from 'node:os'
 import { join } from 'node:path'
 import type * as CodexFsUtils from '../codex-accounts/fs-utils'
 
+// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+vi.mock('./codex-daemon-socket-path-guard', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  applyCodexDaemonSocketGuard: (config: string) => config
+}))
+
 const { homedirMock, promotionTestState } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>(),
   promotionTestState: { failAtomicWrite: false, atomicWritePaths: [] as string[] }
@@ -201,7 +207,7 @@ describe('codex settings write-back promotion', () => {
     simulateCodexSettingWrite('model', '"o4"')
     syncSystemConfigIntoManagedCodexHome()
     expect(readSystemConfig()).toBe('model = "gpt-5"\n')
-    expect(JSON.parse(readFileSync(baselinePath(), 'utf-8'))).toMatchObject({ version: 2 })
+    expect(JSON.parse(readFileSync(baselinePath(), 'utf-8'))).toMatchObject({ version: 3 })
 
     simulateCodexSettingWrite('model', '"o4"')
     syncSystemConfigIntoManagedCodexHome()

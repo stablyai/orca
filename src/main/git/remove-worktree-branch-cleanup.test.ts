@@ -1,5 +1,10 @@
+// Ref mutation tests use fictitious repositories; administrative reservations have real-Git coverage.
+vi.mock('../../shared/git-worktree-admin', () => ({
+  isBranchReservedByWorktreeOperation: vi.fn().mockResolvedValue(false)
+}))
+
 import type * as FsPromises from 'node:fs/promises'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 const {
   gitExecFileAsyncMock,
@@ -7,26 +12,14 @@ const {
   translateWslOutputPathsMock,
   statMock,
   readFileMock,
-  resolveGitDirMock,
-  moveWorktreeDirectoryToTrashMock,
-  restoreWorktreeDirectoryFromTrashMock,
-  scheduleWorktreeTrashDeletionMock
+  resolveGitDirMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileSyncMock: vi.fn(),
   translateWslOutputPathsMock: vi.fn((output: string) => output),
   statMock: vi.fn(),
   readFileMock: vi.fn(),
-  resolveGitDirMock: vi.fn(),
-  moveWorktreeDirectoryToTrashMock: vi.fn(),
-  restoreWorktreeDirectoryFromTrashMock: vi.fn(),
-  scheduleWorktreeTrashDeletionMock: vi.fn()
-}))
-
-vi.mock('../worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: moveWorktreeDirectoryToTrashMock,
-  restoreWorktreeDirectoryFromTrash: restoreWorktreeDirectoryFromTrashMock,
-  scheduleWorktreeTrashDeletion: scheduleWorktreeTrashDeletionMock
+  resolveGitDirMock: vi.fn()
 }))
 
 vi.mock('./runner', () => ({
@@ -58,12 +51,16 @@ import { forceDeleteLocalBranch, removeWorktree } from './worktree'
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
 const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
 
+// Why: removal argv carries core.longpaths on Windows; pin a non-Windows default for exact argv.
+let platformSpy: MockInstance<() => NodeJS.Platform>
+
 beforeEach(() => {
-  resetWorktreeRemovalState({
-    moveWorktreeDirectoryToTrashMock,
-    restoreWorktreeDirectoryFromTrashMock,
-    scheduleWorktreeTrashDeletionMock
-  })
+  resetWorktreeRemovalState()
+  platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+})
+
+afterEach(() => {
+  platformSpy.mockRestore()
 })
 
 describe('removeWorktree', () => {
@@ -459,5 +456,33 @@ branch refs/heads/feature/test
       'changed after the workspace was deleted'
     )
     expect(getGitCalls()).not.toContain('git config --remove-section branch.feature/test')
+  })
+
+  it('runs branch cleanup for one repo one removal at a time, not the checkout deletes', async () => {
+    let releaseFirstBranchDelete: () => void = () => {}
+    const firstBranchDelete = new Promise<void>((resolve) => {
+      releaseFirstBranchDelete = resolve
+    })
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.join(' ') === 'branch -d -- feature/a') {
+        await firstBranchDelete
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const first = removeWorktree('/repo', '/repo-a', false, {
+      knownRemovedWorktree: { branch: 'refs/heads/feature/a', head: 'aaa', locked: false }
+    })
+    await vi.waitFor(() => expect(getGitCalls()).toContain('git branch -d -- feature/a'))
+    const second = removeWorktree('/repo', '/repo-b', false, {
+      knownRemovedWorktree: { branch: 'refs/heads/feature/b', head: 'bbb', locked: false }
+    })
+    await vi.waitFor(() => expect(getGitCalls()).toContain('git worktree remove /repo-b'))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(getGitCalls()).not.toContain('git branch -d -- feature/b')
+
+    releaseFirstBranchDelete()
+    await Promise.all([first, second])
+    expect(getGitCalls()).toContain('git branch -d -- feature/b')
   })
 })

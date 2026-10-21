@@ -102,7 +102,7 @@ async function createWindowsDefaultShellTerminalTab(
     await state.updateSettings({ terminalWindowsShell: selectedShell })
     const terminal = store.getState().createTab(worktreeId)
     store.getState().setActiveTab(terminal.id)
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
     return terminal.id
   }, shell)
 
@@ -140,9 +140,13 @@ async function configureActiveProjectWslRuntime(page: Page): Promise<string | nu
 
     // Why: WSL is selected through project/runtime preferences now; the global
     // Windows default shell setting only represents host shells.
-    await state.updateProject(activeProject.id, {
-      localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
-    })
+    await state.updateProject(
+      activeProject.id,
+      {
+        localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
+      },
+      'local'
+    )
     return wslDistro
   })
 }
@@ -164,7 +168,7 @@ async function createWindowsProjectRuntimeTerminalTab(
 
     const terminal = store.getState().createTab(worktreeId)
     store.getState().setActiveTab(terminal.id)
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
     return terminal.id
   })
 
@@ -189,6 +193,8 @@ async function updateWindowsDefaultShellSetting(
 }
 
 test.describe('Windows terminal shell paste ownership', () => {
+  test.skip(process.platform !== 'win32', 'Windows terminal shell paste coverage is Windows-only')
+
   async function skipWhenGitBashUnavailable(page: Page): Promise<void> {
     const isAvailable = await page.evaluate(() => window.api.gitBash.isAvailable())
     test.skip(!isAvailable, 'Git Bash is not available on this Windows host')
@@ -199,8 +205,6 @@ test.describe('Windows terminal shell paste ownership', () => {
     orcaPage,
     testRepoPath
   }) => {
-    test.skip(process.platform !== 'win32', 'PowerShell paste coverage is Windows-only')
-
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
@@ -252,8 +256,6 @@ test.describe('Windows terminal shell paste ownership', () => {
     orcaPage,
     testRepoPath
   }) => {
-    test.skip(process.platform !== 'win32', 'cmd.exe paste coverage is Windows-only')
-
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
@@ -303,7 +305,6 @@ test.describe('Windows terminal shell paste ownership', () => {
     orcaPage,
     testRepoPath
   }) => {
-    test.skip(process.platform !== 'win32', 'Git Bash paste coverage is Windows-only')
     await skipWhenGitBashUnavailable(orcaPage)
 
     await waitForSessionReady(orcaPage)
@@ -355,7 +356,6 @@ test.describe('Windows terminal shell paste ownership', () => {
     orcaPage,
     testRepoPath
   }) => {
-    test.skip(process.platform !== 'win32', 'WSL paste coverage is Windows-only')
     test.skip(!hasWslNodeRuntime(), 'WSL with node is not available on this Windows host')
 
     await waitForSessionReady(orcaPage)
@@ -414,7 +414,6 @@ test.describe('Windows terminal shell paste ownership', () => {
     orcaPage,
     testRepoPath
   }) => {
-    test.skip(process.platform !== 'win32', 'WSL paste runtime retention is Windows-only')
     test.skip(!hasWslNodeRuntime(), 'WSL with node is not available on this Windows host')
 
     await waitForSessionReady(orcaPage)

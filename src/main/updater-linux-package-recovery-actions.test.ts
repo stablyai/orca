@@ -38,7 +38,13 @@ const {
     }
   }
   return {
-    appMock: { isPackaged: true, getVersion: vi.fn(() => '1.0.51'), on: vi.fn(), quit: vi.fn() },
+    appMock: {
+      isPackaged: true,
+      getVersion: vi.fn(() => '1.0.51'),
+      on: vi.fn(),
+      prependListener: vi.fn(),
+      quit: vi.fn()
+    },
     autoUpdaterMock,
     clearTrackedLinuxPackageArtifactMock: vi.fn(),
     getTrackedLinuxPackageArtifactMock: vi.fn(),
@@ -62,7 +68,7 @@ vi.mock('electron', () => ({
 vi.mock('electron-updater', () => ({ autoUpdater: autoUpdaterMock }))
 vi.mock('./electron-updater-loader', () => ({ loadElectronAutoUpdater: () => autoUpdaterMock }))
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
-vi.mock('./ipc/pty', () => ({ killAllPty: vi.fn() }))
+vi.mock('./ipc/pty/kill-all', () => ({ killAllPty: vi.fn() }))
 vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
 vi.mock('./updater-nudge', () => ({
   fetchNudge: vi.fn().mockResolvedValue(null),

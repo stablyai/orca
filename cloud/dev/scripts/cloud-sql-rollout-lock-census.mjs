@@ -24,6 +24,9 @@ export const PRODUCTION_GROUP = 'production-cloud-sql-rollout'
 export const STAGING_GROUP = 'relay-staging-mutation'
 export const SELECTABLE_GROUP =
   "${{ inputs.environment == 'production' && 'production-cloud-sql-rollout' || 'relay-staging-mutation' }}"
+// Prove Relay Asia Staging's load mode drives traffic only and must not hold the staging lock.
+export const STAGING_OR_LOAD_GROUP =
+  "${{ inputs.mode == 'load' && 'relay-staging-load' || 'relay-staging-mutation' }}"
 
 const selectable = (production, staging) =>
   `\${{ inputs.environment == 'production' && '${production}' || '${staging}' }}`
@@ -33,7 +36,12 @@ export const SELECTABLE_LEASE = {
   object: selectable(PRODUCTION_LEASE.object, STAGING_LEASE.object)
 }
 
-export const LOCK_GROUPS = new Set([PRODUCTION_GROUP, STAGING_GROUP, SELECTABLE_GROUP])
+export const LOCK_GROUPS = new Set([
+  PRODUCTION_GROUP,
+  STAGING_GROUP,
+  SELECTABLE_GROUP,
+  STAGING_OR_LOAD_GROUP
+])
 
 export function readWorkflow(file) {
   return readFileSync(new URL(file, WORKFLOW_ROOT), 'utf8')
@@ -283,15 +291,13 @@ export const LEASED_WORKFLOWS = named([
     'operate-relay-production-rehome.yml',
     production({ leaseFiles: ['operate-relay-production-rehome-job.yml'] })
   ],
-  // The gateway applies its schema at startup, so its deploy revision is the schema step.
-  ['push-deploy.yml', production()],
   ['deploy-relay-asia-topology.yml', eitherEnvironment()],
   ['operate-relay-asia-admission.yml', eitherEnvironment()],
   ['deploy-relay-staging.yml', staging()],
   ['deploy-relay-staging-gce-candidate.yml', staging()],
   ['bootstrap-relay-staging-capacity.yml', staging()],
   ['power-relay-staging.yml', staging()],
-  ['prove-relay-asia-staging.yml', staging()],
+  ['prove-relay-asia-staging.yml', staging({ group: STAGING_OR_LOAD_GROUP })],
   [
     'prove-relay-staging-capacity.yml',
     staging({ exclusiveBy: "inputs.mode == 'refresh-asia-c4-image'" })
@@ -300,6 +306,7 @@ export const LEASED_WORKFLOWS = named([
 ])
 
 export const NOT_A_CLOUD_SQL_CANDIDATE = named([
+  ['push-deploy.yml', 'Push uses dedicated SQL and its own production-push-rollout group and durable push-rollout lease.'],
   [
     'monitor-relay-production.yml',
     'Read-only. Its identity holds monitoring, logging, Cloud SQL and compute viewer roles only, and it runs `gcloud sql instances describe`, never a mutation. It consumes no connection budget, so the durable lease would only let monitoring block a rollout and a rollout block monitoring.'

@@ -1,16 +1,10 @@
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { translate } from '@/i18n/i18n'
+import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { useAppStore } from '../../store'
-import {
-  activateTerminalInitiatedWorktree,
-  focusTerminalInitiatedTab,
-  resolveTerminalPresentation
-} from './terminal-command-state'
+import { focusTerminalInitiatedTab, resolveTerminalPresentation } from './terminal-command-state'
 
 export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
@@ -51,22 +45,12 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
         const shouldActivate = terminalPresentation === 'focused'
         const shouldSurfaceOwner =
           terminalPresentation !== 'background' && data.surfaceOwner !== false
-        if (shouldActivate) {
-          activateTerminalInitiatedWorktree(store, worktreeId)
-        }
         // Why: the paired launch client already resolved the mode, so its choice wins over the host renderer's local default.
         const tabOptions = data.launchAgent
           ? {
               ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
               launchAgent: data.launchAgent,
-              ...(data.viewMode
-                ? { viewMode: data.viewMode }
-                : initialAgentTabViewModeProps(store.settings, {
-                    agent: data.launchAgent,
-                    nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-                      getConnectionIdFromState(store, worktreeId)
-                    )
-                  })),
+              ...(data.viewMode ? { viewMode: data.viewMode } : {}),
               ...(data.cwd ? { startupCwd: data.cwd } : {})
             }
           : shouldActivate
@@ -78,7 +62,28 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 recordInteraction: false,
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
-        const tab = store.createTab(worktreeId, data.targetGroupId, undefined, tabOptions)
+        const pendingStartup = data.command
+          ? {
+              command: data.command,
+              ...(data.env ? { env: data.env } : {}),
+              ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
+              ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
+              ...(data.resumeProviderSession
+                ? { resumeProviderSession: data.resumeProviderSession }
+                : {}),
+              ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+              ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
+              ...(data.startupCommandDelivery
+                ? { startupCommandDelivery: data.startupCommandDelivery }
+                : {})
+            }
+          : undefined
+        const tab = store.createTab(
+          worktreeId,
+          data.targetGroupId,
+          data.shellOverride,
+          pendingStartup ? { ...tabOptions, pendingStartup } : tabOptions
+        )
         if (!shouldActivate) {
           // Why: renderer-backed Codex startup must mount its new TerminalPane without switching UI or connecting every saved tab.
           requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
@@ -92,31 +97,18 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
           }
         }
         if (shouldActivate) {
-          store.setActiveTabType('terminal')
+          // After the tab lands: activating prunes the workspace's empty groups, the requested one too.
+          revealWorkspaceSurface(store, worktreeId, [tab.id])
+          store.setActiveTabType('terminal', worktreeId)
           store.setActiveTab(tab.id)
+        } else if (shouldSurfaceOwner) {
+          store.revealWorktreeInSidebar(worktreeId)
         }
         if (shouldSurfaceOwner) {
-          store.revealWorktreeInSidebar(worktreeId)
           focusTerminalInitiatedTab(tab.id, undefined, worktreeId)
         }
         if (data.title) {
           store.setTabCustomTitle(tab.id, data.title, { recordInteraction: false })
-        }
-        if (data.command) {
-          store.queueTabStartupCommand(tab.id, {
-            command: data.command,
-            ...(data.env ? { env: data.env } : {}),
-            ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
-            ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
-            ...(data.resumeProviderSession
-              ? { resumeProviderSession: data.resumeProviderSession }
-              : {}),
-            ...(data.launchToken ? { launchToken: data.launchToken } : {}),
-            ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
-            ...(data.startupCommandDelivery
-              ? { startupCommandDelivery: data.startupCommandDelivery }
-              : {})
-          })
         }
         window.api.ui.replyTerminalCreate({
           requestId: data.requestId,

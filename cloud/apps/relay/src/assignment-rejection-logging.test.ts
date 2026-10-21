@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RelayAssignment } from './assignment-store.js'
+import { RelayHomeCellUnavailableError, type RelayAssignment } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 
 const fakes = vi.hoisted(() => ({
@@ -49,6 +49,39 @@ describe('assignment rejection logging', () => {
     expect(line).toContain('hinted=true')
     expect(line).toContain('reason=relay_capacity_exhausted')
     expect(line).toContain(`host=${relayHostLogDigest(host)}`)
+    expect(line).not.toContain(host)
+  })
+
+  it('separates an unavailable home cell from capacity and names its cause', async () => {
+    const host = 'cccccccccccccccc'
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: {
+        assign: vi.fn(async () => {
+          throw new RelayHomeCellUnavailableError('cell-asia-1', 'not_ready')
+        }),
+        // The sticky lane refuses a host whose home cell is not live, so this
+        // arrives hinted on the placement lane.
+        resolve: vi.fn(async () => null)
+      } as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true)
+    })
+
+    const response = await app.request('/v1/assign', assignmentRequest(host, { reconnect: true }))
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ error: 'relay_home_cell_unavailable' })
+    const line = warn.mock.calls.map((call) => String(call[0])).find((entry) =>
+      entry.includes('assignment rejected')
+    )
+    expect(line).toContain('lane=placement')
+    expect(line).toContain('hinted=true')
+    expect(line).toContain('reason=relay_home_cell_unavailable')
+    expect(line).toContain('cause=not_ready')
+    expect(line).toContain('cell=cell-asia-1')
+    expect(line).not.toContain('relay_capacity_exhausted')
     expect(line).not.toContain(host)
   })
 
@@ -218,6 +251,31 @@ describe('assignment grant logging', () => {
     expect(line).toContain('lane=sticky')
     expect(line).toContain('cell=cell-r')
     expect(line).toContain(`host=${relayHostLogDigest(host)}`)
+    expect(line).not.toContain(host)
+  })
+
+  it('logs a hinted grant served by the placement lane', async () => {
+    const host = 'rrrrrrrrrrrrrrrr'
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: {
+        assign: vi.fn(async () => assignment('cell-new', host)),
+        resolve: vi.fn(async () => null)
+      } as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true)
+    })
+
+    const response = await app.request('/v1/assign', assignmentRequest(host, { reconnect: true }))
+
+    expect(response.status).toBe(200)
+    const line = warn.mock.calls.map((call) => String(call[0])).find((entry) =>
+      entry.includes('assignment granted')
+    )
+    expect(line).toContain('lane=placement')
+    expect(line).toContain('hinted=true')
+    expect(line).toContain('cell=cell-new')
     expect(line).not.toContain(host)
   })
 

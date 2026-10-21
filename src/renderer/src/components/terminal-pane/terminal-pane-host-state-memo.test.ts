@@ -54,6 +54,23 @@ beforeEach(() => {
 })
 
 describe('selectTerminalPaneHostState memo', () => {
+  it('releases the last store snapshot when no terminal selects again', async () => {
+    if (typeof globalThis.gc !== 'function') {
+      throw new Error('Run with the repository Vitest --expose-gc config')
+    }
+    function selectRetiredState(): WeakRef<AppState> {
+      const state = makeState()
+      selectTerminalPaneHostState(state, LOCAL_WORKTREE)
+      return new WeakRef(state)
+    }
+    const retired = selectRetiredState()
+    for (let round = 0; round < 3; round++) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      globalThis.gc()
+    }
+    expect(retired.deref()).toBeUndefined()
+  })
+
   it('returns the same object across an unrelated store write', () => {
     const first = makeState()
     const before = selectTerminalPaneHostState(first, LOCAL_WORKTREE)

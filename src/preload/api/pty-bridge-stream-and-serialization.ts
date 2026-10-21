@@ -3,6 +3,8 @@ import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { PreloadApi } from '../api-types'
 import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
+import type { CodexSharedServerStatus } from '../../shared/codex-shared-server-command'
+import type { NewerDaemonHeldScreen, NewerDaemonReopenResult } from '../../shared/newer-daemon-hold'
 
 export const ptyStreamAndSerializationApi = {
   inspectProcess: (
@@ -16,6 +18,24 @@ export const ptyStreamAndSerializationApi = {
     ipcRenderer.invoke('pty:inspectProcess', { id, ...options }),
   confirmForegroundProcess: (id: string): Promise<string | null> =>
     ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
+  isCodexOnSharedServer: (id: string): Promise<CodexSharedServerStatus> =>
+    ipcRenderer.invoke('pty:isCodexOnSharedServer', { id }),
+  disableCodexSharedServerAutoStart: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke('pty:disableCodexSharedServerAutoStart', { id }),
+  stopCodexSharedServer: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke('pty:stopCodexSharedServer', { id }),
+  openedBeforeClaudeAccounts: (
+    id: string,
+    target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
+  ): Promise<boolean> => ipcRenderer.invoke('pty:openedBeforeClaudeAccounts', { id, target }),
+  claudeDiffPanelMayAutoOpen: (
+    id: string,
+    target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
+  ): Promise<boolean> => ipcRenderer.invoke('pty:claudeDiffPanelMayAutoOpen', { id, target }),
+  readNewerDaemonHeldScreen: (sessionId: string): Promise<NewerDaemonHeldScreen | null> =>
+    ipcRenderer.invoke('pty:readNewerDaemonHeldScreen', { sessionId }),
+  reopenNewerDaemonTerminals: (): Promise<NewerDaemonReopenResult> =>
+    ipcRenderer.invoke('pty:reopenNewerDaemonTerminals'),
   getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
   getSize: (id: string): Promise<{ cols: number; rows: number } | null> =>
     ipcRenderer.invoke('pty:getSize', { id }),
@@ -74,6 +94,8 @@ export const ptyStreamAndSerializationApi = {
       incarnationId?: string
       /** Set only when the owning relay disowned this id; never a claim that the process died. */
       ptySourceDisowned?: true
+      /** Main stopped this PTY so a new process could take its pane; the pane is not dying. */
+      replacedByRestart?: true
     }) => void
   ): (() => void) => {
     const listener = (
@@ -84,6 +106,7 @@ export const ptyStreamAndSerializationApi = {
         preserveRendererBinding?: boolean
         incarnationId?: string
         ptySourceDisowned?: true
+        replacedByRestart?: true
       }
     ) => callback(data)
     ipcRenderer.on('pty:exit', listener)
@@ -117,6 +140,11 @@ export const ptyStreamAndSerializationApi = {
     ipcRenderer.on('pty:clearBuffer:request', listener)
     return () => ipcRenderer.removeListener('pty:clearBuffer:request', listener)
   },
+  onResetInputModesRequest: (callback: (data: { ptyId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { ptyId: string }) => callback(data)
+    ipcRenderer.on('pty:resetInputModes:request', listener)
+    return () => ipcRenderer.removeListener('pty:resetInputModes:request', listener)
+  },
   sendSerializedBuffer: (
     requestId: string,
     snapshot: {
@@ -139,10 +167,15 @@ export const ptyStreamAndSerializationApi = {
   reportRendererSerializerReady: (ptyId: string): Promise<void> =>
     ipcRenderer.invoke('pty:reportRendererSerializerReady', { ptyId }),
   management: {
+    asyncIoHealth: () => ipcRenderer.invoke('pty:management:asyncIoHealth'),
     listSessions: () => ipcRenderer.invoke('pty:management:listSessions'),
     killAll: () => ipcRenderer.invoke('pty:management:killAll'),
     killOne: (args: { sessionId: string }) => ipcRenderer.invoke('pty:management:killOne', args),
     restart: () => ipcRenderer.invoke('pty:management:restart'),
-    macTccAttribution: () => ipcRenderer.invoke('pty:management:macTccAttribution')
+    macTccAttribution: () => ipcRenderer.invoke('pty:management:macTccAttribution'),
+    resetFolderAccess: () => ipcRenderer.invoke('pty:management:resetFolderAccess'),
+    severedDaemon: () => ipcRenderer.invoke('pty:management:severedDaemon'),
+    restartSeveredDaemon: (expected) =>
+      ipcRenderer.invoke('pty:management:restartSeveredDaemon', expected)
   }
 } satisfies Partial<PreloadApi['pty']>

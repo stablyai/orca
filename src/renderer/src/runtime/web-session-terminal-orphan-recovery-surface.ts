@@ -6,16 +6,10 @@ import type {
   RuntimeTerminalOrphanAdoptionClaim
 } from '../../../shared/runtime-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import {
-  isRemovedSnapshot,
-  isValidReadySurface,
-  surfaceKey,
-  terminalLayoutLeafIds,
-  terminalRowsBySurface
-} from './web-session-terminal-orphan-recovery-surface-index'
-export {
+  hasTerminalHandleRetirementProof,
   isRemovedSnapshot,
   isValidReadySurface,
   surfaceKey,
@@ -43,6 +37,8 @@ type RecoverySurfaceCoordinates = {
   locallyActive: boolean
   /** A persisted binding whose leaf no longer appears in the layout tree. */
   offTree?: boolean
+  /** A pending row whose handle no host inventory vouched for; it must stay pending, not ready. */
+  unattested?: boolean
 }
 
 export type RecoverySurface = RecoverySurfaceCoordinates & { handle: string }
@@ -95,15 +91,7 @@ export function hasExactTerminalRetirementProof(
   snapshot: RuntimeMobileSessionTabsResult,
   surface: RecoverySurface
 ): boolean {
-  return (
-    surface.incoming === undefined &&
-    snapshot.retiredTerminalSurfaces?.some(
-      (retired) =>
-        retired.parentTabId === surface.tabId &&
-        retired.leafId === surface.leafId &&
-        retired.terminal === surface.handle
-    ) === true
-  )
+  return surface.incoming === undefined && hasTerminalHandleRetirementProof(snapshot, surface)
 }
 
 export function prepareTerminalOrphanRecovery(
@@ -149,8 +137,7 @@ export function prepareTerminalOrphanRecovery(
           layout?.activeLeafId === leafId
       }
       if (offTree) {
-        // An off-tree binding has no trustworthy pane topology. Keep it visible
-        // as evidence, but never list/claim/retire it from this recovery pass.
+        // Off-tree bindings cannot justify liveness/adoption claims; retain them pending host evidence.
         retained.push({
           ...coordinates,
           offTree: true,
@@ -177,7 +164,8 @@ export function prepareTerminalOrphanRecovery(
 export function buildRetainedTerminalSurface(surface: AnyRecoverySurface): TerminalSurface {
   const incoming = surface.incoming
   const localTitle = typeof surface.localTab.title === 'string' ? surface.localTab.title.trim() : ''
-  if (!surface.handle) {
+  // Why: a ready row counts as a live terminal, so a slept pane (#30108) would wake in the mirror.
+  if (!surface.handle || surface.unattested) {
     return {
       ...(incoming ?? {
         type: 'terminal',
@@ -218,6 +206,11 @@ export function buildRetainedTerminalSurface(surface: AnyRecoverySurface): Termi
     status: 'ready',
     terminal: surface.handle
   }
+}
+
+/** Marks a pending surface the host's terminal inventory did not list as live. */
+export function withoutHostAttestation(surface: RecoverySurface): RecoverySurface {
+  return surface.pending ? { ...surface, unattested: true } : surface
 }
 
 export function mergeRetainedTerminalSurfaces(

@@ -97,11 +97,11 @@ export function TerminalTitlebarTabs({
         const unifiedTab = unifiedTabs.find((tab) => tab.id === fileId)
         if (unifiedTab?.contentType === 'simulator') {
           setActiveTab(fileId)
-          setActiveTabType('simulator')
+          setActiveTabType('simulator', renderedActiveWorktreeId)
           return
         }
         setActiveFile(fileId)
-        setActiveTabType('editor')
+        setActiveTabType('editor', renderedActiveWorktreeId)
       }}
       onCloseFile={handleCloseFile}
       onActivateBrowserTab={handleActivateBrowserTab}

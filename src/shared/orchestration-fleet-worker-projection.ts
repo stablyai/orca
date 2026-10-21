@@ -176,6 +176,10 @@ export function projectFleetNextAction(
   ) {
     return { kind: 'none', argv: [] }
   }
+  // worker-show repeats this projection; absence alone cannot earn another command.
+  if (liveness.verdict === 'unverifiable' && !worker.pendingInput && !worker.pendingApproval) {
+    return { kind: 'none', argv: [] }
+  }
   return {
     kind: 'inspect',
     argv: ['orchestration', 'worker-show', '--dispatch', worker.dispatchId]

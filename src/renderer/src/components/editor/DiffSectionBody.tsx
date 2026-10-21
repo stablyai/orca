@@ -1,10 +1,10 @@
-import type { RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
+import type { editor } from 'monaco-editor'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
 import { isCombinedDiffSizeUnknown } from './combined-diff-on-demand-load'
 import type { DiffSection } from './diff-section-types'
@@ -12,7 +12,10 @@ import { translate } from '@/i18n/i18n'
 import { LargeDiffFallback } from './LargeDiffFallback'
 import { LargeDiffLoadPrompt } from './LargeDiffLoadPrompt'
 import { buildDiffEditorWhitespaceOptions } from './diff-editor-whitespace-options'
-import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
+import {
+  buildDiffEditorWordWrapOptions,
+  syncDiffEditorOriginalWordWrap
+} from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
 import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
 
@@ -21,18 +24,8 @@ const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 type DiffSectionBodyProps = {
   section: DiffSection
   index: number
-  sectionBodyRef: RefObject<HTMLDivElement | null>
   sectionBodyHeight: number | undefined
   useIntrinsicImageHeight: boolean
-  popover: {
-    lineNumber: number
-    startLine?: number
-    top: number
-    left?: number
-    lineHeight: number
-  } | null
-  addLineCommentPlaceholder?: string
-  addLineCommentLabel?: string
   isBranchMode: boolean
   sideBySide: boolean
   isDark: boolean
@@ -43,8 +36,6 @@ type DiffSectionBodyProps = {
   diffWordWrap?: boolean
   diffShowWhitespace?: boolean
   editorFontFamily?: string
-  onCancelComment: () => void
-  onSubmitComment: (body: string) => Promise<void>
   onRetrySection: (index: number) => void
   onLoadDeferredSection: (index: number) => void
   onSaveLimitedDiff: () => void
@@ -54,12 +45,8 @@ type DiffSectionBodyProps = {
 export function DiffSectionBody({
   section,
   index,
-  sectionBodyRef,
   sectionBodyHeight,
   useIntrinsicImageHeight,
-  popover,
-  addLineCommentPlaceholder,
-  addLineCommentLabel,
   isBranchMode,
   sideBySide,
   isDark,
@@ -70,43 +57,68 @@ export function DiffSectionBody({
   diffWordWrap,
   diffShowWhitespace,
   editorFontFamily,
-  onCancelComment,
-  onSubmitComment,
   onRetrySection,
   onLoadDeferredSection,
   onSaveLimitedDiff,
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
-  const handleEditorMount: DiffOnMount = (editor, monaco) => {
-    const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(editor)
-    editor.onDidDispose(cleanupShiftWheelScroll)
-    onMount(editor, monaco)
+  const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
+  const wordWrapOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
+  const wordWrapMountFrameRef = useRef(0)
+  const diffWordWrapRef = useRef(diffWordWrap)
+  useLayoutEffect(() => {
+    diffWordWrapRef.current = diffWordWrap
+  }, [diffWordWrap])
+  const handleEditorMount: DiffOnMount = (diffEditor, monaco) => {
+    diffEditorRef.current = diffEditor
+    const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(diffEditor)
+    diffEditor.getModifiedEditor().onDidDispose(() => {
+      cleanupShiftWheelScroll()
+      if (diffEditorRef.current !== diffEditor) {
+        return
+      }
+      cancelAnimationFrame(wordWrapMountFrameRef.current)
+      wordWrapOptionsSubRef.current?.dispose()
+      wordWrapOptionsSubRef.current = null
+      diffEditorRef.current = null
+    })
+    // Why: Monaco applies the inline-layout wrap override after mount, once width is known.
+    wordWrapMountFrameRef.current = requestAnimationFrame(() => {
+      if (diffEditorRef.current !== diffEditor) {
+        return
+      }
+      wordWrapOptionsSubRef.current?.dispose()
+      wordWrapOptionsSubRef.current = syncDiffEditorOriginalWordWrap(
+        diffEditor,
+        diffWordWrapRef.current
+      )
+    })
+    onMount(diffEditor, monaco)
   }
+
+  useEffect(() => {
+    cancelAnimationFrame(wordWrapMountFrameRef.current)
+    const diffEditor = diffEditorRef.current
+    if (!diffEditor) {
+      return () => {
+        cancelAnimationFrame(wordWrapMountFrameRef.current)
+      }
+    }
+    wordWrapOptionsSubRef.current?.dispose()
+    wordWrapOptionsSubRef.current = syncDiffEditorOriginalWordWrap(diffEditor, diffWordWrap)
+    return () => {
+      cancelAnimationFrame(wordWrapMountFrameRef.current)
+      wordWrapOptionsSubRef.current?.dispose()
+      wordWrapOptionsSubRef.current = null
+    }
+  }, [diffWordWrap, sideBySide])
 
   return (
     <div
-      ref={sectionBodyRef}
       className={cn('relative', useIntrinsicImageHeight && 'overflow-visible')}
       style={sectionBodyHeight === undefined ? undefined : { height: sectionBodyHeight }}
     >
-      {popover && !renderLimit?.limited ? (
-        // Why: key by lineNumber so the popover remounts when the anchor
-        // line changes instead of leaking draft state across lines.
-        <DiffCommentPopover
-          key={popover.lineNumber}
-          lineNumber={popover.lineNumber}
-          startLine={popover.startLine}
-          top={popover.top}
-          left={popover.left}
-          lineHeight={popover.lineHeight}
-          placeholder={addLineCommentPlaceholder}
-          submitLabel={addLineCommentLabel}
-          submittingLabel="Posting…"
-          onCancel={onCancelComment}
-          onSubmit={onSubmitComment}
-        />
-      ) : null}
       {section.loadOnDemand ? (
         <LargeDiffLoadPrompt
           sizeUnknown={isCombinedDiffSizeUnknown(section)}
@@ -204,6 +216,9 @@ export function DiffSectionBody({
           keepCurrentOriginalModel
           keepCurrentModifiedModel
           options={{
+            dropIntoEditor: { enabled: false },
+            // Native EditContext focus scrolls its hidden input into the combined viewport.
+            editContext: false,
             readOnly: !isEditable,
             originalEditable: false,
             renderSideBySide: sideBySide,

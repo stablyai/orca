@@ -1,16 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { parseManualNetworkAddress } from './manual-address'
 import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../mobile-pairing-protocol-limits'
 
 describe('parseManualNetworkAddress', () => {
-  it('keeps renderer validation off the Zod schema import path', () => {
-    const source = readFileSync(resolve('src/shared/network/manual-address.ts'), 'utf8')
-    expect(source).not.toContain('mobile-relay-pairing-offer')
-    expect(source).not.toContain("from 'zod'")
-  })
-
   describe('IPv4', () => {
     it('accepts canonical IPv4', () => {
       expect(parseManualNetworkAddress('192.168.1.24')).toEqual({

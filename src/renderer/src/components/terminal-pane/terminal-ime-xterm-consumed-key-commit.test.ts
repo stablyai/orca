@@ -109,6 +109,123 @@ describe('a candidate commit that arrives with no composition session', () => {
     document.body.replaceChildren()
   })
 
+  for (const initialState of ['empty', 'refocused', 'committed'] as const) {
+    for (const delayed of [false, true]) {
+      it(`sends direct punctuation exactly once from ${initialState}, delayed=${delayed}`, async () => {
+        const rig = openTerminal()
+        try {
+          if (initialState === 'committed') {
+            dispatchComposition(rig, 'compositionstart', '')
+            dispatchComposition(rig, 'compositionupdate', 'ni')
+            dispatchComposition(rig, 'compositionend', '你')
+            dispatchCommit(rig, '你')
+          } else if (initialState === 'refocused') {
+            rig.textarea.dispatchEvent(new FocusEvent('blur'))
+            rig.textarea.dispatchEvent(new FocusEvent('focus'))
+          }
+          for (const [code, text] of [
+            ['Comma', '，'],
+            ['Period', '。'],
+            ['Comma', '，']
+          ]) {
+            dispatchKey(rig, 'keydown', { key: 'Process', code, keyCode: IME_KEYCODE })
+            if (delayed) {
+              await nextEventLoop()
+            }
+            dispatchCommit(rig, text)
+            dispatchKey(rig, 'keyup', { key: 'Process', code, keyCode: IME_KEYCODE })
+            await nextEventLoop()
+          }
+          await nextEventLoop()
+          expect(rig.emitted.join('')).toBe(`${initialState === 'committed' ? '你' : ''}，。，`)
+        } finally {
+          rig.terminal.dispose()
+        }
+      })
+    }
+  }
+
+  // Chromium writes the commit into the textarea before compositionend, so a Process keydown that
+  // lands before xterm's deferred finalizer owes its own text, not an echo of the commit.
+  for (const finalizerFirst of [true, false]) {
+    it(`sends punctuation keyed before the commit finalizes, finalizerFirst=${finalizerFirst}`, async () => {
+      const rig = openTerminal()
+      try {
+        dispatchComposition(rig, 'compositionstart', '')
+        dispatchComposition(rig, 'compositionupdate', 'ni')
+        dispatchComposition(rig, 'compositionend', '你')
+        dispatchKey(rig, 'keydown', { key: 'Process', code: 'Comma', keyCode: IME_KEYCODE })
+        if (finalizerFirst) {
+          await nextEventLoop()
+        }
+        rig.textarea.value = '你，'
+        const input = new InputEvent('input', { bubbles: true })
+        Object.defineProperty(input, 'inputType', { value: 'insertText' })
+        Object.defineProperty(input, 'data', { value: '，' })
+        Object.defineProperty(input, 'composed', { value: true })
+        rig.textarea.dispatchEvent(input)
+        dispatchKey(rig, 'keyup', { key: 'Process', code: 'Comma', keyCode: IME_KEYCODE })
+        await nextEventLoop()
+        await nextEventLoop()
+        expect(rig.emitted.join('')).toBe('你，')
+      } finally {
+        rig.terminal.dispose()
+      }
+    })
+  }
+
+  // The keypress sends the key's text on every path, so the input that follows must not claim it.
+  for (const finalizerRuns of ['beforeKeypress', 'beforeInput', 'afterInput'] as const) {
+    it(`sends a keypress-carried key once after a commit, finalizer ${finalizerRuns}`, async () => {
+      const rig = openTerminal()
+      try {
+        dispatchComposition(rig, 'compositionstart', '')
+        dispatchComposition(rig, 'compositionupdate', 'ni')
+        dispatchComposition(rig, 'compositionend', '你')
+        dispatchKey(rig, 'keydown', { key: 'Process', code: 'Comma', keyCode: IME_KEYCODE })
+        if (finalizerRuns === 'beforeKeypress') {
+          await nextEventLoop()
+        }
+        dispatchKey(rig, 'keypress', {
+          key: '，',
+          code: 'Comma',
+          keyCode: 0xff0c,
+          charCode: 0xff0c
+        })
+        if (finalizerRuns === 'beforeInput') {
+          await nextEventLoop()
+        }
+        rig.textarea.value = '你，'
+        const input = new InputEvent('input', { bubbles: true })
+        Object.defineProperty(input, 'inputType', { value: 'insertText' })
+        Object.defineProperty(input, 'data', { value: '，' })
+        Object.defineProperty(input, 'composed', { value: true })
+        rig.textarea.dispatchEvent(input)
+        dispatchKey(rig, 'keyup', { key: 'Process', code: 'Comma', keyCode: IME_KEYCODE })
+        await nextEventLoop()
+        await nextEventLoop()
+        expect(rig.emitted.join('')).toBe('你，')
+      } finally {
+        rig.terminal.dispose()
+      }
+    })
+  }
+
+  it('sends direct punctuation delivered after the consumed key is released', async () => {
+    const rig = openTerminal()
+    try {
+      dispatchKey(rig, 'keydown', { key: 'Process', code: 'Comma', keyCode: IME_KEYCODE })
+      await nextEventLoop()
+      dispatchKey(rig, 'keyup', { key: 'Process', code: 'Comma', keyCode: IME_KEYCODE })
+      dispatchCommit(rig, '，')
+      await nextEventLoop()
+      await nextEventLoop()
+      expect(rig.emitted.join('')).toBe('，')
+    } finally {
+      rig.terminal.dispose()
+    }
+  })
+
   it('sends a candidate picked with the mouse, with no key down', async () => {
     const rig = openTerminal()
     await typeConsumedPinyin(rig, ['KeyH', 'KeyA', 'KeyO'])

@@ -2,15 +2,13 @@ import {
   describeMutationRequestState,
   type OrchestrationMutationRequestShowResult
 } from '../../../../../../shared/orchestration-mutation-request'
-import { defineMethod, type RpcMethod } from '../../../core'
-import { requiredString } from '../../../schemas'
-import { z } from 'zod'
+import { defineMethod } from '../../../core'
+import { RequestShowParams } from '../../../../../../shared/rpc-contract/orchestration-runs-mutation-request-show-params'
 
-const RequestShowParams = z.object({ request: requiredString('Missing --request') })
-
-export const ORCHESTRATION_MUTATION_REQUEST_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_MUTATION_REQUEST_METHODS = [
   defineMethod({
     name: 'orchestration.requestShow',
+    permission: 'workspace',
     params: RequestShowParams,
     // Why: recovery needs a way to ask whether a mutation landed without mutating
     // again; this reads the durable receipt and never writes one, so it must stay

@@ -12,6 +12,7 @@ const { copyFileMock, handleMock, lstatMock, realpathMock, renameMock } = vi.hoi
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
 
 vi.mock('electron', () => ({
+  app: { getPath: () => '/orca-test-user-data' },
   ipcMain: { handle: handleMock }
 }))
 

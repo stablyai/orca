@@ -3,7 +3,9 @@ import { posix as pathPosix } from 'node:path'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { OpenFile } from '../store/slices/editor'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -14,6 +16,9 @@ import {
   makeState,
   resetWebSessionTabsSyncTestState
 } from './web-session-tabs-sync-test-harness'
+
+// Why: a server's file is named by its owned id from the first open, as restore names it.
+const README_ID = buildOwnedEditorFileId('/repo/README.md', WT, ENV)
 
 vi.mock('../store', () => ({
   useAppStore: {
@@ -66,7 +71,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     const terminalId = patch.tabsByWorktree?.[WT]?.[0]?.id
     expect(patch.openFiles).toMatchObject([
       {
-        id: '/repo/README.md',
+        id: README_ID,
         filePath: '/repo/README.md',
         relativePath: 'README.md',
         worktreeId: WT,
@@ -80,7 +85,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: 'host-readme-unified',
-          entityId: '/repo/README.md',
+          entityId: README_ID,
           contentType: 'editor',
           label: 'README.md',
           color: '#16a34a',
@@ -92,8 +97,8 @@ describe('applyWebSessionTabsSnapshot', () => {
       activeTabId: 'host-readme-unified',
       tabOrder: [terminalId, 'host-readme-unified']
     })
-    expect(patch.activeFileId).toBe('/repo/README.md')
-    expect(patch.activeFileIdByWorktree?.[WT]).toBe('/repo/README.md')
+    expect(patch.activeFileId).toBe(README_ID)
+    expect(patch.activeFileIdByWorktree?.[WT]).toBe(README_ID)
     expect(patch.activeTabType).toBe('editor')
     expect(patch.activeTabTypeByWorktree?.[WT]).toBe('editor')
   })
@@ -278,20 +283,20 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(patch.openFiles).toMatchObject([
       {
-        id: 'markdown-preview::/repo/README.md',
+        id: `markdown-preview::${README_ID}`,
         filePath: '/repo/README.md',
-        markdownPreviewSourceFileId: '/repo/README.md',
+        markdownPreviewSourceFileId: README_ID,
         mode: 'markdown-preview'
       }
     ])
     expect(patch.unifiedTabsByWorktree?.[WT]).toMatchObject([
       {
         id: 'host-preview-unified',
-        entityId: 'markdown-preview::/repo/README.md',
+        entityId: `markdown-preview::${README_ID}`,
         contentType: 'editor'
       }
     ])
-    expect(patch.activeFileId).toBe('markdown-preview::/repo/README.md')
+    expect(patch.activeFileId).toBe(`markdown-preview::${README_ID}`)
   })
 
   it('removes mirrored editor tabs when the host closes the file', () => {
@@ -323,12 +328,12 @@ describe('applyWebSessionTabsSnapshot', () => {
     const hydratedState = { ...makeState(), ...hydratedPatch } as WebSessionTabsSyncState
 
     expect(hydratedState.openFiles[0]).toMatchObject({
-      id: '/repo/README.md',
+      id: README_ID,
       mirroredFromRuntimeSession: true
     })
     expect(hydratedState.unifiedTabsByWorktree[WT]?.[0]).toMatchObject({
       id: 'host-readme-unified',
-      entityId: '/repo/README.md'
+      entityId: README_ID
     })
 
     const patch = applyWebSessionTabsSnapshot(
@@ -409,5 +414,110 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.activeFileIdByWorktree).toBeUndefined()
     expect(patch.activeTabType).toBeUndefined()
     expect(patch.activeTabTypeByWorktree).toBeUndefined()
+  })
+
+  describe('client dirtiness across a host republish (#21392)', () => {
+    const notesPath = '/repo/NOTES.md'
+    const mirroredNotes = (isDirty: boolean): OpenFile => ({
+      id: notesPath,
+      filePath: notesPath,
+      relativePath: 'NOTES.md',
+      worktreeId: WT,
+      language: 'markdown',
+      isDirty,
+      runtimeEnvironmentId: ENV,
+      mode: 'edit',
+      mirroredFromRuntimeSession: true
+    })
+    const notesUnifiedTab: Tab = {
+      id: 'host-notes-unified',
+      entityId: notesPath,
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'editor',
+      label: 'NOTES.md',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 10,
+      isPreview: false,
+      isPinned: false
+    }
+    // The host republishes the same tab with its own store's flag: not dirty.
+    const hostCleanSnapshot = () =>
+      makeSnapshot(
+        [
+          {
+            type: 'markdown',
+            id: 'host-notes-unified',
+            title: 'NOTES.md',
+            filePath: notesPath,
+            relativePath: 'NOTES.md',
+            language: 'markdown',
+            mode: 'edit',
+            isDirty: false,
+            isActive: true,
+            sourceFileId: notesPath,
+            sourceFilePath: notesPath,
+            sourceRelativePath: 'NOTES.md',
+            documentVersion: `file:${notesPath}`,
+            color: null,
+            isPinned: false
+          }
+        ],
+        { activeTabId: 'host-notes-unified', activeTabType: 'markdown' }
+      )
+
+    it('keeps a client-dirty mirrored file dirty when the host republishes isDirty: false', () => {
+      // Why: the host never learns about client edits, so its flag would otherwise erase the
+      // client's, and the tab strip would close the tab with no prompt while the draft lives.
+      const patch = applyWebSessionTabsSnapshot(
+        makeState({
+          openFiles: [mirroredNotes(true)],
+          editorDrafts: { [notesPath]: '# unsaved client edits' },
+          unifiedTabsByWorktree: { [WT]: [notesUnifiedTab] }
+        }),
+        hostCleanSnapshot(),
+        ENV,
+        NOW
+      )
+
+      // No open-file change means the dirty flag survived exactly as it was.
+      expect(patch.openFiles).toBeUndefined()
+    })
+
+    it('follows a host-side save when the client holds no draft', () => {
+      // Why: a dirty flag with no client draft came from an earlier host snapshot; keeping it
+      // would strand the tab as dirty after the host saved.
+      const patch = applyWebSessionTabsSnapshot(
+        makeState({
+          openFiles: [mirroredNotes(true)],
+          editorDrafts: {},
+          unifiedTabsByWorktree: { [WT]: [notesUnifiedTab] }
+        }),
+        hostCleanSnapshot(),
+        ENV,
+        NOW
+      )
+
+      expect(patch.openFiles).toMatchObject([{ id: notesPath, isDirty: false }])
+    })
+
+    it('does not invent dirtiness from a draft the client already reverted', () => {
+      // Why: a lingering draft with isDirty false means the user typed and undid; the tab is
+      // clean and must not start prompting on close.
+      const patch = applyWebSessionTabsSnapshot(
+        makeState({
+          openFiles: [mirroredNotes(false)],
+          editorDrafts: { [notesPath]: 'same as disk' },
+          unifiedTabsByWorktree: { [WT]: [notesUnifiedTab] }
+        }),
+        hostCleanSnapshot(),
+        ENV,
+        NOW
+      )
+
+      expect(patch.openFiles).toBeUndefined()
+    })
   })
 })

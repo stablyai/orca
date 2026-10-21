@@ -2,8 +2,9 @@ import { randomBytes } from 'node:crypto'
 import type { DirectSshAuthority, SshProviderEpoch } from '../../shared/ssh-types'
 import {
   advanceSshConnectionGeneration,
+  isSshConnectionGenerationInCurrentSession,
   getSshConnectionGeneration
-} from './ssh-connection-generation'
+} from './connection/ssh-connection-generation'
 
 const authorityByTarget = new Map<string, DirectSshAuthority>()
 type ProviderRequestAbortRegistration = {
@@ -120,7 +121,8 @@ export function rotateSshProviderAuthority(targetId: string): DirectSshAuthority
   const previousGeneration = getSshConnectionGeneration(targetId)
   const nextGeneration = advanceSshConnectionGeneration(targetId)
   const authority = createAuthority(targetId, nextGeneration)
-  if (nextGeneration !== previousGeneration + 1) {
+  // Why: a recreated target skips ahead of its forgotten floor without rolling the scope; only a scope roll revokes every target.
+  if (!isSshConnectionGenerationInCurrentSession(previousGeneration)) {
     authorityByTarget.clear()
     authorityByTarget.set(targetId, authority)
     abortAllProviderRequests()

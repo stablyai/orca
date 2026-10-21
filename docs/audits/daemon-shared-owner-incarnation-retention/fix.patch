@@ -1,0 +1,11 @@
+diff --git a/src/main/daemon/daemon-session-owner-resolution.ts b/src/main/daemon/daemon-session-owner-resolution.ts
+index 1906ebfb35..47fe531ec7 100644
+--- a/src/main/daemon/daemon-session-owner-resolution.ts
++++ b/src/main/daemon/daemon-session-owner-resolution.ts
+@@ -54,0 +55,6 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
++    // Another resolver may already have removed this provider's shared routes.
++    for (const sessionId of this.routeIncarnations.keys()) {
++      if (!this.routes.has(sessionId)) {
++        this.routeIncarnations.delete(sessionId)
++      }
++    }

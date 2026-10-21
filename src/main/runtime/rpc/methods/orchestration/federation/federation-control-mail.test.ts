@@ -1,3 +1,4 @@
+import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
@@ -6,7 +7,7 @@ import { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/environment-transport'
 import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
-import { fingerprintAuthenticatedPairingCredential } from '../../../orchestration-mutation-executor'
+import { fingerprintAuthenticatedPairingCredential } from '../../../../device-principal'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { syncFederationBarrier } from './federation-sync-barrier.test-support'
 
@@ -107,6 +108,7 @@ describe('orchestration federation control mail', () => {
     homeDb.markWorkerDispatchReady(dispatchId)
 
     workerDb.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId,
       taskId: task.id,
       homePeerFingerprint: homeFingerprint,

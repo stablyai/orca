@@ -32,7 +32,7 @@ describe('CodexAccountService config sync', () => {
   registerCodexAccountsTestHomes()
 
   // Why: quota probes against a cold per-account CODEX_HOME can take 10–25s
-  // (RPC + PTY fallback) and queue behind an in-flight global usage refresh;
+  // (RPC + HTTP fallback) and queue behind an in-flight global usage refresh;
   // account mutations must never block on — or fail because of — that probe.
   describe('quota refresh decoupling', () => {
     function createAccountOneSettings(): GlobalSettings {

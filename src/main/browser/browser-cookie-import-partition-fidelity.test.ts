@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
+import type { CookiesGetFilter } from 'electron'
 
 const {
   appGetPathMock,
@@ -45,11 +46,11 @@ vi.mock('electron', () => ({
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
-      get: (filter: object) => Promise<unknown>
+      get: (filter: CookiesGetFilter) => Promise<unknown>
       remove: (url: string, name: string) => Promise<void>
     }
   }) => ({
-    get: (filter: object) => targetSession.cookies.get(filter),
+    get: (filter: CookiesGetFilter) => targetSession.cookies.get(filter),
     remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
     snapshotClearIdentities: async (items: { cookie: Record<string, unknown>; url: string }[]) =>
       items.map(({ cookie, url }) => ({ url, ...cookie })),
@@ -132,6 +133,29 @@ describe('validated import partition fidelity', () => {
     return filePath
   }
 
+  it('reports one unreadable cookie and one readable sibling withheld for safety', async () => {
+    const filePath = writeCookieFile([
+      { domain: 'example.com', name: 'readable', value: 'synthetic' },
+      {
+        domain: 'sub.example.com',
+        name: 'unreadable',
+        value: 'synthetic',
+        partitionKey: { topLevelSite: 'https://top.example' }
+      }
+    ])
+    const result = await importCookiesFromFile(filePath, 'persist:test')
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error('Synthetic cookie import failed')
+    }
+    expect(result.summary).toMatchObject({
+      importedCookies: 0,
+      partitionSkippedCookies: 2,
+      partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 1 }
+    })
+    expect(cookieWriteMock).not.toHaveBeenCalled()
+  })
+
   // Why (STA-4300): a JSON export that carries a full CHIPS partition must reach the jar with it.
   // cookies.set() drops partitionKey silently, so this only works through the CDP identity store.
   it('carries a complete partitionKey from a JSON export through to the write', async () => {
@@ -181,44 +205,6 @@ describe('validated import partition fidelity', () => {
     expect(result.ok && result.summary.importedCookies).toBe(1)
     expect(result.ok && result.summary.skippedCookies).toBe(1)
     expect(result.ok && result.summary.domains).toEqual(['plain.example'])
-  })
-
-  it('does not replace existing cookies for a domain whose only source cookie is skipped', async () => {
-    const remove = vi.fn().mockResolvedValue(undefined)
-    sessionFromPartitionMock.mockReturnValue({
-      cookies: {
-        get: vi.fn().mockResolvedValue([
-          {
-            name: 'existing-session',
-            value: 'still-valid',
-            domain: '.app.example',
-            path: '/',
-            secure: true,
-            httpOnly: true,
-            hostOnly: false,
-            session: true,
-            sameSite: 'lax'
-          }
-        ]),
-        remove,
-        set: unreachableCookieSet
-      }
-    })
-    const filePath = writeCookieFile([
-      {
-        domain: '.app.example',
-        name: 'chips-auth',
-        value: 'keep-me',
-        secure: true,
-        partitionKey: { topLevelSite: 'https://top.example' }
-      }
-    ])
-
-    const result = await importCookiesFromFile(filePath, 'persist:test')
-
-    expect(result.ok && result.summary.partitionSkippedCookies).toBe(1)
-    expect(cookieWriteMock).not.toHaveBeenCalled()
-    expect(remove).not.toHaveBeenCalled()
   })
 
   it('preserves a populated family and creates no staged replay for an opaque JSON partition', async () => {
@@ -346,6 +332,7 @@ describe('validated import partition fidelity', () => {
       importedCookies: 1,
       skippedCookies: 2,
       partitionSkippedCookies: 2,
+      partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 1 },
       domains: ['plain.example']
     })
     expect(result.summary.totalCookies).toBe(

@@ -729,6 +729,12 @@
   margin-top: 48px;
 }
 
+/* Why: inside the copy cell, not its own grid row, so the web client (where the field renders
+   nothing) keeps the copy-to-relay rhythm instead of an empty track and a second row gap. */
+.mobile-page-root .mp-pairing-machine {
+  margin-top: 18px;
+}
+
 .mobile-page-root .mp-pairing-relay {
   grid-area: relay;
   min-width: 0;
@@ -1157,12 +1163,7 @@
   flex-direction: column;
   background: var(--m-bg-base);
   color: var(--m-text-primary);
-  font-family:
-    'Geist',
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 13px;
   box-sizing: border-box;
   /* Why: the phone frame is viewport-fit now; the preview content must stay

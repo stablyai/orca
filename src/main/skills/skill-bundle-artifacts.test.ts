@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { loadSkillBundleArtifacts } from './skill-bundle-artifacts'
+import { loadSkillBundleManifest } from './skill-bundle-artifacts'
 
 const temporaryDirectories: string[] = []
 
@@ -10,70 +10,31 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((root) => rm(root, { recursive: true })))
 })
 
-describe('skill bundle artifacts', () => {
-  it('loads the committed schema-2 artifacts and rejects a stamped schema-1 manifest', async () => {
-    const resourceRoot = await mkdtemp(join(tmpdir(), 'orca-skill-artifacts-'))
-    temporaryDirectories.push(resourceRoot)
-    const target = join(resourceRoot, 'skills')
-    const source = resolve('resources', 'skills')
-    await mkdir(target, { recursive: true })
-    const [manifest, registry, releaseMapping] = await Promise.all(
-      ['current-manifest.json', 'snapshot-registry.json', 'release-mapping.json'].map((name) =>
-        readFile(join(source, name), 'utf8')
-      )
-    )
-    await Promise.all([
-      writeFile(join(target, 'current-manifest.json'), manifest),
-      writeFile(join(target, 'snapshot-registry.json'), registry),
-      writeFile(join(target, 'release-mapping.json'), releaseMapping)
-    ])
+async function resourceRootWith(manifest: string): Promise<string> {
+  const resourceRoot = await mkdtemp(join(tmpdir(), 'orca-skill-artifacts-'))
+  temporaryDirectories.push(resourceRoot)
+  await mkdir(join(resourceRoot, 'skills'), { recursive: true })
+  await writeFile(join(resourceRoot, 'skills', 'current-manifest.json'), manifest)
+  return resourceRoot
+}
 
-    const artifacts = await loadSkillBundleArtifacts(resourceRoot)
-    expect(artifacts.manifest.schemaVersion).toBe(2)
-    expect(artifacts.manifest.skills.length).toBeGreaterThan(0)
+describe('skill bundle manifest', () => {
+  it('loads the committed schema-3 manifest and rejects a schema-2 one', async () => {
+    const manifest = await readFile(resolve('resources', 'skills', 'current-manifest.json'), 'utf8')
 
-    const legacyRoot = await mkdtemp(join(tmpdir(), 'orca-skill-artifacts-'))
-    temporaryDirectories.push(legacyRoot)
-    const legacyTarget = join(legacyRoot, 'skills')
-    await mkdir(legacyTarget, { recursive: true })
-    const legacyManifest = JSON.parse(manifest)
-    legacyManifest.schemaVersion = 1
-    legacyManifest.appVersion = '1.0.0'
-    for (const skill of legacyManifest.skills) {
-      skill.appVersion = '1.0.0'
+    const loaded = await loadSkillBundleManifest(await resourceRootWith(manifest))
+    expect(loaded.schemaVersion).toBe(3)
+    expect(loaded.skills.length).toBeGreaterThan(0)
+
+    // Why: schema 2 carried registry revisions; a stale artifact must fail loudly.
+    const legacy = JSON.parse(manifest)
+    legacy.schemaVersion = 2
+    for (const skill of legacy.skills) {
+      skill.releaseRevision = 1
+      skill.gitTreeSha = '0'.repeat(40)
     }
-    await Promise.all([
-      writeFile(join(legacyTarget, 'current-manifest.json'), JSON.stringify(legacyManifest)),
-      writeFile(join(legacyTarget, 'snapshot-registry.json'), registry),
-      writeFile(join(legacyTarget, 'release-mapping.json'), releaseMapping)
-    ])
-
-    await expect(loadSkillBundleArtifacts(legacyRoot)).rejects.toThrow(
-      'Invalid skill bundle manifest'
-    )
-  })
-
-  it('rejects malformed nested release entries before building provenance', async () => {
-    const resourceRoot = await mkdtemp(join(tmpdir(), 'orca-skill-artifacts-'))
-    temporaryDirectories.push(resourceRoot)
-    const target = join(resourceRoot, 'skills')
-    const source = resolve('resources', 'skills')
-    await mkdir(target, { recursive: true })
-    const [manifest, registry, releaseMapping] = await Promise.all(
-      ['current-manifest.json', 'snapshot-registry.json', 'release-mapping.json'].map((name) =>
-        readFile(join(source, name), 'utf8')
-      )
-    )
-    const malformedMapping = JSON.parse(releaseMapping)
-    malformedMapping.releases[0] = { appVersion: 'invalid' }
-    await Promise.all([
-      writeFile(join(target, 'current-manifest.json'), manifest),
-      writeFile(join(target, 'snapshot-registry.json'), registry),
-      writeFile(join(target, 'release-mapping.json'), JSON.stringify(malformedMapping))
-    ])
-
-    await expect(loadSkillBundleArtifacts(resourceRoot)).rejects.toThrow(
-      'Invalid skill release mapping'
-    )
+    await expect(
+      loadSkillBundleManifest(await resourceRootWith(JSON.stringify(legacy)))
+    ).rejects.toThrow('Invalid skill bundle manifest')
   })
 })

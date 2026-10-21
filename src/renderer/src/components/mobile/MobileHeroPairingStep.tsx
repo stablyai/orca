@@ -6,6 +6,7 @@ import type { MobileNetworkInterface } from '../settings/mobile-network-interfac
 import { NetworkInterfacePicker } from './NetworkInterfacePicker'
 import { MobilePairingConnectionOptions } from '../settings/MobilePairingConnectionOptions'
 import { MobileRelayBetaNotice } from '../settings/MobileRelayBetaNotice'
+import { MachineNameField } from '../settings/MachineNameField'
 import { MobileRelayMintFailureNotice } from './mobile-relay-mint-failure-notice'
 import { WindowsFirewallNotice } from './WindowsFirewallNotice'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
@@ -197,6 +198,7 @@ export function MobileHeroPairingStep({
           </strong>
           {translate('auto.components.mobile.MobileHero.2f077ef4eb', ', and scan the code.')}
         </p>
+        <MachineNameField id="mobile-hero-machine-name" className="mp-pairing-machine" />
       </div>
       <div className="mp-pairing-relay">
         <MobilePairingConnectionOptions

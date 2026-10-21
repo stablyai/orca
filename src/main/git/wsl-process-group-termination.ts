@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import type { ProcessTerminationBarrier } from '../../shared/child-process/run-process'
-import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+
+import type { ProcessTerminationBarrier } from '@orca/process-host/process-spec'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { runWslProcess } from '../wsl/wsl-runner'
 
 const GUEST_TERMINATION_ATTEMPTS = 40

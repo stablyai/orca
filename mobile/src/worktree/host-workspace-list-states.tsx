@@ -34,15 +34,27 @@ export function HostWorkspaceListStates(
       <View style={styles.centered}>
         <Text style={styles.emptyText}>
           {props.search
-            ? 'No matching worktrees'
+            ? 'No matching workspaces'
             : props.activeFilterCount > 0
-              ? 'No worktrees match filters'
-              : 'No worktrees'}
+              ? 'No workspaces match filters'
+              : 'No workspaces'}
         </Text>
       </View>
     )
   }
   return null
+}
+
+/** The host serves a list this page cannot build: a page from the host's own build can. */
+export function HostWorkspaceListReopen() {
+  return (
+    <View style={styles.centered}>
+      <Text style={styles.emptyText}>Reopen to update</Text>
+      <Text style={styles.catalogErrorDetail}>
+        This host lists workspaces in a way this page does not know yet.
+      </Text>
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({

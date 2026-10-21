@@ -45,16 +45,3 @@ export function buildNativeChatPasteBytes(text: string): string {
 export function buildNativeChatImagePasteBytes(filePath: string): string {
   return wrapTerminalBracketedPasteText(filePath)
 }
-
-/**
- * Compute the bytes to write for `text` + Enter in ONE write:
- *  - single-line → `text\r`
- *  - multi-line  → `\x1b[200~…\x1b[201~\r` (bracketed-paste wrapped, then submit)
- *
- * Prefer `buildNativeChatPasteBytes` + a separate `NATIVE_CHAT_SUBMIT` write for
- * live sends; this combined form is kept for callers/tests that need the framed
- * body and submit as a single string.
- */
-export function buildNativeChatSendBytes(text: string): string {
-  return `${buildNativeChatPasteBytes(text)}${SUBMIT}`
-}

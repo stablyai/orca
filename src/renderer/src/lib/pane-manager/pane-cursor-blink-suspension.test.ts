@@ -87,7 +87,10 @@ function renderedText(pane: TestPane): string {
 }
 
 /** Reveal = the manager's resume pass, then the terminal regains real DOM focus. */
-async function reveal(panes: TestPane[], owner?: object): Promise<void> {
+async function reveal(
+  panes: TestPane[],
+  owner?: Parameters<typeof resumePaneRendering>[1]
+): Promise<void> {
   resumePaneRendering(panes, owner)
   for (const pane of panes) {
     pane.terminal.focus()

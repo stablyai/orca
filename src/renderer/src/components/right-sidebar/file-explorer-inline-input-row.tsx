@@ -1,5 +1,9 @@
 import React, { useCallback, useRef } from 'react'
 import { File, Folder } from 'lucide-react'
+import {
+  isImeCompositionKeyDown,
+  useImeEnterGestureOwnership
+} from '@/lib/ime-composition-keyboard-event'
 import type { TreeNode } from './file-explorer-types'
 
 export type InlineInput = {
@@ -25,6 +29,7 @@ export function InlineInputRow({
   const inputRef = useRef<HTMLInputElement>(null)
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const submitted = useRef(false)
+  const imeEnter = useImeEnterGestureOwnership()
   // Grace period flag: when a menu (context or dropdown) closes, its focus
   // management can momentarily steal focus from this input before the user
   // has a chance to type. During the grace window we re-focus on blur instead
@@ -76,6 +81,8 @@ export function InlineInputRow({
     (el: HTMLInputElement | null): void => {
       inputRef.current = el
       clearInlineInputTimers()
+      // Why: a keyed remount skips blur, so composition ownership must not outlive the element.
+      imeEnter.reset()
       if (!el) {
         return
       }
@@ -106,7 +113,7 @@ export function InlineInputRow({
         }, 200)
       })
     },
-    [clearInlineInputTimers, inlineInput.existingName, inlineInput.type]
+    [clearInlineInputTimers, imeEnter, inlineInput.existingName, inlineInput.type]
   )
 
   const clearBlurTimeout = useCallback(() => {
@@ -145,6 +152,11 @@ export function InlineInputRow({
         className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
         defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
         onKeyDown={(e) => {
+          // Why: a CJK confirm Enter arrives twice and only the first is marked, so
+          // pair the marked check with the gesture carry; IME-owned Escape is ignored too.
+          if (imeEnter.ownsKeyDown(e) || imeEnter.isComposing() || isImeCompositionKeyDown(e)) {
+            return
+          }
           if (e.key === 'Enter') {
             e.preventDefault()
             submit(e.currentTarget.value)
@@ -154,8 +166,12 @@ export function InlineInputRow({
             onCancel()
           }
         }}
+        onKeyUp={imeEnter.onKeyUp}
+        onCompositionStart={() => imeEnter.setComposing(true)}
+        onCompositionEnd={() => imeEnter.setComposing(false)}
         onFocus={clearBlurTimeout}
         onBlur={(e) => {
+          imeEnter.reset()
           // During the grace period after mount, menu close focus management
           // may shift focus away before the user can type. Re-focus instead of
           // dismissing the still-empty input. Past that window a blur is the

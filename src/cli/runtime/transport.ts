@@ -1,17 +1,23 @@
 import { createConnection } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
-import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import type {
+  ExpectedRuntimeSource,
+  RuntimeOrchestrationEnvelope
+} from '../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
+import { runtimeAccessDeniedError } from './runtime-access-denied'
 
 export async function sendRequest<TResult>(
   metadata: RuntimeMetadata,
   method: string,
   params: unknown,
   timeoutMs: number,
-  envelope?: RuntimeOrchestrationEnvelope
+  envelope?: RuntimeOrchestrationEnvelope,
+  // Why separate from the envelope: federation forwards envelopes to other runtimes.
+  expectedRuntimeSource?: ExpectedRuntimeSource
 ): Promise<RuntimeRpcResponse<TResult>> {
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RuntimeClientError(
@@ -68,13 +74,16 @@ export async function sendRequest<TResult>(
     }
 
     socket.setEncoding('utf8')
-    socket.once('error', () => {
+    socket.once('error', (error) => {
       finish({
         ok: false,
-        error: new RuntimeClientError(
-          'runtime_unavailable',
-          'Could not connect to the running Orca app. Restart Orca and try again.'
-        )
+        // Why: a sandbox denying the socket/pipe is not a dead app, so restart advice would mislead.
+        error:
+          runtimeAccessDeniedError(error, metadata.pid) ??
+          new RuntimeClientError(
+            'runtime_unavailable',
+            'Could not connect to the running Orca app. Restart Orca and try again.'
+          )
       })
     })
     // Why: a clean peer close (FIN, no 'error') before a terminal frame never
@@ -199,7 +208,8 @@ export async function sendRequest<TResult>(
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,
           compatibilityInvocationId: envelope?.compatibilityInvocationId,
-          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence
+          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
+          expectedRuntimeSource
         })}\n`
       )
     })

@@ -28,6 +28,7 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   activeTabId: true,
   tabsByWorktree: true,
   terminalLayoutsByTabId: true,
+  localOnlyScrollbackByTabId: true,
   activeWorktreeIdsOnShutdown: true,
   openFilesByWorktree: true,
   activeFileIdByWorktree: true,
@@ -37,6 +38,7 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   activeBrowserTabIdByWorktree: true,
   clientHostedBrowserPagesByWorktree: true,
   clientHostedBrowserCloseIntentsByEnvironment: true,
+  pairedTerminalTabCloseIntentsByEnvironment: true,
   activeTabTypeByWorktree: true,
   browserUrlHistory: true,
   workspaceDocHistory: true,
@@ -90,13 +92,16 @@ describe('workspaceSessionStateSchema field coverage', () => {
     const parsed = parseWorkspaceSession({
       ...MINIMAL_SESSION,
       closedTerminalTabTombstonesByTabId: {
-        'tab-1': { closedAt: 1_700_000_000_000, worktreeId: 'repo:wt-1', ackRevision: 4 }
+        'tab-1': { closedAt: 1_700_000_000_000, worktreeId: 'repo:wt-1', reason: 'cleanup' },
+        // An older build's acknowledgement stamp is dropped; the record itself survives.
+        'tab-2': { closedAt: 1_700_000_000_000, worktreeId: 'repo:wt-1', ackRevision: 4 }
       }
     })
 
     expect(parsed.ok).toBe(true)
     expect(parsed.ok && parsed.value.closedTerminalTabTombstonesByTabId).toEqual({
-      'tab-1': { closedAt: 1_700_000_000_000, worktreeId: 'repo:wt-1', ackRevision: 4 }
+      'tab-1': { closedAt: 1_700_000_000_000, worktreeId: 'repo:wt-1', reason: 'cleanup' },
+      'tab-2': { closedAt: 1_700_000_000_000, worktreeId: 'repo:wt-1' }
     })
   })
 

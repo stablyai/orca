@@ -9,8 +9,7 @@ import type {
   SshTarget,
   SshTargetAddResult,
   SshTargetCreateInput,
-  SshTargetUpdateInput,
-  SshTerminateSessionsResult
+  SshTargetUpdateInput
 } from '../../shared/ssh-types'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 
@@ -24,10 +23,9 @@ export type SshApi = {
   importConfig: (args?: { reAdopt?: boolean }) => Promise<SshConfigImportResult>
   listConfigHosts: (args?: SshConfigHostListArgs) => Promise<SshConfigHostListResult>
   resolveConfigHost: (args: { alias: string }) => Promise<SshConfigHostResolution | null>
-  connect: (args: { targetId: string }) => Promise<SshConnectionState | null>
+  /** `automatic`: a connect no user asked for; it never lifts a cancelled sign-in. */
+  connect: (args: { targetId: string; automatic?: boolean }) => Promise<SshConnectionState | null>
   disconnect: (args: { targetId: string }) => Promise<void>
-  terminateSessions: (args: { targetId: string }) => Promise<SshTerminateSessionsResult>
-  resetRelay: (args: { targetId: string }) => Promise<void>
   getState: (args: { targetId: string }) => Promise<SshConnectionState | null>
   needsPassphrasePrompt: (args: { targetId: string }) => Promise<boolean>
   testConnection: (args: {
@@ -71,6 +69,7 @@ export type SshApi = {
       targetId: string
       kind: 'passphrase' | 'password' | 'keyboard-interactive'
       detail: string
+      echo?: boolean
     }) => void
   ) => () => void
   onCredentialResolved: (callback: (data: { requestId: string }) => void) => () => void

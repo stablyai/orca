@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
@@ -8,10 +8,8 @@ import {
   WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS,
   type WorktreeCreateIdempotencySupport
 } from './worktree-create-idempotency-policy'
-import {
-  createWorktreeWithNameRetry,
-  WORKTREE_CREATE_AMBIGUOUS_RECONNECT_WAIT_MS
-} from './worktree-create-retry'
+import { createWorktreeWithNameRetry } from './worktree-create-retry'
+import { AMBIGUOUS_RECONNECT_WAIT_MS } from './replay-on-ambiguous-delivery'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 
 type Attempt = { method: string; params: Record<string, unknown> }
@@ -55,7 +53,7 @@ async function flush(): Promise<void> {
 // cutover). Records every call so tests can assert on the clientMutationId.
 function scriptedClient(
   outcomes: Array<
-    | { id: string; displayName?: string }
+    | { id: string; displayName?: string; warning?: string }
     | { errorMessage: string }
     // takesMs models how long the ambiguity took to SURFACE — a clean close is
     // instant, a half-open socket waits out the liveness watchdog or the timeout.
@@ -107,7 +105,8 @@ function scriptedClient(
           worktree: {
             id: outcome.id,
             ...(outcome.displayName !== undefined ? { displayName: outcome.displayName } : {})
-          }
+          },
+          ...(outcome.warning !== undefined ? { warning: outcome.warning } : {})
         },
         _meta: { runtimeId: 'r' }
       }
@@ -116,6 +115,41 @@ function scriptedClient(
 }
 
 describe('createWorktreeWithNameRetry', () => {
+  // Why: `worktree.create` succeeds even when the startup terminal failed to spawn (pty
+  // exhaustion), and `warning` is the only place the host says so.
+  it('returns the host create warning alongside the worktree', async () => {
+    const attempts: Attempt[] = []
+    const client = scriptedClient(
+      [{ id: 'wt-warned', warning: 'Failed to create the startup terminal for /w: no pty' }],
+      attempts
+    )
+    await expect(
+      createWorktreeWithNameRetry({
+        client,
+        baseName: 'puffin',
+        buildParams: (name) => ({ repo: 'id:r', name }),
+        worktreeCreateIdempotency: Promise.resolve(IDEMPOTENT_CREATE_SUPPORT)
+      })
+    ).resolves.toEqual({
+      worktreeId: 'wt-warned',
+      name: 'puffin',
+      warning: 'Failed to create the startup terminal for /w: no pty'
+    })
+  })
+
+  it('omits a blank create warning', async () => {
+    const attempts: Attempt[] = []
+    const client = scriptedClient([{ id: 'wt-clean', warning: '  ' }], attempts)
+    await expect(
+      createWorktreeWithNameRetry({
+        client,
+        baseName: 'puffin',
+        buildParams: (name) => ({ repo: 'id:r', name }),
+        worktreeCreateIdempotency: Promise.resolve(IDEMPOTENT_CREATE_SUPPORT)
+      })
+    ).resolves.toEqual({ worktreeId: 'wt-clean', name: 'puffin' })
+  })
+
   it('waits for capability detection before sending a create', async () => {
     const attempts: Attempt[] = []
     const client = scriptedClient([{ id: 'wt-ready' }], attempts)
@@ -753,6 +787,49 @@ describe('createWorktreeWithNameRetry', () => {
     expect(attempts).toHaveLength(1)
   })
 
+  // The delivery-unknown mark is a WeakSet keyed on the rejection object, so the create must reach
+  // the caller as the very object the transport rejected with. `worktreeCreateRun.request` returns
+  // the transport promise itself for exactly this reason; an operation that wrapped, re-threw or
+  // re-created the error would turn "the host may have built it" into "it failed".
+  it('rethrows the transport rejection object itself, mark and all', async () => {
+    const attempts: Attempt[] = []
+    const connection = connectionController()
+    const marked = markRpcDeliveryUnknown(new Error('Connection lost'))
+    const client = scriptedClient([{ throws: marked }], attempts, connection)
+    // Idempotency off, so the resilient sender rethrows on the first ambiguity instead of replaying
+    // and the object under test is the one the transport produced, not a later attempt's.
+    const caught = await createWorktreeWithNameRetry({
+      client,
+      baseName: 'kestrel',
+      buildParams: (name) => ({ repo: 'id:r', name }),
+      worktreeCreateIdempotency: false
+    }).then(
+      () => null,
+      (error: unknown) => error
+    )
+    expect(caught).toBe(marked)
+    expect(isRpcDeliveryUnknown(caught)).toBe(true)
+  })
+
+  // The other direction: a definite failure must not acquire a mark on the way out, or a create the
+  // host never received would be replayed as a reconciliation and build a second worktree.
+  it('does not mark a rejection the transport left unmarked', async () => {
+    const attempts: Attempt[] = []
+    const unmarked = new Error('Socket closed before send')
+    const client = scriptedClient([{ throws: unmarked }], attempts, connectionController())
+    const caught = await createWorktreeWithNameRetry({
+      client,
+      baseName: 'kestrel',
+      buildParams: (name) => ({ repo: 'id:r', name }),
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
+    }).then(
+      () => null,
+      (error: unknown) => error
+    )
+    expect(caught).toBe(unmarked)
+    expect(isRpcDeliveryUnknown(caught)).toBe(false)
+  })
+
   it('keeps the replay window strictly inside the host dedupe TTL', () => {
     // The window is measured from a lower bound on when the host could have resolved, so
     // it has to leave the record room for the replay to still be in flight. Widening it
@@ -761,6 +838,6 @@ describe('createWorktreeWithNameRetry', () => {
     expect(LEGACY_HOST_REPLAY_WINDOW_MS).toBeLessThan(WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS)
     // A reconnect wait is clamped when a short advertisement leaves less time.
     const shortReplayWindowMs = getWorktreeCreateReplayWindowMs({ dedupeTtlMs: 20_000 })
-    expect(Math.min(WORKTREE_CREATE_AMBIGUOUS_RECONNECT_WAIT_MS, shortReplayWindowMs)).toBe(10_000)
+    expect(Math.min(AMBIGUOUS_RECONNECT_WAIT_MS, shortReplayWindowMs)).toBe(10_000)
   })
 })

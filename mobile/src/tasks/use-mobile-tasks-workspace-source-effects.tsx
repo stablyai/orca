@@ -1,6 +1,9 @@
 import type { WorkspaceCreateProjectionModel } from './use-mobile-tasks-workspace-create-projection'
-import { type BaseRefSearchResult, type SparsePreset, useEffect } from './mobile-tasks-dependencies'
-import { isSuccess } from './mobile-tasks-legacy-foundation'
+import { type SparsePreset, useEffect } from './mobile-tasks-dependencies'
+import {
+  repoBaseRefSearchRead,
+  repoSparsePresetListRead
+} from './mobile-workspace-source-operations'
 
 export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProjectionModel) {
   const {
@@ -45,16 +48,14 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
     setWorkspaceSparsePresetsLoading(true)
     setWorkspaceSparsePresetsLoaded(false)
     setWorkspaceSparsePresetsError('')
-    void client
-      .sendRequest('repo.sparsePresets', { repo: `id:${workspaceCreateTargetRepo.id}` })
-      .then((response) => {
+    void repoSparsePresetListRead
+      .request(client, { repo: `id:${workspaceCreateTargetRepo.id}` })
+      .then((reply) => {
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const presets = (response.result as { presets?: SparsePreset[] }).presets ?? []
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires every member read without a guard (`id`, `name`, `directories`) and drops a row missing one. The cast covers the other three SparsePreset declares non-optional (`repoId`, `createdAt`, `updatedAt`), which the recorded preset does not carry and nothing here reads.
+        const presets = repoSparsePresetListRead.interpret(reply) as SparsePreset[]
         setWorkspaceSparsePresets(presets)
         setWorkspaceSparsePresetsLoaded(true)
         setWorkspaceSparsePresetId((current) =>
@@ -112,23 +113,17 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
     let stale = false
     setWorkspaceBaseBranchLoading(true)
     setWorkspaceBaseBranchError('')
-    void client
-      .sendRequest(
-        'repo.searchRefs',
+    void repoBaseRefSearchRead
+      .request(
+        client,
         { repo: `id:${workspaceCreateTargetRepo.id}`, query, limit: 20 },
         { timeoutMs: 30_000 }
       )
-      .then((response) => {
+      .then((reply) => {
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
-          refDetails?: BaseRefSearchResult[]
-          refs?: string[]
-        }
+        const result = repoBaseRefSearchRead.interpret(reply)
         setWorkspaceBaseBranchResults(
           result.refDetails ??
             (result.refs ?? []).map((refName) => ({ refName, localBranchName: refName }))

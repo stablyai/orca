@@ -31,6 +31,21 @@ type ConptyNative = {
   terminateJob: (id: number, shellPid: number) => boolean
   listJobProcessIds: (id: number, shellPid: number) => number[] | null
   assignCurrentProcessToJob: () => boolean
+  /** Absent on builds that predate the terminal process ceiling. */
+  setActiveProcessLimit?: (limit: number) => boolean
+}
+
+type SelfOwnedPty = IPty & {
+  jobRootProcessIsWrapper?: true
+  shellProcessId?: number
+  terminateOwnedTree?: () => JobTerminationOutcome
+  listOwnedProcessIds?: () => readonly number[] | null
+}
+
+/** The gate's pid never proves that its user shell remains alive. */
+export function ptyShellProcessId(proc: IPty): number | undefined {
+  const owned: SelfOwnedPty = proc
+  return owned.jobRootProcessIsWrapper ? owned.shellProcessId : proc.pid
 }
 
 let cachedNative: ConptyNative | null | undefined
@@ -89,6 +104,23 @@ export type JobTerminationOutcome = 'terminated' | 'unavailable'
  * to be misread as "nothing to kill".
  */
 export function terminatePtyJob(proc: IPty): JobTerminationOutcome {
+  const owned: SelfOwnedPty = proc
+  if (typeof owned.terminateOwnedTree === 'function') {
+    let outcome: JobTerminationOutcome
+    try {
+      outcome = owned.terminateOwnedTree()
+    } catch {
+      return 'unavailable'
+    }
+    if (outcome === 'terminated') {
+      recordSelfInitiatedTreeKill({
+        pid: proc.pid,
+        site: 'windows-pty-job-teardown',
+        scope: 'win-pty-job'
+      })
+    }
+    return outcome
+  }
   const target = ptyJobTarget(proc)
   const native = nativeLoader()
   if (!target || !native) {
@@ -132,6 +164,14 @@ export function terminatePtyJob(proc: IPty): JobTerminationOutcome {
  * including children that detached from the console.
  */
 export function listPtyJobProcessIds(proc: IPty): readonly number[] | null {
+  const owned: SelfOwnedPty = proc
+  if (typeof owned.listOwnedProcessIds === 'function') {
+    try {
+      return owned.listOwnedProcessIds()
+    } catch {
+      return null
+    }
+  }
   const target = ptyJobTarget(proc)
   const native = nativeLoader()
   if (!target || !native) {
@@ -186,6 +226,19 @@ function assignHostProcessOnce(): boolean {
   }
   try {
     return native.assignCurrentProcessToJob()
+  } catch {
+    return false
+  }
+}
+
+/** An ActiveProcessLimit for every later ConPTY's job; false when this build cannot set one. */
+export function setPtyActiveProcessLimit(limit: number): boolean {
+  const native = nativeLoader()
+  if (typeof native?.setActiveProcessLimit !== 'function') {
+    return false
+  }
+  try {
+    return native.setActiveProcessLimit(limit)
   } catch {
     return false
   }

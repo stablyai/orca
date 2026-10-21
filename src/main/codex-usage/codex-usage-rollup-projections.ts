@@ -1,3 +1,4 @@
+import { highestUsageKey } from '../usage/highest-usage-key'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -6,7 +7,7 @@ import type {
   CodexUsageScope,
   CodexUsageSummary
 } from '../../shared/codex-usage-types'
-import type { CodexUsagePersistedState } from './types'
+import type { CodexLongContextTokens, CodexUsagePersistedState } from './types'
 import { estimateCostUsd } from './codex-usage-cost-estimate'
 import {
   getFilteredDaily,
@@ -30,6 +31,7 @@ export function buildSummary(
   let events = 0
   let estimatedCostUsd = 0
   let hasAnyBillableCost = false
+  let hasUnpricedModels = false
   const byModel = new Map<string, number>()
   const byProject = new Map<string, number>()
 
@@ -45,21 +47,18 @@ export function buildSummary(
       (byModel.get(row.model ?? 'Unknown model') ?? 0) + row.totalTokens
     )
     byProject.set(row.projectLabel, (byProject.get(row.projectLabel) ?? 0) + row.totalTokens)
-    const cost = estimateCostUsd(
-      row.model,
-      row.inputTokens,
-      row.cachedInputTokens,
-      row.outputTokens
-    )
+    const cost = estimateCostUsd(row.model, row)
     if (cost !== null) {
       hasAnyBillableCost = true
       estimatedCostUsd += cost
+    } else if (row.model !== null) {
+      // A named model with no pricing entry: its tokens silently leave the total.
+      hasUnpricedModels = true
     }
   }
 
-  const topModel = [...byModel.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? null
-  const topProject =
-    [...byProject.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? null
+  const topModel = highestUsageKey(byModel)
+  const topProject = highestUsageKey(byProject)
 
   return {
     scope,
@@ -72,6 +71,7 @@ export function buildSummary(
     reasoningOutputTokens,
     totalTokens,
     estimatedCostUsd: hasAnyBillableCost ? estimatedCostUsd : null,
+    hasUnpricedModels,
     topModel,
     topProject,
     hasAnyCodexData: filteredSessions.length > 0 || filteredDaily.length > 0
@@ -110,7 +110,12 @@ export function buildBreakdown(
   kind: CodexUsageBreakdownKind
 ): CodexUsageBreakdownRow[] {
   const rows = new Map<string, CodexUsageBreakdownRow>()
+  // Why: long-context counts price the row but are not part of the renderer-facing row shape.
+  const longContextByKey = new Map<string, CodexLongContextTokens>()
   const filteredDaily = getFilteredDaily(state, scope, range)
+  if (filteredDaily.length === 0) {
+    return []
+  }
   const filteredSessions = getFilteredSessions(state, scope, range)
 
   for (const daily of filteredDaily) {
@@ -137,6 +142,15 @@ export function buildBreakdown(
     existing.totalTokens += daily.totalTokens
     existing.hasInferredPricing ||= daily.hasInferredPricing
     rows.set(key, existing)
+    const longContext = longContextByKey.get(key) ?? {
+      longContextInputTokens: 0,
+      longContextCachedInputTokens: 0,
+      longContextOutputTokens: 0
+    }
+    longContext.longContextInputTokens += daily.longContextInputTokens
+    longContext.longContextCachedInputTokens += daily.longContextCachedInputTokens
+    longContext.longContextOutputTokens += daily.longContextOutputTokens
+    longContextByKey.set(key, longContext)
   }
 
   for (const session of filteredSessions) {
@@ -171,12 +185,9 @@ export function buildBreakdown(
   }
 
   for (const row of rows.values()) {
-    row.estimatedCostUsd = estimateCostUsd(
-      kind === 'model' ? row.key : null,
-      row.inputTokens,
-      row.cachedInputTokens,
-      row.outputTokens
-    )
+    const longContext = longContextByKey.get(row.key)
+    row.estimatedCostUsd =
+      kind === 'model' && longContext ? estimateCostUsd(row.key, { ...row, ...longContext }) : null
   }
 
   return [...rows.values()].sort((left, right) => right.totalTokens - left.totalTokens)

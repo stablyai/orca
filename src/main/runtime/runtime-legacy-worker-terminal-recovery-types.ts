@@ -1,11 +1,11 @@
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
 export type LegacyWorkerTerminalRecoveryResult = {
-  blockedPaneCount: number
   adoptedDispatchIds: string[]
   exitedDispatchIds: string[]
   deferredDispatchIds: string[]
@@ -14,6 +14,9 @@ export type LegacyWorkerTerminalRecoveryResult = {
 export type LegacyWorkerRecoveryOptions = {
   connectionId?: string
   materializeRenderer?: boolean
+  /** Internal timer pass; retry only assignments that remain unresolved. */
+  retry?: true
+  dispatchIds?: readonly string[]
 }
 
 export type LegacyWorkerRecoveryCandidate = LegacyWorkerTerminalRecoveryPlan['candidates'][number]
@@ -21,6 +24,7 @@ export type LegacyWorkerRecoveryCandidate = LegacyWorkerTerminalRecoveryPlan['ca
 export type LegacyWorkerRecoveryResolution = {
   candidate: LegacyWorkerRecoveryCandidate
   resolution: 'adopted' | 'exited'
+  hostId?: ExecutionHostId
 }
 
 export type TerminalWorkspaceLaunchScope = {
@@ -39,7 +43,7 @@ export type LegacyWorkerRecoveryWorkspace = {
 export type LegacyWorkerRecoveryInventory = PtyControllerInventory
 
 export type LegacyWorkerRecoveryPorts = {
-  preparePlan: () => LegacyWorkerTerminalRecoveryPlan
+  preparePlan: (dispatchIds?: readonly string[]) => LegacyWorkerTerminalRecoveryPlan
   resolveWorkspace: (
     candidate: LegacyWorkerRecoveryCandidate
   ) => Promise<LegacyWorkerRecoveryWorkspace>
@@ -69,6 +73,8 @@ export type LegacyWorkerRecoveryPorts = {
     resolution: 'adopted' | 'exited'
   ) => void
   canRecoverPersistentLocalPtys: () => boolean
+  isTerminalProvenAbsent?: (candidate: LegacyWorkerRecoveryCandidate) => Promise<boolean>
+  hasRequestedReleases: () => boolean
   reconcileRequestedReleases: () => Promise<unknown>
   reconcile: (options: LegacyWorkerRecoveryOptions) => Promise<LegacyWorkerTerminalRecoveryResult>
   updateRetry: (

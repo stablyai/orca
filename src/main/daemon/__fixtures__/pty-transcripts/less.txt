@@ -1,0 +1,164 @@
+[?1049h[25;1H[?1h=import './xterm-env-polyfill'[m
+import { Terminal } from '@xterm/headless'[m
+import { SerializeAddon } from '@xterm/addon-serialize'[m
+import { Unicode11Addon } from '@xterm/addon-unicode11'[m
+import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provide[m r'[m
+import {[m
+  readSavedCursorRegister,[m
+  serializeWithAbsoluteCursor[m
+} from '../../shared/terminal-serialize-absolute-cursor'[m
+import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'[m
+import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'[m
+import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'[m
+import { readTerminalModes } from './headless-emulator-modes'[m
+import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'[m
+import { TerminalMouseModeMirror } from './terminal-mouse-mode-mirror'[m
+import { TerminalOscCwdTitleScanner } from './terminal-osc-cwd-title-scanner'[m
+import { buildFrameRestoreSnapshotFields } from './terminal-frame-restore-sequences'[m
+import { splitTerminalSnapshotAnsi } from './terminal-snapshot-ansi-buffers'[m
+import {[m
+  installTerminalViewAttributeResponder,[m
+  type TerminalViewAttributeResponder[m
+} from './terminal-view-attribute-responder'[m
+import { installDeviceAttributesResponder } from './startup-device-attributes-responder'[m
+[7msample.ts[27m[K[Kimport type { TerminalSnapshot, TerminalModes } from './types'[m
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'[m
+import type { TerminalCursorContext } from '../../shared/terminal-composer-draft'[m
+import { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'[m
+[m
+export type HeadlessEmulatorOptions = {[m
+  cols: number[m
+  rows: number[m
+  scrollback?: number[m
+  /** Query reply sink (terminal-query-authority.md); only `forwardQueryReplies` writes em[m it here. The daemon Session must never pass this. */[m
+  onQueryReply?: (reply: string) => void[m
+  pathFlavor?: 'posix' | 'win32'[m
+  remotePosixFileUriAuthority?: boolean[m
+  wslDistro?: string[m
+}[m
+[m
+export type HeadlessEmulatorWriteOptions = {[m
+  /** Reply ownership for this exact chunk; default false so seed/hydration/snapshot write[m s never forward (main-side replay guard; twin of renderer replay-guard.ts). */[m
+  forwardQueryReplies?: boolean[m
+}[m
+[m
+type TerminalWithSynchronousWrite = Terminal & {[m
+:[K[K/[Kww[Kii[Kdd[Kee[K[1;1H[Kimport type { TerminalSnapshot, TerminalModes } from './types'[m
+[2;1H[Kimport type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'[m
+[3;1H[Kimport type { TerminalCursorContext } from '../../shared/terminal-composer-draft'[m
+[4;1H[Kimport { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'[m
+[5;1H[K[m
+[6;1H[Kexport type HeadlessEmulatorOptions = {[m
+[7;1H[K  cols: number[m
+[8;1H[K  rows: number[m
+[9;1H[K  scrollback?: number[m
+[10;1H[K  /** Query reply sink (terminal-query-authority.md); only `forwardQueryReplies` writes em[m [11;1H[Kit here. The daemon Session must never pass this. */[m
+[12;1H[K  onQueryReply?: (reply: string) => void[m
+[13;1H[K  pathFlavor?: 'posix' | 'win32'[m
+[14;1H[K  remotePosixFileUriAuthority?: boolean[m
+[15;1H[K  wslDistro?: string[m
+[16;1H[K}[m
+[17;1H[K[m
+[18;1H[Kexport type HeadlessEmulatorWriteOptions = {[m
+[19;1H[K  /** Reply ownership for this exact chunk; default false so seed/hydration/snapshot write[m [20;1H[Ks never forward (main-side replay guard; twin of renderer replay-guard.ts). */[m
+[21;1H[K  forwardQueryReplies?: boolean[m
+[22;1H[K}[m
+[23;1H[K[m
+[24;1H[Ktype TerminalWithSynchronousWrite = Terminal & {[m
+[25;1H[1;1H[Kimport type { TerminalSnapshot, TerminalModes } from './types'[m
+[2;1H[Kimport type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'[m
+[3;1H[Kimport type { TerminalCursorContext } from '../../shared/terminal-composer-draft'[m
+[4;1H[Kimport { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'[m
+[5;1H[K[m
+[6;1H[Kexport type HeadlessEmulatorOptions = {[m
+[7;1H[K  cols: number[m
+[8;1H[K  rows: number[m
+[9;1H[K  scrollback?: number[m
+[10;1H[K  /** Query reply sink (terminal-query-authority.md); only `forwardQueryReplies` writes em[m [11;1H[Kit here. The daemon Session must never pass this. */[m
+[12;1H[K  onQueryReply?: (reply: string) => void[m
+[13;1H[K  pathFlavor?: 'posix' | 'win32'[m
+[14;1H[K  remotePosixFileUriAuthority?: boolean[m
+[15;1H[K  wslDistro?: string[m
+[16;1H[K}[m
+[17;1H[K[m
+[18;1H[Kexport type HeadlessEmulatorWriteOptions = {[m
+[19;1H[K  /** Reply ownership for this exact chunk; default false so seed/hydration/snapshot write[m [20;1H[Ks never forward (main-side replay guard; twin of renderer replay-guard.ts). */[m
+[21;1H[K  forwardQueryReplies?: boolean[m
+[22;1H[K}[m
+[23;1H[K[m
+[24;1H[Ktype TerminalWithSynchronousWrite = Terminal & {[m
+[25;1H...skipping...
+中文字符 [7mwide[27m line 😀 emoji[m
+中文字符 [7mwide[27m line 😀 emoji[m
+中文字符 [7mwide[27m line 😀 emoji[m
+中文字符 [7mwide[27m line 😀 emoji[m
+中文字符 [7mwide[27m line 😀 emoji[m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[7m(END)[27m[K[K/[K[1m~[0m
+[7m(END)[27m[K[K...skipping...
+[m
+  setRestoredOscLinks(links: TerminalOscLinkRange[] | undefined): void {[m
+    this.restoredOscLinks = links?.slice() ?? [][m
+  }[m
+[m
+  clearScrollback(): void {[m
+    this.restoredOscLinks = [][m
+    this.terminal.clear()[m
+  }[m
+[m
+  dispose(): void {[m
+    this.disposed = true[m
+    this.terminal.dispose()[m
+  }[m
+[m
+  private getModes(): TerminalModes {[m
+    return readTerminalModes(this.terminal, this.mouseModes)[m
+  }[m
+}[m
+中文字符 [7mwide[27m line 😀 emoji[m
+中文字符 [7mwide[27m line 😀 emoji[m
+中文字符 [7mwide[27m line 😀 emoji[m
+中文字符 [7mwide[27m line 😀 emoji[m
+中文字符 [7mwide[27m line 😀 emoji[m
+[7m(END)[27m[K[K[H[2J[HMimport { installDeviceAttributesResponder } from './startup-device-attributes-responder'[m
+[HM} from './terminal-view-attribute-responder'[m
+[HM  type TerminalViewAttributeResponder[m
+[HM  installTerminalViewAttributeResponder,[m
+[HMimport {[m
+[HMimport { splitTerminalSnapshotAnsi } from './terminal-snapshot-ansi-buffers'[m
+[HMimport { buildFrameRestoreSnapshotFields } from './terminal-frame-restore-sequences'[m
+[HMimport { TerminalOscCwdTitleScanner } from './terminal-osc-cwd-title-scanner'[m
+[HMimport { TerminalMouseModeMirror } from './terminal-mouse-mode-mirror'[m
+[HMimport { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'[m
+[HMimport { readTerminalModes } from './headless-emulator-modes'[m
+[HMimport { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'[m
+[HMimport type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'[m
+[HMimport { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'[m
+[HM} from '../../shared/terminal-serialize-absolute-cursor'[m
+[HM  serializeWithAbsoluteCursor[m
+[HM  readSavedCursorRegister,[m
+[HMimport {[m
+[HMr'[m
+[HMimport { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provide[m[HMimport { Unicode11Addon } from '@xterm/addon-unicode11'[m
+[HMimport { SerializeAddon } from '@xterm/addon-serialize'[m
+[HMimport { Terminal } from '@xterm/headless'[m
+[HMimport './xterm-env-polyfill'[m
+[25;1H[K:[K[K[?1l>[?1049l

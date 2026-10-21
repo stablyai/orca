@@ -1,25 +1,12 @@
-import { useEffect, useState } from 'react'
-import { Keyboard, Platform } from 'react-native'
+import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
 
+/**
+ * How far the commit bar sits above the bottom of the screen.
+ *
+ * The measurement moved to `platform/keyboard-occlusion`, which the review composer needs too and
+ * which the page answers from `visualViewport` because react-native-web's `Keyboard` never fires.
+ * This name stays because it is what the hub's state calls the number.
+ */
 export function useMobileSourceControlKeyboardLift(): number {
-  const [keyboardLift, setKeyboardLift] = useState(0)
-
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-
-    const onShow = Keyboard.addListener(showEvent, (event) => {
-      // Why: iOS keyboard height already describes the obscured screen area.
-      // Subtracting the safe-area inset lets the commit bar tuck under the keyboard.
-      setKeyboardLift(Math.max(0, event.endCoordinates.height))
-    })
-    const onHide = Keyboard.addListener(hideEvent, () => setKeyboardLift(0))
-
-    return () => {
-      onShow.remove()
-      onHide.remove()
-    }
-  }, [])
-
-  return keyboardLift
+  return useKeyboardOcclusion()
 }

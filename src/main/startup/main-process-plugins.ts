@@ -14,8 +14,10 @@ import {
   normalizePluginConsents,
   normalizePluginIdList
 } from '../../shared/plugins/plugin-consent-state'
+import { projectPluginAgentStatusChangedPayload } from '../plugins/plugin-agent-status-event'
 import { setMainPluginLanguagePacks, setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
+import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { logStartupMilestone } from './startup-diagnostics'
 import { agentHookServer } from '../agent-hooks/server'
 import { emitPluginWorktreeLifecycle } from './main-process-pty-startup'
@@ -140,7 +142,10 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
       event.contentPacksChanged &&
       setMainPluginLanguagePacks(state.pluginService?.contentPacks.languagePacks.list() ?? [])
     ) {
-      void setMainUiLanguage(store.getSettings().uiLanguage).then(() => rebuildAppMenu())
+      void setMainUiLanguage(store.getSettings().uiLanguage).then(() => {
+        rebuildAppMenu()
+        rebuildSystemTrayMenu()
+      })
     }
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
@@ -153,16 +158,10 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   // v0 plugin event seams: agent status (hook pipeline tap) + worktree
   // lifecycle (runtime tap). Server-side filtered per plugin subscription.
   agentHookServer.subscribeEnrichedStatus((enriched) => {
-    // Why: plugins may automate on `working`; restored rows are historical claims, not fresh activity.
-    if (enriched.restoredUnconfirmed) {
-      return
+    const payload = projectPluginAgentStatusChangedPayload(enriched)
+    if (payload) {
+      state.pluginService?.emitEvent('agent.status.changed', payload)
     }
-    state.pluginService?.emitEvent('agent.status.changed', {
-      worktreeId: enriched.worktreeId ?? null,
-      paneKey: enriched.paneKey,
-      state: enriched.payload.state,
-      receivedAt: enriched.receivedAt
-    })
   })
   runtime.onWorktreeLifecycle(emitPluginWorktreeLifecycle)
 }

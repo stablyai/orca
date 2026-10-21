@@ -9,14 +9,8 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
-const {
-  storeState,
-  deps,
-  authorizeExternalPathMock,
-  openFileMock,
-  openFilePathMock,
-  setPendingEditorRevealMock
-} = doubles
+const { storeState, deps, openFileMock, openFilePathMock, setPendingEditorRevealMock, statMock } =
+  doubles
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -49,7 +43,6 @@ describe('handleOscLink', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -65,7 +58,7 @@ describe('handleOscLink', () => {
     // before asserting on positive behavior.
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(statMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/tmp/test.txt' }))
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/test.txt' }),
       { forceContentReload: true }
@@ -88,21 +81,24 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: 'C:/repo/src/index.ts'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: 'C:/repo/src/index.ts' })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: 'C:/repo/src/index.ts' }),
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: 'C:/repo/src/index.ts',
-      fileId: 'C:/repo/src/index.ts',
-      line: 12,
-      column: 3,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: 'C:/repo/src/index.ts',
+        fileId: 'C:/repo/src/index.ts',
+        line: 12,
+        column: 3,
+        matchLength: 0
+      })
+    )
   })
 
   it('opens Windows UNC file URL links from Windows worktrees', async () => {
@@ -118,9 +114,9 @@ describe('handleOscLink', () => {
     )
     await flushAsyncWork()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '//server/share/repo/test.txt'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '//server/share/repo/test.txt' })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '//server/share/repo/test.txt' }),
       { forceContentReload: true }
@@ -140,7 +136,6 @@ describe('handleOscLink', () => {
     )
     await flushAsyncWork()
 
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
   })
 
@@ -151,20 +146,23 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(statMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/tmp/test.txt' }))
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/test.txt' }),
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/test.txt',
-      fileId: '/tmp/test.txt',
-      line: 42,
-      column: 1,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '/tmp/test.txt',
+        fileId: '/tmp/test.txt',
+        line: 42,
+        column: 1,
+        matchLength: 0
+      })
+    )
   })
 
   it('opens file URL links with the system default app for shift+cmd/ctrl-click', async () => {
@@ -177,8 +175,8 @@ describe('handleOscLink', () => {
     )
     await flushAsyncWork()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/test.txt')
+    expect(statMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/tmp/test.txt' }))
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/test.txt', 'local')
     expect(openFileMock).not.toHaveBeenCalled()
     expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
   })
@@ -195,19 +193,22 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(statMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/tmp/test.txt' }))
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/test.txt' }),
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/test.txt',
-      fileId: '/tmp/test.txt',
-      line: 42,
-      column: 7,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '/tmp/test.txt',
+        fileId: '/tmp/test.txt',
+        line: 42,
+        column: 7,
+        matchLength: 0
+      })
+    )
   })
 
   it('opens UNC file URL links with line and column anchors', async () => {
@@ -224,9 +225,9 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '//server/Share/Repo/src/app.ts'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '//server/Share/Repo/src/app.ts' })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '//server/Share/Repo/src/app.ts',
@@ -235,13 +236,16 @@ describe('handleOscLink', () => {
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '//server/Share/Repo/src/app.ts',
-      fileId: '//server/Share/Repo/src/app.ts',
-      line: 12,
-      column: 3,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '//server/Share/Repo/src/app.ts',
+        fileId: '//server/Share/Repo/src/app.ts',
+        line: 12,
+        column: 3,
+        matchLength: 0
+      })
+    )
   })
 
   it('opens relative OSC file links against the terminal cwd', async () => {
@@ -258,9 +262,9 @@ describe('handleOscLink', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '/tmp/project/docs/README.md'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/project/docs/README.md' })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/tmp/project/docs/README.md',
@@ -287,22 +291,27 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
+      })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
       }),
       { forceContentReload: true }
     )
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
-      fileId: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
-      line: 5,
-      column: 3,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
+        fileId: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
+        line: 5,
+        column: 3,
+        matchLength: 0
+      })
+    )
   })
 
   it('maps file URL OSC links for a WSL worktree before opening them', async () => {
@@ -320,22 +329,27 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
+      })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
       }),
       { forceContentReload: true }
     )
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
-      fileId: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
-      line: 5,
-      column: 3,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
+        fileId: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
+        line: 5,
+        column: 3,
+        matchLength: 0
+      })
+    )
   })
 
   it('opens tilde OSC file links against explicit terminal home when cwd is outside home', async () => {
@@ -353,9 +367,9 @@ describe('handleOscLink', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '/home/alice/file.ts'
-    })
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/home/alice/file.ts' })
+    )
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/home/alice/file.ts'

@@ -89,7 +89,7 @@ const LEGAL_TRANSITIONS: Record<LifecycleEntity, Record<string, readonly string[
     start_unknown: ['start_unknown', 'ready', 'failed', 'stopping', 'stopped', 'abandoned'],
     ready: ['ready', 'succeeded', 'failed', 'stopping', 'abandoned'],
     stopping: ['stopping', 'stopped', 'stop_unknown', 'ready', 'failed', 'abandoned'],
-    stop_unknown: ['stop_unknown', 'failed', 'stopped', 'abandoned'],
+    stop_unknown: ['stop_unknown', 'ready', 'failed', 'stopped', 'abandoned'],
     succeeded: ['succeeded'],
     failed: ['failed'],
     stopped: ['stopped'],
@@ -154,7 +154,8 @@ export function transitionLifecycleWithDb(
   const legal = LEGAL_TRANSITIONS[params.entity][current.state] ?? []
   const promptReportCorrection =
     params.correction === 'unobserved_prompt_report' &&
-    current.state === 'failed' &&
+    (current.state === 'failed' ||
+      (params.entity === 'dispatch' && current.state === 'circuit_broken')) &&
     ((params.entity === 'task' && params.to === 'completed') ||
       (params.entity === 'dispatch' && params.to === 'completed') ||
       (params.entity === 'worker' && params.to === 'succeeded'))

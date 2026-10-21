@@ -1,0 +1,61 @@
+{
+  "backgroundLaunch": true,
+  "authAndRegistryTests": {
+    "before": { "passed": 48, "failed": 2, "exitCode": 1 },
+    "after": { "passed": 50, "failed": 0, "exitCode": 0 },
+    "newCases": 18,
+    "expectedBeforeFailures": [
+      "PromiseSettlementWaiters preserves abort scheduling with abortInMicrotask=true",
+      "shared auth filesystem wait lifetime releases aborted poll reasons while one native operation remains needed"
+    ],
+    "paths": [
+      "src/main/rate-limits/auth-filesystem-operation.test.ts",
+      "src/main/rate-limits/auth-filesystem-operation-retention.test.ts",
+      "src/main/rate-limits/codex-auth-presence.test.ts",
+      "src/main/rate-limits/kimi-fetcher-wsl-home.test.ts",
+      "src/main/rate-limits/kimi-fetcher.test.ts",
+      "src/shared/promise-settlement-waiters.test.ts"
+    ]
+  },
+  "existingRegistryConsumers": {
+    "passed": 39,
+    "failed": 0,
+    "exitCode": 0,
+    "paths": [
+      "src/relay/relay-watcher-setup-wait.test.ts",
+      "src/relay/relay-filesystem-watch-registry.test.ts",
+      "src/main/providers/ssh-filesystem-provider-watch-waiters.test.ts",
+      "src/main/runtime/file-watcher-host.test.ts",
+      "src/main/ipc/runtime-watcher-pending-assignment.test.ts",
+      "src/main/ipc/parcel-watcher-supervisor-capacity-wait.test.ts"
+    ]
+  },
+  "typechecks": {
+    "command": "node config/scripts/run-typecheck-projects-in-parallel.mjs",
+    "projects": [
+      "config/tsconfig.node.json",
+      "config/tsconfig.tc.cli.json",
+      "config/tsconfig.tc.web.json"
+    ],
+    "exitCode": 0
+  },
+  "focusedOxlint": { "ordinaryExitCode": 0, "typeAwareExitCode": 0 },
+  "formatCheckExitCode": 0,
+  "changedCodeQuality": {
+    "base": "2fccacadbe23",
+    "changedFiles": 297,
+    "newFindings": 0,
+    "exitCode": 0
+  },
+  "proof": {
+    "node": "26.6.0",
+    "electron": "43.7.0",
+    "electronNode": "24.21.0",
+    "bothExitCode": 0,
+    "orderingCasesPerRuntime": 24,
+    "beforeAfterOrderingEqual": true,
+    "rawFilesystemStall": "injected pending promise, not an affected-host capture",
+    "amplifiedBytesPerCase": 8388608,
+    "ordinaryErrorBytes": "not measured"
+  }
+}

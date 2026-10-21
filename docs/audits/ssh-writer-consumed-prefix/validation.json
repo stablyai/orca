@@ -1,0 +1,157 @@
+{
+  "tests": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-multiplexer-writer-retention.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/main/ssh/ssh-channel-multiplexer-saturation-wedge.test.ts src/main/providers/ssh-pty-write.test.ts",
+    "passed": 31,
+    "files": 5,
+    "newRegressionCases": 5,
+    "exitCode": 0
+  },
+  "baselineOverlay": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config docs/audits/ssh-writer-consumed-prefix/before.config.mjs src/main/ssh/ssh-multiplexer-writer-retention.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/main/ssh/ssh-channel-multiplexer-saturation-wedge.test.ts src/main/providers/ssh-pty-write.test.ts",
+    "passed": 27,
+    "expectedFailed": 4,
+    "failures": "Ordinary/control rolling backlog, each with drain/dispose cleanup variant: 32 completed buffers remain reachable.",
+    "exitCode": 1
+  },
+  "typecheck": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:node",
+    "exitCode": 0
+  },
+  "publicationQuality": {
+    "files": [
+      "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts",
+      "src/main/ssh/ssh-multiplexer-writer-retention.test.ts",
+      "docs/audits/ssh-writer-consumed-prefix/reproduce.cjs",
+      "docs/audits/ssh-writer-consumed-prefix/sources.cjs",
+      "docs/audits/ssh-writer-consumed-prefix/scenario.cjs",
+      "docs/audits/ssh-writer-consumed-prefix/before.config.mjs"
+    ],
+    "scans": [
+      {
+        "label": "code quality",
+        "argv": [
+          "pnpm",
+          "exec",
+          "oxlint",
+          "--no-ignore",
+          "--deny-warnings",
+          "--report-unused-disable-directives-severity",
+          "warn",
+          "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts",
+          "src/main/ssh/ssh-multiplexer-writer-retention.test.ts",
+          "docs/audits/ssh-writer-consumed-prefix/reproduce.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/sources.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/scenario.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/before.config.mjs"
+        ],
+        "exitCode": 0
+      },
+      {
+        "label": "casting code quality",
+        "argv": [
+          "pnpm",
+          "exec",
+          "oxlint",
+          "--no-ignore",
+          "--deny-warnings",
+          "--config",
+          "config/oxlint-code-quality-casting.json",
+          "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts",
+          "src/main/ssh/ssh-multiplexer-writer-retention.test.ts",
+          "docs/audits/ssh-writer-consumed-prefix/reproduce.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/sources.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/scenario.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/before.config.mjs"
+        ],
+        "exitCode": 0
+      },
+      {
+        "label": "type-aware code quality",
+        "argv": [
+          "pnpm",
+          "exec",
+          "oxlint",
+          "--no-ignore",
+          "--deny-warnings",
+          "--type-aware",
+          "--config",
+          "config/oxlint-code-quality-type-aware.json",
+          "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts",
+          "src/main/ssh/ssh-multiplexer-writer-retention.test.ts",
+          "docs/audits/ssh-writer-consumed-prefix/reproduce.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/sources.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/scenario.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/before.config.mjs"
+        ],
+        "exitCode": 0
+      },
+      {
+        "label": "React Doctor",
+        "argv": [
+          "pnpm",
+          "exec",
+          "oxlint",
+          "--no-ignore",
+          "--deny-warnings",
+          "--config",
+          "config/oxlint-react-doctor.json",
+          "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts",
+          "src/main/ssh/ssh-multiplexer-writer-retention.test.ts",
+          "docs/audits/ssh-writer-consumed-prefix/reproduce.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/sources.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/scenario.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/before.config.mjs"
+        ],
+        "exitCode": 0
+      },
+      {
+        "label": "design system",
+        "argv": [
+          "pnpm",
+          "exec",
+          "oxlint",
+          "--no-ignore",
+          "--deny-warnings",
+          "--config",
+          "config/oxlint-design-system.json",
+          "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts",
+          "src/main/ssh/ssh-multiplexer-writer-retention.test.ts",
+          "docs/audits/ssh-writer-consumed-prefix/reproduce.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/sources.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/scenario.cjs",
+          "docs/audits/ssh-writer-consumed-prefix/before.config.mjs"
+        ],
+        "exitCode": 0
+      }
+    ]
+  },
+  "changedQuality": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_CODE_QUALITY_BASE=HEAD pnpm run check:code-quality:changed",
+    "exitCode": 0,
+    "note": "The five explicit-file scans above include every durable CJS/MJS file; the ordinary changed gate cannot see newly ignored artifacts before staging."
+  },
+  "proofs": {
+    "node": "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc --max-old-space-size=192 docs/audits/ssh-writer-consumed-prefix/reproduce.cjs",
+    "electron": "Installed Electron executable with ELECTRON_RUN_AS_NODE=1 and ORCA_BACKGROUND_LAUNCH=1; same flags and script path.",
+    "exitCodes": [0, 0],
+    "beforeAfterCasesPerRuntime": 12,
+    "crlfLoaderControl": true,
+    "bundledSourceHashChecks": 9
+  },
+  "sourceParity": {
+    "identicalNamedSchedulerBaselines": 3,
+    "independentMainIdenticalBundledAndCallerSources": 12,
+    "historicalIdenticalBundledAndCallerSources": 5,
+    "historicalProvenanceSources": 12,
+    "historicalExecutableReplay": false
+  },
+  "format": "All 12 promoted TS/CJS/MJS/MD/JSON paths checked with oxfmt stdin mode, excluding fix.patch.",
+  "gitDiffCheckExitCode": 0,
+  "publicationWhitespace": {
+    "commandTemplate": "git diff --no-index --check <empty-file> <promoted-path>",
+    "files": 12,
+    "expectedExitCode": 1,
+    "diagnostics": 0,
+    "note": "Each complete file is checked, including ignored new artifacts. Exit 1 only reports its content differs from an empty file; no whitespace diagnostics. fix.patch uses zero-context hunks."
+  }
+}

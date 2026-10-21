@@ -111,7 +111,7 @@ export function guardRunningTerminalClose(params: {
     decided = true
   }
 
-  void probePtyRunningWork(settings, ptyIds, { timeoutMs: RUNNING_CLOSE_PROBE_TIMEOUT_MS })
+  void probePtyRunningWork(ptyIds, { timeoutMs: RUNNING_CLOSE_PROBE_TIMEOUT_MS })
     .then((probes) => {
       if (decided) {
         return

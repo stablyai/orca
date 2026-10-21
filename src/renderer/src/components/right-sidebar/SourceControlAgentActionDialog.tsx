@@ -51,7 +51,8 @@ export type SourceControlAgentActionDialogProps = {
   onStart?: (args: {
     agent: TuiAgent
     commandInput: string
-    agentArgs: string
+    /** Omitted when CLI arguments do not apply to this launch, so it resolves the global setting. */
+    agentArgs?: string
   }) => boolean | Promise<boolean>
 }
 
@@ -79,6 +80,7 @@ export function SourceControlAgentActionDialog(
     detecting,
     statusCopy,
     agentArgs,
+    agentArgsApply,
     commandTemplate,
     saveLaunchRecipe,
     saveTargetValue,
@@ -116,6 +118,7 @@ export function SourceControlAgentActionDialog(
             detecting={detecting}
             statusCopy={statusCopy}
             agentArgs={agentArgs}
+            agentArgsApply={agentArgsApply}
             commandTemplate={commandTemplate}
             savedCommandInputTemplate={savedCommandInputTemplate}
             saveLaunchRecipe={saveLaunchRecipe}

@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { useIssueSourceActions } from './issue-source-actions'
 import { useMultipleCreateReset } from './multiple-create-reset'
-import type { SmartGitHubPrStartPointSelection } from './source-selection-decisions'
+import type { SmartSourceSelection } from './source-selection-decisions'
 
 const sources: LinkedWorkItemSummary[] = [
   {
@@ -15,20 +15,6 @@ const sources: LinkedWorkItemSummary[] = [
     number: 42,
     title: 'Fix checkout',
     url: 'https://github.com/acme/app/pull/42'
-  },
-  {
-    provider: 'github',
-    type: 'issue',
-    number: 43,
-    title: 'Fix checkout',
-    url: 'https://github.com/acme/app/issues/43'
-  },
-  {
-    provider: 'gitlab',
-    type: 'mr',
-    number: 44,
-    title: 'Fix checkout',
-    url: 'https://gitlab.com/acme/app/-/merge_requests/44'
   }
 ]
 
@@ -44,9 +30,10 @@ function useSelectedSourceReset(
   const lastAutoNameRef = useRef(name)
   const branchAutoNameRef = useRef('fix-checkout')
   const lastAutoNoteRef = useRef('Generated note')
-  const smartGitHubPrStartPointSelectionRef = useRef<SmartGitHubPrStartPointSelection | null>(
+  const smartSourceSelectionRef = useRef<SmartSourceSelection | null>(
     initialItem?.provider === 'github' && initialItem.type === 'pr'
       ? {
+          kind: 'github-pr',
           repoId: 'repo-1',
           item: {
             ...initialItem,
@@ -63,6 +50,8 @@ function useSelectedSourceReset(
   )
   const source = useIssueSourceActions({
     baseBranch,
+    // Why: a PR/issue/branch source owns the base, so "create more" must still clear it.
+    baseBranchNamesWorkspace: true,
     branchAutoNameRef,
     isProjectGroupTarget,
     lastAutoNameRef,
@@ -87,7 +76,7 @@ function useSelectedSourceReset(
     setReuseEligibleBranch: vi.fn(),
     setReuseSelectedBranch: vi.fn(),
     setStartFromResetHint: vi.fn(),
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   })
   const reset = useMultipleCreateReset({
     handleClearSmartNameSelection: source.handleClearSmartNameSelection,
@@ -107,7 +96,7 @@ function useSelectedSourceReset(
     name,
     note,
     branchAutoNameRef,
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   }
 }
 
@@ -119,12 +108,12 @@ describe('create more source reset', () => {
       expect(result.current.selection?.label).toContain('Fix checkout')
 
       if (item.provider === 'github' && item.type === 'pr') {
-        expect(result.current.smartGitHubPrStartPointSelectionRef.current).not.toBeNull()
+        expect(result.current.smartSourceSelectionRef.current).not.toBeNull()
       }
 
       act(() => result.current.resetForNextCreate())
 
-      expect(result.current.smartGitHubPrStartPointSelectionRef.current).toBeNull()
+      expect(result.current.smartSourceSelectionRef.current).toBeNull()
       expect(result.current.selection).toBeNull()
       expect(result.current.linkedWorkItem).toBeNull()
       expect(result.current.baseBranch).toBeUndefined()
@@ -133,36 +122,4 @@ describe('create more source reset', () => {
       expect(result.current.branchAutoNameRef.current).toBe('')
     }
   )
-
-  it.each(['linear', 'jira'] as const)('clears a %s task on a folder target', (provider) => {
-    const item: LinkedWorkItemSummary = {
-      provider,
-      type: 'issue',
-      number: 0,
-      title: 'Fix checkout',
-      url:
-        provider === 'linear'
-          ? 'https://linear.app/acme/issue/APP-45'
-          : 'https://acme.atlassian.net/browse/APP-45'
-    }
-    const { result } = renderHook(() => useSelectedSourceReset(item, true))
-    expect(result.current.selection?.kind).toBe(provider)
-
-    act(() => result.current.resetForNextCreate())
-
-    expect(result.current.selection).toBeNull()
-    expect(result.current.linkedWorkItem).toBeNull()
-    expect(result.current.name).toBe('')
-    expect(result.current.note).toBe('')
-  })
-
-  it('clears a plain branch selection before the next create', () => {
-    const { result } = renderHook(() => useSelectedSourceReset(null, false, 'feature/checkout'))
-    expect(result.current.selection).toEqual({ kind: 'branch', label: 'feature/checkout' })
-
-    act(() => result.current.resetForNextCreate())
-
-    expect(result.current.selection).toBeNull()
-    expect(result.current.baseBranch).toBeUndefined()
-  })
 })

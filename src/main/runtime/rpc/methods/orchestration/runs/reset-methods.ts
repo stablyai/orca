@@ -1,9 +1,10 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { ResetParams } from '../schemas'
 
-export const ORCHESTRATION_RESET_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_RESET_METHODS = [
   defineMethod({
     name: 'orchestration.reset',
+    permission: 'workspace',
     params: ResetParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()

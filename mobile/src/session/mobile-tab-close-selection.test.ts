@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BULK_TAB_CLOSE_ACTIONS, selectBulkCloseTabs } from './mobile-tab-close-selection'
+import { selectBulkCloseTabs } from './mobile-tab-close-selection'
 
 const tab = (id: string, isDirty?: boolean, isPinned?: boolean) => ({
   id,
@@ -9,13 +9,6 @@ const tab = (id: string, isDirty?: boolean, isPinned?: boolean) => ({
 
 describe('selectBulkCloseTabs', () => {
   const tabs = [tab('a'), tab('b'), tab('c'), tab('d')]
-
-  it('offers only close-others and close-left actions', () => {
-    expect(BULK_TAB_CLOSE_ACTIONS).toEqual([
-      { mode: 'others', label: 'Close Other Tabs' },
-      { mode: 'left', label: 'Close Tabs to the Left' }
-    ])
-  })
 
   it('selects every tab except the anchor for mode "others"', () => {
     expect(selectBulkCloseTabs(tabs, 'b', 'others').map((t) => t.id)).toEqual(['a', 'c', 'd'])

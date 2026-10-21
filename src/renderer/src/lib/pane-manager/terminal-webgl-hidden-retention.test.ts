@@ -6,7 +6,8 @@ import {
   releaseHiddenWebglRetention,
   resetHiddenWebglRetentionForTest,
   retainedHiddenWebglOwnerCountForTest,
-  tryRetainHiddenPanesWebgl
+  tryRetainHiddenPanesWebgl,
+  type HiddenWebglRetentionOwner
 } from './terminal-webgl-hidden-retention'
 
 function createPane(withAddon = true): ManagedPaneInternal {
@@ -24,7 +25,7 @@ function createPane(withAddon = true): ManagedPaneInternal {
   } as unknown as ManagedPaneInternal
 }
 
-function retentionFor(owner: object, panes: ManagedPaneInternal[]) {
+function retentionFor(owner: HiddenWebglRetentionOwner, panes: ManagedPaneInternal[]) {
   return { owner, livePanes: () => panes }
 }
 

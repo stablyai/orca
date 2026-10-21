@@ -1,4 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// These transport fixtures never read abandoned-launch ownership from the app store.
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -7,6 +20,7 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 // Client-side wire regression: the host dimensions every snapshot it publishes,
 // but only the REQUESTED snapshot path ever read `cols`/`rows` back. Both PUSH
@@ -52,11 +66,7 @@ describe('remote transport snapshot source-grid threading', () => {
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
   })
 
   it('carries the host grid on pushed snapshots and omits it when the host has none', async () => {
@@ -124,7 +134,7 @@ describe('remote transport snapshot source-grid threading', () => {
     deliverSnapshot({ cols: 154, rows: 68, seq: 9, source: 'headless' }, 'recovered')
     await expect.poll(() => onReplayData.mock.calls.length, { timeout: 5000 }).toBe(2)
     expect(onReplayData).toHaveBeenLastCalledWith(
-      '\x1b[2J\x1b[3J\x1b[Hrecovered',
+      '\x1b[?2026l\x1b[2J\x1b[3J\x1b[Hrecovered',
       expect.objectContaining({ snapshotCols: 154, snapshotRows: 68 })
     )
 

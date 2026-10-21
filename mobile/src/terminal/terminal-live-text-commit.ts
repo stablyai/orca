@@ -1,4 +1,5 @@
 import { getTerminalLiveSpecialKeyBytes } from './terminal-live-input'
+import { readUtf8CodePointAt } from '../../../src/shared/utf8-byte-limits'
 
 export type TerminalLiveSpecialKeyDecision =
   | { readonly kind: 'ignore' }
@@ -49,6 +50,19 @@ export function getTerminalLiveSpecialKeyDecision({
   return { kind: 'send-now', bytes }
 }
 
+/**
+ * Whether this control ends the line, which is what ends the field's editing session.
+ *
+ * The field holds a mirror of text the PTY has already echoed, so after a carriage return the
+ * terminal owns it and the mirror must restart from empty — the same rule `flushPendingLiveInputText`
+ * states for an explicit flush. `endsWith` rather than equality because a custom key may carry a
+ * command and its return in one payload; a return in the middle is a line inside that payload, not
+ * the end of this one.
+ */
+export function terminalLiveAccessoryInputEndsLine(bytes: string): boolean {
+  return bytes.endsWith('\r')
+}
+
 export function getTerminalLiveAccessoryBytesDecision({
   bytes,
   localEdit,
@@ -79,5 +93,7 @@ export function getTerminalLiveAccessoryLocalEditText({
     return fieldText
   }
 
-  return Array.from(fieldText).slice(0, -1).join('')
+  const end = fieldText.length
+  const width = end > 1 && readUtf8CodePointAt(fieldText, end - 2) > 0xffff ? 2 : 1
+  return fieldText.slice(0, -width)
 }

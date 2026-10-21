@@ -1,4 +1,5 @@
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { WorktreeMemory } from '../../../../shared/process-stats-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
@@ -24,6 +25,8 @@ export type UnifiedSessionRow = {
   cpu: Metric
   memory: Metric
   hasLocalSamples: boolean
+  /** Sampled on a paired server; this client cannot end it. */
+  readOnly?: true
 }
 
 export type UnifiedWorktreeRow = {
@@ -35,8 +38,10 @@ export type UnifiedWorktreeRow = {
   memory: Metric
   history: number[]
   hasLocalSamples: boolean
-  /** Why: repo connectionId, not sample presence, drives the remote chip. */
+  /** Execution-host metadata drives the remote chip; missing samples do not. */
   isRemote: boolean
+  /** Paired server that sampled this row; absent for this machine and SSH rows. */
+  hostLabel?: string
   sessions: UnifiedSessionRow[]
   browsers: BrowserWorkspace[]
 }
@@ -46,7 +51,7 @@ export type UnifiedProjectGroup = {
   repoName: string
   cpu: Metric
   memory: Metric
-  /** Why: kept for callsite stability; this now means SSH-backed repo rows. */
+  /** True when any workspace in this project runs over SSH. */
   hasRemoteChildren: boolean
   worktrees: UnifiedWorktreeRow[]
 }
@@ -64,14 +69,24 @@ export type MergeContext = {
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   /** From useAppStore: false until renderer state can distinguish bound/orphan. */
   workspaceSessionReady: boolean
-  /** Repo display names by repo id for daemon-only groups. */
+  /** Project display names for sampled and daemon-only groups. */
   repoDisplayNameById: Map<string, string>
   /** Repo connectionId by repo id (null/missing == local). */
   repoConnectionIdById: Map<string, string | null>
-  /** Repo runtime-host scope by repo id (missing == keep row). */
-  repoRuntimeScopedById: Map<string, boolean>
+  /** Runtime execution host id by repo id (missing == not hosted by a paired server). */
+  repoRuntimeHostIdById: Map<string, string>
+  /** Process samples each paired server reported for its own workspaces. */
+  runtimeHostResources?: readonly RuntimeHostResourceSample[]
   /** Browser inventory is open-only; the Resource Manager never scans it in the background. */
   browserTabsByWorktree?: Record<string, BrowserWorkspace[]>
-  /** Canonical worktrees keep browser-only workspace rows out of synthetic buckets. */
+  /** Canonical workspace names and grouping for every resource source. */
   worktreeById?: ReadonlyMap<string, Worktree>
+  /** Ids present on more than one execution host; their catalog row cannot name a host. */
+  ambiguousWorktreeIds?: ReadonlySet<string>
+}
+
+export type RuntimeHostResourceSample = {
+  hostId: `runtime:${string}`
+  hostLabel: string
+  worktrees: readonly WorktreeMemory[]
 }

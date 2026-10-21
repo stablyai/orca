@@ -6,6 +6,7 @@ import type { CommandHandler } from '../dispatch'
 import { formatTerminalClose, reportCliError, printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { getRequiredWorktreeSelector, getTerminalHandle } from '../selectors'
+import { describeUnconfirmedCloseStop } from '../../shared/pty-liveness-verdict'
 
 /** A false stop receipt is an error only when the host supplied a liveness verdict. */
 function terminalCloseFailure(close: RuntimeTerminalClose): RuntimeClientError | null {
@@ -13,14 +14,17 @@ function terminalCloseFailure(close: RuntimeTerminalClose): RuntimeClientError |
     return null
   }
 
-  const verdict = close.ptyStopVerdict
-  const detail =
-    verdict === 'live'
-      ? 'The PTY is live.'
-      : `The PTY was not confirmed stopped: ${close.ptyStopReason ?? 'its host could not be reached'}.`
+  if (close.ptyStopVerdict === 'live') {
+    return new RuntimeClientError(
+      'terminal_stop_live',
+      `Terminal ${close.handle} close failed to confirm the PTY stopped (live). The PTY is live.`,
+      { close }
+    )
+  }
+  // Why: the close itself committed; only the process stop is unproven, so say which.
   return new RuntimeClientError(
-    verdict === 'live' ? 'terminal_stop_live' : 'terminal_stop_unverifiable',
-    `Terminal ${close.handle} close failed to confirm the PTY stopped (${verdict}). ${detail}`,
+    'terminal_stop_unverifiable',
+    `Closed terminal ${close.handle}. ${describeUnconfirmedCloseStop(close)}`,
     { close }
   )
 }

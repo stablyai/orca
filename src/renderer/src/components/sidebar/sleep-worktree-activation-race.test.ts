@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => {
         state.ptyIdsByTabId[tab.id] = []
       }
     }),
+    worktreesByRepo: {},
+    detectedWorktreesByRepo: {},
     tabsByWorktree: {} as Record<string, { id: string }[]>,
     ptyIdsByTabId: {} as Record<string, string[]>
   }
@@ -39,6 +41,9 @@ vi.mock('@/lib/worktree-activation', () => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: async () => ({ stoppedSessionIds: [] })
+}))
 
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import { runSleepWorktrees } from './sleep-worktree-flow'
@@ -88,6 +93,7 @@ describe('sleep flow vs slept-workspace activation', () => {
     expect(mocks.resumeWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-parent' })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-parent', {
+      navigationIntent: 'user-open',
       revealInSidebar: false
     })
 
@@ -102,6 +108,7 @@ describe('sleep flow vs slept-workspace activation', () => {
     await activateWorktreeFromSidebar('wt-parent')
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-parent', {
+      navigationIntent: 'user-open',
       revealInSidebar: false
     })
     expect(mocks.toastError).toHaveBeenCalledWith(

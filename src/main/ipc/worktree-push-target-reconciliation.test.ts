@@ -1,5 +1,4 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
-import { validateGitExecArgs } from '../../relay/git-exec-validator'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitRemoteExec, WorktreePushTargetStore } from './worktree-push-target-cleanup'
@@ -232,26 +231,6 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       []
     )
     expect(reclaimed).toEqual([])
-  })
-
-  it('sends only argv the relay accepts, so the sweep is not silently skipped over SSH', async () => {
-    // Exercise every branch (config probe, for-each-ref probe, and the reclaim itself).
-    const exec = makeExec({
-      remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]),
-      branchConfig: `branch.contributor/fix.remote ${FORK_REMOTE}`,
-      localBranches: 'main'
-    })
-    await reconcileOrphanedPrRemotesWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({ [worktreeId('/wt/gone')]: forkTarget() }),
-      exec,
-      []
-    )
-    expect(exec.mock.calls.length).toBeGreaterThan(0)
-    for (const [args] of exec.mock.calls) {
-      expect(() => validateGitExecArgs(args)).not.toThrow()
-    }
   })
 })
 

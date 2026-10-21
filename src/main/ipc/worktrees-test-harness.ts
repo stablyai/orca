@@ -1,4 +1,3 @@
-import { __resetSshWorktreeCreateFetchCacheForTests } from './worktree-remote'
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache
@@ -11,6 +10,7 @@ import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { createWorktreeRuntimeStub, type WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import { handlers, mainWindow, store } from './worktrees-test-ipc-surface'
 import { configureMetadataPruningStoreMocks } from './worktrees-test-metadata-pruning-store'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 import {
   ORIGINAL_PLATFORM,
   setPlatform,
@@ -52,9 +52,7 @@ import {
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
   gitExecFileAsyncMock,
-  getSshGitProviderMock,
   getSshFilesystemProviderMock,
-  getActiveMultiplexerMock,
   deleteWorktreeHistoryDirMock,
   advertisedUrlWatcherForgetWorktreeMock,
   pruneCleanupScanSnapshotMock,
@@ -64,8 +62,7 @@ import {
   recordRemovalSnapshotPruneMock,
   killAllProcessesForWorktreeMock,
   clearProviderPtyStateMock,
-  getLocalPtyProviderMock,
-  getSshPtyProviderMock
+  getLocalPtyProviderMock
 } from './worktrees-test-module-mocks'
 
 export {
@@ -91,7 +88,6 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     .getAllWorktreeMetaForHost
   setPlatform(ORIGINAL_PLATFORM)
   clearConfiguredWorktreeSharedDirectoriesCacheForTests()
-  __resetSshWorktreeCreateFetchCacheForTests()
   __resetDetectedWorktreeScanCacheForTests()
   resetSshProviderAuthorities()
   invalidateAuthorizedRootsCache()
@@ -132,9 +128,7 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     computeWorktreePathMock,
     ensurePathWithinWorkspaceMock,
     gitExecFileAsyncMock,
-    getSshGitProviderMock,
     getSshFilesystemProviderMock,
-    getActiveMultiplexerMock,
     mainWindow.webContents.send,
     store.getRepos,
     store.getRepo,
@@ -146,11 +140,12 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     store.getAllWorktreeMeta,
     store.captureNativeLocalWorktreeMetadataScanExpectation,
     store.setWorktreeMeta,
-    store.setWorktreeMetaForHost,
     store.getProjectHostSetups,
     store.removeWorktreeMeta,
     store.pruneSessionlessMissingLocalWorktreeMetadataForRepo,
     store.removeWorkspaceSessionStateForWorktree,
+    store.getWorkspaceSessionHostIds,
+    store.getWorkspaceSession,
     store.getAllWorktreeLineage,
     store.removeWorktreeLineage,
     store.getAllWorkspaceLineage,
@@ -162,7 +157,6 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     killAllProcessesForWorktreeMock,
     clearProviderPtyStateMock,
     getLocalPtyProviderMock,
-    getSshPtyProviderMock,
     deleteWorktreeHistoryDirMock,
     advertisedUrlWatcherForgetWorktreeMock,
     pruneCleanupScanSnapshotMock,
@@ -184,7 +178,6 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   assertWorktreeCleanForRemovalMock.mockResolvedValue(undefined)
   findExistingWorktreeSymlinkPathsMock.mockResolvedValue([])
   getLocalPtyProviderMock.mockReturnValue({} as never)
-  getSshPtyProviderMock.mockReturnValue({} as never)
 
   for (const key of Object.keys(handlers)) {
     delete handlers[key]
@@ -216,9 +209,6 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   store.getRetiredWorktreeNameRegistry.mockReturnValue({ exhaustedTiers: 0, names: [] })
   resetRetirementCollisionKeyCacheForTests()
   store.setWorktreeMeta.mockReturnValue({})
-  store.setWorktreeMetaForHost.mockImplementation((...args: unknown[]) =>
-    store.setWorktreeMeta(args[0] as string, args[2] as object)
-  )
   store.getProjectHostSetups.mockReturnValue([
     {
       id: 'repo-1',
@@ -233,6 +223,8 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
       updatedAt: 0
     }
   ])
+  store.getWorkspaceSessionHostIds.mockReturnValue(['local'])
+  store.getWorkspaceSession.mockReturnValue(getDefaultWorkspaceSession())
   store.getAllWorktreeLineage.mockReturnValue({})
   store.getAllWorkspaceLineage.mockReturnValue({})
   store.getFolderWorkspaces.mockReturnValue([])
@@ -304,7 +296,7 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   // Default: no direct-read recovery, so a listing that omits the row still fails the create.
   describeCreatedWorktreeMock.mockResolvedValue(undefined)
   forceDeleteLocalBranchMock.mockResolvedValue(undefined)
-  const runtimeStub = createWorktreeRuntimeStub()
+  const runtimeStub = createWorktreeRuntimeStub(mainWindow)
   registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   return runtimeStub
 }

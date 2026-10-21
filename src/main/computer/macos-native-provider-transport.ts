@@ -5,6 +5,10 @@ import { release, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { connectMacOSProviderSocket } from './macos-native-provider-socket'
+import {
+  reapMacOSProviderProcess,
+  type MacOSProviderProcessOwner
+} from './macos-native-provider-process-reaping'
 import { RuntimeClientError } from './runtime-client-error'
 
 const HELPER_CONNECT_TIMEOUT_MS = 10_000
@@ -45,6 +49,27 @@ export function attachMacOSNativeProviderSocketListeners(
   }
 }
 
+export class NativeProviderLineBuffer {
+  private pending = ''
+  private hasCompleteLine = false
+
+  push(chunk: string, handleLine: (line: string) => void): void {
+    this.pending += chunk
+    this.hasCompleteLine ||= chunk.endsWith('\n') || chunk.includes('\n')
+    if (!this.hasCompleteLine) {
+      return
+    }
+    // Keep complete lines retryable if a callback throws.
+    this.pending = consumeNativeProviderLines(this.pending, handleLine)
+    this.hasCompleteLine = false
+  }
+
+  clear(): void {
+    this.pending = ''
+    this.hasCompleteLine = false
+  }
+}
+
 export function consumeNativeProviderLines(
   buffer: string,
   handleLine: (line: string) => void
@@ -65,10 +90,12 @@ export function consumeNativeProviderLines(
 
 export async function startMacOSNativeProviderSocket({
   helperExecutablePath,
-  isCurrent
+  isCurrent,
+  providerProcess
 }: {
   helperExecutablePath: string
   isCurrent: (socketPath: string) => boolean
+  providerProcess: MacOSProviderProcessOwner
 }): Promise<StartedMacOSProviderSocket> {
   const socketDirectory = mkdtempSync(join(tmpdir(), 'orca-computer-use-'))
   chmodSync(socketDirectory, 0o700)
@@ -79,6 +106,9 @@ export async function startMacOSNativeProviderSocket({
   // Why: launching the nested helper via LaunchServices can make TCC evaluate
   // Orca.app as responsible; the signed helper executable owns this grant.
   const provider = spawnProvider(helperExecutablePath, socketPath, socketTokenPath)
+  // Why: own the helper from birth. Adopting only after connect leaves a window
+  // where a quit during startup strands it with nobody holding the handle.
+  providerProcess.adopt(provider)
   const providerFailure = waitForProviderLaunchFailure(provider)
   const connectAbort = new AbortController()
   try {
@@ -90,7 +120,6 @@ export async function startMacOSNativeProviderSocket({
     rmSync(socketTokenPath, { force: true })
     if (!isCurrent(socketPath)) {
       socket.destroy()
-      cleanupSocketDirectory(socketDirectory)
       throw new RuntimeClientError(
         'accessibility_error',
         'native macOS provider startup was superseded'
@@ -100,12 +129,11 @@ export async function startMacOSNativeProviderSocket({
   } catch (error) {
     connectAbort.abort()
     providerFailure.cleanup()
-    // Why: connect failures happen after spawn; terminate the detached helper
-    // so repeated startup attempts do not leave orphan providers.
-    provider.kill('SIGTERM')
-    if (isCurrent(socketPath)) {
-      cleanupSocketDirectory(socketDirectory)
-    }
+    // Why: connect failures and superseded startups both happen after spawn;
+    // escalate so a helper that ignores SIGTERM cannot outlive the attempt.
+    reapMacOSProviderProcess(provider)
+    // Each attempt owns a unique directory, even after its generation is superseded.
+    cleanupSocketDirectory(socketDirectory)
     throw error
   }
 }

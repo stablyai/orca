@@ -19,7 +19,10 @@ export function createInitialManagedPane(
     overflow: 'hidden'
   })
   host.root.appendChild(pane.container)
-  openTerminal(pane, host.options.terminalLigaturesEnabled?.())
+  openTerminal(pane, {
+    ligatures: host.options.terminalLigaturesEnabled?.(),
+    inlineImages: host.options.terminalInlineImagesEnabled?.()
+  })
   host.setActivePaneId(pane.id)
   applyPaneOpacity(host.panes.values(), host.getActivePaneId(), host.getStyleOptions())
 
@@ -27,7 +30,7 @@ export function createInitialManagedPane(
     focusPanePreservingOverlays(pane)
   }
 
-  host.publishPaneCreated(pane)
+  host.publishPaneCreated(pane, { placement: { kind: 'new-tab' } })
   return toPublicPane(pane)
 }
 

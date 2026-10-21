@@ -1,0 +1,130 @@
+name: Clean obsolete PR work
+
+on:
+  pull_request_target:
+    types: [closed, synchronize]
+
+permissions:
+  actions: write
+  pull-requests: read
+
+jobs:
+  clean:
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 5
+    steps:
+      - name: Cancel obsolete PR checks
+        if: github.event.action == 'synchronize' || github.event.pull_request.merged == false
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pr = context.payload.pull_request
+            const superseded = context.payload.action === 'synchronize'
+            const targets = [
+              ['pr-checks', 'pr.yml'],
+              ['node-server', 'node-server-tests.yml'],
+              ['ssh-windows-hosts', 'ssh-windows-hosts.yml'],
+              ['ssh-hostile-hosts', 'ssh-hostile-hosts.yml'],
+              ['mobile', 'mobile.yml'],
+              ['computer-e2e', 'computer-e2e.yml'],
+              ['wsl-orcad-e2e', 'wsl-orcad-e2e.yml'],
+              ['performance-contracts', 'performance-contracts.yml'],
+              ['pr-test-loc', 'pr-test-loc.yml'],
+              ['preflight-critical-path', 'preflight-critical-path-benchmark.yml'],
+              ['preflight-cli', 'preflight-cli-platforms.yml'],
+              ['macos-updater', 'macos-updater-tests.yml'],
+              ['preflight-comparison', 'preflight-benchmark.yml'],
+              ['windows-typecheck-parity', 'windows-typecheck-parity.yml'],
+              ['zcode-transcript-contract', 'zcode-transcript-contract.yml'],
+              ['release-ref-validation', 'release-ref-validation.yml'],
+              ['docs-pr', 'docs.yml'],
+              ['cloud-verify-refs/pull', 'cloud-verify.yml', '/merge'],
+              ['pnpm-verification-pilot', 'ci-pnpm-verification-pilot.yml'],
+              ['win-orcad-serve-switch-e2e', 'win-orcad-serve-switch-e2e.yml'],
+              ['pi-provider-runtime', 'pi-provider-runtime.yml'],
+              ['coding-plan-contract', 'zcode-credential-contract.yml', '-credentials'],
+              ['release-javascript-comparison', 'release-javascript-benchmark.yml'],
+              ['ci-cache-warmup-platforms', 'ci-cache-warmup-platforms.yml'],
+              ['pi-owner-runtime', 'pi-owner-runtime.yml'],
+              ['git-command-termination', 'git-command-termination-runtime.yml'],
+              ['skill-roundtrip-pull_request', 'skill-update-roundtrip.yml'],
+              ['ci-cache-warmup', 'ci-cache-warmup.yml']
+            ]
+            const stillCurrent = async () => {
+              const { data: current } = await github.rest.pulls.get({
+                ...context.repo, pull_number: pr.number
+              })
+              if (superseded) {
+                return current.state === 'open' && current.head.sha === pr.head.sha
+              }
+              return current.state === 'closed' && current.merged_at === null &&
+                current.closed_at === pr.closed_at
+            }
+            if (!Number.isSafeInteger(pr.number) || pr.number <= 0 ||
+                (superseded ? !/^[a-f0-9]{40}$/.test(pr.head?.sha ?? '') :
+                  !Number.isFinite(Date.parse(pr.closed_at)))) {
+              throw new Error('Missing PR identity')
+            }
+            if (!await stillCurrent()) return
+            for (const [prefix, workflow, suffix = ''] of targets) {
+              const group = prefix === 'cloud-verify-refs/pull'
+                ? `${prefix}/${pr.number}${suffix}` : `${prefix}-${pr.number}${suffix}`
+              let data
+              try {
+                const response = await github.request(
+                  'GET /repos/{owner}/{repo}/actions/concurrency_groups/{concurrency_group_name}', {
+                    ...context.repo, concurrency_group_name: group,
+                    headers: { 'X-GitHub-Api-Version': '2026-03-10' }
+                  }
+                )
+                data = response.data
+              } catch (error) {
+                if (error.status === 404) continue
+                throw error
+              }
+              if (data.group_name !== group || !Array.isArray(data.group_members)) {
+                throw new Error(`Unexpected concurrency group: ${group}`)
+              }
+              for (const member of data.group_members) {
+                // Only whole PR runs; release/manual jobs never share this identity.
+                if (member.job_id !== undefined || !Number.isSafeInteger(member.run_id)) continue
+                const { data: run } = await github.rest.actions.getWorkflowRun({
+                  ...context.repo, run_id: member.run_id
+                })
+                if (run.event !== 'pull_request' || run.path !== `.github/workflows/${workflow}` ||
+                    run.status === 'completed' ||
+                    (superseded ? !/^[a-f0-9]{40}$/.test(run.head_sha ?? '') ||
+                      run.head_sha === pr.head.sha :
+                      !Number.isFinite(Date.parse(run.created_at)) ||
+                      Date.parse(run.created_at) > Date.parse(pr.closed_at))) continue
+                if (!await stillCurrent()) return
+                try {
+                  await github.rest.actions.cancelWorkflowRun({
+                    ...context.repo, run_id: member.run_id
+                  })
+                  core.info(`Requested cancellation of ${group}: ${member.run_id}`)
+                } catch (error) {
+                  if (error.status !== 409) throw error
+                }
+              }
+            }
+      # No checkout: this runs trusted default-branch code, including for fork PRs.
+      - uses: actions/github-script@v8
+        if: ${{ !cancelled() && github.event.action == 'closed' }}
+        with:
+          script: |
+            const ref = `refs/pull/${context.payload.pull_request.number}/merge`
+            const caches = await github.paginate(github.rest.actions.getActionsCacheList, {
+              ...context.repo, ref, per_page: 100
+            })
+            for (const cache of caches) {
+              if (cache.ref !== ref) throw new Error(`Unexpected cache ref: ${cache.ref}`)
+              try {
+                await github.rest.actions.deleteActionsCacheById({
+                  ...context.repo, cache_id: cache.id
+                })
+              } catch (error) {
+                if (error.status !== 404) throw error
+              }
+            }
+            core.info(`Removed ${caches.length} caches scoped to ${ref}`)

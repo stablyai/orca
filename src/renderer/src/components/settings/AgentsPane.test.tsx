@@ -8,7 +8,16 @@ import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
 import { getAgentGeneratedTabTitlesTitle } from './agent-generated-tab-title-copy'
 import { getAgentStatusHooksTitle } from './agent-status-hooks-copy'
-import { getAgentAwakeDescription, getAgentAwakeTitle } from './agent-awake-copy'
+import {
+  getAgentWorkspaceTrustDescription,
+  getAgentWorkspaceTrustTitle
+} from './agent-workspace-trust-copy'
+import {
+  getAgentAwakeDescription,
+  getAgentAwakeLidNote,
+  getAgentAwakeTitle
+} from './agent-awake-copy'
+import { getCodexTerminalServerIsolationTitle } from './codex-terminal-server-isolation-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
 import type * as AgentRuntimeSettingModule from './AgentRuntimeSetting'
@@ -17,6 +26,7 @@ import {
   AgentPermissionsSetting,
   AgentGeneratedTabTitlesSetting,
   AgentStatusHooksSetting,
+  AgentWorkspaceTrustSetting,
   AgentsPane,
   getAgentsPaneSearchEntries,
   buildAgentAvailabilitySettingsUpdate,
@@ -24,6 +34,7 @@ import {
 } from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
 import { TooltipProvider } from '../ui/tooltip'
+import { resolveSettingsHostScope } from './settings-host-scope'
 
 const detectedAgentsMock = vi.hoisted(() => ({
   detectedIds: ['claude'] as TuiAgent[] | null,
@@ -94,6 +105,13 @@ function renderPane(
       React.createElement(AgentsPane, {
         settings,
         updateSettings: vi.fn(),
+        // Why: mirrors the page before the user picks a host — the default host setting.
+        hostScope: resolveSettingsHostScope({
+          choice: null,
+          defaultEnvironmentId: settings.activeRuntimeEnvironmentId,
+          savedEnvironmentIds: [],
+          catalogHydrated: false
+        }),
         ...props
       })
     )
@@ -171,7 +189,7 @@ describe('AgentsPane', () => {
     expect(detectedAgentsMock.lastTarget).toEqual({ kind: 'local' })
   })
 
-  it('scopes agent detection to the active remote server', () => {
+  it('waits for host launch settings before displaying remote agent controls', () => {
     // Repro for the "Remote Server lists local agents" bug: with an Active
     // Server selected, the Installed list must probe that server's PATH.
     // Why the mutation: renderToStaticMarkup makes useSyncExternalStore read
@@ -189,22 +207,29 @@ describe('AgentsPane', () => {
         activeRuntimeEnvironmentId: 'env-1'
       })
 
-      expect(detectedAgentsMock.lastTarget).toEqual({ kind: 'runtime', environmentId: 'env-1' })
-      expect(markup).toContain('on Coder')
+      expect(detectedAgentsMock.lastTarget).toBeUndefined()
+      expect(markup).toContain('Loading agent settings…')
+      expect(markup).not.toContain('Default Agent')
     } finally {
       initialState.runtimeEnvironments = priorRuntimeEnvironments
     }
   })
 
-  it('shows a retryable error when initial remote detection fails', () => {
+  it('detects agents on the host chosen in the page, not the focused server', () => {
+    renderPane(
+      { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
+      { hostScope: { target: { kind: 'local' }, available: true } }
+    )
+
+    expect(detectedAgentsMock.lastTarget).toEqual({ kind: 'local' })
+  })
+
+  it('shows a retryable error when initial local detection fails', () => {
     detectedAgentsMock.detectedIds = null
     detectedAgentsMock.isLoading = false
     detectedAgentsMock.detectionFailed = true
 
-    const markup = renderPane({
-      ...getDefaultSettings('/tmp'),
-      activeRuntimeEnvironmentId: 'env-1'
-    })
+    const markup = renderPane(getDefaultSettings('/tmp'))
 
     expect(markup).toContain('Couldn’t detect installed agents')
     expect(markup).toContain('Retry')
@@ -260,6 +285,32 @@ describe('AgentsPane', () => {
       ).toBe(false)
     } finally {
       delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+    }
+  })
+
+  it('keeps the host-only folder trust row out of paired web clients and their search', () => {
+    Reflect.set(globalThis, '__ORCA_WEB_CLIENT__', true)
+    try {
+      expect(renderPane(getDefaultSettings('/tmp'))).not.toContain(getAgentWorkspaceTrustTitle())
+      expect(
+        matchesSettingsSearch(
+          'trust',
+          getAgentsPaneSearchEntries({ includeAgentWorkspaceTrust: false })
+        )
+      ).toBe(false)
+    } finally {
+      Reflect.deleteProperty(globalThis, '__ORCA_WEB_CLIENT__')
+    }
+  })
+
+  it('keeps the host-only Codex server row out of paired web clients', () => {
+    Reflect.set(globalThis, '__ORCA_WEB_CLIENT__', true)
+    try {
+      expect(renderPane(getDefaultSettings('/tmp'))).not.toContain(
+        getCodexTerminalServerIsolationTitle()
+      )
+    } finally {
+      Reflect.deleteProperty(globalThis, '__ORCA_WEB_CLIENT__')
     }
   })
 
@@ -321,6 +372,24 @@ describe('AgentsPane', () => {
     )
   })
 
+  it('describes macOS lid behavior without promising lid-closed wake', () => {
+    expect(getAgentAwakeDescription('Macintosh')).toBe(
+      'Choose On, Agent, or Off. Agent mode prevents idle sleep while agents work, so long runs finish with the lid open. Closing the lid still puts this Mac to sleep.'
+    )
+  })
+
+  it('picks the lid note for each platform', () => {
+    expect(getAgentAwakeLidNote('Macintosh')).toBe(
+      'Prevents idle sleep with the lid open; closing the lid still puts this Mac to sleep.'
+    )
+    expect(getAgentAwakeLidNote('Windows')).toBe(
+      "Lid-close behavior follows this device's power settings."
+    )
+    expect(getAgentAwakeLidNote('X11; Linux x86_64')).toBe(
+      'Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
+    )
+  })
+
   it('updates the keep-awake mode with its legacy fallback', () => {
     const updateSettings = vi.fn()
     const element = AgentAwakeSetting({
@@ -363,6 +432,28 @@ describe('AgentsPane', () => {
     expect(updateSettings).toHaveBeenCalledWith({
       agentStatusHooksEnabled: false
     })
+  })
+
+  it('defaults agent folder trust on and toggles it off', () => {
+    const updateSettings = vi.fn()
+    const element = AgentWorkspaceTrustSetting({
+      settings: getDefaultSettings('/tmp'),
+      updateSettings
+    })
+
+    const trustSwitch = findSwitchRow(element, getAgentWorkspaceTrustTitle())
+    expect(trustSwitch.props.checked).toBe(true)
+    expect(getAgentWorkspaceTrustDescription()).toContain('hooks')
+    expect(getAgentWorkspaceTrustDescription()).toContain('already trusted stay trusted')
+    expect(getAgentWorkspaceTrustDescription()).toContain('without you watching')
+
+    const onChange: unknown = trustSwitch.props.onChange
+    expect(typeof onChange).toBe('function')
+    if (typeof onChange === 'function') {
+      onChange()
+    }
+
+    expect(updateSettings).toHaveBeenCalledWith({ agentWorkspaceTrustEnabled: false })
   })
 
   it('toggles generated tab titles with the next value', () => {
@@ -412,24 +503,40 @@ describe('AgentsPane', () => {
     expect(matchesSettingsSearch('permission', getAgentsPaneSearchEntries())).toBe(true)
     expect(matchesSettingsSearch('yolo', getAgentsPaneSearchEntries())).toBe(true)
     expect(matchesSettingsSearch('manual', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('approve for me', getAgentsPaneSearchEntries())).toBe(true)
   })
 
-  it('applies the selected agent permission mode from settings without a mixed segment', () => {
-    const onChange = vi.fn()
-    const element = AgentPermissionsSetting({ mode: 'mixed', onChange })
-    const props = element.props.children.props.action.props as {
-      value: 'yolo'
-      onChange: (value: 'yolo' | 'manual' | 'mixed') => void
-      options: { value: string }[]
-    }
+  it.each([
+    ['manual', undefined, 'How much agents can do without asking you.', 1],
+    ['auto', 'yolo', 'Supported agents</button> approve safe actions on their own.', 2],
+    ['auto', 'mixed', 'Supported agents</button> approve safe actions on their own.', 1],
+    ['mixed', undefined, 'Most agents use Yolo. Choosing a mode resets the marked exceptions', 0]
+  ] as const)('describes %s permissions with others %s', (mode, nonAutoMode, copy, checked) => {
+    const markup = renderToStaticMarkup(
+      <TooltipProvider>
+        <AgentPermissionsSetting
+          mode={mode}
+          nonAutoMode={nonAutoMode}
+          majorityMode="yolo"
+          autoAgentLabels={['Claude', 'Claude Agent Teams', 'Codex']}
+          onChange={vi.fn()}
+          onChangeNonAuto={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+    expect(markup).toContain(copy)
+    expect(markup.includes('inert=""')).toBe(mode !== 'auto')
+    expect(markup.match(/aria-checked="true"/g)?.length ?? 0).toBe(checked)
+  })
 
-    expect(props.value).toBe('yolo')
-    expect(props.options.map((option) => option.value)).toEqual(['yolo', 'manual'])
-    props.onChange('mixed')
-    expect(onChange).not.toHaveBeenCalled()
-
-    props.onChange('manual')
-    expect(onChange).toHaveBeenCalledWith('manual')
+  it('explains inline when the host cannot run Auto', () => {
+    const markup = renderToStaticMarkup(
+      <TooltipProvider>
+        <AgentPermissionsSetting mode="yolo" autoSupported={false} onChange={vi.fn()} />
+      </TooltipProvider>
+    )
+    expect(markup).toContain('Auto needs a newer Orca on this host.')
+    expect(markup).toMatch(/aria-disabled="true"[^>]*>Auto</)
   })
 
   it('keeps catalog agent ids, labels, and commands discoverable in settings search', () => {

@@ -1,3 +1,5 @@
+import type { RpcClient } from './rpc-client'
+
 // Where a relay dial is waiting, so a bound can tell "the cell never answered the
 // upgrade" from "the cell took the dial and is slow" — the two look identical from
 // ConnectionState, which stays 'connecting' until relay-hello arrives.
@@ -17,12 +19,21 @@ export type RelayDialStageSource = {
   onDialStageChange(listener: (stage: RelayDialStage) => void): () => void
 }
 
-export function relayDialStageSource(session: object): RelayDialStageSource | null {
-  const candidate = session as Partial<RelayDialStageSource>
-  return typeof candidate.getDialStage === 'function' &&
-    typeof candidate.onDialStageChange === 'function'
-    ? (candidate as RelayDialStageSource)
-    : null
+/** An RPC client that may also report relay dial stages; only relay sessions do. */
+export type MaybeRelayDialStageSource = RpcClient & Partial<RelayDialStageSource>
+
+function reportsDialStages(
+  session: MaybeRelayDialStageSource
+): session is MaybeRelayDialStageSource & RelayDialStageSource {
+  return (
+    typeof session.getDialStage === 'function' && typeof session.onDialStageChange === 'function'
+  )
+}
+
+export function relayDialStageSource(
+  session: MaybeRelayDialStageSource
+): RelayDialStageSource | null {
+  return reportsDialStages(session) ? session : null
 }
 
 export class RelayDialStageTracker implements RelayDialStageSource {

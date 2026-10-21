@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
@@ -17,6 +17,9 @@ const {
   parseImportedSymbols,
   isVersionNodeAboveFloor,
   findFloorViolations,
+  DESKTOP_GLIBC_FLOOR,
+  SERVER_SLOT_GLIBC_FLOOR,
+  COMPAT_SLOT_GLIBC_FLOOR,
   findMissingProviderDeps,
   collectNativeBinaries,
   verifyLinuxGlibcFloor
@@ -116,6 +119,52 @@ describe('verify-linux-glibc-floor parsing', () => {
       ].join('\n')
     )
     expect(findFloorViolations(needs, '/opt/app/pty.node')).toEqual([])
+  })
+})
+
+describe('floor profiles', () => {
+  const needs = (...names) => names.map((name) => ({ library: 'libc.so.6', name, weak: false }))
+  const flagged = (list, floor) =>
+    findFloorViolations(list, '/opt/orcad/pty.node', floor).map((v) => v.name)
+
+  it('keeps the desktop default at Ubuntu 20.04', () => {
+    expect(DESKTOP_GLIBC_FLOOR.label).toContain('glibc 2.31')
+    expect(flagged(needs('GLIBC_2.31', 'GLIBC_2.32'))).toEqual(['GLIBC_2.32'])
+    expect(flagged(needs('GLIBC_2.31', 'GLIBC_2.32'), DESKTOP_GLIBC_FLOOR)).toEqual(['GLIBC_2.32'])
+  })
+
+  it('gates server slots at glibc 2.28 and GCC 8 libstdc++', () => {
+    expect(
+      flagged(
+        needs(
+          'GLIBC_2.28',
+          'GLIBC_2.29',
+          'GLIBCXX_3.4.25',
+          'GLIBCXX_3.4.26',
+          'CXXABI_1.3.11',
+          'CXXABI_1.3.12'
+        ),
+        SERVER_SLOT_GLIBC_FLOOR
+      )
+    ).toEqual(['GLIBC_2.29', 'GLIBCXX_3.4.26', 'CXXABI_1.3.12'])
+  })
+
+  it('gates the compat slot at glibc 2.17 and GCC 4.8 libstdc++', () => {
+    expect(
+      flagged(
+        needs('GLIBC_2.17', 'GLIBC_2.18', 'GLIBCXX_3.4.19', 'GLIBCXX_3.4.20', 'CXXABI_1.3.8'),
+        COMPAT_SLOT_GLIBC_FLOOR
+      )
+    ).toEqual(['GLIBC_2.18', 'GLIBCXX_3.4.20', 'CXXABI_1.3.8'])
+  })
+
+  it('still rejects non-numeric glibc nodes under every profile', () => {
+    for (const floor of [SERVER_SLOT_GLIBC_FLOOR, COMPAT_SLOT_GLIBC_FLOOR]) {
+      expect(flagged(needs('GLIBC_ABI_DT_RELR', 'GLIBC_PRIVATE'), floor)).toEqual([
+        'GLIBC_ABI_DT_RELR',
+        'GLIBC_PRIVATE'
+      ])
+    }
   })
 })
 
@@ -297,6 +346,24 @@ describe.skipIf(process.platform === 'win32')('verifyLinuxGlibcFloor', () => {
     }
   })
 
+  it('applies the floor profile it is given and names it in the failure', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-glibc-profile-'))
+    try {
+      const objdumpPath = await writeStubObjdump(root)
+      await mkdir(join(root, 'app'), { recursive: true })
+      await writeFile(join(root, 'app', 'good-pty.node'), ELF_HEADER) // GLIBC_2.28
+      const verify = (glibcFloor) =>
+        verifyLinuxGlibcFloor(join(root, 'app'), { objdumpPath, glibcFloor })
+
+      expect(() => verify(SERVER_SLOT_GLIBC_FLOOR)).not.toThrow()
+      expect(() => verify(COMPAT_SLOT_GLIBC_FLOOR)).toThrow(
+        /will not load on glibc 2\.17 \(CentOS 7[^\n]*\n\s+good-pty\.node needs GLIBC_2\.28/
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('fails closed when objdump cannot read a binary (non-zero exit)', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-glibc-closed-'))
     try {
@@ -373,6 +440,17 @@ describe('bundled native binary architecture', () => {
     // Still caught even when the slice being built is x64.
     expect(findArchViolation(file, 'x64')).toMatchObject({ actual: 'x64', expectedArch: 'arm64' })
     await rm(dir, { recursive: true, force: true })
+  })
+
+  // Release arm64 slices live in `linux-arm64-unpacked`; bundled ripgrep ships linux-x64 beside it.
+  it('reads arch tokens only below the slice root', async () => {
+    const root = join(await mkdtemp(join(tmpdir(), 'orca-elf-arch-')), 'linux-arm64-unpacked')
+    const dir = join(root, 'resources', 'ripgrep', 'linux-x64')
+    await mkdir(dir, { recursive: true })
+    const file = join(dir, 'rg')
+    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.x64))
+    expect(findArchViolation(file, 'arm64', root)).toBeNull()
+    await rm(dirname(root), { recursive: true, force: true })
   })
 
   it('flags an x86-64 binary in an arm64 slice', async () => {

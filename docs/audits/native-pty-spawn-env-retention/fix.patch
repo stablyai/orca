@@ -1,0 +1,17 @@
+diff --git a/src/main/daemon/pty-subprocess/subprocess-handle.ts b/src/main/daemon/pty-subprocess/subprocess-handle.ts
+index 974602dfe8..5d7ef16342 100644
+--- a/src/main/daemon/pty-subprocess/subprocess-handle.ts
++++ b/src/main/daemon/pty-subprocess/subprocess-handle.ts
+@@ -24,4 +24,5 @@ export function createDaemonPtySubprocessHandle(args: {
+   startupAgentRecognition: RecognizedAgentProcess | null
+ }): SubprocessHandle {
++  const reportsChildExitStatus = args.reportsChildExitStatus
+   const proc = args.process
+   // node-pty exposes destroy at runtime but omits it from IPty.
+@@ -57,5 +58,5 @@ export function createDaemonPtySubprocessHandle(args: {
+       exitCode,
+       signal,
+-      hostReportsChildExitStatus: args.reportsChildExitStatus
++      hostReportsChildExitStatus: reportsChildExitStatus
+     })
+   })

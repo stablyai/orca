@@ -40,16 +40,16 @@ export function buildSpoolHookBody(record: SpoolRecord): Record<string, unknown>
     version: record.version,
     launchToken: record.launchToken,
     hookEventName: record.hookEventName,
+    agentProcess: record.agentProcess,
+    opencodeMajor: record.opencodeMajor,
+    opencodeTui: record.opencodeTui,
+    opencodeSharedServer: record.opencodeSharedServer,
     payload: record.payload
   }
 }
 
 export function launchTokenHash(token: string | undefined): string | null {
   return token?.trim() ? createHash('sha256').update(token.trim()).digest('hex') : null
-}
-
-export function readSpoolRecords(path: string, now = Date.now()): SpoolRecord[] {
-  return readSpoolFile(path, now).records
 }
 
 /** Records plus the byte offset through the last COMPLETE line. A torn trailing line is
@@ -103,21 +103,20 @@ export function readSpoolFile(
 export type SpoolDrainOptions = {
   endpointDir: string
   getPersistedLaunchTokenHash: (paneKey: string) => string | undefined
-  ingest: (record: SpoolRecord) => void
+  ingest: (record: SpoolRecord) => Promise<void> | void
   now?: number
 }
 
 /** Drain JSONL files in place; never replace or unlink an inode held by a hook writer. */
-export function drainAgentHookSpool(options: SpoolDrainOptions): number {
-  const spoolDir = join(options.endpointDir, 'spool')
+function spoolCandidates(endpointDir: string): { path: string; mtimeMs: number }[] {
+  const spoolDir = join(endpointDir, 'spool')
   let names: string[]
   try {
     names = readdirSync(spoolDir)
   } catch {
-    return 0
+    return []
   }
-  const now = options.now ?? Date.now()
-  const candidates = names
+  return names
     .map((name) => {
       const path = join(spoolDir, name)
       try {
@@ -132,39 +131,53 @@ export function drainAgentHookSpool(options: SpoolDrainOptions): number {
     .filter((entry): entry is { path: string; mtimeMs: number } => entry !== null)
     .sort((a, b) => a.mtimeMs - b.mtimeMs)
     .slice(0, AGENT_HOOK_SPOOL_MAX_FILES)
+}
+
+function consumeSpoolPrefix(path: string, consumed: number): void {
+  try {
+    const fd = openSync(path, 'r+')
+    try {
+      // Keep the inode so a concurrent append handle cannot silently orphan writes.
+      const size = fstatSync(fd).size
+      if (size > consumed) {
+        // Why: a hook may have appended between the read and here; shift the unread tail
+        // to the front instead of truncating to zero, which would erase it.
+        const tail = Buffer.alloc(size - consumed)
+        readSync(fd, tail, 0, tail.length, consumed)
+        writeSync(fd, tail, 0, tail.length, 0)
+        ftruncateSync(fd, tail.length)
+      } else {
+        ftruncateSync(fd, 0)
+      }
+    } finally {
+      closeSync(fd)
+    }
+  } catch {
+    // A concurrently removed or inaccessible file is harmless; the next launch retries it.
+  }
+}
+
+function matchesLaunchToken(
+  record: SpoolRecord,
+  options: Pick<SpoolDrainOptions, 'getPersistedLaunchTokenHash'>
+): boolean {
+  const expected = options.getPersistedLaunchTokenHash(record.paneKey)
+  return !expected || launchTokenHash(record.launchToken) === expected
+}
+
+/** Await each admission before consuming a file so owner probes preserve replay order and retry. */
+export async function drainAgentHookSpoolAsync(options: SpoolDrainOptions): Promise<number> {
+  const now = options.now ?? Date.now()
   let drained = 0
-  for (const candidate of candidates) {
+  for (const candidate of spoolCandidates(options.endpointDir)) {
     const { records, consumed } = readSpoolFile(candidate.path, now)
     for (const record of records) {
-      const expected = options.getPersistedLaunchTokenHash(record.paneKey)
-      const actual = launchTokenHash(record.launchToken)
-      if (expected && actual !== expected) {
-        continue
+      if (matchesLaunchToken(record, options)) {
+        await options.ingest({ ...record, isReplay: true })
+        drained += 1
       }
-      options.ingest({ ...record, isReplay: true })
-      drained += 1
     }
-    try {
-      const fd = openSync(candidate.path, 'r+')
-      try {
-        // Keep the inode so a concurrent append handle cannot silently orphan writes.
-        const size = fstatSync(fd).size
-        if (size > consumed) {
-          // Why: a hook may have appended between the read and here; shift the unread tail
-          // to the front instead of truncating to zero, which would erase it.
-          const tail = Buffer.alloc(size - consumed)
-          readSync(fd, tail, 0, tail.length, consumed)
-          writeSync(fd, tail, 0, tail.length, 0)
-          ftruncateSync(fd, tail.length)
-        } else {
-          ftruncateSync(fd, 0)
-        }
-      } finally {
-        closeSync(fd)
-      }
-    } catch {
-      // A concurrently removed or inaccessible file is harmless; the next launch retries it.
-    }
+    consumeSpoolPrefix(candidate.path, consumed)
   }
   return drained
 }

@@ -1,0 +1,381 @@
+{
+  "runtime": {
+    "node": "26.6.0",
+    "acorn": "8.17.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.3",
+    "libffi": "3.7.1",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "147",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "3.6.3",
+    "simdjson": "4.6.6",
+    "simdutf": "7.7.0",
+    "sqlite": "3.53.4",
+    "tz": "2026a",
+    "undici": "8.9.0",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "14.6.202.34-node.26",
+    "zlib": "1.2.12",
+    "zstd": "1.5.7"
+  },
+  "sourceHashLineEndings": "canonical LF",
+  "crlfLoaderControl": {
+    "syntheticCrlfReads": 2,
+    "identicalSourcesAndHashes": true
+  },
+  "cases": [
+    {
+      "fixed": false,
+      "release": "drain",
+      "laneName": "ordinary",
+      "during": {
+        "completedWrites": 2049,
+        "accepted": 2049,
+        "completedBuffersAlive": 2048,
+        "completedCallbacksAlive": 2048,
+        "logicalFrames": 2,
+        "logicalBytes": 706,
+        "physicalSlots": 2050,
+        "head": 2048,
+        "liveQueued": 2,
+        "disposed": false
+      },
+      "after": {
+        "completedBuffersAlive": 0,
+        "physicalSlots": 0,
+        "logicalFrames": 0,
+        "logicalBytes": 0,
+        "disposed": false
+      }
+    },
+    {
+      "fixed": false,
+      "release": "dispose",
+      "laneName": "ordinary",
+      "during": {
+        "completedWrites": 2049,
+        "accepted": 2049,
+        "completedBuffersAlive": 2048,
+        "completedCallbacksAlive": 2048,
+        "logicalFrames": 2,
+        "logicalBytes": 706,
+        "physicalSlots": 2050,
+        "head": 2048,
+        "liveQueued": 2,
+        "disposed": false
+      },
+      "after": {
+        "completedBuffersAlive": 0,
+        "physicalSlots": 0,
+        "logicalFrames": 0,
+        "logicalBytes": 0,
+        "disposed": true
+      }
+    },
+    {
+      "fixed": false,
+      "release": "drain",
+      "laneName": "control",
+      "during": {
+        "completedWrites": 2049,
+        "accepted": 2049,
+        "completedBuffersAlive": 2048,
+        "completedCallbacksAlive": 2048,
+        "logicalFrames": 2,
+        "logicalBytes": 184,
+        "physicalSlots": 2050,
+        "head": 2048,
+        "liveQueued": 2,
+        "disposed": false
+      },
+      "after": {
+        "completedBuffersAlive": 0,
+        "physicalSlots": 0,
+        "logicalFrames": 0,
+        "logicalBytes": 0,
+        "disposed": false
+      }
+    },
+    {
+      "fixed": false,
+      "release": "dispose",
+      "laneName": "control",
+      "during": {
+        "completedWrites": 2049,
+        "accepted": 2049,
+        "completedBuffersAlive": 2048,
+        "completedCallbacksAlive": 2048,
+        "logicalFrames": 2,
+        "logicalBytes": 184,
+        "physicalSlots": 2050,
+        "head": 2048,
+        "liveQueued": 2,
+        "disposed": false
+      },
+      "after": {
+        "completedBuffersAlive": 0,
+        "physicalSlots": 0,
+        "logicalFrames": 0,
+        "logicalBytes": 0,
+        "disposed": true
+      }
+    },
+    {
+      "kind": "real-node-writable",
+      "fixed": false,
+      "writes": 129,
+      "accepted": 128,
+      "logicalFrames": 3,
+      "logicalBytes": 49440,
+      "physicalSlots": 130,
+      "retainedBuffers": 128
+    },
+    {
+      "kind": "in-flight-callback-ownership",
+      "fixed": false,
+      "retainedByNativeCallback": 1,
+      "afterNativeCallbackRelease": 0,
+      "pendingResult": {
+        "outcome": "unverifiable",
+        "reason": "transport_settlement_lost",
+        "bytesHandedToTransport": true
+      },
+      "queuedResult": {
+        "outcome": "refused",
+        "reason": "transport_rejected_before_handoff"
+      }
+    },
+    {
+      "fixed": true,
+      "release": "drain",
+      "laneName": "ordinary",
+      "during": {
+        "completedWrites": 2049,
+        "accepted": 2049,
+        "completedBuffersAlive": 0,
+        "completedCallbacksAlive": 0,
+        "logicalFrames": 2,
+        "logicalBytes": 706,
+        "physicalSlots": 2,
+        "head": 0,
+        "liveQueued": 2,
+        "disposed": false
+      },
+      "after": {
+        "completedBuffersAlive": 0,
+        "physicalSlots": 0,
+        "logicalFrames": 0,
+        "logicalBytes": 0,
+        "disposed": false
+      }
+    },
+    {
+      "fixed": true,
+      "release": "dispose",
+      "laneName": "ordinary",
+      "during": {
+        "completedWrites": 2049,
+        "accepted": 2049,
+        "completedBuffersAlive": 0,
+        "completedCallbacksAlive": 0,
+        "logicalFrames": 2,
+        "logicalBytes": 706,
+        "physicalSlots": 2,
+        "head": 0,
+        "liveQueued": 2,
+        "disposed": false
+      },
+      "after": {
+        "completedBuffersAlive": 0,
+        "physicalSlots": 0,
+        "logicalFrames": 0,
+        "logicalBytes": 0,
+        "disposed": true
+      }
+    },
+    {
+      "fixed": true,
+      "release": "drain",
+      "laneName": "control",
+      "during": {
+        "completedWrites": 2049,
+        "accepted": 2049,
+        "completedBuffersAlive": 0,
+        "completedCallbacksAlive": 0,
+        "logicalFrames": 2,
+        "logicalBytes": 184,
+        "physicalSlots": 2,
+        "head": 0,
+        "liveQueued": 2,
+        "disposed": false
+      },
+      "after": {
+        "completedBuffersAlive": 0,
+        "physicalSlots": 0,
+        "logicalFrames": 0,
+        "logicalBytes": 0,
+        "disposed": false
+      }
+    },
+    {
+      "fixed": true,
+      "release": "dispose",
+      "laneName": "control",
+      "during": {
+        "completedWrites": 2049,
+        "accepted": 2049,
+        "completedBuffersAlive": 0,
+        "completedCallbacksAlive": 0,
+        "logicalFrames": 2,
+        "logicalBytes": 184,
+        "physicalSlots": 2,
+        "head": 0,
+        "liveQueued": 2,
+        "disposed": false
+      },
+      "after": {
+        "completedBuffersAlive": 0,
+        "physicalSlots": 0,
+        "logicalFrames": 0,
+        "logicalBytes": 0,
+        "disposed": true
+      }
+    },
+    {
+      "kind": "real-node-writable",
+      "fixed": true,
+      "writes": 129,
+      "accepted": 128,
+      "logicalFrames": 3,
+      "logicalBytes": 49440,
+      "physicalSlots": 130,
+      "retainedBuffers": 1
+    },
+    {
+      "kind": "in-flight-callback-ownership",
+      "fixed": true,
+      "retainedByNativeCallback": 1,
+      "afterNativeCallbackRelease": 0,
+      "pendingResult": {
+        "outcome": "unverifiable",
+        "reason": "transport_settlement_lost",
+        "bytesHandedToTransport": true
+      },
+      "queuedResult": {
+        "outcome": "refused",
+        "reason": "transport_rejected_before_handoff"
+      }
+    }
+  ],
+  "versions": [
+    {
+      "fixed": false,
+      "sourceHashes": {
+        "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts": {
+          "before": "3e5fe7a1e3537505baf42869449193fc0448339d851254a49527ec2a1c7cbb50",
+          "after": "6173ddd6640a930d0fa586fed91c1adc0d865a33f81af9a1ed5a0817c08e90cc"
+        }
+      },
+      "bundleSha256": "aafe581371b67c00d50d96a0857257bee20fa317c2d8ce4ea1800e558c7a1b91",
+      "dependencies": [
+        {
+          "path": "src/shared/relay-frame-decoder-contract.ts",
+          "sha256": "f58279099fe4dbbdfde9e3e038a916ae077e71d8ac6aa871b59a64c6fbaeaad8"
+        },
+        {
+          "path": "src/shared/relay-frame-buffer.ts",
+          "sha256": "f89fcd33489894c34f79ba8fd5e5634487555a7c34fc8e7c054229ae1c20e0be"
+        },
+        {
+          "path": "src/shared/relay-frame-decoder.ts",
+          "sha256": "88c0ecbc06b93efe6733094b8c9e4509ab1cbd139f8cb3257e9fb74a0ed39194"
+        },
+        {
+          "path": "src/main/ssh/relay-protocol.ts",
+          "sha256": "644aa6f2087b5867d41006bfdcec78ffba693157a2912feb8f82b120f5647b34"
+        },
+        {
+          "path": "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts",
+          "sha256": "3e5fe7a1e3537505baf42869449193fc0448339d851254a49527ec2a1c7cbb50"
+        },
+        {
+          "path": "src/shared/pty-write-settlement.ts",
+          "sha256": "0726aba75f2ef127d41f47a0685fb42daab34fc139d5b9f727079aec88b702e6"
+        },
+        {
+          "path": "src/main/ssh/ssh-multiplexer-transport-writer.ts",
+          "sha256": "433a2cc400b5ed9743871ca03aac06d31a079ef23c42c2a2759f78967312d071"
+        },
+        {
+          "path": "src/main/ssh/ssh-channel-multiplexer.ts",
+          "sha256": "9ecd88963fec72901596bd25d2cb4c8666ef41d3c8a968242c6eef52095ee108"
+        },
+        {
+          "path": "src/main/providers/ssh-pty-write.ts",
+          "sha256": "357024da7dc5bf2df1dabd43f6f90146afa239d414e29f04b17f86a6351520ae"
+        }
+      ]
+    },
+    {
+      "fixed": true,
+      "sourceHashes": {
+        "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts": {
+          "before": "3e5fe7a1e3537505baf42869449193fc0448339d851254a49527ec2a1c7cbb50",
+          "after": "6173ddd6640a930d0fa586fed91c1adc0d865a33f81af9a1ed5a0817c08e90cc"
+        }
+      },
+      "bundleSha256": "8dad9c7df8842e01466d24e238ed08b8cfc642fbc3f0a6867ea2ec49058d2aa8",
+      "dependencies": [
+        {
+          "path": "src/shared/relay-frame-decoder-contract.ts",
+          "sha256": "f58279099fe4dbbdfde9e3e038a916ae077e71d8ac6aa871b59a64c6fbaeaad8"
+        },
+        {
+          "path": "src/shared/relay-frame-buffer.ts",
+          "sha256": "f89fcd33489894c34f79ba8fd5e5634487555a7c34fc8e7c054229ae1c20e0be"
+        },
+        {
+          "path": "src/shared/relay-frame-decoder.ts",
+          "sha256": "88c0ecbc06b93efe6733094b8c9e4509ab1cbd139f8cb3257e9fb74a0ed39194"
+        },
+        {
+          "path": "src/main/ssh/relay-protocol.ts",
+          "sha256": "644aa6f2087b5867d41006bfdcec78ffba693157a2912feb8f82b120f5647b34"
+        },
+        {
+          "path": "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts",
+          "sha256": "6173ddd6640a930d0fa586fed91c1adc0d865a33f81af9a1ed5a0817c08e90cc"
+        },
+        {
+          "path": "src/shared/pty-write-settlement.ts",
+          "sha256": "0726aba75f2ef127d41f47a0685fb42daab34fc139d5b9f727079aec88b702e6"
+        },
+        {
+          "path": "src/main/ssh/ssh-multiplexer-transport-writer.ts",
+          "sha256": "433a2cc400b5ed9743871ca03aac06d31a079ef23c42c2a2759f78967312d071"
+        },
+        {
+          "path": "src/main/ssh/ssh-channel-multiplexer.ts",
+          "sha256": "9ecd88963fec72901596bd25d2cb4c8666ef41d3c8a968242c6eef52095ee108"
+        },
+        {
+          "path": "src/main/providers/ssh-pty-write.ts",
+          "sha256": "357024da7dc5bf2df1dabd43f6f90146afa239d414e29f04b17f86a6351520ae"
+        }
+      ]
+    }
+  ]
+}

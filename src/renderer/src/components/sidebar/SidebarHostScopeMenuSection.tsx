@@ -5,11 +5,17 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostId } from '../../../../shared/execution-host'
+import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../../shared/execution-host'
 import type {
   VisibleWorkspaceHostIds,
   WorkspaceHostScope
 } from '../../../../shared/ui-chrome-types'
+import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution-host'
+import {
+  getCheckedHostRows,
+  toggleAllVisibleHosts,
+  toggleVisibleHostRow
+} from '../../../../shared/workspace-view/workspace-host-visibility'
 import { getSidebarHostHealthLabel, type SidebarHostOption } from './sidebar-host-options'
 import { translate } from '@/i18n/i18n'
 
@@ -23,7 +29,7 @@ type SidebarHostScopeMenuSectionProps = {
 }
 
 function getHostMetadata(host: SidebarHostOption): string {
-  const healthLabel = getSidebarHostHealthLabel(host.health)
+  const healthLabel = getSidebarHostHealthLabel(host.health, host.blockedReason)
   if (host.kind === 'local') {
     return host.detail
   }
@@ -44,7 +50,7 @@ function getHostMetadata(host: SidebarHostOption): string {
     host.presence === 'active'
       ? translate(
           'auto.components.sidebar.SidebarWorkspaceOptionsMenu.activeRuntimeHost',
-          'Active server'
+          'Default for new projects'
         )
       : translate(
           'auto.components.sidebar.SidebarWorkspaceOptionsMenu.projectRuntimeHost',
@@ -62,34 +68,28 @@ export function SidebarHostScopeMenuSection({
   setVisibleWorkspaceHostIds
 }: SidebarHostScopeMenuSectionProps): React.JSX.Element {
   const allVisible = !visibleWorkspaceHostIds
-  const visibleHostIdSet = new Set(visibleWorkspaceHostIds ?? [])
+  const hostRows = pickerExecutionHosts(hostOptions)
+  const checkedRowIds = new Set(
+    (visibleWorkspaceHostIds
+      ? getCheckedHostRows(hostRows, visibleWorkspaceHostIds)
+      : hostRows
+    ).map((host) => host.id)
+  )
 
   const toggleAllHosts = (): void => {
-    if (!allVisible) {
+    const next = toggleAllVisibleHosts(hostOptions, visibleWorkspaceHostIds)
+    if (next === null) {
       setWorkspaceHostScope(ALL_EXECUTION_HOSTS_SCOPE)
-      return
-    }
-    const firstHost = hostOptions[0]
-    if (firstHost) {
-      setVisibleWorkspaceHostIds([firstHost.id])
+    } else if (next) {
+      setVisibleWorkspaceHostIds(next)
     }
   }
 
-  const toggleHost = (hostId: ExecutionHostId): void => {
-    if (allVisible) {
-      setVisibleWorkspaceHostIds([hostId])
-      return
+  const toggleHost = (host: SidebarHostOption): void => {
+    const next = toggleVisibleHostRow(hostOptions, visibleWorkspaceHostIds, host)
+    if (next !== undefined) {
+      setVisibleWorkspaceHostIds(next)
     }
-    const next = new Set(visibleHostIdSet)
-    if (next.has(hostId)) {
-      if (next.size <= 1) {
-        return
-      }
-      next.delete(hostId)
-    } else {
-      next.add(hostId)
-    }
-    setVisibleWorkspaceHostIds(next.size === hostOptions.length ? null : [...next])
   }
 
   // Why: one Sort-by-style row (label left, value right) — nested panel holds
@@ -128,12 +128,12 @@ export function SidebarHostScopeMenuSection({
             </span>
           </span>
         </DropdownMenuCheckboxItem>
-        {hostOptions.map((host) => (
+        {hostRows.map((host) => (
           <DropdownMenuCheckboxItem
             key={host.id}
-            checked={visibleHostIdSet.has(host.id)}
-            disabled={!allVisible && visibleHostIdSet.has(host.id) && visibleHostIdSet.size <= 1}
-            onCheckedChange={() => toggleHost(host.id)}
+            checked={!allVisible && checkedRowIds.has(host.id)}
+            disabled={!allVisible && checkedRowIds.has(host.id) && checkedRowIds.size <= 1}
+            onCheckedChange={() => toggleHost(host)}
             onSelect={(e) => e.preventDefault()}
             className="min-h-11 items-start py-1.5"
           >

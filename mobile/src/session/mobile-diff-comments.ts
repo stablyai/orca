@@ -142,3 +142,11 @@ export function removeDeliveredMobileDiffComments(
     return !snapshot || !deliveredCommentMatches(comment, snapshot)
   })
 }
+
+/** Unsent notes that no new-agent send is still carrying. */
+export function sendableMobileDiffComments(
+  comments: readonly DiffComment[],
+  sendingIds: ReadonlySet<string>
+): DiffComment[] {
+  return comments.filter((comment) => !comment.sentAt && !sendingIds.has(comment.id))
+}

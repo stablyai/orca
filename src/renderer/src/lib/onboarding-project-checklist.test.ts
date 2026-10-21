@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultOnboardingState } from '../../../shared/constants'
+import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
 import { markOnboardingProjectAdded } from './onboarding-project-checklist'
 
 const mocks = vi.hoisted(() => ({

@@ -6,10 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Command, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import {
-  isImeCompositionKeyDown,
-  useImeEnterGestureOwnership
-} from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
@@ -19,7 +15,7 @@ import {
 } from '@/store/worktree-repo-index'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { branchDisplayName } from '@/components/sidebar/WorktreeCardHelpers'
-import { getCyclicProjectedWorktreeLineageIds } from '@/components/sidebar/worktree-lineage-projection'
+import { getCyclicProjectedWorktreeLineageIds } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import {
   clampWorktreeParentPickerIndex,
   filterWorktreeParentCandidates
@@ -41,7 +37,12 @@ import {
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import { useRepoMap } from '@/store/selectors'
 
 /** Single-line row: text-sm leading (20px) over py-2. Set as the row's explicit height. */
 const NO_PARENT_ROW_HEIGHT = 36
@@ -209,29 +210,25 @@ function getFolderWorkspaceSubtreeIds(
 function ParentWorktreeCandidateList({
   repoId,
   executionHostId,
-  projectId,
   value,
   activeFolderWorkspaceId,
   onSelect
 }: ParentWorktreeCandidateListProps): React.JSX.Element {
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const repoMap = useRepoMap()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const imeEnter = useImeEnterGestureOwnership()
   const optionIdPrefix = `${useId()}option`
   const [search, setSearch] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
 
   const candidates = useMemo(() => {
-    // Why `?? undefined`: an unresolved host or project is "not known yet", not "no host", and
-    // the boundary check reads undefined on either side as a wildcard. A candidate in this repo
-    // with no recorded hostId inherits that repo's host, so it is on the child's host too.
+    // Legacy rows inherit their real repo host, including candidates from another project.
+    const childRepo = repoMap.get(repoId)
     const childBoundary: WorktreeLineageBoundary = {
-      repoId,
-      hostId: executionHostId ?? undefined,
-      projectId: projectId ?? undefined
+      hostId: executionHostId ?? (childRepo ? getRepoExecutionHostId(childRepo) : undefined)
     }
     const worktreeMap = getIndexedWorktreeMap(worktreesByRepo)
     const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap)
@@ -246,9 +243,11 @@ function ParentWorktreeCandidateList({
     return getIndexedAllWorktrees(worktreesByRepo)
       .filter(
         (candidate) =>
-          candidate.repoId === repoId &&
           !candidate.isArchived &&
-          sharesWorktreeLineageBoundary(childBoundary, candidate) &&
+          sharesWorktreeLineageBoundary(childBoundary, {
+            ...candidate,
+            hostId: getWorktreeExecutionHostId(candidate, repoMap.get(candidate.repoId))
+          }) &&
           !cyclicLineageIds.has(candidate.id) &&
           (folderSubtreeIds === null || folderSubtreeIds.has(candidate.id))
       )
@@ -256,16 +255,16 @@ function ParentWorktreeCandidateList({
   }, [
     activeFolderWorkspaceId,
     executionHostId,
-    projectId,
     repoId,
+    repoMap,
     workspaceLineageByChildKey,
     worktreeLineageById,
     worktreesByRepo
   ])
 
   const filtered = useMemo(
-    () => filterWorktreeParentCandidates(candidates, search),
-    [candidates, search]
+    () => filterWorktreeParentCandidates(candidates, search, repoMap),
+    [candidates, search, repoMap]
   )
   // Index 0 is the pinned "No parent" row; candidates start at 1.
   const activeIndex = clampWorktreeParentPickerIndex(highlightedIndex, filtered.length + 1)
@@ -307,11 +306,6 @@ function ParentWorktreeCandidateList({
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       // Why: cmdk's root handler only knows the mounted virtual window, so own navigation here.
-      // A CJK confirm sends two Enter keydowns and only the first is marked, so the marked-only
-      // check must be paired with the gesture carry or the unmarked one commits a selection.
-      if (imeEnter.ownsKeyDown(event) || isImeCompositionKeyDown(event)) {
-        return
-      }
       const navigate = (nextIndex: number): void => {
         event.preventDefault()
         event.stopPropagation()
@@ -334,7 +328,7 @@ function ParentWorktreeCandidateList({
         }
       }
     },
-    [activeIndex, filtered, imeEnter, moveHighlight, onSelect]
+    [activeIndex, filtered, moveHighlight, onSelect]
   )
 
   // Why: cmdk's Input owns aria-activedescendant and points it at its own empty
@@ -352,9 +346,6 @@ function ParentWorktreeCandidateList({
         value={search}
         onValueChange={handleSearchChange}
         onKeyDown={handleKeyDown}
-        onKeyUp={imeEnter.onKeyUp}
-        onCompositionStart={() => imeEnter.setComposing(true)}
-        onCompositionEnd={() => imeEnter.setComposing(false)}
         wrapperClassName="shrink-0"
         placeholder={translate(
           'auto.components.ComposerParentWorktreePicker.searchPlaceholder',
@@ -397,7 +388,14 @@ function ParentWorktreeCandidateList({
                     <div className="truncate text-[13px] font-medium">{candidate.displayName}</div>
                     <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-none text-muted-foreground">
                       <GitBranch className="size-3 shrink-0" />
-                      <span className="truncate">{branchDisplayName(candidate.branch)}</span>
+                      <span className="truncate">
+                        {[
+                          repoMap.get(candidate.repoId)?.displayName,
+                          branchDisplayName(candidate.branch)
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
                     </div>
                   </div>
                 ) : (

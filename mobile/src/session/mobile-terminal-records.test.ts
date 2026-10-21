@@ -172,7 +172,7 @@ describe('mobile terminal records', () => {
             ...base,
             agentStatus: {
               ...base.agentStatus!,
-              state: 'blocked',
+              state: 'blocked' as const,
               updatedAt: 2,
               stateStartedAt: 2
             }

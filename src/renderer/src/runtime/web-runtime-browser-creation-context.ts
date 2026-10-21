@@ -37,6 +37,8 @@ export type CreateWebRuntimeSessionBrowserTabArgs = {
   profileId?: string | null
   targetGroupId?: string
   clientTargetGroupId?: string
+  /** Client-only unified tab id the staged row follows; never sent to the host. */
+  clientAfterTabId?: string
   clientTargetGroupCreated?: boolean
   focusOnCreate?: boolean
   /** Wait until a renderer-backed host can publish the new page in its session snapshot. */
@@ -109,6 +111,18 @@ export function createWebRuntimeBrowserCreationContext(
   }
 }
 
+/**
+ * The client group this create is steered to. With an anchor only an explicit client destination
+ * counts; a host-facing targetGroupId would otherwise freeze the row away from the source's group.
+ */
+export function resolveWebRuntimeBrowserClientTargetGroupId(
+  args: CreateWebRuntimeSessionBrowserTabArgs
+): string | undefined {
+  return args.clientAfterTabId
+    ? args.clientTargetGroupId
+    : (args.clientTargetGroupId ?? args.targetGroupId)
+}
+
 export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreationContext): void {
   const { args, environmentId, intentOwner, provisionalPageId, shouldFocusOnCreate } = context
   throwIfE2eWebRuntimeBrowserCapabilityUnavailable()
@@ -125,6 +139,7 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
   if (context.shouldSelectWorktree) {
     selectWebRuntimeSessionBrowserWorktree(args.worktreeId, environmentId)
   }
+  const stagedTargetGroupId = resolveWebRuntimeBrowserClientTargetGroupId(args)
   // Why: everything below this point is a host round-trip; stage the tab first so the strip
   // reacts to the click instead of to the runtime.
   context.staged = stageWebRuntimeBrowserTab({
@@ -135,9 +150,8 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
     ...(args.url !== undefined ? { url: args.url } : {}),
     ...(args.stagedTitle !== undefined ? { title: args.stagedTitle } : {}),
     ...(args.profileId !== undefined ? { profileId: args.profileId } : {}),
-    ...((args.clientTargetGroupId ?? args.targetGroupId)
-      ? { targetGroupId: (args.clientTargetGroupId ?? args.targetGroupId) as string }
-      : {}),
+    ...(stagedTargetGroupId ? { targetGroupId: stagedTargetGroupId } : {}),
+    ...(args.clientAfterTabId ? { afterTabId: args.clientAfterTabId } : {}),
     ...(args.stagedFocusAddressBar !== undefined
       ? { focusAddressBar: args.stagedFocusAddressBar }
       : {}),

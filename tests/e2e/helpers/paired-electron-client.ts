@@ -34,7 +34,15 @@ export type PairedElectronClient = {
   page: Page
   environmentId: string
   captureDirectSshAttempts: () => Promise<void>
+  /** Closes the app AND deletes the profile. For a restart, use `quitPreservingProfile`. */
   dispose: () => Promise<void>
+  /** Quit for a relaunch on the same profile: everything `dispose` does except `removeProfile`.
+   *  Why named rather than left to callers: composing it wrong is silent and expensive. Calling
+   *  `dispose` and relaunching with `reuseUserDataDir` yields a FIRST RUN on an empty profile, so
+   *  every persistence assertion after it reads empty and looks exactly like data loss — that
+   *  produced a phantom data-loss report once. Reaching for a bare `app.close()` instead hangs:
+   *  it lacks the timeout and force-kill fallback that `closeElectronAppForE2E` wraps around it. */
+  quitPreservingProfile: () => Promise<void>
   getDirectSshAttemptTargetIds: () => Promise<string[]>
   installDirectSshAttemptProbe: () => Promise<void>
   replacePairingInPlace: (offer: RuntimeDesktopPairingOffer) => Promise<SameIdPairingReplacement>
@@ -94,6 +102,22 @@ export async function createRuntimeDesktopPairingOffer(
       pairingUrl: offer.pairingUrl,
       ...(offer.webClientUrl ? { webClientUrl: offer.webClientUrl } : {})
     }
+  })
+}
+
+/** The phone QR a desktop shows in Settings, minted LAN-only so no Relay is involved. */
+export async function createDesktopMobilePairingOffer(
+  desktopPage: Page
+): Promise<RuntimeDesktopPairingOffer> {
+  return desktopPage.evaluate(async () => {
+    const offer = await window.api.mobile.getPairingQR({
+      address: '127.0.0.1',
+      connectionMode: 'local-only'
+    })
+    if (!offer.available) {
+      throw new Error(`Desktop did not mint a mobile pairing offer: ${JSON.stringify(offer)}`)
+    }
+    return { pairingUrl: offer.pairingUrl }
   })
 }
 
@@ -239,6 +263,10 @@ export async function launchPairedElectronClient(
         await closeElectronAppForE2E(app)
         await cleanupE2EDaemons(userDataDir)
         await removeProfile(userDataDir)
+      },
+      quitPreservingProfile: async () => {
+        await closeElectronAppForE2E(app)
+        await cleanupE2EDaemons(userDataDir)
       },
       getDirectSshAttemptTargetIds: async () => {
         return readDirectSshAttemptTargetIds(directSshProbePath).filter(

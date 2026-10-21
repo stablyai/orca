@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
+import { removeWorktreeViaStore } from './helpers/dead-terminal'
 
 async function openPluginSettings(page: Page): Promise<void> {
   await page.evaluate(() => {
@@ -169,13 +170,12 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
       )
       .toBe(true)
   } finally {
-    if (createdWorktreeId) {
-      await orcaPage
-        .evaluate(async (worktreeId) => {
-          await window.__store?.getState().removeWorktree(worktreeId, true)
-        }, createdWorktreeId)
-        .catch(() => undefined)
+    try {
+      if (createdWorktreeId) {
+        await removeWorktreeViaStore(orcaPage, createdWorktreeId)
+      }
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
     }
-    await rm(tempRoot, { recursive: true, force: true })
   }
 })

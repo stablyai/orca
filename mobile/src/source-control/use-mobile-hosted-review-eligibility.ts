@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { HostedReviewCreationEligibility } from '../../../src/shared/hosted-review'
+import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
@@ -54,7 +54,7 @@ export function shouldFetchMobileHostedReviewEligibility(
   return input.connState === 'connected' && input.client !== null && !!input.branch
 }
 
-export function eligibilityStateAfterMobileHostedReviewError(): MobileCreatePrEligibilityState {
+function eligibilityStateAfterMobileHostedReviewError(): MobileCreatePrEligibilityState {
   return { kind: 'error' }
 }
 
@@ -144,7 +144,7 @@ export function useMobileHostedReviewEligibility(
       behind
     }
     void fetchMobileHostedReviewEligibility(client, worktreeId, requestInput)
-      .then((eligibility: HostedReviewCreationEligibility | null) => {
+      .then((eligibility: MobileHostedReviewEligibilityReply | null) => {
         if (!active) {
           return
         }

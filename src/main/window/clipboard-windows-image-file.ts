@@ -13,7 +13,7 @@ type WindowsClipboardImageFileDeps = {
   openFile: (filePath: string) => Promise<ClipboardImageFileHandle>
 }
 
-type WindowsClipboardImageFileFormats = {
+export type WindowsClipboardFileFormats = {
   fileNameW: Buffer
   shellIdListArray: Buffer
 }
@@ -65,7 +65,7 @@ function decodeFileNameW(value: Buffer): string | null {
   if (!filePath || filePath.includes('\0') || !isFullyQualifiedWindowsPath(filePath)) {
     return null
   }
-  return IMAGE_FILE_EXTENSION_SET.has(win32.extname(filePath).toLowerCase()) ? filePath : null
+  return filePath
 }
 
 function hasAtMostOneShellItem(value: Buffer): boolean {
@@ -74,6 +74,23 @@ function hasAtMostOneShellItem(value: Buffer): boolean {
   }
   // Why: Explorer's FileNameW exposes only the first path even when its CIDA has multiple items.
   return value.byteLength >= 12 && value.readUInt32LE(0) === 1
+}
+
+/** The one file Explorer copied; null when it copied none or several. */
+export function readWindowsCopiedFilePath({
+  fileNameW,
+  shellIdListArray
+}: WindowsClipboardFileFormats): string | null {
+  return hasAtMostOneShellItem(shellIdListArray) ? decodeFileNameW(fileNameW) : null
+}
+
+export function readWindowsCopiedImageFilePath(
+  formats: WindowsClipboardFileFormats
+): string | null {
+  const filePath = readWindowsCopiedFilePath(formats)
+  return filePath && IMAGE_FILE_EXTENSION_SET.has(win32.extname(filePath).toLowerCase())
+    ? filePath
+    : null
 }
 
 function readPngDimensions(source: Buffer): { height: number; width: number } | null {
@@ -153,13 +170,10 @@ async function readStableFile(
 }
 
 export async function readWindowsClipboardImageFileAsPng(
-  { fileNameW, shellIdListArray }: WindowsClipboardImageFileFormats,
+  formats: WindowsClipboardFileFormats,
   { createImageFromBuffer, openFile }: WindowsClipboardImageFileDeps
 ): Promise<Buffer | null> {
-  if (!hasAtMostOneShellItem(shellIdListArray)) {
-    return null
-  }
-  const filePath = decodeFileNameW(fileNameW)
+  const filePath = readWindowsCopiedImageFilePath(formats)
   if (!filePath) {
     return null
   }

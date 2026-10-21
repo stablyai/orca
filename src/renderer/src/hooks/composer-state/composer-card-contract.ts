@@ -18,6 +18,7 @@ export type ComposerCardSourceProps = Pick<
   | 'selectedRepoExecutionHostId'
   | 'selectedRepoProjectId'
   | 'smartNameSelection'
+  | 'smartNameMode'
   | 'reuseSelectedBranch'
   | 'createMultiple'
   | 'agentPrompt'
@@ -56,6 +57,7 @@ export type ComposerCardSourceProps = Pick<
 >
 
 export type ComposerCardActionProps = {
+  selectedRepo?: ComposerModel['selectedRepo'] | null
   onRepoChange: ComposerModel['handleRepoChange']
   onProjectChange: ComposerModel['handleProjectChange']
   onProjectHostSetupChange: ComposerModel['handleProjectHostSetupChange']
@@ -85,6 +87,7 @@ export type ComposerCardActionProps = {
   onAgentPromptChange: ComposerModel['setAgentPrompt']
   linkedOnlyTemplatePreview: string | null
   getAttachmentLabel: (pathValue: string) => string
+  onNativeFileDrop?: ComposerModel['applyNativeDrop']
   onAddAttachment: () => void
   onRemoveAttachment: (pathValue: string) => void
   onRemoveLinkedWorkItem: ComposerModel['handleRemoveLinkedWorkItem']
@@ -95,7 +98,6 @@ export type ComposerCardActionProps = {
   onOpenAgentSettings: ComposerModel['handleOpenAgentSettings']
   onToggleAdvanced: () => void
   createDisabled: boolean
-  onCreate: () => void
   onNoteChange: ComposerModel['setNote']
   onBaseBranchChange: ComposerModel['handleBaseBranchChange']
   onBaseBranchPrSelect: ComposerModel['handleBaseBranchPrSelect']

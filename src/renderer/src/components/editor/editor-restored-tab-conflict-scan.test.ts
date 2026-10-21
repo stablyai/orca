@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createStore, type StoreApi } from 'zustand/vanilla'
-import { createEditorSlice } from '@/store/slices/editor'
+import type { StoreApi } from 'zustand/vanilla'
+import { createTestStore } from '@/store/slices/store-test-helpers'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { AppState } from '@/store'
 import { attachRestoredTabConflictScan } from './editor-restored-tab-conflict-scan'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 
 const mocks = vi.hoisted(() => ({
   readRuntimeFileContent: vi.fn(),
@@ -11,33 +12,26 @@ const mocks = vi.hoisted(() => ({
   pathExists: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-read-client', () => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: () => null
-}))
+
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: mocks.getConnectionIdForFile
 }))
 
-function createEditorStore(): StoreApi<AppState> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createStore<any>()((...args: any[]) => ({
-    settings: {},
-    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-  })) as unknown as StoreApi<AppState>
-}
-
 function openRestoredDirtyTab(
   store: StoreApi<AppState>,
   filePath: string,
-  baselineContent: string
+  baselineContent: string,
+  owner: { relativePath: string; worktreeId: string } = {
+    relativePath: filePath.slice(1),
+    worktreeId: 'wt-1'
+  }
 ): void {
   store.getState().openFile({
     filePath,
-    relativePath: filePath.slice(1),
-    worktreeId: 'wt-1',
+    ...owner,
     language: 'typescript',
     mode: 'edit'
   })
@@ -45,13 +39,7 @@ function openRestoredDirtyTab(
   store.getState().markFileDirty(filePath, true)
   store.getState().setLastKnownDiskSignature(filePath, getDiskBaselineSignature(baselineContent))
   // Why: hydration flags restored dirty tabs for verification; tests mimic it.
-  store.setState({
-    openFiles: store
-      .getState()
-      .openFiles.map((f) =>
-        f.id === filePath ? { ...f, pendingDiskBaselineVerification: true } : f
-      )
-  } as never)
+  store.getState().setPendingDiskBaselineVerification(filePath, true)
 }
 
 describe('attachRestoredTabConflictScan', () => {
@@ -75,7 +63,7 @@ describe('attachRestoredTabConflictScan', () => {
       content: 'agent rewrote this offline',
       isBinary: false
     })
-    const store = createEditorStore()
+    const store = createTestStore()
     openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
@@ -92,7 +80,7 @@ describe('attachRestoredTabConflictScan', () => {
       content: 'original baseline',
       isBinary: false
     })
-    const store = createEditorStore()
+    const store = createTestStore()
     openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
@@ -106,7 +94,7 @@ describe('attachRestoredTabConflictScan', () => {
   })
 
   it('does not read files for clean tabs or tabs without a baseline', async () => {
-    const store = createEditorStore()
+    const store = createTestStore()
     store.getState().openFile({
       filePath: '/repo/clean.ts',
       relativePath: 'clean.ts',
@@ -138,7 +126,7 @@ describe('attachRestoredTabConflictScan', () => {
     mocks.readRuntimeFileContent
       .mockRejectedValueOnce(new Error('connection not ready'))
       .mockResolvedValue({ content: 'agent rewrote this offline', isBinary: false })
-    const store = createEditorStore()
+    const store = createTestStore()
     openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
@@ -157,7 +145,7 @@ describe('attachRestoredTabConflictScan', () => {
       content: 'original baseline',
       isBinary: false
     })
-    const store = createEditorStore()
+    const store = createTestStore()
     openRestoredDirtyTab(store, '/repo/match.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
@@ -182,7 +170,7 @@ describe('attachRestoredTabConflictScan', () => {
   })
 
   it('does not re-verify live dirty tabs that were never flagged at hydration', async () => {
-    const store = createEditorStore()
+    const store = createTestStore()
     store.getState().openFile({
       filePath: '/repo/live.ts',
       relativePath: 'live.ts',
@@ -211,7 +199,7 @@ describe('attachRestoredTabConflictScan', () => {
     // suspended for the whole session.
     mocks.readRuntimeFileContent.mockRejectedValue(new Error('ENOENT'))
     mocks.pathExists.mockResolvedValue(false)
-    const store = createEditorStore()
+    const store = createTestStore()
     openRestoredDirtyTab(store, '/repo/deleted.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
@@ -234,7 +222,7 @@ describe('attachRestoredTabConflictScan', () => {
     // transport recovers.
     mocks.readRuntimeFileContent.mockRejectedValue(new Error('connection not ready'))
     mocks.pathExists.mockRejectedValue(new Error('connection not ready'))
-    const store = createEditorStore()
+    const store = createTestStore()
     openRestoredDirtyTab(store, '/repo/unreachable.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
@@ -250,8 +238,58 @@ describe('attachRestoredTabConflictScan', () => {
     }
   })
 
+  it('verifies a restored dirty floating-workspace tab as the file the user named', async () => {
+    mocks.readRuntimeFileContent.mockRejectedValueOnce(new Error('ENOENT'))
+    mocks.readRuntimeFileContent.mockResolvedValue({
+      content: 'original baseline',
+      isBinary: false
+    })
+    mocks.pathExists.mockResolvedValue(true)
+    mocks.getConnectionIdForFile.mockReturnValue(null)
+    const store = createTestStore()
+    openRestoredDirtyTab(store, '/Users/me/notes.txt', 'original baseline', {
+      relativePath: 'notes.txt',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+
+    const detach = attachRestoredTabConflictScan(store)
+    try {
+      await vi.advanceTimersByTimeAsync(10)
+      expect(mocks.pathExists).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: '/Users/me/notes.txt', access: { kind: 'user-file' } })
+      )
+      await vi.advanceTimersByTimeAsync(2_100)
+      expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
+        expect.objectContaining({ filePath: '/Users/me/notes.txt', access: { kind: 'user-file' } })
+      )
+      expect(store.getState().openFiles[0]?.pendingDiskBaselineVerification).toBeUndefined()
+    } finally {
+      detach()
+    }
+  })
+
+  it('verifies a restored dirty project tab inside its root', async () => {
+    mocks.readRuntimeFileContent.mockResolvedValue({
+      content: 'original baseline',
+      isBinary: false
+    })
+    mocks.getConnectionIdForFile.mockReturnValue(null)
+    const store = createTestStore()
+    openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
+
+    const detach = attachRestoredTabConflictScan(store)
+    try {
+      await vi.advanceTimersByTimeAsync(10)
+      expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: '/repo/file.ts', access: undefined })
+      )
+    } finally {
+      detach()
+    }
+  })
+
   it('does not verify an external SSH file through a replacement target', async () => {
-    const store = createEditorStore()
+    const store = createTestStore()
     openRestoredDirtyTab(store, '/tmp/external.ts', 'original baseline')
     store.setState({
       openFiles: store
@@ -282,7 +320,7 @@ describe('attachRestoredTabConflictScan', () => {
           pendingReads.push(resolve)
         })
     )
-    const store = createEditorStore()
+    const store = createTestStore()
     for (let i = 0; i < 6; i++) {
       openRestoredDirtyTab(store, `/repo/file-${i}.ts`, 'original baseline')
     }
@@ -315,7 +353,7 @@ describe('attachRestoredTabConflictScan', () => {
         resolveRead = resolve
       })
     )
-    const store = createEditorStore()
+    const store = createTestStore()
     openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
@@ -344,7 +382,7 @@ describe('attachRestoredTabConflictScan', () => {
           pending.push({ filePath, resolve })
         })
     )
-    const store = createEditorStore()
+    const store = createTestStore()
     // Three reads fill the concurrency cap; the fourth waits in the queue.
     for (let i = 0; i < 4; i++) {
       openRestoredDirtyTab(store, `/repo/file-${i}.ts`, 'stale baseline')

@@ -143,16 +143,3 @@ export function getAmbiguousProjectOptionIds(
     options.filter((o) => (counts.get(o.displayName) ?? 0) > 1).map((option) => option.id)
   )
 }
-
-/**
- * A deep path's identity lives in its tail (`…/services/checkout-api`), which is
- * exactly what a plain truncate throws away — two sibling paths then render
- * identically. Split so the head can elide while the tail keeps its width.
- */
-export function splitDetailForElision(detail: string): { head: string; tail: string } | null {
-  const segments = detail.split('/')
-  if (segments.length <= 3 || detail.length <= 28) {
-    return null
-  }
-  return { head: segments.slice(0, -2).join('/'), tail: segments.slice(-2).join('/') }
-}

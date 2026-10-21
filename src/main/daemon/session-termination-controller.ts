@@ -2,10 +2,13 @@ import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TuiAgent } from '../../shared/tui-agent'
+import {
+  IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
+  SESSION_FORCE_KILL_RETRY_MS
+} from './immediate-kill-reply-budget'
 
 const KILL_TIMEOUT_MS = 5_000
-export const IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS = 8_000
-export const SESSION_FORCE_KILL_RETRY_MS = 250
+export { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS, SESSION_FORCE_KILL_RETRY_MS }
 const SESSION_FORCE_KILL_MAX_ATTEMPTS = 2
 
 export type SessionTerminationControllerDeps = {

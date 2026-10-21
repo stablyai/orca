@@ -219,7 +219,7 @@ export class CodexAccountRegistration {
     target: CodexAccountSelectionTarget | undefined
   ): void {
     // Why: quota probes against a cold per-account CODEX_HOME can take 10–25s
-    // (RPC + PTY fallback) and queue behind an in-flight global usage refresh.
+    // (RPC + HTTP fallback) and queue behind an in-flight global usage refresh.
     // The refresh synchronously flips usage to "fetching" before its first await,
     // so the switcher updates immediately; the probe itself must never block or
     // fail the already-durable account mutation.

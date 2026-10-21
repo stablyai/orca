@@ -1,8 +1,3 @@
-import {
-  getActiveAutomationListSearchQuery,
-  resolveAutomationListSearchQuery
-} from './automation-list-search-query'
-
 export {
   AUTOMATION_LIST_SEARCH_QUERY_MAX_BYTES,
   clampAutomationListSearchQueryInput,
@@ -109,81 +104,6 @@ export function automationListSearchIndexMatches(
     }
   }
   return false
-}
-
-export function automationListSearchFieldsMatch(
-  fields: AutomationListSearchFields,
-  rawQuery: string
-): boolean {
-  const resolved = resolveAutomationListSearchQuery(rawQuery)
-  if (resolved.status === 'too_large') {
-    return false
-  }
-  if (resolved.status === 'inactive') {
-    return true
-  }
-  return automationListSearchIndexMatches(buildAutomationListSearchIndex(fields), resolved.query)
-}
-
-/**
- * Filters with an already-resolved active query. Callers must pass null/skip
- * when search is inactive or too large so this never runs "for free".
- */
-export function filterByActiveAutomationListSearchQuery<T>(
-  items: readonly T[],
-  indexes: readonly AutomationListSearchIndex[],
-  activeQuery: string
-): T[] {
-  if (indexes.length !== items.length) {
-    return [...items]
-  }
-  const matches: T[] = []
-  for (let i = 0; i < items.length; i += 1) {
-    const item = items[i]
-    const index = indexes[i]
-    if (item !== undefined && index && automationListSearchIndexMatches(index, activeQuery)) {
-      matches.push(item)
-    }
-  }
-  return matches
-}
-
-/**
- * Filters items by a prebuilt index. Empty and oversized queries leave the
- * original array reference untouched so the list stays unfiltered and search
- * work is skipped entirely.
- */
-export function filterByAutomationListSearchIndex<T>(
-  items: readonly T[],
-  indexes: readonly AutomationListSearchIndex[],
-  rawQuery: string
-): readonly T[] {
-  const activeQuery = getActiveAutomationListSearchQuery(rawQuery)
-  if (activeQuery === null) {
-    return items
-  }
-  return filterByActiveAutomationListSearchQuery(items, indexes, activeQuery)
-}
-
-/** Builds indexes then filters. Prefer prebuilt indexes when filtering often. */
-export function filterByAutomationListSearch<T>(
-  items: readonly T[],
-  rawQuery: string,
-  getFields: (item: T) => AutomationListSearchFields
-): readonly T[] {
-  const activeQuery = getActiveAutomationListSearchQuery(rawQuery)
-  if (activeQuery === null) {
-    return items
-  }
-  const matches: T[] = []
-  for (const item of items) {
-    if (
-      automationListSearchIndexMatches(buildAutomationListSearchIndex(getFields(item)), activeQuery)
-    ) {
-      matches.push(item)
-    }
-  }
-  return matches
 }
 
 /**

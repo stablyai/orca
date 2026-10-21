@@ -13,6 +13,8 @@ import { getLayoutCharacterForCode } from '../../lib/keyboard-layout/layout-base
 // actually produced (`，` for `,`, `、` for `\`, `——` for a single press).
 // Xterm would otherwise send the raw layout character from the keydown and then
 // preventDefault, destroying the committed text before Chromium can deliver it.
+// Linux fcitx4 has the same shape: a single-character candidate pick is a plain
+// Space/digit keydown whose insertText is the candidate (#28213).
 //
 // The claim is structural, so it holds for input sources that do not exist yet:
 // no input-source identity is read, and `key` is only ever measured for length.
@@ -135,7 +137,7 @@ function matchesClaimedPress(
 
 /** Different held keys coexist, so records are keyed by physical identity. */
 function claimedKeyId(press: { key: string; code?: string }): string {
-  return press.code ?? press.key
+  return press.code || press.key
 }
 
 export function installTerminalImeNativeTextForwarder(args: {
@@ -172,6 +174,15 @@ export function installTerminalImeNativeTextForwarder(args: {
     for (const [id, record] of claimedKeyRecords) {
       if (matchesClaimedPress(event, record)) {
         return id
+      }
+    }
+    if (event.type === 'keyup') {
+      // XIM's pick keydown carries `code: ''` and key NUL while its keyup is the real key, so
+      // only elimination can pair them (#28213).
+      for (const [id, record] of claimedKeyRecords) {
+        if (!record.code) {
+          return id
+        }
       }
     }
     return null
@@ -320,13 +331,13 @@ export function installTerminalImeNativeTextForwarder(args: {
     if (!(event instanceof InputEvent)) {
       return
     }
-    // Why: an accepted composition transaction already owns its commit; letting
-    // it through here would send the text a second time.
-    if (compositionTransactionPending && event.inputType === 'insertText') {
-      if (pendingCommit) {
-        settleCommit(pendingCommit, null)
-        pendingCommit = null
-      }
+    // Why: an accepted composition transaction already owns its commit, so a
+    // claimed press must not send that text a second time. Unclaimed input stays
+    // with xterm, which dedupes its own echo — stopping it dropped a Linux
+    // `Process` commit that landed before the transaction settled.
+    if (compositionTransactionPending && event.inputType === 'insertText' && pendingCommit) {
+      settleCommit(pendingCommit, null)
+      pendingCommit = null
       event.stopImmediatePropagation()
       return
     }

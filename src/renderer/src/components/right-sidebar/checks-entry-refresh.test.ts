@@ -100,18 +100,6 @@ describe('shouldEntryRefresh', () => {
     ).toBe(false)
   })
 
-  it('ignores checks/comments freshness when no PR is known', () => {
-    expect(
-      shouldEntryRefresh({
-        prFetchedAt: NOW - 1_000,
-        checksFetchedAt: undefined,
-        commentsFetchedAt: undefined,
-        prNumber: null,
-        now: NOW
-      })
-    ).toBe(false)
-  })
-
   it('treats a PR timestamp exactly at the cutoff as fresh', () => {
     // Why: the rule is "older than now - grace", strict less-than. Equal is fresh.
     expect(

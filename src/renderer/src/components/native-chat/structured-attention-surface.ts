@@ -1,0 +1,106 @@
+/**
+ * Structured-chat implementation of the provider-neutral attention surface.
+ *
+ * Addressing: the subject key is the pane key the structured status producer already publishes,
+ * `structuredAgentSessionPaneKey(unifiedTabId, sessionId)`, so the container this surface reports
+ * as `groupId` is the unified tab id that prefixes it — never the split-layout group the tab sits
+ * in. One structured tab owns exactly one session, so tab and subject are one-to-one.
+ */
+import type { useAppStore } from '@/store'
+import type {
+  AgentAttentionSubject,
+  AgentAttentionSurface,
+  AgentAttentionSurfaceAdmission,
+  AgentAttentionSurfaceSubject
+} from '@/attention/agent-attention-contract'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { isTabOnScreen, isWorkspaceOnScreen } from '@/hooks/agent-auto-ack-targets'
+import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
+import type { StructuredTab } from './structured-agent-session-tabs'
+import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
+
+type StoreSnapshot = ReturnType<typeof useAppStore.getState>
+
+function structuredTabsIn(state: StoreSnapshot, workspaceId: string): StructuredTab[] {
+  return (state.unifiedTabsByWorktree[workspaceId] ?? []).filter(isStructuredTab)
+}
+
+/**
+ * The structured tab a subject key addresses, and only while the key still names that tab's
+ * current session — a tab rebound to a new session no longer owns the old key.
+ */
+function findSubjectTab(
+  state: StoreSnapshot,
+  workspaceId: string,
+  surfaceKey: string
+): StructuredTab | null {
+  const parsed = parsePaneKey(surfaceKey)
+  if (!parsed) {
+    return null
+  }
+  const tab = structuredTabsIn(state, workspaceId).find(
+    (candidate) => candidate.id === parsed.tabId
+  )
+  if (!tab || structuredAgentSessionPaneKey(tab.id, tab.entityId) !== surfaceKey) {
+    return null
+  }
+  return tab
+}
+
+function admitStructuredSession(
+  state: StoreSnapshot,
+  subject: AgentAttentionSurfaceSubject
+): AgentAttentionSurfaceAdmission {
+  const parsed = parsePaneKey(subject.surfaceKey)
+  if (!parsed) {
+    return { admitted: false, cause: 'unknown-surface' }
+  }
+  const tab = structuredTabsIn(state, subject.workspaceId).find(
+    (candidate) => candidate.id === parsed.tabId
+  )
+  if (!tab) {
+    return { admitted: false, cause: 'unknown-surface' }
+  }
+  return structuredAgentSessionPaneKey(tab.id, tab.entityId) === subject.surfaceKey
+    ? { admitted: true, groupId: tab.id }
+    : { admitted: false, cause: 'superseded-surface' }
+}
+
+function isViewedStructuredTab(
+  state: StoreSnapshot,
+  workspaceId: string,
+  tab: StructuredTab
+): boolean {
+  return isTabOnScreen(state, workspaceId, tab.id, 'structured')
+}
+
+/** Binds the neutral surface contract to one store snapshot. */
+export function createStructuredAttentionSurface(state: StoreSnapshot): AgentAttentionSurface {
+  return {
+    // Why: a structured session runs on the execution host with no renderer PTY, so an open tab
+    // still bound to the session is the only liveness evidence this process holds.
+    hasLiveSession: (subject: AgentAttentionSubject) =>
+      subject.surfaceKey === undefined
+        ? structuredTabsIn(state, subject.workspaceId).length > 0
+        : findSubjectTab(state, subject.workspaceId, subject.surfaceKey) !== null,
+    admitSurface: (subject) => admitStructuredSession(state, subject),
+    isSurfaceViewed: (subject) => {
+      const tab = findSubjectTab(state, subject.workspaceId, subject.surfaceKey)
+      return tab !== null && isViewedStructuredTab(state, subject.workspaceId, tab)
+    },
+    // Why: in-app selection alone is not viewing — a backgrounded Orca, Settings or an away user still need unread.
+    isWorkspaceViewed: (workspaceId) => isWorkspaceOnScreen(state, workspaceId),
+    isWorkspaceActive: (workspaceId) => state.activeWorktreeId === workspaceId,
+    isWorkspaceMuted: (workspaceId) =>
+      isWorkspaceNotificationMutedBySidebarFilters(state, workspaceId),
+    resolveViewedSubjectKey: (groupId) => {
+      const tab = Object.values(state.unifiedTabsByWorktree)
+        .flat()
+        .find((candidate) => candidate.id === groupId)
+      return tab && isStructuredTab(tab)
+        ? structuredAgentSessionPaneKey(tab.id, tab.entityId)
+        : null
+    }
+  }
+}

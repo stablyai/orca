@@ -17,7 +17,6 @@ const {
   glabExecFileAsyncMock,
   gitExecFileAsyncMock,
   getUpstreamStatusMock,
-  getSshGitProviderMock,
   getEnterpriseGitHubRepoSlugMock
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
@@ -36,7 +35,6 @@ const {
   glabExecFileAsyncMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   getUpstreamStatusMock: vi.fn(),
-  getSshGitProviderMock: vi.fn(),
   getEnterpriseGitHubRepoSlugMock: vi.fn()
 }))
 
@@ -105,9 +103,9 @@ vi.mock('../gitlab/gl-utils', () => ({
 
 vi.mock('../git/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: getSshGitProviderMock }))
-
-vi.mock('./hosted-review', () => ({ getHostedReviewForBranch: getHostedReviewForBranchMock }))
+vi.mock('./hosted-review', () => ({
+  getHostedReviewForBranch: getHostedReviewForBranchMock
+}))
 
 import { createHostedReview, getHostedReviewCreationEligibility } from './hosted-review-creation'
 import { baseRefExistsOnRemote } from './hosted-review-creation-git-state'
@@ -141,7 +139,6 @@ function resetMocks(): void {
     glabExecFileAsyncMock,
     gitExecFileAsyncMock,
     getUpstreamStatusMock,
-    getSshGitProviderMock,
     getEnterpriseGitHubRepoSlugMock
   ]) {
     mock.mockReset()
@@ -546,7 +543,9 @@ describe('getHostedReviewCreationEligibility', () => {
       if (args[0] === 'status') {
         return { stdout: '', stderr: '' }
       }
-      // symbolic-ref / for-each-ref resolve the base on the remote.
+      if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+        return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
+      }
       return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
     })
 
@@ -582,23 +581,25 @@ describe('getHostedReviewCreationEligibility', () => {
   })
 
   const mockRefs = (opts: {
-    symbolicRef?: string
-    forEachRef?: string
-    forEachThrows?: boolean
-    revParseThrows?: boolean
+    defaultRef?: string
+    remoteRefs?: string
+    remoteProbeFails?: boolean
   }): void => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: opts.symbolicRef ?? '', stderr: '' }
+      if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+        return {
+          stdout: opts.defaultRef ? `refs/remotes/origin/HEAD\0${opts.defaultRef}\n` : '',
+          stderr: ''
+        }
       }
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
       if (args[0] === 'show-ref') {
-        if (opts.forEachThrows) {
+        if (opts.remoteProbeFails) {
           throw new Error('ssh: connect: connection refused')
         }
-        const availableRefs = (opts.forEachRef ?? '')
+        const availableRefs = (opts.remoteRefs ?? '')
           .split(/\r?\n/)
           .map((ref) => ref.trim())
           .filter(Boolean)
@@ -611,15 +612,12 @@ describe('getHostedReviewCreationEligibility', () => {
         }
         throw Object.assign(new Error('missing ref'), { code: 1 })
       }
-      if (args[0] === 'rev-parse' && opts.revParseThrows) {
-        throw new Error('unknown revision')
-      }
       return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
     })
   }
 
   it('falls back to the repo default when a stacked parent base is local-only', async () => {
-    mockRefs({ symbolicRef: 'refs/remotes/origin/main\n' })
+    mockRefs({ defaultRef: 'refs/remotes/origin/main' })
     await expect(getHostedReviewCreationEligibility(stackedArgs())).resolves.toMatchObject({
       canCreate: true,
       blockedReason: null,
@@ -628,7 +626,7 @@ describe('getHostedReviewCreationEligibility', () => {
   })
 
   it('preserves a stacked parent base that exists on the remote', async () => {
-    mockRefs({ forEachRef: 'refs/remotes/origin/parent-pushed\n' })
+    mockRefs({ remoteRefs: 'refs/remotes/origin/parent-pushed\n' })
     await expect(
       getHostedReviewCreationEligibility(stackedArgs({ base: 'parent-pushed' }))
     ).resolves.toMatchObject({
@@ -639,7 +637,7 @@ describe('getHostedReviewCreationEligibility', () => {
   })
 
   it('keeps the candidate base when no repo default can be resolved', async () => {
-    mockRefs({ revParseThrows: true })
+    mockRefs({})
     await expect(getHostedReviewCreationEligibility(stackedArgs())).resolves.toMatchObject({
       canCreate: true,
       blockedReason: null,
@@ -650,7 +648,7 @@ describe('getHostedReviewCreationEligibility', () => {
   it('preserves the candidate base when the remote probe cannot reach the host', async () => {
     // Transport failure must not be read as "absent" — that would demote a
     // legitimately-pushed parent to the repo default on a transient SSH blip.
-    mockRefs({ forEachThrows: true })
+    mockRefs({ remoteProbeFails: true })
     await expect(
       getHostedReviewCreationEligibility(stackedArgs({ base: 'parent-pushed' }))
     ).resolves.toMatchObject({ canCreate: true, defaultBaseRef: 'parent-pushed' })
@@ -756,7 +754,7 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
-  it('resolves remote eligibility through SSH repo metadata without generating PR copy', async () => {
+  it('resolves remote eligibility from SSH repo metadata without running git or PR copy', async () => {
     const remoteGit = {
       exec: vi.fn(async (args: string[]) => ({
         stdout:
@@ -768,7 +766,6 @@ describe('getHostedReviewCreationEligibility', () => {
         stderr: ''
       }))
     }
-    getSshGitProviderMock.mockReturnValue(remoteGit)
 
     await expect(
       getHostedReviewCreationEligibility({
@@ -792,13 +789,8 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
       expect.objectContaining({ repoPath: '/remote/repo', executionHostId: 'ssh:ssh-1' })
     )
-    // Why: the base-on-remote probe must run on the SSH host that will execute
-    // the provider create, so it flows through the relay exec, not local git.
-    expect(remoteGit.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
-    expect(remoteGit.exec).toHaveBeenCalledWith(
-      ['show-ref', '--verify', '--quiet', '--', 'refs/remotes/origin/main'],
-      '/remote/repo'
-    )
+    // An SSH host is not served here, so its base probe never runs as local git either.
+    expect(remoteGit.exec).not.toHaveBeenCalled()
   })
 
   it('offers push as the next action for authenticated branches with local-only commits', async () => {

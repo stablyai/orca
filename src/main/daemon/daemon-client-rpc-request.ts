@@ -59,8 +59,11 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
   const createTimeoutError = (): DaemonRequestTimeoutError =>
     new DaemonRequestTimeoutError(`Request ${type} timed out after ${opts.timeoutMs}ms`)
   const createSessionId =
-    type === 'createOrAttach' && payload !== null && typeof payload === 'object'
-      ? Reflect.get(payload, 'sessionId')
+    type === 'createOrAttach' &&
+    payload !== null &&
+    typeof payload === 'object' &&
+    'sessionId' in payload
+      ? payload.sessionId
       : null
   const requestPayload =
     type === 'createOrAttach' && payload !== null && typeof payload === 'object'

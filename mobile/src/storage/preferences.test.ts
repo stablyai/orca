@@ -30,10 +30,12 @@ import {
   updateSessionViewOverride
 } from './session-view-preferences'
 
+// A store rather than two bare spies: the mirrored write path reads a key back after writing it,
+// so a `setItem` that answers with nothing is not a store any caller could have (ruling 35).
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(),
-    setItem: vi.fn()
+    setItem: vi.fn(async () => undefined)
   }
 }))
 
@@ -278,8 +280,18 @@ describe('push notification preference', () => {
     vi.mocked(AsyncStorage.setItem).mockReset()
   })
 
+  it.each(['true', 'false'])('requires fresh consent for legacy choice %s', async (legacy) => {
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
+      key === 'orca:pushNotificationsEnabled' ? legacy : null
+    )
+    await expect(readPushNotificationsPreference()).resolves.toEqual({ value: null, loaded: true })
+    await expect(loadPushNotificationsEnabled()).resolves.toBe(false)
+  })
+
   it('distinguishes an unset preference from an explicit disabled choice', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
+      key === 'orca:remotePushEnabled' ? 'true' : null
+    )
     await expect(readPushNotificationsPreference()).resolves.toEqual({
       value: null,
       loaded: true
@@ -303,12 +315,17 @@ describe('push notification preference', () => {
     await expect(loadPushNotificationsEnabled()).resolves.toBe(false)
   })
 
-  it('persists the onboarding decision in the existing mobile toggle', async () => {
-    await savePushNotificationsEnabled(true)
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:pushNotificationsEnabled', 'true')
-
-    await savePushNotificationsEnabled(false)
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:pushNotificationsEnabled', 'false')
+  it('persists and reloads master consent', async () => {
+    const storage = new Map<string, string>()
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) => storage.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => {
+      storage.set(key, value)
+    })
+    for (const enabled of [true, false]) {
+      await savePushNotificationsEnabled(enabled)
+      await expect(loadPushNotificationsEnabled()).resolves.toBe(enabled)
+    }
+    expect([...storage]).toEqual([['orca:pushServiceNotificationsEnabled', 'false']])
   })
 })
 

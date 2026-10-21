@@ -1,19 +1,13 @@
+import { getStoredRepoSshConnectionId } from '../repo-execution-host'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import type { Repo } from '../../shared/repo-types'
-import {
-  getEffectiveHooks,
-  hasHooksFile,
-  hasUnrecognizedOrcaYamlKeys,
-  loadHooks,
-  parseOrcaYaml
-} from '../hooks'
+import { getEffectiveHooks, hasHooksFile, hasUnrecognizedOrcaYamlKeys, loadHooks } from '../hooks'
 import {
   getDefaultTabCommandTrustContent,
   getEffectiveSetupRunPolicy
 } from '../effective-hook-config'
-import { isENOENT } from '../ipc/filesystem-auth'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { isENOENT } from '../ipc/filesystem-path-containment'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
@@ -27,33 +21,14 @@ export class RuntimeRepositoryHooksCommands {
 
   async getRepoHooks(repoSelector: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
-    if (repo.connectionId) {
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      if (!fsProvider) {
-        return {
-          hasHooksFile: false,
-          hooks: null,
-          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
-          source: null
-        }
-      }
-      try {
-        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
-        const hooks = result.isBinary ? null : parseOrcaYaml(result.content)
-        return {
-          hasHooksFile: Boolean(hooks),
-          hooks,
-          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
-          source: hooks ? ('orca.yaml' as const) : null,
-          setupTrust: setupTrust(repo, getDefaultTabCommandTrustContent(hooks))
-        }
-      } catch {
-        return {
-          hasHooksFile: false,
-          hooks: null,
-          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
-          source: null
-        }
+    const connectionId = getStoredRepoSshConnectionId(repo)
+    // Why: an `ssh:` repo is not served here; it reports no hooks file.
+    if (connectionId) {
+      return {
+        hasHooksFile: false,
+        hooks: null,
+        setupRunPolicy: getEffectiveSetupRunPolicy(repo),
+        source: null
       }
     }
     const hasFile = hasHooksFile(repo.path)
@@ -73,30 +48,9 @@ export class RuntimeRepositoryHooksCommands {
     if (isFolderRepo(repo)) {
       return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
-    if (repo.connectionId) {
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      if (!fsProvider) {
-        return { status: 'error' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
-      }
-      try {
-        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
-        if (result.isBinary) {
-          return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
-        }
-        return {
-          status: 'ok' as const,
-          hasHooks: true,
-          hooks: parseOrcaYaml(result.content),
-          mayNeedUpdate: false
-        }
-      } catch (error) {
-        return {
-          status: isENOENT(error) ? ('ok' as const) : ('error' as const),
-          hasHooks: false,
-          hooks: null,
-          mayNeedUpdate: false
-        }
-      }
+    const connectionId = getStoredRepoSshConnectionId(repo)
+    if (connectionId) {
+      return { status: 'error' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
     const has = hasHooksFile(repo.path)
     const hooks = has ? loadHooks(repo.path) : null
@@ -115,17 +69,8 @@ export class RuntimeRepositoryHooksCommands {
     }
     return inspectSetupScriptImportCandidates(async (relativePath) => {
       const filePath = joinWorktreeRelativePath(repo.path, relativePath)
-      if (repo.connectionId) {
-        const fsProvider = getSshFilesystemProvider(repo.connectionId)
-        if (!fsProvider) {
-          return null
-        }
-        try {
-          const result = await fsProvider.readFile(filePath)
-          return result.isBinary ? null : result.content
-        } catch {
-          return null
-        }
+      if (getStoredRepoSshConnectionId(repo)) {
+        return null
       }
       try {
         return await readFile(filePath, 'utf-8')

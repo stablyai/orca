@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import type { PtyProviderBufferSnapshot } from '../../providers/pty-provider-contract'
+import { TerminalKittyKeyboardModeTracker } from '../../../shared/terminal-kitty-keyboard-mode-tracker'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
@@ -197,6 +199,79 @@ describe('OrcaRuntimeService', () => {
     expect(clearBuffer).toHaveBeenCalledWith('pty-1')
     const snapshot = await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 1000 })
     expect(snapshot?.data).not.toContain('line-0')
+  })
+
+  it('resets input modes through the PTY controller and the headless model', async () => {
+    const resetInputModes = vi.fn().mockResolvedValue(undefined)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      resetInputModes
+    })
+    syncSinglePty(runtime, 'pty-1')
+    // An app armed these and crashed with no command end.
+    runtime.onPtyData('pty-1', 'prompt$ app\r\n\x1b[>31u\x1b[?1000h\x1b[?2004h', 123)
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const armed = await runtime.serializeTerminalBuffer('pty-1')
+    expect(armed?.kittyKeyboardFlags).toBe(31)
+
+    await expect(runtime.resetTerminalInputModes(terminal.handle)).resolves.toEqual({
+      handle: terminal.handle,
+      reset: true
+    })
+
+    expect(resetInputModes).toHaveBeenCalledWith('pty-1')
+    const snapshot = await runtime.serializeTerminalBuffer('pty-1')
+    expect(snapshot?.kittyKeyboardFlags).toBe(0)
+    expect(snapshot?.data).not.toContain('\x1b[?1000h')
+    expect(snapshot?.data).not.toContain('\x1b[?2004h')
+  })
+
+  it('grounds the provider mode tracker before a later chunk, in the emulator order', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime, 'pty-1')
+    runtime.onPtyData('pty-1', 'prompt$ ', 123)
+    const tracker = new TerminalKittyKeyboardModeTracker()
+    runtime['providerModeTrackersByPtyId'].set('pty-1', tracker)
+
+    // A TUI starts while the reset still waits on the headless write chain.
+    const reset = runtime.resetHeadlessTerminalInputModes('pty-1')
+    runtime.onPtyData('pty-1', '\x1b[?1049h', 124)
+    await reset
+    await runtime['headlessTerminals'].get('pty-1')?.writeChain
+
+    expect(runtime['headlessTerminals'].get('pty-1')?.emulator.isAlternateScreen).toBe(true)
+    expect(tracker.isAlternateScreen).toBe(true)
+  })
+
+  it('grounds an in-flight provider snapshot capture so it cannot publish the pre-reset screen', async () => {
+    let resolveSnapshot: (snapshot: PtyProviderBufferSnapshot) => void = () => {}
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer: () => new Promise((resolve) => (resolveSnapshot = resolve))
+    })
+    syncSinglePty(runtime, 'pty-1')
+    const generation = runtime['getPtyLifecycleGeneration']('pty-1')
+
+    // The capture's daemon request left before the reset; its answer predates the ground.
+    const capture = runtime['captureProviderTerminalBuffer']('pty-1', {}, generation)
+    await runtime.resetHeadlessTerminalInputModes('pty-1')
+    resolveSnapshot({
+      data: '',
+      cols: 80,
+      rows: 24,
+      seq: 1,
+      source: 'headless',
+      alternateScreen: true
+    })
+    await capture
+
+    expect(runtime['providerModeTrackersByPtyId'].get('pty-1')?.isAlternateScreen).toBe(false)
   })
 
   it('waits for terminal exit and resolves with the exit status', async () => {

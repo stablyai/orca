@@ -1,0 +1,85 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "source-control.remote-prerequisite",
+  "family": "git.remote-prerequisite",
+  "namedDeltas": [],
+  "values": {
+    "00e8a3bac22f": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true,
+        "ran": true
+      }
+    },
+    "0fe2eb2410a4": {
+      "outcome": {
+        "ok": true,
+        "ran": true
+      }
+    },
+    "191da6f43475": {
+      "name": "progress",
+      "ordinal": 1,
+      "value": "publishing"
+    },
+    "316caee8c6a8": {
+      "name": "git.push#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\",\"publish\":true}}"
+    },
+    "ddf67b6024c1": {
+      "name": "git.push#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "publish": true,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-prerequisite-publish",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["ddf67b6024c1"],
+          "payloads": ["316caee8c6a8"],
+          "settlements": {
+            "apply": "00e8a3bac22f"
+          },
+          "state": "0fe2eb2410a4",
+          "effects": ["191da6f43475"]
+        }
+      }
+    ]
+  }
+}

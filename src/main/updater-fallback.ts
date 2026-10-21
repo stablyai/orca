@@ -51,6 +51,7 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         left.message === right.message &&
         left.version === right.version &&
         left.retryable === right.retryable &&
+        left.retryAction === right.retryAction &&
         left.userInitiated === right.userInitiated &&
         left.activeNudgeId === right.activeNudgeId &&
         // Recovery identity fences async actions, so same-valued recaptures must reach the renderer.

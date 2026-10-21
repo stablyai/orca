@@ -3,7 +3,7 @@ import type { MultiplexerWriterLane } from './ssh-multiplexer-transport-writer'
 const CONTROL_WRITES_BEFORE_ORDINARY = 4
 
 type LaneQueue<T> = {
-  entries: T[]
+  entries: (T | undefined)[]
   head: number
 }
 
@@ -20,16 +20,20 @@ function shift<T>(queue: LaneQueue<T>): T | undefined {
   if (entry === undefined) {
     return undefined
   }
+  queue.entries[queue.head] = undefined
   queue.head += 1
-  if (queue.head === queue.entries.length) {
-    queue.entries.length = 0
+  if (
+    queue.head === queue.entries.length ||
+    (queue.head >= 1024 && queue.head * 2 >= queue.entries.length)
+  ) {
+    queue.entries = queue.entries.slice(queue.head)
     queue.head = 0
   }
   return entry
 }
 
 function clear<T>(queue: LaneQueue<T>): T[] {
-  const entries = queue.entries.slice(queue.head)
+  const entries = queue.entries.slice(queue.head).filter((entry): entry is T => entry !== undefined)
   queue.entries.length = 0
   queue.head = 0
   return entries

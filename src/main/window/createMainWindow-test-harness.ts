@@ -146,3 +146,46 @@ export function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
     Object.defineProperty(process, 'platform', { configurable: true, value: original })
   }
 }
+
+export type RendererRecoveryWindowHarness = {
+  browserWindowInstance: { loadFile: Mock<() => Promise<void>>; loadURL: Mock<() => Promise<void>> }
+  windowHandlers: Record<string, (...args: any[]) => void>
+}
+
+/** A main window whose webContents events land in `windowHandlers` for suites that drive renderer recovery. */
+export function createRendererRecoveryWindowHarness(): RendererRecoveryWindowHarness {
+  const windowHandlers: RendererRecoveryWindowHarness['windowHandlers'] = {}
+  const webContents = {
+    id: 143,
+    getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
+    isDestroyed: vi.fn(() => false),
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      windowHandlers[event] = handler
+    }),
+    setZoomLevel: vi.fn(),
+    setBackgroundThrottling: vi.fn(),
+    invalidate: vi.fn(),
+    setWindowOpenHandler: vi.fn(),
+    send: vi.fn()
+  }
+  const browserWindowInstance = {
+    webContents,
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      windowHandlers[event] = handler
+    }),
+    isDestroyed: vi.fn(() => false),
+    isMaximized: vi.fn(() => true),
+    isFullScreen: vi.fn(() => false),
+    getSize: vi.fn(() => [1200, 800]),
+    setSize: vi.fn(),
+    maximize: vi.fn(),
+    show: vi.fn(),
+    loadFile: vi.fn(() => Promise.resolve()),
+    loadURL: vi.fn(() => Promise.resolve())
+  }
+  browserWindowMock.mockImplementation(function () {
+    return browserWindowInstance
+  })
+
+  return { browserWindowInstance, windowHandlers }
+}

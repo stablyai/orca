@@ -176,6 +176,12 @@ describe('resolvePreviewShortcutAction', () => {
     expect(
       resolvePreviewShortcutAction(keydown({ key: 'd', code: 'KeyD', metaKey: true }), contextFor())
     ).toEqual({ type: 'splitActivePane', direction: 'vertical' })
+    expect(
+      resolvePreviewShortcutAction(
+        keydown({ key: 'd', code: 'KeyD', metaKey: true }),
+        contextFor({ terminalShortcutPolicy: 'terminal-first' })
+      )
+    ).toBeNull()
   })
 
   // Why: a terminal-first user remapped terminal.closePane away, so only the

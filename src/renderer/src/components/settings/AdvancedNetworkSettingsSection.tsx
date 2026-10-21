@@ -9,7 +9,9 @@ import { Button } from '../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { Textarea } from '../ui/textarea'
 import { getAdvancedNetworkSearchEntries } from './advanced-network-search'
+import { NodeDistMirrorSettingField } from './NodeDistMirrorSettingField'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { translate } from '@/i18n/i18n'
@@ -24,7 +26,11 @@ export function shouldOpenNetworkProxyConfig(searchQuery: string): boolean {
 
 /** A configured proxy should also reveal the fields, so users see the value. */
 export function hasConfiguredNetworkProxy(settings: GlobalSettings): boolean {
-  return Boolean(settings.httpProxyUrl?.trim() || settings.httpProxyBypassRules?.trim())
+  return Boolean(
+    settings.httpProxyUrl?.trim() ||
+    settings.httpProxyBypassRules?.trim() ||
+    settings.nodeDistMirrorUrl?.trim()
+  )
 }
 
 export type HttpProxyUrlDraftState = {
@@ -215,7 +221,9 @@ export function AdvancedNetworkSettingsSection({
         'no_proxy',
         'network',
         'bypass',
-        'localhost'
+        'localhost',
+        'mirror',
+        'nodejs'
       ]}
       className="space-y-3"
     >
@@ -304,16 +312,11 @@ export function AdvancedNetworkSettingsSection({
                   'Proxy Bypass Rules'
                 )}
               </Label>
-              <Input
+              <Textarea
                 id="settings-http-proxy-bypass-rules"
                 value={httpProxyBypassRulesDraft}
                 onChange={(e) => updateHttpProxyBypassRulesDraft(e.target.value)}
                 onBlur={commitHttpProxyBypassRules}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.currentTarget.blur()
-                  }
-                }}
                 placeholder={translate(
                   'auto.components.settings.AdvancedNetworkSettingsSection.3e431564b5',
                   'localhost, 127.0.0.1, *.internal'
@@ -322,6 +325,7 @@ export function AdvancedNetworkSettingsSection({
                 autoCorrect="off"
                 autoComplete="off"
                 spellCheck={false}
+                rows={3}
                 className="font-mono text-xs"
               />
               <p className="text-xs text-muted-foreground">
@@ -331,6 +335,11 @@ export function AdvancedNetworkSettingsSection({
                 )}
               </p>
             </div>
+
+            <NodeDistMirrorSettingField
+              value={settings.nodeDistMirrorUrl}
+              onCommit={(nodeDistMirrorUrl) => updateSettings({ nodeDistMirrorUrl })}
+            />
           </div>
         </CollapsibleContent>
       </Collapsible>

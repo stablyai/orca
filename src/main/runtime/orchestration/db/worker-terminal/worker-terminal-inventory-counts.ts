@@ -44,12 +44,14 @@ function buildInventoryScope(params: WorkerTerminalInventoryParams): {
 }
 
 /** The only place worker terminal state is derived for filtering or counting: raw columns out of
- *  SQL, the verdict from the one TS state machine, so no second copy can drift from it. */
+ *  SQL, the verdict from the one TS state machine, so no second copy can drift from it.
+ *  Ordered newest first because the filtered listing pages by slicing this scan. */
 export function scanWorkerTerminalStates(
   this: OrchestrationDb,
   where: string[],
   values: (string | number)[]
 ): WorkerTerminalStateRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this cast is unchanged and matches every other row cast in db/; the gate flags it only because this diff edits the ORDER BY inside its span.
   const rows = this.db
     .prepare(
       `SELECT d.id AS dispatch_id,
@@ -61,7 +63,7 @@ export function scanWorkerTerminalStates(
          LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
          LEFT JOIN worker_terminal_resources r ON r.owner_dispatch_id = d.id
         ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
-        ORDER BY d.rowid ASC`
+        ORDER BY d.rowid DESC`
     )
     .all(...values) as {
     dispatch_id: string

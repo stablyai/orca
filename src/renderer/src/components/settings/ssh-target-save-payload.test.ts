@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { EMPTY_FORM } from './ssh-target-draft'
+import {
+  EMPTY_FORM,
+  getEditingTargetForSshTarget,
+  hasAdvancedConnectionValues,
+  isSshTargetFormDirty
+} from './ssh-target-draft'
 import { buildSshTargetSavePayload } from './ssh-target-save-payload'
 
 describe('buildSshTargetSavePayload', () => {
@@ -12,80 +17,42 @@ describe('buildSshTargetSavePayload', () => {
     }
   })
 
-  it('omits default SSH connection reuse from new targets but clears it on update', () => {
-    const result = buildSshTargetSavePayload({
+  it('saves remote CLI control on by default and an explicit false when turned off', () => {
+    const on = buildSshTargetSavePayload({ ...EMPTY_FORM, host: 'gpu.example.com' })
+    const off = buildSshTargetSavePayload({
       ...EMPTY_FORM,
-      label: 'Production',
-      host: 'prod.example.com',
-      username: 'deploy',
-      port: '2202'
+      host: 'gpu.example.com',
+      allowRemoteCliControl: false
     })
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      throw new Error(result.error)
+    if (!off.ok || !on.ok) {
+      throw new Error('payload rejected')
     }
-    expect(result.payload.target).toMatchObject({
-      label: 'Production',
-      configHost: 'prod.example.com',
-      host: 'prod.example.com',
-      port: 2202,
-      username: 'deploy',
-      relayGracePeriodSeconds: 0
-    })
-    expect(result.payload.target).not.toHaveProperty('systemSshConnectionReuse')
-    expect(result.payload.updates).toMatchObject({
-      source: 'manual',
-      identityFile: undefined,
-      proxyCommand: undefined,
-      jumpHost: undefined,
-      systemSshConnectionReuse: undefined
-    })
+    expect(on.payload.target).toMatchObject({ allowRemoteCliControl: true })
+    expect(on.payload.updates).toMatchObject({ allowRemoteCliControl: true })
+    expect(off.payload.target).toMatchObject({ allowRemoteCliControl: false })
+    expect(off.payload.updates).toMatchObject({ allowRemoteCliControl: false })
+    expect(hasAdvancedConnectionValues(EMPTY_FORM)).toBe(false)
+    expect(hasAdvancedConnectionValues({ ...EMPTY_FORM, allowRemoteCliControl: false })).toBe(true)
   })
 
-  it('persists explicit SSH connection reuse opt-outs and bounded relay timeouts', () => {
-    const result = buildSshTargetSavePayload({
-      ...EMPTY_FORM,
-      host: 'appliance.example.com',
-      username: 'admin',
-      identityFile: '~/.ssh/appliance',
-      proxyCommand: 'cloudflared access ssh --hostname %h',
-      jumpHost: 'bastion.example.com',
-      systemSshConnectionReuse: false,
-      relayKeepAliveUntilReset: false,
-      relayGracePeriodSeconds: '600'
-    })
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      throw new Error(result.error)
-    }
-    expect(result.payload.target).toMatchObject({
-      label: 'admin@appliance.example.com',
-      host: 'appliance.example.com',
-      relayGracePeriodSeconds: 600,
-      identityFile: '~/.ssh/appliance',
-      proxyCommand: 'cloudflared access ssh --hostname %h',
-      jumpHost: 'bastion.example.com',
-      systemSshConnectionReuse: false
-    })
-    expect(result.payload.updates).toMatchObject({
-      source: 'manual',
-      systemSshConnectionReuse: false
-    })
+  it('shows a host with no saved value as on, and an explicit false as off', () => {
+    const host = { id: 'gpu', label: 'gpu', host: 'gpu.example.com', port: 22, username: 'me' }
+    expect(getEditingTargetForSshTarget(host).allowRemoteCliControl).toBe(true)
+    expect(
+      getEditingTargetForSshTarget({ ...host, allowRemoteCliControl: false }).allowRemoteCliControl
+    ).toBe(false)
   })
 
-  it('rejects invalid bounded relay timeouts', () => {
-    const result = buildSshTargetSavePayload({
-      ...EMPTY_FORM,
-      host: 'appliance.example.com',
-      relayKeepAliveUntilReset: false,
-      relayGracePeriodSeconds: '59'
+  it('round-trips the remote CLI control opt-in through the edit form', () => {
+    const form = getEditingTargetForSshTarget({
+      id: 'gpu',
+      label: 'gpu',
+      host: 'gpu.example.com',
+      port: 22,
+      username: 'me',
+      allowRemoteCliControl: true
     })
-
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.error).toContain('Terminal timeout')
-    }
+    expect(form.allowRemoteCliControl).toBe(true)
+    expect(isSshTargetFormDirty({ ...form, allowRemoteCliControl: false }, form)).toBe(true)
   })
 })

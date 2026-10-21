@@ -68,3 +68,28 @@ describe.skipIf(process.platform === 'win32')('omp wrapper under a user alias na
     expectAliasedOmpNameSurvives('/bin/zsh', 'setopt aliases')
   })
 })
+
+describe.skipIf(process.platform === 'win32' || !zshAvailable)('OMP wrapper global aliases', () => {
+  it.each(['--help', '-v', 'models'])('parses with hostile global alias %s', (token) => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-omp-global-alias-'))
+    roots.push(root)
+    const startup = join(root, 'startup.zsh')
+    writeFileSync(
+      startup,
+      [
+        `alias -g -- ${token}='${token} 2>&1 | cat'`,
+        getPosixOmpShellWrapper(),
+        `if ! __orca_omp_should_skip_extension '${token}'; then exit 1; fi`,
+        'printf "parsed\\n"',
+        `alias -g -- '${token}'`
+      ].join('\n')
+    )
+    const result = spawnSync('/bin/zsh', ['-f', startup], {
+      encoding: 'utf8',
+      env: { ...process.env, HOME: root, ZDOTDIR: root }
+    })
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toContain('parsed')
+    expect(result.stdout).toContain('2>&1 | cat')
+  })
+})

@@ -1,9 +1,9 @@
+import { openExternalLink } from '../platform/external-link'
 export { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 export type { ReactNode } from 'react'
 export {
   ActivityIndicator,
   FlatList,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -12,9 +12,30 @@ export {
   TextInput,
   View
 } from 'react-native'
+/**
+ * `Linking` as this tree uses it: one method, routed through the platform seam.
+ *
+ * Not react-native's. Inside the shell's WebView react-native-web's `openURL` calls
+ * `window.open(url, '_blank')`, which both shells refuse — iOS returns nil from
+ * `createWebViewWith`, Android false from `onCreateWindow` — and resolves regardless, so every
+ * call site would report success into a tap that opened nothing. The seam posts `externalLink` to
+ * the shell on the web and is `Linking.openURL` unchanged on a phone.
+ *
+ * Typed `void` on purpose: the seam names its own failures and never rejects, so a `.catch` here
+ * would be a handler for a rejection that cannot arrive, and this makes that a compile error.
+ */
+export const Linking: { openURL: (url: string) => void } = { openURL: openExternalLink }
 export { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-export * as Clipboard from 'expo-clipboard'
-export { useLocalSearchParams, useRouter } from 'expo-router'
+export { useLocalSearchParams } from 'expo-router'
+/**
+ * The router as this tree uses it: expo-router's on a phone, and the handoff inside the page.
+ *
+ * The page is one document standing in for one screen, so a route it does not render goes back to
+ * the app that does, and its Back goes to the native stack the shell pushed it onto — the
+ * document has the single history entry the entry wrote, so expo-router's `back()` moves nothing.
+ * `useRouteHandoff` is router-shaped, so no call site changes.
+ */
+export { useRouteHandoff as useRouter } from '../navigation/route-handoff'
 export {
   AlertTriangle,
   Check,
@@ -34,7 +55,7 @@ export {
 } from 'lucide-react-native'
 export type { RpcClient } from '../transport/rpc-client'
 export type { RpcSuccess } from '../transport/types'
-export { useHostClient } from '../transport/client-context'
+export { useHostClient } from '../transport/host-client-hooks'
 export {
   useLastConnectedAt,
   useRelayRecoveryStatus,
@@ -44,6 +65,7 @@ export { classifyConnection } from '../transport/connection-health'
 export { StatusDot } from '../components/StatusDot'
 export { ActionSheetModal } from '../components/ActionSheetModal'
 export { BottomDrawer } from '../components/BottomDrawer'
+export { BottomDrawerModalHost } from '../components/bottom-drawer-modal-host'
 export { ConfirmModal } from '../components/ConfirmModal'
 export { MobileMarkdown } from '../components/MobileMarkdown'
 export { MobileAgentIcon } from '../components/MobileAgentIcon'
@@ -115,19 +137,22 @@ export { colors, radii, spacing, typography } from '../theme/mobile-theme'
 export { triggerMediumImpact } from '../platform/haptics'
 export {
   CROSS_REPO_DISPLAY_LIMIT,
+  getTaskPagePerRepoLimit,
+  getWorkItemCountedTotalPages,
   isGitHubWorkItemsSshRemoteRequiredError,
-  PER_REPO_FETCH_LIMIT
-} from './mobile-work-items'
+  PER_REPO_FETCH_LIMIT,
+  sortWorkItemsByNumber,
+  taskPageToGitHubApiPage
+} from '../../../src/shared/work-items'
 export {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
   resolveVisibleTaskProvider
-} from './mobile-task-providers'
-export type { TaskProvider } from './mobile-task-providers'
+} from '../../../src/shared/task-providers'
+export type { TaskProvider } from '../../../src/shared/task-providers'
 export { hasSettledHostRepoList } from './host-repo-list'
 export { useHostRepoList } from './use-host-repo-list'
 export { isHostedTaskRepo, reconcileRepoSelection } from './hosted-repo-selection'
-export { extractLinearIssueReadItems } from './linear-mobile-issue-read'
 export type { LinearMobileIssue } from './linear-mobile-issue-read'
 export { MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from './mobile-tui-agents'
 export { resolveComposerBranchSelection } from './mobile-composer-branch-selection'

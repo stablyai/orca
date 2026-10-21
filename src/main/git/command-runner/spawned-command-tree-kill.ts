@@ -9,6 +9,11 @@ export function killSpawnedCommandTree(child: ChildProcess): Promise<void> {
     child.kill()
     return Promise.resolve()
   }
+  // Windows may reuse the pid after exit while inherited pipes still delay close.
+  if ((child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null) {
+    child.kill()
+    return Promise.resolve()
+  }
   if (
     !admitSelfInitiatedTreeKill({ pid, site: 'git-command-tree-kill', scope: 'win-taskkill-tree' })
   ) {

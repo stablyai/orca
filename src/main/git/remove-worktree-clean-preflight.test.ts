@@ -7,26 +7,14 @@ const {
   translateWslOutputPathsMock,
   statMock,
   readFileMock,
-  resolveGitDirMock,
-  moveWorktreeDirectoryToTrashMock,
-  restoreWorktreeDirectoryFromTrashMock,
-  scheduleWorktreeTrashDeletionMock
+  resolveGitDirMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileSyncMock: vi.fn(),
   translateWslOutputPathsMock: vi.fn((output: string) => output),
   statMock: vi.fn(),
   readFileMock: vi.fn(),
-  resolveGitDirMock: vi.fn(),
-  moveWorktreeDirectoryToTrashMock: vi.fn(),
-  restoreWorktreeDirectoryFromTrashMock: vi.fn(),
-  scheduleWorktreeTrashDeletionMock: vi.fn()
-}))
-
-vi.mock('../worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: moveWorktreeDirectoryToTrashMock,
-  restoreWorktreeDirectoryFromTrash: restoreWorktreeDirectoryFromTrashMock,
-  scheduleWorktreeTrashDeletion: scheduleWorktreeTrashDeletionMock
+  resolveGitDirMock: vi.fn()
 }))
 
 vi.mock('./runner', () => ({
@@ -50,16 +38,13 @@ import { resetWorktreeRemovalState } from './remove-worktree-test-harness'
 import { assertWorktreeCleanForRemoval, WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS } from './worktree'
 
 beforeEach(() => {
-  resetWorktreeRemovalState({
-    moveWorktreeDirectoryToTrashMock,
-    restoreWorktreeDirectoryFromTrashMock,
-    scheduleWorktreeTrashDeletionMock
-  })
+  resetWorktreeRemovalState()
 })
 
 describe('assertWorktreeCleanForRemoval', () => {
   beforeEach(() => {
-    gitExecFileAsyncMock.mockReset()
+    // Calls after the status read are the dirty refusal's `.gitmodules` probe: no file, exit 1.
+    gitExecFileAsyncMock.mockReset().mockRejectedValue(new Error('git config exited with code 1'))
   })
 
   it('returns without checking git status for force removals', async () => {
@@ -73,7 +58,7 @@ describe('assertWorktreeCleanForRemoval', () => {
     await expect(assertWorktreeCleanForRemoval('/repo-feature')).resolves.toBeUndefined()
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['status', '--porcelain', '--untracked-files=all'],
+      ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
       { cwd: '/repo-feature', timeout: WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS }
     )
   })
@@ -97,7 +82,7 @@ describe('assertWorktreeCleanForRemoval', () => {
     ).resolves.toBeUndefined()
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['status', '--porcelain', '-z', '--untracked-files=all'],
+      ['status', '--porcelain', '-z', '--untracked-files=all', '--ignore-submodules=none'],
       { cwd: '/repo-feature', timeout: WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS }
     )
   })
@@ -110,7 +95,7 @@ describe('assertWorktreeCleanForRemoval', () => {
     ).rejects.toThrow('git timed out.')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['status', '--porcelain', '--untracked-files=all'],
+      ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
       { cwd: '/repo-feature', timeout: 25 }
     )
   })

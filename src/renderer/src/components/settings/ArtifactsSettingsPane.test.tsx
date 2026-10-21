@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
       configured: true,
       state: 'connected'
     } as Record<string, unknown> | null,
-    orcaProfileConnecting: false,
     isWebClient: false
   }
 }))
@@ -46,7 +45,6 @@ describe('ArtifactsSettingsPane', () => {
     mocks.fetchAuthStatus.mockReset()
     mocks.openArtifactsPage.mockReset()
     mocks.state.orcaProfileAuthStatus = { configured: true, state: 'connected' }
-    mocks.state.orcaProfileConnecting = false
     mocks.state.isWebClient = false
   })
 
@@ -92,19 +90,11 @@ describe('ArtifactsSettingsPane', () => {
     expect(mocks.connect).toHaveBeenCalledOnce()
   })
 
-  it('shows reconnect and connecting states', () => {
+  it('keeps sign in clickable while reconnect is required', () => {
     mocks.state.orcaProfileAuthStatus = { configured: true, state: 'reconnect-required' }
-    const { rerender } = render(
-      <ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
-    )
+    render(<ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />)
 
     expect(screen.getByRole('button', { name: 'Sign in again' })).toBeEnabled()
-
-    mocks.state.orcaProfileConnecting = true
-    rerender(
-      <ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
-    )
-    expect(screen.getByRole('button', { name: 'Signing in…' })).toBeDisabled()
   })
 
   it('loads missing account status and disables sign in until configured', () => {

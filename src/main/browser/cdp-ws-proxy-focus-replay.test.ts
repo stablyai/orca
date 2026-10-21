@@ -23,8 +23,8 @@ describe('CdpWsProxy DOM.focus replay', () => {
 
   beforeEach(async () => {
     mock = createMockWebContents()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    proxy = new CdpWsProxy(mock.webContents as any)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
+    proxy = new CdpWsProxy(mock.webContents as never, () => () => {})
     endpoint = await proxy.start()
   })
 
@@ -261,9 +261,8 @@ describe('CdpWsProxy DOM.focus replay', () => {
 
     expect(insertResponse.id).toBe(29)
     expect(insertResponse.result).toEqual({})
-    // Why: both Page.bringToFront and Input.insertText natively call focus(),
-    // independent of the (now-cleared) DOM.focus replay.
-    expect(mock.webContents.focus).toHaveBeenCalledTimes(2)
+    // Why: only Input.insertText focuses natively; Page.bringToFront is a no-op.
+    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
     expect(getSendCommandMethods(mock)).toEqual(['Page.enable', 'DOM.focus', 'Input.insertText'])
     client.close()
   })

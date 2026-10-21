@@ -34,6 +34,9 @@ import { okFixture, queueFixtures } from '../test-fixtures'
 
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
+// Why: a structured-session marker inherited from the runner diverts these cases to the
+// structured refusal, so which branch they exercise would depend on who ran them.
+const originalStructuredSession = process.env.ORCA_STRUCTURED_SESSION
 
 const restoreEnv = (name: string, value: string | undefined): void => {
   if (value === undefined) {
@@ -54,6 +57,7 @@ describe('orchestration gate commands carry caller identity', () => {
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PANE_KEY
+    delete process.env.ORCA_STRUCTURED_SESSION
     process.exitCode = 0
   })
 
@@ -62,6 +66,7 @@ describe('orchestration gate commands carry caller identity', () => {
     errorSpy.mockRestore()
     restoreEnv('ORCA_TERMINAL_HANDLE', originalTerminalHandle)
     restoreEnv('ORCA_PANE_KEY', originalPaneKey)
+    restoreEnv('ORCA_STRUCTURED_SESSION', originalStructuredSession)
     process.exitCode = 0
   })
 
@@ -192,7 +197,7 @@ describe('orchestration gate commands carry caller identity', () => {
 
     expect(process.exitCode).toBe(1)
     const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
-    expect(stderr).toContain('Pass --from <terminal-handle>')
+    expect(stderr).toContain("Pass --from with your own terminal's handle")
     expect(callMock).not.toHaveBeenCalledWith('orchestration.gateCreate', expect.anything())
   })
 

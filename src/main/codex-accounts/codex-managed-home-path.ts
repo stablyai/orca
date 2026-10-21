@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { app } from 'electron'
-import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+import { getAppEnvironment } from '../../shared/app-environment'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
@@ -15,7 +15,7 @@ export class CodexManagedHomePath {
   constructor(private readonly validateWslPath: (distro: string, script: string) => string) {}
 
   getRoot(): string {
-    const root = join(app.getPath('userData'), 'codex-accounts')
+    const root = join(getAppEnvironment().getPath('userData'), 'codex-accounts')
     mkdirSync(root, { recursive: true })
     return root
   }
@@ -23,7 +23,7 @@ export class CodexManagedHomePath {
   assertHostOwnership(candidatePath: string, expectedAccountId: string): string {
     return assertOwnedHostCodexManagedHomePath({
       candidatePath,
-      managedAccountsRoot: join(app.getPath('userData'), 'codex-accounts'),
+      managedAccountsRoot: join(getAppEnvironment().getPath('userData'), 'codex-accounts'),
       systemCodexHomePath: getSystemCodexHomePath(),
       expectedAccountId
     })

@@ -1,8 +1,19 @@
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { useAppStore } from '../../store'
+import {
+  acquireBrowserAutomationVisibility,
+  releaseBrowserAutomationVisibility
+} from '@/components/browser-pane/host-guest/browser-automation-visibility'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import {
+  beginAgentInputFocusGuard,
+  clearAgentInputFocusGuards,
+  endAgentInputFocusGuard,
+  watchUserComposition
+} from '@/components/browser-pane/host-guest/agent-input-focus-guard'
 
 /**
  * A client-hosted page is a local Electron webview on this desktop that happens to belong to a
@@ -68,6 +79,47 @@ export function registerBrowserStateIpcBridge(
       }
     })
   )
+  // Why: main owns capture holds and sends each page's first hold and last release; no reply is awaited.
+  const capturePaintHoldTokens = new Map<string, string>()
+  const unsubscribeCapturePaintHold = window.api.browser.onCapturePaintHold?.(
+    ({ browserPageId, held }) => {
+      const token = capturePaintHoldTokens.get(browserPageId)
+      if (held && !token) {
+        capturePaintHoldTokens.set(browserPageId, acquireBrowserAutomationVisibility(browserPageId))
+      } else if (!held && token) {
+        capturePaintHoldTokens.delete(browserPageId)
+        releaseBrowserAutomationVisibility(token)
+      }
+    }
+  )
+  if (unsubscribeCapturePaintHold) {
+    unsubs.push(() => {
+      unsubscribeCapturePaintHold()
+      // Why: the release for a live hold can no longer arrive, so it must not leave the page drawn.
+      for (const token of capturePaintHoldTokens.values()) {
+        releaseBrowserAutomationVisibility(token)
+      }
+      capturePaintHoldTokens.clear()
+    })
+  }
+  const unsubscribeAgentInputFocusGuard = window.api.browser.onAgentInputFocusGuard?.(
+    ({ browserPageId, token, active }) => {
+      if (active) {
+        const answer = beginAgentInputFocusGuard(browserPageId, token)
+        window.api.browser.agentInputFocusGuardReady(token, answer === 'composing')
+      } else {
+        endAgentInputFocusGuard(token)
+      }
+    }
+  )
+  if (unsubscribeAgentInputFocusGuard) {
+    const unwatchUserComposition = watchUserComposition()
+    unsubs.push(() => {
+      unsubscribeAgentInputFocusGuard()
+      unwatchUserComposition()
+      clearAgentInputFocusGuards()
+    })
+  }
   unsubs.push(
     window.api.browser.onPaneFocus(({ worktreeId, browserPageId }) => {
       if (isRuntimeEnvironmentActive()) {
@@ -86,7 +138,10 @@ export function registerBrowserStateIpcBridge(
       const sourcePage = Object.values(store.browserPagesByWorkspace)
         .flat()
         .find((page) => page.id === browserPageId)
-      if (!sourcePage || getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
+      if (
+        !sourcePage ||
+        runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(store, sourcePage.worktreeId)
+      ) {
         return
       }
       // Why: the link inherits the opener's cookie jar. Falling back to the default profile would let
@@ -94,9 +149,18 @@ export function registerBrowserStateIpcBridge(
       const sourceTab = (store.browserTabsByWorktree[sourcePage.worktreeId] ?? []).find(
         (tab) => tab.id === sourcePage.workspaceId
       )
+      const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
+        store,
+        browserPageId,
+        sourcePage.worktreeId
+      )
       store.createBrowserTab(sourcePage.worktreeId, url, {
         title: url,
         activate: activate ?? true,
+        ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
+        ...(sourceUnifiedTab?.executionHostId
+          ? { executionHostId: sourceUnifiedTab.executionHostId }
+          : {}),
         ...(sourceTab
           ? {
               sessionProfileId: sourceTab.sessionProfileId,

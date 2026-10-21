@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { remapOpenEditorTabsForPathChange } from './remap-open-editor-tabs-for-path-change'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { editorMoveOwnerFromContext, type EditorMoveOwner } from '@/lib/open-editor-move-owner'
 
 function ownedEditorFileId(
   filePath: string,
@@ -12,12 +13,16 @@ function ownedEditorFileId(
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
 }
 
+function localMoveOwner(worktreeId: string | undefined): EditorMoveOwner {
+  return editorMoveOwnerFromContext({ target: { kind: 'local' } }, worktreeId)
+}
+
 describe('remapOpenEditorTabsForPathChange', () => {
   beforeEach(() => {
     useAppStore.setState(useAppStore.getInitialState(), true)
   })
 
-  it('preserves runtime owners, drafts, dirty state, and markdown preview sources', () => {
+  it('moves only the renaming host’s editor of a same-id twin, with its draft and preview', () => {
     const state = useAppStore.getState()
     const worktreeId = 'wt-1'
     const worktreePath = '/repo'
@@ -75,46 +80,40 @@ describe('remapOpenEditorTabsForPathChange', () => {
       fromPath: '/repo/docs',
       toPath: '/repo/notes',
       worktreePath,
-      worktreeId
+      worktreeId,
+      owner: editorMoveOwnerFromContext(
+        {
+          target: { kind: 'environment', environmentId: 'env-remote' },
+          expectedExecutionHostId: 'local'
+        },
+        worktreeId
+      )
     })
 
     const nextState = useAppStore.getState()
-    expect(nextState.openFiles.some((file) => file.filePath === oldPath)).toBe(false)
-
-    const localRemapped = nextState.openFiles.find(
-      (file) =>
-        file.filePath === newPath && file.mode === 'edit' && file.runtimeEnvironmentId === null
-    )
     const remoteRemapped = nextState.openFiles.find(
       (file) =>
         file.filePath === newPath &&
         file.mode === 'edit' &&
         file.runtimeEnvironmentId === 'env-remote'
     )
-    expect(localRemapped).toMatchObject({
-      relativePath: 'notes/readme.md',
-      isDirty: true,
-      runtimeEnvironmentId: null
-    })
-    expect(remoteRemapped).toMatchObject({
-      relativePath: 'notes/readme.md',
-      isDirty: true,
-      runtimeEnvironmentId: 'env-remote'
-    })
-    expect(nextState.editorDrafts[localRemapped!.id]).toBe('local draft')
+    expect(remoteRemapped).toMatchObject({ relativePath: 'notes/readme.md', isDirty: true })
     expect(nextState.editorDrafts[remoteRemapped!.id]).toBe('remote draft')
-    expect(nextState.editorDrafts[localEditId!]).toBeUndefined()
     expect(nextState.editorDrafts[remoteEdit!.id]).toBeUndefined()
-
-    const remotePreview = nextState.openFiles.find(
-      (file) => file.mode === 'markdown-preview' && file.runtimeEnvironmentId === 'env-remote'
-    )
-    expect(remotePreview).toMatchObject({
+    expect(
+      nextState.openFiles.find(
+        (file) => file.mode === 'markdown-preview' && file.runtimeEnvironmentId === 'env-remote'
+      )
+    ).toMatchObject({
       filePath: newPath,
       relativePath: 'notes/readme.md',
       markdownPreviewAnchor: 'heading',
       markdownPreviewSourceFileId: remoteRemapped!.id
     })
+    // The local twin's file never moved, so its tab and unsaved draft stay where they were.
+    const local = nextState.openFiles.find((file) => file.id === localEditId)
+    expect(local).toMatchObject({ filePath: oldPath, isDirty: true, runtimeEnvironmentId: null })
+    expect(nextState.editorDrafts[localEditId!]).toBe('local draft')
   })
 
   it('retargets preview-only markdown source ids to the moved owner path', () => {
@@ -149,7 +148,8 @@ describe('remapOpenEditorTabsForPathChange', () => {
       fromPath: '/repo/docs',
       toPath: '/repo/notes',
       worktreePath,
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      owner: localMoveOwner('wt-1')
     })
 
     const floatingPreview = useAppStore
@@ -203,7 +203,8 @@ describe('remapOpenEditorTabsForPathChange', () => {
       fromPath: '/repo/a.md',
       toPath: '/repo/b.md',
       worktreePath: '/repo',
-      worktreeId: 'wt-a'
+      worktreeId: 'wt-a',
+      owner: localMoveOwner('wt-a')
     })
     expect(result.ok).toBe(true)
 
@@ -240,7 +241,8 @@ describe('remapOpenEditorTabsForPathChange', () => {
       fromPath: 'c:\\repo\\src',
       toPath: 'c:\\repo\\dst',
       worktreePath: 'c:\\repo',
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      owner: localMoveOwner('wt-1')
     })
 
     expect(result.ok).toBe(true)
@@ -273,7 +275,8 @@ describe('remapOpenEditorTabsForPathChange', () => {
       fromPath: '\\\\wsl$\\Ubuntu\\repo\\src',
       toPath: '\\\\wsl$\\Ubuntu\\repo\\dst',
       worktreePath: '\\\\wsl$\\Ubuntu\\repo',
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      owner: localMoveOwner('wt-1')
     })
 
     expect(result.ok).toBe(true)
@@ -301,7 +304,8 @@ describe('remapOpenEditorTabsForPathChange', () => {
       fromPath: '/repo/src',
       toPath: '/repo/dst',
       worktreePath: '/repo',
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      owner: localMoveOwner('wt-1')
     })
 
     expect(useAppStore.getState().openFiles[0]!.filePath).toBe('/repo/dst/a\\b.txt')
@@ -338,7 +342,8 @@ describe('remapOpenEditorTabsForPathChange', () => {
       fromPath: '/repo/src',
       toPath: '/repo/dst',
       worktreePath: '/repo',
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      owner: localMoveOwner('wt-1')
     })
 
     const floating = useAppStore
@@ -369,7 +374,8 @@ describe('remapOpenEditorTabsForPathChange', () => {
       fromPath: '/repo/src',
       toPath: '/repo/dst\\',
       worktreePath: '/repo',
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      owner: localMoveOwner('wt-1')
     })
 
     expect(useAppStore.getState().openFiles[0]!.filePath).toBe('/repo/dst\\/a.ts')
@@ -392,7 +398,8 @@ describe('remapOpenEditorTabsForPathChange', () => {
       fromPath: '/srv/team\\repo/src',
       toPath: '/srv/team\\repo/dst',
       worktreePath: '/srv/team\\repo',
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      owner: localMoveOwner('wt-1')
     })
 
     // POSIX flavor: the separator stays `/`; the ancestor backslash is untouched.
@@ -416,7 +423,8 @@ describe('remapOpenEditorTabsForPathChange', () => {
       fromPath: 'C:\\Repo\\\\Src',
       toPath: 'C:\\Repo\\Dst',
       worktreePath: 'C:\\Repo',
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      owner: localMoveOwner('wt-1')
     })
 
     // Nested suffix preserved, no dropped or doubled separator.
@@ -441,7 +449,8 @@ describe('remapOpenEditorTabsForPathChange', () => {
       fromPath: oldPath,
       toPath: newPath,
       worktreePath: '/repo',
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      owner: localMoveOwner('wt-1')
     })
 
     expect(useAppStore.getState().openFiles).toHaveLength(1)
@@ -473,7 +482,12 @@ describe('remapOpenEditorTabsForPathChange', () => {
     state.setLastKnownDiskSignature(oldId, 'sig-abc')
     state.setExternalMutation(oldId, 'changed')
 
-    remapOpenEditorTabsForPathChange({ fromPath: oldPath, toPath: newPath, worktreePath: '/repo' })
+    remapOpenEditorTabsForPathChange({
+      fromPath: oldPath,
+      toPath: newPath,
+      worktreePath: '/repo',
+      owner: localMoveOwner(undefined)
+    })
 
     const moved = useAppStore.getState().openFiles.find((f) => f.filePath === newPath)
     expect(moved).toBeTruthy()
@@ -503,7 +517,8 @@ describe('remapOpenEditorTabsForPathChange', () => {
       fromPath: '/repo/docs',
       toPath: '/repo/notes',
       worktreePath: '/repo',
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      owner: localMoveOwner('wt-1')
     })
 
     const moved = useAppStore.getState().openFiles.find((f) => f.mode === 'diff')

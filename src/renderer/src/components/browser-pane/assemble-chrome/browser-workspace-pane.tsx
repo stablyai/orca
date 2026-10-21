@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { isClientHostedBrowserPageHandle } from '@/store/slices/browser'
 import type { BrowserWorkspace as BrowserWorkspaceState } from '../../../../../shared/browser-workspace-types'
 import { destroyPersistentWebview } from '../host-guest/webview-registry'
 import { useBrowserAutomationVisiblePageIds } from '../host-guest/browser-automation-visibility'
@@ -22,6 +23,10 @@ import { WorkspaceDocPagePane } from '../workspace-doc/workspace-doc-page-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'
 import { isBrowserPagePanePaintable } from '../host-guest/browser-page-paintability'
 import { SshRoutedBrowserPageGate } from './ssh-routed-browser-page-gate'
+import {
+  isBrowserPageMountAdmitted,
+  useAnyBrowserPageMountAdmission
+} from '../host-guest/browser-page-mount-admission'
 
 export default function BrowserPane({
   browserTab,
@@ -36,7 +41,7 @@ export default function BrowserPane({
 }): React.JSX.Element {
   const resolvedChromeShortcutScope = chromeShortcutScope ?? (isActive ? 'focused' : 'inactive')
   const activeRuntimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(s, browserTab.worktreeId)
+    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, browserTab.worktreeId)
   )
   const browserPages = useAppStore((s) =>
     getBrowserPagesForWorkspace(s.browserPagesByWorkspace, browserTab.id)
@@ -71,6 +76,7 @@ export default function BrowserPane({
     () => localBrowserPages.map((page) => page.id),
     [localBrowserPages]
   )
+  const hasAdmittedPage = useAnyBrowserPageMountAdmission(localBrowserPageIds)
   const pageDriver = useBrowserDriverForPage(activeBrowserPageId)
   // Why: a runtime-backed page is streamed, never locally driven, so its driver must read idle.
   const activeBrowserDriver = runtimeEnvironmentActive ? IDLE_BROWSER_DRIVER : pageDriver
@@ -113,14 +119,14 @@ export default function BrowserPane({
     // first frame. The host mints the placement, so keying on it would swap component and key at
     // adoption — a remount that replays open dropdowns and throws away focus and drafts. The pane
     // renders connecting until adoption fills the placement in.
-    const stagedClientHosted =
-      environmentHandle?.staged === true && environmentHandle.stagedClientHosted === true
-    // Why: a row restored from a previous run has no placement until the relaunched host recovers
+    // A row restored from a previous run has no placement until the relaunched host recovers
     // the page, and the streamed pane would meanwhile open a server screencast the host refuses
     // for a client-placed page. It mounts quiet on the client pane until adoption fills it in.
-    const restoredClientHosted = environmentHandle?.restoredClientHosted === true
+    const clientHosted = environmentHandle
+      ? isClientHostedBrowserPageHandle(environmentHandle)
+      : false
     return activeBrowserPage ? (
-      clientPlacement || stagedClientHosted || restoredClientHosted ? (
+      clientHosted ? (
         <ClientHostedBrowserPagePane
           key={`${activeBrowserRuntimeEnvironmentId}:${activeBrowserPage.id}`}
           browserTab={activeBrowserPage}
@@ -166,7 +172,9 @@ export default function BrowserPane({
                   key={page.id}
                   retainMounted={isWorktreeActive}
                   mountEligible={isBrowserPagePanePaintable({
-                    isActive: isActive && page.id === activeBrowserPageId,
+                    isActive:
+                      (isActive && page.id === activeBrowserPageId) ||
+                      (hasAdmittedPage && isBrowserPageMountAdmitted(page.id)),
                     isAutomationVisible: automationVisiblePageIds.has(page.id),
                     isMobileDriven: mobileDrivenPageIds.has(page.id),
                     hasRemoteViewer: remotelyViewedPageIds.has(page.id)

@@ -2,15 +2,21 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileImageSource } from './mobile-image-source-picker'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import { useMobileImageAttachment } from './use-mobile-image-attachment'
 import {
   useMobileNativeChatImageAttachments,
   type MobileNativeChatImageAttachments
 } from './use-mobile-native-chat-image-attachments'
+import {
+  useMobileNativeChatFileAttachments,
+  type MobileNativeChatFileAttachments
+} from './use-mobile-native-chat-file-attachments'
 
 type CurrentRef<T> = { readonly current: T }
 
 type Args = {
+  readonly agent?: string | null
   readonly client: RpcClient | null
   readonly activeHandle: string | null
   readonly activeHandleRef: CurrentRef<string | null>
@@ -30,14 +36,13 @@ type Args = {
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly {
-      id: string
-      path: string
-      previewUri: string
-    }[]
+    attachments?: readonly StructuredMobileSendAttachment[],
+    sentAt?: number
   ) => Promise<MobileNativeChatSendOutcome>
   /** Structured agent sessions do not have a terminal paste path. */
   readonly structuredNativeChat: boolean
+  /** The structured chat's session, which owns the files uploaded for it. */
+  readonly nativeChatSessionId: string | null
   /** Launch-context text parked on the agent's TUI input line, or null — sizes
    *  the image paste's leading clear so a multi-line draft cannot ride along. */
   readonly readSeededLaunchDraft: () => string | null
@@ -50,10 +55,12 @@ type Args = {
 
 /** A session exposes image attachment on two surfaces that share one upload
  *  pipeline and host wiring: the visible terminal input (immediate bracketed
- *  paste) and the native-chat composer (chips deferred to submit). Owning both
- *  here keeps the already-dense session route to a single wiring point. */
+ *  paste) and the native-chat composer (chips deferred to submit), plus a
+ *  structured chat's files. Owning them here keeps the already-dense session
+ *  route to a single wiring point. */
 export function useMobileSessionImageAttachments({
   client,
+  agent,
   activeHandle,
   activeHandleRef,
   canSend,
@@ -65,6 +72,7 @@ export function useMobileSessionImageAttachments({
   beforeTerminalSend,
   nativeChatBaseSend,
   structuredNativeChat,
+  nativeChatSessionId,
   readSeededLaunchDraft,
   showToast,
   onNativeChatSendError,
@@ -74,9 +82,11 @@ export function useMobileSessionImageAttachments({
   attachImage: (source: MobileImageSource) => Promise<void>
   isAttaching: boolean
   nativeChatImages: MobileNativeChatImageAttachments
+  nativeChatFiles: MobileNativeChatFileAttachments
 } {
   const { attachImage, isAttaching } = useMobileImageAttachment({
     client,
+    agent,
     activeHandle,
     canSend,
     connState,
@@ -87,8 +97,16 @@ export function useMobileSessionImageAttachments({
     onSuccess,
     onError
   })
+  const nativeChatFiles = useMobileNativeChatFileAttachments({
+    client,
+    sessionId: structuredNativeChat ? nativeChatSessionId : null,
+    scopeKey: nativeChatScopeKey,
+    enabled: structuredNativeChat && connState === 'connected',
+    showToast
+  })
   const nativeChatImages = useMobileNativeChatImageAttachments({
     client,
+    agent,
     activeHandleRef,
     deviceTokenRef,
     getActiveWorktreeConnectionId,
@@ -96,6 +114,8 @@ export function useMobileSessionImageAttachments({
     scopeKey: nativeChatScopeKey,
     enabled: structuredNativeChat ? connState === 'connected' : nativeChatInputLeaseReady,
     structuredNativeChat,
+    files: nativeChatFiles.files,
+    onFilesSent: nativeChatFiles.removeFiles,
     showToast,
     onSendError: onNativeChatSendError,
     baseSend: nativeChatBaseSend,
@@ -103,5 +123,5 @@ export function useMobileSessionImageAttachments({
     onAttachSuccess: onSuccess,
     onError
   })
-  return { attachImage, isAttaching, nativeChatImages }
+  return { attachImage, isAttaching, nativeChatImages, nativeChatFiles }
 }

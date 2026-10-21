@@ -78,10 +78,21 @@ export function useWorktreePointerDragWindowEvents(args: {
       clearWorktreeDrag()
     }
 
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || !worktreePointerDragRef.current) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      clearWorktreeDrag()
+    }
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true })
     window.addEventListener('pointermove', handlePointerMove, { capture: true })
     window.addEventListener('pointerup', handlePointerUp, { capture: true })
     window.addEventListener('pointercancel', handlePointerCancel, { capture: true })
     return () => {
+      window.removeEventListener('keydown', handleKeyDown, { capture: true })
       window.removeEventListener('pointermove', handlePointerMove, { capture: true })
       window.removeEventListener('pointerup', handlePointerUp, { capture: true })
       window.removeEventListener('pointercancel', handlePointerCancel, { capture: true })

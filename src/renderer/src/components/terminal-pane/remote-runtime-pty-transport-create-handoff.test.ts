@@ -20,8 +20,57 @@ const { runtimeCall, refreshSessionTabsSnapshot, resetRemoteRuntimeTransport } =
   })
 
 describe('createRemoteRuntimePtyTransport', () => {
-  beforeEach(() => {
+  it.each([
+    { supported: true, resume: false },
+    { supported: true, resume: true },
+    { supported: false, resume: false },
+    { supported: false, resume: true }
+  ])(
+    'gates keyboard fields for host support $supported, resume $resume',
+    async ({ supported, resume }) => {
+      runtimeCall.mockImplementation(async (args: { method?: string }) =>
+        args.method === 'status.get'
+          ? {
+              ok: true,
+              result: {
+                runtimeProtocolVersion: 3,
+                minCompatibleRuntimeClientVersion: 2,
+                capabilities: [
+                  'agent-session.host-authority.v1',
+                  ...(supported ? ['agent-session.keyboard.v1'] : [])
+                ]
+              }
+            }
+          : { ok: true, result: { terminal: { handle: 'terminal-1' } } }
+      )
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        launchAgent: 'codex',
+        terminalKittyKeyboardProtocol: true,
+        ...(resume
+          ? { resumeProviderSession: { key: 'session_id' as const, id: 'session-1' } }
+          : {})
+      })
+      await transport.connect({ url: '', callbacks: {} })
+      const method = resume ? 'terminal.ensureAgentSession' : 'terminal.createAgentSession'
+      const call = runtimeCall.mock.calls.find(([args]) => args.method === method)?.[0]
+      expect(call).toBeDefined()
+      if (supported) {
+        expect(call?.params).toHaveProperty('terminalKittyKeyboardProtocol', true)
+      } else {
+        expect(call?.params).not.toHaveProperty('terminalKittyKeyboardProtocol')
+      }
+      transport.destroy?.()
+    }
+  )
+
+  beforeEach(async () => {
     resetRemoteRuntimeTransport()
+    // Charge the cold module transform to setup, not the launch deadline.
+    await import('./remote-runtime-pty-transport')
   })
 
   it('closes a remote terminal created after the pane was destroyed', async () => {
@@ -250,6 +299,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       command: "codex 'linked issue context'",
       envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       startupCommandDelivery: 'shell-ready',
+      terminalKittyKeyboardProtocol: true,
       terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
     })
 
@@ -263,6 +313,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           command: "codex 'linked issue context'",
           envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
           startupCommandDelivery: 'shell-ready',
+          terminalKittyKeyboardProtocol: true,
           terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
         })
       })

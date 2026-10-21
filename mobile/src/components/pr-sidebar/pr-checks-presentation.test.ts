@@ -5,6 +5,7 @@ import {
   firstFailingCheckKey,
   getPRReviewerRows,
   prCheckKey,
+  prChecksSummaryLabel,
   prStateBadge,
   sortPRChecks,
   summarizePRChecks
@@ -85,6 +86,13 @@ describe('summarizePRChecks', () => {
     expect(summary.total).toBe(0)
     expect(summary.outcome).toBe('none')
     expect(summary.label).toBe('No checks')
+  })
+  it('reads the empty header as unavailable, not absent, when the checks read failed', () => {
+    const summary = summarizePRChecks([])
+    expect(prChecksSummaryLabel(summary, null)).toBe('No checks')
+    expect(prChecksSummaryLabel(summary, 'The host sent a reply this app could not read')).toBe(
+      'Checks unavailable'
+    )
   })
   it('counts pass/pending/fail and reports worst-case outcome', () => {
     const summary = summarizePRChecks([

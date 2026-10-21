@@ -25,7 +25,7 @@ const SECRETS = {
   pem: '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ\n-----END PRIVATE KEY-----'
 }
 
-const SHAPES: { label: string; raw: string; tag: string }[] = [
+const PROVIDER_KEY_CASES: { label: string; raw: string; tag: string }[] = [
   { label: 'anthropic', raw: SECRETS.anthropic, tag: 'anthropic-key' },
   { label: 'openai', raw: SECRETS.openai, tag: 'openai-key' },
   { label: 'github', raw: SECRETS.github, tag: 'github-token' },
@@ -37,7 +37,7 @@ const SHAPES: { label: string; raw: string; tag: string }[] = [
 ]
 
 describe('redactor — provider-key fingerprints', () => {
-  for (const { label, raw, tag } of SHAPES) {
+  for (const { label, raw, tag } of PROVIDER_KEY_CASES) {
     describe(`${label}`, () => {
       it('redacts when the secret appears as an attribute value', () => {
         // Bare "<secret>" without a labeled-kv keyword nearby — exercises the

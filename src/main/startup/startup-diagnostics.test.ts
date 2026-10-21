@@ -1,10 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic,
+  logStartupMilestone,
   STARTUP_DIAGNOSTICS_ENV,
   writeStartupDiagnosticLine
 } from './startup-diagnostics'
+
+afterEach(() => vi.unstubAllEnvs())
+
+it('does not compute lazy milestone details unless diagnostics are enabled', () => {
+  vi.stubEnv(STARTUP_DIAGNOSTICS_ENV, '0')
+  const details = vi.fn(() => ({ bytes: 123 }))
+  logStartupMilestone('persistence-load-done', details)
+  expect(details).not.toHaveBeenCalled()
+  vi.stubEnv(STARTUP_DIAGNOSTICS_ENV, '1')
+  logStartupMilestone('persistence-load-done', details)
+  expect(details).toHaveBeenCalledOnce()
+})
 
 describe('writeStartupDiagnosticLine', () => {
   it('writes directly to stderr fd 2 with a newline', () => {

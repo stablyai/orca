@@ -7,7 +7,11 @@ import {
   canOpenWorkspaceBrowserTabOnSsh
 } from '@/lib/workspace-browser-tab-open'
 import { resolvePaneWslDistro } from './terminal-pane-wsl-distro'
-import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
+import {
+  resolveTerminalHttpLinkSourceOwner,
+  resolveTerminalLinkRuntimeEnvironmentId,
+  resolveTerminalRuntimeHandle
+} from './terminal-http-link-source-owner'
 import {
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
@@ -20,9 +24,10 @@ import type { PtyConnectionDeps } from './pty-connection-types'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
-import { registerRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
+import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { normalizeTerminalLayoutSnapshot } from './layout-serialization'
 import { applyTerminalAppearance } from './terminal-appearance'
+import { terminalLinkClickBehaviorFor } from './terminal-link-click-behavior'
 import { createTerminalPanePtyDeps } from './terminal-pane-pty-deps'
 import type { DeferredSplitPaneHandoffHandle } from './deferred-split-pane-handoff'
 import {
@@ -43,7 +48,6 @@ export type TerminalPaneMountPreparation = {
   startupCwd: string
   terminalHomePath: string | null
   wslDistro: string | null
-  startupWithSetupSplitWait: PtyConnectionDeps['startup']
   ptyDeps: PtyConnectionDeps
   deferredSplitHandoffs: Map<number, DeferredSplitPaneHandoffHandle>
   unregisterRuntimeTab: () => void
@@ -130,7 +134,9 @@ export function prepareTerminalPaneMount(
       canOpenOwnedBrowserForPane(paneId)
     )
   const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
-    if (deps.settingsRef.current?.terminalLinkActionPopoverEnabled === false) {
+    const plainClickBehavior = terminalLinkClickBehaviorFor(deps.settingsRef.current)
+    const middleClickBehavior = deps.settingsRef.current?.terminalUrlMiddleClickBehavior ?? 'open'
+    if (plainClickBehavior === 'none' && middleClickBehavior === 'none') {
       return null
     }
     const pane = deps.managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
@@ -145,7 +151,10 @@ export function prepareTerminalPaneMount(
       pointerGesture,
       claimPtyMouse: suppression.claimAction,
       request: deps.requestTerminalLinkAction,
-      focusTerminal: () => pane.terminal.focus()
+      focusTerminal: () => pane.terminal.focus(),
+      plainClickBehavior,
+      middleClickBehavior,
+      sourceOwner: getHttpLinkSourceOwnerForPane(paneId)
     }
   }
   const pathExistsCache = new Map<string, boolean>()
@@ -159,11 +168,15 @@ export function prepareTerminalPaneMount(
     managerRef: deps.managerRef,
     linkProviderDisposablesRef: refs.linkProviderDisposablesRef,
     pathExistsCache,
-    getRuntimeEnvironmentIdForPane: (paneId) => {
-      const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
-      return sourceOwner.kind === 'runtime' ? sourceOwner.runtimeEnvironmentId : null
-    },
-    getLinkActionContext
+    getRuntimeEnvironmentIdForPane: (paneId) =>
+      resolveTerminalLinkRuntimeEnvironmentId(
+        paneTransports.get(paneId),
+        useAppStore.getState(),
+        deps.worktreeId
+      ),
+    getRuntimeTerminalHandleForPane: (id) => resolveTerminalRuntimeHandle(paneTransports.get(id)),
+    getLinkActionContext,
+    sourceTabId: deps.tabId
   }
   let resizeRaf: number | null = null
   const queueResizeAll = (focusActive: boolean): void => {
@@ -208,13 +221,6 @@ export function prepareTerminalPaneMount(
   if (hydratedInitialScrollback.hydrated) {
     deps.initialLayoutRef.current = hydratedInitialScrollback.layout
   }
-  const startupWithSetupSplitWait =
-    deps.startup && deps.setupSplit
-      ? {
-          ...deps.startup,
-          waitForSetupSplitDirection: deps.setupSplit.direction
-        }
-      : deps.startup
   // Numeric pane ids are mount-local; the handle itself is keyed by the
   // durable tab/leaf identity so a whole-tab remount can reclaim it.
   const deferredSplitHandoffs = new Map<number, DeferredSplitPaneHandoffHandle>()
@@ -222,7 +228,6 @@ export function prepareTerminalPaneMount(
     deps,
     refs,
     startupCwd,
-    startupWithSetupSplitWait,
     mountFollowsTerminalPark,
     restoredPtyIdByLeafId: deps.initialLayoutRef.current.ptyIdsByLeafId ?? {},
     deferredSplitHandoffs
@@ -243,7 +248,7 @@ export function prepareTerminalPaneMount(
         getHttpLinkSourceOwnerForPane(paneId),
         canOpenOwnedBrowserForPane(paneId)
       ),
-      showActions: deps.settingsRef.current?.terminalLinkActionPopoverEnabled !== false
+      showActions: terminalLinkClickBehaviorFor(deps.settingsRef.current) === 'actions'
     })
   return {
     container,
@@ -255,7 +260,6 @@ export function prepareTerminalPaneMount(
     startupCwd,
     terminalHomePath,
     wslDistro,
-    startupWithSetupSplitWait,
     ptyDeps,
     deferredSplitHandoffs,
     unregisterRuntimeTab,

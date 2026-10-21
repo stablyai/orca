@@ -1,8 +1,10 @@
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { OrcaRuntimeService } from './orca-runtime'
+
+type UnstoppedPtyRuntime = Pick<OrcaRuntimeService, 'getPtyLivenessVerdict'>
 import {
   UNSTOPPED_PTY_DETAIL_SEPARATOR,
-  UNSTOPPED_PTY_LIVE_DETAIL_PREFIX,
+  STILL_LIVE_DETAIL_PREFIX,
   UNSTOPPED_PTY_REMOVAL_PREFIX
 } from '../../shared/worktree/removal'
 import {
@@ -65,7 +67,7 @@ export async function verifyUnstoppedPtys(
  */
 export function unverifiableStopVerdict(
   failedPtyIds: readonly string[],
-  runtime: OrcaRuntimeService | undefined
+  runtime: UnstoppedPtyRuntime | undefined
 ): UnstoppedPtyVerdict | null {
   for (const ptyId of failedPtyIds) {
     const verdict = runtime?.getPtyLivenessVerdict?.(ptyId)
@@ -81,7 +83,7 @@ export async function resolveUnstoppedPtyVerdict(
   provider: IPtyProvider,
   sweepBudgetMs: number,
   providerObservesOwningHost: boolean,
-  runtime?: OrcaRuntimeService
+  runtime?: UnstoppedPtyRuntime
 ): Promise<UnstoppedPtyVerdict> {
   if (failedPtyIds.length === 0) {
     return { status: 'exited' }
@@ -105,7 +107,7 @@ export function describeUnstoppedPtys(
 ): string {
   const detail =
     verdict.status === 'live'
-      ? `${UNSTOPPED_PTY_LIVE_DETAIL_PREFIX} ${verdict.ptyIds.join(', ')}`
+      ? `${STILL_LIVE_DETAIL_PREFIX} ${verdict.ptyIds.join(', ')}`
       : `could not verify these exited: ${failedPtyIds.join(', ')} (${verdict.reason})`
   return `${UNSTOPPED_PTY_REMOVAL_PREFIX} ${worktreeId}${UNSTOPPED_PTY_DETAIL_SEPARATOR}${detail}`
 }

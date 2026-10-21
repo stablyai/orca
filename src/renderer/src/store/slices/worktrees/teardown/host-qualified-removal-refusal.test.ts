@@ -68,10 +68,9 @@ describe('beginHostQualifiedRemoval refusals clear the delete state', () => {
       }) as never
   }
 
-  // A hostless row (folder-workspace meta never sets hostId, and runtime rows omit the field
-  // when the repo is unresolved) plus more than one saved runtime environment trips the legacy
-  // single-runtime gate in resolveWorktreeOperationRouteResult, which returns `missing`.
-  it('clears when a known worktree has no host and the legacy runtime is ambiguous', () => {
+  // The "Active Server" focus never names a removal's host: an unstamped repo row is a legacy
+  // local row (server rows are stamped as they land), whatever server is focused.
+  it('routes a hostless legacy worktree locally, never through the focused server', () => {
     const clearWorktreeDeleteState = vi.fn()
     const start = beginHostQualifiedRemoval(
       makeRoutedGet(clearWorktreeDeleteState, {
@@ -85,8 +84,11 @@ describe('beginHostQualifiedRemoval refusals clear the delete state', () => {
       false
     )
 
-    expect(start.ok).toBe(false)
-    expect(clearWorktreeDeleteState).toHaveBeenCalledWith(WORKTREE_ID)
+    expect(start).toMatchObject({
+      ok: true,
+      removalRoute: { executionHostId: 'local', runtimeEnvironmentId: null }
+    })
+    expect(clearWorktreeDeleteState).not.toHaveBeenCalled()
   })
 
   // Folder workspaces fail closed on a stale id by design, so a row whose folder record is gone

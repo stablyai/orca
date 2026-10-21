@@ -131,7 +131,7 @@ export type FocusedPaneCensus = {
 
 type CountableRecord = Record<string, unknown> | null | undefined
 
-export type TypingCensusStoreShape = {
+export type TypingCensusStoreView = {
   worktreesByRepo?: Record<string, WorktreeLike[]> | null
   tabsByWorktree?: Record<string, unknown[]> | null
   unifiedTabsByWorktree?: Record<string, unknown[]> | null
@@ -231,7 +231,7 @@ function collectWorktrees(
 }
 
 export function summarizeTypingScaleCensus(input: {
-  state: TypingCensusStoreShape | null
+  state: TypingCensusStoreView | null
   appVersion: string | null
   livePaneCount: number | null
   instrumentedPaneCount: number

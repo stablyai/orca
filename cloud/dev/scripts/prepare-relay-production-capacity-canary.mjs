@@ -35,6 +35,12 @@ function cellOrigin(cellId) {
 // The same-cap roll covers the Asia cells the US-only capacity rollout never touches.
 const APPROVED_CELL_LISTS = { 'same-cap': SAME_CAP_CELLS }
 
+// Matches the cell's own cap on /v1/admin/drain.
+const MAX_PACE_WINDOW_MS = 20 * 60 * 1_000
+// Every paced image before the cap rose rejects a longer window with the same 400 an unpaced
+// image gives, and an unpaced drain is the opposite of what a slower window asked for.
+const LEGACY_MAX_PACE_WINDOW_MS = 5 * 60 * 1_000
+
 export function parseProductionCapacityCellArguments(argv) {
   const values = {}
   for (let index = 0; index < argv.length; index += 2) {
@@ -43,8 +49,8 @@ export function parseProductionCapacityCellArguments(argv) {
     if (!key?.startsWith('--') || value === undefined) throw new Error('invalid arguments')
     values[key.slice(2)] = value
   }
-  if (!['isolate', 'drain', 'activate'].includes(values.mode)) {
-    throw new Error('--mode must be isolate, drain, or activate')
+  if (!['pace-check', 'isolate', 'drain', 'activate'].includes(values.mode)) {
+    throw new Error('--mode must be pace-check, isolate, drain, or activate')
   }
   const approvedList = values['approved-cells']
   if (approvedList !== undefined && !APPROVED_CELL_LISTS[approvedList]) {
@@ -64,11 +70,22 @@ export function parseProductionCapacityCellArguments(argv) {
   ) {
     throw new Error('production capacity target origin is not exact')
   }
+  const paceWindowMs = values['pace-window-ms'] === undefined
+    ? 0
+    : Number(values['pace-window-ms'])
+  if (
+    !Number.isSafeInteger(paceWindowMs) ||
+    paceWindowMs < 0 ||
+    paceWindowMs > MAX_PACE_WINDOW_MS
+  ) {
+    throw new Error('--pace-window-ms must be an integer between 0 and 1200000')
+  }
   return {
     directorOrigin: DIRECTOR_ORIGIN,
     cellOrigin: expectedCellOrigin,
     cellId,
-    mode: values.mode
+    mode: values.mode,
+    paceWindowMs
   }
 }
 
@@ -78,28 +95,69 @@ async function responseJson(response, label) {
   return body
 }
 
+// Read-only, and run before the isolate: an image that does not advertise its cap has the
+// legacy one, so a slower pace stops here with the cell untouched instead of isolated.
+async function checkDrainPace(fetchImpl, config, wait) {
+  const health = await responseJson(
+    await fetchAdminOnceMore(fetchImpl, `${config.cellOrigin}/health`, {}, { wait }),
+    'cell health'
+  )
+  if (health.ok !== true) throw new Error('cell health is not ok')
+  const maxPaceWindowMs = Number.isSafeInteger(health.drainPaceWindowMaxMs)
+    ? health.drainPaceWindowMaxMs
+    : LEGACY_MAX_PACE_WINDOW_MS
+  if (config.paceWindowMs > maxPaceWindowMs) {
+    throw new Error(
+      `cell accepts drain paces up to ${maxPaceWindowMs} ms, not ${config.paceWindowMs} ms; ` +
+      'it was not isolated'
+    )
+  }
+  return { paceWindowMs: config.paceWindowMs, maxPaceWindowMs }
+}
+
 export async function prepareProductionCapacityCell(config, overrides = {}) {
   const fetchImpl = overrides.fetch ?? fetch
+  if (config.mode === 'pace-check') return await checkDrainPace(fetchImpl, config, overrides.wait)
   const token = overrides.token ?? process.env.ORCA_RELAY_ADMIN_ID_TOKEN
   if (!token || token.length > 8_192) throw new Error('admin identity token is unavailable')
-  const postAt = async (origin, path, body) =>
-    await responseJson(
-      await fetchAdminOnceMore(
-        fetchImpl,
-        `${origin}${path}`,
-        {
-          method: 'POST',
-          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-          body: JSON.stringify(body)
-        },
-        { wait: overrides.wait }
-      ),
-      path
+  const postRaw = async (origin, path, body) =>
+    await fetchAdminOnceMore(
+      fetchImpl,
+      `${origin}${path}`,
+      {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      },
+      { wait: overrides.wait }
     )
+  const postAt = async (origin, path, body) =>
+    await responseJson(await postRaw(origin, path, body), path)
   const post = async (path, body) => await postAt(config.directorOrigin, path, body)
   if (config.mode === 'drain') {
+    const paceWindowMs = config.paceWindowMs ?? 0
+    if (paceWindowMs > 0) {
+      const paced = await postRaw(config.cellOrigin, '/v1/admin/drain', {
+        v: 1,
+        graceMs: 0,
+        paceWindowMs
+      })
+      if (paced.ok) {
+        await paced.json().catch(() => ({}))
+        return { changed: false, drained: true, paceWindowMs }
+      }
+      // A cell still on an image without paced drain rejects the unknown field outright.
+      // An unpaced drain is the behaviour that cell already has, so fall back to it.
+      if (paced.status !== 400) throw new Error(`/v1/admin/drain returned ${paced.status}`)
+      await paced.json().catch(() => ({}))
+      if (paceWindowMs > LEGACY_MAX_PACE_WINDOW_MS) {
+        throw new Error(
+          `cell rejected a ${paceWindowMs} ms drain pace; refusing to drain faster than asked`
+        )
+      }
+    }
     await postAt(config.cellOrigin, '/v1/admin/drain', { v: 1, graceMs: 0 })
-    return { changed: false, drained: true }
+    return { changed: false, drained: true, paceWindowMs: 0 }
   }
   const before = await inspectAdmissionSelector(post)
   const state = selectorCellState(before.selector, config.cellId)
@@ -107,12 +165,18 @@ export async function prepareProductionCapacityCell(config, overrides = {}) {
   const desiredState = config.mode === 'isolate' ? 'migration-only' : 'general'
   const membership = membershipWithStates(before.selector, { [config.cellId]: desiredState })
   const result = await applyExactAdmissionSelector(post, membership, {
-    expectedCurrentSelector: before.selector
+    expectedCurrentSelector: before.selector,
+    // The stamp that tells the director this cell is parked for a restart rather
+    // than held back as capacity, so it may re-place the hosts still on it. The
+    // activate branch omits it, and moving to 'general' clears it in the same
+    // statement that writes the state.
+    ...(config.mode === 'isolate' ? { rollIsolatedCells: [config.cellId] } : {})
   })
   return {
     changed: result.changed,
     generation: result.selector.generation,
-    admissionState: desiredState
+    admissionState: desiredState,
+    rollIsolated: config.mode === 'isolate'
   }
 }
 

@@ -1,11 +1,15 @@
 import { useAppStore } from '@/store'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
-import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
 import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../../../shared/tui-agent-launch-defaults'
+  resolveSshHostReportedPlatform,
+  resolveAgentResumeLaunchTarget
+} from '@/lib/agent-resume-launch-target'
+import {
+  agentResumeOriginNamesAnotherExecutionHost,
+  sleepingRecordNamesAnotherExecutionHost
+} from '@/lib/sleeping-record-execution-host-scope'
+import { resolveResumeLaunchRecipe } from '../../../../../shared/tui-agent-launch-defaults'
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
@@ -25,9 +29,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     const entry = state.agentStatusByPaneKey[session.cacheKey]
     const sleepingRecordEntry = session.getSleepingRecordForPane(state)
     const sleepingRecord = sleepingRecordEntry?.record
-    if (session.isLegacyWorkerAutomaticResumeBlocked()) {
-      return null
-    }
+
     const useLiveEntry = entry && entry.state !== 'done'
     const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
     if (!agent || !isResumableTuiAgent(agent)) {
@@ -37,6 +39,25 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       useLiveEntry ? entry.providerSession : sleepingRecord?.providerSession
     )
     if (!providerSession) {
+      return null
+    }
+    // Why: this is the second issuer of `--resume`, and the one that handles a quit/live record
+    // whose pane still exists — the sweep hands those here rather than launching them. A session id
+    // names a transcript on the machine that captured it, so replaying one over a pane now attached
+    // to a different host answers `No conversation found`. Returning null leaves the pane with a
+    // plain shell and the record intact, which the user can resume by hand.
+    //
+    // Two sources are consulted because either can be the one that knows. `session.executionHostId`
+    // is the pane's own transport and is authoritative when set, but it is still unresolved on an
+    // early reattach frame — and failing open on that frame is precisely when a wrong resume slips
+    // out. The catalog's answer for the record's worktree covers that window.
+    if (
+      agentResumeOriginNamesAnotherExecutionHost(
+        useLiveEntry ? entry.connectionId : sleepingRecord?.connectionId,
+        session.executionHostId
+      ) ||
+      (sleepingRecord && sleepingRecordNamesAnotherExecutionHost(sleepingRecord, state))
+    ) {
       return null
     }
     const matchingSleepingLaunchConfig =
@@ -53,28 +74,23 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     // follow the tab's effective Windows shell, not the win32 PowerShell default.
     const resumeTarget = resolveAgentResumeLaunchTarget({
       projectRuntime: session.projectRuntime,
-      connectionId: session.connectionId,
+      connectionId: null,
       executionHostId: session.executionHostId,
       worktreePath: session.worktree?.path,
       terminalWindowsShell: state.settings?.terminalWindowsShell,
-      tabShellOverride: session.shellOverride
+      tabShellOverride: session.shellOverride,
+      // Why the transport's runtime: the pane's own connection names the SSH target's owner.
+      remotePlatform: resolveSshHostReportedPlatform(
+        state,
+        session.executionHostId,
+        session.transport.getRuntimeEnvironmentId?.() ?? null
+      )
     })
     const startupPlan = buildAgentResumeStartupPlan({
       agent,
       providerSession,
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-      agentArgs:
-        launchConfig !== undefined
-          ? launchConfig.agentArgs
-          : resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
-      agentEnv:
-        launchConfig !== undefined
-          ? launchConfig.agentEnv
-          : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
-      ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-      ...(launchConfig?.ompResumeFilePath
-        ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
-        : {}),
+      ...resolveResumeLaunchRecipe(launchConfig),
       platform: resumeTarget.platform,
       shell: resumeTarget.shell
     })

@@ -1,3 +1,4 @@
+import type { SecretAtRestProtection } from '../secret-at-rest-protection'
 export type LinearViewer = {
   displayName: string
   email: string | null
@@ -39,6 +40,9 @@ export type LinearConnectionStatus = {
   // Set when a stored token file exists but could not be decrypted, so the
   // UI can explain reads failing while the connection still looks saved.
   credentialError?: string
+  // 'plaintext' when any stored token is unsealed, so Settings can warn. Optional:
+  // an older remote host omits it, and absent must read as "unknown", not "sealed".
+  credentialProtection?: SecretAtRestProtection | null
 }
 
 /**

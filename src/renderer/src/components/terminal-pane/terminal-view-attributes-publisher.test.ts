@@ -12,7 +12,8 @@ import { applyTerminalAppearance } from './terminal-appearance'
 import {
   _resetTerminalViewAttributesPublisherForTest,
   composeTerminalViewAttributes,
-  publishTerminalViewAttributes
+  publishTerminalViewAttributes,
+  subscribeToPublishedTerminalViewColors
 } from './terminal-view-attributes-publisher'
 
 const cursorSettings = {
@@ -134,10 +135,27 @@ describe('publishTerminalViewAttributes dedupe', () => {
     // No window stub: default send must be a safe no-op.
     expect(publishTerminalViewAttributes(null, 'dark', cursorSettings)).toBe(false)
   })
+
+  it('hands each published fg/bg to subscribers, starting with the current one', () => {
+    const send = vi.fn(() => true)
+    publishTerminalViewAttributes({ foreground: '#111111' }, 'dark', cursorSettings, send)
+    const heard: unknown[] = []
+
+    const unsubscribe = subscribeToPublishedTerminalViewColors((colors) => heard.push(colors))
+    publishTerminalViewAttributes({ foreground: '#222222' }, 'dark', cursorSettings, send)
+    unsubscribe()
+    publishTerminalViewAttributes({ foreground: '#333333' }, 'dark', cursorSettings, send)
+
+    expect(heard).toEqual([
+      { foreground: '#111111', background: '#000000' },
+      { foreground: '#222222', background: '#000000' }
+    ])
+  })
 })
 
 describe('applyTerminalAppearance publication', () => {
   function makePane(id: number): ManagedPane {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the pane members used by the publisher.
     return {
       id,
       terminal: { options: {}, cols: 80, rows: 24 }
@@ -145,9 +163,11 @@ describe('applyTerminalAppearance publication', () => {
   }
 
   function makeManager(panes: ManagedPane[]): PaneManager {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the pane manager members used by the publisher.
     return {
       getPanes: () => panes,
       setPaneLigaturesEnabled: vi.fn(),
+      setPaneInlineImagesEnabled: vi.fn(),
       setPaneStyleOptions: vi.fn()
     } as unknown as PaneManager
   }

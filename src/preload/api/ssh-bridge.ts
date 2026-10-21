@@ -9,7 +9,6 @@ import type {
   SshTargetCreateInput,
   SshTarget,
   SshTargetUpdateInput,
-  SshTerminateSessionsResult,
   PortForwardEntry,
   EnrichedDetectedPort
 } from '../../shared/ssh-types'
@@ -44,19 +43,16 @@ export const sshApi = {
   resolveConfigHost: (args: { alias: string }): Promise<SshConfigHostResolution | null> =>
     ipcRenderer.invoke('ssh:resolveConfigHost', args),
 
-  connect: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
+  connect: async (args: {
+    targetId: string
+    automatic?: boolean
+  }): Promise<SshConnectionState | null> => {
     const state: unknown = await ipcRenderer.invoke('ssh:connect', args)
     return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
   },
 
   disconnect: (args: { targetId: string }): Promise<void> =>
     ipcRenderer.invoke('ssh:disconnect', args),
-
-  terminateSessions: (args: { targetId: string }): Promise<SshTerminateSessionsResult> =>
-    ipcRenderer.invoke('ssh:terminateSessions', args),
-
-  resetRelay: (args: { targetId: string }): Promise<void> =>
-    ipcRenderer.invoke('ssh:resetRelay', args),
 
   getState: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
     const state: unknown = await ipcRenderer.invoke('ssh:getState', args)
@@ -158,6 +154,7 @@ export const sshApi = {
       targetId: string
       kind: 'passphrase' | 'password' | 'keyboard-interactive'
       detail: string
+      echo?: boolean
     }) => void
   ): (() => void) => {
     const listener = (
@@ -167,6 +164,7 @@ export const sshApi = {
         targetId: string
         kind: 'passphrase' | 'password' | 'keyboard-interactive'
         detail: string
+        echo?: boolean
       }
     ) => callback(data)
     ipcRenderer.on('ssh:credential-request', listener)

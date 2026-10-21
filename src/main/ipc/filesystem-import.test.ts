@@ -29,6 +29,7 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  app: { getPath: () => '/orca-test-user-data' },
   ipcMain: { handle: handleMock }
 }))
 
@@ -73,6 +74,7 @@ describe('fs:importExternalPaths', () => {
           size: 12,
           ino: 1,
           dev: 1,
+          mtimeMs: 1700000000000,
           isFile: () => true,
           isDirectory: () => false,
           isSymbolicLink: () => false
@@ -94,6 +96,7 @@ describe('fs:importExternalPaths', () => {
           size: entry.isDir ? 0 : 12,
           ino: entry.isDir ? 2 : 3,
           dev: 1,
+          mtimeMs: 1700000000000,
           isFile: () => !entry.isDir,
           isDirectory: () => entry.isDir,
           isSymbolicLink: () => false
@@ -142,6 +145,7 @@ describe('fs:importExternalPaths', () => {
           size: content.byteLength,
           ino: 1,
           dev: 1,
+          mtimeMs: 1700000000000,
           isFile: () => true
         }),
         createReadStream: () => Readable.from([content]),
@@ -216,6 +220,7 @@ describe('fs:importExternalPaths', () => {
           size: 12,
           ino: 1,
           dev: 1,
+          mtimeMs: 1700000000000,
           isFile: () => true
         }),
         createReadStream: () => Readable.from([Buffer.from('file-content')]),
@@ -234,26 +239,6 @@ describe('fs:importExternalPaths', () => {
       constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0)
     )
     expect(openMock).toHaveBeenCalledWith(path.join(destDir, 'logo.png'), 'wx')
-  })
-
-  it('imports multiple files in one batch', async () => {
-    const sources = ['/tmp/dropped/a.txt', '/tmp/dropped/b.txt']
-    lstatMock.mockImplementation(async (p: string) => {
-      const resolved = [path.resolve(sources[0]), path.resolve(sources[1])]
-      if (resolved.includes(p)) {
-        return { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }
-      }
-      throw enoent()
-    })
-
-    const result = (await handlers.get('fs:importExternalPaths')!(null, {
-      sourcePaths: sources,
-      destDir
-    })) as { results: { status: string }[] }
-
-    expect(result.results).toHaveLength(2)
-    expect(result.results[0]).toMatchObject({ status: 'imported' })
-    expect(result.results[1]).toMatchObject({ status: 'imported' })
   })
 
   it('imports a directory recursively', async () => {
@@ -484,6 +469,7 @@ describe('fs:importExternalPaths', () => {
           size: 4,
           ino: 1,
           dev: 1,
+          mtimeMs: 1700000000000,
           isFile: () => true,
           isDirectory: () => false,
           isSymbolicLink: () => false
@@ -498,6 +484,7 @@ describe('fs:importExternalPaths', () => {
         size: 4,
         ino: 1,
         dev: 1,
+        mtimeMs: 1700000000000,
         isFile: () => true
       }),
       readFile: readFileHandleMock,
@@ -514,11 +501,21 @@ describe('fs:importExternalPaths', () => {
         status: 'staged',
         name: 'logo.png',
         kind: 'file',
-        entries: [{ relativePath: '', kind: 'file', contentBase64: 'cG5n' }]
+        entries: [
+          {
+            relativePath: '',
+            kind: 'file',
+            byteLength: 4,
+            inode: 1,
+            deviceId: 1,
+            modifiedAtMs: 1700000000000
+          }
+        ]
       }
     ])
     expect(copyFileMock).not.toHaveBeenCalled()
-    expect(readFileHandleMock).toHaveBeenCalled()
+    // Why: bodies stream at upload time, so staging must never read the file.
+    expect(readFileHandleMock).not.toHaveBeenCalled()
     expect(closeMock).toHaveBeenCalled()
   })
 
@@ -533,6 +530,7 @@ describe('fs:importExternalPaths', () => {
           size: 0,
           ino: 1,
           dev: 1,
+          mtimeMs: 1700000000000,
           isFile: () => false,
           isDirectory: () => true,
           isSymbolicLink: () => false
@@ -543,6 +541,7 @@ describe('fs:importExternalPaths', () => {
           size: 4,
           ino: 2,
           dev: 1,
+          mtimeMs: 1700000000000,
           isFile: () => true,
           isDirectory: () => false,
           isSymbolicLink: () => false
@@ -578,6 +577,7 @@ describe('fs:importExternalPaths', () => {
         size: 4,
         ino: 2,
         dev: 1,
+        mtimeMs: 1700000000000,
         isFile: () => true
       }),
       readFile: vi.fn().mockResolvedValue(Buffer.from('icon')),
@@ -597,7 +597,14 @@ describe('fs:importExternalPaths', () => {
         entries: [
           { relativePath: '', kind: 'directory' },
           { relativePath: '..assets', kind: 'directory' },
-          { relativePath: '..assets/icon.txt', kind: 'file', contentBase64: 'aWNvbg==' }
+          {
+            relativePath: '..assets/icon.txt',
+            kind: 'file',
+            byteLength: 4,
+            inode: 2,
+            deviceId: 1,
+            modifiedAtMs: 1700000000000
+          }
         ]
       }
     ])
@@ -612,6 +619,7 @@ describe('fs:importExternalPaths', () => {
           size: 0,
           ino: 1,
           dev: 1,
+          mtimeMs: 1700000000000,
           isFile: () => false,
           isDirectory: () => true,
           isSymbolicLink: () => false
@@ -637,14 +645,15 @@ describe('fs:importExternalPaths', () => {
     expect(openMock).not.toHaveBeenCalled()
   })
 
-  it('checks runtime upload directory byte budget before reading a file that exceeds the total cap', async () => {
+  it('checks runtime upload directory byte budget before opening a file that exceeds the total cap', async () => {
     const sourcePath = '/tmp/dropped/project'
     const resolvedPath = path.resolve(sourcePath)
     const filePaths = ['one.bin', 'two.bin', 'three.bin', 'four.bin', 'overflow.bin'].map((name) =>
       path.join(resolvedPath, name)
     )
     const mib = 1024 * 1024
-    const regularSize = 25 * mib
+    // Four files exactly fill the 8 GB total ceiling; the fifth pushes past it.
+    const regularSize = 2 * 1024 * mib
     const overflowSize = Number(mib)
     const readFileMock = vi.fn().mockResolvedValue(Buffer.from('chunk'))
 
@@ -654,6 +663,7 @@ describe('fs:importExternalPaths', () => {
           size: 0,
           ino: 1,
           dev: 1,
+          mtimeMs: 1700000000000,
           isFile: () => false,
           isDirectory: () => true,
           isSymbolicLink: () => false
@@ -666,6 +676,7 @@ describe('fs:importExternalPaths', () => {
           size,
           ino: fileIndex + 2,
           dev: 1,
+          mtimeMs: 1700000000000,
           isFile: () => true,
           isDirectory: () => false,
           isSymbolicLink: () => false
@@ -689,6 +700,7 @@ describe('fs:importExternalPaths', () => {
             size: regularSize,
             ino: fileIndex + 2,
             dev: 1,
+            mtimeMs: 1700000000000,
             isFile: () => true
           }),
           readFile: readFileMock,
@@ -702,11 +714,9 @@ describe('fs:importExternalPaths', () => {
       sourcePaths: [sourcePath]
     })) as { sources: { status: string; reason?: string }[] }
 
-    expect(result.sources[0]).toMatchObject({
-      status: 'failed',
-      reason: 'Remote import is too large'
-    })
-    expect(readFileMock).toHaveBeenCalledTimes(4)
+    expect(result.sources[0]).toMatchObject({ status: 'failed' })
+    expect(result.sources[0]?.reason).toContain('total remote import limit')
+    expect(readFileMock).not.toHaveBeenCalled()
     expect(openMock).not.toHaveBeenCalledWith(filePaths.at(-1), expect.anything())
   })
 
@@ -719,6 +729,7 @@ describe('fs:importExternalPaths', () => {
           size: 4,
           ino: 1,
           dev: 1,
+          mtimeMs: 1700000000000,
           isFile: () => true,
           isDirectory: () => false,
           isSymbolicLink: () => false
@@ -732,6 +743,7 @@ describe('fs:importExternalPaths', () => {
         size: 4,
         ino: 2,
         dev: 1,
+        mtimeMs: 1700000000000,
         isFile: () => true
       }),
       readFile: readFileHandleMock,
@@ -744,7 +756,7 @@ describe('fs:importExternalPaths', () => {
 
     expect(result.sources[0]).toMatchObject({
       status: 'failed',
-      reason: "File changed during upload staging: ''"
+      reason: "File changed during upload staging: 'logo.png'"
     })
     expect(readFileHandleMock).not.toHaveBeenCalled()
   })

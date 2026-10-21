@@ -2,10 +2,10 @@ import type { TaskPageJiraListProjectionModel } from './use-task-page-jira-list-
 import { useState, useMemo, useEffect, type SetStateAction } from 'react'
 import { useTeamMembers, useTeamLabels, useTeamStates } from '@/hooks/useIssueMetadata'
 import { useTaskCreationDraftRetention } from '@/components/use-task-creation-draft-retention'
-import type { LinearProjectSummary } from '../../../shared/linear/project-types'
-import { linearListProjects } from '@/runtime/runtime-linear-project-client'
+import { useNewLinearIssueProjects } from './use-new-linear-issue-projects'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { writeNewLinearIssueDraft, writeNewLinearProjectDraft } from './task-page-draft-storage'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 export function useTaskPageLinearCreationState(model: TaskPageJiraListProjectionModel) {
   const {
     settings,
@@ -39,12 +39,12 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
   )
   const newLinearProjectMembers = useTeamMembers(
     newLinearProjectOpen ? (newLinearProjectTargetTeam?.id ?? null) : null,
-    settings,
+    defaultScopeSource(settings),
     newLinearProjectTargetTeam?.workspaceId
   )
   const newLinearProjectLabels = useTeamLabels(
     newLinearProjectOpen ? (newLinearProjectTargetTeam?.id ?? null) : null,
-    settings,
+    defaultScopeSource(settings),
     newLinearProjectTargetTeam?.workspaceId
   )
   const setNewLinearProjectTeamId = (id: string | null): void => {
@@ -86,43 +86,18 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     () => availableTeams.find((t) => t.id === newLinearIssueTeamId) ?? availableTeams[0] ?? null,
     [availableTeams, newLinearIssueTeamId]
   )
-  const [newLinearIssueProjects, setNewLinearIssueProjects] = useState<LinearProjectSummary[]>([])
-  const [newLinearIssueProjectsLoading, setNewLinearIssueProjectsLoading] = useState(false)
-  useEffect(() => {
-    let cancelled = false
-    if (!newLinearIssueOpen || !linearConnected || !newLinearIssueTargetTeam) {
-      setNewLinearIssueProjects([])
-      setNewLinearIssueProjectsLoading(false)
-      return
-    }
-    setNewLinearIssueProjectsLoading(true)
-    const targetWorkspaceId =
-      newLinearIssueTargetTeam.workspaceId ||
-      (selectedLinearWorkspaceId !== 'all' ? selectedLinearWorkspaceId : null)
-    linearListProjects(linearTaskSourceContext ?? settings, undefined, 100, targetWorkspaceId)
-      .then((p) => {
-        if (!cancelled) {
-          setNewLinearIssueProjects(p.items)
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) {
-          setNewLinearIssueProjectsLoading(false)
-        }
-      })
-    return () => {
-      // Why: project lists are workspace-scoped; stale responses must not populate the composer after a team/workspace switch.
-      cancelled = true
-    }
-  }, [
-    linearConnected,
-    newLinearIssueOpen,
-    newLinearIssueTargetTeam,
+  const {
+    newLinearIssueProjects,
+    setNewLinearIssueProjects,
+    newLinearIssueProjectsLoading,
+    setNewLinearIssueProjectsLoading
+  } = useNewLinearIssueProjects({
+    open: newLinearIssueOpen && linearConnected,
+    targetTeam: newLinearIssueTargetTeam,
+    selectedLinearWorkspaceId,
     linearTaskSourceContext,
-    settings,
-    selectedLinearWorkspaceId
-  ])
+    settings
+  })
   const setNewLinearIssueTeamId = (value: SetStateAction<string | null>): void => {
     const id = typeof value === 'function' ? value(newLinearIssueTeamId) : value
     setNewLinearIssueTeamIdState(id)
@@ -139,17 +114,17 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
   }
   const newLinearStates = useTeamStates(
     linearConnected ? newLinearIssueTargetTeam?.id || null : null,
-    settings,
+    defaultScopeSource(settings),
     newLinearIssueTargetTeam?.workspaceId
   )
   const newLinearMembers = useTeamMembers(
     linearConnected ? newLinearIssueTargetTeam?.id || null : null,
-    settings,
+    defaultScopeSource(settings),
     newLinearIssueTargetTeam?.workspaceId
   )
   const newLinearLabels = useTeamLabels(
     linearConnected ? newLinearIssueTargetTeam?.id || null : null,
-    settings,
+    defaultScopeSource(settings),
     newLinearIssueTargetTeam?.workspaceId
   )
   useEffect(() => {

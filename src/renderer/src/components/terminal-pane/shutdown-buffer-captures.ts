@@ -1,5 +1,9 @@
 export type ShutdownBufferCaptureOptions = {
   includeLocalBuffers?: boolean
+  /** Route the captured bytes to `localOnlyScrollbackByTabId` instead of the shared layout.
+   *  Set by the ordinary cold park, which fires on every workspace hide; the rare captures
+   *  (force-park, hibernate, sleep, shutdown) stay shared so a second desktop can still cold-restore. */
+  localOnly?: boolean
 }
 
 /** Map of tabId → buffer-capture callback, one per mounted TerminalPane.

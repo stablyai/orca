@@ -45,27 +45,9 @@ export function AutomationRunsTable({
 
   return (
     <div className="flex min-h-[18rem] flex-col overflow-hidden rounded-lg border border-border/60 bg-card">
-      <div className="grid shrink-0 grid-cols-[minmax(11rem,1.4fr)_minmax(10rem,1fr)_minmax(5rem,.55fr)_minmax(8rem,.8fr)_minmax(7rem,auto)] gap-3 border-b border-border/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        <div>
-          {translate(
-            'auto.components.automations.AutomationRunsDashboard.automation',
-            'Automation'
-          )}
-        </div>
-        <div>
-          {translate('auto.components.automations.AutomationRunsDashboard.triggered', 'Triggered')}
-        </div>
-        <div>
-          {translate('auto.components.automations.AutomationRunsDashboard.trigger', 'Trigger')}
-        </div>
-        <div>{translate('auto.components.automations.AutomationRunsDashboard.host', 'Host')}</div>
-        <div>
-          {translate('auto.components.automations.AutomationRunsDashboard.status', 'Status')}
-        </div>
-      </div>
       <div
         ref={scrollRef}
-        className="scrollbar-sleek h-[calc(100vh-21rem)] min-h-[15rem] overflow-auto"
+        className="scrollbar-sleek flex h-[calc(100vh-21rem)] min-h-[15rem] flex-col overflow-auto"
         onScroll={(event) => {
           const { clientHeight, scrollHeight, scrollTop } = event.currentTarget
           const nearEnd = scrollHeight - scrollTop - clientHeight < RUN_ROW_HEIGHT_PX * 10
@@ -75,8 +57,29 @@ export function AutomationRunsTable({
           }
         }}
       >
+        <div className="sticky top-0 z-10 grid shrink-0 grid-cols-[minmax(11rem,1.4fr)_minmax(10rem,1fr)_minmax(5rem,.55fr)_minmax(8rem,.8fr)_minmax(7rem,auto)] gap-3 border-b border-border/60 bg-card px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+          <div>
+            {translate(
+              'auto.components.automations.AutomationRunsDashboard.automation',
+              'Automation'
+            )}
+          </div>
+          <div>
+            {translate(
+              'auto.components.automations.AutomationRunsDashboard.triggered',
+              'Triggered'
+            )}
+          </div>
+          <div>
+            {translate('auto.components.automations.AutomationRunsDashboard.trigger', 'Trigger')}
+          </div>
+          <div>{translate('auto.components.automations.AutomationRunsDashboard.host', 'Host')}</div>
+          <div>
+            {translate('auto.components.automations.AutomationRunsDashboard.status', 'Status')}
+          </div>
+        </div>
         {loading && entries.length === 0 ? (
-          <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+          <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
             {translate(
               'auto.components.automations.AutomationRunsDashboard.loading',
@@ -84,7 +87,7 @@ export function AutomationRunsTable({
             )}
           </div>
         ) : entries.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-6 text-center">
             <div className="text-sm font-medium">
               {translate(
                 'auto.components.automations.AutomationRunsDashboard.noRuns',
@@ -99,7 +102,7 @@ export function AutomationRunsTable({
             </div>
           </div>
         ) : (
-          <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+          <div className="relative w-full shrink-0" style={{ height: virtualizer.getTotalSize() }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {
               const entry = entries[virtualRow.index]
               if (!entry) {

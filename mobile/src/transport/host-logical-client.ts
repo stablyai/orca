@@ -10,7 +10,7 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
   // direct socket remains a replaceable first physical generation.
   const logical = createStableLogicalRpcClient(
     connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
-    directPathForEndpoint(host, host.endpoint)
+    directPathForEndpoint(host.endpoint)
   )
   if (Platform.OS === 'web') {
     return logical

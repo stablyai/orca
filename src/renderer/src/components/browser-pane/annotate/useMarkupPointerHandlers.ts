@@ -2,13 +2,16 @@ import { useCallback } from 'react'
 import type React from 'react'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { PendingText } from './useMarkupKeyboardShortcuts'
+import type { MarkupPoint, MarkupTool } from './markup-drawing-model'
 import {
-  commitShape,
-  type MarkupDocument,
-  type MarkupPoint,
-  type MarkupShape,
-  type MarkupTool
-} from './markup-drawing-model'
+  beginDrawGesture,
+  beginEraseGesture,
+  cancelGesture,
+  endGesture,
+  moveGesture,
+  type MarkupEditorState
+} from './markup-gesture'
+import type { TextInkBoxMeasurer } from './markup-shape-hit-test'
 
 export type MarkupPointerParams = {
   busy: boolean
@@ -16,15 +19,14 @@ export type MarkupPointerParams = {
   color: string
   width: number
   pendingText: PendingText | null
-  inProgress: MarkupShape | null
   canvasRef: React.RefObject<HTMLCanvasElement | null>
-  setInProgress: React.Dispatch<React.SetStateAction<MarkupShape | null>>
+  measureTextInkBox: TextInkBoxMeasurer
   setPendingText: (value: PendingText | null) => void
-  setDoc: React.Dispatch<React.SetStateAction<MarkupDocument>>
+  setState: React.Dispatch<React.SetStateAction<MarkupEditorState>>
 }
 
-// Canvas pointer interactions: draw a new shape, or place text. Split out of
-// useMarkupEditor to keep that hook focused.
+// Canvas pointer interactions: draw a new shape, erase touched ones, or place
+// text. Split out of useMarkupEditor to keep that hook focused.
 export function useMarkupPointerHandlers(params: MarkupPointerParams) {
   const {
     busy,
@@ -32,11 +34,10 @@ export function useMarkupPointerHandlers(params: MarkupPointerParams) {
     color,
     width,
     pendingText,
-    inProgress,
     canvasRef,
-    setInProgress,
+    measureTextInkBox,
     setPendingText,
-    setDoc
+    setState
   } = params
 
   const pointFromEvent = useCallback(
@@ -69,43 +70,55 @@ export function useMarkupPointerHandlers(params: MarkupPointerParams) {
         return
       }
       event.currentTarget.setPointerCapture(event.pointerId)
-      const id = createBrowserUuid()
-      if (tool === 'pen' || tool === 'highlight') {
-        setInProgress({ id, kind: tool, color, width, points: [point] })
-      } else {
-        setInProgress({ id, kind: tool, color, width, from: point, to: point })
+      const { pointerId } = event
+      if (tool === 'eraser') {
+        setState((state) => beginEraseGesture(state, pointerId, point, measureTextInkBox))
+        return
       }
+      const id = createBrowserUuid()
+      const shape =
+        tool === 'pen' || tool === 'highlight'
+          ? { id, kind: tool, color, width, points: [point] }
+          : { id, kind: tool, color, width, from: point, to: point }
+      setState((state) => beginDrawGesture(state, pointerId, shape))
     },
-    [busy, color, pendingText, pointFromEvent, setInProgress, setPendingText, tool, width]
+    [
+      busy,
+      color,
+      measureTextInkBox,
+      pendingText,
+      pointFromEvent,
+      setPendingText,
+      setState,
+      tool,
+      width
+    ]
   )
 
   const onPointerMove = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
-      setInProgress((current) => {
-        if (!current) {
-          return current
-        }
-        const point = pointFromEvent(event)
-        if (current.kind === 'pen' || current.kind === 'highlight') {
-          return { ...current, points: [...current.points, point] }
-        }
-        if (current.kind === 'text') {
-          return current
-        }
-        return { ...current, to: point }
-      })
+      const point = pointFromEvent(event)
+      const { pointerId } = event
+      setState((state) => moveGesture(state, pointerId, point, measureTextInkBox))
     },
-    [pointFromEvent, setInProgress]
+    [measureTextInkBox, pointFromEvent, setState]
   )
 
-  // Why: committing inside the setInProgress updater made it impure, so StrictMode's
-  // double-invoke appended the shape twice (commitShape does not dedupe by id).
-  const onPointerUp = useCallback(() => {
-    if (inProgress) {
-      setDoc((document) => commitShape(document, inProgress))
-    }
-    setInProgress(null)
-  }, [inProgress, setDoc, setInProgress])
+  const onPointerUp = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      const { pointerId } = event
+      setState((state) => endGesture(state, pointerId))
+    },
+    [setState]
+  )
 
-  return { onPointerDown, onPointerMove, onPointerUp }
+  const onPointerCancel = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      const { pointerId } = event
+      setState((state) => cancelGesture(state, pointerId))
+    },
+    [setState]
+  )
+
+  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel }
 }

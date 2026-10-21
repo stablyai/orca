@@ -10,6 +10,11 @@ import type {
   BrowserContextMenuRequestedEvent,
   BrowserPermissionDeniedEvent
 } from '../../../../shared/browser-guest-events'
+import type {
+  BrowserHistoryNavigateCommand,
+  BrowserPageCommandTarget
+} from '../../../../shared/browser-page-command-target'
+import type { BrowserPageZoomCommand } from '../../../../shared/browser-page-zoom'
 
 const toastMocks = vi.hoisted(() => ({
   loading: vi.fn(),
@@ -44,10 +49,10 @@ let contextMenu = paneChannel<BrowserContextMenuRequestedEvent>()
 let contextMenuDismissed = paneChannel<{ browserPageId: string }>()
 let permissionDenied = paneChannel<BrowserPermissionDeniedEvent>()
 let findRequests = paneChannel<void>()
-let historyNavigate = paneChannel<'back' | 'forward'>()
-let reloadRequests = paneChannel<void>()
-let hardReloadRequests = paneChannel<void>()
-let zoomRequests = paneChannel<'in' | 'out' | 'reset'>()
+let historyNavigate = paneChannel<BrowserHistoryNavigateCommand>()
+let reloadRequests = paneChannel<BrowserPageCommandTarget>()
+let hardReloadRequests = paneChannel<BrowserPageCommandTarget>()
+let zoomRequests = paneChannel<BrowserPageZoomCommand>()
 let openDevTools = vi.fn(async () => true)
 let proceedCertificate = vi.fn(async () => ({ ok: true as const }))
 let openUrl = vi.fn(async () => {})
@@ -79,8 +84,8 @@ beforeEach(() => {
       onFindInBrowserPage: (_source: unknown, callback: () => void) =>
         findRequests.subscribe(callback),
       onBrowserHistoryNavigate: historyNavigate.subscribe,
-      onReloadBrowserPage: (callback: () => void) => reloadRequests.subscribe(callback),
-      onHardReloadBrowserPage: (callback: () => void) => hardReloadRequests.subscribe(callback),
+      onReloadBrowserPage: reloadRequests.subscribe,
+      onHardReloadBrowserPage: hardReloadRequests.subscribe,
       onZoomBrowserPage: zoomRequests.subscribe,
       writeClipboardText
     },
@@ -137,19 +142,28 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
   it('reloads and hard-reloads the retained guest from the forwarded chords', () => {
     const { webview } = renderPane()
 
-    act(() => reloadRequests.emit(undefined))
+    // A split sibling's chord must not reach this pane.
+    act(() => reloadRequests.emit({ browserPageId: 'page-b' }))
+    act(() => hardReloadRequests.emit({ browserPageId: 'page-b' }))
+    expect(webview.reload).not.toHaveBeenCalled()
+    expect(webview.reloadIgnoringCache).not.toHaveBeenCalled()
+
+    act(() => reloadRequests.emit({ browserPageId: 'page-a' }))
     expect(webview.reload).toHaveBeenCalledTimes(1)
     expect(webview.reloadIgnoringCache).not.toHaveBeenCalled()
 
-    act(() => hardReloadRequests.emit(undefined))
+    act(() => hardReloadRequests.emit({ browserPageId: 'page-a' }))
     expect(webview.reloadIgnoringCache).toHaveBeenCalledTimes(1)
   })
 
   it('walks history from the forwarded chords', () => {
     const { webview } = renderPane()
 
-    act(() => historyNavigate.emit('back'))
-    act(() => historyNavigate.emit('forward'))
+    act(() => historyNavigate.emit({ browserPageId: 'page-b', direction: 'back' }))
+    expect(webview.goBack).not.toHaveBeenCalled()
+
+    act(() => historyNavigate.emit({ browserPageId: 'page-a', direction: 'back' }))
+    act(() => historyNavigate.emit({ browserPageId: 'page-a', direction: 'forward' }))
 
     expect(webview.goBack).toHaveBeenCalledTimes(1)
     expect(webview.goForward).toHaveBeenCalledTimes(1)
@@ -161,7 +175,10 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     const indicator = screen.getByRole('status', { hidden: true })
     expect(indicator.getAttribute('aria-hidden')).toBe('true')
 
-    act(() => zoomRequests.emit('in'))
+    act(() => zoomRequests.emit({ browserPageId: 'page-b', direction: 'in' }))
+    expect(webview.setZoomLevel).not.toHaveBeenCalled()
+
+    act(() => zoomRequests.emit({ browserPageId: 'page-a', direction: 'in' }))
 
     expect(webview.setZoomLevel).toHaveBeenCalledTimes(1)
     expect(webview.setZoomLevel.mock.calls[0]![0]).toBeGreaterThan(0)

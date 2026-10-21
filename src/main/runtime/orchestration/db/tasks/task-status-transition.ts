@@ -35,18 +35,24 @@ export function updateTaskStatus(
          ORDER BY rowid DESC LIMIT 1`
       )
       .get(id) as { id: string } | undefined
-    const activeWorker = terminalStatus
-      ? (this.db
-          .prepare(
-            `SELECT active.id
+    // Why: a supervised worker owns its Task for as long as it is alive. Every status this
+    // function lets past the active-Dispatch check must clear the same worker check, or the Task
+    // re-opens under a worker whose own lifecycle can no longer settle it (#16904 relay wedge).
+    // A no-op re-assert of `dispatched` re-opens nothing and stays legal.
+    const reopensUnderWorker = requiresActiveDispatch && task.status !== 'dispatched'
+    const activeWorker =
+      terminalStatus || reopensUnderWorker
+        ? (this.db
+            .prepare(
+              `SELECT active.id
              FROM dispatch_contexts active
              JOIN worker_dispatches worker ON worker.dispatch_id = active.id
              WHERE active.task_id = ? AND active.status IN ('pending', 'dispatched')
                AND worker.state NOT IN ('failed', 'succeeded', 'stopped', 'abandoned')
              ORDER BY active.rowid DESC LIMIT 1`
-          )
-          .get(id) as { id: string } | undefined)
-      : undefined
+            )
+            .get(id) as { id: string } | undefined)
+        : undefined
     if (activeWorker) {
       throw new OrchestrationError(
         'task_not_startable',

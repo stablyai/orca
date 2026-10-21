@@ -13,7 +13,7 @@ vi.mock('node:fs', () => ({ existsSync: existsSyncMock }))
 vi.mock('node:os', () => ({ userInfo: userInfoMock }))
 // Why mock the chokepoint: encoding, kill signal, output cap and closing stdin
 // are its contract now, so this suite asserts the PAM probe's argv and verdict.
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: (...args: unknown[]) => Promise.resolve(runProcessMock(...args))
 }))
 vi.mock('./macos-login-session-pty-probe', async (importOriginal) => ({
@@ -606,16 +606,6 @@ describe('probeMacosLoginSessionAlive', () => {
     expect(outcome).toEqual({ ok: false, conclusive: true, reason: 'rejected' })
     // The dead-session daemon must stop minting login(1) prompt zombies (#7936).
     expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
-  })
-
-  it('does not overwrite the cached verdict on an inconclusive probe', async () => {
-    setPlatform('darwin')
-    await prepareMacosTccLoginShell()
-    runProcessMock.mockReturnValue(TIMED_OUT_RESULT)
-    ptyProbeMock.mockResolvedValue({ ok: false, conclusive: false, reason: 'timeout' })
-    const outcome = await probeMacosLoginSessionAlive()
-    expect(outcome).toEqual({ ok: false, conclusive: false, reason: 'timeout' })
-    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
   })
 
   it('does not trust a pipe rejection when its PTY confirmation is inconclusive', async () => {

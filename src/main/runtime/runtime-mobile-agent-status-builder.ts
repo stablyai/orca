@@ -15,13 +15,16 @@ import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import {
   classifyAgentTitle,
   getLatestAgentCandidateTitle,
-  getLatestPtyTitle
+  getLatestPtyTitle,
+  terminalTitleBlocksExplicitAgentStatus
 } from './runtime-worktree-status-projection'
 
 type RuntimeMobileAgentStatusHost = {
   getPaneKey(tab: RuntimeMobileSessionTerminalTab): string
   getLeaf(tab: RuntimeMobileSessionTerminalTab): RuntimeLeafRecord | null
   getTrackedTitle(ptyId: string | null): string | null
+  /** Wall clock of the PTY's latest live OSC title; seeded restore titles leave it unset. */
+  getPtyTitleObservedAtEpochMs?(ptyId: string | null): number | null
 }
 
 export function buildRuntimeMobileAgentStatus(
@@ -33,13 +36,13 @@ export function buildRuntimeMobileAgentStatus(
   host: RuntimeMobileAgentStatusHost
 ): { agentStatus: AgentStatusEntry } | Record<string, never> {
   const paneKey = host.getPaneKey(tab)
-  // Why: neither the OSC-retained row nor a title-derived status can carry a
-  // provider session — only the hook payload does, and headless serve has no
+  // Why: neither the live-status projection nor a title-derived status carries a
+  // provider session — only the full hook payload does, and headless serve has no
   // renderer to publish `tab.agentStatus`. Without it mobile native chat has no
   // transcript to address and sits on the empty state forever.
   const hookRow = selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey))
   // Why: the hook row is evidence in its own right. Returning early on a missing
-  // PTY status/retained row put this check ahead of the only headless carrier, so
+  // PTY status/projected row put this check ahead of the only headless carrier, so
   // an agent that reported its session but never emitted a recognized title got no
   // `agentStatus` at all — exactly the hook-only case the fallback exists for.
   if (!pty?.lastAgentStatus && !retained && !hookRow.agentType && !hookRow.providerSession) {
@@ -47,7 +50,9 @@ export function buildRuntimeMobileAgentStatus(
   }
   const providerSession = hookRow.providerSession
     ? { providerSession: hookRow.providerSession }
-    : {}
+    : retained?.providerSession
+      ? { providerSession: retained.providerSession }
+      : {}
   const leaf = host.getLeaf(tab)
   const trackerOnlyTitle = host.getTrackedTitle(pty?.ptyId ?? leaf?.ptyId ?? null)
   const ptyTitle = pty
@@ -101,6 +106,9 @@ export function buildRuntimeMobileAgentStatus(
         ...liveRow.payload,
         paneKey,
         updatedAt: liveRow.updatedAt,
+        ...(liveRow.evidenceObservedAt !== undefined
+          ? { evidenceObservedAt: liveRow.evidenceObservedAt }
+          : {}),
         stateStartedAt: liveRow.stateStartedAt,
         stateHistory: [],
         ...(terminalHandle ? { terminalHandle } : {}),
@@ -109,7 +117,8 @@ export function buildRuntimeMobileAgentStatus(
           : {}),
         tabId: tab.parentTabId,
         terminalTitle,
-        ...providerSession
+        ...providerSession,
+        ...(liveRow.programStatus ? { programStatus: liveRow.programStatus } : {})
       },
       ownerAgent,
       ownerOptions
@@ -120,6 +129,41 @@ export function buildRuntimeMobileAgentStatus(
     })
     if (renewedStatus) {
       return { agentStatus: renewedStatus }
+    }
+  }
+  // Why: a turn restored across a server restart is unverifiable, not finished; a synthetic
+  // `done` told clients a running agent had stopped. Keep its own date (so it cannot outrank a
+  // client's row) and drop the question fields (#12346). Only a later shell title retires it.
+  const shellTitleRetiredRestored =
+    hookRow.restored !== null &&
+    terminalTitleBlocksExplicitAgentStatus(ptyTitle) &&
+    (pty?.lastOscTitleEpochMs ?? host.getPtyTitleObservedAtEpochMs?.(leaf?.ptyId ?? null) ?? 0) >=
+      hookRow.restored.updatedAt
+  const restored = !pty?.lastAgentStatus && !shellTitleRetiredRestored ? hookRow.restored : null
+  if (restored) {
+    const restoredAgentType = ownerAgent ?? restored.payload.agentType
+    return {
+      agentStatus: normalizeCompatibleAgentStatusEntryForOwner(
+        {
+          state: restored.payload.state,
+          prompt: restored.payload.prompt,
+          updatedAt: restored.updatedAt,
+          stateStartedAt: restored.stateStartedAt,
+          restoredUnconfirmed: true,
+          paneKey,
+          ...(terminalHandle ? { terminalHandle } : {}),
+          ...(restoredAgentType ? { agentType: restoredAgentType } : {}),
+          ...((pty?.worktreeId ?? restored.worktreeId)
+            ? { worktreeId: pty?.worktreeId ?? restored.worktreeId }
+            : {}),
+          tabId: tab.parentTabId,
+          terminalTitle,
+          stateHistory: [],
+          ...providerSession
+        },
+        ownerAgent,
+        ownerOptions
+      )
     }
   }
   // Last resort: the pane's hook evidence is identity only (resume rows, stale

@@ -1,0 +1,50 @@
+{
+  "comparison": "Actual structured host teardown, record store, journal, and transcript watcher; baseline reverses catchup/forward/restart behavior through a temporary Vite transform",
+  "sourceHashes": {
+    "src/main/native-chat/agent-session-wire/structured-agent-session-handoff-forward.ts": {
+      "before": "c9bb6fbf8ca3fc3fad815f35a21c73e392dd6be267335984deb0b5c9319210f1",
+      "after": "99204872e4432ea841be493012c23b00b67fedabe07a83332c995dec632839cc"
+    },
+    "src/main/native-chat/agent-session-wire/structured-agent-session-handoff-restart-tui.ts": {
+      "before": "fcfcbd821816f33d1cf8bb71e6ecb40b03d4139affe8629f5baaa0a45f423921",
+      "after": "58a1b23f9390234e39bdb9681e43e9b32fd4d741a4242101a8d25e85a7001c6e"
+    },
+    "src/main/native-chat/agent-session-wire/structured-agent-session-handoff-restart.ts": {
+      "before": "8f2dc4f31fd2f96f3e9393afcc0826b712591c5d3bfa80965113e63be65f69ab",
+      "after": "73461453fba97bd0630471a224fc718ac2ce497c18fc95afb2ee264e7e42f791"
+    },
+    "src/main/native-chat/agent-session-wire/structured-tui-transcript-catchup.ts": {
+      "before": "36085d52e44152c7d8906ac2691242e8e31e54511fc908510c0d3aee10615973",
+      "after": "2d0dc6dcfbfba666a0bdebb229b78706c8a137b8427aa2a8b8bc679f0d43749b"
+    },
+    "src/main/native-chat/agent-session-wire/structured-agent-session-handoff-types.ts": {
+      "current": "225283eaf80f976fcad35554b330ad24e81cd4c1dd275996dc471c53de46ba67"
+    },
+    "src/main/native-chat/agent-session-wire/structured-tui-transcript-teardown.test.ts": {
+      "current": "cc8be5277db229dcf52d1c72bfddfc86b2f07fd2f77eba3f11af01d1877f2604"
+    },
+    "src/main/native-chat/agent-session-wire/structured-tui-transcript-teardown-test-fixture.ts": {
+      "current": "d186aeab78e31f0aa493f92d5f472708e81791670e82637e37481ebca9918756"
+    }
+  },
+  "before": {
+    "exitCode": 1,
+    "passed": 1,
+    "failed": 6,
+    "failedCases": [
+      "cancels transcript acquisition during host teardown at resolve",
+      "cancels transcript acquisition during host teardown at subscribe",
+      "cancels transcript acquisition during host teardown at initial-ready",
+      "cancels transcript acquisition during host teardown at before-prepare",
+      "cancels transcript acquisition during host teardown at after-prepare",
+      "cancels recovered TUI catchup without relabeling the live owner or retrying"
+    ]
+  },
+  "after": {
+    "exitCode": 0,
+    "passed": 7,
+    "failed": 0,
+    "failedCases": []
+  },
+  "passed": true
+}

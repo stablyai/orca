@@ -103,6 +103,37 @@ describe('OrcaRuntimeService', () => {
     await expect(waiting).resolves.toEqual({ exitCode: 9 })
   })
 
+  it('cancels setup completion observation when the caller aborts', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-cancelled-setup' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    ;(
+      runtime as unknown as { setupCompletionTokenByPtyId: Map<string, string> }
+    ).setupCompletionTokenByPtyId.set('pty-cancelled-setup', 'token-cancelled')
+    const unsubscribe = vi.fn()
+    vi.spyOn(runtime, 'subscribeToTerminalData').mockReturnValue(unsubscribe)
+    const controller = new AbortController()
+
+    const waiting = runtime.waitForSetupTerminalCompletion(handle, controller.signal)
+    expect(runtime.subscribeToTerminalData).toHaveBeenCalledWith(
+      'pty-cancelled-setup',
+      expect.any(Function)
+    )
+
+    const reason = new Error('cancelled')
+    controller.abort(reason)
+
+    await expect(waiting).rejects.toBe(reason)
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
   it('keeps observing after an uncertain setup terminal status', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

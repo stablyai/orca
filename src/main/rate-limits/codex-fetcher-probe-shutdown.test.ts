@@ -8,8 +8,19 @@ const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = 
   ptySpawnMock: vi.fn()
 }))
 
+// The probe's child runs in-process here; the worker transport has its own suite.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
+}))
+
+// The recovery's supervised stop imports the process-table reader, which needs the real execFile.
+vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+  startCodexStateDbBackfillRecoveryInBackground: vi.fn()
 }))
 
 vi.mock('node:fs/promises', () => ({
@@ -129,7 +140,7 @@ describe('fetchCodexRateLimits probe shutdown', () => {
       }
     })
 
-    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    const resultPromise = fetchCodexRateLimits()
     await vi.advanceTimersByTimeAsync(19_999)
     expect(rpcChild.kill).not.toHaveBeenCalled()
 
@@ -169,7 +180,7 @@ describe('fetchCodexRateLimits probe shutdown', () => {
     })
 
     try {
-      const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+      const resultPromise = fetchCodexRateLimits()
       await vi.advanceTimersByTimeAsync(0)
       await vi.advanceTimersByTimeAsync(9_999)
       expect(rpcChild.kill).not.toHaveBeenCalled()
@@ -200,12 +211,10 @@ describe('fetchCodexRateLimits probe shutdown', () => {
     })
 
     const first = fetchCodexRateLimits({
-      allowPtyFallback: false,
       codexHomePath: '/managed/home-a'
     })
     await vi.advanceTimersByTimeAsync(0)
     const second = fetchCodexRateLimits({
-      allowPtyFallback: false,
       codexHomePath: '/managed/home-a'
     })
     await vi.advanceTimersByTimeAsync(0)
@@ -241,13 +250,11 @@ describe('fetchCodexRateLimits probe shutdown', () => {
 
     try {
       const first = fetchCodexRateLimits({
-        allowPtyFallback: false,
         codexHomePath: '/managed/home-error'
       })
       await vi.advanceTimersByTimeAsync(0)
       firstChild.emit('error', new Error('stdio failed'))
       const second = fetchCodexRateLimits({
-        allowPtyFallback: false,
         codexHomePath: '/managed/home-error'
       })
       await vi.advanceTimersByTimeAsync(0)
@@ -308,14 +315,12 @@ describe('fetchCodexRateLimits probe shutdown', () => {
 
     try {
       const first = fetchCodexRateLimits({
-        allowPtyFallback: false,
         codexHomePath: home
       })
       await vi.advanceTimersByTimeAsync(0)
       expect(firstChild.kill).toHaveBeenCalledWith('SIGTERM')
 
       const second = fetchCodexRateLimits({
-        allowPtyFallback: false,
         codexHomePath: home
       })
       await vi.advanceTimersByTimeAsync(4_999)
@@ -357,13 +362,11 @@ describe('fetchCodexRateLimits probe shutdown', () => {
 
     try {
       const first = fetchCodexRateLimits({
-        allowPtyFallback: false,
         codexHomePath: '/managed/home-async-stdin-error'
       })
       await vi.advanceTimersByTimeAsync(0)
       firstChild.stdin.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
       const second = fetchCodexRateLimits({
-        allowPtyFallback: false,
         codexHomePath: '/managed/home-async-stdin-error'
       })
 

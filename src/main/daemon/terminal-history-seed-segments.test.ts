@@ -3,7 +3,7 @@ import { HeadlessEmulator } from './headless-emulator'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import {
-  COLD_RESTORE_SEED_MODE_RESET,
+  PROCESS_BOUNDARY_GROUND,
   RESET_GRAPHIC_RENDITION
 } from '../../shared/terminal-mode-reset-profiles'
 import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
@@ -20,7 +20,7 @@ const ARMED_MODES: TerminalModes = {
 
 // Why import rather than restate: the exact bytes are pinned in
 // terminal-mode-reset-profiles.test.ts; this suite pins placement within the seed.
-const MOUSE_OFF = COLD_RESTORE_SEED_MODE_RESET
+const GROUND = PROCESS_BOUNDARY_GROUND
 
 function restoreInfo(overrides: Partial<ColdRestoreInfo> = {}): ColdRestoreInfo {
   return {
@@ -36,24 +36,23 @@ function restoreInfo(overrides: Partial<ColdRestoreInfo> = {}): ColdRestoreInfo 
 }
 
 describe('getRecoveredHistorySeedSegments', () => {
-  it('disarms mouse reporting after the snapshot but before the torn escape tail', () => {
+  it('grounds after the snapshot and drops the dead process torn escape tail', () => {
     const segments = getRecoveredHistorySeedSegments(
       restoreInfo({ pendingEscapeTailAnsi: '\x1b[3' })
     )
     expect(segments).toEqual([
       `${RESET_GRAPHIC_RENDITION}\x1b[?1003h\x1b[?1006h`,
       'user@host ~ $ \x1b[?1003h',
-      MOUSE_OFF,
-      '\x1b[3'
+      GROUND
     ])
   })
 
-  it('disarms mouse reporting on the alt-screen normal-buffer branch too', () => {
+  it('grounds the alt-screen normal-buffer branch too', () => {
     expect(
       getRecoveredHistorySeedSegments(
         restoreInfo({ modes: { ...ARMED_MODES, alternateScreen: true } })
       )
-    ).toEqual([`${RESET_GRAPHIC_RENDITION}user@host ~ $ `, MOUSE_OFF])
+    ).toEqual([`${RESET_GRAPHIC_RENDITION}user@host ~ $ `, GROUND])
   })
 
   it('stays empty when there is no recovered normal buffer', () => {
@@ -70,7 +69,7 @@ describe('getRecoveredHistorySeedSegments', () => {
 
   it('keeps the empty "nothing to recover" sentinel on the normal-screen branch', () => {
     // Why: daemon-pty-adapter keys the probe-race kill+respawn and the history
-    // re-anchor on `length === 0`, so the reset must never be the only segment.
+    // re-anchor on `length === 0`, so the ground must never be the only segment.
     expect(
       getRecoveredHistorySeedSegments(
         restoreInfo({
@@ -83,7 +82,7 @@ describe('getRecoveredHistorySeedSegments', () => {
     ).toEqual([])
   })
 
-  it('keeps a torn escape last when it is the only recovered data', () => {
+  it('recovers nothing when a torn escape is the only recovered data', () => {
     expect(
       getRecoveredHistorySeedSegments(
         restoreInfo({
@@ -93,7 +92,7 @@ describe('getRecoveredHistorySeedSegments', () => {
           pendingEscapeTailAnsi: '\x1b[3'
         })
       )
-    ).toEqual([MOUSE_OFF, '\x1b[3'])
+    ).toEqual([])
   })
 
   it('leaves the revived emulator unarmed while preserving scrollback (#12101)', () => {

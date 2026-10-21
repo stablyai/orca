@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { getNotificationNavigationTarget } from './notification-routing'
 import {
@@ -6,8 +5,6 @@ import {
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from '../navigation/host-stack-navigation'
-
-const rootLayoutSource = readFileSync(new URL('../../app/_layout.tsx', import.meta.url), 'utf8')
 
 function navigationHarness(initialState: HostStackNavigationState | undefined) {
   const stateListeners = new Set<() => void>()
@@ -100,18 +97,79 @@ describe('notification route coordination', () => {
   it('leaves a host-only notification as a shallow push with nothing to coordinate', () => {
     expect(getNotificationNavigationTarget({ hostId: 'host-1' })?.sessionTarget).toBeNull()
   })
+})
 
-  it('routes notification taps through the coordinated transition, not a bare push', () => {
-    const start = rootLayoutSource.indexOf('// ─── Notification tap routing ───')
-    const end = rootLayoutSource.indexOf('// ─── End notification tap routing ───', start)
-
-    // Assert the markers first: a renamed banner would otherwise slice garbage and report a
-    // missing call instead of the real cause.
-    expect(start).toBeGreaterThanOrEqual(0)
-    expect(end).toBeGreaterThan(start)
-
-    const notificationEffect = rootLayoutSource.slice(start, end)
-    expect(notificationEffect).toContain('openNotificationRoute(target)')
-    expect(notificationEffect).not.toContain('router.push(')
+it('reuses the current workspace screen and targets the notification pane without pushing', () => {
+  const target = getNotificationNavigationTarget({
+    hostId: 'host',
+    worktreeId: 'folder::/workspace',
+    paneKey: 'agent-tab:leaf'
+  })!
+  const harness = navigationHarness(
+    rootLayoutScopedState({
+      index: 1,
+      routes: [
+        { name: 'index' },
+        {
+          name: 'h',
+          state: {
+            key: 'host-stack',
+            index: 0,
+            routes: [
+              {
+                key: 'existing-workspace',
+                name: target.sessionTarget!.name,
+                params: { hostId: 'host', worktreeId: 'folder::/workspace' }
+              }
+            ]
+          }
+        }
+      ]
+    })
+  )
+  const router = { push: vi.fn(), replace: vi.fn() }
+  const controller = navigateToHostStackRoute(
+    harness.navigation,
+    router,
+    target.hostId,
+    target.sessionTarget!
+  )
+  expect(router.push).not.toHaveBeenCalled()
+  expect(router.replace).not.toHaveBeenCalled()
+  expect(harness.navigation.dispatch).toHaveBeenCalledExactlyOnceWith({
+    type: 'SET_PARAMS',
+    target: 'host-stack',
+    source: 'existing-workspace',
+    payload: { params: target.sessionTarget!.params }
   })
+  expect(controller.isActive()).toBe(false)
+})
+
+it('does not reuse a different workspace on the same host', () => {
+  const target = getNotificationNavigationTarget({ hostId: 'host', worktreeId: 'workspace-b' })!
+  const harness = navigationHarness(
+    rootLayoutScopedState({
+      index: 0,
+      routes: [
+        {
+          name: 'h',
+          state: {
+            key: 'host-stack',
+            index: 0,
+            routes: [
+              {
+                key: 'workspace-a',
+                name: target.sessionTarget!.name,
+                params: { hostId: 'host', worktreeId: 'workspace-a' }
+              }
+            ]
+          }
+        }
+      ]
+    })
+  )
+  const router = { push: vi.fn(), replace: vi.fn() }
+  navigateToHostStackRoute(harness.navigation, router, target.hostId, target.sessionTarget!)
+  expect(router.push).toHaveBeenCalledOnce()
+  expect(harness.navigation.dispatch).not.toHaveBeenCalled()
 })

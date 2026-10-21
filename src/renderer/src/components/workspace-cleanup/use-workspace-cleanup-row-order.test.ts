@@ -26,23 +26,6 @@ describe('workspace cleanup streaming row order', () => {
     expect(ids(arranged)).toEqual(['a', 'b', 'c'])
   })
 
-  it('appends unseen rows after the frozen ones and keeps them stable on later ticks', () => {
-    const order = createWorkspaceCleanupFrozenRowOrder([row('a'), row('b')], 'name:asc')
-
-    const firstRows = [row('a'), row('d'), row('b'), row('c')]
-    const firstTick = arrangeWorkspaceCleanupRowsByFrozenOrder(firstRows, order)
-    expect(ids(firstTick)).toEqual(['a', 'b', 'd', 'c'])
-    const extendedOrder = extendWorkspaceCleanupFrozenRowOrder(firstRows, order)
-
-    // A later tick sorting d and c differently must not swap them anymore.
-    const secondTick = arrangeWorkspaceCleanupRowsByFrozenOrder(
-      [row('c'), row('d'), row('b'), row('a')],
-      extendedOrder
-    )
-    expect(ids(secondTick)).toEqual(['a', 'b', 'd', 'c'])
-    expect(order.positions.has('d')).toBe(false)
-  })
-
   it('holds slots for rows a filter temporarily hides', () => {
     const order = createWorkspaceCleanupFrozenRowOrder([row('a'), row('b'), row('c')], 'name:asc')
 

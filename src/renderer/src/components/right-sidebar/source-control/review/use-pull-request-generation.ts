@@ -1,10 +1,14 @@
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorkspaceJiraIssueKey } from '../../../../../../shared/jira-review-title'
 import { useCallback } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
 import {
   cancelRuntimeGeneratePullRequestFields,
-  generateRuntimePullRequestFields,
-  type RuntimeGeneratePullRequestFieldsOverrides
-} from '@/runtime/runtime-git-client'
+  generateRuntimePullRequestFields
+} from '@/runtime/runtime-git-generation-client'
+import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/runtime-git-client-context'
+import type { PullRequestGenerationOutcome } from '../../create-pull-request-dialog-field-model'
+import { settlePullRequestGenerationRequest } from '../../pull-request-generation-request-outcome'
 import { useAppStore } from '@/store'
 import {
   createRunningPullRequestGenerationRecord,
@@ -18,6 +22,7 @@ import {
   type PullRequestGenerationContext,
   type PullRequestGenerationFields
 } from '@/store/slices/pull-request-generation'
+import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
 import type { HostedReviewProvider } from '../../../../../../shared/hosted-review'
 import type { SourceControlAi } from '../ai/use-ai'
 import { stripBaseRef } from '../../create-pull-request-base-ref-normalization'
@@ -26,12 +31,12 @@ import type { SourceControlWorktreeContext } from '../listing/use-worktree-conte
 import type { SourceControlStatusRefresh } from '../sync/use-status-refresh'
 
 /**
- * Runs AI generation of the PR title/body/base for the active branch through a store record, so a
+ * Runs AI generation of the PR details for the active branch through a store record, so a
  * run started before a tab switch is still resumable when the composer remounts.
  */
 export function useSourceControlPullRequestGeneration({
   activeRepo,
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
   allocatePullRequestGenerationRequestId,
   branchName,
@@ -44,7 +49,7 @@ export function useSourceControlPullRequestGeneration({
   worktreePath
 }: {
   activeRepo: SourceControlWorktreeContext['activeRepo']
-  activeRepoSettings: SourceControlWorktreeContext['activeRepoSettings']
+  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktreeId: string | null
   allocatePullRequestGenerationRequestId: SourceControlStoreActions['allocatePullRequestGenerationRequestId']
   branchName: string
@@ -80,97 +85,117 @@ export function useSourceControlPullRequestGeneration({
     async (
       fields: PullRequestGenerationFields,
       fieldRevisions: PullRequestFieldRevisions,
-      overrides?: RuntimeGeneratePullRequestFieldsOverrides
-    ): Promise<void> => {
-      if (!activeRepo || !activePullRequestGenerationKey || !worktreePath || !branchName) {
-        return
+      overrides?: RuntimeGeneratePullRequestFieldsOverrides,
+      options?: PullRequestGenerationOptions
+    ): Promise<PullRequestGenerationOutcome | undefined> => {
+      if (
+        !activeRepo ||
+        !activeRepoTarget ||
+        !activePullRequestGenerationKey ||
+        !worktreePath ||
+        !branchName
+      ) {
+        return undefined
       }
       const generationKey = activePullRequestGenerationKey
       if (
         useAppStore.getState().pullRequestGenerationRecords[generationKey]?.status === 'running'
       ) {
-        return
+        return undefined
       }
       const requestId = allocatePullRequestGenerationRequestId()
       const context: PullRequestGenerationContext = {
         worktreeId: activeWorktreeId,
         worktreePath,
         connectionId: getConnectionId(activeWorktreeId) ?? undefined,
+        jiraIssueKey:
+          (hostedReviewCreateProvider === 'github' || hostedReviewCreateProvider === 'gitlab') &&
+          activeWorktreeId
+            ? getWorkspaceJiraIssueKey(
+                useAppStore
+                  .getState()
+                  .getKnownWorktreeById(activeWorktreeId, getRepoExecutionHostId(activeRepo))
+              )
+            : null,
         requestId,
         repoId: activeRepo.id,
         branch: branchName,
-        runtimeTargetSettings: activeRepoSettings
+        runtimeTarget: activeRepoTarget
       }
       const seed = { ...fields }
       // Why: SourceControl can unmount on tab switches; the persisted record lets the PR composer resume on return.
       setPullRequestGenerationRecord(
         generationKey,
-        createRunningPullRequestGenerationRecord(context, seed, fieldRevisions)
+        createRunningPullRequestGenerationRecord(context, seed, fieldRevisions, options?.autoSubmit)
       )
 
-      try {
-        const result = await generateRuntimePullRequestFields(
-          {
-            // Why: route generation by the repo OWNER host, not the focused runtime.
-            settings: context.runtimeTargetSettings,
-            worktreeId: context.worktreeId,
-            worktreePath: context.worktreePath,
-            connectionId: context.connectionId
-          },
-          {
-            base: stripBaseRef(seed.base.trim()),
-            title: seed.title,
-            body: seed.body,
-            draft: seed.draft,
-            provider: hostedReviewCreateProvider,
-            useTemplate: resolvedPrCreationDefaults.useTemplate
-          },
-          overrides
-        )
-        if (result.branchChangedByPreparation) {
-          await refreshGitStatusAfterPullRequestGeneration(context)
-        }
-        if (result.success) {
-          useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
-        }
-        updatePullRequestGenerationRecord(generationKey, (record) => {
-          if (!result.success) {
-            return resolvePullRequestGenerationFailure({
+      const request = (async (): Promise<void> => {
+        try {
+          const result = await generateRuntimePullRequestFields(
+            {
+              // Why: route generation by the repo OWNER host, not the focused runtime.
+              target: context.runtimeTarget,
+              prefs: useAppStore.getState().settings,
+              worktreeId: context.worktreeId,
+              worktreePath: context.worktreePath,
+              connectionId: context.connectionId
+            },
+            {
+              base: stripBaseRef(seed.base.trim()),
+              title: seed.title,
+              body: seed.body,
+              draft: seed.draft,
+              provider: hostedReviewCreateProvider,
+              useTemplate: resolvedPrCreationDefaults.useTemplate
+            },
+            overrides
+          )
+          if (result.branchChangedByPreparation) {
+            await refreshGitStatusAfterPullRequestGeneration(context)
+          }
+          if (result.success) {
+            useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
+          }
+          updatePullRequestGenerationRecord(generationKey, (record) => {
+            if (!result.success) {
+              return resolvePullRequestGenerationFailure({
+                record,
+                requestId,
+                canceled: result.canceled,
+                error: result.canceled ? null : result.error
+              })
+            }
+            if (!record) {
+              return null
+            }
+            return resolvePullRequestGenerationSuccess({
               record,
               requestId,
-              canceled: result.canceled,
-              error: result.canceled ? null : result.error
+              result: {
+                base: stripBaseRef(result.fields.base),
+                title: result.fields.title,
+                body: result.fields.body,
+                draft: result.fields.draft
+              }
             })
-          }
-          if (!record) {
-            return null
-          }
-          return resolvePullRequestGenerationSuccess({
-            record,
-            requestId,
-            result: {
-              base: stripBaseRef(result.fields.base),
-              title: result.fields.title,
-              body: result.fields.body,
-              draft: result.fields.draft
-            }
           })
-        })
-      } catch (error) {
-        updatePullRequestGenerationRecord(generationKey, (record) =>
-          resolvePullRequestGenerationFailure({
-            record,
-            requestId,
-            error:
-              error instanceof Error ? error.message : 'Failed to generate pull request details'
-          })
-        )
-      }
+        } catch (error) {
+          updatePullRequestGenerationRecord(generationKey, (record) =>
+            resolvePullRequestGenerationFailure({
+              record,
+              requestId,
+              error:
+                error instanceof Error ? error.message : 'Failed to generate pull request details'
+            })
+          )
+        }
+      })()
+      return await settlePullRequestGenerationRequest(generationKey, requestId, request)
     },
     [
       activePullRequestGenerationKey,
       activeRepo,
-      activeRepoSettings,
+      activeRepoTarget,
       activeWorktreeId,
       allocatePullRequestGenerationRequestId,
       branchName,
@@ -200,7 +225,7 @@ export function useSourceControlPullRequestGeneration({
     })
     void cancelRuntimeGeneratePullRequestFields({
       // Why: the user can switch hosts while generation runs; cancel the original request owner, not the focused host.
-      settings: record.context.runtimeTargetSettings,
+      target: record.context.runtimeTarget,
       worktreeId: record.context.worktreeId,
       worktreePath: record.context.worktreePath,
       connectionId: record.context.connectionId

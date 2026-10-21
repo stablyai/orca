@@ -169,6 +169,47 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('drops a launch pane an older build saved: after a restart its pane is an ordinary pane', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'claude',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            launchAgent: 'claude',
+            agentLaunchPane: { leafId: 'leaf-1', outcome: { kind: 'not-started', code: 'boom' } }
+          },
+          {
+            id: 'tab2',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'claude',
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 1,
+            agentLaunchPane: { leafId: 'leaf-2', outcome: { kind: 'exploded' } }
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0]).not.toHaveProperty('agentLaunchPane')
+      expect(result.value.tabsByWorktree.wt[1]).not.toHaveProperty('agentLaunchPane')
+    }
+  })
+
   it('drops an unknown launchAgent without failing the whole session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -551,7 +592,7 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it('preserves a structured agent session tab and its active projection', () => {
+  it('preserves a structured agent session tab and drops the retired adoption key', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: 'wt',
@@ -567,11 +608,25 @@ describe('parseWorkspaceSession', () => {
             worktreeId: 'wt',
             contentType: 'agent-session',
             agentSessionAgent: 'codex',
-            structuredSessionId: 'codex-session-1',
             label: 'Codex Chat',
             customLabel: null,
             color: null,
             sortOrder: 0,
+            createdAt: 0
+          },
+          {
+            id: 'terminal-1',
+            entityId: 'terminal-1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'terminal',
+            viewMode: 'chat',
+            // Why: older builds could save this key on a chat-mode terminal; it must keep loading.
+            structuredSessionId: 'codex-session-1',
+            label: 'Terminal 1',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
             createdAt: 0
           }
         ]
@@ -583,10 +638,54 @@ describe('parseWorkspaceSession', () => {
     if (result.ok) {
       expect(result.value.unifiedTabs?.wt[0]).toMatchObject({
         contentType: 'agent-session',
-        agentSessionAgent: 'codex',
-        structuredSessionId: 'codex-session-1'
+        agentSessionAgent: 'codex'
       })
+      expect(result.value.unifiedTabs?.wt[1]).toMatchObject({
+        contentType: 'terminal',
+        viewMode: 'chat'
+      })
+      expect(result.value.unifiedTabs?.wt[1]).not.toHaveProperty('structuredSessionId')
       expect(result.value.activeTabTypeByWorktree?.wt).toBe('agent-session')
+    }
+  })
+
+  it('keeps a chat tab of any agent id, and drops only a malformed id', () => {
+    const chatTab = (id: string, agentSessionAgent: unknown) => ({
+      id,
+      entityId: id,
+      groupId: 'group1',
+      worktreeId: 'wt',
+      contentType: 'agent-session',
+      agentSessionAgent,
+      label: 'Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    })
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          chatTab('a', 'grok'),
+          chatTab('b', 'not an agent!'),
+          chatTab('c', 42),
+          chatTab('d', 'claude')
+        ]
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.unifiedTabs?.wt.map((tab) => [tab.id, tab.agentSessionAgent])).toEqual([
+        ['a', 'grok'],
+        ['b', undefined],
+        ['c', undefined],
+        ['d', 'claude']
+      ])
     }
   })
 

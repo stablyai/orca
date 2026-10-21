@@ -1,6 +1,13 @@
+import { removeWorktreeViaStore } from './helpers/dead-terminal'
+import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { getActiveWorktreeId, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import {
+  ensureTerminalVisible,
+  getActiveWorktreeId,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from './helpers/store'
 import { createTerminalTabFromMenu } from './helpers/terminal-tab-menu'
 import {
   execInTerminal,
@@ -12,18 +19,12 @@ import { splitMarkerEchoCommand } from './terminal-marker-echo-command'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 async function createWorkspace(page: Page, name: string): Promise<void> {
-  await page.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(page)
   const dialog = page.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   await expect(dialog).toBeVisible()
   await dialog.getByPlaceholder(/Type a name/i).fill(name)
   await dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i }).click()
   await expect(dialog).toBeHidden({ timeout: 20_000 })
-}
-
-async function removeCreatedWorktree(page: Page, worktreeId: string): Promise<void> {
-  await page.evaluate(async (id) => {
-    await window.__store?.getState().removeWorktree(id, true)
-  }, worktreeId)
 }
 
 test('creates a worktree, keeps its terminal isolated, and switches back @golden', async ({
@@ -61,6 +62,15 @@ test('creates a worktree, keeps its terminal isolated, and switches back @golden
     await expect(
       orcaPage.locator(`[role="option"][data-worktree-id="${originalWorktreeId}"]`)
     ).toHaveAttribute('aria-current', 'page', { timeout: 20_000 })
+    // Why: sidebar aria-current can land before the store/terminal remount.
+    // Mac release goldens then wait 30s on a child tab whose PaneManager is gone.
+    await expect
+      .poll(() => getActiveWorktreeId(orcaPage), {
+        timeout: 20_000,
+        message: 'store did not activate the original worktree after sidebar click'
+      })
+      .toBe(originalWorktreeId)
+    await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
     expect(await waitForActivePanePtyId(orcaPage, 30_000)).toBe(parentPtyId)
   } finally {
@@ -71,7 +81,7 @@ test('creates a worktree, keeps its terminal isolated, and switches back @golden
           .click()
           .catch(() => undefined)
       }
-      await removeCreatedWorktree(orcaPage, childWorktreeId).catch(() => undefined)
+      await removeWorktreeViaStore(orcaPage, childWorktreeId)
     }
   }
 })

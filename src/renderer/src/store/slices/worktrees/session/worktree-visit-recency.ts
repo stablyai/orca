@@ -1,3 +1,4 @@
+import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
@@ -29,7 +30,7 @@ export function createMarkWorktreeVisited(
           hostId: ownerHostId
         }) ?? 0
       if (!(now > prev)) {
-        return {}
+        return s
       }
       return {
         lastVisitedAtByWorktreeId: {
@@ -45,7 +46,7 @@ export function createPruneLastVisitedTimestamps(
   set: WorktreeSliceSet,
   _get: WorktreeSliceGet
 ): WorktreeSlice['pruneLastVisitedTimestamps'] {
-  return () => {
+  const prune = () => {
     set((s) => {
       // Why: prune per-repo, not globally — SSH repos aren't hydrated at startup, so a global prune would wipe SSH focus-recency.
       // Only drop for repos with a populated/authoritative list; a missing repoId means not-yet-hydrated (defer).
@@ -124,9 +125,10 @@ export function createPruneLastVisitedTimestamps(
           patch.activeWorkspaceExecutionHostId = null
         }
       }
-      return Object.keys(patch).length > 0 ? patch : {}
+      return Object.keys(patch).length > 0 ? patch : s
     })
   }
+  return () => runAsAutomaticDeselection(prune)
 }
 
 export function createSeedActiveWorktreeLastVisitedIfMissing(
@@ -137,12 +139,12 @@ export function createSeedActiveWorktreeLastVisitedIfMissing(
     set((s) => {
       const id = s.activeWorktreeId
       if (!id) {
-        return {}
+        return s
       }
       const hostId = s.activeWorkspaceExecutionHostId ?? s.getKnownWorktreeById(id)?.hostId
       const key = getWorktreeVisitKey(id, hostId)
       if (getWorktreeVisitTimestamp(s.lastVisitedAtByWorktreeId, { id, hostId }) != null) {
-        return {}
+        return s
       }
       return {
         lastVisitedAtByWorktreeId: {

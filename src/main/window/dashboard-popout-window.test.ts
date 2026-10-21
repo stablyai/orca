@@ -235,29 +235,23 @@ describe('createOrFocusDashboardPopout', () => {
     expect(win.show).toHaveBeenCalledTimes(1)
   })
 
-  it('loads the prod file entry with the requested view', () => {
-    createOrFocusDashboardPopout(makeStore() as never, 'kanban')
+  it('loads the prod file entry', () => {
+    createOrFocusDashboardPopout(makeStore() as never)
     const win = instances[0]
     expect(win.loadURL).not.toHaveBeenCalled()
     expect(win.loadFile).toHaveBeenCalledTimes(1)
     const [file, options] = win.loadFile.mock.calls[0]
     expect(String(file)).toMatch(/renderer[\\/]popout\.html$/)
-    expect(options).toEqual({ search: 'view=kanban' })
+    expect(options).toBeUndefined()
   })
 
-  it('opens on the current dashboard view by default', () => {
-    createOrFocusDashboardPopout(makeStore() as never)
-
-    expect(instances[0].loadFile.mock.calls[0][1]).toEqual({ search: 'view=board' })
-  })
-
-  it('loads the dev server URL with the requested view when in dev', () => {
+  it('loads the dev server URL when in dev', () => {
     isMock.dev = true
     vi.stubEnv('ELECTRON_RENDERER_URL', RENDERER_URL)
-    createOrFocusDashboardPopout(makeStore() as never, 'kanban')
+    createOrFocusDashboardPopout(makeStore() as never)
     const win = instances[0]
     expect(win.loadFile).not.toHaveBeenCalled()
-    expect(win.loadURL).toHaveBeenCalledWith(`${RENDERER_URL}/popout.html?view=kanban`)
+    expect(win.loadURL).toHaveBeenCalledWith(`${RENDERER_URL}/popout.html`)
   })
 
   it('focuses the existing window instead of creating a second one', () => {
@@ -267,16 +261,6 @@ describe('createOrFocusDashboardPopout', () => {
     expect(instances).toHaveLength(1)
     expect(second).toBe(first)
     expect(instances[0].focus).toHaveBeenCalledTimes(1)
-  })
-
-  it('switches an existing popout to an explicitly requested view', () => {
-    const store = makeStore()
-    createOrFocusDashboardPopout(store as never)
-    const win = instances[0]
-
-    createOrFocusDashboardPopout(store as never, 'map')
-
-    expect(win.webContents.send).toHaveBeenCalledWith('dashboard:viewRequested', 'map')
   })
 
   it('trusts only the live popout webContents', () => {
@@ -337,6 +321,33 @@ describe('createOrFocusDashboardPopout', () => {
 
       store.updateUI.mockClear()
       win.bounds = { x: 10, y: 10, width: 100, height: 100 } // below minimum
+      win.emit('resize')
+      vi.advanceTimersByTime(500)
+      expect(store.updateUI).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps saving bounds after a vetoed quit and freezes them only on an allowed quit', () => {
+    vi.useFakeTimers()
+    try {
+      const store = makeStore()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The window fixture reads getUI, updateUI, and onUIChanged supplied by this store.
+      createOrFocusDashboardPopout(store as never)
+      const win = instances[0]
+      const freeze = appOnMock.mock.calls.find(([event]) => event === 'before-quit')?.[1]
+      expect(freeze).toBeTypeOf('function')
+      freeze({ defaultPrevented: true })
+      win.bounds = { x: 10, y: 20, width: 1200, height: 900 }
+      win.emit('resize')
+      vi.advanceTimersByTime(500)
+      expect(store.updateUI).toHaveBeenCalledWith({
+        dashboardPopoutBounds: { x: 10, y: 20, width: 1200, height: 900 }
+      })
+
+      store.updateUI.mockClear()
+      freeze({ defaultPrevented: false })
       win.emit('resize')
       vi.advanceTimersByTime(500)
       expect(store.updateUI).not.toHaveBeenCalled()
@@ -446,12 +457,14 @@ describe('createOrFocusDashboardPopout', () => {
   })
 
   it('respects zoom keybinding overrides for keyboard and mouse-wheel paths', () => {
-    const win = createOrFocusDashboardPopout(makeStore() as never, undefined, {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: makeStore() is a partial store stub; this path only reads UI/getKeybindings, matching every other popout call here.
+    createOrFocusDashboardPopout(makeStore() as never, {
       getKeybindings: () => ({
         'zoom.in': ['Mod+Y'],
         'zoom.out': []
       })
-    }) as unknown as FakeWindow
+    })
+    const win = instances[0]
     const mod =
       process.platform === 'darwin'
         ? { meta: true, control: false }

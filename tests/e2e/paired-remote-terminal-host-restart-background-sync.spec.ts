@@ -16,6 +16,7 @@ import {
 } from './helpers/paired-electron-client'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { waitForTabParked } from './helpers/terminal-hidden-parking'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const PARK_DELAY_MS = 2_000
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-host-restart-background-'))
@@ -47,15 +48,11 @@ test.afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 function fixtureCommand(sinkPath: string): string {
   const command = [process.execPath, fixturePath, sinkPath]
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
-    : command.map(shellQuote).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 function seededRepoPathOrSkip(): string {
@@ -225,7 +222,7 @@ async function openClientTab(page: Page, worktreeId: string, webTabId: string): 
       state?.setActiveView('terminal')
       state?.setActiveWorktree(worktreeId)
       state?.setActiveTab(webTabId)
-      state?.setActiveTabType('terminal')
+      state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
     },
     { worktreeId, webTabId }
   )

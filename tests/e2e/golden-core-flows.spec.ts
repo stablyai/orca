@@ -1,4 +1,7 @@
-import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
+import {
+  openSidebarProjectDialog,
+  openSidebarWorkspaceComposer
+} from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -95,7 +98,7 @@ async function continueOnboarding(page: Page): Promise<void> {
 }
 
 async function selectCodexAgent(page: Page): Promise<void> {
-  const codexButton = page.getByRole('button', { name: /^Codex\s/ })
+  const codexButton = page.getByRole('button', { name: 'Codex', exact: true })
   const codexVisible = await codexButton
     .first()
     .waitFor({ state: 'visible', timeout: 1_000 })
@@ -231,7 +234,7 @@ async function addProjectFromSidebar(
 }
 
 async function createWorkspace(page: Page, workspaceName: string): Promise<void> {
-  await page.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(page)
   const dialog = page.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   await expect(dialog).toBeVisible()
   const nameInput = dialog.getByPlaceholder(/Type a name/i)
@@ -295,11 +298,15 @@ async function renderedTabIds(page: Page): Promise<string[]> {
 }
 
 async function expectTerminalSurface(page: Page): Promise<void> {
-  await expect
-    .poll(() => page.locator('[data-terminal-tab-id]').count(), { timeout: 30_000 })
-    .toBeGreaterThan(0)
-  const terminalSurface = page.locator('[data-terminal-tab-id]').first()
-  await expect(terminalSurface).toHaveAttribute('data-native-file-drop-target', 'terminal')
+  const terminalSurface = page
+    .locator('[data-terminal-tab-id][data-terminal-layout-leaf-ids]:visible')
+    .first()
+  await expect(terminalSurface).toBeVisible({ timeout: 30_000 })
+  await expect(terminalSurface).not.toHaveAttribute('data-os-file-drop-owner')
+  await expect(terminalSurface.locator('.pane[data-leaf-id]').first()).toHaveAttribute(
+    'data-os-file-drop-owner',
+    ''
+  )
 }
 
 async function waitForTerminalPaneManager(page: Page): Promise<void> {

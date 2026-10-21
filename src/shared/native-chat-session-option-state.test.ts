@@ -48,6 +48,25 @@ describe('applyNativeChatReportedSessionOptions', () => {
 })
 
 describe('matchNativeChatCatalogModelId', () => {
+  it('prefers the longest contained id and keeps catalog order for ties', () => {
+    const catalog = {
+      ...CLAUDE_SESSION_OPTION_CATALOG,
+      models: ['a', 'abc', 'xyz'].map((id) => ({ id, label: id, options: [] }))
+    }
+    expect(matchNativeChatCatalogModelId(catalog, 'provider-xyz-abc')).toBe('abc')
+    expect(catalog.models.map((model) => model.id)).toEqual(['a', 'abc', 'xyz'])
+  })
+
+  it('keeps the reported selector as-is for a catalog that seeds no models', () => {
+    // Why: OMP's hook reports `provider/id`, the exact form `/model` accepts back,
+    // and an empty seed has nothing that could outrank it.
+    const unseeded = { ...CLAUDE_SESSION_OPTION_CATALOG, models: [] }
+    expect(matchNativeChatCatalogModelId(unseeded, ' deepseek/deepseek-v4-pro ')).toBe(
+      'deepseek/deepseek-v4-pro'
+    )
+    expect(matchNativeChatCatalogModelId(unseeded, '   ')).toBeNull()
+  })
+
   it('matches exact ids, labels, and provider-id containment', () => {
     expect(matchNativeChatCatalogModelId(CLAUDE_SESSION_OPTION_CATALOG, 'sonnet')).toBe('sonnet')
     expect(matchNativeChatCatalogModelId(CLAUDE_SESSION_OPTION_CATALOG, 'Sonnet 5')).toBe('sonnet')

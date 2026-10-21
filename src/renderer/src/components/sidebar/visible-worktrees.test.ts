@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { computeVisibleWorktreeIds } from './visible-worktrees'
-import { getPairedDeviceIdsByEnvironment } from './workspace-creator-visibility'
+import { computeVisibleWorktreeIds } from './compute-visible-worktrees'
+import { getPairedDeviceIdsByEnvironment } from '../../../../shared/workspace-creator-visibility'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
@@ -389,18 +389,18 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([feature.id])
   })
 
-  it('keeps folder-mode main worktrees visible when default branch workspaces are hidden', () => {
-    const folder = makeWorktree('folder')
-    folder.isMainWorktree = true
-    folder.branch = ''
+  it('keeps an empty-branch git main visible when default branch workspaces are hidden', () => {
+    const detached = makeWorktree('detached')
+    detached.isMainWorktree = true
+    detached.branch = ''
 
     const result = computeVisibleWorktreeIds(
-      { repo1: [folder] },
-      [folder.id],
+      { repo1: [detached] },
+      [detached.id],
       visibleOptions({ hideDefaultBranchWorkspace: true })
     )
 
-    expect(result).toEqual([folder.id])
+    expect(result).toEqual([detached.id])
   })
 
   it('filters worktrees to a selected SSH host scope', () => {
@@ -889,7 +889,7 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([child.id])
   })
 
-  it('does not include a known cross-project parent hidden by another filter', () => {
+  it('keeps a cross-project ancestor visible through the default-branch filter', () => {
     const parent = Object.assign(makeWorktree('parent'), {
       projectId: 'project-b',
       isMainWorktree: true
@@ -906,6 +906,6 @@ describe('computeVisibleWorktreeIds', () => {
       })
     )
 
-    expect(result).toEqual([child.id])
+    expect(result).toEqual([parent.id, child.id])
   })
 })

@@ -1,6 +1,7 @@
 import type { TaskPageGitHubLandingRefreshModel } from './use-task-page-github-landing-refresh'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useRef } from 'react'
+import type { QuietRevalidateRunOwner } from '@/components/task-page-github-work-item-quiet-state'
 import { advanceTaskPageQuietRevalidateScope } from '@/components/task-page-github-work-item-mutations'
 import { useTaskPageGitHubQuietRefreshEffect } from './use-task-page-github-quiet-refresh-effect'
 export type TaskPageGitHubQuietRefreshPreludeModel = ReturnType<
@@ -12,7 +13,7 @@ export function useTaskPageGitHubQuietRefreshPrelude(model: TaskPageGitHubLandin
   // shared quietState (inFlight/trailingQueued), so a nonce-triggered re-render
   // must NOT cancel the in-flight run's trailing bookkeeping.
   const quietRevalidateMountedRef = useMountedRef()
-  const quietRevalidateOwnerRef = useRef<object>({})
+  const quietRevalidateOwnerRef = useRef<QuietRevalidateRunOwner>({})
   const quietRevalidateScopeRef = useRef({
     queryKey: githubWorkItemMutationQueryKey,
     generation: 0

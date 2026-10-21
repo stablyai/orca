@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
 type TestRenderer = {
@@ -57,6 +58,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
 
   afterEach(() => {
     act(() => renderer?.unmount())
+    resetMobileNativeChatDraftStoreForTests()
     renderer = null
     state = null
   })
@@ -156,6 +158,42 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     await update([...history])
     expect(pendingTexts()).toEqual(['fix the', 'bug'])
     expect(renderedPendingTexts(history, state)).toEqual(['fix the', 'bug'])
+  })
+
+  // A send of the same text as a message a Stop took back is resent as a new message: its bubble
+  // waits beside the stopped row for that new row, never for the stopped one.
+  it('keeps a resend bubble beside a stopped row of the same text until its own row lands', async () => {
+    const history = [userTurn('m1', 'run the tests', 1000), assistantTurn('m2', 'stopped', 1100)]
+    await mount(history)
+    act(() => send('run the tests'))
+
+    await update([...history])
+    expect(pendingTexts()).toEqual(['run the tests'])
+
+    const resent = [...history, userTurn('m3', 'run the tests', 5000)]
+    await update(resent)
+    expect(state?.pending).toEqual([])
+    expect(renderedPendingTexts(resent, state)).toEqual([])
+  })
+
+  // The likelier order: the press goes out before this phone has drawn the stopped row.
+  it('shows the text once at every step when the stopped row lands after the resend press', async () => {
+    const history = [assistantTurn('m0', 'ready', 500)]
+    await mount(history)
+    act(() => send('run the tests'))
+    expect(renderedPendingTexts(history, state)).toEqual(['run the tests'])
+
+    // The stopped row takes the bubble's place; nothing is left pending beside it.
+    const stopped = [...history, userTurn('m1', 'run the tests', 1000)]
+    await update(stopped)
+    expect(state?.pending).toEqual([])
+    expect(renderedPendingTexts(stopped, state)).toEqual([])
+
+    // The resend's own row then lands beside it, and still nothing is pending.
+    const resent = [...stopped, userTurn('m2', 'run the tests', 5000)]
+    await update(resent)
+    expect(state?.pending).toEqual([])
+    expect(renderedPendingTexts(resent, state)).toEqual([])
   })
 
   it('still retires each bubble on its own when the sends do not glue', async () => {

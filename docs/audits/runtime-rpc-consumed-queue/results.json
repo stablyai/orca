@@ -1,0 +1,152 @@
+{
+  "node": "v26.6.0",
+  "electron": null,
+  "versions": {
+    "sourcePath": "src/shared/runtime-rpc-call-queue.ts",
+    "baselineSha256": "45921658a10ffeefe0247673227aab643d1b5251d24aa460244fadd5480fc349",
+    "fixedSha256": "6afe6eb8acd9025d227960fafef77ae205a455c7f680b15ad0db5cdfee18c71d",
+    "matchingBaselineRefs": {
+      "origin/main": "77cd61df396f25ec91ee2d5ddcbd1f55aa94f818",
+      "v1.4.198": "e0826956fcfc532f5a1e55b5e081f2e57e553c43"
+    }
+  },
+  "proofSha256": "79e415e5f7de6516b4e4bd8fc8ab0c6d0ac139efe996b8c39ef4cf7b8659bacb",
+  "reports": [
+    {
+      "candidate": false,
+      "kind": "input",
+      "lane": "foreground",
+      "completed": 8,
+      "releaseByIdle": false,
+      "historyLength": 9,
+      "head": 9,
+      "retainedBeforeCompaction": 8,
+      "retainedAfterCompaction": 0,
+      "activeCreditBytesAfterCompleted": 0,
+      "finalQueues": 0,
+      "memoryDelta": {
+        "external": 8378970,
+        "heapUsed": -555304
+      }
+    },
+    {
+      "candidate": false,
+      "kind": "input",
+      "lane": "background",
+      "completed": 8,
+      "releaseByIdle": false,
+      "historyLength": 8,
+      "head": 8,
+      "retainedBeforeCompaction": 8,
+      "retainedAfterCompaction": 0,
+      "activeCreditBytesAfterCompleted": 0,
+      "finalQueues": 0,
+      "memoryDelta": {
+        "external": 8388608,
+        "heapUsed": 6648
+      }
+    },
+    {
+      "candidate": false,
+      "kind": "input",
+      "lane": "foreground",
+      "completed": 8,
+      "releaseByIdle": true,
+      "historyLength": 9,
+      "head": 9,
+      "retainedBeforeCompaction": 8,
+      "retainedAfterCompaction": 0,
+      "activeCreditBytesAfterCompleted": 0,
+      "finalQueues": 0,
+      "memoryDelta": {
+        "external": 8388608,
+        "heapUsed": 192
+      }
+    },
+    {
+      "candidate": false,
+      "kind": "result",
+      "lane": "foreground",
+      "completed": 8,
+      "releaseByIdle": false,
+      "historyLength": 9,
+      "head": 9,
+      "retainedBeforeCompaction": 0,
+      "retainedAfterCompaction": 0,
+      "activeCreditBytesAfterCompleted": 0,
+      "finalQueues": 0,
+      "memoryDelta": {
+        "external": 0,
+        "heapUsed": 7744
+      }
+    },
+    {
+      "candidate": true,
+      "kind": "input",
+      "lane": "foreground",
+      "completed": 8,
+      "releaseByIdle": false,
+      "historyLength": 9,
+      "head": 9,
+      "retainedBeforeCompaction": 0,
+      "retainedAfterCompaction": 0,
+      "activeCreditBytesAfterCompleted": 0,
+      "finalQueues": 0,
+      "memoryDelta": {
+        "external": -9748,
+        "heapUsed": -9552
+      }
+    },
+    {
+      "candidate": true,
+      "kind": "input",
+      "lane": "background",
+      "completed": 8,
+      "releaseByIdle": false,
+      "historyLength": 8,
+      "head": 8,
+      "retainedBeforeCompaction": 0,
+      "retainedAfterCompaction": 0,
+      "activeCreditBytesAfterCompleted": 0,
+      "finalQueues": 0,
+      "memoryDelta": {
+        "external": 0,
+        "heapUsed": -3808
+      }
+    },
+    {
+      "candidate": true,
+      "kind": "input",
+      "lane": "foreground",
+      "completed": 8,
+      "releaseByIdle": true,
+      "historyLength": 9,
+      "head": 9,
+      "retainedBeforeCompaction": 0,
+      "retainedAfterCompaction": 0,
+      "activeCreditBytesAfterCompleted": 0,
+      "finalQueues": 0,
+      "memoryDelta": {
+        "external": 0,
+        "heapUsed": -4616
+      }
+    },
+    {
+      "candidate": true,
+      "kind": "result",
+      "lane": "foreground",
+      "completed": 8,
+      "releaseByIdle": false,
+      "historyLength": 9,
+      "head": 9,
+      "retainedBeforeCompaction": 0,
+      "retainedAfterCompaction": 0,
+      "activeCreditBytesAfterCompleted": 0,
+      "finalQueues": 0,
+      "memoryDelta": {
+        "external": 0,
+        "heapUsed": 2608
+      }
+    }
+  ]
+}

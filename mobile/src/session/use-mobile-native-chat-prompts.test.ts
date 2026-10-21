@@ -39,6 +39,39 @@ function permissionFor(status: Partial<AgentStatusEntry> | null): unknown {
 }
 
 describe('useMobileNativeChatPrompts approval-envelope state gate', () => {
+  it.each(['opencode', 'opencode2'])(
+    'keeps the %s approval event authoritative over numbered assistant prose',
+    (agentType) => {
+      expect(
+        permissionFor({
+          state: 'waiting',
+          agentType,
+          interactivePrompt: APPROVAL,
+          lastAssistantMessage: 'Allow this Bash command?\n1. Yes\n2. No'
+        })
+      ).toMatchObject({
+        title: 'Allow Bash?',
+        options: [
+          { label: 'Allow', send: '\r' },
+          { label: 'Deny', send: '\x1b' }
+        ]
+      })
+    }
+  )
+
+  it.each(['opencode', 'opencode2'])(
+    'does not mistake %s question text for an approval',
+    (agentType) => {
+      const prompts = promptsFor({
+        state: 'waiting',
+        agentType,
+        interactivePrompt: ASK,
+        lastAssistantMessage: 'Allow this Bash command?\n1. Yes\n2. No'
+      })
+      expect(prompts.permission).toBeNull()
+      expect(prompts.ask?.questions[0]?.question).toBe('Which path?')
+    }
+  )
   it('renders no approval card while the agent is working', () => {
     expect(permissionFor({ state: 'working', interactivePrompt: APPROVAL })).toBeNull()
   })

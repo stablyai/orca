@@ -7,20 +7,21 @@ import { registerOsMarkdownFileOpenBridge } from './os-markdown-file-open-bridge
 
 const mocks = vi.hoisted(() => ({
   openFile: vi.fn<EditorFilesSlice['openFile']>(() => 'file-1'),
-  updateSettings: vi.fn(async () => {}),
-  isFloatingWorkspacePanelVisible: vi.fn(() => false),
-  toastError: vi.fn()
+  updateSettings: vi.fn(async (_updates: { floatingTerminalEnabled?: boolean }) => {}),
+  toastError: vi.fn(),
+  subscribe: vi.fn<(listener: (state: { workspaceSessionReady: boolean }) => void) => () => void>()
 }))
 
 let storeState: {
   openFile: typeof mocks.openFile
   updateSettings: typeof mocks.updateSettings
   settings: { floatingTerminalEnabled?: boolean } | undefined
+  floatingWorkspacePanelOpen: boolean
+  workspaceSessionReady: boolean
 }
 
-vi.mock('../../store', () => ({ useAppStore: { getState: () => storeState } }))
-vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
-  isFloatingWorkspacePanelVisible: mocks.isFloatingWorkspacePanelVisible
+vi.mock('../../store', () => ({
+  useAppStore: { getState: () => storeState, subscribe: mocks.subscribe }
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -70,16 +71,43 @@ describe('registerOsMarkdownFileOpenBridge', () => {
     storeState = {
       openFile: mocks.openFile,
       updateSettings: mocks.updateSettings,
-      settings: { floatingTerminalEnabled: true }
+      settings: { floatingTerminalEnabled: true },
+      floatingWorkspacePanelOpen: false,
+      workspaceSessionReady: true
     }
     mocks.openFile.mockReturnValue('file-1')
-    mocks.updateSettings.mockResolvedValue(undefined)
-    mocks.isFloatingWorkspacePanelVisible.mockReturnValue(false)
+    mocks.updateSettings.mockImplementation(
+      async (updates: { floatingTerminalEnabled?: boolean }) => {
+        storeState.settings = { ...storeState.settings, ...updates }
+      }
+    )
+    mocks.subscribe.mockReset().mockReturnValue(() => {})
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
       frames.push(callback)
     )
     vi.spyOn(console, 'error').mockImplementation(() => {})
     process.on('unhandledRejection', recordUnhandledRejection)
+  })
+
+  it('leaves documents in main until startup restoration has finished', async () => {
+    storeState.workspaceSessionReady = false
+    const unsubscribe = vi.fn()
+    mocks.subscribe.mockReturnValue(unsubscribe)
+    const consume = vi.fn(async () => [markdownDocument({ relativePath: 'export.csv' })])
+    stubPreload({ onOpenMarkdownFiles: () => () => {}, consumePendingMarkdownFileOpens: consume })
+    const unsubs: (() => void)[] = []
+    registerOsMarkdownFileOpenBridge(unsubs)
+    await settle()
+    expect(consume).not.toHaveBeenCalled()
+    expect(mocks.openFile).not.toHaveBeenCalled()
+    expect(unsubs).toEqual([unsubscribe])
+
+    storeState.workspaceSessionReady = true
+    mocks.subscribe.mock.calls[0][0](storeState)
+    await settle()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(consume).toHaveBeenCalledOnce()
+    expect(mocks.openFile.mock.calls[0][0].language).toBe('csv')
   })
 
   afterEach(() => {
@@ -94,7 +122,7 @@ describe('registerOsMarkdownFileOpenBridge', () => {
       consumePendingMarkdownFileOpens: () =>
         Promise.resolve([
           markdownDocument(),
-          markdownDocument({ filePath: '/Users/me/notes/plan.md', relativePath: 'plan.md' })
+          markdownDocument({ filePath: '/Users/me/notes/plan.csv', relativePath: 'plan.csv' })
         ])
     })
 
@@ -104,7 +132,7 @@ describe('registerOsMarkdownFileOpenBridge', () => {
     expect(mocks.openFile).toHaveBeenCalledTimes(2)
     expect(mocks.openFile.mock.calls.map((call) => call[0].filePath)).toEqual([
       '/Users/me/notes/README.md',
-      '/Users/me/notes/plan.md'
+      '/Users/me/notes/plan.csv'
     ])
     expect(mocks.openFile.mock.calls[0][0].worktreeId).toBe(FLOATING_TERMINAL_WORKTREE_ID)
   })
@@ -125,12 +153,12 @@ describe('registerOsMarkdownFileOpenBridge', () => {
     expect(unsubs).toEqual([unsubscribe])
 
     listeners[0]([
-      markdownDocument({ filePath: '/Users/me/notes/live.md', relativePath: 'live.md' })
+      markdownDocument({ filePath: '/Users/me/notes/live.tsv', relativePath: 'live.tsv' })
     ])
     await settle()
 
     expect(mocks.openFile).toHaveBeenCalledTimes(1)
-    expect(mocks.openFile.mock.calls[0][0].filePath).toBe('/Users/me/notes/live.md')
+    expect(mocks.openFile.mock.calls[0][0].filePath).toBe('/Users/me/notes/live.tsv')
 
     unsubs.forEach((teardown) => teardown())
     expect(unsubscribe).toHaveBeenCalledOnce()
@@ -147,6 +175,8 @@ describe('registerOsMarkdownFileOpenBridge', () => {
     await settle()
 
     expect(mocks.updateSettings).toHaveBeenCalledWith({ floatingTerminalEnabled: true })
+    runFrames()
+    expect(dispatchEvent).toHaveBeenCalledTimes(1)
   })
 
   it('leaves settings alone when the floating workspace is already enabled', async () => {
@@ -178,7 +208,7 @@ describe('registerOsMarkdownFileOpenBridge', () => {
   })
 
   it('does not toggle when the panel is already visible', async () => {
-    mocks.isFloatingWorkspacePanelVisible.mockReturnValue(true)
+    storeState.floatingWorkspacePanelOpen = true
     stubPreload({
       onOpenMarkdownFiles: () => () => {},
       consumePendingMarkdownFileOpens: () => Promise.resolve([markdownDocument()])
@@ -216,7 +246,7 @@ describe('registerOsMarkdownFileOpenBridge', () => {
     registerOsMarkdownFileOpenBridge([])
     await settle()
 
-    expect(mocks.toastError).toHaveBeenCalledWith('Failed to open the Markdown file.')
+    expect(mocks.toastError).toHaveBeenCalledWith('Failed to open the file.')
     // Why: App.tsx awaits hydration around this registration and treats any throw as
     // "session restore failed", so the bridge must swallow its own failures.
     expect(unhandledRejections).toEqual([])
@@ -239,7 +269,7 @@ describe('registerOsMarkdownFileOpenBridge', () => {
     expect(() => listeners[0]([markdownDocument()])).not.toThrow()
     await settle()
 
-    expect(mocks.toastError).toHaveBeenCalledWith('Failed to open the Markdown file.')
+    expect(mocks.toastError).toHaveBeenCalledWith('Failed to open the file.')
     expect(unhandledRejections).toEqual([])
     expect(dispatchEvent).not.toHaveBeenCalled()
   })

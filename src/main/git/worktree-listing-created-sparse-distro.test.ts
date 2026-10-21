@@ -102,4 +102,27 @@ describe('describeCreatedWorktree on a drvfs-spelled WSL worktree', () => {
       platformSpy.mockRestore()
     }
   })
+
+  it('uses the repo disk witness in the WSL execution namespace', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    readRepoCommonDirFromGitMock.mockResolvedValue('/other/.git')
+    statMock.mockImplementation(async (target: string) => {
+      const value = slashed(target)
+      if (value === `${slashed(REPO)}/.git`) {
+        return { isDirectory: () => true }
+      }
+      if (value === `${HOST_GIT_DIR}/info/sparse-checkout`) {
+        return { isFile: () => true, size: 12 }
+      }
+      throw missing()
+    })
+
+    try {
+      await expect(
+        describeCreatedWorktree(REPO, 'C:\\wt\\x', 'feature', { wslDistro: 'Ubuntu' })
+      ).resolves.toMatchObject({ branch: 'refs/heads/feature' })
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
 })

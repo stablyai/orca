@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  hostNodeApiVersion,
   compareDottedVersions,
   detectLibcFromReportHeader,
   detectNativeHostAbi,
@@ -139,5 +140,12 @@ describe('detectNativeHostAbi', () => {
     expect(abi.arch).toBe(process.arch)
     expect(abi.nodeAbi).toBe(process.versions.modules)
     expect(abi.libc).toBe(process.platform === 'linux' ? abi.libc : 'none')
+  })
+})
+
+describe('hostNodeApiVersion', () => {
+  it('reads the N-API level and returns null when the runtime reports none', () => {
+    expect(hostNodeApiVersion({ ...process.versions, napi: '8' })).toBe(8)
+    expect(hostNodeApiVersion({ ...process.versions, napi: '' })).toBeNull()
   })
 })

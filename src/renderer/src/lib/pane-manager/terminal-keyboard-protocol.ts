@@ -21,9 +21,7 @@ export type TerminalKeyboardProtocolContext = WindowsPtyCompatibilityContext & {
  * targets CSI-u-blind CLIs (e.g. Antigravity); Grok is not in that set and
  * relies on KKP for interject vs newline (official Grok Build keyboard docs).
  */
-export function prefersKittyKeyboardDespiteWindowsConpty(
-  agent: TuiAgent | null | undefined
-): boolean {
+function prefersKittyKeyboardDespiteWindowsConpty(agent: TuiAgent | null | undefined): boolean {
   return agent === 'grok'
 }
 

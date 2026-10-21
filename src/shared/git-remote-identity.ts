@@ -95,10 +95,8 @@ export function parseGitRemoteVerboseOutput(stdout: string): GitRemoteEntry[] {
   const entries: GitRemoteEntry[] = []
   for (const rawLine of stdout.split(/\r?\n/)) {
     const line = rawLine.trim()
-    if (!line.endsWith('(fetch)')) {
-      continue
-    }
-    const match = /^(\S+)\s+(.+?)\s+\(fetch\)$/.exec(line)
+    // Partial clones append their object filter after the fetch marker.
+    const match = /^(\S+)\s+(.+?)\s+\(fetch\)(?:\s+\[[^\]\r\n]*\])?$/.exec(line)
     if (!match) {
       continue
     }

@@ -1,16 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type {
-  DiscoveredSkill,
-  SkillDiscoveryResult,
-  SkillDiscoverySource
-} from '../../../shared/skills'
+import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../shared/skills'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   _installedAgentSkillDiscoveryInternalsForTests,
   hasInstalledAgentSkill,
   hasInstalledAgentSkillNamed,
-  hasUnreadableAgentSkillSource,
   notifyInstalledAgentSkillsRefreshed
 } from './useInstalledAgentSkills'
 
@@ -162,44 +157,6 @@ describe('hasInstalledAgentSkill', () => {
   })
 })
 
-describe('hasUnreadableAgentSkillSource', () => {
-  function source(overrides: Partial<SkillDiscoverySource>): SkillDiscoverySource {
-    return {
-      id: 'home',
-      label: 'Agent skills home',
-      path: '/Users/test/.agents/skills',
-      sourceKind: 'home',
-      providers: ['agent-skills'],
-      owner: null,
-      // An unread root reports `exists`: the host could not prove otherwise.
-      exists: true,
-      ...overrides
-    }
-  }
-
-  it('flags a root that did not answer even though it reports as present', () => {
-    expect(hasUnreadableAgentSkillSource([source({ skippedReason: 'unavailable' })])).toBe(true)
-  })
-
-  it('ignores roots that were scanned or are genuinely absent', () => {
-    expect(
-      hasUnreadableAgentSkillSource([
-        source({}),
-        source({ id: 'gone', exists: false, skippedReason: 'missing' })
-      ])
-    ).toBe(false)
-  })
-
-  it('ignores an unread root outside the scopes the caller asked about', () => {
-    expect(
-      hasUnreadableAgentSkillSource(
-        [source({ id: 'repo', sourceKind: 'repo', skippedReason: 'unavailable' })],
-        GLOBAL_AGENT_SKILL_SOURCE_KINDS
-      )
-    ).toBe(false)
-  })
-})
-
 describe('isOrchestrationSkillName', () => {
   it('matches only the orchestration skill name', () => {
     expect(
@@ -322,6 +279,44 @@ describe('discoverInstalledAgentSkills', () => {
     expect(discover).toHaveBeenCalledTimes(2)
     expect(discover).toHaveBeenNthCalledWith(1, undefined)
     expect(discover).toHaveBeenNthCalledWith(2, { runtime: 'wsl', wslDistro: null })
+  })
+
+  it('forwards filters and isolates filtered discovery caches', async () => {
+    const orchestrationResult = discoveryResult([skill({ name: 'orchestration' })])
+    const computerUseResult = discoveryResult([skill({ name: 'computer-use' })])
+    const discover = vi
+      .fn()
+      .mockResolvedValueOnce(orchestrationResult)
+      .mockResolvedValueOnce(computerUseResult)
+    vi.stubGlobal('window', { api: { skills: { discover } } })
+
+    await _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(
+      false,
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      undefined,
+      ['orchestration'],
+      GLOBAL_AGENT_SKILL_SOURCE_KINDS
+    )
+    await _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(
+      false,
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      undefined,
+      ['computer-use'],
+      GLOBAL_AGENT_SKILL_SOURCE_KINDS
+    )
+
+    expect(discover).toHaveBeenNthCalledWith(1, {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      names: ['orchestration'],
+      sourceKinds: ['home']
+    })
+    expect(discover).toHaveBeenNthCalledWith(2, {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      names: ['computer-use'],
+      sourceKinds: ['home']
+    })
   })
 
   it('forwards project runtime targets to skill discovery', async () => {

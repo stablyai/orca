@@ -1,3 +1,4 @@
+import { rebrandPiStateTitle } from './pi-state-title-marker'
 import { detectAgentStatusFromTitle, getAgentLabel } from './agent-detection'
 import type { AgentStatusEntry, AgentType } from './agent-status-types'
 import {
@@ -156,6 +157,10 @@ export function normalizeCompatibleAgentTitleForOwner(
     source.profile.titleIdentityGroup !== ownerProfile.titleIdentityGroup
   ) {
     return title
+  }
+  const stateTitle = rebrandPiStateTitle(title, ownerProfile.workingLabel)
+  if (stateTitle !== null) {
+    return stateTitle
   }
   // Why: a π-branded title is the agent's own semantic session title (`π > <session> - <cwd>`;
   // Orca's injected extension writes the same shape). Swap only the BRAND for the owner's label

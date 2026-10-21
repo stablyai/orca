@@ -64,3 +64,13 @@ describe('FileExplorerNameFilter', () => {
     expect(onClear).toHaveBeenCalledTimes(1)
   })
 })
+
+it('names the visible folder in the filter prompt', () => {
+  const element = FileExplorerNameFilter({
+    query: '',
+    scopeLabel: 'apps/web',
+    onQueryChange: vi.fn(),
+    onClear: vi.fn()
+  })
+  expect(findInputByAriaLabel(element, 'Find files').props.placeholder).toBe('Find in apps/web')
+})

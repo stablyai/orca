@@ -118,7 +118,7 @@ describe('useBufferedTerminalDrafts', () => {
       renderer = create(createElement(Probe, { activeHandle: 'terminal-old' }))
     })
     act(() => hook().setInput('rejected command'))
-    let send: ReturnType<BufferedDraftHook['beginBufferedTerminalDraftSend']>
+    let send!: ReturnType<BufferedDraftHook['beginBufferedTerminalDraftSend']>
     act(() => {
       send = hook().beginBufferedTerminalDraftSend('terminal-old', hook().input)
       hook().reconcileTerminalTabs(

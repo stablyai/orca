@@ -1,5 +1,4 @@
 import { setCachedWorktrees } from '../cache/worktree-cache'
-import { sendSingleFlightRequest } from '../transport/request-single-flight'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import {
@@ -8,6 +7,7 @@ import {
   type HostWorktreeInfo
 } from './home-worktree-info'
 import { pickResumeWorktree } from './resume-worktree'
+import { worktreeCatalogRead } from './worktree-catalog-operations'
 import { WORKTREE_PS_FULL_LIMIT } from './worktree-catalog-snapshot-client'
 
 const ACTIVE_STATUSES = new Set(['working', 'active', 'permission'])
@@ -36,17 +36,19 @@ export function fetchHomeHostWorktreeInfo(
   }
 
   const attempt = (cutoverRetriesLeft: number): Promise<void> =>
-    sendSingleFlightRequest(client, hostId, 'worktree.ps', { limit: WORKTREE_PS_FULL_LIMIT })
-      .then((response) => {
+    worktreeCatalogRead
+      .requestSingleFlight(client, hostId, { limit: WORKTREE_PS_FULL_LIMIT })
+      .then((reply) => {
         if (disposed()) {
           return
         }
-        if (!response.ok) {
+        const catalog = worktreeCatalogRead.interpret(reply)
+        if (!catalog.accepted) {
           markUnavailable()
           return
         }
-        const result = response.result as { worktrees?: HomeWorktreeSummary[] }
-        const worktrees = result.worktrees ?? []
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `worktrees` is a salvaged member, so the `?? []` is what makes it an array; the rows stay opaque because three screens project a row differently. This card reads `status` and the resume pick, both through their own guards, and the `worktree-home-catalog` golden records the row it is given as `{worktreeId, displayName, repo, status}`.
+        const worktrees = (catalog.value.worktrees ?? []) as HomeWorktreeSummary[]
         setCachedWorktrees(hostId, worktrees, { proven: true })
         const active = worktrees.filter((w) => w.status && ACTIVE_STATUSES.has(w.status))
         // Mirror the desktop's focused workspace (see pickResumeWorktree).

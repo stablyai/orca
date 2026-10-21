@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -436,21 +437,11 @@ describe('DaemonServer', () => {
       expect(['healthy', 'unhealthy', 'unknown']).toContain(result.health)
     })
 
-    it('handles write (fire-and-forget)', async () => {
+    it('probes Full Disk Access in the owning daemon', async () => {
       await startServer()
       const c = await connectClient()
-
-      await c.request('createOrAttach', {
-        sessionId: 'test-session',
-        cols: 80,
-        rows: 24
-      })
-
-      // Should not throw
-      c.notify('write', { sessionId: 'test-session', data: 'ls\n' })
-
-      // Give the server time to process
-      await new Promise((r) => setTimeout(r, 50))
+      const result = await c.request<{ status: unknown }>('fullDiskAccessStatus', undefined)
+      expect(['granted', 'denied', 'unknown', 'unsupported']).toContain(result.status)
     })
 
     it('handles resize', async () => {

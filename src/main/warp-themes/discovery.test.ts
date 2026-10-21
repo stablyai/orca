@@ -43,6 +43,78 @@ describe('getWarpThemeDirectories', () => {
     readdirSyncMock.mockReturnValue([])
   })
 
+  it('sorts dynamic directories with one collator and preserves locale ties', () => {
+    platformMock.mockReturnValue('darwin')
+    const names = ['éclair', 'Eclair', 'item2', 'item10', 'Ångström', 'zebra', 'İstanbul'].map(
+      (name) => `.warp-${name}`
+    )
+    readdirSyncMock.mockReturnValue(names.map(directoryEntry))
+    const expected = [...names].sort((a, b) =>
+      // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
+      a.localeCompare(b, undefined, { sensitivity: 'base' })
+    )
+    const NativeCollator = Intl.Collator
+    const construct = vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
+      return new NativeCollator(locales, options)
+    })
+    const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+    try {
+      expect(getWarpThemeDirectories().slice(6)).toEqual(
+        expected.map((name) => `/Users/alice/${name}/themes`)
+      )
+      expect(construct).toHaveBeenCalledExactlyOnceWith(undefined, { sensitivity: 'base' })
+      expect(localeCompare).not.toHaveBeenCalled()
+    } finally {
+      construct.mockRestore()
+      localeCompare.mockRestore()
+    }
+  })
+
+  it('collates only the Warp entries in a crowded home directory', () => {
+    platformMock.mockReturnValue('darwin')
+    const noise = Array.from({ length: 500 }, (_, index) => directoryEntry(`project-${index}`))
+    const warpNames = ['.warp-zebra', '.warp-Ångström', '.warp-éclair']
+    readdirSyncMock.mockReturnValue([...noise, ...warpNames.map(directoryEntry)])
+    const expected = [...warpNames].sort((a, b) =>
+      // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
+      a.localeCompare(b, undefined, { sensitivity: 'base' })
+    )
+    const NativeCollator = Intl.Collator
+    const compares: string[][] = []
+    vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
+      const collator = new NativeCollator(locales, options)
+      return {
+        ...collator,
+        compare: (left: string, right: string) => {
+          compares.push([left, right])
+          return collator.compare(left, right)
+        }
+      }
+    })
+    try {
+      expect(getWarpThemeDirectories().slice(6)).toEqual(
+        expected.map((name) => `/Users/alice/${name}/themes`)
+      )
+      // Filtering first keeps the crowd out of ICU: only Warp names are collated.
+      expect(compares.flat().every((name) => name.startsWith('.warp'))).toBe(true)
+      expect(compares.length).toBeLessThan(10)
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
+
+  it('skips a directory scan that finds no dynamic Warp entries', () => {
+    platformMock.mockReturnValue('darwin')
+    readdirSyncMock.mockReturnValue([directoryEntry('Documents'), fileEntry('.warprc')])
+    const construct = vi.spyOn(Intl, 'Collator')
+    try {
+      expect(getWarpThemeDirectories()).toHaveLength(6)
+      expect(construct).not.toHaveBeenCalled()
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
+
   it('returns macOS Warp channel theme directories in stable-first order', () => {
     platformMock.mockReturnValue('darwin')
     expect(getWarpThemeDirectories()).toEqual([

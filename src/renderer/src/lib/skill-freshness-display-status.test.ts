@@ -37,18 +37,14 @@ function placement(status: SkillFreshnessStatus, index = 0): SkillFreshnessInsta
     physicalIdentity: `physical-${index}`,
     topology: 'canonical-copy',
     status,
-    installedReleaseRevision: 1,
-    installedAppVersion: '1.0.0',
-    currentReleaseRevision: 2,
     currentPackageDigest: 'current',
-    currentAppVersion: '2.0.0',
-    observedPackageDigest: status === 'current' ? 'current' : 'other',
+    lockSource: 'stablyai/orca',
     errorCategory: null
   }
 }
 
 function pluginCachePlacement(
-  status: SkillFreshnessStatus = 'unrecognized'
+  status: SkillFreshnessStatus = 'outdated'
 ): SkillFreshnessInstallation {
   return {
     ...placement(status, 9),
@@ -57,7 +53,7 @@ function pluginCachePlacement(
   }
 }
 
-function repoPlacement(status: SkillFreshnessStatus = 'unrecognized'): SkillFreshnessInstallation {
+function repoPlacement(status: SkillFreshnessStatus = 'outdated'): SkillFreshnessInstallation {
   return {
     ...placement(status, 7),
     rootId: 'repo-work',
@@ -84,6 +80,19 @@ describe('getSkillFreshnessDisplayStatus', () => {
     ).toBe('update-available')
   })
 
+  it.each([null, 'acme/agent-skills'])(
+    'reports presence only for an update to a copy Orca did not install (%s)',
+    (lockSource) => {
+      // Why: such a copy is offered unselected in the dialog, never advertised.
+      expect(
+        getSkillFreshnessDisplayStatus(
+          inventory([{ ...placement('outdated'), lockSource }], [SKILL_NAME]),
+          SKILL_NAME
+        )
+      ).toBe('installed')
+    }
+  )
+
   it('shows up to date only when every discovered placement is current', () => {
     expect(
       getSkillFreshnessDisplayStatus(
@@ -104,8 +113,8 @@ describe('getSkillFreshnessDisplayStatus', () => {
 
   it.each([
     [
-      'when any placement is unrecognized',
-      inventory([placement('current'), placement('unrecognized', 1)])
+      'when a placement the update cannot reach is outdated',
+      inventory([placement('current'), { ...placement('outdated', 1), topology: 'external-link' }])
     ],
     ['when a placement is inaccessible', inventory([placement('inaccessible')])],
     ['when an outdated placement is not eligible', inventory([placement('outdated')])]
@@ -161,39 +170,21 @@ describe('getSkillFreshnessDisplayStatus', () => {
     )
   })
 
-  it('shows recognized-newer content as up to date instead of blaming the user', () => {
-    // Why: 'newer-known' is official content ahead of this build — the updater's own
-    // install or a newer release's bytes. Amber here sent users on a remove/reinstall
-    // loop that lands the same newer content (#11220's scan half).
-    const value = inventory([placement('newer-known')])
-
-    expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('up-to-date')
-    expect(hasSkillCopyNeedingAttention(value, SKILL_NAME)).toBe(false)
-  })
-
-  it('still reports drift beside a newer-known copy', () => {
-    expect(
-      getSkillFreshnessDisplayStatus(
-        inventory([placement('newer-known'), placement('unrecognized', 1)]),
-        SKILL_NAME
-      )
-    ).toBe('needs-attention')
-  })
-
   it('still reports drift in our own copy when a plugin-managed one sits alongside', () => {
     expect(
       getSkillFreshnessDisplayStatus(
-        inventory([placement('unrecognized'), pluginCachePlacement()]),
+        inventory([placement('inaccessible'), pluginCachePlacement()]),
         SKILL_NAME
       )
     ).toBe('needs-attention')
   })
 
-  it('reports attention when a plugin-cache copy is inaccessible', () => {
+  it('reports presence only for a plugin-cache copy, readable or not', () => {
+    // Why: Orca never writes there and cannot tell an old release from another vendor's skill.
     const value = inventory([pluginCachePlacement('inaccessible')])
 
-    expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('needs-attention')
-    expect(hasSkillCopyNeedingAttention(value, SKILL_NAME)).toBe(true)
+    expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('installed')
+    expect(hasSkillCopyNeedingAttention(value, SKILL_NAME)).toBe(false)
   })
 })
 
@@ -225,16 +216,15 @@ describe('hasSkillCopyNeedingAttention', () => {
   // copy inside a work directory. Orca only updates global skills, so the project copy
   // must not turn the badge amber over drift it has no way to fix.
   it('reports up to date for a current global copy beside a drifted project copy', () => {
-    const value = inventory([placement('current'), repoPlacement('unrecognized')])
+    const value = inventory([placement('current'), repoPlacement('outdated')])
 
     expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('up-to-date')
     expect(hasSkillCopyNeedingAttention(value, SKILL_NAME)).toBe(false)
   })
 
-  // Why by scope and not by status: an outdated or unreadable project copy is just as
-  // far outside the global updater's reach as an unrecognized one, so pinning only the
-  // reported status would leave the same bug reachable through a different one.
-  it.each<[SkillFreshnessStatus]>([['unrecognized'], ['outdated'], ['inaccessible']])(
+  // Why by scope and not by status: an outdated or unreadable project copy is equally
+  // far outside the global updater's reach.
+  it.each<[SkillFreshnessStatus]>([['outdated'], ['inaccessible']])(
     'ignores a %s project copy when judging global freshness',
     (status) => {
       const value = inventory([placement('current'), repoPlacement(status)])
@@ -248,16 +238,6 @@ describe('hasSkillCopyNeedingAttention', () => {
   it('reports presence only when every copy is project-owned', () => {
     expect(getSkillFreshnessDisplayStatus(inventory([repoPlacement()]), SKILL_NAME)).toBe(
       'installed'
-    )
-  })
-
-  // Regression guard for the centralization: the badge predicate deliberately omits the
-  // shared helper's outdated carve-out, so a non-eligible outdated copy stays amber.
-  // Collapsing the two predicates would flip this to green while the dialog still shows
-  // a reinstall row — the badge/dialog contradiction this change exists to avoid.
-  it('keeps a non-eligible outdated global copy amber', () => {
-    expect(getSkillFreshnessDisplayStatus(inventory([placement('outdated')]), SKILL_NAME)).toBe(
-      'needs-attention'
     )
   })
 

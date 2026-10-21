@@ -1,14 +1,16 @@
+import { getStoredRepoSshConnectionId } from '../repo-execution-host'
+import type { GitRuntimeOptions } from '../git/git-runtime-options'
 import type { Repo } from '../../shared/repo-types'
-import { parseOrcaYaml } from '../hooks'
 import { readIssueCommand, writeIssueCommand } from '../issue-command-file'
-import { isENOENT } from '../ipc/filesystem-auth'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import type { IFilesystemProvider } from '../providers/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
+import type { RuntimeStore } from './runtime-store-contract'
+import { assertWslMoveRepoWritable } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 type RuntimeRepositoryIssueCommandDeps = {
   resolveRepo: (selector: string) => Promise<Repo>
+  getLocalGitArgs: (repo: Repo) => [] | [GitRuntimeOptions]
+  getStore?: () => RuntimeStore | null
 }
 
 export class RuntimeRepositoryIssueCommand {
@@ -25,116 +27,31 @@ export class RuntimeRepositoryIssueCommand {
         source: 'none' as const
       }
     }
-    if (!repo.connectionId) {
+    const connectionId = getStoredRepoSshConnectionId(repo)
+    if (!connectionId) {
       return readIssueCommand(repo.path)
     }
-    const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
-    const fsProvider = getSshFilesystemProvider(repo.connectionId)
-    if (!fsProvider) {
-      return {
-        localContent: null,
-        sharedContent: null,
-        effectiveContent: null,
-        localFilePath: issueCommandPath,
-        source: 'none' as const
-      }
-    }
-    const localContent = await readRemoteOverride(fsProvider, issueCommandPath)
-    const sharedContent = await readRemoteShared(fsProvider, repo.path)
+    // Why: an `ssh:` repo is not served here; it reads as having no command.
     return {
-      localContent,
-      sharedContent,
-      effectiveContent: localContent ?? sharedContent,
-      localFilePath: issueCommandPath,
-      source: localContent
-        ? ('local' as const)
-        : sharedContent
-          ? ('shared' as const)
-          : ('none' as const)
+      localContent: null,
+      sharedContent: null,
+      effectiveContent: null,
+      localFilePath: joinWorktreeRelativePath(repo.path, '.orca/issue-command'),
+      source: 'none' as const
     }
   }
 
+  /** Save a private override on its execution host; blank content restores the shared command. */
   async write(repoSelector: string, content: string): Promise<{ ok: true }> {
     const repo = await this.deps.resolveRepo(repoSelector)
+    assertWslMoveRepoWritable(this.deps.getStore?.() ?? undefined, repo)
     if (isFolderRepo(repo)) {
       return { ok: true }
     }
-    if (!repo.connectionId) {
-      writeIssueCommand(repo.path, content)
-      return { ok: true }
+    // Why: an `ssh:` repo is not served here; the write is dropped, as when it was unreachable.
+    if (!getStoredRepoSshConnectionId(repo)) {
+      await writeIssueCommand(repo.path, content, () => this.deps.getLocalGitArgs(repo)[0] ?? {})
     }
-    const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
-    const fsProvider = getSshFilesystemProvider(repo.connectionId)
-    if (!fsProvider) {
-      return { ok: true }
-    }
-    const trimmed = content.trim()
-    if (!trimmed) {
-      await fsProvider.deletePath(issueCommandPath, false).catch((error: unknown) => {
-        if (!isENOENT(error)) {
-          throw error
-        }
-      })
-      return { ok: true }
-    }
-    await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
-    await ensureRemoteOrcaDirIgnored(fsProvider, repo.path)
-    await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
     return { ok: true }
-  }
-}
-
-async function readRemoteOverride(
-  fsProvider: IFilesystemProvider,
-  issueCommandPath: string
-): Promise<string | null> {
-  try {
-    const result = await fsProvider.readFile(issueCommandPath)
-    return result.isBinary ? null : result.content.trim() || null
-  } catch {
-    return null
-  }
-}
-
-async function readRemoteShared(
-  fsProvider: IFilesystemProvider,
-  repoPath: string
-): Promise<string | null> {
-  try {
-    const result = await fsProvider.readFile(joinWorktreeRelativePath(repoPath, 'orca.yaml'))
-    return result.isBinary ? null : parseOrcaYaml(result.content)?.issueCommand?.trim() || null
-  } catch {
-    return null
-  }
-}
-
-async function ensureRemoteOrcaDirIgnored(
-  fsProvider: IFilesystemProvider,
-  repoPath: string
-): Promise<void> {
-  const gitignorePath = joinWorktreeRelativePath(repoPath, '.gitignore')
-  let result: Awaited<ReturnType<IFilesystemProvider['readFile']>>
-  try {
-    result = await fsProvider.readFile(gitignorePath)
-  } catch (error) {
-    if (!isENOENT(error)) {
-      console.warn('[runtime] Could not inspect remote .gitignore for .orca', error)
-      return
-    }
-    try {
-      await fsProvider.writeFile(gitignorePath, '.orca\n')
-    } catch (writeError) {
-      console.warn('[runtime] Could not update remote .gitignore to exclude .orca', writeError)
-    }
-    return
-  }
-  if (result.isBinary || /^\.orca\/?$/m.test(result.content)) {
-    return
-  }
-  const separator = result.content.endsWith('\n') ? '' : '\n'
-  try {
-    await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
-  } catch (writeError) {
-    console.warn('[runtime] Could not update remote .gitignore to exclude .orca', writeError)
   }
 }

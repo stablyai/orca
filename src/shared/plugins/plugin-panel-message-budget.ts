@@ -159,6 +159,9 @@ export function structuredCloneMessageBytes(
         add(4)
         visit(key, depth + 1)
         visit(entry, depth + 1)
+        if (total > stopAfter) {
+          return
+        }
       }
       return
     }
@@ -167,6 +170,9 @@ export function structuredCloneMessageBytes(
       for (const entry of object) {
         add(4)
         visit(entry, depth + 1)
+        if (total > stopAfter) {
+          return
+        }
       }
       return
     }
@@ -175,6 +181,9 @@ export function structuredCloneMessageBytes(
       for (const entry of object) {
         add(4)
         visit(entry, depth + 1)
+        if (total > stopAfter) {
+          return
+        }
       }
       return
     }
@@ -188,6 +197,9 @@ export function structuredCloneMessageBytes(
         add(4)
         add(utf8Bytes(key, stopAfter - total))
         visit((object as Record<string, unknown>)[key], depth + 1)
+        if (total > stopAfter) {
+          return
+        }
       }
     } catch {
       total = stopAfter + 1

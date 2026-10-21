@@ -28,7 +28,7 @@ type CodexAccountSelectionDependencies = {
   lifecycle: CodexAccountServiceLifecycle
   resolveSystemDefault: () => CodexSystemDefaultIdentity
   removeManagedHome: (candidatePath: string, expectedAccountId: string) => void
-  discardResetAttempts: (accountId: string) => void
+  discardResetAttempts: (accountId: string) => Promise<void>
 }
 
 export class CodexAccountSelection {
@@ -83,10 +83,13 @@ export class CodexAccountSelection {
     }
 
     this.dependencies.removeManagedHome(account.managedHomePath, account.id)
-    // Why: a removed account can no longer appear in the switcher dropdown,
-    // so purge its cached usage to avoid stale entries.
     this.dependencies.rateLimits.evictInactiveCodexCache(accountId)
-    this.dependencies.discardResetAttempts(accountId)
+    try {
+      await this.dependencies.discardResetAttempts(accountId)
+    } catch (error) {
+      // Removal already succeeded; retain the ledger's safety guards if cleanup fails.
+      console.warn('[codex-accounts] Removed account, but credit ledger cleanup failed:', error)
+    }
     const accountTarget = getCodexSelectionTargetForAccount(account)
     this.startQuotaRefresh(
       getSelectedCodexAccountIdForTarget(settings, accountTarget) === accountId

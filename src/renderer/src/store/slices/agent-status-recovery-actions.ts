@@ -2,17 +2,10 @@ import type { SleepingAgentSessionRecord } from '../../../../shared/agent-sessio
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status-recovery-collection'
-import {
-  removeSleepingRecordsReplacedByManualWorktreeSleep,
-  sleepingRecordFromEntry
-} from './agent-status-sleeping-records'
-import {
-  recoveryRecordTargetsSameSession,
-  sleepingRecordsEquivalentIgnoringCaptureTime
-} from './agent-status-recovery-equivalence'
+import { removeSleepingRecordsReplacedByManualWorktreeSleep } from './agent-status-sleeping-records'
+import { capturedResumeRecord } from '../../../../shared/agent-resume-record-from-status'
 import { getLaunchConfigForEntry } from './agent-status-launch-config'
-import { findAgentPaneWorktreeId } from './agent-status-pane-key-tab-binding'
-import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/live-resume-anchor-record'
+import { findAgentPaneWorktreeId, findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
 
 export function createAgentStatusRecoveryActions(
   runtime: AgentStatusRuntime
@@ -21,8 +14,8 @@ export function createAgentStatusRecoveryActions(
   | 'captureSleepingAgentSessionsByWorktree'
   | 'captureAllSleepingAgentSessions'
   | 'clearSleepingAgentSession'
+  | 'rememberSleepingAgentSession'
   | 'clearSleepingAgentSessionsByPaneKey'
-  | 'setSleepingAgentAutomaticResumeBlocked'
   | 'clearSleepingAgentSessionsByWorktree'
   | 'pruneSleepingAgentSessions'
 > {
@@ -55,49 +48,21 @@ export function createAgentStatusRecoveryActions(
     captureAllSleepingAgentSessions: (mode) => {
       set((s) => {
         const capturedAt = Date.now()
-        const origin = mode === 'quit' ? ('quit' as const) : ('live' as const)
         const next: Record<string, SleepingAgentSessionRecord> = {
           ...s.sleepingAgentSessionsByPaneKey
         }
         let changed = false
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
-          if (entry.state === 'done') {
-            const existing = next[entry.paneKey]
-            if (
-              !isCompletedPiCompatibleAgentWithLiveRecoveryRecord(entry, existing) ||
-              mode === 'periodic'
-            ) {
-              continue
-            }
-            const record = { ...existing, capturedAt, origin }
-            if (!sleepingRecordsEquivalentIgnoringCaptureTime(existing, record)) {
-              next[entry.paneKey] = record
-              changed = true
-            }
-            continue
-          }
-          const worktreeId = entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey)
-          if (!worktreeId) {
-            continue
-          }
-          const record = sleepingRecordFromEntry({
-            state: s,
+          const record = capturedResumeRecord({
             entry,
-            worktreeId,
+            existing: next[entry.paneKey],
+            mode,
             capturedAt,
-            launchConfig: getLaunchConfigForEntry(s, entry),
-            origin
+            worktreeIdOf: () => entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey),
+            tabOf: (worktreeId) => findTabForAgentEntry(s, worktreeId, entry),
+            launchConfigOf: () => getLaunchConfigForEntry(s, entry)
           })
-          const existing = next[entry.paneKey]
-          if (
-            mode === 'periodic' &&
-            existing?.origin === 'quit' &&
-            record &&
-            recoveryRecordTargetsSameSession(existing, record)
-          ) {
-            continue
-          }
-          if (record && !sleepingRecordsEquivalentIgnoringCaptureTime(existing, record)) {
+          if (record) {
             next[record.paneKey] = record
             changed = true
           }
@@ -107,48 +72,20 @@ export function createAgentStatusRecoveryActions(
     },
 
     clearSleepingAgentSession: (paneKey) => clearSleepingAgentSessionsByPaneKey([paneKey]),
-    clearSleepingAgentSessionsByPaneKey,
 
-    setSleepingAgentAutomaticResumeBlocked: (paneKey, blocked) => {
-      set((s) => {
-        // The pane key is tracked even with no record: a worker settled while its tab was open
-        // is fenced before the record exists, and the record is only minted on close.
-        const wasBlocked = s.automaticResumeBlockedPaneKeys[paneKey] === true
-        let paneKeys = s.automaticResumeBlockedPaneKeys
-        if (blocked !== wasBlocked) {
-          paneKeys = { ...s.automaticResumeBlockedPaneKeys }
-          if (blocked) {
-            paneKeys[paneKey] = true
-          } else {
-            delete paneKeys[paneKey]
-          }
-        }
-        const current = s.sleepingAgentSessionsByPaneKey[paneKey]
-        if (
-          !current ||
-          (blocked
-            ? current.automaticResumeBlockedBy === 'legacy-orchestration-worker'
-            : current.automaticResumeBlockedBy === undefined)
-        ) {
-          return paneKeys === s.automaticResumeBlockedPaneKeys
-            ? s
-            : { automaticResumeBlockedPaneKeys: paneKeys }
-        }
-        const next = { ...current }
-        if (blocked) {
-          next.automaticResumeBlockedBy = 'legacy-orchestration-worker'
-        } else {
-          delete next.automaticResumeBlockedBy
-        }
-        return {
-          automaticResumeBlockedPaneKeys: paneKeys,
-          sleepingAgentSessionsByPaneKey: {
-            ...s.sleepingAgentSessionsByPaneKey,
-            [paneKey]: next
-          }
-        }
-      })
+    rememberSleepingAgentSession: (record) => {
+      set((s) =>
+        s.sleepingAgentSessionsByPaneKey[record.paneKey]
+          ? s
+          : {
+              sleepingAgentSessionsByPaneKey: {
+                ...s.sleepingAgentSessionsByPaneKey,
+                [record.paneKey]: record
+              }
+            }
+      )
     },
+    clearSleepingAgentSessionsByPaneKey,
 
     clearSleepingAgentSessionsByWorktree: (worktreeId) => {
       set((s) => {

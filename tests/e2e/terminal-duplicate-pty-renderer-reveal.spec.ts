@@ -1,9 +1,11 @@
+import {
+  mutateStoppedProfileState,
+  readPersistedProfileState
+} from './helpers/persisted-profile-state'
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import path from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import type { TerminalLayoutSnapshot } from '../../src/shared/terminal-tab-types'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import { test, expect } from './helpers/orca-app'
 import {
   findMarkerFrame,
@@ -59,39 +61,36 @@ setInterval(() => {
 `.trim()
 }
 
-function persistedDataPath(userDataDir: string): string {
-  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
-}
-
 function seedDuplicatePtyOwnership(userDataDir: string): void {
-  const dataPath = persistedDataPath(userDataDir)
-  const data = JSON.parse(readFileSync(dataPath, 'utf8')) as PersistedData
-  const session = data.workspaceSession
-  const tabId = session?.activeTabId
-  const layout = tabId ? session?.terminalLayoutsByTabId?.[tabId] : undefined
-  const retainedLeafId = layout?.activeLeafId
-  const ptyId = retainedLeafId ? layout?.ptyIdsByLeafId?.[retainedLeafId] : undefined
-  if (!session?.terminalLayoutsByTabId || !tabId || !layout || !retainedLeafId || !ptyId) {
-    throw new Error('Persisted terminal ownership was unavailable for duplicate-layout seeding')
-  }
-
-  const duplicateLeafId = randomUUID()
-  session.terminalLayoutsByTabId[tabId] = {
-    ...layout,
-    root: {
-      type: 'split',
-      direction: 'vertical',
-      first: { type: 'leaf', leafId: retainedLeafId },
-      second: { type: 'leaf', leafId: duplicateLeafId }
-    },
-    activeLeafId: retainedLeafId,
-    expandedLeafId: null,
-    ptyIdsByLeafId: {
-      [retainedLeafId]: ptyId,
-      [duplicateLeafId]: ptyId
+  return mutateStoppedProfileState(userDataDir, (state) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const data = state as PersistedData
+    const session = data.workspaceSession
+    const tabId = session?.activeTabId
+    const layout = tabId ? session?.terminalLayoutsByTabId?.[tabId] : undefined
+    const retainedLeafId = layout?.activeLeafId
+    const ptyId = retainedLeafId ? layout?.ptyIdsByLeafId?.[retainedLeafId] : undefined
+    if (!session?.terminalLayoutsByTabId || !tabId || !layout || !retainedLeafId || !ptyId) {
+      throw new Error('Persisted terminal ownership was unavailable for duplicate-layout seeding')
     }
-  }
-  writeFileSync(dataPath, `${JSON.stringify(data, null, 2)}\n`)
+
+    const duplicateLeafId = randomUUID()
+    session.terminalLayoutsByTabId[tabId] = {
+      ...layout,
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: retainedLeafId },
+        second: { type: 'leaf', leafId: duplicateLeafId }
+      },
+      activeLeafId: retainedLeafId,
+      expandedLeafId: null,
+      ptyIdsByLeafId: {
+        [retainedLeafId]: ptyId,
+        [duplicateLeafId]: ptyId
+      }
+    }
+  })
 }
 
 async function waitForRestoredTerminal(page: Page, worktreeId: string): Promise<string> {
@@ -307,6 +306,24 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
     if (revealFailure) {
       throw revealFailure
     }
+
+    // Whatever the window saved, no stored pane may be left without its terminal: that pane
+    // would restore empty, and with no duplicate left the repair would never run again.
+    await session.close(secondApp)
+    secondApp = null
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const persisted = readPersistedProfileState(session.userDataDir) as PersistedData
+    const storedLayout = persisted.workspaceSession?.terminalLayoutsByTabId?.[restoredTabId]
+    const storedLeafIds = (node: TerminalLayoutSnapshot['root']): string[] =>
+      !node
+        ? []
+        : node.type === 'leaf'
+          ? [node.leafId]
+          : [...storedLeafIds(node.first), ...storedLeafIds(node.second)]
+    const unboundLeafIds = storedLeafIds(storedLayout?.root ?? null).filter(
+      (leafId) => !storedLayout?.ptyIdsByLeafId?.[leafId]
+    )
+    expect(unboundLeafIds).toEqual([])
   } finally {
     tui.cleanup()
     if (secondApp) {

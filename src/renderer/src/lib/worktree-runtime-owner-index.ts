@@ -6,7 +6,6 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 
@@ -58,12 +57,7 @@ export function getCatalogOwnerHostId(owner: {
   connectionId?: string | null
   executionHostId?: string | null
 }): ExecutionHostId {
-  const explicitHost = parseExecutionHostId(owner.executionHostId)
-  if (explicitHost) {
-    return explicitHost.id
-  }
-  const connectionId = owner.connectionId?.trim()
-  return connectionId ? toSshExecutionHostId(connectionId) : 'local'
+  return getRepoExecutionHostId(owner)
 }
 
 function buildCatalogOwnerIndex<
@@ -182,7 +176,7 @@ function addWorktreeOwnerIndexEntry(
   }
 }
 
-function worktreeOwnerHostIds(owner: WorktreeOwnerRecord): ExecutionHostId[] {
+export function worktreeOwnerHostIds(owner: WorktreeOwnerRecord): ExecutionHostId[] {
   const physicalHostId = parseExecutionHostId(owner.hostId)?.id
   const runtimeEnvironmentId = owner.runtimeOwnerEnvironmentId?.trim()
   if (!runtimeEnvironmentId) {
@@ -279,40 +273,64 @@ export function findIndexedRepoOwnerForHost<T extends RepoOwnerRecord>(
   return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
 }
 
-export function findIndexedFolderWorkspaceOwner(
+function catalogOwnerKey(id: string, executionHostId?: ExecutionHostId): string {
+  return executionHostId ? `${id}\0${executionHostId}` : id
+}
+
+/** An unqualified lookup keeps a twin (same id on two hosts) distinct from a missing row. */
+export function resolveIndexedFolderWorkspaceOwner(
   folderWorkspaces: readonly FolderWorkspaceOwnerRecord[] | undefined,
   folderWorkspaceId: string,
   executionHostId?: ExecutionHostId
-): FolderWorkspaceOwnerRecord | null {
+): IndexedFolderWorkspaceOwnerResolution {
   if (!folderWorkspaces) {
-    return null
+    return { kind: 'missing' }
   }
   let index = folderWorkspaceOwnerIndexCache.get(folderWorkspaces)
   if (!index) {
     index = buildCatalogOwnerIndex(folderWorkspaces)
     folderWorkspaceOwnerIndexCache.set(folderWorkspaces, index)
   }
-  const resolution = index.get(
-    executionHostId ? `${folderWorkspaceId}\0${executionHostId}` : folderWorkspaceId
-  )
-  return resolution?.kind === 'resolved' ? resolution.owner : null
+  return index.get(catalogOwnerKey(folderWorkspaceId, executionHostId)) ?? { kind: 'missing' }
 }
 
-export function findIndexedProjectGroupOwner(
+/** An unqualified lookup keeps a twin (same id on two hosts) distinct from a missing row. */
+export function resolveIndexedProjectGroupOwner(
   projectGroups: readonly ProjectGroupOwnerRecord[] | undefined,
   projectGroupId: string,
   executionHostId?: ExecutionHostId
-): ProjectGroupOwnerRecord | null {
+): IndexedProjectGroupOwnerResolution {
   if (!projectGroups) {
-    return null
+    return { kind: 'missing' }
   }
   let index = projectGroupOwnerIndexCache.get(projectGroups)
   if (!index) {
     index = buildCatalogOwnerIndex(projectGroups)
     projectGroupOwnerIndexCache.set(projectGroups, index)
   }
-  const resolution = index.get(
-    executionHostId ? `${projectGroupId}\0${executionHostId}` : projectGroupId
+  return index.get(catalogOwnerKey(projectGroupId, executionHostId)) ?? { kind: 'missing' }
+}
+
+export function findIndexedFolderWorkspaceOwner<T extends FolderWorkspaceOwnerRecord>(
+  folderWorkspaces: readonly T[] | undefined,
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
+): T | null {
+  const resolution = resolveIndexedFolderWorkspaceOwner(
+    folderWorkspaces,
+    folderWorkspaceId,
+    executionHostId
   )
-  return resolution?.kind === 'resolved' ? resolution.owner : null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the index is built from and cached on this exact array, so its owner is one of the caller's T rows.
+  return resolution.kind === 'resolved' ? (resolution.owner as T) : null
+}
+
+export function findIndexedProjectGroupOwner<T extends ProjectGroupOwnerRecord>(
+  projectGroups: readonly T[] | undefined,
+  projectGroupId: string,
+  executionHostId?: ExecutionHostId
+): T | null {
+  const resolution = resolveIndexedProjectGroupOwner(projectGroups, projectGroupId, executionHostId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the index is built from and cached on this exact array, so its owner is one of the caller's T rows.
+  return resolution.kind === 'resolved' ? (resolution.owner as T) : null
 }

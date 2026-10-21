@@ -2,6 +2,7 @@ import { TerminalStreamOpcode } from '../../../../../shared/terminal-stream-prot
 import {
   TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION,
   TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION,
+  TERMINAL_MULTIPLEX_MAX_QUEUED_PTY_WAITS_PER_CONNECTION,
   TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR
 } from '../../../../../shared/terminal-multiplex-flow-control'
 import type {
@@ -40,7 +41,14 @@ export function resolveMultiplexSubscribePty(
   state: TerminalMultiplexConnection,
   request: MultiplexSubscribeRequest
 ): string | null | Promise<string | null> {
-  const { runtime, pendingPtyWaitControllers, registerBinaryStreamHandler, signal, emit } = state
+  const {
+    runtime,
+    pendingPtyWaitControllers,
+    ptyWaitAdmission,
+    registerBinaryStreamHandler,
+    signal,
+    emit
+  } = state
   state.detachStream(request.streamId, null)
   state.cancelPendingPtyWaits(request.streamId)
 
@@ -56,18 +64,18 @@ export function resolveMultiplexSubscribePty(
   if (leaf?.ptyId || !request.client) {
     return finalizeResolvedMultiplexPty(state, request, leaf)
   }
-  if (pendingPtyWaitControllers.size >= TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION) {
+  if (!ptyWaitAdmission.hasRoom()) {
     state.sendStreamError(request.streamId, TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR, {
       active_stream_count: state.streams.size,
       pending_pty_wait_count: pendingPtyWaitControllers.size,
-      max_stream_count: TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION
+      max_stream_count:
+        TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION +
+        TERMINAL_MULTIPLEX_MAX_QUEUED_PTY_WAITS_PER_CONNECTION
     })
     emit({ type: 'end', streamId: request.streamId })
     return null
   }
 
-  // Why: a never-mounted tab has no graph leaf to await; mounting the exact tab attaches its PTY without activating the worktree.
-  runtime.requestRendererTerminalTabMount(request.terminal)
   const waitController = new AbortController()
   const pendingControllers = pendingPtyWaitControllers.get(request.streamId) ?? new Set()
   pendingControllers.add(waitController)
@@ -83,7 +91,14 @@ export function resolveMultiplexSubscribePty(
     }
   })
   return (async () => {
+    let admitted = false
     try {
+      admitted = await ptyWaitAdmission.acquire(waitController.signal)
+      if (!admitted || waitController.signal.aborted) {
+        return null
+      }
+      // Why: a never-mounted tab has no graph leaf to await; mounting the exact tab attaches its PTY without activating the worktree.
+      runtime.requestRendererTerminalTabMount(request.terminal)
       const ptyId = await runtime.waitForLeafPtyId(request.terminal, 10_000, waitController.signal)
       leaf = { ptyId }
     } catch {
@@ -92,6 +107,9 @@ export function resolveMultiplexSubscribePty(
       }
       // Fall through to the explicit no_connected_pty error below.
     } finally {
+      if (admitted) {
+        ptyWaitAdmission.release()
+      }
       const currentControllers = pendingPtyWaitControllers.get(request.streamId)
       currentControllers?.delete(waitController)
       if (currentControllers?.size === 0) {

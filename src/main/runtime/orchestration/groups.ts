@@ -3,7 +3,9 @@ import type { OrchestrationAddressableAgent } from './structured-worker-group-ad
 
 // Why: group addresses enable broadcast messaging to logical groups of agents.
 // Resolution is done at send-time: one message record per recipient, same thread_id,
-// so each recipient gets their own read-tracking (Section 4.5).
+// so each recipient gets their own read-tracking (Section 4.5). The caller picks the
+// candidates: the sender's Run for every group but `@worktree:<id>`, which names one
+// workspace explicitly. There is no host-wide candidate set.
 
 const AGENT_NAME_GROUPS = [
   'claude',
@@ -71,7 +73,7 @@ export function resolveGroupAddress(
   const group = to.toLowerCase()
 
   if (group === '@all') {
-    // Why: @all broadcasts to every terminal except the sender to avoid self-delivery loops.
+    // Why: every candidate except the sender, to avoid self-delivery loops.
     return terminals.map((t) => t.handle).filter((h) => h !== senderHandle)
   }
 

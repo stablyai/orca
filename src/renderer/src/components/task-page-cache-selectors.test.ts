@@ -96,6 +96,7 @@ describe('task page cache selectors', () => {
       {
         repoId: 'repo-1',
         repoPath: '/repo/one',
+        hostId: 'local',
         sourceKey: 'repo-1::local',
         sources: null,
         error: null
@@ -204,8 +205,77 @@ describe('task page cache selectors', () => {
     }
 
     expect(findTaskPageDialogWorkItem(cache, null)).toBeNull()
-    expect(findTaskPageDialogWorkItem(cache, { id: 'issue-1', repoId: 'repo-1' })).toBe(item)
-    expect(findTaskPageDialogWorkItem(cache, { id: 'issue-1', repoId: 'repo-2' })).toBeNull()
+    expect(
+      findTaskPageDialogWorkItem(cache, { id: 'issue-1', repoId: 'repo-1', url: item.url })
+    ).toBe(item)
+    expect(
+      findTaskPageDialogWorkItem(cache, { id: 'issue-1', repoId: 'repo-2', url: item.url })
+    ).toBeNull()
+  })
+
+  it('keeps the clicked repository when a source change refreshes the same issue number', () => {
+    const origin = {
+      ...workItem('issue:12', 'repo-1'),
+      url: 'https://github.com/fork-owner/widgets/issues/12'
+    }
+    const upstream = {
+      ...origin,
+      url: 'https://github.com/upstream-owner/widgets/issues/12'
+    }
+    const clickedIssue = { id: origin.id, repoId: origin.repoId, url: origin.url }
+    const upstreamCache = {
+      upstream: entry<GitHubWorkItem[]>([upstream])
+    }
+
+    expect(findTaskPageDialogWorkItem(upstreamCache, clickedIssue)).toBeNull()
+    expect(
+      findTaskPageDialogWorkItem(
+        { ...upstreamCache, origin: entry<GitHubWorkItem[]>([origin]) },
+        clickedIssue
+      )
+    ).toBe(origin)
+  })
+
+  it('opens the copy the clicked twin host returned, not the other host cached copy', () => {
+    const local = { ...workItem('pr:7', 'twin'), repoHostId: 'local' as const }
+    const remote = { ...local, repoHostId: 'ssh:builder' as const }
+    const cache = {
+      local: entry<GitHubWorkItem[]>([local]),
+      remote: entry<GitHubWorkItem[]>([remote])
+    }
+
+    expect(
+      findTaskPageDialogWorkItem(cache, {
+        id: remote.id,
+        repoId: remote.repoId,
+        url: remote.url,
+        repoHostId: remote.repoHostId
+      })
+    ).toBe(remote)
+  })
+
+  it('keeps each twin host row on its own copy when the cache syncs the table', () => {
+    const local = { ...workItem('pr:7', 'twin'), repoHostId: 'local' as const }
+    const remote = { ...local, repoHostId: 'ssh:builder' as const }
+    const pages = [[local, { ...remote }]]
+
+    const nextPages = reconcileTaskPagePagesWithWorkItemsCache(pages, [
+      entry<GitHubWorkItem[]>([local]),
+      entry<GitHubWorkItem[]>([remote])
+    ])
+
+    expect(nextPages[0]?.map((item) => item.repoHostId)).toEqual(['local', 'ssh:builder'])
+    expect(nextPages[0]?.[1]).toBe(remote)
+  })
+
+  it('names each twin row host in source state, even when the twins share a path', () => {
+    const local = { id: 'repo-1', path: '/same/path' }
+    const ssh = { id: 'repo-1', path: '/same/path', connectionId: 'devbox' }
+
+    expect(buildTaskPageRepoSourceState([local, ssh], []).map((state) => state.hostId)).toEqual([
+      'local',
+      'ssh:devbox'
+    ])
   })
 
   it('reconciles paged table rows with patched work-item cache entries', () => {

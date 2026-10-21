@@ -15,7 +15,6 @@ export type WriteRefusalReason =
   | 'endpoint_disconnected'
   | 'endpoint_awaiting_recovery'
   | 'encode_failed'
-  | 'write_gate_denied'
   | 'provider_unavailable'
   | 'provider_refused_write'
   | 'provider_cannot_settle'
@@ -26,6 +25,7 @@ export type WriteAmbiguityReason =
   | 'settlement_timeout'
   | 'endpoint_write_threw'
   | 'provider_threw_after_handoff'
+  | 'partial_write'
 
 export type WriteSettlement =
   | Readonly<{ outcome: 'accepted' }>

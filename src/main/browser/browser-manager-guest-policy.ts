@@ -4,6 +4,7 @@ import {
   type PopupOwnerContext
 } from './browser-manager-types'
 import { BrowserManagerGuestCleanup } from './browser-manager-guest-cleanup'
+import { allowPageUnload } from './browser-guest-unload-policy'
 import { installDocPreviewGuestPolicy } from './doc-preview-guest-policy'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
@@ -26,15 +27,15 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     if (inheritedOwnerContext) {
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }
-    const disposeAuthDetachTracking = this.trackDebuggerDetachForAuthUserAgent(guest)
+    const disposeDetachTracking = this.trackDebuggerDetachForCdpOverrides(guest)
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
-    const disposePopupPolicy = this.installGuestPopupPolicy(guest, !inheritedOwnerContext)
+    const disposePopupPolicy = this.installGuestPopupPolicy(guest)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
 
     // Why: store cleanup so unregisterGuest can drop these listeners on teardown and let the WebContents wrapper GC.
     this.policyCleanupByGuestId.set(guest.id, () => {
-      disposeAuthDetachTracking()
+      disposeDetachTracking()
       disposePopupPolicy()
       disposeNavigationPolicy()
     })
@@ -54,10 +55,12 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       this.cleanupGuestPolicyAttachment(guest.id)
     }
     guest.on('destroyed', handleDestroyed)
+    guest.on('will-prevent-unload', allowPageUnload)
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeDocPolicy()
       try {
         guest.off('destroyed', handleDestroyed)
+        guest.off('will-prevent-unload', allowPageUnload)
       } catch {
         // guest may already be destroyed
       }

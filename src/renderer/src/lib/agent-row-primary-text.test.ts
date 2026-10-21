@@ -75,36 +75,6 @@ Keep the raw preamble out of the sidebar.`
     expect(getAgentRowPrimaryText({ prompt: 'Fix checkout race' })).toBe('Fix checkout race')
   })
 
-  // Why: production status prompts reach these helpers already folded to a
-  // single line and capped at 200 chars by normalizeAgentStatusPayload. Guard
-  // the real normalized shape — earlier tests only fed raw multi-line prompts,
-  // which hid that the task-id parser split on \n and never matched.
-  it('matches orchestration labels on a normalized single-line dispatch prompt', () => {
-    const normalized = normalizeAgentStatusPayload({
-      state: 'working',
-      prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your coordinator's terminal handle is: term_parent
-Your task ID is: task_9f3ab2
-
-You talk to the coordinator only through the CLI commands below.
-
-=== TASK ===
-Fix the checkout race condition in payments`
-    })
-    expect(normalized).not.toBeNull()
-    expect(
-      getAgentRowPrimaryText({
-        prompt: normalized!.prompt,
-        orchestration: {
-          taskId: 'task_9f3ab2',
-          dispatchId: 'ctx-1',
-          taskTitle: 'Checkout race',
-          displayName: 'Fix checkout race'
-        }
-      })
-    ).toBe('Fix checkout race')
-  })
-
   // Why: full preambles bury === TASK === after multi-KB CLI instructions. The
   // status normalizer must compact the field so a missing/delayed label still
   // yields a meaningful task preview from the single-line 200-char prompt.
@@ -139,18 +109,6 @@ ${taskBody}`
     expect(preview).toContain('orchestration fallback task preview')
     expect(preview).not.toContain('You are working inside Orca')
     expect(preview).not.toContain('CLI COMMANDS')
-  })
-
-  it('uses a short single-line task body as the fallback preview', () => {
-    const normalized = normalizeAgentStatusPayload({
-      state: 'working',
-      prompt: `You are working inside Orca, a multi-agent IDE.
-Your task ID is: task_short
-
-=== TASK ===
-Fix login form`
-    })
-    expect(getAgentRowPrimaryText({ prompt: normalized!.prompt })).toBe('Fix login form')
   })
 
   it('prefers later orchestration labels over the extracted task preview', () => {

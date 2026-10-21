@@ -1,21 +1,25 @@
-// Payload bounds for tool output and diffs.
-//
-// A 40 MB tool result must not be inlined into a row that every reconnecting
-// client replays. A bounded payload keeps a head plus the original byte length
-// and digest; the remainder is discarded. Crossing a bound is always marked —
-// never a silent drop.
-
+// Completed content is canonical; running revisions keep previews until the full close.
 import { createHash } from 'node:crypto'
 import type { AgentJournalBoundedPayload } from '../../../shared/agent-session-journal-types'
 
 export type JournalPayloadLimits = {
-  /** Bytes of the payload kept inline on the row. */
+  /** Bytes of the payload kept in `head`. */
   inlineHeadBytes: number
 }
 
-export const DEFAULT_JOURNAL_PAYLOAD_LIMITS: JournalPayloadLimits = {
+/** What a revision of a call still running keeps where every update is a row and the open budget
+ *  holds it (provider-timeline-budget.ts); its closing revision keeps the whole value. */
+export const JOURNAL_RUNNING_PREVIEW_LIMITS: JournalPayloadLimits = {
   inlineHeadBytes: 16 * 1024
 }
+
+/** The raw provider frame a row keeps behind its disclosure: a record of traffic Orca cannot
+ *  model, not content the agent said, so it keeps a head. */
+export const PROVIDER_FRAME_PAYLOAD_LIMITS: JournalPayloadLimits = { inlineHeadBytes: 16 * 1024 }
+
+/** A send's rejection reason: a provider error body of any size, not conversation content, and
+ *  it rides the submission list rather than an item (#20654). */
+export const JOURNAL_DISPATCH_REASON_LIMITS: JournalPayloadLimits = { inlineHeadBytes: 16 * 1024 }
 
 /** Marker appended to a clipped inline string so the UI never presents a
  *  truncated body as complete. Kept in the text itself because block-level
@@ -28,27 +32,45 @@ export function digestPayload(payload: string): string {
   return createHash('sha256').update(payload, 'utf8').digest('hex')
 }
 
-/** Clip `payload` to the inline head. `truncated` means the remainder was
- *  discarded; `digest` and `byteLength` describe the original. */
+/** The whole value, as a tool output or diff is saved. */
+export function journalPayload(payload: string): AgentJournalBoundedPayload {
+  return {
+    head: payload,
+    byteLength: Buffer.byteLength(payload, 'utf8'),
+    digest: digestPayload(payload),
+    truncated: false
+  }
+}
+
+/** Whole once `running` is false; a preview while the call still runs. */
+export function journalToolPayload(payload: string, running: boolean): AgentJournalBoundedPayload {
+  return running ? boundPayload(payload, JOURNAL_RUNNING_PREVIEW_LIMITS) : journalPayload(payload)
+}
+
+/** Clip `payload` to the inline head. `truncated` means the head is not the whole value;
+ *  `digest` and `byteLength` describe the original. */
 export function boundPayload(
   payload: string,
   limits: JournalPayloadLimits
 ): AgentJournalBoundedPayload {
-  const buffer = Buffer.from(payload, 'utf8')
+  const byteLength = Buffer.byteLength(payload, 'utf8')
   const digest = digestPayload(payload)
-  if (buffer.byteLength <= limits.inlineHeadBytes) {
-    return { head: payload, byteLength: buffer.byteLength, digest, truncated: false }
+  if (byteLength <= limits.inlineHeadBytes) {
+    return { head: payload, byteLength, digest, truncated: false }
   }
-  return {
-    head: clipUtf8(buffer, limits.inlineHeadBytes),
-    byteLength: buffer.byteLength,
-    digest,
-    truncated: true
-  }
+  return { head: utf8Head(payload, limits.inlineHeadBytes), byteLength, digest, truncated: true }
 }
 
-/** Bound a plain string that must stay a string (a tool-result block's output),
- *  keeping the explicit marker inline. */
+/** The first `maxBytes` of `text` as UTF-8, never splitting a character; encodes only that head. */
+export function utf8Head(text: string, maxBytes: number): string {
+  const boundedBuffer =
+    Number.isSafeInteger(maxBytes) && maxBytes >= 0 ? Buffer.allocUnsafe(maxBytes) : null
+  return boundedBuffer
+    ? boundedBuffer.toString('utf8', 0, boundedBuffer.write(text, 0, boundedBuffer.length, 'utf8'))
+    : clipUtf8(Buffer.from(text, 'utf8'), maxBytes)
+}
+
+/** Bound a plain string that must stay a string, keeping the explicit marker inline. */
 export function boundInlineText(
   payload: string,
   limits: JournalPayloadLimits
@@ -63,7 +85,7 @@ export function boundInlineText(
   }
 }
 
-/** Keep arbitrary tool input JSON bounded before it reaches a row. */
+/** Tool input JSON over the limit, as its head and the original's size and digest. */
 export function boundToolInput(input: unknown, limits: JournalPayloadLimits): unknown {
   let encoded: string
   try {

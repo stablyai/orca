@@ -424,6 +424,70 @@ describe('pane terminal output scheduler', () => {
     )
   })
 
+  it('shortens an existing synchronized hold when interactive output arrives', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, '\x1b[?2026h\x1b[?25ltool redraw', {
+      foreground: true,
+      holdForeground: true,
+      latencySensitive: false
+    })
+    vi.advanceTimersByTime(100)
+
+    writeTerminalOutput(terminal, '\x1b[12;4Htyped input', {
+      foreground: true,
+      holdForeground: true,
+      latencySensitive: true
+    })
+
+    vi.advanceTimersByTime(31)
+    expect(terminal.write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    vi.runOnlyPendingTimers()
+    expect(terminal.write).toHaveBeenCalledWith(
+      '\x1b[?2026h\x1b[?25ltool redraw\x1b[12;4Htyped input',
+      expect.any(Function)
+    )
+  })
+
+  it('keeps a frame close bounded after a safety flush removes the held queue', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    const writeHold = (index: number): void => {
+      writeTerminalOutput(terminal, `\x1b[?2026hchunk-${index}`, {
+        foreground: true,
+        holdForeground: true,
+        latencySensitive: true
+      })
+    }
+
+    writeHold(0)
+    vi.advanceTimersByTime(20)
+    writeHold(1)
+    vi.advanceTimersByTime(20)
+    writeHold(2)
+    vi.advanceTimersByTime(11)
+    expect(terminal.write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    vi.runOnlyPendingTimers()
+    expect(terminal.write).toHaveBeenCalledOnce()
+
+    writeTerminalOutput(terminal, '\x1b[?2026l', {
+      foreground: true,
+      coalesceForeground: true
+    })
+    vi.advanceTimersByTime(0)
+    vi.runOnlyPendingTimers()
+    expect(terminal.write).toHaveBeenCalledTimes(2)
+    expect(terminal.write).toHaveBeenLastCalledWith('\x1b[?2026l', expect.any(Function))
+  })
+
   it('drains a synchronized foreground ending after the restore coalescing window', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()

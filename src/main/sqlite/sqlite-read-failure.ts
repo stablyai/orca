@@ -6,18 +6,34 @@
 /** Primary result codes; extended codes pack the primary code in the low byte. */
 const SQLITE_BUSY = 5
 const SQLITE_LOCKED = 6
+const SQLITE_CORRUPT = 11
 const SQLITE_CANTOPEN = 14
+const SQLITE_NOTADB = 26
 
 // Shared with the Codex index-heal pass, which only ever sees a relayed message
 // string (app-server RPC drops `errcode`), so message matching is not optional.
 const CONTENTION_MESSAGE = /SQLITE_(?:BUSY|LOCKED)|database (?:is )?(?:busy|locked)/i
 
 function primaryErrcode(error: unknown): number | null {
-  if (!error || typeof error !== 'object' || !('errcode' in error)) {
+  if (!error || typeof error !== 'object') {
     return null
   }
-  const errcode = (error as { errcode?: unknown }).errcode
+  const errcode = 'errcode' in error ? error.errcode : undefined
   return typeof errcode === 'number' && Number.isFinite(errcode) ? errcode & 0xff : null
+}
+
+/** node:sqlite marks its errors `ERR_SQLITE_ERROR`. */
+function isSqliteDriverError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ERR_SQLITE_ERROR'
+}
+
+/** True only when SQLite itself reports the database damaged or not a database at all. */
+export function isSqliteCorruption(error: unknown): boolean {
+  if (!isSqliteDriverError(error)) {
+    return false
+  }
+  const errcode = primaryErrcode(error)
+  return errcode === SQLITE_CORRUPT || errcode === SQLITE_NOTADB
 }
 
 function errorText(error: unknown): string {

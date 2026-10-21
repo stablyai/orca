@@ -32,6 +32,7 @@ vi.mock('electron', () => ({
 }))
 
 import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
+import { markNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
 
 const isMac = process.platform === 'darwin'
 
@@ -72,6 +73,37 @@ function getSubmenu(
 }
 
 describe('registerAppMenu', () => {
+  it.each(['linux', 'win32', 'darwin'] as const)(
+    'leaves Ctrl+M to the terminal while preserving macOS minimize on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      registerAppMenu(buildMenuOptions())
+
+      const windowSubmenu = getSubmenu(getTemplate(), 'Window')
+      const minimize = windowSubmenu.find((item) => item.role === 'minimize')
+      expect(minimize).toEqual(
+        platform === 'darwin'
+          ? { role: 'minimize' }
+          : { role: 'minimize', accelerator: '', registerAccelerator: false }
+      )
+      expect(windowSubmenu.find((item) => item.role === 'zoom')).toEqual({ role: 'zoom' })
+    }
+  )
+
+  it('shows the Settings hint when the user assigns a shortcut', () => {
+    registerAppMenu({
+      ...buildMenuOptions(),
+      getKeybindings: () => ({ 'app.settings': ['Mod+Comma'] })
+    })
+
+    const submenu = getSubmenu(getTemplate(), isMac ? 'Orca' : 'File')
+    expect(submenu).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}` })
+      ])
+    )
+  })
+
   it('toggles missing default-on appearance settings from visible to hidden', () => {
     expect(getNextDefaultOnAppearanceSettingValue(undefined)).toBe(false)
     expect(getNextDefaultOnAppearanceSettingValue(true)).toBe(false)
@@ -354,6 +386,48 @@ describe('registerAppMenu', () => {
     expect(sendActionToFirstResponderMock).toHaveBeenCalledWith('paste:')
   })
 
+  it.each(
+    (['darwin', 'linux', 'win32'] as const).flatMap((platform) =>
+      ['popup', 'child', 'unavailable'].map((focus) => ({ platform, focus }))
+    )
+  )(
+    'routes native popup Edit actions to web contents on $platform with $focus focus',
+    ({ platform, focus }) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const popupContents = { paste: vi.fn(), copy: vi.fn(), selectAll: vi.fn(), send: vi.fn() }
+      const childContents = { paste: vi.fn(), copy: vi.fn(), selectAll: vi.fn(), send: vi.fn() }
+      const popupWindow = { webContents: popupContents }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The popup registry only stores window identity; Edit actions use the mocked webContents methods.
+      markNativeBrowserPopupWindow(popupWindow as unknown as Electron.BrowserWindow)
+      getFocusedWindowMock.mockReturnValue(popupWindow)
+      getFocusedWebContentsMock.mockReturnValue(
+        focus === 'child' ? childContents : focus === 'popup' ? popupContents : null
+      )
+      registerAppMenu(buildMenuOptions())
+
+      const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+      for (const label of ['Paste', 'Copy', 'Select All']) {
+        const click: unknown = editSubmenu.find((item) => item.label === label)?.click
+        expect(click).toBeTypeOf('function')
+        if (typeof click === 'function') {
+          click()
+        }
+      }
+
+      const target = focus === 'child' ? childContents : popupContents
+      const other = focus === 'child' ? popupContents : childContents
+      expect(target.paste).toHaveBeenCalledOnce()
+      expect(target.copy).toHaveBeenCalledOnce()
+      expect(target.selectAll).toHaveBeenCalledOnce()
+      expect(other.paste).not.toHaveBeenCalled()
+      expect(other.copy).not.toHaveBeenCalled()
+      expect(other.selectAll).not.toHaveBeenCalled()
+      expect(popupContents.send).not.toHaveBeenCalled()
+      expect(childContents.send).not.toHaveBeenCalled()
+      expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
+    }
+  )
+
   it.each(['linux', 'win32'] as const)(
     'does not invoke the native paste responder on %s without a focused window',
     (platform) => {
@@ -381,10 +455,8 @@ describe('registerAppMenu', () => {
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
     expect(fileLabels).not.toContain(`Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`)
-    expect(fileLabels[0]).toBe(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
-    expect(fileLabels).toEqual(
-      expect.arrayContaining([`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`, 'Exit'])
-    )
+    expect(fileLabels[0]).toBe('Settings')
+    expect(fileLabels).toEqual(expect.arrayContaining(['Settings', 'Exit']))
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
     expect(helpLabels).toEqual(
@@ -403,9 +475,7 @@ describe('registerAppMenu', () => {
     const template = getTemplate()
     const appSubmenu = getSubmenu(template, 'Orca')
     const appLabels = appSubmenu.map((item) => item.label)
-    expect(appLabels).toEqual(
-      expect.arrayContaining(['Check for Updates...', `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`])
-    )
+    expect(appLabels).toEqual(expect.arrayContaining(['Check for Updates...', 'Settings']))
     // Why: on macOS File should NOT duplicate Settings/Exit — those live in
     // the system app menu. Without global Export, there is no File item left.
     expect(template.find((item) => item.label === 'File')).toBeUndefined()
@@ -556,4 +626,34 @@ describe('registerAppMenu', () => {
     expect(appearanceSubmenu.find((item) => item.label === leftLabel)?.accelerator).toBeUndefined()
     expect(appearanceSubmenu.find((item) => item.label === rightLabel)?.accelerator).toBeUndefined()
   })
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'keeps the native quit role unless the host supplies a quit handler (%s, #15537)',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const quitMenu = platform === 'darwin' ? 'Orca' : 'File'
+      const findQuit = (): Electron.MenuItemConstructorOptions | undefined =>
+        getSubmenu(getTemplate(), quitMenu).find(
+          (item) =>
+            item.role === 'quit' || item.accelerator === 'CmdOrCtrl+Q' || item.label === 'Exit'
+        )
+
+      registerAppMenu(buildMenuOptions())
+      expect(findQuit()?.role).toBe('quit')
+
+      buildFromTemplateMock.mockClear()
+      const onQuit = vi.fn()
+      registerAppMenu({ ...buildMenuOptions(), onQuit })
+      const quit = findQuit()
+      expect(quit?.role).toBeUndefined()
+      expect(quit?.label).toBe(platform === 'darwin' ? 'Quit Orca' : 'Exit')
+      expect(quit?.accelerator).toBe(platform === 'win32' ? undefined : 'CmdOrCtrl+Q')
+      // Why untyped: the handler ignores its Electron arguments.
+      const click: unknown = quit?.click
+      if (typeof click === 'function') {
+        click()
+      }
+      expect(onQuit).toHaveBeenCalledOnce()
+    }
+  )
 })

@@ -1,5 +1,5 @@
-import type { RpcClient } from '../transport/rpc-client'
 import { saveMobileClipboardImageAsTempFile } from './mobile-clipboard-image'
+import type { MobileClipboardImageRpcSender } from './mobile-clipboard-image-operations'
 // Type-only import so this module (and its unit test) stays free of the expo/
 // react-native picker chain; the concrete `pickImage` is injected by the hook.
 import type { MobileImageSource, PickedMobileImage } from './mobile-image-source-picker'
@@ -28,7 +28,7 @@ export function appendPendingNativeChatImages(
 }
 
 export type UploadNativeChatImagesDeps = {
-  readonly client: Pick<RpcClient, 'sendRequest'>
+  readonly client: MobileClipboardImageRpcSender
   readonly getConnectionId: () => Promise<string | null>
   // Injected so this module stays free of expo/react-native imports (unit-testable).
   readonly pickImages: (
@@ -71,7 +71,10 @@ export async function uploadMobileNativeChatImages(
     // Prefer the picker's local URI for the thumbnail; fall back to an inline data
     // URI when the source omitted one (RN <Image> renders both).
     const previewUri = image.uri ?? `data:image/png;base64,${image.base64}`
-    const result = { path, previewUri }
+    const result = {
+      path,
+      previewUri
+    }
     uploaded.push(result)
     onImageUploaded?.(result)
   }

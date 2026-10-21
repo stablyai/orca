@@ -218,6 +218,7 @@ describe('parked terminal watcher synchronization', () => {
         if (typeof property === 'string') {
           harness.reconciliationPtyReads += 1
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
         return Reflect.get(target, property, receiver)
       }
     })

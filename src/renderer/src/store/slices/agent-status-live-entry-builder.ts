@@ -1,15 +1,13 @@
+import { sameAgentStatusTerminalOwner } from '../../../../shared/agent-status-terminal-owner'
 import type { AppState } from '../types'
-import {
-  AGENT_STATE_HISTORY_MAX,
-  agentSubagentsEqual,
-  type MigrationUnsupportedPtyEntry,
-  type AgentStateHistoryEntry,
-  type AgentStatusEntry
+import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-main-agent'
+import { resolveAgentStatusLiveEntryStateHistory } from '../../../../shared/agent-status-live-entry-state-history'
+import type {
+  MigrationUnsupportedPtyEntry,
+  AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import {
   agentProviderSessionsEqual,
-  getAgentResumeArgv,
-  isResumableTuiAgent,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
@@ -29,6 +27,12 @@ import { registryEntryMatchesStatus } from './agent-status-launch-config'
 import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
+import { liveEntryChildFields } from './agent-status-live-entry-children'
+import {
+  canReuseStatusProviderSession,
+  recordLaunchConfigForStatus,
+  statusRetainsResumableIdentity
+} from '../../../../shared/agent-resume-record-from-status'
 
 export type AgentStatusLiveEntryBuild = {
   entry: AgentStatusEntry
@@ -78,43 +82,22 @@ export function buildAgentStatusLiveEntry(
     return { entry: null, reason: 'stale' }
   }
   const effectiveTitle = terminalTitle ?? existing?.terminalTitle
-  let history: AgentStateHistoryEntry[] = existing?.stateHistory ?? []
-  let lastCompletedAssistantMessage = existing?.lastCompletedAssistantMessage
-  const boundaryLandsOnRealDone =
-    existing?.state === 'done' &&
-    existing.sessionBoundary !== true &&
-    payload.state === 'done' &&
-    payload.sessionBoundary === true
-  if (
-    existing &&
-    (existing.state !== payload.state || boundaryLandsOnRealDone) &&
-    !(existing.state === 'done' && existing.sessionBoundary === true)
-  ) {
-    history = [
-      ...history,
-      {
-        state: existing.state,
-        prompt: existing.prompt,
-        startedAt: existing.stateStartedAt,
-        interrupted: existing.interrupted
-      }
-    ]
-    if (history.length > AGENT_STATE_HISTORY_MAX) {
-      history = history.slice(history.length - AGENT_STATE_HISTORY_MAX)
-    }
-    if (existing.state === 'done') {
-      lastCompletedAssistantMessage = existing.lastAssistantMessage
-    }
-  }
+  const { history, lastCompletedAssistantMessage, stateObservedAt } =
+    resolveAgentStatusLiveEntryStateHistory(existing, payload, updatedAt)
   const identity = resolveAgentStatusIdentity({
-    existing: existing
-      ? {
-          agentType: existing.agentType,
-          state: existing.state,
-          updatedAt: existing.updatedAt,
-          restoredUnconfirmed: existing.restoredUnconfirmed
+    existing:
+      existing &&
+      sameAgentStatusTerminalOwner(
+        { connectionId: existing.connectionId ?? null, worktreeId: existing.worktreeId },
+        {
+          connectionId:
+            (routing?.connectionId === undefined ? existing.connectionId : routing.connectionId) ??
+            null,
+          worktreeId: routing?.worktreeId ?? existing.worktreeId
         }
-      : undefined,
+      )
+        ? existing
+        : undefined,
     incoming: payload.agentType,
     now: updatedAt
   })
@@ -139,11 +122,15 @@ export function buildAgentStatusLiveEntry(
       : existing && existing.state === payload.state
         ? existing.stateStartedAt
         : updatedAt)
+  // Why: a writer with no turn clock (an OSC repaint) keeps the host's stamp only within one state;
+  // a state change it cannot date must not inherit another turn's start.
+  const turnStartedAt =
+    timing?.turnStartedAt ??
+    (existing && existing.state === payload.state ? existing.turnStartedAt : undefined)
   if (
     existing &&
     shouldSuppressInheritedTerminalStatus({
-      inheritedFromActivePane: identity.inheritedFromActivePane,
-      incomingState: payload.state
+      inheritedFromActivePane: identity.inheritedFromActivePane
     })
   ) {
     return { entry: null, reason: 'suppressed-inherited-terminal' }
@@ -162,9 +149,10 @@ export function buildAgentStatusLiveEntry(
     payloadMergedOrchestration ??
     runtimeMergedOrchestration ??
     (payload.state === 'done' ? existing?.orchestration : undefined)
-  const canReuseExistingProviderSession =
-    existing?.agentType === identity.agentType &&
-    (existing.state !== 'done' || payload.state === 'done')
+  const canReuseExistingProviderSession = canReuseStatusProviderSession(existing, {
+    agentType: identity.agentType,
+    state: payload.state
+  })
   const providerSession =
     metadata?.providerSession ??
     (canReuseExistingProviderSession ? existing.providerSession : undefined)
@@ -194,22 +182,16 @@ export function buildAgentStatusLiveEntry(
   })
   const matchedRegistryLaunchConfig = registryMatched ? registryEntry?.launchConfig : undefined
   const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]
-  const retainsResumableRecoveryIdentity =
-    payload.state === 'done' &&
-    isResumableTuiAgent(identity.agentType) &&
-    providerSession !== undefined &&
-    getAgentResumeArgv(identity.agentType, providerSession) !== null
+  const retainsResumableRecoveryIdentity = statusRetainsResumableIdentity(
+    { agentType: identity.agentType, state: payload.state },
+    providerSession
+  )
   const matchedSleepingLaunchConfig =
-    (payload.state !== 'done' || retainsResumableRecoveryIdentity) &&
-    existingSleepingRecord?.launchConfig &&
-    existingSleepingRecord.agent === identity.agentType &&
-    providerSession &&
-    agentProviderSessionsEqual(
-      identity.agentType,
-      existingSleepingRecord.providerSession,
-      providerSession
-    )
-      ? existingSleepingRecord.launchConfig
+    payload.state !== 'done' || retainsResumableRecoveryIdentity
+      ? recordLaunchConfigForStatus(existingSleepingRecord, {
+          agentType: identity.agentType,
+          providerSession
+        })
       : undefined
   const launchConfigSource =
     (payload.state !== 'done' && !providerSessionChanged && metadata?.launchToken
@@ -217,6 +199,9 @@ export function buildAgentStatusLiveEntry(
       : undefined) ??
     matchedRegistryLaunchConfig ??
     matchedSleepingLaunchConfig
+  const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
+  const programStatus =
+    payload.programStatus === undefined ? existing?.programStatus : payload.programStatus
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -227,10 +212,14 @@ export function buildAgentStatusLiveEntry(
     ...(timing?.evidenceObservedAt !== undefined
       ? { evidenceObservedAt: timing.evidenceObservedAt }
       : {}),
+    ...(metadata?.structuredHostOwned === true ? { structuredHostOwned: true as const } : {}),
     stateStartedAt,
+    stateObservedAt,
+    ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
     agentType: identity.agentType,
     model:
       payload.model ?? (existing?.agentType === identity.agentType ? existing.model : undefined),
+    ...(payload.modelSwitchCommand ? { modelSwitchCommand: payload.modelSwitchCommand } : {}),
     paneKey,
     terminalHandle: statusTerminalHandle,
     worktreeId:
@@ -255,9 +244,9 @@ export function buildAgentStatusLiveEntry(
     lastAssistantMessageIsToolOutput: payload.lastAssistantMessageIsToolOutput,
     ...(lastCompletedAssistantMessage ? { lastCompletedAssistantMessage } : {}),
     orchestration,
-    subagents: agentSubagentsEqual(existing?.subagents, payload.subagents)
-      ? existing?.subagents
-      : payload.subagents,
+    ...(payload.subagentObservation ? { subagentObservation: payload.subagentObservation } : {}),
+    ...liveEntryChildFields(existing, payload),
+    ...(mainAgent ? { mainAgent } : {}),
     ...(providerSession ? { providerSession } : {}),
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }
@@ -266,6 +255,7 @@ export function buildAgentStatusLiveEntry(
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     acceptedStatusSeq: (existing?.acceptedStatusSeq ?? 0) + 1,
     ...(payload.observation ? { observation: payload.observation } : {}),
+    ...(programStatus ? { programStatus } : {}),
     interrupted: payload.interrupted,
     sessionBoundary:
       payload.sessionBoundary ??

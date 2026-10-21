@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ getRuntimeGitHistory: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-status-client', () => ({
   getRuntimeGitHistory: mocks.getRuntimeGitHistory
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
@@ -35,7 +36,7 @@ type Api = ReturnType<typeof useSourceControlGitHistory>
 let latest: Api | null = null
 
 function Probe(props: {
-  activeRepoSettings?: { activeRuntimeEnvironmentId: string | null }
+  activeRepoTarget?: RuntimeClientTarget
   worktreeId?: string | null
   worktreePath?: string
   compareBaseRef?: string | null
@@ -46,7 +47,7 @@ function Probe(props: {
   worktreeMap?: ReadonlyMap<string, unknown>
 }): null {
   latest = useSourceControlGitHistory({
-    activeRepoSettings: props.activeRepoSettings ?? null,
+    activeRepoTarget: props.activeRepoTarget ?? { kind: 'local' },
     activeWorktreeId: props.worktreeId === undefined ? 'A' : props.worktreeId,
     worktreePath: props.worktreePath ?? '/a',
     compareBaseRef: props.compareBaseRef === undefined ? 'origin/main' : props.compareBaseRef,
@@ -238,28 +239,28 @@ describe('useSourceControlGitHistory stale completion', () => {
 
   it('re-fetches when the owner host changes but the worktree and path stay put', async () => {
     const root = await mount({
-      activeRepoSettings: { activeRuntimeEnvironmentId: null }
+      activeRepoTarget: { kind: 'local' }
     })
     await flush()
     expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(1)
     expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ settings: { activeRuntimeEnvironmentId: null } }),
+      expect.objectContaining({ target: { kind: 'local' } }),
       expect.anything()
     )
 
     await act(async () => {
-      root.render(<Probe activeRepoSettings={{ activeRuntimeEnvironmentId: 'env-1' }} />)
+      root.render(<Probe activeRepoTarget={{ kind: 'environment', environmentId: 'env-1' }} />)
     })
     await flush()
     expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
     expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ settings: { activeRuntimeEnvironmentId: 'env-1' } }),
+      expect.objectContaining({ target: { kind: 'environment', environmentId: 'env-1' } }),
       expect.anything()
     )
 
     // A new settings object with the same owner host must not trigger another git read.
     await act(async () => {
-      root.render(<Probe activeRepoSettings={{ activeRuntimeEnvironmentId: 'env-1' }} />)
+      root.render(<Probe activeRepoTarget={{ kind: 'environment', environmentId: 'env-1' }} />)
     })
     await flush()
     expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)

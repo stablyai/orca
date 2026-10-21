@@ -9,7 +9,7 @@ import {
   cookieImportTarget,
   type CookieImportOptions
 } from './browser-cookie-import-pipeline'
-import { deriveUrl, firefoxSameSite, type ValidatedCookie } from './browser-cookie-validation'
+import { databaseSameSite, deriveUrl, type ValidatedCookie } from './browser-cookie-validation'
 import type { DetectedBrowser } from './browser-cookie-detection-types'
 import { diag } from './browser-cookie-import-diagnostics'
 
@@ -108,7 +108,7 @@ export async function importCookiesFromFirefox(
         path: row.path || '/',
         secure,
         httpOnly: row.isHttpOnly === 1,
-        sameSite: firefoxSameSite(row.sameSite),
+        sameSite: databaseSameSite(row.sameSite),
         expirationDate: row.expiry > 0 ? row.expiry : undefined,
         partition: readFirefoxRowPartition(row, firefoxColumns)
       })

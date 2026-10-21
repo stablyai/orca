@@ -1,17 +1,16 @@
-import { createContext, Script } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import type { TappedFilePath } from './terminal-path-tap'
-import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
+import {
+  resolveTerminalFileUrlTap as documentResolveTerminalFileUrlTap,
+  resolveTerminalOscFileTap as documentResolveTerminalOscFileTap
+} from './document/osc-link-tap'
 import {
   TERMINAL_HTTP_URL_MAX_LENGTH,
-  TERMINAL_HTTP_URL_REGEX_SOURCE,
-  URL_TAP_WEBVIEW_JS,
   findFileUrlAtColumn,
   findUrlAtColumn,
   resolveTerminalOscFileTap,
   resolveTerminalFileUrlTap
 } from './terminal-webview-url-tap'
-import { XTERM_HTML } from './terminal-webview-html'
 
 type FileTapResolverCase = {
   name: string
@@ -92,26 +91,16 @@ const OSC_FILE_TAP_CASES: FileTapResolverCase[] = [
 
 type InjectedFileTapResolver = (uri: string) => TappedFilePath | null
 
-// Why: the WebView blob hand-translates terminal-file-url-tap.ts into plain JS
-// with re-escaped regexes; executing it against the same cases as the TS module
-// keeps the two copies from drifting (mirrors createInjectedPathMatcher).
+// Why: the document carries its own copy of this logic, so the two are run against one set of
+// cases and cannot drift. Both are modules now, so the comparison is an import rather than an
+// evaluation of the document's text.
 function createInjectedFileTapResolvers(): {
   resolveTerminalFileUrlTap: InjectedFileTapResolver
   resolveTerminalOscFileTap: InjectedFileTapResolver
 } {
-  const context = createContext({ URL })
-  new Script(
-    `${TERMINAL_PATH_TAP_JS}\n${URL_TAP_WEBVIEW_JS}\n` +
-      'this.__resolveTerminalFileUrlTap = resolveTerminalFileUrlTap;\n' +
-      'this.__resolveTerminalOscFileTap = resolveTerminalOscFileTap;'
-  ).runInContext(context)
-  const injected = context as {
-    __resolveTerminalFileUrlTap: InjectedFileTapResolver
-    __resolveTerminalOscFileTap: InjectedFileTapResolver
-  }
   return {
-    resolveTerminalFileUrlTap: injected.__resolveTerminalFileUrlTap,
-    resolveTerminalOscFileTap: injected.__resolveTerminalOscFileTap
+    resolveTerminalFileUrlTap: documentResolveTerminalFileUrlTap,
+    resolveTerminalOscFileTap: documentResolveTerminalOscFileTap
   }
 }
 
@@ -190,20 +179,5 @@ describe('findUrlAtColumn', () => {
 
     const overlongUrl = `https://example.com/${'a'.repeat(TERMINAL_HTTP_URL_MAX_LENGTH)}`
     expect(findUrlAtColumn(overlongUrl, 0)).toBeNull()
-  })
-
-  it('injects URL and OSC tap handling into the WebView document', () => {
-    expect(XTERM_HTML).toContain('function findUrlAtColumn(')
-    expect(XTERM_HTML).toContain('function findFileUrlAtColumn(')
-    expect(XTERM_HTML).toContain('function fileUrlAtViewportPoint(')
-    expect(XTERM_HTML).toContain('function urlAtViewportPoint(')
-    expect(XTERM_HTML).toContain(JSON.stringify(TERMINAL_HTTP_URL_REGEX_SOURCE))
-    expect(XTERM_HTML).toContain('function oscLinkAtViewportPoint(')
-    expect(XTERM_HTML).toContain('function resolveTerminalOscFileTap(')
-    expect(XTERM_HTML).toContain('function resolveTerminalFileUrlTap(')
-    expect(XTERM_HTML).toContain('function isLocalFileUriHostname(')
-    expect(XTERM_HTML).toContain('return parsePathLineCol(value);')
-    expect(XTERM_HTML).toContain('function notifyTerminalSurfaceTap(')
-    expect(XTERM_HTML).toContain("notify({ type: 'open-url', url: tappedUrl });")
   })
 })

@@ -8,6 +8,7 @@ type WorkItemSourceActionsInput = Pick<
   | 'repoId'
   | 'reuseEligibleBranch'
   | 'setBaseBranch'
+  | 'setBaseBranchNamesWorkspace'
   | 'setBranchNameOverride'
   | 'setBranchNameOverridePreservesNameEdits'
   | 'setCompareBaseRef'
@@ -17,7 +18,7 @@ type WorkItemSourceActionsInput = Pick<
   | 'setReuseEligibleBranch'
   | 'setReuseSelectedBranch'
   | 'setStartFromResetHint'
-  | 'smartGitHubPrStartPointSelectionRef'
+  | 'smartSourceSelectionRef'
   | 'worktreesByRepo'
 >
 
@@ -35,6 +36,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
     repoId,
     reuseEligibleBranch,
     setBaseBranch,
+    setBaseBranchNamesWorkspace,
     setBranchNameOverride,
     setBranchNameOverridePreservesNameEdits,
     setCompareBaseRef,
@@ -44,13 +46,13 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
     setReuseEligibleBranch,
     setReuseSelectedBranch,
     setStartFromResetHint,
-    smartGitHubPrStartPointSelectionRef,
+    smartSourceSelectionRef,
     worktreesByRepo
   } = input
 
   const handleSmartBranchSelect = useCallback(
     (refName: string, localBranchName: string): void => {
-      smartGitHubPrStartPointSelectionRef.current = null
+      smartSourceSelectionRef.current = null
       const selection = resolveComposerBranchPick({
         refName,
         localBranchName,
@@ -59,6 +61,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
         worktreeBranches: getComposerRepoWorktreeBranches(worktreesByRepo[repoId] ?? [], repoId)
       })
       setBaseBranch(selection.baseBranch)
+      setBaseBranchNamesWorkspace(true)
       setCompareBaseRef(undefined)
       setPushTarget(undefined)
       setStartFromResetHint(null)
@@ -86,6 +89,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
       branchAutoNameRef,
       lastAutoNameRef,
       setBaseBranch,
+      setBaseBranchNamesWorkspace,
       setBranchNameOverride,
       setBranchNameOverridePreservesNameEdits,
       setCompareBaseRef,
@@ -95,7 +99,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
       setReuseEligibleBranch,
       setReuseSelectedBranch,
       setStartFromResetHint,
-      smartGitHubPrStartPointSelectionRef
+      smartSourceSelectionRef
     ]
   )
 

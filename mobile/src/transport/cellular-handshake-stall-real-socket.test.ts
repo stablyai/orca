@@ -127,10 +127,3 @@ describe.runIf(RUN_LIVE)('issue #10119 — real socket, handshake slower than th
     expect(labels.slice(firstEscalated).every((l) => l !== 'Connecting…')).toBe(true)
   }, 60_000)
 })
-
-// Why: vitest fails a file with zero tests; keep a sentinel for default runs.
-describe.runIf(!RUN_LIVE)('real-socket handshake stall (skipped)', () => {
-  it('is opt-in via ORCA_MOBILE_LIVE_REPRO=1', () => {
-    expect(true).toBe(true)
-  })
-})

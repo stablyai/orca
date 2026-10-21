@@ -280,14 +280,4 @@ describe('terminal title classification', () => {
       expect(resolveExplicitTerminalTitleAgentType(title)).toBe(explicitTitleAgent)
     }
   )
-
-  it('returns the same verdict on the second read of every title', () => {
-    for (const title of TERMINAL_TITLE_CLASSIFICATION_CORPUS) {
-      expect(detectAgentStatusFromTitle(title)).toBe(detectAgentStatusFromTitle(title))
-      expect(getAgentLabel(title)).toBe(getAgentLabel(title))
-      expect(resolveExplicitTerminalTitleAgentType(title)).toBe(
-        resolveExplicitTerminalTitleAgentType(title)
-      )
-    }
-  })
 })

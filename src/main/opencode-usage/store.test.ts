@@ -18,17 +18,18 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./scanner', () => ({
-  scanOpenCodeUsageDatabases: vi.fn()
+vi.mock('../usage/usage-scan-worker-spawn', () => ({
+  scanOpenCodeUsageDatabasesViaWorker: vi.fn(),
+  splitUsageCacheFileViaWorker: vi.fn()
 }))
 
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from './store'
+import { OPENCODE_USAGE_SCHEMA_VERSION } from './opencode-usage-provider'
 import { normalizePersistedState } from './persisted-state-normalization'
-import { scanOpenCodeUsageDatabases } from './scanner'
+import { scanOpenCodeUsageDatabasesViaWorker } from '../usage/usage-scan-worker-spawn'
 
 function createEmptyScanResult() {
   return {
-    processedDatabases: [],
     sessions: [],
     dailyAggregates: []
   }
@@ -36,7 +37,7 @@ function createEmptyScanResult() {
 
 function getDefaultState(): OpenCodeUsagePersistedState {
   return {
-    schemaVersion: 2,
+    schemaVersion: OPENCODE_USAGE_SCHEMA_VERSION,
     worktreeFingerprint: null,
     processedDatabases: [],
     sessions: [],
@@ -163,8 +164,8 @@ describe('OpenCodeUsageStore', () => {
     tempUserData = mkdtempSync(join(tmpdir(), 'orca-opencode-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
     initOpenCodeUsagePath()
-    vi.mocked(scanOpenCodeUsageDatabases).mockReset()
-    vi.mocked(scanOpenCodeUsageDatabases).mockResolvedValue(createEmptyScanResult())
+    vi.mocked(scanOpenCodeUsageDatabasesViaWorker).mockReset()
+    vi.mocked(scanOpenCodeUsageDatabasesViaWorker).mockResolvedValue(createEmptyScanResult())
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-10T12:00:00.000-04:00'))
   })
@@ -174,7 +175,7 @@ describe('OpenCodeUsageStore', () => {
     rmSync(tempUserData, { recursive: true, force: true })
   })
 
-  it('adapts OpenCode scans to pretty-printed cache persistence', async () => {
+  it('hands OpenCode scans the worker-owned source cache and persists a compact report', async () => {
     const store = createStoreWithState({
       scanState: {
         enabled: true,
@@ -187,8 +188,13 @@ describe('OpenCodeUsageStore', () => {
     await store.refresh(true)
 
     const persistedJson = readFileSync(join(tempUserData, 'orca-opencode-usage.json'), 'utf-8')
-    expect(scanOpenCodeUsageDatabases).toHaveBeenCalledWith([], [])
-    expect(persistedJson).toContain('\n')
+    expect(scanOpenCodeUsageDatabasesViaWorker).toHaveBeenCalledWith([], {
+      path: join(tempUserData, 'orca-opencode-usage-sources.json'),
+      schemaVersion: OPENCODE_USAGE_SCHEMA_VERSION,
+      worktreeFingerprint: '[]',
+      reuse: false
+    })
+    expect(persistedJson).not.toContain('\n')
   })
 
   it('reports no data for Orca scope when only non-Orca OpenCode usage exists', async () => {
@@ -312,6 +318,20 @@ describe('OpenCodeUsageStore', () => {
         totalTokens: 1350
       }
     ])
+  })
+
+  it.each([true, false])('rebuilds v2 caches without changing enabled=%s', (enabled) => {
+    const oldState = {
+      ...getDefaultState(),
+      schemaVersion: 2,
+      sessions: [makeSession()],
+      dailyAggregates: [makeDaily()],
+      scanState: { ...getDefaultState().scanState, enabled, lastScanCompletedAt: 123 }
+    }
+    expect(normalizePersistedState(oldState)).toEqual({
+      ...getDefaultState(),
+      scanState: { ...getDefaultState().scanState, enabled }
+    })
   })
 
   it('normalizes persisted OpenCode state by schema version', () => {

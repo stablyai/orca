@@ -1,4 +1,5 @@
 import { tokenizeCustomCommandTemplate, type CommandTokenSpan } from './commit-message-prompt'
+import { quotePowerShellLiteral } from './powershell-native-argument'
 
 /**
  * `'posix'` covers every Unix shell Orca can type into, fish included — not
@@ -217,7 +218,7 @@ function quotePortableUnixArg(value: string): string {
 
 export function quoteStartupArg(value: string, shell: AgentStartupShell): string {
   if (shell === 'powershell') {
-    return `'${value.replace(/'/g, "''")}'`
+    return quotePowerShellLiteral(value)
   }
   if (shell === 'cmd') {
     return `"${value.replace(/([\^&|<>()%!"])/g, '^$1')}"`

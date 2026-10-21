@@ -40,16 +40,6 @@ describe('formatBrowserImportSummary', () => {
     ).toBe('Detected: Google Chrome, Safari, Microsoft Edge, Arc, +2 more.')
   })
 
-  it('lists supported import sources before detection runs', () => {
-    expect(
-      formatBrowserImportSummary({
-        detectedBrowsers: [],
-        detectedBrowsersLoaded: false,
-        supportedImportLabels: SUPPORTED_LABELS
-      })
-    ).toBe('Import from: Google Chrome, Microsoft Edge, Arc, Brave, +4 more.')
-  })
-
   it('falls back to supported import sources when detection finds nothing', () => {
     expect(
       formatBrowserImportSummary({

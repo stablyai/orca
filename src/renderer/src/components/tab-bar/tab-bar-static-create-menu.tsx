@@ -13,7 +13,7 @@ import {
 import type { TabBarProps } from './tab-bar-props'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 
-export function renderTabBarStaticCreateMenu({
+export function TabBarStaticCreateMenu({
   terminalOnly,
   mobileEmulatorEnabled,
   managedBrowserCreationEnabled,

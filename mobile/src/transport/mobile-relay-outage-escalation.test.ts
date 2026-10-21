@@ -5,7 +5,8 @@ import {
   dependencies,
   FakeRelaySession,
   FakeSession,
-  host
+  host,
+  relay
 } from './mobile-endpoint-supervisor-test-fakes'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -40,7 +41,7 @@ describe('continuous Relay outage escalation', () => {
       openRelay,
       randomBytes: () => new Uint8Array([0, 0])
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     expect(openRelay).toHaveBeenCalledOnce()

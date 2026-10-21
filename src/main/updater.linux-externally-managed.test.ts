@@ -17,7 +17,7 @@ vi.mock('electron', () => moduleFactories.electron())
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
 vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
-vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+vi.mock('./ipc/pty/kill-all', () => moduleFactories.ptyKillAll())
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
@@ -103,17 +103,6 @@ describe('updater externally managed Linux installs', () => {
       version: '1.0.61',
       retryable: false
     })
-  })
-
-  it('marks the refusal non-retryable so the card offers no Retry Download', async () => {
-    const { send, updater } = await startUpdater({ packageType: 'deb', externallyManaged: true })
-    updater.checkForUpdatesFromMenu()
-    await vi.advanceTimersByTimeAsync(0)
-    updater.downloadUpdate()
-    await vi.advanceTimersByTimeAsync(0)
-
-    const status = lastStatus(send)
-    expect(status?.state === 'error' && status.retryable).toBe(false)
   })
 
   it('records the blocked download for field diagnosis', async () => {

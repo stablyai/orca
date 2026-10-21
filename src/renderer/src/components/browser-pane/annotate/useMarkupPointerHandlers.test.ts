@@ -3,7 +3,8 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useMarkupPointerHandlers, type MarkupPointerParams } from './useMarkupPointerHandlers'
-import type { MarkupShape } from './markup-drawing-model'
+import { createMarkupDocument } from './markup-drawing-model'
+import type { MarkupEditorState } from './markup-gesture'
 
 const realCrypto = globalThis.crypto
 
@@ -24,15 +25,14 @@ function baseParams(overrides: Partial<MarkupPointerParams> = {}): MarkupPointer
     color: '#ef4444',
     width: 4,
     pendingText: null,
-    inProgress: null,
     canvasRef: {
       current: {
         getBoundingClientRect: () => ({ left: 0, top: 0 })
       } as unknown as HTMLCanvasElement
     },
-    setInProgress: vi.fn(),
+    measureTextInkBox: () => null,
     setPendingText: vi.fn(),
-    setDoc: vi.fn(),
+    setState: vi.fn(),
     ...overrides
   }
 }
@@ -52,50 +52,19 @@ describe('useMarkupPointerHandlers in a non-secure browser context', () => {
   })
 
   it('starts a pen stroke with a valid id instead of throwing', () => {
-    const setInProgress = vi.fn()
-    const { result } = renderHook(() => useMarkupPointerHandlers(baseParams({ setInProgress })))
+    let state: MarkupEditorState = { doc: createMarkupDocument(), gesture: null }
+    const setState: MarkupPointerParams['setState'] = (update) => {
+      state = typeof update === 'function' ? update(state) : update
+    }
+    const { result } = renderHook(() => useMarkupPointerHandlers(baseParams({ setState })))
 
     expect(() => act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))).not.toThrow()
 
-    expect(setInProgress).toHaveBeenCalledTimes(1)
-    const shape = setInProgress.mock.calls[0][0] as MarkupShape
-    expect(shape.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/)
-  })
-})
-
-describe('useMarkupPointerHandlers pointer up', () => {
-  const inProgress: MarkupShape = {
-    id: 'shape-1',
-    kind: 'pen',
-    color: '#ef4444',
-    width: 4,
-    points: [{ x: 0, y: 0 }]
-  } as MarkupShape
-
-  it('commits outside the setInProgress updater so a double-invoked updater cannot duplicate the shape', () => {
-    const setInProgress = vi.fn()
-    const setDoc = vi.fn()
-    const { result } = renderHook(() =>
-      useMarkupPointerHandlers(baseParams({ inProgress, setInProgress, setDoc }))
-    )
-
-    act(() => result.current.onPointerUp())
-
-    expect(setDoc).toHaveBeenCalledTimes(1)
-    // The clear must be a plain value, not an updater that also commits.
-    expect(setInProgress).toHaveBeenCalledWith(null)
-  })
-
-  it('does not commit when no shape is in progress', () => {
-    const setInProgress = vi.fn()
-    const setDoc = vi.fn()
-    const { result } = renderHook(() =>
-      useMarkupPointerHandlers(baseParams({ inProgress: null, setInProgress, setDoc }))
-    )
-
-    act(() => result.current.onPointerUp())
-
-    expect(setDoc).not.toHaveBeenCalled()
-    expect(setInProgress).toHaveBeenCalledWith(null)
+    expect(state.gesture).toMatchObject({
+      kind: 'draw',
+      shape: {
+        id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+      }
+    })
   })
 })

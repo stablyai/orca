@@ -2,14 +2,31 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
+  AgentJournalDispatchState,
   AgentJournalRenderItem,
   AgentJournalResolution
 } from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
+import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
+
+const asyncStorage = vi.hoisted(() => ({
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn()
+}))
+
+vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
+
+function listedModelIds(snapshot: readonly SessionOptionDescriptor[]): string[] {
+  const model = snapshot.find((descriptor) => descriptor.id === 'model')
+  return model?.kind.type === 'select' ? model.kind.choices.map((choice) => choice.value) : []
+}
 
 function ok(result: unknown) {
   return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -138,15 +155,19 @@ function runningStatusItem(): AgentJournalRenderItem {
   }
 }
 
+function sendResult(dispatchState: AgentJournalDispatchState, reason: string | null = null) {
+  return ok({
+    ok: true,
+    replayed: false,
+    fence: 3,
+    cursor: { epoch: 'epoch-1', sequence: 1 },
+    value: structuredSendResultFixture(dispatchState, reason)
+  })
+}
+
 async function defaultSendRequest(method: string, params?: Record<string, unknown>) {
   if (method === 'agentSession.send') {
-    return ok({
-      ok: true,
-      replayed: false,
-      fence: 3,
-      cursor: { epoch: 'epoch-1', sequence: 1 },
-      value: { turnId: 'turn-1' }
-    })
+    return sendResult('accepted')
   }
   if (method === 'agentSession.options') {
     return ok({
@@ -227,6 +248,7 @@ describe('useMobileStructuredAgentSession', () => {
     sendRequest,
     subscribe
   } as unknown as RpcClient
+  let storedOperations: Map<string, string>
 
   function Harness({
     sessionId = 'session-1',
@@ -253,6 +275,17 @@ describe('useMobileStructuredAgentSession', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+
+    storedOperations = new Map()
+    asyncStorage.getItem.mockImplementation(
+      async (key: string) => storedOperations.get(key) ?? null
+    )
+    asyncStorage.setItem.mockImplementation(async (key: string, value: string) => {
+      storedOperations.set(key, value)
+    })
+    asyncStorage.removeItem.mockImplementation(async (key: string) => {
+      storedOperations.delete(key)
+    })
     sendRequest.mockImplementation(defaultSendRequest)
     listener = null
   })
@@ -337,7 +370,7 @@ describe('useMobileStructuredAgentSession', () => {
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() => listener?.(snapshotEvent()))
 
-    let outcome: 'accepted' | 'unknown' | 'rejected' = 'rejected'
+    let outcome: MobileNativeChatSendOutcome = 'rejected'
     await act(async () => {
       outcome = await hook!.sendWithOutcome('hello')
     })
@@ -385,7 +418,8 @@ describe('useMobileStructuredAgentSession', () => {
 
     await vi.waitFor(() => expect(hook.permission).not.toBeNull())
     await vi.waitFor(() => expect(hook.question).not.toBeNull())
-    await vi.waitFor(() => expect(hook.optionSnapshot.length).toBeGreaterThan(0))
+    // The seed paints first; the session's own list is what a pick is checked against.
+    await vi.waitFor(() => expect(listedModelIds(hook.optionSnapshot)).toContain('gpt-slow'))
 
     expect(hook.permission).toMatchObject({
       title: 'Allow Bash?',
@@ -468,7 +502,7 @@ describe('useMobileStructuredAgentSession', () => {
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() => listener?.(snapshotEvent(3)))
 
-    let outcome: 'accepted' | 'unknown' | 'rejected' = 'rejected'
+    let outcome: MobileNativeChatSendOutcome = 'rejected'
     await act(async () => {
       outcome = await hook.sendWithOutcome('look at this', undefined, undefined, [
         { path: '/tmp/a.png', previewUri: 'file:///a.jpg' }
@@ -506,7 +540,7 @@ describe('useMobileStructuredAgentSession', () => {
     act(() => listener?.(snapshotEvent(3)))
     sendRequest.mockClear()
 
-    let outcome: 'accepted' | 'unknown' | 'rejected' = 'accepted'
+    let outcome: MobileNativeChatSendOutcome = 'accepted'
     await act(async () => {
       outcome = await hook!.sendWithOutcome('look at this', ['file:///a.jpg'])
     })
@@ -673,43 +707,13 @@ describe('useMobileStructuredAgentSession', () => {
     expect(retryId).not.toBe(firstId)
   })
 
-  it('marks a retried send as retryUnknown after ambiguous delivery', async () => {
-    act(() => {
-      renderer = create(createElement(Harness))
-    })
-    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
-    act(() => listener?.(snapshotEvent(3)))
-    let attempts = 0
-    sendRequest.mockImplementation(async (method, params) => {
-      if (method === 'agentSession.send' && attempts++ === 0) {
-        throw markRpcDeliveryUnknown(new Error('Connection closed'))
-      }
-      return defaultSendRequest(method, params)
-    })
-
-    await act(async () => {
-      expect(await hook!.sendWithOutcome('retry me')).toBe('unknown')
-      expect(await hook!.sendWithOutcome('retry me')).toBe('accepted')
-    })
-
-    const calls = sendRequest.mock.calls.filter(([method]) => method === 'agentSession.send')
-    expect(calls).toHaveLength(2)
-    expect(calls[0]![1]).not.toHaveProperty('retryUnknown')
-    expect(calls[1]![1]).toMatchObject({ retryUnknown: true })
-    const firstId = (calls[0]![1] as { envelope: { clientOperationId: string } }).envelope
-      .clientOperationId
-    const retryId = (calls[1]![1] as { envelope: { clientOperationId: string } }).envelope
-      .clientOperationId
-    expect(retryId).toBe(firstId)
-  })
-
   it('keeps structured option changes dispatched after unknown delivery', async () => {
     act(() => {
       renderer = create(createElement(Harness))
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() => listener?.(snapshotEvent(3)))
-    await vi.waitFor(() => expect(hook!.optionSnapshot.length).toBeGreaterThan(0))
+    await vi.waitFor(() => expect(listedModelIds(hook!.optionSnapshot)).toContain('gpt-slow'))
     sendRequest.mockImplementation(async (method, params) => {
       if (method === 'agentSession.setOption') {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))

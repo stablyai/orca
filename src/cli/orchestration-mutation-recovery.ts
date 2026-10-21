@@ -1,9 +1,10 @@
+import { quotePosixShellDoubleQuotedApostrophe } from '../shared/shell-argument-quoting'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import {
   recoverableOrchestrationArgs,
   resolveOrchestrationCliExecutable
 } from './runtime/orchestration-recovery-command'
-import { quoteWindowsCmdArgument } from '../shared/child-process/windows-command-line'
+import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line'
 import { quotePowerShellNativeArgument } from '../shared/powershell-native-argument'
 import { resolveWindowsShellStartupFamily } from '../shared/windows-terminal-shell'
 import type { AgentStartupShell } from '../shared/tui-agent-startup-shell'
@@ -44,8 +45,8 @@ export function orchestrationMutationRecoveryError(error: unknown): unknown {
   }
   const retryStep = retryCommand
     ? dispatchId
-      ? `After inspecting the Dispatch, if keyed recovery is still needed, run ${renderCommand(retryCommand)}. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate.`
-      : `If request-show reports completed or pending, run ${renderCommand(retryCommand)}. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate. If request-show reports absent, inspect the affected state before deciding whether to retry; absence does not prove a retry is safe.`
+      ? `After inspecting the Dispatch, if keyed recovery is still needed, run ${renderCommand(retryCommand)} from this same terminal. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate.`
+      : `If request-show reports completed or pending, run ${renderCommand(retryCommand)} from this same terminal. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate. If request-show reports absent, inspect the affected state before deciding whether to retry; absence does not prove a retry is safe.`
     : 'Recovery is blocked until the exact original command is available; no retry command was emitted.'
   const nextSteps = [`Run ${renderCommand(queryCommand)} before retrying.`, retryStep]
   const message = [
@@ -208,7 +209,7 @@ function shellQuote(value: string): string {
   if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) {
     return value
   }
-  return `'${value.replaceAll("'", `'"'"'`)}'`
+  return quotePosixShellDoubleQuotedApostrophe(value)
 }
 
 function stripUnsafeRetryAdvice(message: string, requestId: string): string {

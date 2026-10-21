@@ -79,12 +79,16 @@ export function formatHourlyReleaseName(version, buildNumber, commit, date) {
 // base version, and the base is only known once the published tags have been
 // resolved just above. Computing it outside meant numbering against whatever
 // version the caller guessed.
-export function getHourlyBuildIdentity(now = new Date(), { publishedVersions, releaseNames } = {}) {
-  const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
+export function getHourlyBuildIdentity(
+  now = new Date(),
+  { packageVersion, publishedVersions, releaseNames } = {}
+) {
+  const versionFromPackage =
+    packageVersion ?? JSON.parse(readFileSync(resolve('package.json'), 'utf8')).version
   const commit = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
     encoding: 'utf8'
   }).trim()
-  const base = resolveDevChannelBaseVersion(packageJson.version, publishedVersions ?? [])
+  const base = resolveDevChannelBaseVersion(versionFromPackage, publishedVersions ?? [])
   const version = createHourlyBuildVersion(base, now)
   const buildNumber = nextHourlyBuildNumber(base, releaseNames ?? [])
   return {

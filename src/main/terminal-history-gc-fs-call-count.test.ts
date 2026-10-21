@@ -167,15 +167,20 @@ describe('history GC filesystem request count', () => {
 
     await runHistoryGc(live)
 
+    const tombstoneLists = fsCalls.readdir.filter((p) => p.endsWith(PENDING_DELETE_DIR_NAME))
+    const scanLists = fsCalls.readdir.filter((p) => !p.endsWith(PENDING_DELETE_DIR_NAME))
     // The size estimation walked into every directory; the pass now only lists the root.
-    expect(fsCalls.readdir).toEqual([historyRoot])
+    expect(scanLists).toEqual([historyRoot])
+    // The tombstone drain (formerly a blocking readdirSync per completion) lists pending-delete a
+    // bounded number of times, never once per entry it removes.
+    expect(tombstoneLists.length).toBeLessThanOrEqual(12)
     // No stat on the entries themselves: the root dirent already carries the type.
     expect(statsOnEntries()).toEqual([])
     // The one surviving stat per directory is readHistoryMetaAsync enforcing its size cap.
     expect(statsInsideEntries().sort()).toEqual(
       Array.from({ length: DIR_COUNT }, (_, i) => join(historyRoot, `wt-${i}`, 'meta.json')).sort()
     )
-    expect(fsCalls.readdir.length + fsCalls.stat.length).toBe(1 + DIR_COUNT)
+    expect(scanLists.length + fsCalls.stat.length).toBe(1 + DIR_COUNT)
 
     const after = survivingDirs()
     expect(expected.size).toBe(DIR_COUNT / ORPHAN_EVERY)

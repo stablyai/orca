@@ -41,8 +41,12 @@ function withCountedEntityIdReads(tabs: readonly Tab[], onRead: () => void): Tab
 }
 
 describe('createEditorSlice recently closed editor tabs', () => {
-  function openMirroredEditor(store: StoreApi<AppState>, filePath: string, preview = false): void {
-    store.getState().openFile(
+  function openMirroredEditor(
+    store: StoreApi<AppState>,
+    filePath: string,
+    preview = false
+  ): string {
+    return store.getState().openFile(
       {
         filePath,
         relativePath: filePath.replace('/repo/', ''),
@@ -58,9 +62,9 @@ describe('createEditorSlice recently closed editor tabs', () => {
 
   it('reopens a closed mirrored editor tab as a local tab', () => {
     const store = createEditorStore()
-    openMirroredEditor(store, '/repo/notes.md')
+    const fileId = openMirroredEditor(store, '/repo/notes.md')
 
-    store.getState().closeFile('/repo/notes.md')
+    store.getState().closeFile(fileId)
 
     const recent = store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]
     expect(recent).toMatchObject({ filePath: '/repo/notes.md' })
@@ -265,6 +269,8 @@ describe('createEditorSlice recently closed editor tabs', () => {
     const liveWt1Id = openShared('wt-1')
     expect(liveWt1Id).toBe(ownedEditorFileId(sharedPath, 'wt-1', null))
     store.getState().closeFile(wt2Id)
+    // Why: closing wt-1's last tab above left the landing state; reopen runs for the on-screen worktree.
+    store.setState({ activeWorktreeId: 'wt-1' })
 
     expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
 

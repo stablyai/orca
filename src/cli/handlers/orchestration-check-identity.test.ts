@@ -94,19 +94,16 @@ describe('orchestration check identity', () => {
     )
   })
 
-  it.each([true, false])(
-    'surfaces a stale --terminal refusal instead of an empty inbox (json=%s)',
-    async (json) => {
-      callMock.mockRejectedValue(
-        Object.assign(new Error('Terminal term_gone has no live pane bound to a Run'), {
-          code: 'stable_pane_required'
-        })
-      )
+  it('surfaces a stale --terminal refusal instead of an empty inbox', async () => {
+    callMock.mockRejectedValue(
+      Object.assign(new Error('Terminal term_gone has no live pane bound to a Run'), {
+        code: 'stable_pane_required'
+      })
+    )
 
-      await expect(
-        invokeCheck(new Map<string, string | boolean>([['terminal', 'term_gone']]), json)
-      ).rejects.toMatchObject({ code: 'stable_pane_required' })
-      expect(printResultMock).not.toHaveBeenCalled()
-    }
-  )
+    await expect(
+      invokeCheck(new Map<string, string | boolean>([['terminal', 'term_gone']]))
+    ).rejects.toMatchObject({ code: 'stable_pane_required' })
+    expect(printResultMock).not.toHaveBeenCalled()
+  })
 })

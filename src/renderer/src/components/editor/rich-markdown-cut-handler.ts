@@ -81,7 +81,18 @@ export function handleRichMarkdownCut(view: EditorView, event: ClipboardEvent): 
     // Falls through to block-level cut for single-line paragraphs.
   }
 
+  // Images and source atoms can have no visible text.
+  let hasContentAtom = false
   if (!text) {
+    cutNode.descendants((node) => {
+      if (node.isAtom && !node.isText && node.type.name !== 'hardBreak') {
+        hasContentAtom = true
+      }
+      return !hasContentAtom
+    })
+  }
+
+  if (!text && !hasContentAtom) {
     // Still delete the empty block, matching VS Code behavior
     event.preventDefault()
     deleteBlockAndRestoreSelection(view, $from.before(cutDepth), $from.after(cutDepth))

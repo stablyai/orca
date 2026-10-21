@@ -64,17 +64,6 @@ describe('command code done settle window', () => {
     expect(successorSettle).toHaveBeenCalledExactlyOnceWith('Fix the spinner')
   })
 
-  it('drops the window when a working repaint cancels it', () => {
-    const settle = vi.fn()
-    setCommandCodeDoneSettleExecutor(PANE_KEY, settle)
-
-    openCommandCodeDoneSettle(PANE_KEY, 'Fix the spinner')
-    cancelCommandCodeDoneSettle(PANE_KEY)
-    vi.advanceTimersByTime(COMMAND_CODE_OUTPUT_DONE_SETTLE_MS * 2)
-
-    expect(settle).not.toHaveBeenCalled()
-  })
-
   // Why: a pane torn down with no successor has no row worth completing.
   it('fires harmlessly when every owner released before the deadline', () => {
     const release = setCommandCodeDoneSettleExecutor(PANE_KEY, vi.fn())

@@ -2,20 +2,17 @@ import type { Repo } from '../../shared/repo-types'
 import { getDefaultRemote } from '../git/repo'
 import { getProjectRefForRemote } from '../gitlab/client'
 import { getGlabKnownHosts } from '../gitlab/gl-utils'
-import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
-import { pickPreferredGitRemote } from '../../shared/preferred-git-remote'
 
 export async function resolveRuntimeGitLabIssueSourceRemote(
   repoPath: string,
   preference?: Repo['issueSourcePreference'],
-  connectionId?: string | null,
   localGitOptions: { wslDistro?: string } = {}
 ): Promise<string> {
-  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
+  const knownHosts = await getGlabKnownHosts(null, localGitOptions)
   const localGitOptionArgs =
     Object.keys(localGitOptions).length > 0 ? ([localGitOptions] as const) : []
   const resolveProject = (remote: string) =>
-    getProjectRefForRemote(repoPath, remote, knownHosts, connectionId, ...localGitOptionArgs)
+    getProjectRefForRemote(repoPath, remote, knownHosts, null, ...localGitOptionArgs)
   if (preference === 'origin') {
     if (await resolveProject('origin')) {
       return 'origin'
@@ -36,11 +33,6 @@ export async function resolveRuntimeGitLabIssueSourceRemote(
   }
   if (await resolveProject('origin')) {
     return 'origin'
-  }
-  if (connectionId) {
-    const provider = requireSshGitProvider(connectionId)
-    const { stdout } = await provider.exec(['remote'], repoPath)
-    return pickPreferredGitRemote(stdout.split('\n'))
   }
   return getDefaultRemote(repoPath, localGitOptions)
 }

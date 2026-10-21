@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
 import type { RuntimeMobileSessionTabsResult } from '../orca-runtime-test-mocks.spec'
@@ -86,6 +87,62 @@ describe('OrcaRuntimeService', () => {
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.state).toBe('done')
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.agentType).toBe('claude')
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.terminalTitle).toBeUndefined()
+  })
+
+  it('publishes a renamed tab over the live agent title, and the live title once cleared', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'renamed-pty' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'claude'
+    })
+    const leafId = HEADLESS_LEAF_ID
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, { tabId: 'renamed-tab', leafId })
+    runtime.attachWindow(1)
+    const publish = (snapshotVersion: number, customTitle: string | null) =>
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'renamed-tab',
+            worktreeId: TEST_WORKTREE_ID,
+            title: '✳ Claude Code',
+            activeLeafId: leafId,
+            layout: null
+          }
+        ],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'renderer-renamed',
+            snapshotVersion,
+            activeGroupId: null,
+            activeTabId: `renamed-tab::${leafId}`,
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: `renamed-tab::${leafId}`,
+                parentTabId: 'renamed-tab',
+                leafId,
+                title: '✳ Claude Code',
+                customTitle,
+                isActive: true
+              }
+            ]
+          }
+        ]
+      })
+    publish(1, 'Build fixer')
+    runtime.onPtyData('renamed-pty', '\x1b]0;⠂ Claude Code\x07', 124)
+
+    const renamed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(renamed.tabs[0]).toEqual(expect.objectContaining({ title: 'Build fixer' }))
+
+    publish(2, null)
+    const cleared = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(cleared.tabs[0]).toEqual(expect.objectContaining({ title: '⠂ Claude Code' }))
   })
 
   it('uses fresh neutral PTY titles over stale mobile snapshot and OSC titles', async () => {
@@ -181,7 +238,7 @@ describe('OrcaRuntimeService', () => {
     })
     events.length = 0
 
-    runtime.onPtyExit('laptop-created-pty', 0)
+    await runtime.onPtyExit('laptop-created-pty', 0)
 
     expect(events).toEqual([
       expect.objectContaining({
@@ -351,7 +408,8 @@ describe('OrcaRuntimeService', () => {
       isDestroyed: () => false,
       webContents: {
         isDestroyed: () => false,
-        setBackgroundThrottling
+        setBackgroundThrottling,
+        capturePage: vi.fn(async () => null)
       }
     })
 
@@ -364,7 +422,8 @@ describe('OrcaRuntimeService', () => {
 
     acknowledged.resolve()
     await expect(pending).resolves.toEqual({ closed: true })
-    expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
+    // The final release restores throttling on the next task, after any native destruction.
+    await vi.waitFor(() => expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]]))
   })
 
   it('accepts a paired close after the renderer already persisted its removal', async () => {
@@ -374,7 +433,9 @@ describe('OrcaRuntimeService', () => {
     const acknowledged = makeDeferred()
     const closeTerminalTab = vi.fn(() => acknowledged.promise)
     const kill = vi.fn(() => true)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setNotifier({ closeTerminal: vi.fn(), closeTerminalTab } as never)
     runtime.setPtyController({
       write: () => true,
@@ -431,7 +492,8 @@ describe('OrcaRuntimeService', () => {
       isDestroyed: () => false,
       webContents: {
         isDestroyed: () => false,
-        setBackgroundThrottling: vi.fn()
+        setBackgroundThrottling: vi.fn(),
+        capturePage: vi.fn(async () => null)
       }
     })
 
@@ -510,7 +572,9 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValueOnce({ id: 'headless-left' })
       .mockResolvedValueOnce({ id: 'headless-right' })
     const kill = vi.fn(() => true)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow })
+    )
     runtime.setPtyController({
       spawn,
       write: () => true,

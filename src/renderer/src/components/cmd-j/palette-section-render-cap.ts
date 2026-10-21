@@ -56,13 +56,13 @@ export function capPaletteSection<T>(
  * `moreCount` is everything after the preview (including rows past the hard cap)
  * so one overflow hint covers both scrollable rest and “keep typing” remainder.
  */
-export type SoftSplitSection<T> = {
+type SoftSplitSection<T> = {
   preview: readonly T[]
   rest: readonly T[]
   moreCount: number
 }
 
-export function softSplitPaletteSection<T>(
+function softSplitPaletteSection<T>(
   items: readonly T[],
   previewCount: number,
   hardCap: number = PALETTE_SECTION_RENDER_CAP,

@@ -1,6 +1,7 @@
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { GitPushTarget } from '../../shared/worktree/types'
+import type { GitStageWorktreeScope } from '../../shared/git-stage-worktree-scope'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import type { SourceControlAiSettings } from '../../shared/source-control-ai-types'
@@ -101,6 +102,7 @@ export type GitOperationApi = {
     worktreePath: string
     filePaths: string[]
     connectionId?: string
+    scope?: GitStageWorktreeScope
   }) => Promise<void>
   unstage: (args: {
     worktreePath: string

@@ -1,0 +1,11 @@
+{
+  "baselineHashes": {
+    "src/main/rate-limits/auth-filesystem-operation.ts": "581d7045220e92602ca83ec335576889dcba5ada4a699e866ea1dba10afbecac",
+    "src/shared/promise-settlement-waiters.ts": "b0b60bae6dcca4bb4f335ef7dda250f4350aa5b0306d3595b887cc4af4493060"
+  },
+  "checkedMainRevision": "77cd61df396f25ec91ee2d5ddcbd1f55aa94f818",
+  "sharedTestBaselineSha256": "1e274da93106f31b9b57aa48fd965a4d81c8adf4ebe1bfa20a196aa3e529a73a",
+  "authSourceIdenticalNamedRefs": ["origin/main", "v1.4.198"],
+  "registrySourceIdenticalNamedRefs": ["origin/main"],
+  "historicalRuntimeReproduced": false
+}

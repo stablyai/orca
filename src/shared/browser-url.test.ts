@@ -212,6 +212,44 @@ describe('browser-url helpers', () => {
     )
   })
 
+  it.each([
+    ['example.com:8443/docs?q=one#section', 'https://example.com:8443/docs?q=one#section'],
+    ['EXAMPLE.COM:443', 'https://example.com/'],
+    ['example.com:80', 'https://example.com:80/'],
+    ['app.localhost:3000', 'http://app.localhost:3000/'],
+    ['app.localhost:443', 'http://app.localhost:443/'],
+    ['app.localhost:80', 'http://app.localhost/'],
+    ['deep.app.localhost:5173/path?x=1#preview', 'http://deep.app.localhost:5173/path?x=1#preview'],
+    ['https://app.localhost:3000', 'https://app.localhost:3000/'],
+    ['http://example.com:80/docs', 'http://example.com/docs'],
+    ['example.com:65535/docs', 'https://example.com:65535/docs'],
+    ['example.com:0', 'https://example.com:0/'],
+    ['APP.LOCALHOST.:443/docs', 'http://app.localhost.:443/docs'],
+    ['[::1]:3000/docs', 'http://[::1]:3000/docs'],
+    ['https://user:pass@example.com:8443/docs', 'https://user:pass@example.com:8443/docs'],
+    [
+      'example.com:8443/path@evil.test?next=:80#part',
+      'https://example.com:8443/path@evil.test?next=:80#part'
+    ]
+  ])('navigates a domain with a port: %s', (input, expected) => {
+    expect(normalizeBrowserNavigationUrl(input, 'google')).toBe(expected)
+    expect(normalizeBrowserNavigationUrl(input)).toBe(expected)
+  })
+
+  it.each([
+    'javascript:1234',
+    'data:1234',
+    'custom:3000',
+    'example.com:65536',
+    'example.com:8443@evil.test',
+    'example.com:8443\\evil.test',
+    'example.com:-1',
+    'example.com:3.5',
+    'example.com:8443evil.test'
+  ])('does not turn an unsupported scheme or invalid port into a navigation: %s', (input) => {
+    expect(normalizeBrowserNavigationUrl(input, 'google')).toBeNull()
+  })
+
   it('builds search URLs correctly', () => {
     expect(buildSearchUrl('hello world', 'google')).toBe(
       'https://www.google.com/search?q=hello%20world'

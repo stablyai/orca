@@ -1,0 +1,84 @@
+import { extractMouseModeScanTail } from './write-queue'
+import type { TerminalDocumentScope } from './document-scope'
+import { C1_CSI, ESC } from './escape-introducers'
+
+export function isAltScreenActive(data: unknown): data is string {
+  if (typeof data !== 'string') {
+    return false
+  }
+  const on = data.lastIndexOf(ESC + '[?1049h')
+  const off = data.lastIndexOf(ESC + '[?1049l')
+  return on !== -1 && on > off
+}
+
+export function normalizeInitialData(data: unknown) {
+  if (!isAltScreenActive(data)) {
+    return data
+  }
+  const on = data.lastIndexOf(ESC + '[?1049h')
+  // Why: SerializeAddon can include normal-buffer scrollback before the
+  // active alternate-screen snapshot. Replaying both into a fresh mobile
+  // xterm duplicates TUI frames and can flatten SGR attributes.
+  return on > 0 ? data.slice(on) : data
+}
+
+// `live`: bytes the program just wrote, as opposed to a snapshot replay.
+export function updateMouseModeFromData(scope: TerminalDocumentScope, data: unknown, live = false) {
+  if (typeof data !== 'string' || data.length === 0) {
+    return
+  }
+  const input = scope.mouseModeScanTail + data
+  scope.mouseModeScanTail = extractMouseModeScanTail(input)
+  const re = new RegExp(
+    ESC + 'c|' + ESC + '\\[\\?([0-9;]+)([hl])|' + C1_CSI + '\\?([0-9;]+)([hl])',
+    'g'
+  )
+  let match: RegExpExecArray | null
+  while ((match = re.exec(input)) !== null) {
+    if (match[0] === ESC + 'c') {
+      scope.mouseEncodingKnown = true
+      scope.trackedMouseTrackingMode = 'none'
+      scope.sgrMouseMode = false
+      scope.sgrMousePixelsMode = false
+      continue
+    }
+    const enabled = (match[2] || match[4]) === 'h'
+    const params = (match[1] || match[3]).split(';')
+    for (let i = 0; i < params.length; i++) {
+      if (params[i] === '') {
+        continue
+      }
+      const param = Number(params[i])
+      if (!Number.isInteger(param)) {
+        continue
+      }
+      // Why: a program enabling tracking live states its encoding in that same burst, or
+      // means the default; only a replay can carry tracking without its encoding.
+      if (live && enabled && (param === 9 || param === 1000 || param === 1002 || param === 1003)) {
+        scope.mouseEncodingKnown = true
+      }
+      if (param === 9) {
+        scope.trackedMouseTrackingMode = enabled ? 'x10' : 'none'
+      }
+      if (param === 1000) {
+        scope.trackedMouseTrackingMode = enabled ? 'vt200' : 'none'
+      }
+      if (param === 1002) {
+        scope.trackedMouseTrackingMode = enabled ? 'drag' : 'none'
+      }
+      if (param === 1003) {
+        scope.trackedMouseTrackingMode = enabled ? 'any' : 'none'
+      }
+      if (param === 1006) {
+        scope.mouseEncodingKnown = true
+        scope.sgrMouseMode = enabled
+        scope.sgrMousePixelsMode = false
+      }
+      if (param === 1016) {
+        scope.mouseEncodingKnown = true
+        scope.sgrMouseMode = false
+        scope.sgrMousePixelsMode = enabled
+      }
+    }
+  }
+}

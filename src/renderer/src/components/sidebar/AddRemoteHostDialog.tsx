@@ -13,6 +13,7 @@ import {
 import { AddRemoteHostSshConfigPicker } from './AddRemoteHostSshConfigPicker'
 import { AddRemoteHostSshFormPanel } from './AddRemoteHostSshFormPanel'
 import { AddRemoteHostServerFormPanel } from './AddRemoteHostServerFormPanel'
+import { AddWslHostDialogBody } from './AddWslHostDialogBody'
 import {
   addAllSshConfigHostsToOrca,
   loadSshConfigHostsForPicker,
@@ -20,7 +21,7 @@ import {
   saveNewSshHostFromForm
 } from './add-remote-host-ssh-actions'
 
-export type AddRemoteHostMode = 'ssh' | 'server'
+export type AddRemoteHostMode = 'ssh' | 'server' | 'wsl'
 
 type AddRemoteHostDialogProps = {
   mode: AddRemoteHostMode | null
@@ -68,7 +69,7 @@ export function AddRemoteHostDialog({
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
   const recordSshRepoReadoptions = useAppStore((s) => s.recordSshRepoReadoptions)
   const setRuntimeEnvironments = useAppStore((s) => s.setRuntimeEnvironments)
-  const setRuntimeEnvironmentStatus = useAppStore((s) => s.setRuntimeEnvironmentStatus)
+  const readRuntimeHostStatusSnapshots = useAppStore((s) => s.readRuntimeHostStatusSnapshots)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   const busy = isSaving || isBulkImporting || resolvingConfigAlias !== null
@@ -283,12 +284,18 @@ export function AddRemoteHostDialog({
       }
       const environments = await window.api.runtimeEnvironments.list()
       setRuntimeEnvironments(environments)
-      setRuntimeEnvironmentStatus(result.environment.id, {
-        status: result.runtimeStatus,
-        checkedAt: Date.now()
-      })
+      await readRuntimeHostStatusSnapshots()
       toast.success(
-        translate('auto.components.sidebar.AddRemoteHostDialog.serverSaved', 'Remote server added.')
+        result.updatedExisting
+          ? translate(
+              'auto.components.sidebar.AddRemoteHostDialog.serverAlreadyPaired',
+              'This server is already paired as {{value0}}; updated its connection.',
+              { value0: result.environment.name }
+            )
+          : translate(
+              'auto.components.sidebar.AddRemoteHostDialog.serverSaved',
+              'Remote server added.'
+            )
       )
       reset()
       onOpenChange(null)
@@ -342,6 +349,16 @@ export function AddRemoteHostDialog({
               onAddAllToOrca={() => void addAllConfigHostsToOrca()}
             />
           </div>
+        ) : renderMode === 'wsl' ? (
+          <AddWslHostDialogBody
+            adding={isSaving}
+            onAddingChange={setIsSaving}
+            onAdded={() => {
+              reset()
+              onOpenChange(null)
+            }}
+            onCancel={close}
+          />
         ) : renderMode === 'ssh' ? (
           <AddRemoteHostSshFormPanel
             form={sshForm}

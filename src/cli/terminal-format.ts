@@ -1,5 +1,5 @@
-import { PTY_LIVE_NOTE, describeUnconfirmedStop } from '../shared/pty-liveness-verdict'
-import { structuredChatPtyWriteRefusalCopy } from '../shared/agent-session-pty-write-refusal-copy'
+import { PTY_LIVE_NOTE, describeUnconfirmedCloseStop } from '../shared/pty-liveness-verdict'
+import { describeTerminalWaitBlockedReason } from '../shared/terminal-wait-blocked-reason-legacy-alias'
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 import type {
   RuntimeTerminalClose,
@@ -13,6 +13,7 @@ import type {
   RuntimeTerminalRead,
   RuntimeTerminalRename,
   RuntimeTerminalSend,
+  RuntimeTerminalSetPaneTitle,
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
   RuntimeTerminalWait
@@ -28,7 +29,7 @@ export function formatTerminalList(
   const body = result.terminals
     .map(
       (terminal) =>
-        `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
+        `${terminal.handle}  ${terminal.paneTitle ?? terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
   const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)
@@ -98,6 +99,7 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
   return [
     `handle: ${terminal.handle}`,
     `title: ${terminal.title ?? '(untitled)'}`,
+    ...(terminal.paneTitle ? [`paneTitle: ${terminal.paneTitle}`] : []),
     `worktree: ${terminal.worktreePath}`,
     `branch: ${terminal.branch}`,
     `leaf: ${terminal.leafId}`,
@@ -118,7 +120,10 @@ function formatAgentWait(agentWait: RuntimeTerminalShow['agentWait']): string {
   if (!agentWait) {
     return 'none'
   }
-  return `${agentWait.reason ?? 'interactive prompt'} (via ${agentWait.source})`
+  if (!agentWait.reason) {
+    return `interactive prompt (via ${agentWait.source})`
+  }
+  return `${describeTerminalWaitBlockedReason(agentWait.reason)} (via ${agentWait.source})`
 }
 
 export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
@@ -172,12 +177,6 @@ function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string
 }
 
 export function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
-  if (result.send.agentSessionRefusal) {
-    const copy = structuredChatPtyWriteRefusalCopy(result.send.agentSessionRefusal, 'terminal-send')
-    if (copy) {
-      return copy
-    }
-  }
   if (!result.send.accepted) {
     const reason = result.send.refusedReason ? `: ${result.send.refusedReason}` : ''
     return `Input refused by ${result.send.handle}${reason}.`
@@ -230,6 +229,14 @@ export function formatTerminalRename(result: { rename: RuntimeTerminalRename }):
     : `Cleared title for terminal ${result.rename.handle}.`
 }
 
+export function formatTerminalSetPaneTitle(result: {
+  paneTitle: RuntimeTerminalSetPaneTitle
+}): string {
+  return result.paneTitle.title
+    ? `Set title of pane ${result.paneTitle.leafId} to "${result.paneTitle.title}".`
+    : `Cleared title of pane ${result.paneTitle.leafId}.`
+}
+
 export function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }): string {
   const titleNote = result.terminal.title ? ` (title: "${result.terminal.title}")` : ''
   const surfaceNote = result.terminal.surface ? ` [${result.terminal.surface}]` : ''
@@ -257,7 +264,7 @@ function describePtyStop(close: RuntimeTerminalClose): string {
     return ` ${PTY_LIVE_NOTE}`
   }
   if (close.ptyStopVerdict === 'unverifiable') {
-    return ` ${describeUnconfirmedStop(close.ptyStopReason ?? 'its host could not be reached')}`
+    return ` ${describeUnconfirmedCloseStop(close)}`
   }
   return ''
 }
@@ -278,7 +285,7 @@ export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): strin
     `exitCode: ${result.wait.exitCode ?? 'null'}`
   ]
   if (result.wait.blockedReason) {
-    lines.push(`blockedReason: ${result.wait.blockedReason}`)
+    lines.push(`blockedReason: ${describeTerminalWaitBlockedReason(result.wait.blockedReason)}`)
   }
   return lines.join('\n')
 }

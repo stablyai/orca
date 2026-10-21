@@ -10,7 +10,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../shared/terminal-tab-types'
-import { appendRetiredTerminalSurfaceProofs } from './mobile-session-terminal-retirement-proof'
+import { appendRetiredTerminalSurfaceProofs } from '../../shared/terminal-retirement-proof-ledger'
 
 export type RetiredTerminalSurface = {
   worktreeId: string
@@ -115,7 +115,15 @@ function chooseGroupActiveTab(
   if (group.activeTabId && retainedTabIds.has(group.activeTabId)) {
     return group.activeTabId
   }
-  const recent = (group.recentTabIds ?? []).toReversed().find((tabId) => retainedTabIds.has(tabId))
+  // Node 18 is the orcad floor and does not provide Array.prototype.toReversed.
+  let recent: string | undefined
+  for (let index = (group.recentTabIds?.length ?? 0) - 1; index >= 0; index -= 1) {
+    const tabId = group.recentTabIds?.[index]
+    if (tabId && retainedTabIds.has(tabId)) {
+      recent = tabId
+      break
+    }
+  }
   return recent ?? group.tabOrder.find((tabId) => retainedTabIds.has(tabId)) ?? null
 }
 

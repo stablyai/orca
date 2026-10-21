@@ -1,5 +1,8 @@
+import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { AgentWorkspaceTrustSpawnRequest } from '../../shared/agent-workspace-trust-spawn-request'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { PtyBackgroundStreamEvent, PtyDataEvent } from './pty-provider-events'
@@ -77,6 +80,8 @@ export type PtySpawnOptions = {
   isNewSession?: boolean
   /** Host setting forwarded additively to the process owner; old owners ignore it. */
   historyIsolationEnabled?: boolean
+  /** SSH only: workspace the relay pre-trusts for `launchAgent` before spawning; old relays ignore it. */
+  agentWorkspaceTrust?: AgentWorkspaceTrustSpawnRequest
   /** Attach the named session atomically or fail without creating a process. */
   attachOnly?: boolean
   /** Exact persisted owner expected by an attach-only routing decision. */
@@ -88,6 +93,8 @@ export type PtySpawnOptions = {
    *  changing the user's persistent default shell setting. Only consulted on
    *  Windows; ignored on macOS/Linux where shell selection is not exposed. */
   shellOverride?: string
+  /** Optional Unix interactive profile args; ignored for command and agent launches. */
+  terminalShellArgs?: string[]
   /** Preferred WSL distro for generic `wsl.exe` launches. Worktree/session
    *  distro still wins when the cwd already identifies a WSL distro. */
   terminalWindowsWslDistro?: string | null
@@ -99,6 +106,8 @@ export type PtySpawnOptions = {
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   /** Fresh-spawn-only source authority installed before any PTY output is released. */
   startupIngress?: PtyStartupIngressIntent
+  /** Why the caller is starting this terminal; presence lets the host defer an automatic restore. */
+  spawnIntent?: SpawnIntent
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding
@@ -116,6 +125,8 @@ export type { PtyProcessInfo, PtySpawnResult }
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
+  /** SSH providers only: the relay session generation that registered them. */
+  readonly providerGeneration?: number
   requestHostRpc?: (
     method: string,
     params: unknown,
@@ -136,7 +147,7 @@ export type IPtyProvider = {
   providesAgentSessionOwnerListings?: (ptyId: string) => boolean
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
-  attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void>
+  attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence' | 'lastTitle'> | void>
   hasPty?: (id: string) => boolean
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
@@ -222,8 +233,12 @@ export type IPtyProvider = {
   getCwd(id: string): Promise<string>
   getInitialCwd(id: string): Promise<string>
   clearBuffer(id: string): Promise<void>
-  /** Ordered handoff from startup source authority to the live/hidden view authority. */
+  /** Grounds the host's own terminal models (Reset Terminal); renderers ground themselves. */
+  resetInputModes(id: string): Promise<void>
+  /** Ends the startup Kitty-query window; OSC 10/11 authority stays with the owner for life. */
   closeStartupQueryAuthority?: (id: string) => Promise<number> | number
+  /** Host-wide viewer colours the PTY owner answers OSC 10/11 from. */
+  setColorQueryReplyColors?: (colors: TerminalOscColorQueryReplyColors) => void
   acknowledgeDataEvent(id: string, charCount: number): void
   hasChildProcesses(id: string): Promise<boolean>
   getForegroundProcess(id: string): Promise<string | null>
@@ -249,6 +264,8 @@ export type IPtyProvider = {
       incarnationId?: PtyIncarnationId
       /** Absent when the provider predates exit causes; readers must not infer one from `code`. */
       cause?: TerminalExitCause
+      /** Main ended the session to restart the daemon; the pane stays for its next process. */
+      replacedByRestart?: true
     }) => void
   ): () => void
 }

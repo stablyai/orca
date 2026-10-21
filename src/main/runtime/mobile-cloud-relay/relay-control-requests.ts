@@ -1,0 +1,217 @@
+import {
+  RelayControlErrorMessageSchema,
+  RelayDeviceCredentialInstalledMessageSchema,
+  RelayDeviceCredentialInstallStatusResultMessageSchema,
+  RelayDeviceRevokedMessageSchema,
+  RelayDeviceResumeConfirmedMessageSchema,
+  RelayInviteCreatedMessageSchema,
+  type RelayDeviceCredentialInstalledMessage,
+  type RelayDeviceCredentialInstallStatusResultMessage,
+  type RelayDeviceResumeConfirmedMessage,
+  type RelayInviteCreatedMessage
+} from './relay-control-protocol'
+
+type PendingRequest = {
+  kind: 'invite' | 'revoke' | 'install' | 'install-status' | 'confirm'
+  resolve: (value: unknown) => void
+  reject: (error: Error) => void
+  timer: ReturnType<typeof setTimeout>
+}
+
+export type RelayControlRequestTimeout = {
+  kind: PendingRequest['kind']
+  sentAt: number
+}
+
+/** Notified when a request hits its deadline, so liveness can probe the socket. */
+export type OnRelayControlRequestTimeout = (timeout: RelayControlRequestTimeout) => void
+
+// A classification key, not prose: consumers exact-match this against
+// /^relay_[a-z0-9_]{1,74}$/ (src/shared/mobile-relay-mint-failure.ts), so any
+// appended diagnostic downgrades a precise code to the generic fallback.
+// Diagnostics belong in the log — see RelayControlLiveness.noteRequestTimeout.
+const REQUEST_TIMEOUT_CODE = 'relay_control_request_timeout'
+
+export type DeviceCredentialInstallAuthorization =
+  | { mode: 'relay-basis'; basisConnId: string }
+  | { mode: 'authenticated-direct'; directAuthId: string }
+
+export type DeviceCredentialInstallInput = {
+  relayDeviceId: string
+  newResumeTokenHash: string
+  expectedCurrentHash?: string
+  authorization: DeviceCredentialInstallAuthorization
+}
+
+/** Every control-plane request this class hands to `send`. */
+type RelayControlRequestPayload =
+  | { type: 'invite-create'; reqId: string; relayDeviceId: string }
+  | { type: 'device-revoke'; reqId: string; relayDeviceId: string }
+  | ({ type: 'device-credential-install'; v: 1; reqId: string } & DeviceCredentialInstallInput)
+  | { type: 'device-credential-install-status'; v: 1; reqId: string; relayDeviceId: string }
+  | { type: 'device-resume-confirm'; v: 1; reqId: string; basisConnId: string }
+
+type SendRelayControlRequest = (payload: RelayControlRequestPayload) => void
+
+export class RelayControlRequests {
+  private readonly pending = new Map<string, PendingRequest>()
+
+  constructor(
+    private readonly onPendingChanged?: () => void,
+    private readonly onTimeout?: OnRelayControlRequestTimeout
+  ) {}
+
+  get size(): number {
+    return this.pending.size
+  }
+
+  createInvite(
+    reqId: string,
+    relayDeviceId: string,
+    send: SendRelayControlRequest
+  ): Promise<RelayInviteCreatedMessage> {
+    return this.request(
+      reqId,
+      'invite',
+      { type: 'invite-create', reqId, relayDeviceId },
+      send
+    ) as Promise<RelayInviteCreatedMessage>
+  }
+
+  revokeDevice(reqId: string, relayDeviceId: string, send: SendRelayControlRequest): Promise<void> {
+    return this.request(
+      reqId,
+      'revoke',
+      { type: 'device-revoke', reqId, relayDeviceId },
+      send
+    ) as Promise<void>
+  }
+
+  installCredential(
+    reqId: string,
+    input: DeviceCredentialInstallInput,
+    send: SendRelayControlRequest
+  ): Promise<RelayDeviceCredentialInstalledMessage> {
+    return this.request(
+      reqId,
+      'install',
+      { type: 'device-credential-install', v: 1, reqId, ...input },
+      send
+    ) as Promise<RelayDeviceCredentialInstalledMessage>
+  }
+
+  credentialInstallStatus(
+    reqId: string,
+    relayDeviceId: string,
+    send: SendRelayControlRequest
+  ): Promise<RelayDeviceCredentialInstallStatusResultMessage> {
+    return this.request(
+      reqId,
+      'install-status',
+      { type: 'device-credential-install-status', v: 1, reqId, relayDeviceId },
+      send
+    ) as Promise<RelayDeviceCredentialInstallStatusResultMessage>
+  }
+
+  confirmResume(
+    reqId: string,
+    basisConnId: string,
+    send: SendRelayControlRequest
+  ): Promise<RelayDeviceResumeConfirmedMessage> {
+    return this.request(
+      reqId,
+      'confirm',
+      { type: 'device-resume-confirm', v: 1, reqId, basisConnId },
+      send
+    ) as Promise<RelayDeviceResumeConfirmedMessage>
+  }
+
+  resolveMessage(message: Record<string, unknown>): boolean {
+    const reqId = typeof message.reqId === 'string' ? message.reqId : null
+    const pending = reqId ? this.pending.get(reqId) : null
+    if (!pending || !reqId) {
+      return false
+    }
+    const error = RelayControlErrorMessageSchema.safeParse(message)
+    if (error.success) {
+      this.finish(reqId)
+      pending.reject(new Error(error.data.code))
+      return true
+    }
+    if (pending.kind === 'invite') {
+      const invite = RelayInviteCreatedMessageSchema.safeParse(message)
+      if (!invite.success) {
+        return false
+      }
+      this.finish(reqId)
+      pending.resolve(invite.data)
+      return true
+    }
+    if (pending.kind === 'revoke') {
+      const revoked = RelayDeviceRevokedMessageSchema.safeParse(message)
+      if (!revoked.success) {
+        return false
+      }
+      this.finish(reqId)
+      pending.resolve(undefined)
+      return true
+    }
+    const schema =
+      pending.kind === 'install'
+        ? RelayDeviceCredentialInstalledMessageSchema
+        : pending.kind === 'install-status'
+          ? RelayDeviceCredentialInstallStatusResultMessageSchema
+          : RelayDeviceResumeConfirmedMessageSchema
+    const result = schema.safeParse(message)
+    if (!result.success) {
+      return false
+    }
+    this.finish(reqId)
+    pending.resolve(result.data)
+    return true
+  }
+
+  rejectAll(error: Error): void {
+    for (const [reqId, pending] of this.pending) {
+      this.finish(reqId)
+      pending.reject(error)
+    }
+  }
+
+  private request(
+    reqId: string,
+    kind: PendingRequest['kind'],
+    payload: RelayControlRequestPayload,
+    send: SendRelayControlRequest
+  ): Promise<unknown> {
+    if (this.pending.has(reqId)) {
+      return Promise.reject(new Error('duplicate_relay_request_id'))
+    }
+    const sentAt = Date.now()
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.finish(reqId)
+        // Runs before the reject so the probe observes the socket as the deadline found it.
+        this.onTimeout?.({ kind, sentAt })
+        reject(new Error(REQUEST_TIMEOUT_CODE))
+      }, 10_000)
+      this.pending.set(reqId, { kind, resolve, reject, timer })
+      try {
+        send(payload)
+      } catch (error) {
+        this.finish(reqId)
+        reject(error)
+      }
+    })
+  }
+
+  private finish(reqId: string): void {
+    const pending = this.pending.get(reqId)
+    if (pending) {
+      clearTimeout(pending.timer)
+      this.pending.delete(reqId)
+      // Settle the request before its final waiter retires the owning origin.
+      queueMicrotask(() => this.onPendingChanged?.())
+    }
+  }
+}

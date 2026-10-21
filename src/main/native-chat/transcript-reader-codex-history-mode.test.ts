@@ -240,7 +240,7 @@ describe('Codex transcript history modes', () => {
     expect(call).toMatchObject({
       id: 'call-1',
       role: 'assistant',
-      blocks: [{ type: 'tool-call', name: 'exec', input: 'pwd' }]
+      blocks: [{ type: 'tool-call', name: 'exec', input: 'pwd', callId: 'durable-call-1' }]
     })
     expect(output).toMatchObject({
       id: 'fallback-output',

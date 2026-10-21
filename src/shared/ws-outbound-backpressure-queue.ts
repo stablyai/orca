@@ -10,6 +10,16 @@
 // Generic over the frame type so it serves both the text reply path (encrypted
 // base64 strings) and the binary send path (Uint8Array frames).
 
+/** Which hard bound tripped, plus the backlog held when it did. */
+export type WsOutboundOverflowEvidence = {
+  cap: 'maxQueuedBytes' | 'maxQueuedFrames' | 'maxFrameBytes' | 'claimQueuedBytes' | 'sendFailed'
+  queuedBytes: number
+  queuedFrames: number
+  maxQueuedBytes: number
+  maxQueuedFrames: number
+  maxFrameBytes: number
+}
+
 export type WsOutboundBackpressureQueueOptions<TFrame> = {
   /** Send a frame on the wire. Called only when under the soft cap. */
   send: (frame: TFrame) => void
@@ -25,8 +35,9 @@ export type WsOutboundBackpressureQueueOptions<TFrame> = {
    * Called once when queued bytes exceed maxQueuedBytes — the link is wedged.
    * The caller should tear the connection down so a fresh subscription can
    * replay an authoritative snapshot. The queue drops its backlog afterward.
+   * Receives the backlog measured before that drop, so callers can report it.
    */
-  onOverflow: () => void
+  onOverflow: (evidence: WsOutboundOverflowEvidence) => void
   /** Soft cap: stop draining onto the wire while bufferedAmount is above this. */
   softCapBytes?: number
   /** Hard cap on bytes held in this queue before onOverflow fires. */
@@ -51,6 +62,8 @@ export type WsOutboundBackpressureQueue<TFrame> = {
   enqueue: (frame: TFrame) => boolean
   /** Queue-or-send a frame and allow its owner to cancel it before wire delivery. */
   enqueueCancelable: (frame: TFrame) => WsOutboundEnqueueResult
+  /** True when nothing is parked and the wire has room, so enqueue would send this size directly. */
+  isIdle: (frameBytes: number) => boolean
   /** Bytes currently held (not yet handed to the wire). */
   queuedBytes: () => number
   evidence: () => { queuedBytes: number; queuedFrames: number; storageSlots: number }
@@ -135,13 +148,22 @@ export function createWsOutboundBackpressureQueue<TFrame>(
     stopTimer()
   }
 
-  const failOverflow = (): void => {
+  const failOverflow = (cap: WsOutboundOverflowEvidence['cap']): void => {
     if (disposed || overflowed) {
       return
     }
     overflowed = true
+    // Snapshot before dropBacklog() zeroes the counters.
+    const evidence: WsOutboundOverflowEvidence = {
+      cap,
+      queuedBytes: queued,
+      queuedFrames,
+      maxQueuedBytes,
+      maxQueuedFrames,
+      maxFrameBytes
+    }
     dropBacklog()
-    options.onOverflow()
+    options.onOverflow(evidence)
   }
 
   const sendFrame = (frame: TFrame): boolean => {
@@ -149,7 +171,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
       options.send(frame)
       return true
     } catch {
-      failOverflow()
+      failOverflow('sendFailed')
       return false
     }
   }
@@ -237,22 +259,23 @@ export function createWsOutboundBackpressureQueue<TFrame>(
     }
   }
 
+  const isIdle = (bytes: number): boolean =>
+    queuedFrames === 0 &&
+    options.isWritable() &&
+    bufferedAmount() <= softCapBytes &&
+    (options.canSend?.(bytes, false) ?? true)
+
   const enqueueCancelable = (frame: TFrame): WsOutboundEnqueueResult => {
     if (disposed || overflowed) {
       return { accepted: false, queued: false, cancel: () => false }
     }
     const bytes = options.byteLengthOf(frame)
     if (!Number.isFinite(bytes) || bytes < 0 || bytes > maxFrameBytes) {
-      failOverflow()
+      failOverflow('maxFrameBytes')
       return { accepted: false, queued: false, cancel: () => false }
     }
     // Fast path: nothing parked and the wire is under the cap — send directly.
-    if (
-      queuedFrames === 0 &&
-      options.isWritable() &&
-      bufferedAmount() <= softCapBytes &&
-      (options.canSend?.(bytes, false) ?? true)
-    ) {
+    if (isIdle(bytes)) {
       return {
         accepted: sendFrame(frame),
         queued: false,
@@ -261,7 +284,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
     }
     const queuedBytesClaim = options.claimQueuedBytes?.(bytes)
     if (options.claimQueuedBytes && !queuedBytesClaim) {
-      failOverflow()
+      failOverflow('claimQueuedBytes')
       return { accepted: false, queued: false, cancel: () => false }
     }
     const entry: QueueEntry = {
@@ -274,7 +297,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
     queued += bytes
     queuedFrames += 1
     if (queued > maxQueuedBytes || queuedFrames > maxQueuedFrames) {
-      failOverflow()
+      failOverflow(queued > maxQueuedBytes ? 'maxQueuedBytes' : 'maxQueuedFrames')
       return { accepted: false, queued: false, cancel: () => false }
     }
     if (timer === null) {
@@ -292,6 +315,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
       return enqueueCancelable(frame).accepted
     },
     enqueueCancelable,
+    isIdle,
     queuedBytes: () => queued,
     evidence: () => ({
       queuedBytes: queued,

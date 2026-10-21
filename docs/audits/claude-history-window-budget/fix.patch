@@ -1,0 +1,30 @@
+diff --git a/src/main/claude/claude-structured-history-window.ts b/src/main/claude/claude-structured-history-window.ts
+index 1cfd48a8a6..f7a541fa31 100644
+--- a/src/main/claude/claude-structured-history-window.ts
++++ b/src/main/claude/claude-structured-history-window.ts
+@@ -12,8 +12,8 @@
+ // of those makes absence meaningless. Failing it reports an inconsistent
+ // boundary rather than an empty window, because the two decide opposite things.
+ 
+-import { readFile, stat } from 'node:fs/promises'
+ import { join } from 'node:path'
++import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
+ import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+ import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
+ import type {
+@@ -284,10 +284,11 @@ export async function readClaudeProviderHistoryWindow(input: {
+   }
+   let contents: string
+   try {
+-    if ((await stat(input.transcriptPath)).size > MAX_HISTORY_WINDOW_SOURCE_BYTES) {
+-      return INCONSISTENT
+-    }
+-    contents = await readFile(input.transcriptPath, 'utf8')
++    const read = await readNodeFileWithinLimit(
++      input.transcriptPath,
++      MAX_HISTORY_WINDOW_SOURCE_BYTES
++    )
++    contents = read.buffer.toString('utf8')
+   } catch {
+     return INCONSISTENT
+   }

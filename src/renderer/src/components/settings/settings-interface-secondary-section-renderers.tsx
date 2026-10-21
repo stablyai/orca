@@ -1,5 +1,6 @@
 import { StatsPane } from '../stats/StatsPane'
 import { AppearancePane } from './AppearancePane'
+import { ChatSettingsSection } from './ChatSettingsSection'
 import { InputPane } from './InputPane'
 import { NotificationsPane } from './NotificationsPane'
 import { ShortcutsPane } from './ShortcutsPane'
@@ -33,6 +34,38 @@ export function renderAppearanceSettingsSection(context: SettingsRenderContext):
         />
       ) : null}
     </SettingsSection>
+  )
+}
+
+export type ChatSettingsRenderContext = {
+  model: Pick<
+    SettingsRenderContext['model'],
+    | 'settings'
+    | 'updateSettings'
+    | 'setHasUnsavedChatPromptChanges'
+    | 'sourceControlAiPromptDiscardSignal'
+    | 'hasUnsavedChatPromptChanges'
+    | 'showDesktopOnlySettings'
+  >
+  interactions: Pick<SettingsRenderContext['interactions'], 'writeSourceControlAiSettingsOrThrow'>
+  navigation: Pick<SettingsRenderContext['navigation'], 'getSectionSearchEntries'>
+  view: Pick<SettingsRenderContext['view'], 'isSectionMounted'>
+}
+
+export function renderChatSettingsSection(context: ChatSettingsRenderContext): React.JSX.Element {
+  const { model, interactions, navigation, view } = context
+  return (
+    <ChatSettingsSection
+      settings={model.settings}
+      updateSettings={model.updateSettings}
+      writeSourceControlAiSettings={interactions.writeSourceControlAiSettingsOrThrow}
+      onChatPromptDirtyChange={model.setHasUnsavedChatPromptChanges}
+      chatPromptDiscardSignal={model.sourceControlAiPromptDiscardSignal}
+      hasUnsavedChatPromptChanges={model.hasUnsavedChatPromptChanges}
+      searchEntries={navigation.getSectionSearchEntries('chat')}
+      showDesktopOnlySettings={model.showDesktopOnlySettings}
+      isMounted={view.isSectionMounted('chat')}
+    />
   )
 }
 
@@ -103,7 +136,7 @@ export function renderStatsSettingsSection(context: SettingsRenderContext): Reac
       title={translate('auto.components.settings.Settings.954a8f5aef', 'Stats & Usage')}
       description={translate(
         'auto.components.settings.Settings.8acf3f22e0',
-        'Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
+        'Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.'
       )}
       searchEntries={navigation.getSectionSearchEntries('stats')}
     >

@@ -1,7 +1,15 @@
 import { createPortal } from 'react-dom'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import CodexRestartChip from '../CodexRestartChip'
+import { CodexSharedServerBanner } from './CodexSharedServerBanner'
+import { ClaudeOldTerminalBanner } from './ClaudeOldTerminalBanner'
+import { ClaudeDiffPanelNoticeBanner } from './ClaudeDiffPanelNoticeBanner'
+import { NewerDaemonHoldBanner } from './NewerDaemonHoldBanner'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
-import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
+import { useWslHostUnavailableReason } from './use-wsl-host-unavailable-reason'
+import { useManagedPairingRefusedEnvironmentId } from './use-managed-pairing-refused'
+import { DelayedRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { TerminalProcessExitOverlay } from './TerminalProcessExitOverlay'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { getDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
@@ -15,24 +23,69 @@ export function TerminalPaneCodexRestartPortals({
 }: {
   controller: TerminalPaneController
 }): React.JSX.Element {
-  const { activePane, isActive, isVisible, managedPanes, paneTransportsRef, savedLayout } =
-    controller
+  const {
+    activePane,
+    isActive,
+    isVisible,
+    managedPanes,
+    managerRef,
+    paneTransportsRef,
+    savedLayout,
+    tabId
+  } = controller
   return (
     <>
       {managedPanes.map((pane) => {
+        // Why the saved fallback: a restored pane's transport has no pty id until it reattaches.
         const ptyId =
           paneTransportsRef.current.get(pane.id)?.getPtyId() ??
           savedLayout.ptyIdsByLeafId?.[pane.leafId]
+        const holdBanner = (
+          <NewerDaemonHoldBanner
+            key={`newer-daemon-hold-${pane.id}-${ptyId}`}
+            tabId={tabId}
+            leafId={pane.leafId}
+          />
+        )
         if (!ptyId) {
-          return null
+          // Switch point: a server's held pane has no terminal handle to bind until it reopens.
+          return ORCA_LAYOUT_OWNER_IS_MAIN
+            ? createPortal(holdBanner, pane.container, `codex-restart-${pane.id}`)
+            : null
         }
         return createPortal(
-          <CodexRestartChip
-            key={`codex-restart-${pane.id}-${ptyId}`}
-            isVisible={isVisible}
-            ptyId={ptyId}
-            shouldFocus={isActive && isVisible && activePane?.id === pane.id}
-          />,
+          <>
+            <CodexRestartChip
+              key={`codex-restart-${pane.id}-${ptyId}`}
+              isVisible={isVisible}
+              ptyId={ptyId}
+              onReturnFocus={() => {
+                managerRef.current?.setActivePane(pane.id, { focus: false })
+                focusTerminalTabSurface(tabId, pane.leafId)
+              }}
+              shouldFocus={isActive && isVisible && activePane?.id === pane.id}
+            />
+            <CodexSharedServerBanner
+              key={`codex-shared-server-${pane.id}-${ptyId}`}
+              ptyId={ptyId}
+              tabId={tabId}
+              leafId={pane.leafId}
+            />
+            <ClaudeOldTerminalBanner
+              key={`claude-old-terminal-${pane.id}-${ptyId}`}
+              ptyId={ptyId}
+              tabId={tabId}
+              leafId={pane.leafId}
+            />
+            <ClaudeDiffPanelNoticeBanner
+              key={`claude-diff-panel-notice-${pane.id}-${ptyId}`}
+              ptyId={ptyId}
+              tabId={tabId}
+              leafId={pane.leafId}
+              container={pane.container}
+            />
+            {holdBanner}
+          </>,
           pane.container,
           `codex-restart-${pane.id}`
         )
@@ -124,6 +177,8 @@ export function TerminalPaneRecoveryPortals({
 }): React.JSX.Element | null {
   const { managedPanes, paneTransportsRef, ptyRecoveryStatesByPaneId, showSshReconnectOverlay } =
     controller
+  const wslHostUnavailable = useWslHostUnavailableReason(controller.worktreeId)
+  const pairingRefusedEnvironmentId = useManagedPairingRefusedEnvironmentId(controller.worktreeId)
   if (showSshReconnectOverlay) {
     return null
   }
@@ -131,14 +186,31 @@ export function TerminalPaneRecoveryPortals({
     <>
       {managedPanes.map((pane) => {
         const recoveryState = ptyRecoveryStatesByPaneId[pane.id]
-        if (!recoveryState) {
+        if (!recoveryState || recoveryState.reason === 'ownership') {
           return null
         }
         return createPortal(
-          <TerminalRemoteRuntimeReconnectBanner
-            key={`remote-runtime-reconnect-${pane.id}-${recoveryState.epoch}`}
+          <DelayedRemoteRuntimeReconnectBanner
+            // Why per pane, not per epoch: a Reconnect click opens a new epoch and must not hide the banner again.
+            key={`remote-runtime-reconnect-${pane.id}`}
+            epoch={recoveryState.epoch}
             phase={recoveryState.phase}
-            onReconnect={() => paneTransportsRef.current.get(pane.id)?.retryRecovery?.()}
+            onReconnect={() => {
+              const retry = (): void => {
+                paneTransportsRef.current.get(pane.id)?.retryRecovery?.()
+              }
+              // Why connect first: it asks Orca to pair again, which a pane retry alone does not.
+              if (pairingRefusedEnvironmentId) {
+                void window.api.runtimeEnvironments
+                  .connect({ selector: pairingRefusedEnvironmentId })
+                  .catch(() => undefined)
+                  .finally(retry)
+                return
+              }
+              retry()
+            }}
+            wslHostUnavailable={wslHostUnavailable}
+            pairingRefused={pairingRefusedEnvironmentId !== null}
           />,
           pane.container,
           `remote-runtime-reconnect-${pane.id}`

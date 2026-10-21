@@ -1,5 +1,7 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import { RuntimeSubscriptionRegistry } from '../runtime-subscription-registry'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -14,6 +16,7 @@ function stubRuntime(
   waiters: Waiter[],
   overrides: Record<string, unknown> = {}
 ): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   return {
     getRuntimeId: () => 'test-runtime',
     registerRemoteTerminalViewSubscriber: () => () => {},
@@ -36,6 +39,7 @@ function stubRuntime(
     registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
     cleanupSubscription: vi.fn(registry.cleanupSubscription),
     cleanupSubscriptionIfOwnedByConnection: vi.fn(registry.cleanupSubscriptionIfOwnedByConnection),
+    getSubscriptionRegistrationVersion: registry.getSubscriptionRegistrationVersion,
     subscribeToPtyExit: vi.fn((_ptyId: string, listener: () => void) => {
       waiters.push({ resolve: listener })
       return vi.fn()
@@ -116,7 +120,7 @@ describe('terminal.subscribe teardown ownership', () => {
     expect(registry.peekCleanup(SUBSCRIPTION_ID)).toBeUndefined()
   })
 
-  it('disposes an already-exited PTY observer before binding socket abort', async () => {
+  it('disposes an already-exited PTY observer and the request-abort listener', async () => {
     const registry = createSubscriptionRegistryDouble()
     const unsubscribeExit = vi.fn()
     const runtime = stubRuntime(registry, [], {
@@ -128,12 +132,14 @@ describe('terminal.subscribe teardown ownership', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
     const conn = new AbortController()
     const addAbort = vi.spyOn(conn.signal, 'addEventListener')
+    const removeAbort = vi.spyOn(conn.signal, 'removeEventListener')
     const options = streamOptions('conn-a', conn.signal)
 
     await dispatcher.dispatchStreaming(makeRequest(binaryParams), vi.fn(), options)
 
     expect(unsubscribeExit).toHaveBeenCalledOnce()
-    expect(addAbort).not.toHaveBeenCalled()
+    expect(addAbort).toHaveBeenCalledOnce()
+    expect(removeAbort).toHaveBeenCalledWith('abort', addAbort.mock.calls[0]![1])
   })
 
   // Why: the synchronous release runs cleanup before setup, so anything registered after it never gets torn down.
@@ -289,6 +295,87 @@ describe('terminal.unsubscribe connection ownership', () => {
 
     expect(registry.peekCleanup(SUBSCRIPTION_ID)).toBe(live)
     expect(JSON.parse(replies[0]!).result).toEqual({ unsubscribed: false })
+  })
+
+  it.each(
+    [binaryParams, leaseOnlyParams].flatMap((params) =>
+      ['streaming', 'unary'].flatMap((transport) =>
+        [SUBSCRIPTION_ID, 'terminal-1'].map((subscriptionId) => ({
+          params,
+          transport,
+          subscriptionId
+        }))
+      )
+    )
+  )(
+    'keeps the replacement when $transport unsubscribe of $subscriptionId yields',
+    async ({ params, transport, subscriptionId }) => {
+      const registry = new RuntimeSubscriptionRegistry()
+      const runtime = stubRuntime(createSubscriptionRegistryDouble(), [], {
+        registerOwnedSubscriptionCleanup: registry.registerOwned.bind(registry),
+        cleanupSubscriptionIfOwnedByConnection: registry.cleanupIfOwnedByConnection.bind(registry),
+        getSubscriptionRegistrationVersion: registry.getRegistrationVersion.bind(registry)
+      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+      const connection = streamOptions('conn-a')
+      const original = dispatcher.dispatchStreaming(makeRequest(params), vi.fn(), connection)
+      await vi.waitFor(() => expect(runtime.handleMobileSubscribe).toHaveBeenCalledTimes(1))
+
+      const replies: string[] = []
+      const retiring =
+        transport === 'streaming'
+          ? dispatcher.dispatchStreaming(
+              unsubscribeRequest(subscriptionId),
+              (reply) => replies.push(reply),
+              { connectionId: 'conn-a' }
+            )
+          : dispatcher
+              .dispatch(unsubscribeRequest(subscriptionId), { connectionId: 'conn-a' })
+              .then((reply) => replies.push(JSON.stringify(reply)))
+      const replacementMessages: string[] = []
+      const replacement = dispatcher.dispatchStreaming(
+        { ...makeRequest(params), id: 'req-replacement' },
+        (reply) => replacementMessages.push(reply),
+        connection
+      )
+      await retiring
+
+      try {
+        expect(runtime.handleMobileSubscribe).toHaveBeenCalledTimes(2)
+        expect(runtime.handleMobileUnsubscribe).toHaveBeenCalledTimes(1)
+        expect(replacementMessages.some((reply) => JSON.parse(reply).result?.type === 'end')).toBe(
+          false
+        )
+        expect(JSON.parse(replies[0]!).result).toEqual({ unsubscribed: false })
+      } finally {
+        registry.cleanupForConnection('conn-a')
+        await Promise.all([original, replacement])
+      }
+    }
+  )
+
+  it('rejects malformed unsubscribe params before capturing registration state', async () => {
+    const registry = createSubscriptionRegistryDouble()
+    const runtime = stubRuntime(registry, [])
+    const captureVersion = vi.spyOn(runtime, 'getSubscriptionRegistrationVersion')
+    const cleanup = vi.fn()
+    registry.registerSubscriptionCleanup(SUBSCRIPTION_ID, cleanup, 'conn-a')
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const replies: string[] = []
+
+    await dispatcher.dispatchStreaming(
+      { ...unsubscribeRequest(SUBSCRIPTION_ID), params: { subscriptionId: 42 } },
+      (reply) => replies.push(reply),
+      { connectionId: 'conn-a' }
+    )
+
+    expect(JSON.parse(replies[0]!)).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument' }
+    })
+    expect(captureVersion).not.toHaveBeenCalled()
+    expect(cleanup).not.toHaveBeenCalled()
+    registry.cleanupSubscriptionsForConnection('conn-a')
   })
 
   // T5 same-connection: preservation — the owning connection may still unsubscribe.

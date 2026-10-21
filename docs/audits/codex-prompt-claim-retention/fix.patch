@@ -1,0 +1,11 @@
+--- a/src/main/codex/codex-prompt-registry.ts
++++ b/src/main/codex/codex-prompt-registry.ts
+@@ -226,7 +226,7 @@
+ 
+   clearTurn(threadId: string, turnId: string): void {
+     const prompts = new Set(
+-      [...this.byAddress.values(), ...this.boundPrompts.values()].filter(
++      [...this.byAddress.values(), ...this.boundPrompts.values(), ...this.claims.keys()].filter(
+         (prompt) => prompt.threadId === threadId && codexPromptMatchesTurn(prompt, turnId)
+       )
+     )

@@ -51,6 +51,28 @@ const BRIDGE_OPTIONS: BrowserAnnotationViewportBridgeOptions = {
   token: 'annotationviewporttoken'
 }
 
+const MARKER_OPTIONS: BrowserAnnotationViewportBridgeOptions = {
+  ...BRIDGE_OPTIONS,
+  markers: [
+    {
+      id: 'historical-document-marker',
+      index: 2,
+      isFixed: false,
+      rectPage: { x: 80, y: 120, width: 100, height: 40 },
+      rectViewport: { x: 80, y: 120, width: 100, height: 40 }
+    }
+  ]
+}
+
+function deferGuestInjection(guest: Record<string, unknown>): () => void {
+  let release = (): void => {}
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  guest.executeJavaScriptInIsolatedWorld = vi.fn(() => gate)
+  return release
+}
+
 function registerPage(pageId: string, guest: Record<string, unknown>): void {
   webContentsFromIdMock.mockReturnValue(guest)
   browserManager.attachGuestPolicies(guest as never)
@@ -139,6 +161,161 @@ describe('browserManager.setAnnotationViewportBridge', () => {
 
     expect(secondGuest.executeJavaScriptInIsolatedWorld).toHaveBeenCalledTimes(1)
     expect(firstGuest.executeJavaScriptInIsolatedWorld).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([false, true])(
+    'skips retired queued markers after invalidation (replacement guest: %s)',
+    async (replaceGuest) => {
+      const { guest: firstGuest } = makeGuest(5201)
+      const release = deferGuestInjection(firstGuest)
+      registerPage('tab-retired-markers', firstGuest)
+      const resolveGuest = resolveFromRegistry('tab-retired-markers')
+      const inFlight = browserManager.setAnnotationViewportBridge(
+        'tab-retired-markers',
+        BRIDGE_OPTIONS,
+        resolveGuest
+      )
+      await flushViewportOps()
+      const retired = browserManager.setAnnotationViewportBridge(
+        'tab-retired-markers',
+        MARKER_OPTIONS,
+        resolveGuest
+      )
+      const { guest: replacementGuest } = makeGuest(5202)
+      if (replaceGuest) {
+        registerPage('tab-retired-markers', replacementGuest)
+      }
+      const cleared = browserManager.setAnnotationViewportBridge(
+        'tab-retired-markers',
+        { ...BRIDGE_OPTIONS, enabled: false },
+        resolveGuest
+      )
+
+      release()
+      await expect(inFlight).resolves.toBe(true)
+      await expect(retired).resolves.toBe(false)
+      await expect(cleared).resolves.toBe(true)
+      const currentGuest = replaceGuest ? replacementGuest : firstGuest
+      expect(currentGuest.executeJavaScriptInIsolatedWorld).not.toHaveBeenCalledWith(
+        expect.any(Number),
+        [expect.objectContaining({ code: expect.stringContaining('historical-document-marker') })],
+        false
+      )
+      expect(currentGuest.executeJavaScriptInIsolatedWorld).toHaveBeenLastCalledWith(
+        expect.any(Number),
+        [expect.objectContaining({ code: expect.stringContaining('const enabled = false;') })],
+        false
+      )
+    }
+  )
+
+  it('keeps an in-flight injection and applies the latest fresh markers and token', async () => {
+    const { guest } = makeGuest(5203)
+    const release = deferGuestInjection(guest)
+    const resolveGuest = resolveFromRegistry('tab-fresh-markers')
+    registerPage('tab-fresh-markers', guest)
+    const inFlight = browserManager.setAnnotationViewportBridge(
+      'tab-fresh-markers',
+      MARKER_OPTIONS,
+      resolveGuest
+    )
+    await flushViewportOps()
+    const cleared = browserManager.setAnnotationViewportBridge(
+      'tab-fresh-markers',
+      { ...BRIDGE_OPTIONS, enabled: false },
+      resolveGuest
+    )
+    const fresh = browserManager.setAnnotationViewportBridge(
+      'tab-fresh-markers',
+      {
+        ...MARKER_OPTIONS,
+        token: 'remintedpreviewtoken',
+        markers: MARKER_OPTIONS.markers.map((marker) => ({ ...marker, id: 'fresh-preview-marker' }))
+      },
+      resolveGuest
+    )
+
+    release()
+    await expect(inFlight).resolves.toBe(true)
+    await expect(cleared).resolves.toBe(false)
+    await expect(fresh).resolves.toBe(true)
+    expect(guest.executeJavaScriptInIsolatedWorld).toHaveBeenCalledTimes(2)
+    expect(guest.executeJavaScriptInIsolatedWorld).toHaveBeenLastCalledWith(
+      expect.any(Number),
+      [
+        expect.objectContaining({
+          code: expect.stringContaining('fresh-preview-marker')
+        })
+      ],
+      false
+    )
+    expect(guest.executeJavaScriptInIsolatedWorld).toHaveBeenLastCalledWith(
+      expect.any(Number),
+      [expect.objectContaining({ code: expect.stringContaining('remintedpreviewtoken') })],
+      false
+    )
+  })
+
+  it('continues the queue after an in-flight injection fails', async () => {
+    const { guest } = makeGuest(5204)
+    let rejectInjection = (): void => {}
+    const gate = new Promise<void>((_resolve, reject) => {
+      rejectInjection = () => reject(new Error('retired document'))
+    })
+    guest.executeJavaScriptInIsolatedWorld = vi
+      .fn()
+      .mockReturnValueOnce(gate)
+      .mockResolvedValue(true)
+    registerPage('tab-failed-injection', guest)
+    const resolveGuest = resolveFromRegistry('tab-failed-injection')
+    const inFlight = browserManager.setAnnotationViewportBridge(
+      'tab-failed-injection',
+      MARKER_OPTIONS,
+      resolveGuest
+    )
+    await flushViewportOps()
+    const cleared = browserManager.setAnnotationViewportBridge(
+      'tab-failed-injection',
+      { ...BRIDGE_OPTIONS, enabled: false },
+      resolveGuest
+    )
+
+    rejectInjection()
+    await expect(inFlight).resolves.toBe(false)
+    await expect(cleared).resolves.toBe(true)
+    await expect(
+      browserManager.setAnnotationViewportBridge(
+        'tab-failed-injection',
+        BRIDGE_OPTIONS,
+        resolveGuest
+      )
+    ).resolves.toBe(true)
+    expect(guest.executeJavaScriptInIsolatedWorld).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not run a queued marker request after page teardown removes its chain', async () => {
+    const { guest } = makeGuest(5205)
+    const release = deferGuestInjection(guest)
+    registerPage('tab-closed-queue', guest)
+    const resolveGuest = resolveFromRegistry('tab-closed-queue')
+    const inFlight = browserManager.setAnnotationViewportBridge(
+      'tab-closed-queue',
+      BRIDGE_OPTIONS,
+      resolveGuest
+    )
+    await flushViewportOps()
+    const retired = browserManager.setAnnotationViewportBridge(
+      'tab-closed-queue',
+      MARKER_OPTIONS,
+      resolveGuest
+    )
+    browserManager.unregisterGuest('tab-closed-queue')
+
+    release()
+    await expect(inFlight).resolves.toBe(true)
+    await expect(retired).resolves.toBe(false)
+    expect(guest.executeJavaScriptInIsolatedWorld).toHaveBeenCalledTimes(1)
+    expect(browserManager.getGuestWebContentsId('tab-closed-queue')).toBeNull()
   })
 
   // Why this is the resolver's cleanup and not the bridge's: the authority that reads the registry

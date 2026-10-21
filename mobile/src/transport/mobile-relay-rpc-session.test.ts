@@ -4,6 +4,7 @@ import {
   encodeBrowserScreencastFrame
 } from '../../../src/shared/browser-screencast-protocol'
 import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
+import { scopeRpcClientToExecutionHost } from './execution-host-scoped-rpc-client'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 
 const fakes = vi.hoisted(() => ({
@@ -322,6 +323,21 @@ describe('mobile relay RPC session', () => {
     expect(session.getState()).toBe('disconnected')
   })
 
+  it('keeps a synchronous pre-write relay failure definite', async () => {
+    const { session } = await authenticateSession()
+    fakes.sendText.mockImplementationOnce(() => {
+      fakes.linkOptions!.onError(new Error('relay outbound overflow'))
+      return false
+    })
+
+    const error = await session
+      .sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+      .catch((cause: unknown) => cause)
+
+    expect((error as Error).message).toBe('relay outbound overflow')
+    expect(isRpcDeliveryUnknown(error)).toBe(false)
+  })
+
   it('marks in-flight requests delivery-unknown when the session closes', async () => {
     const { session } = await authenticateSession()
     const pending = session.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
@@ -350,6 +366,70 @@ describe('mobile relay RPC session', () => {
       })
     } finally {
       vi.useRealTimers()
+    }
+  })
+
+  it('sends requests and streams with no envelope byte for byte as before', async () => {
+    const { session } = await authenticateSession()
+    void session.sendRequest('status.get', { a: 1 })
+    session.subscribe('terminal.subscribe', { terminal: 't1' }, () => undefined)
+    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
+    expect(
+      fakes.sendText.mock.calls.map((call) => String(call[0]).replace(/"id":"[^"]+"/, ''))
+    ).toEqual([
+      '{,"method":"status.get","params":{"a":1},"deviceToken":"device-token"}',
+      '{,"method":"terminal.subscribe","params":{"terminal":"t1"},"deviceToken":"device-token"}'
+    ])
+  })
+
+  it('sends a server workspace call as the same top-level executionHost frame as before the envelope', async () => {
+    const { session } = await authenticateSession()
+    const server = scopeRpcClientToExecutionHost(session, 'runtime:a')
+    void server.sendRequest('worktree.ps', { limit: 1 })
+    server.subscribe('terminal.subscribe', { terminal: 't1' }, () => undefined)
+    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
+    const frames = fakes.sendText.mock.calls.map((call) => JSON.parse(String(call[0])))
+    // The frames #26501 wrote with its own `executionHost` option, ids aside; key order is not read.
+    expect(frames.map(({ id: _id, ...frame }) => frame)).toStrictEqual([
+      {
+        method: 'worktree.ps',
+        params: { limit: 1 },
+        executionHost: 'runtime:a',
+        deviceToken: 'device-token'
+      },
+      {
+        method: 'terminal.subscribe',
+        params: { terminal: 't1' },
+        executionHost: 'runtime:a',
+        deviceToken: 'device-token'
+      }
+    ])
+  })
+
+  it('merges an envelope under the transport fields on requests, subscribes and unsubscribes', async () => {
+    const { session } = await authenticateSession()
+    const envelope = {
+      executionHost: 'runtime:a',
+      id: 'x',
+      method: 'x',
+      params: 'x',
+      deviceToken: 'x'
+    }
+    void session.sendRequest('status.get', { a: 1 }, { envelope })
+    const dispose = session.subscribe('terminal.subscribe', { terminal: 't1' }, () => undefined, {
+      envelope
+    })
+    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
+    dispose()
+    const frames = fakes.sendText.mock.calls.map((call) => JSON.parse(String(call[0])))
+    expect(frames).toEqual([
+      expect.objectContaining({ method: 'status.get', params: { a: 1 } }),
+      expect.objectContaining({ method: 'terminal.subscribe', params: { terminal: 't1' } }),
+      expect.objectContaining({ method: 'terminal.unsubscribe' })
+    ])
+    for (const frame of frames) {
+      expect(frame).toMatchObject({ executionHost: 'runtime:a', deviceToken: 'device-token' })
+      expect(frame.id).not.toBe('x')
     }
   })
 })

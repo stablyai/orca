@@ -1,0 +1,60 @@
+{
+  "comparison": "Actual split close/IPC transport and actual host handle-close tests; before reverses only fix.patch in a temporary Vite transform",
+  "sourceHashes": {
+    "src/renderer/src/components/terminal-pane/retire-unbound-ipc-terminal-pane.ts": {
+      "before": "3194229bdd3c992e8459cdad727a3931653953b204854486b8aaf4d129152d24",
+      "after": "f52f4b50d94e71506921788e3b49db547dbd879569d80151429adaeaa5865571"
+    },
+    "src/renderer/src/components/terminal-pane/use-terminal-pane-close-actions.ts": {
+      "before": "bbfeb2385fd120a7a1407d043011fb689b5c2b652c31150de44061f1edb76a7b",
+      "after": "d9f0c08d82e70180f4e3c28ca33815314c580ba59c65cb3c5004079b56c3f227"
+    },
+    "src/renderer/src/runtime/runtime-rpc-client.ts": {
+      "before": "d0ae689153ba0d972ba7a10484c2024bf9fd08c8628bd43009396aa0f653058e",
+      "after": "37912cebd375be8378a8a882cf5677663d435414cb81bec5180637df7165f2b9"
+    },
+    "src/renderer/src/store/terminals/terminal-tab-close-providers.ts": {
+      "before": "87b666644adc3b3295b848b424f44b5834980c7871d7df55bbda6fabeb4c7c7b",
+      "after": "66f5853c4dc1a14bee7b630a2d868ae3432a8d4870b3e5022a4a7138469d6579"
+    },
+    "src/renderer/src/components/terminal-pane/retire-unbound-runtime-terminal-pane.ts": {
+      "current": "9e7fe08d0d32e75b9d01cb56c6fcffef48443e57b1d8d183377120ce944a1ae7"
+    },
+    "src/renderer/src/components/terminal-pane/terminal-pane-retirement-ownership.ts": {
+      "current": "a7aa072930b2e293ca49701df355b60e52ad8b8bb1c8449239e0777f8d8c3020"
+    },
+    "src/renderer/src/components/terminal-pane/pending-runtime-pane-close-test-fixture.ts": {
+      "current": "2e08dec20d64d2f21962fb6a04ee0783d49cf2db1c0bc3d407e761a7f5515c7a"
+    },
+    "src/renderer/src/components/terminal-pane/pending-runtime-pane-close.test.ts": {
+      "current": "f1477f53e086330c7587c2e0c5f13070917bb84b4b249de1d31045c3f03fb2f3"
+    },
+    "docs/audits/pending-runtime-pane-close/host-handle-proof.test.ts": {
+      "current": "becc10e549a97e4a45d03f93de726ee7989f11fc6cb118bc362c7eab4809d8c7"
+    }
+  },
+  "before": {
+    "exitCode": 1,
+    "passed": 5,
+    "failed": 10,
+    "failedCases": [
+      "actual close RPC addresses only the captured host incarnation: replacement=false",
+      "actual close RPC addresses only the captured host incarnation: replacement=true",
+      "closes the captured scoped handle while actual remote attach is still unbound",
+      "rechecks same-leaf ownership after compatibility settles",
+      "rechecks other-tab ownership after compatibility settles",
+      "rechecks bound-transport ownership after compatibility settles",
+      "rechecks worktree-owner ownership after compatibility settles",
+      "rechecks pairing ownership after compatibility settles",
+      "does not bypass a failed compatibility check",
+      "never turns a late different resolved handle into close authority"
+    ]
+  },
+  "after": {
+    "exitCode": 0,
+    "passed": 15,
+    "failed": 0,
+    "failedCases": []
+  },
+  "passed": true
+}

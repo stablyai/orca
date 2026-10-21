@@ -4,6 +4,15 @@ import { createProgrammaticScrollMarks } from './programmatic-scroll-marks'
 const scrollEvent = (): Event => new Event('scroll')
 
 describe('createProgrammaticScrollMarks', () => {
+  it('checks pending landings without consuming their delayed events', () => {
+    const marks = createProgrammaticScrollMarks()
+    marks.mark(12000)
+    expect(marks.hasPendingScrollOffset(5000, 5000)).toBe(true)
+    expect(marks.hasPendingScrollOffset(4000, 5000)).toBe(false)
+    expect(marks.consume(scrollEvent(), 5000, 5000)).toBe(true)
+    expect(marks.hasPendingScrollOffset(5000, 5000)).toBe(false)
+  })
+
   it('classifies an event matching a marked target as programmatic', () => {
     const marks = createProgrammaticScrollMarks()
     marks.mark(500)

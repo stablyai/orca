@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { eraseRpcMethods } from '../../../core'
 
 // The aggregate terminal inventory only iterates registered providers, so a
 // dropped relay clears `connected` for every remote PTY at once. That is lost
@@ -29,7 +30,9 @@ describe('worker-stop against a terminal we lost contact with', () => {
   afterEach(() => db.close())
 
   async function call(name: string, params: Record<string, unknown>) {
-    const method = ORCHESTRATION_METHODS.find((candidate) => candidate.name === name)
+    const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
+      (candidate) => candidate.name === name
+    )
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }
@@ -226,7 +229,7 @@ describe('worker-stop against a terminal we lost contact with', () => {
     const dispatch = createWorker()
     expect(db.beginWorkerStop(dispatch.id, runtime.getRuntimeId()).disposition).toBe('stopping')
 
-    expect(() => db.abandonWorkerDispatch(dispatch.id)).toThrow(
+    expect(() => db.abandonWorkerDispatch(dispatch.id, runtime.getRuntimeId())).toThrow(
       'is stopping; wait for worker-stop to settle before abandoning'
     )
     expect(db.getWorkerDispatch(dispatch.id)?.state).toBe('stopping')

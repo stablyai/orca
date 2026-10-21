@@ -1,6 +1,6 @@
 /**
  * Memory-leak + correctness regression: `ambiguousOwnerWarnedWorktreeIds` is a
- * module-scope Set that had no `delete` anywhere.
+ * module-scope map that had no `delete` anywhere.
  *
  * `warnAmbiguousOwnerOnce` adds a worktree id so the "identity is ambiguous
  * across hosts" warning is emitted once per workspace rather than on every PTY
@@ -44,7 +44,7 @@ globalThis.window = { api: mockApi }
 import {
   ambiguousOwnerWarnedWorktreeIds,
   warnAmbiguousOwnerOnce
-} from './worktrees/listing/worktree-owner-settings'
+} from '@/lib/ambiguous-owner-warning'
 import { createTestStore, seedStore, makeWorktree } from './store-test-helpers'
 
 const WT1 = 'repo1::/path/wt1'

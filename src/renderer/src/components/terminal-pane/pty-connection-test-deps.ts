@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { leafIdForPane } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 
 type MockRef = { current: Mock }
 
@@ -16,7 +17,7 @@ export type PaneConnectionDeps = {
   mountFollowsTerminalPark: boolean
   paneTransportsRef: { current: Map<number, unknown> }
   paneMode2031Ref: { current: Map<number, unknown> }
-  paneKittyKeyboardModesRef: { current: Map<number, unknown> }
+  paneKittyKeyboardModesRef: { current: Map<number, TerminalKittyKeyboardModeTracker> }
   paneLastThemeModeRef: { current: Map<number, unknown> }
   replayingPanesRef: { current: Map<number, unknown> }
   isActiveRef: { current: boolean }
@@ -31,12 +32,7 @@ export type PaneConnectionDeps = {
   setRuntimePaneTitle: Mock
   clearRuntimePaneTitle: Mock
   updateTabPtyId: Mock<(tabId: string, ptyId: string, replacedPtyId?: string) => void>
-  markWorktreeUnread: Mock
-  markTerminalTabUnread: Mock
-  markTerminalPaneUnread: Mock
-  clearWorktreeUnread: Mock
-  clearTerminalTabUnread: Mock
-  clearTerminalPaneUnread: Mock
+  markTerminalBell: Mock
   dispatchNotification: Mock
   onShowSessionRestoredBanner: Mock
   setCacheTimerStartedAt: Mock
@@ -83,12 +79,7 @@ export function buildPaneConnectionDeps(
             : [...current, ptyId]
       getState().ptyIdsByTabId = { ...getState().ptyIdsByTabId, [tabId]: next }
     }),
-    markWorktreeUnread: vi.fn(),
-    markTerminalTabUnread: vi.fn(),
-    markTerminalPaneUnread: vi.fn(),
-    clearWorktreeUnread: vi.fn(),
-    clearTerminalTabUnread: vi.fn(),
-    clearTerminalPaneUnread: vi.fn(),
+    markTerminalBell: vi.fn(),
     dispatchNotification: vi.fn(),
     onShowSessionRestoredBanner: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
@@ -101,39 +92,4 @@ export function buildPaneConnectionDeps(
     clearExitedPanePtyLayoutBinding: vi.fn(),
     ...overrides
   }
-}
-
-export type DirectSshSplitRetryCommit = Mock<
-  (tabId: string, ptyId: string, replacedPtyId?: string, directSshRetryAttemptId?: string) => void
->
-
-export function buildDirectSshSplitRetryCommit(
-  getState: () => StoreState
-): DirectSshSplitRetryCommit {
-  return vi.fn(
-    (tabId: string, ptyId: string, _replacedPtyId?: string, directSshRetryAttemptId?: string) => {
-      const currentPtyIds = getState().ptyIdsByTabId?.[tabId] ?? []
-      getState().ptyIdsByTabId = {
-        ...getState().ptyIdsByTabId,
-        [tabId]: currentPtyIds.includes(ptyId) ? currentPtyIds : [...currentPtyIds, ptyId]
-      }
-      const pending = getState().directSshPaneRetryByTabId?.[tabId]
-      if (!pending || pending.attemptId !== directSshRetryAttemptId) {
-        return
-      }
-      const tab = getState().tabsByWorktree['wt-1'].find((candidate) => candidate.id === tabId)
-      if (tab && !tab.ptyId) {
-        tab.ptyId = ptyId
-      }
-      getState().directSshPaneRetryByTabId = {}
-      getState().directSshLivePtyBindingByTabId = {
-        [tabId]: {
-          attemptId: pending.attemptId,
-          authority: pending.authority,
-          tabGeneration: pending.tabGeneration,
-          ptyId: tab?.ptyId ?? ptyId
-        }
-      }
-    }
-  )
 }

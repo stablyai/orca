@@ -48,7 +48,8 @@ export async function readHooksJsonRemote(
 export async function writeHooksJsonRemote(
   sftp: SFTPWrapper,
   remotePath: string,
-  config: HooksConfig,
+  // Why: mirrors the local writer — the config is only the fallback serialization source.
+  config: Record<string, unknown>,
   // Why: mirrors the local writer — a JSONC config supplies text edited in place.
   options?: { serialized?: string }
 ): Promise<void> {
@@ -126,6 +127,21 @@ export async function readTextFileRemote(
 ): Promise<string | null> {
   try {
     return await readFile(sftp, remotePath)
+  } catch (err) {
+    if (isNoEntryError(err)) {
+      return null
+    }
+    throw err
+  }
+}
+
+/** Entry names in a remote directory, or null when the directory does not exist. */
+export async function listRemoteDirectory(
+  sftp: SFTPWrapper,
+  remotePath: string
+): Promise<string[] | null> {
+  try {
+    return (await readdir(sftp, remotePath)).map((entry) => entry.filename)
   } catch (err) {
     if (isNoEntryError(err)) {
       return null

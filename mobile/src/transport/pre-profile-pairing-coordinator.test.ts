@@ -108,7 +108,7 @@ function dependencies(client: RpcClient, events: string[]) {
       id: hostId,
       name: 'Blue Whale'
     })),
-    saveHost: vi.fn(async (_host: HostProfile) => {
+    savePairedHost: vi.fn(async (_host: HostProfile) => {
       events.push('save-host')
     }),
     saveJournal: vi.fn(async (_journal: MobileRelayPairingJournal) => {
@@ -120,8 +120,13 @@ function dependencies(client: RpcClient, events: string[]) {
     clearJournal: vi.fn(async () => {
       events.push('clear-journal')
     }),
+    releaseJournal: vi.fn(),
+    recoverPendingJournal: vi.fn(async () => {}),
     writeCredentialBundle: vi.fn(async (_bundle: MobileRelayCredentialBundle) => {
       events.push('write-credential')
+    }),
+    recordDescriptorFromStatus: vi.fn(() => {
+      events.push('record-descriptor')
     }),
     now: () => now,
     platform: 'ios'
@@ -168,7 +173,7 @@ describe('pre-profile pairing coordinator', () => {
     })
 
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
-    expect(deps.saveHost).toHaveBeenCalledWith({
+    expect(deps.savePairedHost).toHaveBeenCalledWith({
       id: `host-${now}`,
       name: 'Blue Whale',
       endpoint: directOffer.endpoint,
@@ -176,7 +181,7 @@ describe('pre-profile pairing coordinator', () => {
       publicKeyB64: directOffer.publicKeyB64,
       lastConnected: now
     })
-    expect(events).toEqual(['connect', 'save-host'])
+    expect(events).toEqual(['connect', 'save-host', 'record-descriptor'])
   })
 
   it('reuses the existing host id and name when re-pairing the same desktop key (no duplicate)', async () => {
@@ -198,7 +203,7 @@ describe('pre-profile pairing coordinator', () => {
     })
 
     await expect(attempt.result).resolves.toEqual({ hostId: 'host-existing' })
-    expect(deps.saveHost).toHaveBeenCalledWith({
+    expect(deps.savePairedHost).toHaveBeenCalledWith({
       id: 'host-existing',
       name: 'Studio Mac',
       endpoint: directOffer.endpoint,
@@ -206,6 +211,54 @@ describe('pre-profile pairing coordinator', () => {
       publicKeyB64: directOffer.publicKeyB64,
       lastConnected: now
     })
+  })
+
+  it('hands the winning status to the descriptor recorder only after the host is saved', async () => {
+    const events: string[] = []
+    const client = fakeClient([success({ machineName: 'm4airs-Air', hostPlatform: 'darwin' })])
+    const deps = dependencies(client, events)
+    const attempt = startPreProfilePairing({
+      offer: directOffer,
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+    expect(events).toEqual(['connect', 'save-host', 'record-descriptor'])
+    expect(deps.recordDescriptorFromStatus).toHaveBeenCalledWith(
+      `host-${now}`,
+      expect.objectContaining({ machineName: 'm4airs-Air', hostPlatform: 'darwin' })
+    )
+  })
+
+  it('pairs a desktop whose status reply is unreadable, recording no descriptor', async () => {
+    const deps = dependencies(fakeClient([success(null)]), [])
+    const attempt = startPreProfilePairing({
+      offer: directOffer,
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+    expect(deps.savePairedHost).toHaveBeenCalledOnce()
+    expect(deps.recordDescriptorFromStatus).not.toHaveBeenCalled()
+  })
+
+  it('still resolves a saved pairing when descriptor recording throws', async () => {
+    const events: string[] = []
+    const client = fakeClient([success({ machineName: 'm4airs-Air', hostPlatform: 'darwin' })])
+    const deps = dependencies(client, events)
+    deps.recordDescriptorFromStatus.mockImplementation(() => {
+      throw new Error('storage unavailable')
+    })
+    const attempt = startPreProfilePairing({
+      offer: directOffer,
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+    expect(deps.savePairedHost).toHaveBeenCalledOnce()
   })
 
   it('journals before connecting and publishes only after authoritative direct install', async () => {
@@ -269,25 +322,18 @@ describe('pre-profile pairing coordinator', () => {
       'update-journal',
       'write-credential',
       'save-host',
-      'clear-journal'
+      'clear-journal',
+      'record-descriptor'
     ])
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'pairing.provisionRelay', {
       reqId: journal!.metadata.installReqId,
       newResumeTokenHash: journal!.metadata.pendingResumeTokenHash
     })
-    expect(deps.saveHost).toHaveBeenCalledWith(
+    expect(deps.savePairedHost).toHaveBeenCalledWith(
       expect.objectContaining({
         id: `host-${now}`,
         endpoint: directOffer.endpoint,
-        relayHostId: relayOffer.relay!.relayHostId,
-        endpoints: [
-          { id: 'direct-primary', kind: 'lan', url: directOffer.endpoint },
-          {
-            id: 'relay-primary',
-            kind: 'relay',
-            url: `wss://relay-c1.onorca.dev/v1/connect/${relayOffer.relay!.relayHostId}`
-          }
-        ]
+        relay: expect.objectContaining({ relayHostId: relayOffer.relay!.relayHostId })
       })
     )
   })
@@ -304,16 +350,55 @@ describe('pre-profile pairing coordinator', () => {
     })
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
-    expect(deps.saveHost).toHaveBeenCalledWith(
-      expect.not.objectContaining({ endpoints: expect.anything() })
+    expect(deps.savePairedHost).toHaveBeenCalledWith(
+      expect.not.objectContaining({ relay: expect.anything() })
     )
     expect(events).toEqual([
       'save-journal',
       'connect',
       'update-journal',
       'save-host',
-      'clear-journal'
+      'clear-journal',
+      'record-descriptor'
     ])
+  })
+
+  // Why 'forbidden' and not only 'method_not_found': the desktop's mobile allowlist gate runs
+  // before its RPC dispatcher, so a method a desktop predates is missing from both and the phone
+  // is refused by scope, never by absence. A desktop that old also omits the offer's `relay` block,
+  // so this flow would not probe it at all — what this pins is the skew that stays reachable, a
+  // desktop that offers relay but does not allowlist the probe. Refusing it must still commit.
+  it('tolerates an old desktop scope refusal and commits a direct-only host', async () => {
+    const events: string[] = []
+    const entries: ConnectionLogEntry[] = []
+    const client = fakeClient([success({ version: '1.0.0' }), failure('forbidden')])
+    const deps = dependencies(client, events)
+
+    const attempt = startPreProfilePairing({
+      offer: relayOffer,
+      timeoutMs: 5_000,
+      connectOptions: { onLog: (entry) => entries.push(entry) },
+      dependencies: deps
+    })
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+
+    expect(deps.savePairedHost).toHaveBeenCalledWith(
+      expect.not.objectContaining({ relay: expect.anything() })
+    )
+    expect(events).toEqual([
+      'save-journal',
+      'connect',
+      'update-journal',
+      'save-host',
+      'clear-journal',
+      'record-descriptor'
+    ])
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        message: 'Relay: desktop will not serve relay pairing',
+        detail: 'forbidden'
+      })
+    )
   })
 
   it('uses relay-basis provisioning when only the relay reaches post-E2EE status', async () => {
@@ -440,6 +525,31 @@ describe('pre-profile pairing coordinator', () => {
     expect(entries[0]).toMatchObject({ level: 'warn', detail: '10.5.0.2:6768' })
   })
 
+  it('lets a stale journal recover before the new scan journals, and releases it on failure', async () => {
+    const events: string[] = []
+    const client = fakeClient([])
+    vi.mocked(client.sendRequest).mockRejectedValue(new Error('offline'))
+    const deps = dependencies(client, events)
+    let finishRecovery!: () => void
+    deps.recoverPendingJournal.mockImplementation(
+      () => new Promise<void>((resolve) => (finishRecovery = resolve))
+    )
+    const attempt = startPreProfilePairing({
+      offer: relayOffer,
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+    const settled = attempt.result.catch(() => null)
+    await vi.waitFor(() => expect(deps.recoverPendingJournal).toHaveBeenCalled())
+    expect(events).toEqual([])
+    finishRecovery()
+    await settled
+    expect(events[0]).toBe('save-journal')
+    const journalId = deps.saveJournal.mock.calls[0]?.[0].metadata.journalId
+    expect(journalId).toEqual(expect.any(String))
+    expect(deps.releaseJournal).toHaveBeenCalledWith(journalId)
+  })
+
   it('cancels the disposable physical client without publishing a host', async () => {
     let resolveStatus!: (response: RpcResponse) => void
     const status = new Promise<RpcResponse>((resolve) => {
@@ -459,6 +569,6 @@ describe('pre-profile pairing coordinator', () => {
 
     await expect(attempt.result).rejects.toThrow(/cancelled/)
     expect(client.close).toHaveBeenCalledOnce()
-    expect(deps.saveHost).not.toHaveBeenCalled()
+    expect(deps.savePairedHost).not.toHaveBeenCalled()
   })
 })

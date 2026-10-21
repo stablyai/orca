@@ -66,10 +66,10 @@ jobs:
       - name: Run golden E2E tests on Linux
         if: runner.os == 'Linux'
         run: |
-          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e tests/e2e/golden-core-flows.spec.ts
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
           if [ -f tests/e2e/golden-fresh-profile-terminal.spec.ts ]; then
-            xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
+            xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
           fi
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
@@ -80,10 +80,10 @@ jobs:
       - name: Run golden E2E tests on macOS
         if: runner.os == 'macOS'
         run: |
-          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e tests/e2e/golden-core-flows.spec.ts
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
           if [ -f tests/e2e/golden-fresh-profile-terminal.spec.ts ]; then
-            env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
+            env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
           fi
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
@@ -104,7 +104,7 @@ jobs:
           pnpm run --if-present test:e2e:tab-bar-agent-launch-golden
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (Test-Path tests/e2e/golden-fresh-profile-terminal.spec.ts) {
-            pnpm run test:e2e -- tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
+            pnpm run test:e2e tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           pnpm run --if-present test:e2e:source-control-golden

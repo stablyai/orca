@@ -3,12 +3,12 @@ import type { TerminalPaneSplitSource } from '../../../shared/feature-education-
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeTerminalClose, RuntimeTerminalSplit } from '../../../shared/runtime-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
-import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '../lib/resolve-owner'
 import { useAppStore } from '../store'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
-import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
+import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
@@ -197,10 +197,16 @@ export async function updateWebRuntimePaneLayout(args: {
   tabId: string
   root: TerminalPaneLayoutNode | null
   expandedLeafId: string | null
+  chatLeafId?: string | null
   titlesByLeafId?: Record<string, string>
+  renamedLeafIds?: string[]
 }): Promise<boolean> {
-  const environmentId =
-    getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
+  // Why: a twin's edit must not reach either host on a guess; it stays local until one is chosen.
+  const environmentId = runtimeEnvironmentIdUnlessTwin(
+    useAppStore.getState(),
+    args.worktreeId,
+    'push a pane layout to its host'
+  )
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
@@ -216,7 +222,9 @@ export async function updateWebRuntimePaneLayout(args: {
         tabId: hostTabId,
         root: args.root,
         expandedLeafId: args.expandedLeafId,
-        ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {})
+        ...(args.chatLeafId !== undefined ? { chatLeafId: args.chatLeafId } : {}),
+        ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {}),
+        ...(args.renamedLeafIds ? { renamedLeafIds: args.renamedLeafIds } : {})
       },
       timeoutMs: 15_000
     })
@@ -238,15 +246,19 @@ export function setWebRuntimeTabProps(args: {
   color?: string | null
   isPinned?: boolean
   viewMode?: 'terminal' | 'chat'
+  customTitle?: string | null
 }): boolean {
-  const environmentId =
-    getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
+  const environmentId = runtimeEnvironmentIdUnlessTwin(
+    useAppStore.getState(),
+    args.worktreeId,
+    'push tab props to its host'
+  )
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId)
   const state = useAppStore.getState()
-  void import('./web-session-tabs-sync')
+  void import('./web-session-tabs-sync/tracking-mappings')
     .then(({ resolveHostSessionTabIdForWebSessionTab }) => {
       const hostTabId =
         resolveHostSessionTabIdForWebSessionTab(state, {
@@ -261,7 +273,8 @@ export function setWebRuntimeTabProps(args: {
           tabId: hostTabId,
           ...(args.color !== undefined ? { color: args.color } : {}),
           ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
-          ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
+          ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {}),
+          ...(args.customTitle !== undefined ? { customTitle: args.customTitle } : {})
         },
         timeoutMs: 15_000
       })
@@ -272,35 +285,6 @@ export function setWebRuntimeTabProps(args: {
     .catch((error) => {
       console.warn(
         '[web-runtime-session] failed to set tab props:',
-        error instanceof Error ? error.message : String(error)
-      )
-    })
-  return true
-}
-
-// Why: local pane.terminal.clear() is undone by the next host snapshot replay; clear the host buffer so it sticks.
-export function clearWebRuntimeTerminalBuffer(ptyId: string | null | undefined): boolean {
-  if (!ptyId) {
-    return false
-  }
-  const remote = parseRemoteRuntimePtyId(ptyId)
-  const environmentId = remote?.environmentId?.trim()
-  if (!remote || !environmentId || !isWebRuntimeSessionActive(environmentId)) {
-    return false
-  }
-  void window.api.runtimeEnvironments
-    .call({
-      selector: environmentId,
-      method: 'terminal.clearBuffer',
-      params: { terminal: remote.handle },
-      timeoutMs: 15_000
-    })
-    .then((response) => {
-      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ clear: unknown }>)
-    })
-    .catch((error) => {
-      console.warn(
-        '[web-runtime-session] failed to clear terminal buffer:',
         error instanceof Error ? error.message : String(error)
       )
     })

@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { ArrowDown, ArrowUp, Plus, Settings, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -120,7 +121,7 @@ export default function WorkspaceKanbanSettingsMenu({
               >
                 <div className="flex items-center gap-1">
                   <meta.icon className={cn('size-3.5 shrink-0', meta.tone)} />
-                  <input
+                  <ImeInput
                     defaultValue={status.label}
                     onBlur={(event) => onRenameStatus(status.id, event.target.value)}
                     onKeyDown={(event) => {

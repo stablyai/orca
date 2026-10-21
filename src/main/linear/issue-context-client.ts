@@ -123,8 +123,11 @@ export async function resolveIssue(
 
 export const getConnectedWorkspaces = (): LinearWorkspace[] => getStatus().workspaces ?? []
 
-export function getRequiredEntry(workspaceId: string): LinearClientForWorkspace {
-  const entry = getClients(workspaceId)[0]
+export function getRequiredEntry(
+  workspaceId: string,
+  signal?: AbortSignal
+): LinearClientForWorkspace {
+  const entry = getClients(workspaceId, signal)[0]
   if (!entry) {
     throw linearError('linear_not_connected', 'Linear is not connected.')
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore, createEditorTabsStore } from './editor-slice-test-harness'
 import type { AppState } from '../types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -88,7 +89,7 @@ describe('createEditorSlice openDiff', () => {
     const store = createEditorStore()
     // A remote runtime is globally focused, but wt-1's repo names no explicit
     // owner. The diff must stamp null (not undefined): null forces a LOCAL read
-    // in settingsForRuntimeOwner, while undefined would inherit 'focused-env'.
+    // (local), while undefined used to inherit 'focused-env'.
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings']
     })
@@ -644,14 +645,17 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
       expect.objectContaining({
         entityId: '/repo/a.ts',
-        isPinned: true,
-        isPreview: false
+        isPinned: true
       }),
       expect.objectContaining({
         entityId: 'wt-1::diff::unstaged::b.ts',
         isPreview: true
       })
     ])
+    // Not a preview: a switch-on build omits the flag rather than writing false.
+    expect(store.getState().unifiedTabsByWorktree['wt-1']?.[0]?.isPreview).toBe(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : false
+    )
   })
 
   it('makes a preview file permanent without pinning the tab', () => {
@@ -678,10 +682,13 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
       expect.objectContaining({
         entityId: '/repo/a.ts',
-        isPinned: undefined,
-        isPreview: false
+        isPinned: undefined
       })
     ])
+    // Not a preview: a switch-on build omits the flag rather than writing false.
+    expect(store.getState().unifiedTabsByWorktree['wt-1']?.[0]?.isPreview).toBe(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : false
+    )
   })
 
   it('does not replace a dirty file that was opened as a preview', () => {
@@ -714,13 +721,16 @@ describe('createEditorSlice openDiff', () => {
     ])
     expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
       expect.objectContaining({
-        entityId: '/repo/a.ts',
-        isPreview: false
+        entityId: '/repo/a.ts'
       }),
       expect.objectContaining({
         entityId: 'wt-1::diff::unstaged::b.ts',
         isPreview: true
       })
     ])
+    // Not a preview: a switch-on build omits the flag rather than writing false.
+    expect(store.getState().unifiedTabsByWorktree['wt-1']?.[0]?.isPreview).toBe(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : false
+    )
   })
 })

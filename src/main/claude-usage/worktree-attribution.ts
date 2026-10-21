@@ -105,7 +105,7 @@ export async function attributeClaudeUsageTurns(
   worktreeLookup: Map<string, ClaudeUsageWorktreeRef>
 ): Promise<ClaudeUsageAttributedTurn[]> {
   const attributed: ClaudeUsageAttributedTurn[] = []
-  const canonicalCwdByPath = new Map<string, string>()
+  const worktreeByCwd = new Map<string, ClaudeUsageWorktreeRef | null>()
 
   for (const turn of turns) {
     const day = localDayFromTimestamp(turn.timestamp)
@@ -119,14 +119,12 @@ export async function attributeClaudeUsageTurns(
     let projectLabel = getDefaultProjectLabel(turn.cwd)
 
     if (turn.cwd) {
-      let canonicalCwd = canonicalCwdByPath.get(turn.cwd)
-      if (canonicalCwd === undefined) {
-        // Why: Claude transcripts repeat the same cwd for many consecutive
-        // turns. Cache realpath work so attribution scales with unique paths.
-        canonicalCwd = await canonicalizePath(turn.cwd)
-        canonicalCwdByPath.set(turn.cwd, canonicalCwd)
+      let worktree = worktreeByCwd.get(turn.cwd)
+      if (worktree === undefined) {
+        const canonicalCwd = await canonicalizePath(turn.cwd)
+        worktree = findContainingWorktree(canonicalCwd, worktreeLookup)
+        worktreeByCwd.set(turn.cwd, worktree)
       }
-      const worktree = findContainingWorktree(canonicalCwd, worktreeLookup)
       if (worktree) {
         repoId = worktree.repoId
         worktreeId = worktree.worktreeId

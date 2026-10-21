@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   activateWebRuntimeSessionTabMock,
+  createBrowserUuidMock,
   closeWebRuntimeSessionTabMock,
   createWebRuntimeSessionTerminalMock,
   getLatestWebSessionTabsPublicationEpochMock,
@@ -12,6 +13,7 @@ const {
   toHostSessionTabIdMock
 } = vi.hoisted(() => ({
   activateWebRuntimeSessionTabMock: vi.fn(),
+  createBrowserUuidMock: vi.fn(() => 'tab-1'),
   closeWebRuntimeSessionTabMock: vi.fn(),
   createWebRuntimeSessionTerminalMock: vi.fn(),
   getLatestWebSessionTabsPublicationEpochMock: vi.fn(() => 'epoch-1'),
@@ -28,17 +30,29 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/lib/browser-uuid', () => ({
+  createBrowserUuid: createBrowserUuidMock
+}))
+
+vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: activateWebRuntimeSessionTabMock,
-  closeWebRuntimeSessionTab: closeWebRuntimeSessionTabMock,
-  createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock,
-  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock,
+  closeWebRuntimeSessionTab: closeWebRuntimeSessionTabMock
+}))
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
+}))
+vi.mock('../../../../shared/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: isWebTerminalSurfaceTabIdMock,
   toHostSessionTabId: toHostSessionTabIdMock
 }))
 
-vi.mock('@/runtime/web-session-tabs-sync', () => ({
-  getLatestWebSessionTabsPublicationEpoch: getLatestWebSessionTabsPublicationEpochMock,
+vi.mock('@/runtime/web-session-tabs-sync/tracking-lifecycle', () => ({
+  getLatestWebSessionTabsPublicationEpoch: getLatestWebSessionTabsPublicationEpochMock
+}))
+vi.mock('@/runtime/web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: resolveHostSessionTabIdForWebSessionTabMock
 }))
 
@@ -76,10 +90,33 @@ describe('createNewTerminalTab', () => {
 
     createNewTerminalTab('wt-1', 'zsh')
 
-    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, 'zsh', undefined)
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, 'zsh', { id: 'tab-1' })
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     expect(setTabBarOrder).toHaveBeenCalledWith('wt-1', ['tab-1'])
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps open browser tabs before the new terminal when no order is saved yet', () => {
+    createBrowserUuidMock.mockReturnValueOnce('term-new')
+    const setTabBarOrder = vi.fn()
+    getStateMock
+      .mockReturnValueOnce({
+        settings: { activeRuntimeEnvironmentId: null },
+        createTab: vi.fn(() => ({ id: 'term-new' })),
+        setActiveTabType: vi.fn(),
+        setTabBarOrder
+      })
+      .mockReturnValueOnce({
+        tabsByWorktree: { 'wt-1': [{ id: 'term-a' }, { id: 'term-new' }] },
+        openFiles: [],
+        browserTabsByWorktree: { 'wt-1': [{ id: 'browser-1' }] },
+        tabBarOrderByWorktree: {},
+        setTabBarOrder
+      })
+
+    createNewTerminalTab('wt-1')
+
+    expect(setTabBarOrder).toHaveBeenCalledWith('wt-1', ['term-a', 'browser-1', 'term-new'])
   })
 
   it('delegates terminal creation to the host runtime in paired web clients', () => {
@@ -97,7 +134,7 @@ describe('createNewTerminalTab', () => {
     expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
-      command: 'pwsh',
+      shell: 'pwsh',
       activate: true
     })
     expect(createTab).not.toHaveBeenCalled()
@@ -121,7 +158,7 @@ describe('createNewTerminalTab', () => {
     expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'owner-runtime',
-      command: 'pwsh',
+      shell: 'pwsh',
       activate: true
     })
     expect(createTab).not.toHaveBeenCalled()
@@ -148,9 +185,10 @@ describe('createNewTerminalTab', () => {
     createNewTerminalTab('wt-1', undefined, { startupCwd: '/repo/packages/app' })
 
     expect(createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      id: 'tab-1',
       startupCwd: '/repo/packages/app'
     })
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
   })
 
   it('delegates requested startup cwd to host runtime terminals', () => {

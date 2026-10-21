@@ -6,10 +6,12 @@
  * copied: two renderings would let the two surfaces disagree about what a tool call looked like.
  */
 
+import { claimBackgroundTaskTwins } from './native-chat-background-task-row'
 import {
   isSubagentGroupFallbackText,
   subagentGroupFallbackText
 } from './native-chat-subagent-summary'
+import { subagentFallbackText } from './native-chat-subagent-items'
 import type { NativeChatMessage } from './native-chat-types'
 
 export function formatWorkerTranscriptMessage(message: NativeChatMessage): string {
@@ -20,9 +22,16 @@ export function formatWorkerTranscriptMessage(message: NativeChatMessage): strin
   // every fallback-shaped text block as soon as any group is present and draws
   // each group, so it never has to decide which twin belongs to which group.
   const standIns = claimSubagentGroupTwins(message.blocks)
+  // A background task's row is the same shape: one block, one frozen twin. Its
+  // twin is matched on exact text rather than by shape, because the sentence is
+  // often the provider's own and has none.
+  const taskTwins = claimBackgroundTaskTwins(message.blocks)
   const blocks = message.blocks.map((block, index) => {
     if (block.type === 'text') {
       return block.text
+    }
+    if (block.type === 'background-task') {
+      return taskTwins.unpairedRows.get(index) ?? null
     }
     if (block.type === 'tool-call') {
       return `[tool ${block.name}] ${safeJson(block.input)}`
@@ -35,6 +44,12 @@ export function formatWorkerTranscriptMessage(message: NativeChatMessage): strin
     }
     if (block.type === 'subagent-group') {
       return standIns.get(index) ?? null
+    }
+    if (block.type === 'subagent') {
+      // A subagent's own row is its block and its twin, nothing else.
+      return message.blocks.some((other) => other.type === 'text')
+        ? null
+        : `[subagents] ${subagentFallbackText(block)}`
     }
     // The journal deliberately admits block types this build does not know, and
     // a newer remote host can send one over the wire. Degrade to a marker rather
@@ -56,27 +71,30 @@ export function formatWorkerTranscriptMessage(message: NativeChatMessage): strin
  *  twice. A group left with no twin prints its own: the wire admits a roster that
  *  arrived without one, and dropping that would lose the sentence altogether. */
 function claimSubagentGroupTwins(blocks: NativeChatMessage['blocks']): Map<number, string> {
-  const twins: string[] = []
+  const twins = new Map<string, number>()
+  let remainingTwins = 0
   const groups: { index: number; sentence: string }[] = []
   blocks.forEach((block, index) => {
     if (block.type === 'text' && isSubagentGroupFallbackText(block.text)) {
-      twins.push(block.text)
+      twins.set(block.text, (twins.get(block.text) ?? 0) + 1)
+      remainingTwins += 1
     } else if (block.type === 'subagent-group') {
       groups.push({ index, sentence: subagentGroupFallbackText(block.agents) })
     }
   })
   const standIns = new Map<number, string>()
   const unclaimed = groups.filter((group) => {
-    const exact = twins.indexOf(group.sentence)
-    if (exact === -1) {
+    const count = twins.get(group.sentence) ?? 0
+    if (count === 0) {
       return true
     }
-    twins.splice(exact, 1)
+    twins.set(group.sentence, count - 1)
+    remainingTwins -= 1
     return false
   })
   for (const group of unclaimed) {
-    if (twins.length > 0) {
-      twins.pop()
+    if (remainingTwins > 0) {
+      remainingTwins -= 1
       continue
     }
     standIns.set(group.index, `[subagents] ${group.sentence}`)

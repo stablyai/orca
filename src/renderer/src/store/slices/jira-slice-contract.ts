@@ -6,6 +6,7 @@ import type {
   JiraConnectionStatus,
   JiraIssue,
   JiraIssueFilter,
+  JiraIssueListFilters,
   JiraSiteSelection,
   JiraViewer
 } from '../../../../shared/jira-types'
@@ -16,8 +17,16 @@ export type JiraReadOptions = {
   siteId?: JiraSiteSelection | null
 }
 
-export type JiraSearchOptions = JiraReadOptions & { signal?: AbortSignal }
-export type JiraPatchOptions = { sourceContext?: TaskSourceContext | null }
+export type JiraCollectionReadOptions = JiraReadOptions & {
+  force?: boolean
+  filters?: JiraIssueListFilters
+}
+export type JiraSearchOptions = JiraCollectionReadOptions & { signal?: AbortSignal }
+export type JiraPatchOptions = {
+  sourceContext?: TaskSourceContext | null
+  siteId?: string | null
+  contextKey?: string
+}
 export type JiraIssueSummaryLookupOptions = { force?: boolean; signal?: AbortSignal }
 
 export type JiraSlice = {
@@ -61,7 +70,7 @@ export type JiraSlice = {
   listJiraIssues: (
     filter?: JiraIssueFilter,
     limit?: number,
-    options?: JiraReadOptions
+    options?: JiraCollectionReadOptions
   ) => Promise<JiraIssue[]>
   patchJiraIssue: (issueKey: string, patch: Partial<JiraIssue>, options?: JiraPatchOptions) => void
 }

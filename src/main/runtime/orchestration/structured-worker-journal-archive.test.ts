@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../shared/native-chat-types'
 import { buildStructuredJournalArchive } from './structured-worker-journal-archive'
+import { foldToolMessages, pairToolBlocks } from '../../../shared/native-chat-tool-fold'
 
 const STRUCTURED_ARCHIVE_MAX_BYTES = 262_144
 
@@ -68,6 +70,60 @@ describe('buildStructuredJournalArchive', () => {
     expect(built.warnings).not.toContain(
       'The oldest archived journal messages were dropped to fit the size bound.'
     )
+  })
+
+  it('archives raw result-before-call order without publishing client presentation markers', () => {
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: 'a',
+        sequence: 1,
+        revision: 0,
+        observedAt: 1,
+        body: {
+          kind: 'tool-call',
+          name: 'Bash',
+          callId: 'a',
+          input: { command: 'a' },
+          state: 'completed'
+        }
+      },
+      {
+        itemId: 'old-x',
+        sequence: 2,
+        revision: 0,
+        observedAt: 2,
+        body: {
+          kind: 'message',
+          role: 'tool',
+          blocks: [{ type: 'tool-result', callId: 'x', output: 'OLD X' }]
+        }
+      },
+      {
+        itemId: 'x',
+        sequence: 3,
+        revision: 0,
+        observedAt: 3,
+        body: {
+          kind: 'tool-call',
+          name: 'Bash',
+          callId: 'x',
+          input: { command: 'x' },
+          state: 'completed'
+        }
+      }
+    ]
+    const built = archive(items)
+    expect(built.messages.map((message) => message.id)).toEqual(['a', 'old-x', 'x'])
+    expect(built.messages.every((message) => !Object.hasOwn(message, 'unpairedToolResults'))).toBe(
+      true
+    )
+    const roundTrip: NativeChatMessage[] = JSON.parse(JSON.stringify(built.messages))
+    const projected = foldToolMessages(roundTrip)
+    expect(pairToolBlocks(projected[0]!.blocks).every((pair) => pair.result === undefined)).toBe(
+      true
+    )
+    expect(projected[1]).toMatchObject({ id: 'old-x', role: 'tool', blocks: [{ output: 'OLD X' }] })
+    expect(foldToolMessages(projected)).toEqual(projected)
   })
 
   it('still reports omitted older items when the page itself was bounded', () => {

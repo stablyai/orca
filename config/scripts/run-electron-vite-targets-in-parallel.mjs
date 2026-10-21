@@ -11,7 +11,7 @@ function buildTarget(target) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [buildScript, '--config', targetConfig, '--ignoreConfigWarning'],
+      [buildScript, '--config', targetConfig, '--ignoreConfigWarning', ...process.argv.slice(2)],
       {
         stdio: 'inherit',
         env: {

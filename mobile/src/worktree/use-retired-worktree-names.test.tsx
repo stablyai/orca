@@ -55,7 +55,12 @@ function mountNames() {
       retiredNameTiersByRepo: Record<string, unknown> = {}
     ) {
       await act(async () => {
-        pending[index]!.resolve({ result: { retiredNamesByRepo, retiredNameTiersByRepo } })
+        // `ok` is what the host always sends and what the read's acceptance policy routes on;
+        // a reply without it read as a refusal, which is not a shape any host produces.
+        pending[index]!.resolve({
+          ok: true,
+          result: { retiredNamesByRepo, retiredNameTiersByRepo }
+        })
         await Promise.resolve()
       })
     },

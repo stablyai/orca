@@ -1,6 +1,5 @@
 import type { TaskPaginationActionsModel } from './use-mobile-tasks-task-pagination-actions'
 import {
-  type GitHubProjectOwnerType,
   type GitHubProjectPartialFailure,
   type GitHubProjectRef,
   type GitHubProjectSettings,
@@ -11,7 +10,13 @@ import {
   parseProjectInput,
   useCallback
 } from './mobile-tasks-dependencies'
-import { type GitHubProjectTable, isSuccess } from './mobile-tasks-legacy-foundation'
+import type { GitHubProjectTable } from './mobile-tasks-legacy-foundation'
+import {
+  githubProjectListRead,
+  githubProjectRefResolve,
+  githubProjectViewListRead,
+  githubProjectViewTableRead
+} from './mobile-task-project-board-operations'
 
 export function useMobileTasksProjectLoadingActions(model: TaskPaginationActionsModel) {
   const {
@@ -48,24 +53,15 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     }
     setGithubProjectError('')
     setGithubProjectPartialFailures([])
-    const response = await client.sendRequest('github.project.listAccessible', {
-      host: 'github.com'
-    })
-    if (!isSuccess(response)) {
-      throw new Error(response.error.message)
-    }
-    const result = response.result as
-      | {
-          ok: true
-          projects: GitHubProjectSummary[]
-          partialFailures?: GitHubProjectPartialFailure[]
-        }
-      | { ok: false; error: { message: string } }
+    const reply = await githubProjectListRead.request(client, { host: 'github.com' })
+    const result = githubProjectListRead.interpret(reply)
     if (!result.ok) {
       throw new Error(result.error.message)
     }
-    setGithubProjects(result.projects)
-    setGithubProjectPartialFailures(result.partialFailures ?? [])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires the owner/ownerType/number a project is keyed by plus the `title` the picker search lowercases, and types the rest; `id`, `url` and `source` are declared non-optional by GitHubProjectSummary but absent from the reply main records, so defaulting them here would put bytes in the picker's state the host never sent.
+    setGithubProjects(result.projects as GitHubProjectSummary[])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same shape rule for the per-org banner rows.
+    setGithubProjectPartialFailures((result.partialFailures ?? []) as GitHubProjectPartialFailure[])
   }, [client, connState, tasksSupported])
 
   const loadGitHubProjectViews = useCallback(
@@ -73,23 +69,20 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
       if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
         return []
       }
-      const response = await client.sendRequest('github.project.listViews', {
+      const reply = await githubProjectViewListRead.request(client, {
         owner: project.owner,
         host: githubProjectHost(project.host),
         ownerType: project.ownerType,
         projectNumber: project.number
       })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const result = response.result as
-        | { ok: true; views: GitHubProjectViewSummary[] }
-        | { ok: false; error: { message: string } }
+      const result = githubProjectViewListRead.interpret(reply)
       if (!result.ok) {
         throw new Error(result.error.message)
       }
-      setGithubProjectViews(result.views)
-      return result.views
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires the `id` a view is selected by and types `number`/`name`/`layout` without requiring them, because a layout arm this build has not heard of must reach the "no supported views" test rather than drop the row.
+      const views = result.views as GitHubProjectViewSummary[]
+      setGithubProjectViews(views)
+      return views
     },
     [client, connState, taskStateHydrated, tasksSupported]
   )
@@ -109,8 +102,8 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
       setGithubProjectLoading(true)
       setGithubProjectError('')
       try {
-        const response = await client.sendRequest(
-          'github.project.viewTable',
+        const reply = await githubProjectViewTableRead.request(
+          client,
           {
             owner: activeGitHubProject.owner,
             host: activeGitHubProjectHost,
@@ -121,27 +114,24 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
           },
           { timeoutMs: 60_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
-          | { ok: true; data: GitHubProjectTable }
-          | { ok: false; error: { message: string }; totalCount?: number }
+        const result = githubProjectViewTableRead.interpret(reply)
         if (!result.ok) {
           throw new Error(result.error.message)
         }
-        setGithubProjectTable(result.data)
-        setGithubProjectSearch(options.queryOverride ?? result.data.selectedView.filter ?? '')
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `project.id` and the `selectedView` container the five reads below go through; nothing deeper, because the recorded table carries an empty `rows` and a `project` with no owner, so this corpus has no evidence for a deeper requirement.
+        const data = result.data as GitHubProjectTable
+        setGithubProjectTable(data)
+        setGithubProjectSearch(options.queryOverride ?? data.selectedView.filter ?? '')
         setGithubProjectViews((current) =>
-          current.some((view) => view.id === result.data.selectedView.id)
+          current.some((view) => view.id === data.selectedView.id)
             ? current
             : [
                 ...current,
                 {
-                  id: result.data.selectedView.id,
-                  number: result.data.selectedView.number,
-                  name: result.data.selectedView.name,
-                  layout: result.data.selectedView.layout
+                  id: data.selectedView.id,
+                  number: data.selectedView.number,
+                  name: data.selectedView.name,
+                  layout: data.selectedView.layout
                 }
               ]
         )
@@ -262,24 +252,11 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     setGithubProjectPasteError('')
     setGithubProjectError('')
     try {
-      const response = await client.sendRequest('github.project.resolveRef', {
+      const reply = await githubProjectRefResolve.request(client, {
         input,
         host: githubProjectHost(parsed.host)
       })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const result = response.result as
-        | {
-            ok: true
-            owner: string
-            ownerType: GitHubProjectOwnerType
-            number: number
-            title: string
-            host?: string
-            viewNumber?: number
-          }
-        | { ok: false; error: { message: string } }
+      const result = githubProjectRefResolve.interpret(reply)
       if (!result.ok) {
         setGithubProjectPasteError(result.error.message)
         return

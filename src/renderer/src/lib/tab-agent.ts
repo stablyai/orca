@@ -1,6 +1,6 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { agentTypeToIconAgent } from './agent-status'
@@ -23,7 +23,7 @@ export function resolveFocusedTabAgent(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   layout: TerminalLayoutSnapshot | undefined,
   tabId: string
-): TuiAgent | null {
+): TerminalAgent | null {
   const activeLeafId = layout?.activeLeafId
   if (activeLeafId && isTerminalLeafId(activeLeafId)) {
     return agentFromStatusEntry(agentStatusByPaneKey[makePaneKey(tabId, activeLeafId)])
@@ -37,7 +37,7 @@ export function resolveSiblingTabAgent(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   layout: TerminalLayoutSnapshot | undefined,
   tabId: string
-): TuiAgent | null {
+): TerminalAgent | null {
   const activeLeafId =
     layout?.activeLeafId && isTerminalLeafId(layout.activeLeafId) ? layout.activeLeafId : null
   if (!activeLeafId) {
@@ -50,14 +50,14 @@ function resolveAnyTabAgent(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   tabId: string,
   excludedLeafId?: string
-): TuiAgent | null {
+): TerminalAgent | null {
   return firstTabAgentExcludingLeaf(
     selectLiveTabAgentPanes(agentStatusByPaneKey, tabId),
     excludedLeafId
   )
 }
 
-function agentFromStatusEntry(entry: AgentStatusEntry | undefined): TuiAgent | null {
+function agentFromStatusEntry(entry: AgentStatusEntry | undefined): TerminalAgent | null {
   if (!entry || entry.state === 'done') {
     return null
   }
@@ -68,7 +68,7 @@ export function resolveFocusedCompletedTabAgent(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   layout: TerminalLayoutSnapshot | undefined,
   tabId: string
-): TuiAgent | null {
+): TerminalAgent | null {
   const activeLeafId = layout?.activeLeafId
   if (activeLeafId && isTerminalLeafId(activeLeafId)) {
     return completedAgentFromStatusEntry(agentStatusByPaneKey[makePaneKey(tabId, activeLeafId)])
@@ -80,7 +80,7 @@ export function resolveSiblingCompletedTabAgent(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   layout: TerminalLayoutSnapshot | undefined,
   tabId: string
-): TuiAgent | null {
+): TerminalAgent | null {
   const activeLeafId =
     layout?.activeLeafId && isTerminalLeafId(layout.activeLeafId) ? layout.activeLeafId : null
   if (!activeLeafId) {
@@ -93,14 +93,14 @@ function resolveAnyCompletedTabAgent(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   tabId: string,
   excludedLeafId?: string
-): TuiAgent | null {
+): TerminalAgent | null {
   return firstTabAgentExcludingLeaf(
     selectCompletedTabAgentPanes(agentStatusByPaneKey, tabId),
     excludedLeafId
   )
 }
 
-function completedAgentFromStatusEntry(entry: AgentStatusEntry | undefined): TuiAgent | null {
+function completedAgentFromStatusEntry(entry: AgentStatusEntry | undefined): TerminalAgent | null {
   if (!entry || entry.state !== 'done') {
     return null
   }
@@ -111,7 +111,7 @@ export function resolveFocusedRetainedTabAgent(
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>,
   layout: TerminalLayoutSnapshot | undefined,
   tabId: string
-): TuiAgent | null {
+): TerminalAgent | null {
   const activeLeafId = layout?.activeLeafId
   if (activeLeafId && isTerminalLeafId(activeLeafId)) {
     return agentFromRetainedEntry(retainedAgentsByPaneKey[makePaneKey(tabId, activeLeafId)])
@@ -123,7 +123,7 @@ export function resolveSiblingRetainedTabAgent(
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>,
   layout: TerminalLayoutSnapshot | undefined,
   tabId: string
-): TuiAgent | null {
+): TerminalAgent | null {
   const activeLeafId =
     layout?.activeLeafId && isTerminalLeafId(layout.activeLeafId) ? layout.activeLeafId : null
   if (!activeLeafId) {
@@ -136,13 +136,13 @@ function resolveAnyRetainedTabAgent(
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>,
   tabId: string,
   excludedLeafId?: string
-): TuiAgent | null {
+): TerminalAgent | null {
   return firstTabAgentExcludingLeaf(
     selectRetainedTabAgentPanes(retainedAgentsByPaneKey, tabId),
     excludedLeafId
   )
 }
 
-function agentFromRetainedEntry(entry: RetainedAgentEntry | undefined): TuiAgent | null {
+function agentFromRetainedEntry(entry: RetainedAgentEntry | undefined): TerminalAgent | null {
   return agentTypeToIconAgent(entry?.agentType)
 }

@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
 import type { BitbucketAuthMode } from '../../../../shared/bitbucket-credentials'
 import { useAppStore } from '@/store'
@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 import { hasRemoteProviderRuntime } from '@/lib/provider-runtime-context'
+import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 import { translate } from '@/i18n/i18n'
 
 const API_TOKEN_DOCS_URL = 'https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/'
@@ -63,6 +64,9 @@ export function BitbucketCredentialsDialog({
   const [baseUrl, setBaseUrl] = useState('')
   const [connectState, setConnectState] = useState<ConnectState>('idle')
   const [connectError, setConnectError] = useState<string | null>(null)
+  // Why: the form is seeded from `initial*` props that a status refresh may rewrite mid-edit, so
+  // compare text fields against the values captured at open rather than the live props.
+  const baselineRef = useRef({ email: '', baseUrl: '' })
 
   // Re-sync from the latest stored metadata on every open, not just on mount, so
   // the Edit flow never shows values from a previous connection. Secrets always
@@ -71,9 +75,12 @@ export function BitbucketCredentialsDialog({
     if (!open) {
       return
     }
+    const seedEmail = initialEmail ?? ''
+    const seedBaseUrl = initialBaseUrl ?? ''
+    baselineRef.current = { email: seedEmail, baseUrl: seedBaseUrl }
     setAuthMode(initialAuthMode ?? 'basic')
-    setEmail(initialEmail ?? '')
-    setBaseUrl(initialBaseUrl ?? '')
+    setEmail(seedEmail)
+    setBaseUrl(seedBaseUrl)
     setApiToken('')
     setAccessToken('')
     setConnectState('idle')
@@ -105,6 +112,14 @@ export function BitbucketCredentialsDialog({
       onOpenChange(nextOpen)
     }
   }
+
+  // Why: a stray backdrop click must not discard typed credentials. Only the active mode's fields
+  // are submitted, so compare just those — a stale basic-mode email is not submitted in token mode
+  // and must not make the form sticky. Escape / Cancel / × stay explicit.
+  const isDraftDirty = (): boolean =>
+    baseUrl !== baselineRef.current.baseUrl ||
+    (isTokenMode ? accessToken !== '' : email !== baselineRef.current.email || apiToken !== '')
+  const guardOutsideDismiss = preventOutsideDismissWhenDirty(isDraftDirty)
 
   const handleConnect = async (): Promise<void> => {
     if (!canSubmit) {
@@ -153,6 +168,8 @@ export function BitbucketCredentialsDialog({
       <DialogContent
         overlayClassName={overlayClassName}
         className={cn('sm:max-w-lg', contentClassName)}
+        onPointerDownOutside={guardOutsideDismiss}
+        onInteractOutside={guardOutsideDismiss}
         onKeyDown={(event) => {
           // Only from a text field: Enter on Cancel or the docs link must do
           // what that control does, not submit the form.

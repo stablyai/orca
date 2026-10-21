@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { showMessageBoxMock } = vi.hoisted(() => ({
@@ -103,24 +101,5 @@ describe('handleGpuFallbackRecoveredLaunch', () => {
     expect(handlers.confirmSafeGraphics).not.toHaveBeenCalled()
     expect(handlers.clearSafeGraphics).not.toHaveBeenCalled()
     expect(handlers.restartWithHardware).not.toHaveBeenCalled()
-  })
-})
-
-describe('recovered safe-graphics production wiring', () => {
-  it('prompts only after the recovered window is shown and persists both consent states', () => {
-    const windowSource = readFileSync(
-      join(__dirname, '..', 'startup', 'main-window-controller.ts'),
-      'utf8'
-    )
-    const lifecycleSource = readFileSync(
-      join(__dirname, '..', 'startup', 'gpu-lifecycle.ts'),
-      'utf8'
-    )
-    expect(windowSource).toMatch(
-      /window\.once\('show',[\s\S]*?presentGpuFallbackRecoveredLaunchPrompt\(window\)/
-    )
-    expect(lifecycleSource).toMatch(
-      /persistMarker:[\s\S]*?userConfirmed: false[\s\S]*?confirmMarker:[\s\S]*?userConfirmed: true/
-    )
   })
 })

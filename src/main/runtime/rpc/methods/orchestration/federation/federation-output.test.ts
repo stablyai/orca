@@ -1,9 +1,9 @@
+import '../../../unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
@@ -119,15 +119,14 @@ describe('orchestration federated worker output', () => {
             error: { code: 'relay_provider_unavailable', message: 'relay unavailable' }
           }
         }
-        return (await workerDispatcher.dispatch({
+        return await workerDispatcher.dispatch({
           id: `remote_${method}`,
           authToken: 'run-home-device-token',
           method,
           params,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
-          orchestrationRequestId: envelope?.orchestrationRequestId,
-          orchestrationCapability: envelope?.orchestrationCapability
-        })) as RuntimeRpcResponse<unknown>
+          orchestrationRequestId: envelope?.orchestrationRequestId
+        })
       }
     }
     homeRuntime = new OrcaRuntimeService(null, undefined, {

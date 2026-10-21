@@ -1,3 +1,6 @@
+import { attachPushRegistration } from '../notifications/push-registration'
+import { recordHostDescriptorFromStatus } from './host-descriptor-recorder'
+import { startRuntimeStatusProbe } from './runtime-status-probe'
 import {
   connectionLogStore,
   recordConnectionClientSessionStart
@@ -113,11 +116,38 @@ export async function openHostClientEntry(
       client.close()
       return state.store.get(hostId) ?? null
     }
-    const unsubState = client.onStateChange((next) => {
+    let detachPushRegistration: (() => void) | null = null
+    const syncPushRegistration = (next: ConnectionState): void => {
+      if (next === 'connected') {
+        detachPushRegistration ??= attachPushRegistration(hostId, client)
+      } else {
+        detachPushRegistration?.()
+        detachPushRegistration = null
+      }
+    }
+    // Why here: the connection layer owns descriptor recording for every host client — home rows
+    // and host screens alike — so no screen has to re-ask, and the probe's cutover retry means a
+    // relay<->direct switch cannot lose the read. One extra status.get per connect is the cost.
+    let stopDescriptorProbe: (() => void) | null = null
+    const syncDescriptorProbe = (next: ConnectionState): void => {
+      if (next === 'connected') {
+        stopDescriptorProbe ??= startRuntimeStatusProbe(client, (status) => {
+          if (status) {
+            recordHostDescriptorFromStatus(hostId, status)
+          }
+        })
+      } else {
+        stopDescriptorProbe?.()
+        stopDescriptorProbe = null
+      }
+    }
+    const unsubscribeState = client.onStateChange((next) => {
       const current = state.store.get(hostId)
       if (!current) {
         return
       }
+      syncPushRegistration(next)
+      syncDescriptorProbe(next)
       current.state = next
       state.notifyHostState(hostId, next)
     })
@@ -134,11 +164,19 @@ export async function openHostClientEntry(
       clientId: host.deviceToken,
       state: client.getState(),
       refCount: state.pendingAcquisitions.get(hostId) ?? 0,
-      unsubState,
+      unsubState: () => {
+        unsubscribeState()
+        detachPushRegistration?.()
+        detachPushRegistration = null
+        stopDescriptorProbe?.()
+        stopDescriptorProbe = null
+      },
       unsubConnectionPath
     }
     state.pendingAcquisitions.delete(hostId)
     state.store.set(hostId, entry)
+    syncPushRegistration(entry.state)
+    syncDescriptorProbe(entry.state)
     settle()
     const priorFailureCount = state.retryScheduler.recordSuccess(hostId)
     if (priorFailureCount > 0) {

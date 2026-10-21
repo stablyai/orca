@@ -108,6 +108,22 @@ function refreshOnFocus(): void {
   void refreshLayoutMap()
 }
 
+function disposeLayoutCharacterPrefetch(): void {
+  if (attachedWindow) {
+    attachedWindow.removeEventListener('focus', refreshOnFocus)
+    attachedWindow = null
+  }
+  unsubscribeLayoutChange?.()
+  unsubscribeLayoutChange = null
+  focusListenerAttached = false
+}
+
+if (import.meta !== undefined && import.meta.hot) {
+  // Vite can replace this module without a full renderer reload. Remove the
+  // global focus/layout hooks so dev sessions do not accumulate listeners.
+  import.meta.hot.dispose(disposeLayoutCharacterPrefetch)
+}
+
 /** A layout map entry is usable as a kitty base key only if it is a single
  *  printable codepoint (dead keys report names like 'Dead'; some entries are
  *  empty). Exposed for tests. */

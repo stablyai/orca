@@ -1,16 +1,22 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
+import { assertRemovalHostMatchesRepoRow } from '../repo-host-ownership'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
 import { listWorktreesStrict as listGitWorktreesStrict } from '../../../git/worktree'
-import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
+import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { resolveWorktreeRemovalMetadata } from '../../../worktree-removal-repo-owner'
+import { isPrunableGitFileWorktree } from '../../../worktree-prunable-git-file'
 import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
-import { removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval } from '../../../local-worktree-removal-recovery'
-import { runHook } from '../../../hooks'
+import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
+import { removeStaleLocalWorktreeRegistration } from '../../../local-worktree-removal-recovery'
+import { resolveWorktreeRemovalHomeForHost } from '../../../worktree-removal-execution-host-route'
+import { getEffectiveHooks, runHook } from '../../../hooks'
+import type { ArchiveHookOverride } from '../../../../shared/worktree/archive-hook-removal-gate'
+import { gateWorktreeRemovalOnArchiveHook } from '../../../worktree-archive-hook-gate'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import {
   cleanupUnusedWorktreePushTargetRemote,
@@ -20,14 +26,14 @@ import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-
 import { formatWorktreeRemovalError } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
-import { getArchiveHooksForRemoval, runRemoteArchiveHook } from './worktree-archive-hook'
 import { isAlreadyRemovedWorktreePath } from './worktree-removal-filesystem'
 import { rememberPreservedBranchCleanupTarget } from './preserved-branch-cleanup'
 import { removeWorktreeMetadataAndTransientState } from './worktree-removal-ownership'
 import { removeFolderWorkspace } from './remove-folder-workspace'
 import { removeUnregisteredWorktree } from './remove-unregistered-worktree'
-import { removeRegisteredRemoteWorktree } from './remove-registered-remote-worktree'
 import { removeRegisteredLocalWorktree } from './remove-registered-local-worktree'
+import { retryFailedLocalWorktreeRemoval } from './retry-failed-local-worktree-removal'
+import { retryFailedRemovalUnlessRegistered } from '../../../worktree-removal-leftover'
 
 export async function executeWorktreeRemoval(
   context: WorktreeIpcContext,
@@ -41,23 +47,38 @@ export async function executeWorktreeRemoval(
   if (isFolderRepo(repo)) {
     return removeFolderWorkspace(context, args, repo, repoId, removalHostId)
   }
-  const provider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
-  const localWorktreeGitOptions = repo.connectionId
-    ? {}
-    : getLocalProjectWorktreeGitOptions(store, repo)
+  assertRemovalHostMatchesRepoRow(repo, repoId, removalHostId)
+  if (repo.connectionId) {
+    throw new SshHostNotServedError(repo.connectionId)
+  }
+  const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   const hasLocalWorktreeGitOptions = Object.keys(localWorktreeGitOptions).length > 0
-  const registeredWorktrees = repo.connectionId
-    ? await provider!.listWorktrees(repo.path)
-    : hasLocalWorktreeGitOptions
-      ? await listGitWorktreesStrict(repo.path, localWorktreeGitOptions)
-      : await listGitWorktreesStrict(repo.path)
+  const registeredWorktrees = hasLocalWorktreeGitOptions
+    ? await listGitWorktreesStrict(repo.path, localWorktreeGitOptions)
+    : await listGitWorktreesStrict(repo.path)
   const removedMeta = resolveWorktreeRemovalMetadata(store, repoId, args.worktreeId, removalHostId)
   const removedPushTarget = removedMeta?.pushTarget
   const registeredWorktree = findRegisteredDeletableWorktree(
     repo.path,
     worktreePath,
-    registeredWorktrees
+    registeredWorktrees,
+    resolveWorktreeRemovalHomeForHost(removalHostId)
   )
+  if (args.expectedCheckout) {
+    assertNestedWorktreeRemovalApproval(registeredWorktree ? [registeredWorktree] : [], [
+      args.expectedCheckout
+    ])
+  }
+  if (
+    await retryFailedRemovalUnlessRegistered(
+      args.worktreeId,
+      worktreePath,
+      registeredWorktrees,
+      () => retryFailedLocalWorktreeRemoval(context, args, removalHostId)
+    )
+  ) {
+    return { removing: true }
+  }
   if (!registeredWorktree) {
     return removeUnregisteredWorktree(
       context,
@@ -69,8 +90,7 @@ export async function executeWorktreeRemoval(
       registeredWorktrees,
       removedMeta,
       removedPushTarget,
-      localWorktreeGitOptions,
-      provider
+      localWorktreeGitOptions
     )
   }
   const canonicalWorktreePath = registeredWorktree.path
@@ -83,15 +103,19 @@ export async function executeWorktreeRemoval(
     throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false))
   }
 
+  // Ahead of the archive-hook gate below, and that ordering is right: both arms describe a
+  // registration with no checkout behind it — a row whose path IS a `.git` file, or a tree already
+  // gone from disk. There is nothing to archive, and running the hook would fail on the missing
+  // cwd and block a cleanup that has no user data to lose.
   if (
-    !repo.connectionId &&
-    args.force === true &&
-    process.platform === 'win32' &&
-    (isWindowsAbsolutePathLike(canonicalWorktreePath) || !!localWorktreeGitOptions.wslDistro) &&
-    removedMeta &&
-    (await isAlreadyRemovedWorktreePath(repo, canonicalWorktreePath, localWorktreeGitOptions))
+    (await isPrunableGitFileWorktree(registeredWorktree, localWorktreeGitOptions)) ||
+    (args.force === true &&
+      process.platform === 'win32' &&
+      (isWindowsAbsolutePathLike(canonicalWorktreePath) || !!localWorktreeGitOptions.wslDistro) &&
+      removedMeta &&
+      (await isAlreadyRemovedWorktreePath(canonicalWorktreePath, localWorktreeGitOptions)))
   ) {
-    const removalResult = await removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
+    const removalResult = await removeStaleLocalWorktreeRegistration({
       canonicalWorktreePath,
       repoPath: repo.path,
       localWorktreeGitOptions,
@@ -114,7 +138,7 @@ export async function executeWorktreeRemoval(
     )
     runtime.clearOptimisticReconcileToken(args.worktreeId)
     removeWorktreeMetadataAndTransientState(
-      store,
+      { store, runtime },
       args.worktreeId,
       removalHostId,
       args.snapshotPruneBatchId
@@ -124,49 +148,31 @@ export async function executeWorktreeRemoval(
     return removalResult ?? {}
   }
 
-  const hooks = await getArchiveHooksForRemoval(repo)
+  const hooks = getEffectiveHooks(repo)
 
   const archiveScript = hooks?.scripts.archive
 
+  // Precondition, not an advisory (#19334): both branches below stop PTYs and delete the
+  // checkout, so a hook failure has to throw here — before either is reached.
+  let archiveHookOverride: ArchiveHookOverride | undefined
   if (archiveScript && !args.skipArchive) {
-    // Why the branch on connectionId: this block is shared by both flows, so a hardcoded
-    // 'remote' would file every local archive hook under the SSH breakdown.
-    await withWorktreeRemoveStageSpan(
-      'archive_hook',
-      repo.connectionId ? 'remote' : 'local',
-      async () => {
-        const result = repo.connectionId
-          ? await runRemoteArchiveHook(repo, canonicalWorktreePath, archiveScript)
-          : await runHook(
-              'archive',
-              canonicalWorktreePath,
-              repo,
-              undefined,
-              localWorktreeGitOptions
-            )
-        if (!result.success) {
-          console.error(`[hooks] archive hook failed for ${canonicalWorktreePath}:`, result.output)
-        }
-      }
-    )
+    await withWorktreeRemoveStageSpan('archive_hook', 'local', async () => {
+      const result = await runHook(
+        'archive',
+        canonicalWorktreePath,
+        repo,
+        undefined,
+        localWorktreeGitOptions
+      )
+      archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
+        worktreePath: canonicalWorktreePath,
+        result,
+        allowFailure: args.allowFailedArchiveHook === true
+      })
+    })
   }
 
-  const remoteConnectionId = repo.connectionId ?? undefined
-  if (remoteConnectionId) {
-    return removeRegisteredRemoteWorktree(
-      context,
-      args,
-      repo,
-      repoId,
-      canonicalWorktreePath,
-      removalHostId,
-      registeredWorktree,
-      removedPushTarget,
-      provider!,
-      deleteBranch
-    )
-  }
-  return removeRegisteredLocalWorktree(
+  const result = await removeRegisteredLocalWorktree(
     context,
     args,
     repo,
@@ -178,4 +184,5 @@ export async function executeWorktreeRemoval(
     hasLocalWorktreeGitOptions,
     deleteBranch
   )
+  return archiveHookOverride ? { ...result, archiveHookOverride } : result
 }

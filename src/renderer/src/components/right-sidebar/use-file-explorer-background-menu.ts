@@ -1,7 +1,7 @@
 import type React from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useState } from 'react'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import type { InlineInput } from './file-explorer-inline-input-row'
 
 type UseFileExplorerBackgroundMenuResult = {
@@ -15,9 +15,11 @@ type UseFileExplorerBackgroundMenuResult = {
 /** Empty-space interactions of the explorer surface: background menu and new-file double click. */
 export function useFileExplorerBackgroundMenu({
   worktreePath,
+  displayDepth = 0,
   inlineInput,
   startNew
 }: {
+  displayDepth?: number
   worktreePath: string | null
   inlineInput: InlineInput | null
   startNew: (type: 'file' | 'folder', parentPath: string, depth: number) => void
@@ -48,9 +50,9 @@ export function useFileExplorerBackgroundMenu({
       if (target.closest('[data-slot="context-menu-trigger"]')) {
         return
       }
-      startNew('file', worktreePath, 0)
+      startNew('file', worktreePath, displayDepth)
     },
-    [inlineInput, startNew, worktreePath]
+    [inlineInput, startNew, worktreePath, displayDepth]
   )
 
   return {

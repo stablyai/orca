@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   publishDocPreviewFailure: vi.fn(),
-  boundGrantIdByGuest: new Map<object, string>(),
+  boundGrantIdByGuest: new Map<Electron.WebContents, string>(),
   revocationListener: null as null | ((grant: { id: string }) => void)
 }))
 
@@ -10,7 +10,8 @@ vi.mock('./doc-preview-failure-notice', () => ({
   publishDocPreviewFailure: mocks.publishDocPreviewFailure
 }))
 vi.mock('./doc-preview-guest-policy', () => ({
-  readDocPreviewGuestBoundGrantId: (guest: object) => mocks.boundGrantIdByGuest.get(guest) ?? null
+  readDocPreviewGuestBoundGrantId: (guest: Electron.WebContents) =>
+    mocks.boundGrantIdByGuest.get(guest) ?? null
 }))
 vi.mock('./doc-preview-grant-registry', () => ({
   onDocPreviewGrantRevoked: (listener: (grant: { id: string }) => void) => {

@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore, withRuntimePaneAdmission } from './runtime-durable-store-fixture'
 import { expect, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -8,7 +9,11 @@ import {
 } from '../../shared/agent-prompt-injection'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
+import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
+import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
 import { toComparableRelaySshPtyId } from '../../shared/ssh-pty-id'
+import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
 import {
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock
@@ -25,6 +30,8 @@ import type {
 import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration-messages.spec'
 import type { OrchestrationDb } from './orchestration/db'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { Store } from '../persistence'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>
 type HeadlessTerminal = InstanceType<typeof HeadlessEmulator>
@@ -147,6 +154,15 @@ const RESTORED_AUTHORITY_TOKEN = 'restored-authority-secret'
 const RESTORED_AUTHORITY_TOKEN_HASH = createHash('sha256')
   .update(RESTORED_AUTHORITY_TOKEN)
   .digest('hex')
+
+function isLocalBranchCatalogQuery(args: string[]): boolean {
+  return (
+    args.length === 3 &&
+    args[0] === 'for-each-ref' &&
+    args[1] === '--format=%(refname)' &&
+    args[2] === 'refs/heads/'
+  )
+}
 
 function isOriginMainBaseRefProbe(args: string[]): boolean {
   return (
@@ -363,14 +379,14 @@ function createStaleRuntimeWorktreeStore(
   const metaById: Record<string, WorktreeMeta> = {
     [worktreeId]: makeWorktreeMeta(metaOverrides)
   }
-  const removeWorktreeMeta = vi.fn((id: string) => {
+  const removeWorktreeMeta = vi.fn(({ id }: HostWorktreeTarget) => {
     delete metaById[id]
   })
   const runtimeStore = {
     ...store,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Partial<WorktreeMeta>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
       metaById[id] = { ...(metaById[id] ?? makeWorktreeMeta()), ...meta }
       return metaById[id]
     },
@@ -394,7 +410,7 @@ const store = {
   getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
   mergeRetiredWorktreeNames: () => false,
   addRepo: () => {},
-  updateRepo: (id: string, updates: Record<string, unknown>) =>
+  updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) =>
     ({
       ...store.getRepo(id),
       ...updates
@@ -416,7 +432,7 @@ const store = {
     }
   }),
   getWorktreeMeta: (worktreeId: string) => store.getAllWorktreeMeta()[worktreeId],
-  setWorktreeMeta: (_worktreeId: string, meta: Record<string, unknown>) =>
+  setWorktreeMeta: (_target: HostWorktreeTarget, meta: Record<string, unknown>) =>
     ({
       ...store.getAllWorktreeMeta()[TEST_WORKTREE_ID],
       ...meta
@@ -435,8 +451,8 @@ const store = {
   getProjects: () => []
 }
 
-// Callers pass the pane's APP-form pty id; the lease stores RELAY form, exactly as
-// upsertSshRemotePtyLease does through toStoredPtyId. Non-SSH ids pass through untouched.
+// Callers pass the pane's APP-form pty id; the lease stores RELAY form, exactly as the relay-era
+// writer did through toStoredPtyId. Non-SSH ids pass through untouched.
 function createRuntimeWithSshLease(
   ptyId: string,
   tabId: string,
@@ -557,10 +573,11 @@ function makeRuntimeStoreWithWorkspaceSession(
   ownerHostId = 'local'
 ): {
   runtimeStore: typeof store & {
+    admitTerminalPane: ReturnType<typeof withRuntimePaneAdmission>['admitTerminalPane']
     getWorkspaceSession: (hostId?: string) => WorkspaceSessionState
-    setWorkspaceSession: ReturnType<typeof vi.fn>
-    flushOrThrow: ReturnType<typeof vi.fn>
-    persistPtyBinding: ReturnType<typeof vi.fn>
+    setWorkspaceSession: ReturnType<typeof vi.fn<Store['setWorkspaceSession']>>
+    flushOrThrow: ReturnType<typeof vi.fn<() => void>>
+    persistPtyBinding: ReturnType<typeof vi.fn<Store['persistPtyBinding']>>
   }
   getSession: () => WorkspaceSessionState
   setSession: (next: WorkspaceSessionState) => void
@@ -569,16 +586,30 @@ function makeRuntimeStoreWithWorkspaceSession(
   const setSession = (next: WorkspaceSessionState): void => {
     session = next
   }
-  const runtimeStore = {
-    ...store,
-    getWorkspaceSession: (hostId?: string) =>
-      hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
-    setWorkspaceSession: vi.fn(setSession),
-    // Headless close is a durable transaction; keep the in-memory fixture's
-    // persistence contract equivalent to the production store.
-    flushOrThrow: vi.fn(),
-    persistPtyBinding: vi.fn(
-      (args: { worktreeId: string; tabId: string; leafId: string; ptyId: string }) => {
+  const runtimeStore = withRuntimePaneAdmission(
+    withDurableRuntimeStore({
+      ...store,
+      getWorkspaceSession: (hostId?: string) =>
+        hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
+      setWorkspaceSession: vi.fn(setSession),
+      // Main's `layout.apply` on this partition, as the Store applies it (switch-on writes).
+      applyLayoutCommand: vi.fn(async (command: LayoutCommand, hostIds?: readonly string[]) => {
+        const change = applyCommandToSession(
+          resolveHostId(hostIds?.[0] ?? ownerHostId),
+          session,
+          command
+        )
+        session = change.session ?? session
+        return change.value
+      }),
+      // Headless close is a durable transaction; keep the in-memory fixture's
+      // persistence contract equivalent to the production store.
+      flushOrThrow: vi.fn(),
+      persistPtyBinding: vi.fn<Store['persistPtyBinding']>(async (input) => {
+        const args = typeof input === 'function' ? input() : input
+        if (!args) {
+          return false
+        }
         const tabs = session.tabsByWorktree[args.worktreeId] ?? []
         session = {
           ...session,
@@ -604,9 +635,9 @@ function makeRuntimeStoreWithWorkspaceSession(
           }
         }
         return true
-      }
-    )
-  }
+      })
+    })
+  )
   return { runtimeStore, getSession: () => session, setSession }
 }
 
@@ -667,9 +698,10 @@ export { antigravityPromptBeforeModelReadyScreen, antigravityReadyScreen, bindSi
 export { createExplicitAgentStatusHarness, createFolderWorkspaceRuntimeStore, createRuntime }
 export { createRuntimeWithSshLease, createStaleRuntimeWorktreeStore, cursorBusyScreen }
 export { cursorReadyScreen, deferred, expectStablePaneKeyEnv, isOriginMainBaseRefProbe }
+export { isLocalBranchCatalogQuery }
 export { makeDeferred, makeFolderProjectGroup, makeFolderWorkspace, makeHeadlessTerminalLayout }
 export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession, makeStatusFrame }
 export { makeWorkspaceSessionWithHeadlessTerminal, makeWorktreeInfo, makeWorktreeMeta }
 export { parseHeadlessSnapshotLines, pendingMailPointerRepoints, referenceStatusFrameLines }
-export { renderGateCapMs, setInMemoryOrchestrationMessages, store, syncSinglePty }
+export { renderGateCapMs, setInMemoryOrchestrationMessages, spawnedPtyEnv, store, syncSinglePty }
 export { visibleNonEmptyLines, withPlatform, writeHeadless }

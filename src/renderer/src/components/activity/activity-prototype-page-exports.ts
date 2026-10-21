@@ -6,7 +6,6 @@ export {
   activityThreadMatchesSearchQuery,
   buildActivityThreadGroups,
   getActivityThreadGroup,
-  groupActivityThreadsByStatus,
   isActivitySearchQueryTooLarge
 } from './activity-thread-grouping'
 export {

@@ -1,10 +1,5 @@
-import { Buffer } from 'buffer'
-import type { GestureResponderEvent, Image, View } from 'react-native'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
-import type {
-  BrowserScreencastFrame,
-  BrowserScreencastFrameMetadata
-} from '../transport/browser-screencast-protocol'
+import type { GestureResponderEvent } from 'react-native'
+import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
 import { colors } from '../theme/mobile-theme'
 import {
   clampBrowserZoomState,
@@ -33,10 +28,6 @@ const browserFrameCache = new Map<string, BrowserFrameCacheEntry>()
 
 export function buttonColor(enabled: boolean): string {
   return enabled ? colors.textSecondary : colors.textMuted
-}
-
-export function createBrowserFrameDataUri(frame: BrowserScreencastFrame): string {
-  return `data:image/${frame.format};base64,${Buffer.from(frame.image).toString('base64')}`
 }
 
 export function makeBrowserFrameCacheKey(
@@ -85,31 +76,6 @@ export function cacheBrowserFrame(cacheKey: string | null, entry: BrowserFrameCa
       break
     }
     browserFrameCache.delete(oldestKey)
-  }
-}
-
-export function updateBrowserLayerVisibility(
-  layers: [View | null, View | null],
-  visible: FrameLayer
-): void {
-  for (const [index, layer] of layers.entries()) {
-    layer?.setNativeProps({ style: { opacity: index === visible ? 1 : 0 } })
-  }
-}
-
-export function updateBrowserImageSource(image: Image | null, uri: string): void {
-  // Why: browser frames are large strings; mutating only the native Image
-  // source avoids re-rendering the whole tab view for every streamed frame.
-  const source = [{ uri }]
-  image?.setNativeProps({ source, src: source })
-}
-
-export function assertRpcOk(
-  response: RpcSuccess | RpcFailure,
-  fallbackMessage: string
-): asserts response is RpcSuccess {
-  if (!response.ok) {
-    throw new Error(response.error.message || fallbackMessage)
   }
 }
 

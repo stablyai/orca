@@ -1,3 +1,4 @@
+import { senderEvents } from './filesystem-watcher-test-sender'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, getSshFilesystemProviderMock, providerRegistrationListeners } = vi.hoisted(
@@ -20,7 +21,8 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   }
 }))
 
-import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -28,7 +30,9 @@ const WORKTREE_PATH = '/home/me/repo'
 const ARGS = { worktreePath: WORKTREE_PATH, connectionId: 'conn-1' }
 const OVERFLOW_PAYLOAD = {
   worktreePath: WORKTREE_PATH,
-  events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }]
+  events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }],
+  resync: true,
+  connectionId: 'conn-1'
 }
 const RETRY_GIVE_UP_MS = 61_000
 const DORMANT_FIRST_MS = 60_000
@@ -36,10 +40,11 @@ const DORMANT_FIRST_MS = 60_000
 function createSender(id: number): {
   isDestroyed: () => boolean
   send: ReturnType<typeof vi.fn>
+  removeListener: ReturnType<typeof vi.fn>
   once: ReturnType<typeof vi.fn>
   id: number
 } {
-  return { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id }
+  return { isDestroyed: () => false, send: vi.fn(), ...senderEvents(), id }
 }
 
 describe('remote filesystem watcher dormant re-arm', () => {

@@ -27,23 +27,6 @@ describe('pr-refresh-coordinator', () => {
     vi.useRealTimers()
   })
 
-  it('preserves the coordinator public module API', async () => {
-    const coordinator = await import('./pr-refresh-coordinator')
-
-    expect(Object.keys(coordinator).sort()).toEqual([
-      '_getPRRefreshAliasCountForTests',
-      '_getPRRefreshErrorBackoffCountForTests',
-      '_getPRRefreshQueueSizeForTests',
-      '_getVisiblePRRefreshWindowCountForTests',
-      'clearVisiblePRRefreshWindow',
-      'enqueuePRRefresh',
-      'pruneWorktreePRRefreshAliases',
-      'refreshPRNow',
-      'reportVisiblePRRefreshCandidates',
-      'setPRRefreshOutcomeObserver'
-    ])
-  })
-
   it('ignores a stale visibility generation before it can replace queued work', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: Date.now() })
@@ -136,7 +119,7 @@ describe('pr-refresh-coordinator', () => {
       fetchedAt: Date.now() + 5
     })
 
-    await refreshPRNow(makeCandidate())
+    const result = await refreshPRNow(makeCandidate())
 
     const events = sendMock.mock.calls.map(([, event]) => event)
     const inFlight = events.find((event) => event.status === 'in-flight')
@@ -144,6 +127,8 @@ describe('pr-refresh-coordinator', () => {
     expect(inFlight?.requestStartedAt).toBe(1_000)
     expect(outcome?.requestStartedAt).toBe(1_000)
     expect(outcome?.sequence).toBe(inFlight?.sequence)
+    // The renderer skips the reply as a repeat of the broadcast only if both carry this same outcome.
+    expect(result).toEqual(outcome?.outcome)
   })
 
   it('keeps each manual outcome on its request sequence when completions race', async () => {

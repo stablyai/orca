@@ -1,4 +1,5 @@
 import { encodePowerShellCommand } from './powershell-command-encoding'
+import { quotePowerShellLiteral } from './powershell-native-argument'
 
 // Why: `cmd.exe /c "<path>"` is typed into the terminal's shell, so the path is parsed twice.
 // cmd expands %VAR% even inside quotes (no escape exists on the command line), and PowerShell
@@ -18,7 +19,7 @@ export function windowsRunnerPathNeedsCmdGuard(runnerScriptPath: string): boolea
  */
 export function buildWindowsCmdRunnerDelayedLaunchCommand(runnerScriptPath: string): string {
   const script = [
-    `$runner = ${quotePowerShellString(runnerScriptPath)}`,
+    `$runner = ${quotePowerShellLiteral(runnerScriptPath)}`,
     // Why: an empty value would silently degrade to `cmd /c ""`, which exits 0 without running setup.
     'if ([string]::IsNullOrEmpty($runner)) { exit 1 }',
     '$processInfo = [System.Diagnostics.ProcessStartInfo]::new()',
@@ -38,8 +39,4 @@ export function buildWindowsCmdRunnerDelayedLaunchCommand(runnerScriptPath: stri
   // Bypass` was a no-op — and it is one of the most heavily EDR-flagged PowerShell tokens. The
   // base64 stays: this string is typed into a shell, which is the whole point of the guard above.
   return `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(script)}`
-}
-
-function quotePowerShellString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`
 }

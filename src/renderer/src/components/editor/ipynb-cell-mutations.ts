@@ -1,13 +1,6 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { isRecord, type IpynbCellKind } from './ipynb-parse'
 
-export type IpynbRunResult = {
-  stdout: string
-  stderr: string
-  exitCode: number | null
-  error?: string
-}
-
 function splitIpynbSource(source: string): string[] {
   if (!source) {
     return []
@@ -146,30 +139,78 @@ export function moveIpynbCell(content: string, index: number, direction: -1 | 1)
   return serializeNotebook(root)
 }
 
-export function updateIpynbCellOutputs(
+export function updateIpynbCellRun(
   content: string,
   index: number,
-  result: IpynbRunResult
+  outputs: Record<string, unknown>[],
+  executionCount: number | null
 ): string {
   const root = parseNotebookRoot(content)
+  applyIpynbCellRun(root, index, outputs, executionCount)
+  return serializeNotebook(root)
+}
+
+function applyIpynbCellRun(
+  root: Record<string, unknown>,
+  index: number,
+  outputs: Record<string, unknown>[],
+  executionCount: number | null
+): void {
   const cell = ensureCell(root, index)
-  const outputs: Record<string, unknown>[] = []
-  if (result.stdout) {
-    outputs.push({ output_type: 'stream', name: 'stdout', text: splitIpynbSource(result.stdout) })
+  // Like Jupyter, store stream text as lines so notebook diffs stay line-oriented.
+  cell.outputs = outputs.map((output) =>
+    output.output_type === 'stream' && typeof output.text === 'string'
+      ? { ...output, text: splitIpynbSource(output.text) }
+      : output
+  )
+  cell.execution_count = executionCount
+}
+
+export function updateIpynbCellRuns(
+  content: string,
+  updates: { index: number; outputs: Record<string, unknown>[]; executionCount: number | null }[]
+): string {
+  if (updates.length === 0) {
+    return content
   }
-  if (result.stderr && result.exitCode === 0 && !result.error) {
-    outputs.push({ output_type: 'stream', name: 'stderr', text: splitIpynbSource(result.stderr) })
+  const root = parseNotebookRoot(content)
+  let changed = false
+  for (const update of updates) {
+    try {
+      applyIpynbCellRun(root, update.index, update.outputs, update.executionCount)
+      changed = true
+    } catch {
+      // Preserve the successful prefix when a later cell no longer exists.
+      break
+    }
   }
-  if (result.error || (result.exitCode ?? 0) !== 0) {
-    const message = result.error || result.stderr || `Process exited with code ${result.exitCode}`
-    outputs.push({
-      output_type: 'error',
-      ename: 'PythonError',
-      evalue: message,
-      traceback: splitIpynbSource(result.stderr || message)
-    })
+  return changed ? serializeNotebook(root) : content
+}
+
+export function clearIpynbOutputs(content: string): string {
+  const root = parseNotebookRoot(content)
+  for (const cell of Array.isArray(root.cells) ? root.cells : []) {
+    if (isRecord(cell) && cell.cell_type === 'code') {
+      cell.outputs = []
+      cell.execution_count = null
+    }
   }
-  cell.outputs = outputs
-  cell.execution_count = typeof cell.execution_count === 'number' ? cell.execution_count + 1 : 1
+  return serializeNotebook(root)
+}
+
+/** Gives every cell an nbformat 4.5 id, as Jupyter does when it upgrades a 4.4 notebook. */
+export function withIpynbCellIds(content: string): string {
+  const root = parseNotebookRoot(content)
+  const cells = Array.isArray(root.cells) ? root.cells.filter(isRecord) : []
+  if (cells.every((cell) => typeof cell.id === 'string')) {
+    return content
+  }
+  for (const cell of cells) {
+    cell.id = typeof cell.id === 'string' ? cell.id : createBrowserUuid()
+  }
+  root.nbformat_minor = Math.max(
+    typeof root.nbformat_minor === 'number' ? root.nbformat_minor : 0,
+    5
+  )
   return serializeNotebook(root)
 }

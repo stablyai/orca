@@ -1,3 +1,5 @@
+import { getDeepSeekBuildTitleStatus } from './dsb-terminal-title'
+import { qoderTitleStatus } from './qoder-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
   BRAILLE_SPINNER_RE,
@@ -19,6 +21,7 @@ import {
   containsQuarterCircleSpinner,
   containsLegacyAgentName,
   isClaudeManagementTitle,
+  isDshTerminalTitle,
   isGeminiTerminalTitle,
   isPiAgentTitle,
   isPiTerminalTitle
@@ -62,16 +65,23 @@ export function clearWorkingIndicators(title: string): string {
   return cleaned || title
 }
 
+/** Where a working agent settled: at rest, or on a prompt that needs the user. */
+export type AgentIdleStatus = Exclude<AgentStatus, 'working'>
+
 /**
- * Tracks agent status transitions from terminal title changes.
+ * Tracks agent status transitions. The program's own OSC 7501 activity, while it reports one,
+ * outranks title glyphs; titles classify only programs that report nothing explicit.
  */
 export function createAgentStatusTracker(
-  onBecameIdle: (title: string) => void,
+  onBecameIdle: (title: string, status: AgentIdleStatus) => void,
   onBecameWorking?: () => void,
   onAgentExited?: () => void,
   initialTitle?: string
 ): {
   handleTitle: (title: string) => void
+  handleProgramActivity: (activity: AgentStatus | null) => void
+  /** Adopt replayed activity without edges, as replayed titles move no status. */
+  seedProgramActivity: (activity: AgentStatus | null) => void
   seedTitle: (title: string) => void
   restoreLastExit: (confirmedStatus?: AgentStatus) => AgentStatus | null
   reset: () => void
@@ -81,32 +91,54 @@ export function createAgentStatusTracker(
   let lastStatus: AgentStatus | null =
     initialTitle !== undefined ? detectAgentStatusFromTitle(initialTitle) : null
   let restorableExitStatus: AgentStatus | null = null
+  let programActivity: AgentStatus | null = null
+  let lastTitle = initialTitle ?? ''
+
+  function transition(newStatus: AgentStatus | null, title: string): void {
+    if (newStatus !== null) {
+      restorableExitStatus = null
+    }
+    if (lastStatus === 'working' && newStatus !== null && newStatus !== 'working') {
+      onBecameIdle(title, newStatus)
+    }
+    if (lastStatus !== 'working' && newStatus === 'working') {
+      onBecameWorking?.()
+    }
+    // Why: reverting to a plain shell prompt after idle/permission means the
+    // agent exited; while working it can just be a transient internal title.
+    if (lastStatus !== null && lastStatus !== 'working' && newStatus === null) {
+      restorableExitStatus = lastStatus
+      lastStatus = null
+      onAgentExited?.()
+    }
+    if (newStatus !== null) {
+      lastStatus = newStatus
+    }
+  }
 
   return {
     handleTitle(title: string): void {
-      const newStatus = detectAgentStatusFromTitle(title)
-      if (newStatus !== null) {
+      lastTitle = title
+      transition(programActivity ?? detectAgentStatusFromTitle(title), title)
+    },
+    handleProgramActivity(activity: AgentStatus | null): void {
+      programActivity = activity
+      // Why no transition on null: the program stopped reporting, so the next title decides.
+      if (activity !== null) {
+        transition(activity, lastTitle)
+      }
+    },
+    seedProgramActivity(activity: AgentStatus | null): void {
+      programActivity = activity
+      // The restored state is the baseline later live edges compare against.
+      if (activity !== null) {
+        lastStatus = activity
         restorableExitStatus = null
-      }
-      if (lastStatus === 'working' && newStatus !== null && newStatus !== 'working') {
-        onBecameIdle(title)
-      }
-      if (lastStatus !== 'working' && newStatus === 'working') {
-        onBecameWorking?.()
-      }
-      // Why: reverting to a plain shell prompt after idle/permission means the
-      // agent exited; while working it can just be a transient internal title.
-      if (lastStatus !== null && lastStatus !== 'working' && newStatus === null) {
-        restorableExitStatus = lastStatus
-        lastStatus = null
-        onAgentExited?.()
-      }
-      if (newStatus !== null) {
-        lastStatus = newStatus
       }
     },
     seedTitle(title: string): void {
-      lastStatus = detectAgentStatusFromTitle(title)
+      lastTitle = title
+      lastStatus = programActivity ?? detectAgentStatusFromTitle(title)
       restorableExitStatus = null
     },
     restoreLastExit(confirmedStatus?: AgentStatus): AgentStatus | null {
@@ -120,6 +152,8 @@ export function createAgentStatusTracker(
     reset(): void {
       lastStatus = null
       restorableExitStatus = null
+      programActivity = null
+      lastTitle = ''
     }
   }
 }
@@ -128,6 +162,14 @@ export function createAgentStatusTracker(
  * Normalize high-churn agent titles into stable display labels before storage.
  */
 export function normalizeTerminalTitle(title: string): string {
+  if (getDeepSeekBuildTitleStatus(title)) {
+    return title
+  }
+  const qoderStatus = qoderTitleStatus(title)
+  if (qoderStatus) {
+    const label = title.includes('Qoder CLI CN') ? 'Qoder CLI CN' : 'Qoder CLI'
+    return `${qoderStatus === 'working' ? '✦' : qoderStatus === 'permission' ? '▲' : '◇'} ${label}`
+  }
   if (!title) {
     return title
   }
@@ -142,7 +184,9 @@ export function normalizeTerminalTitle(title: string): string {
     if (status === 'working') {
       return `${GEMINI_WORKING} Gemini CLI`
     }
-    if (status === 'idle') {
+    // Why only with the glyph: a bare `gemini` title (a shell auto-title) reads idle by default,
+    // and stamping Gemini's rest glyph on it turned a name into explicit readiness.
+    if (status === 'idle' && title.includes(GEMINI_IDLE)) {
       return `${GEMINI_IDLE} Gemini CLI`
     }
   }
@@ -180,6 +224,14 @@ function canonicalizeBrailleSpinnerFrame(title: string): string {
 }
 
 function computeAgentStatusFromTitle(title: string): AgentStatus | null {
+  const buildStatus = getDeepSeekBuildTitleStatus(title)
+  if (buildStatus) {
+    return buildStatus
+  }
+  const qoderStatus = qoderTitleStatus(title)
+  if (qoderStatus) {
+    return qoderStatus
+  }
   if (!title || isClaudeManagementTitle(title)) {
     return null
   }
@@ -198,14 +250,20 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
     return piStateStatus
   }
 
-  if (title.includes(GEMINI_PERMISSION)) {
-    return 'permission'
-  }
-  if (title.includes(GEMINI_WORKING) || title.includes(GEMINI_SILENT_WORKING)) {
-    return 'working'
-  }
-  if (title.includes(GEMINI_IDLE)) {
-    return 'idle'
+  // Why the guard: DSH-TUI prefixes its title with `✦` while it is at REST, and that is
+  // Gemini's WORKING glyph. Reading it here made a finished DSH pane report working
+  // forever. DSH's own spinner prefixes are braille, which the spinner check below
+  // already covers, and its hooks are the authority either way.
+  if (!isDshTerminalTitle(title)) {
+    if (title.includes(GEMINI_PERMISSION)) {
+      return 'permission'
+    }
+    if (title.includes(GEMINI_WORKING) || title.includes(GEMINI_SILENT_WORKING)) {
+      return 'working'
+    }
+    if (title.includes(GEMINI_IDLE)) {
+      return 'idle'
+    }
   }
 
   // Why: resolve synthetic Pi/OMP permission/idle labels before the broader

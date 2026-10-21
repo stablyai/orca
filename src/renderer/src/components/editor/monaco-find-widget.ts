@@ -16,7 +16,7 @@ export function isMonacoFindWidgetOpen(root: ParentNode | null | undefined): boo
   return getOpenMonacoFindWidget(root) !== null
 }
 
-export function isMonacoFindHostFocused(
+function isMonacoFindHostFocused(
   root: ParentNode | null | undefined,
   eventTarget: EventTarget | null | undefined
 ): boolean {

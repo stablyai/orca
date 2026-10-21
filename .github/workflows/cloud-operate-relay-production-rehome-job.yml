@@ -134,9 +134,9 @@ jobs:
             --drain-grace-ms "${DRAIN_GRACE_MS}" --confirmation "${CONFIRMATION}" \
             | tee "${RUNNER_TEMP}/relay-rehome-control.json"
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/setup@v2
         if: ${{ inputs.mode == 'enable' }}
-        with: { package_json_file: cloud/package.json }
+        with: { package-json-file: cloud/package.json, install: false }
 
       - run: pnpm install --frozen-lockfile
         if: ${{ inputs.mode == 'enable' }}
@@ -173,6 +173,8 @@ jobs:
           test "${COUNT}" = 0
 
       - uses: google-github-actions/setup-gcloud@v2
+        with:
+          skip_install: true
 
       - uses: ./.github/actions/cloud-sql-rollout-lease
         with:
@@ -320,7 +322,7 @@ jobs:
             echo '### Regional rehome control'
             jq -r '"- mode: `\(.mode)`\n- generation: `\(.control.generation)`\n- enabled: `\(.control.enabled)`"' \
               "${RUNNER_TEMP}/relay-rehome-control.json"
-            jq -r '"- active: `\(.active)`\n- awaiting receipt: `\(.awaitingReceipt)`\n- target registered: `\(.targetRegistered)`\n- completed (24h): `\(.completedLast24Hours)`\n- aborted (24h): `\(.abortedLast24Hours)`"' \
+            jq -r '"- active: `\(.active)`\n- awaiting receipt: `\(.awaitingReceipt)`\n- target registered: `\(.targetRegistered)`\n- completed (24h): `\(.completedLast24Hours)`\n- aborted (24h): `\(.abortedLast24Hours)`\n- host not arrived (24h): `\(.hostNotArrivedLast24Hours // "not reported")`\n- oldest active age (ms): `\(.oldestActiveAgeMs // "none")`"' \
               "${RUNNER_TEMP}/relay-rehome-inventory.json"
           } >> "${GITHUB_STEP_SUMMARY}"
 

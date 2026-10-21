@@ -25,10 +25,6 @@ type ShellStartupFiles = {
   syntax: StartupFileSyntax
 }
 
-export function isShellStartupEnvProbeSupported(): boolean {
-  return process.platform !== 'win32'
-}
-
 function parseAssignedValue(
   content: string,
   name: string,
@@ -162,7 +158,7 @@ function unquoteShellValue(value: string): { text: string; quoted: '"' | "'" | n
   return { text: trimmed, quoted: null }
 }
 
-function stripTrailingComment(value: string): string {
+export function stripTrailingComment(value: string): string {
   // Why: shells only treat `#` as a comment delimiter when it begins a word
   // (unquoted, preceded by whitespace). Walk the string so `#` inside quotes
   // and `path/with#hash` (no preceding whitespace) are preserved literally.
@@ -193,6 +189,7 @@ function expandHome(value: string, home: string): string {
     .replace(/\$HOME(?![A-Za-z0-9_])/g, home)
 }
 
+export const SHELL_STARTUP_ENV_CACHE_MAX_ENTRIES = 256
 const cache = new Map<string, string | undefined>()
 
 /**
@@ -214,11 +211,11 @@ const cache = new Map<string, string | undefined>()
  *   nothing. LAST matching assignment wins.
  * - fish universal variables (`set -Ux` stored in fish_variables) are only
  *   seen when the assignment is also written in a config file.
- * - Windows is unsupported (PowerShell profile parsing is out of scope).
+ * - Windows has no POSIX default shell and reads nothing; Git Bash goes
+ *   through readBashStartupEnvVar, PowerShell through powershell-profile-env.ts.
  *
- * Results are memoized per (name, home, shell, configHome) for the process
- * lifetime — shell startup files do not change mid-session in any practical
- * scenario, and PTY spawn is on the hot path.
+ * Results are memoized per (name, home, shell, configHome); a bounded recent
+ * window keeps SSH/WSL home churn from retaining every historical key.
  */
 export function readShellStartupEnvVar(
   name: string,
@@ -226,7 +223,23 @@ export function readShellStartupEnvVar(
   shell = process.env.SHELL,
   configHome = process.env.XDG_CONFIG_HOME
 ): string | undefined {
-  if (!home || !isShellStartupEnvProbeSupported()) {
+  return process.platform === 'win32'
+    ? undefined
+    : readStartupFilesEnvVar(name, home, shell, configHome)
+}
+
+/** The same probe over bash login files, for a Windows pane running Git Bash. */
+export function readBashStartupEnvVar(name: string, home: string): string | undefined {
+  return readStartupFilesEnvVar(name, home, 'bash', undefined)
+}
+
+function readStartupFilesEnvVar(
+  name: string,
+  home: string | undefined,
+  shell: string | undefined,
+  configHome: string | undefined
+): string | undefined {
+  if (!home) {
     return undefined
   }
   // Why: the regex above is fixed; rejecting unsafe names is cheap defense
@@ -236,8 +249,12 @@ export function readShellStartupEnvVar(
   }
 
   const cacheKey = `${name}\0${home}\0${shell ?? ''}\0${configHome ?? ''}`
+  const cached = cache.get(cacheKey)
   if (cache.has(cacheKey)) {
-    return cache.get(cacheKey)
+    // Keep frequently used homes warm when historical homes churn.
+    cache.delete(cacheKey)
+    cache.set(cacheKey, cached)
+    return cached
   }
 
   let lastMatch: string | undefined
@@ -256,6 +273,13 @@ export function readShellStartupEnvVar(
   }
 
   cache.set(cacheKey, lastMatch)
+  while (cache.size > SHELL_STARTUP_ENV_CACHE_MAX_ENTRIES) {
+    const oldest = cache.keys().next()
+    if (oldest.done) {
+      break
+    }
+    cache.delete(oldest.value)
+  }
   return lastMatch
 }
 

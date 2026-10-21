@@ -135,7 +135,7 @@ test.describe('Automation hidden terminal first mount', () => {
       }
       const state = store.getState()
       state.setActiveTab(tabId)
-      state.setActiveTabType('terminal')
+      state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     }, hiddenTabId)
 
     await ensureTerminalVisible(orcaPage)

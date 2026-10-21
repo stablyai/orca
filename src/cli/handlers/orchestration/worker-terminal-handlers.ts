@@ -126,6 +126,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       counts: Record<string, number>
       scope?: WorkerListRunScope
       page?: { hasMore: boolean; nextCursor: string | null; total: number }
+      warnings?: string[]
       partialHostErrors?: {
         environmentId: string
         name: string
@@ -177,10 +178,13 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
         value.page?.hasMore && value.page.nextCursor
           ? `\nMore: --cursor ${value.page.nextCursor}`
           : ''
-      const warnings = (value.partialHostErrors ?? []).map(
-        (error) =>
-          `Warning: worker observations from ${error.name} (${error.environmentId}) are incomplete: ${error.code}; dispatches=${error.dispatchIds.join(',') || 'none'}`
-      )
+      const warnings = [
+        ...(value.warnings ?? []),
+        ...(value.partialHostErrors ?? []).map(
+          (error) =>
+            `worker observations from ${error.name} (${error.environmentId}) are incomplete: ${error.code}; dispatches=${error.dispatchIds.join(',') || 'none'}`
+        )
+      ].map((warning) => `Warning: ${warning}`)
       const warningBlock = warnings.length ? `\n${warnings.join('\n')}` : ''
       const scopeLine = `\n${formatWorkerListScope(value.scope ?? scope)}`
       return `${counts ? `${rows}\nTerminals: ${counts}` : rows}${scopeLine}${pagination}${warningBlock}`

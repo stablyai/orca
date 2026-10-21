@@ -1,3 +1,4 @@
+import { quotePosixShellUnlessPlain } from '../../../../shared/shell-argument-quoting'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
 
@@ -45,11 +46,15 @@ export function isLinuxUserAgent(
   return !isMacUserAgent(userAgent) && !isWindowsUserAgent(userAgent) && userAgent.includes('Linux')
 }
 
-function shouldPreserveEditableFocus(element: Element | null): boolean {
+export function shouldPreserveEditableFocus(element: Element | null): boolean {
   if (!(element instanceof HTMLElement)) {
     return false
   }
   if (element.classList.contains('xterm-helper-textarea') || element.closest('.xterm')) {
+    return false
+  }
+  // Why: a field in a just-hidden pane keeps focus until Chromium drops it to body a task later.
+  if (element.closest('[hidden], [inert]')) {
     return false
   }
   // Why: deferred fit/focus work can run after inline rename or settings
@@ -71,9 +76,5 @@ export function shellEscapePath(path: string, targetShell: 'posix' | 'windows'):
     return /^[a-zA-Z0-9_./@:\\-]+$/.test(path) ? path : `"${path}"`
   }
 
-  if (/^[a-zA-Z0-9_./@:-]+$/.test(path)) {
-    return path
-  }
-
-  return `'${path.replace(/'/g, "'\\''")}'`
+  return quotePosixShellUnlessPlain(path)
 }

@@ -1,11 +1,15 @@
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getWorkspaceJiraIssueKey } from '../../../../../shared/jira-review-title'
 import { useCallback } from 'react'
+import type { PullRequestGenerationOutcome } from '../create-pull-request-dialog-field-model'
+import { settlePullRequestGenerationRequest } from '../pull-request-generation-request-outcome'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import {
   generateRuntimePullRequestFields,
-  cancelRuntimeGeneratePullRequestFields,
-  type RuntimeGeneratePullRequestFieldsOverrides
-} from '@/runtime/runtime-git-client'
+  cancelRuntimeGeneratePullRequestFields
+} from '@/runtime/runtime-git-generation-client'
+import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/runtime-git-client-context'
 import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import { stripBaseRef } from '../create-pull-request-base-ref-normalization'
@@ -19,6 +23,7 @@ import {
   type PullRequestGenerationContext,
   type PullRequestGenerationFields
 } from '@/store/slices/pull-request-generation'
+import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
 
 type ChecksPanelGenerationInput = Pick<
   ChecksPanelReviewState,
@@ -34,7 +39,7 @@ type ChecksPanelGenerationInput = Pick<
     | 'activeWorktreePath'
     | 'allocatePullRequestGenerationRequestId'
     | 'branch'
-    | 'ownerSettings'
+    | 'ownerTarget'
     | 'prGenerationRecords'
     | 'repo'
     | 'setPullRequestGenerationRecord'
@@ -51,7 +56,7 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
     branch,
     handleBranchChangedByPullRequestGeneration,
     hostedReviewCreateProvider,
-    ownerSettings,
+    ownerTarget,
     prCreationDefaults,
     prGenerationRecords,
     repo,
@@ -62,33 +67,54 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
     async (
       fields: PullRequestGenerationFields,
       fieldRevisions: PullRequestFieldRevisions,
-      overrides?: RuntimeGeneratePullRequestFieldsOverrides
-    ): Promise<void> => {
-      if (!repo || !activePullRequestGenerationKey || !activeWorktreePath || !branch) {
-        return
+      overrides?: RuntimeGeneratePullRequestFieldsOverrides,
+      options?: PullRequestGenerationOptions
+    ): Promise<PullRequestGenerationOutcome | undefined> => {
+      if (
+        !repo ||
+        !activePullRequestGenerationKey ||
+        !activeWorktreePath ||
+        !branch ||
+        !ownerTarget
+      ) {
+        return undefined
       }
       const generationKey = activePullRequestGenerationKey
       if (
         useAppStore.getState().pullRequestGenerationRecords[generationKey]?.status === 'running'
       ) {
-        return
+        return undefined
       }
       const requestId = allocatePullRequestGenerationRequestId()
       const context: PullRequestGenerationContext = {
         worktreeId: activeWorktreeId,
         worktreePath: activeWorktreePath,
         connectionId: getConnectionId(activeWorktreeId) ?? undefined,
+        jiraIssueKey:
+          (hostedReviewCreateProvider === 'github' || hostedReviewCreateProvider === 'gitlab') &&
+          activeWorktreeId
+            ? getWorkspaceJiraIssueKey(
+                useAppStore
+                  .getState()
+                  .getKnownWorktreeById(activeWorktreeId, getRepoExecutionHostId(repo))
+              )
+            : null,
         requestId,
         repoId: repo.id,
         branch,
-        runtimeTargetSettings: ownerSettings
+        runtimeTarget: ownerTarget
       }
       const seed = { ...fields }
       const previousRequiresPushBeforeCreate =
         useAppStore.getState().pullRequestGenerationRecords[generationKey]
           ?.requiresPushBeforeCreate === true
       // Why: ChecksPanel unsets the composer on navigate-away; persist the request so generation can finish in the background.
-      const runningRecord = createRunningPullRequestGenerationRecord(context, seed, fieldRevisions)
+      const runningRecord = createRunningPullRequestGenerationRecord(
+        context,
+        seed,
+        fieldRevisions,
+        options?.autoSubmit
+      )
       setPullRequestGenerationRecord(
         generationKey,
         previousRequiresPushBeforeCreate
@@ -96,61 +122,65 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
           : runningRecord
       )
 
-      try {
-        const result = await generateRuntimePullRequestFields(
-          {
-            // Why: route generation by the worktree owner captured at click time.
-            settings: context.runtimeTargetSettings,
-            worktreeId: context.worktreeId,
-            worktreePath: context.worktreePath,
-            connectionId: context.connectionId
-          },
-          {
-            base: stripBaseRef(seed.base.trim()),
-            title: seed.title,
-            body: seed.body,
-            draft: seed.draft,
-            provider: hostedReviewCreateProvider,
-            useTemplate: prCreationDefaults.useTemplate
-          },
-          overrides
-        )
-        if (result.branchChangedByPreparation) {
-          await handleBranchChangedByPullRequestGeneration(generationKey, context)
-        }
-        if (result.success) {
-          useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
-        }
-        updatePullRequestGenerationRecord(generationKey, (record) => {
-          if (!result.success) {
-            return resolvePullRequestGenerationFailure({
+      const request = (async (): Promise<void> => {
+        try {
+          const result = await generateRuntimePullRequestFields(
+            {
+              // Why: route generation by the worktree owner captured at click time.
+              target: context.runtimeTarget,
+              prefs: useAppStore.getState().settings,
+              worktreeId: context.worktreeId,
+              worktreePath: context.worktreePath,
+              connectionId: context.connectionId
+            },
+            {
+              base: stripBaseRef(seed.base.trim()),
+              title: seed.title,
+              body: seed.body,
+              draft: seed.draft,
+              provider: hostedReviewCreateProvider,
+              useTemplate: prCreationDefaults.useTemplate
+            },
+            overrides
+          )
+          if (result.branchChangedByPreparation) {
+            await handleBranchChangedByPullRequestGeneration(generationKey, context)
+          }
+          if (result.success) {
+            useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
+          }
+          updatePullRequestGenerationRecord(generationKey, (record) => {
+            if (!result.success) {
+              return resolvePullRequestGenerationFailure({
+                record,
+                requestId,
+                canceled: result.canceled,
+                error: result.canceled ? null : result.error
+              })
+            }
+            return resolvePullRequestGenerationSuccess({
               record,
               requestId,
-              canceled: result.canceled,
-              error: result.canceled ? null : result.error
+              result: {
+                base: stripBaseRef(result.fields.base),
+                title: result.fields.title,
+                body: result.fields.body,
+                draft: result.fields.draft
+              }
             })
-          }
-          return resolvePullRequestGenerationSuccess({
-            record,
-            requestId,
-            result: {
-              base: stripBaseRef(result.fields.base),
-              title: result.fields.title,
-              body: result.fields.body,
-              draft: result.fields.draft
-            }
           })
-        })
-      } catch (error) {
-        updatePullRequestGenerationRecord(generationKey, (record) =>
-          resolvePullRequestGenerationFailure({
-            record,
-            requestId,
-            error:
-              error instanceof Error ? error.message : 'Failed to generate pull request details'
-          })
-        )
-      }
+        } catch (error) {
+          updatePullRequestGenerationRecord(generationKey, (record) =>
+            resolvePullRequestGenerationFailure({
+              record,
+              requestId,
+              error:
+                error instanceof Error ? error.message : 'Failed to generate pull request details'
+            })
+          )
+        }
+      })()
+      return await settlePullRequestGenerationRequest(generationKey, requestId, request)
     },
     [
       activePullRequestGenerationKey,
@@ -160,7 +190,7 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
       branch,
       handleBranchChangedByPullRequestGeneration,
       hostedReviewCreateProvider,
-      ownerSettings,
+      ownerTarget,
       prCreationDefaults.useTemplate,
       repo,
       setPullRequestGenerationRecord,
@@ -184,7 +214,7 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
     })
     void cancelRuntimeGeneratePullRequestFields({
       // Why: Stop must target the request owner, not the currently focused worktree.
-      settings: record.context.runtimeTargetSettings,
+      target: record.context.runtimeTarget,
       worktreeId: record.context.worktreeId,
       worktreePath: record.context.worktreePath,
       connectionId: record.context.connectionId

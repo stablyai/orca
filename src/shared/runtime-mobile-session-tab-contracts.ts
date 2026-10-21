@@ -4,11 +4,15 @@ import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalLayoutSnapshot } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
+import type { StructuredAgentId } from './agent-session-provider-handle'
 
 export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  /** The tab's manual name on the host, null when it has none. Absent from older hosts, so a
+   *  client keeps its own record then rather than reading absence as a cleared name. */
+  customTitle?: string | null
   quickCommandLabel?: string | null
   parentTabId: string
   leafId: string
@@ -33,6 +37,9 @@ export type RuntimeMobileSessionTerminalTab = {
 export type RuntimeMobileTerminalTheme = {
   mode: 'dark' | 'light'
   theme: TerminalColorOverrides
+  /** Optional desktop terminalMinimumContrastRatio override (#10754). Absent means the client picks
+   *  its own background-luminance floor, which is what pre-#10754 clients always do. */
+  minimumContrastRatio?: number
 }
 
 export type RuntimeMobileSessionMarkdownTab = {
@@ -48,6 +55,8 @@ export type RuntimeMobileSessionMarkdownTab = {
   sourceFileId: string
   sourceFilePath: string
   sourceRelativePath: string
+  /** Set by a desktop for a "New Markdown" document not yet named; hosts and phones before it omit it. */
+  isUntitled?: true
   documentVersion: string
   color?: string | null
   isPinned?: boolean
@@ -94,7 +103,9 @@ export type RuntimeMobileSessionAgentTab = {
   title: string
   sessionId: string
   replacesSessionId?: string
-  agent: 'claude' | 'codex'
+  /** An agent the host registered. Beyond Claude and Codex, published only to clients advertising
+   *  the registered-agents capability. */
+  agent: StructuredAgentId
   color?: string | null
   isPinned?: boolean
   isActive: boolean

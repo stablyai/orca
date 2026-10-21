@@ -23,7 +23,7 @@ vi.mock('./file-explorer-operation-owner', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getFileExplorerOperationOwner: () => ({ kind: 'local' as const })
 }))
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-status-client', () => ({
   getRuntimeGitIgnoredPaths: vi.fn().mockResolvedValue([])
 }))
 
@@ -170,6 +170,7 @@ describe('file explorer directory refresh churn', () => {
       rootError: null,
       isDirStale: () => false,
       loadDir,
+      refreshTree: vi.fn().mockResolvedValue('refreshed'),
       resetAndLoad: vi.fn(),
       resetSelection: vi.fn(),
       setNameFilterQuery: vi.fn()

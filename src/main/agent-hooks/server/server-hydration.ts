@@ -1,12 +1,17 @@
 import { readFileSync } from 'node:fs'
 
 import {
+  admitLegacyAgentStatus,
+  clearLegacyAgentStatuses
+} from '../../../shared/agent-hook-listener/listener-state'
+import {
   seedClaudeLeadTurnFromPersistedStatus,
   seedClaudeSubagentRosterFromSnapshots
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
+import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status-legacy-adapter'
 import { HYDRATE_MAX_AGE_MS, LAST_STATUS_FILE_VERSION } from './server-constants'
-import type { LastStatusFile } from './server-types'
+import type { EnrichedAgentHookEventPayload, LastStatusFile } from './server-types'
 import {
   authorityCommitmentsMatch,
   dropHydratedIdleClaudeSubagents,
@@ -14,16 +19,17 @@ import {
   sanitizeHydratedEntry,
   sanitizePersistedAuthorityCommitment
 } from './server-persistence-validation'
-import { AgentHookServerReaping } from './server-reaping'
+import { AgentHookServerTabCleanup } from './server-tab-cleanup'
+import { readPersistedAgentExits, recordAgentExit } from './agent-exit-evidence'
 
-export abstract class AgentHookServerHydration extends AgentHookServerReaping {
+export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup {
   /** Hydrate the durable cache, validating every row before it reaches the live listener state. */
   protected hydrateLastStatusFromDisk(): void {
     if (!this.lastStatusFilePath) {
       return
     }
     // Why: keep hydrate idempotent so a future re-start path can't merge prior-session state.
-    this.state.lastStatusByPaneKey.clear()
+    clearLegacyAgentStatuses(this.state)
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()
     let raw: string
@@ -100,7 +106,12 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
           // Why: the terminal transition may have fired while no receiver was up; restore as unconfirmed, never as live truth.
           entry.restoredUnconfirmed = true
         }
-        this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
+        admitLegacyAgentStatus(
+          this.state,
+          'main-status-hydration',
+          entry,
+          AGENT_STATUS_PERSISTED_HYDRATION_MODE
+        )
         if (entry.connectionId) {
           // Why: a restart can see an earlier wall clock; seed ordering so new events stay after disk state.
           const previousWatermark = this.connectionTimestampWatermarkById.get(entry.connectionId)
@@ -113,9 +124,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
         if (entry.payload.agentType === 'codex') {
           seedCodexStateFromSnapshot(this.state, resolvedPaneKey, entry.payload)
         } else if (entry.payload.agentType === 'claude') {
-          seedClaudeLeadTurnFromPersistedStatus(this.state, resolvedPaneKey, entry, {
-            childOnlyBoundary: entry.claudeLeadBoundaryChildOnly === true
-          })
+          seedClaudeLeadTurnFromPersistedStatus(this.state, resolvedPaneKey, entry)
           if (entry.payload.subagents) {
             seedClaudeSubagentRosterFromSnapshots(
               this.state,
@@ -128,6 +137,9 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
       } else {
         dropped += 1
       }
+    }
+    for (const exit of readPersistedAgentExits(file.agentExits, ttlCutoff)) {
+      recordAgentExit(this.agentExitedAtByPaneKey, exit.paneKeys, exit, exit.at)
     }
     for (const [paneKey, rawCommitment] of Object.entries(file.authorityCommitments ?? {})) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
@@ -156,7 +168,25 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
       this.runStatusPersist()
     } else if (hydrated > 0) {
       // Why: prime dedup from raw bytes (not re-serialized) only when hydration was lossless.
-      this.lastWrittenJson = raw
+      this.primeStatusPersistBaseline(raw)
     }
+  }
+
+  /** Hydrated rows still claiming work that nothing in this runtime has confirmed. */
+  listUnconfirmedRestoredStatuses(): EnrichedAgentHookEventPayload[] {
+    const rows: EnrichedAgentHookEventPayload[] = []
+    for (const [paneKey, row] of this.state.lastStatusByPaneKey) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+      const enriched = row as EnrichedAgentHookEventPayload
+      // Why: a resume remnant carries no state claim.
+      if (
+        enriched.restoredUnconfirmed &&
+        !enriched.providerSessionOnly &&
+        !this.runtimeObservedStatusPaneKeys.has(paneKey)
+      ) {
+        rows.push(enriched)
+      }
+    }
+    return rows
   }
 }

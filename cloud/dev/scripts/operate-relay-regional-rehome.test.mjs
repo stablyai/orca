@@ -99,6 +99,30 @@ test('parses exact selector and typed control confirmation', () => {
   )
 })
 
+test('accepts every one- and two-digit production cell and rejects malformed membership', () => {
+  const parseGeneral = (general) => parseRegionalRehomeArguments(
+    argumentsFor('inspect').map((value, index, all) =>
+      all[index - 1] === '--expected-general-cells' ? general : value
+    ),
+    { ORCA_RELAY_ADMIN_ID_TOKEN: 'token' }
+  ).expectedMembership.general
+  assert.deepEqual(
+    parseGeneral('production-gce-c30,production-gce-c9,production-gce-c29'),
+    ['production-gce-c29', 'production-gce-c30', 'production-gce-c9']
+  )
+  assert.deepEqual(parseGeneral('production-gce-c99'), ['production-gce-c99'])
+  for (const general of [
+    'production-gce-c0',
+    'production-gce-c100',
+    'production-gce-c09',
+    'production-gce-c30,production-gce-c30',
+    'staging-gce-c30',
+    ','
+  ]) {
+    assert.throws(() => parseGeneral(general), /selector membership is invalid/, general)
+  }
+})
+
 test('binds enable to exact selector and durable control generations', async () => {
   const requests = []
   const controls = [

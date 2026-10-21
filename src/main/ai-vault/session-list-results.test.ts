@@ -4,6 +4,7 @@ import type {
   AiVaultScanIssue,
   AiVaultSession
 } from '../../shared/ai-vault-types'
+import { truncateAiVaultListResult } from '../../shared/ai-vault-session-depth'
 import { mergeAiVaultListResults } from './session-list-results'
 
 function listResult(issues: AiVaultScanIssue[]): AiVaultListResult {
@@ -181,15 +182,6 @@ describe('mergeAiVaultListResults', () => {
     expect(merged.sessions).toHaveLength(1001)
   })
 
-  it('keeps a per-host scope truncation notice when merging all-host results', () => {
-    const merged = mergeAiVaultListResults(
-      [listResult([]), listResult([SCOPE_TRUNCATION])],
-      undefined
-    )
-
-    expect(merged.issues).toEqual([SCOPE_TRUNCATION])
-  })
-
   it('keeps one scope notice per host rather than collapsing them', () => {
     const otherHost: AiVaultScanIssue = { ...SCOPE_TRUNCATION, executionHostId: 'ssh:build-box' }
 
@@ -222,4 +214,22 @@ describe('mergeAiVaultListResults', () => {
     // Kinded issues render as their own banner rows, never as skipped transcripts.
     expect(merged.issues.filter((issue) => !issue.kind)).toEqual([])
   })
+})
+
+it('retains recovered scope rows through All-computers aggregation and smaller cached depths', () => {
+  const local = {
+    ...listResult([SCOPE_TRUNCATION]),
+    sessions: [{ ...session(4), cwd: '/other' }, { ...session(3), cwd: '/other' }, session(1)]
+  }
+  const merged = mergeAiVaultListResults([local, listResult([])], 2, false, ['/repo'])
+  expect(merged.sessions.map((row) => row.sessionId)).toEqual([
+    'session-4',
+    'session-3',
+    'session-1'
+  ])
+  expect(
+    truncateAiVaultListResult(merged, 1, ['/repo']).sessions.map((row) => row.sessionId)
+  ).toEqual(['session-4', 'session-1'])
+  expect(merged.issues).toEqual([SCOPE_TRUNCATION])
+  expect(merged.scannedAt).toBe(local.scannedAt)
 })

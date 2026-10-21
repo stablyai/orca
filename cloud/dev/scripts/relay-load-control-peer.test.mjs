@@ -901,3 +901,174 @@ test('shutdown closes both splice legs and waits for the in-flight splice', asyn
   assert.equal(observations.at(-1).type, 'shutdown')
   assert.equal(observations.at(-1).detail.activeSpliceSockets, 0)
 })
+
+function trackRefreshTimers(context) {
+  const schedule = global.setTimeout
+  const cancel = global.clearTimeout
+  const timers = new Map()
+  context.mock.method(global, 'setTimeout', (callback, milliseconds, ...args) => {
+    const timer = schedule(() => {
+      timers.delete(timer)
+      callback(...args)
+    }, milliseconds)
+    timers.set(timer, milliseconds)
+    return timer
+  })
+  context.mock.method(global, 'clearTimeout', (timer) => {
+    timers.delete(timer)
+    cancel(timer)
+  })
+  context.after(() => {
+    for (const timer of timers.keys()) cancel(timer)
+  })
+  return () => [...timers.values()].filter((milliseconds) => milliseconds >= 180_000).length
+}
+
+function reconnectingPeer(context, observations) {
+  const peer = new RelayLoadControlPeer(
+    0,
+    peerOptions({
+      directorOrigin: undefined,
+      targetOrigin: 'https://cell.test',
+      accessToken: 'test-access-token'
+    }),
+    (type) => observations.push(type)
+  )
+  peer.phase.refreshOffsetMs = 180_000
+  peer.phase.refreshIntervalMs = 200_000
+  peer.createSocket = () => {
+    const socket = fakeHandshakeSocket()
+    socket.send = (raw) => {
+      const message = JSON.parse(raw)
+      if (message.type === 'host-hello') {
+        queueMicrotask(() => socket.message(validChallenge(peer)))
+      } else if (message.type === 'host-challenge-ack') {
+        queueMicrotask(() =>
+          socket.message({
+            type: 'host-hello-ack',
+            generation: 1,
+            controlResumeSecret: 'test-secret'
+          })
+        )
+      }
+    }
+    return openOnNextTurn(socket)
+  }
+  context.after(() => peer.shutdown())
+  return peer
+}
+
+for (const outcome of ['success', 'failure']) {
+  for (const owner of ['current connection', 'replacement connection', 'shutdown']) {
+    test(`refresh ${outcome} respects its ${owner} ownership`, async (context) => {
+      const refreshTimers = trackRefreshTimers(context)
+      const observations = []
+      const peer = reconnectingPeer(context, observations)
+      const pendingResponse = deferred()
+      const requestStarted = deferred()
+      let delayResponse = false
+      context.mock.method(global, 'fetch', async () => {
+        if (delayResponse) {
+          requestStarted.resolve()
+          return await pendingResponse.promise
+        }
+        return response({ relayToken: 'test-relay-token' })
+      })
+      await peer.connect()
+      assert.equal(refreshTimers(), 1)
+      clearTimeout(peer.refreshTimer)
+      delayResponse = true
+      peer.scheduleRefresh(0)
+      await requestStarted.promise
+      delayResponse = false
+      if (owner !== 'current connection') {
+        peer.socket.close(1006)
+        await new Promise((resolve) => setImmediate(resolve))
+        await peer.connect()
+        assert.equal(refreshTimers(), 1)
+      }
+      const shutdown = owner === 'shutdown' ? peer.shutdown() : undefined
+      if (outcome === 'success') pendingResponse.resolve(response({ relayToken: 'fresh-token' }))
+      else pendingResponse.reject(new Error('token request failed'))
+      await new Promise((resolve) => setImmediate(resolve))
+      const timersAfterCompletion = refreshTimers()
+      await (shutdown ?? peer.shutdown())
+
+      assert.equal(timersAfterCompletion, owner === 'shutdown' ? 0 : 1)
+      assert.equal(refreshTimers(), 0)
+      assert.equal(
+        observations.filter((type) => type === 'refresh').length,
+        owner === 'current connection' && outcome === 'success' ? 1 : 0
+      )
+    })
+  }
+}
+
+test('a twin shares its host keys and connects with a given assignment, not the director', async (context) => {
+  const originalFetch = global.fetch
+  context.after(() => {
+    global.fetch = originalFetch
+  })
+  const fetched = []
+  global.fetch = async (url) => {
+    fetched.push(String(url))
+    throw new Error('the director must not be asked')
+  }
+  const primary = new RelayLoadControlPeer(0, peerOptions(), () => undefined)
+  const twin = new RelayLoadControlPeer(0, peerOptions({ keys: primary.keys }), () => undefined)
+  assert.equal(twin.relayHostId, primary.relayHostId)
+  const socket = fakeHandshakeSocket()
+  let socketCell
+  twin.createSocket = (assignment) => {
+    socketCell = assignment.cellUrl
+    openOnNextTurn(socket)
+    return socket
+  }
+
+  const connecting = twin.connect({ cellUrl: 'https://c3.relay.test', assignmentEpoch: 7 })
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  await twin.shutdown()
+  await connecting.catch(() => undefined)
+
+  assert.equal(socketCell, 'https://c3.relay.test')
+  assert.equal(JSON.parse(socket.sent[0]).assignmentEpoch, 7)
+  assert.equal(fetched.some((url) => url.endsWith('/v1/assign')), false)
+})
+
+test('declares a reconnect only after an established control', async (context) => {
+  const originalFetch = global.fetch
+  context.after(() => {
+    global.fetch = originalFetch
+  })
+  const bodies = []
+  global.fetch = async (_url, { body }) => {
+    bodies.push(JSON.parse(body))
+    return response({ cellUrl: 'https://cell.test', assignmentEpoch: 1 })
+  }
+  const peer = new RelayLoadControlPeer(0, peerOptions(), () => undefined)
+  const token = await peer.relayToken()
+  await peer.assignment(token)
+  peer.generation = 1
+  await peer.assignment(token)
+  assert.equal(bodies[0].reconnect, undefined)
+  assert.equal(bodies[1].reconnect, true)
+})
+
+test('a silent control is terminated after the desktop silence limit', (context) => {
+  context.mock.timers.enable({ apis: ['setInterval', 'Date'] })
+  const peer = new RelayLoadControlPeer(0, peerOptions(), () => undefined)
+  const socket = fakeOpenSocket()
+  let terminated = 0
+  socket.terminate = () => {
+    terminated++
+    socket.emit('close', 1006, Buffer.from(''))
+  }
+  peer.watchSilence(socket)
+  context.mock.timers.tick(60_000)
+  socket.emit('ping')
+  context.mock.timers.tick(60_000)
+  assert.equal(terminated, 0)
+  context.mock.timers.tick(30_000)
+  context.mock.timers.tick(60_000)
+  assert.equal(terminated, 1)
+})

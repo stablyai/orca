@@ -1,4 +1,6 @@
+import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback } from 'react'
+import { terminalBufferClear, terminalInputSend } from '../terminal/mobile-terminal-operations'
 import {
   clearTerminalLiveInputFocusTimer,
   scheduleTerminalLiveInputFocus
@@ -110,8 +112,8 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     terminalGestureInputInFlightRef.current.add(handle)
     try {
       // Why: gesture arrows parked across a reconnect would move a TUI long after the swipe.
-      await rpc.sendRequest(
-        'terminal.send',
+      const response = await terminalInputSend.request(
+        rpc,
         buildTerminalSendParams({
           terminal: handle,
           text: queued.bytes,
@@ -120,6 +122,9 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         }),
         TERMINAL_INPUT_SEND_OPTIONS
       )
+      if (terminalInputSend.interpret(response) === true) {
+        reportWorkerTerminalUserInput(rpc, handle)
+      }
     } catch {
       // Transient failure
     } finally {
@@ -229,9 +234,8 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     }
     getTerminalRef(target.handle)?.clear()
     try {
-      await client.sendRequest('terminal.clearBuffer', {
-        terminal: target.handle
-      })
+      // The reply is unread: main toasted success on any fulfilled envelope, refusal included.
+      await terminalBufferClear.request(client, { terminal: target.handle })
       showToast('Terminal cleared')
     } catch {
       showToast("Couldn't clear terminal", 1500)

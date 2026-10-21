@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -51,6 +52,7 @@ function createHarness(): Harness {
   const dbPath = join(dir, 'orchestration.db')
   const before = new OrchestrationDb(dbPath)
   const task = before.createTask({
+    runId: 'run_legacy_local',
     spec: 'legacy assignment',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })

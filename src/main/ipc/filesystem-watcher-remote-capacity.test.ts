@@ -1,3 +1,4 @@
+import { createWatcherSender } from './filesystem-watcher-test-sender'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, getSshFilesystemProviderMock } = vi.hoisted(() => ({
@@ -18,7 +19,8 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 }))
 
 import { WATCH_ROOT_CAPACITY_REFUSAL_MESSAGE } from '../../shared/watch-root-capacity-refusal'
-import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { getRemoteWatcherKey } from './filesystem-watcher-paths'
 
@@ -58,7 +60,7 @@ describe('remote filesystem watcher capacity refusals', () => {
       throw new Error(WATCH_ROOT_CAPACITY_REFUSAL_MESSAGE)
     })
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     const args = { worktreePath: '/home/me/repos/one', connectionId: 'conn-capacity' }
 
     await handlers['fs:watchWorktree']({ sender }, args)
@@ -78,7 +80,7 @@ describe('remote filesystem watcher capacity refusals', () => {
       throw new Error('Relay channel lost')
     })
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 2 }
+    const sender = createWatcherSender(2)
     const args = { worktreePath: '/home/me/repos/two', connectionId: 'conn-unavailable' }
 
     await handlers['fs:watchWorktree']({ sender }, args)

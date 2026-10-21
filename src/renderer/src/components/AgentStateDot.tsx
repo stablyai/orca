@@ -4,6 +4,11 @@ import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import {
+  AgentProgressRing,
+  formatAgentProgressPercent,
+  type AgentProgressRingTone
+} from '@/components/AgentProgressRing'
+import {
   StateIndicatorTooltip,
   type StateIndicatorTooltipSide
 } from '@/components/StateIndicatorTooltip'
@@ -35,6 +40,9 @@ export type AgentDotState =
   // held there, and never rendered as 'done' or 'working' — it asserts nothing about
   // the agent, only about what Orca last heard.
   | 'unverifiable'
+  // Why: the turn ended and Orca cannot prove how. An outcome like 'failed', drawn with the
+  // 'unverifiable' glyph because it too reports missing evidence, never a finish.
+  | 'unconfirmed'
   // Why: the sidebar's title-based status flow (StatusIndicator/WorktreeCard)
   // collapses blocked + waiting into a single "needs attention" state. Keep
   // this as a distinct member so that flow can render without inventing a new
@@ -63,6 +71,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return 'Idle'
     case 'unverifiable':
       return 'No recent update'
+    case 'unconfirmed':
+      return 'Couldn’t confirm'
     case 'permission':
       return 'Needs attention'
   }
@@ -75,6 +85,36 @@ type Props = {
   /** Overrides the hover tooltip; null suppresses it for an existing tooltip. */
   title?: string | null
   tooltipSide?: StateIndicatorTooltipSide
+  /** Program-reported 0–100; live states then draw a filling ring instead of the spinner/glyph. */
+  progress?: number
+}
+
+type ProgressRing = { tone: AgentProgressRingTone; percent: number }
+
+// Why only live states: a finished row's last percentage would read as work still in flight.
+function progressRing(state: AgentDotState, progress: number | undefined): ProgressRing | null {
+  if (progress === undefined) {
+    return null
+  }
+  if (state === 'working') {
+    return { tone: 'working', percent: progress }
+  }
+  return state === 'waiting' || state === 'blocked' || state === 'permission'
+    ? { tone: 'attention', percent: progress }
+    : null
+}
+
+function withRingPercent(baseLabel: string, ring: ProgressRing | null): string {
+  return ring ? `${baseLabel} · ${formatAgentProgressPercent(ring.percent)}` : baseLabel
+}
+
+/** A state's label, with the percentage only when AgentStateDot draws a progress ring for it. */
+export function agentStateProgressLabel(
+  state: AgentDotState,
+  progress: number | undefined,
+  baseLabel: string = agentStateLabel(state)
+): string {
+  return withRingPercent(baseLabel, progressRing(state, progress))
 }
 
 /** Render the compact state glyph used by agent rows and terminal tabs. */
@@ -83,16 +123,26 @@ export const AgentStateDot = React.memo(function AgentStateDot({
   size = 'sm',
   className,
   title,
-  tooltipSide
+  tooltipSide,
+  progress
 }: Props): React.JSX.Element {
   const box = size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'
   const inner = size === 'md' ? 'size-2' : 'size-1.5'
   const icon = size === 'md' ? 'size-3' : 'size-2.5'
-  const tooltipLabel = title === null ? null : (title ?? agentStateLabel(state))
+  const ring = progressRing(state, progress)
+  const label = withRingPercent(agentStateLabel(state), ring)
+  const tooltipLabel = title === null ? null : (title ?? label)
 
   let indicator: React.JSX.Element
 
-  if (state === 'working') {
+  if (ring) {
+    // Why the label on the ring: the progressbar is what a screen reader announces, so say it once there.
+    indicator = (
+      <span className={cn('inline-flex shrink-0 items-center justify-center', box, className)}>
+        <AgentProgressRing percent={ring.percent} tone={ring.tone} label={label} className={icon} />
+      </span>
+    )
+  } else if (state === 'working') {
     indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
@@ -107,7 +157,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
         aria-label={agentStateLabel(state)}
       >
-        <Activity className={cn('text-yellow-500', icon)} aria-hidden="true" />
+        <Activity className={cn('text-agent-working', icon)} aria-hidden="true" />
       </span>
     )
   } else if (state === 'done') {
@@ -123,7 +173,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         <CircleCheck className={cn('text-emerald-500', icon)} aria-hidden="true" />
       </span>
     )
-  } else if (state === 'unverifiable') {
+  } else if (state === 'unverifiable' || state === 'unconfirmed') {
     // Why: a dashed ring reads as "incomplete information" rather than a state claim,
     // and amber carries warning weight without borrowing 'done' green or 'working' yellow.
     indicator = (
@@ -153,9 +203,12 @@ export const AgentStateDot = React.memo(function AgentStateDot({
           className={cn(
             'block rounded-full',
             inner,
-            state === 'blocked' || state === 'interrupted' || state === 'failed'
+            state === 'blocked' || state === 'failed'
               ? 'bg-red-500'
-              : 'bg-neutral-500/40'
+              : // Why: a user's Stop is not news; muted, never the fault red or the finished green.
+                state === 'interrupted'
+                ? 'bg-muted-foreground'
+                : 'bg-neutral-500/40'
           )}
         />
       </span>

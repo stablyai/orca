@@ -2,6 +2,22 @@ import { describe, expect, it } from 'vitest'
 import { parseAiVaultListResult } from './session-list-result-validation'
 
 describe('parseAiVaultListResult', () => {
+  it('keeps host cwd aliases, and drops only malformed ones', () => {
+    const parsed = parseAiVaultListResult({
+      sessions: [
+        { ...validSession('aliased'), cwdAliases: ['/home/me/work/api'] },
+        { ...validSession('malformed'), cwdAliases: [42] }
+      ],
+      issues: [],
+      scannedAt: '2026-07-27T00:00:00.000Z'
+    })
+
+    expect(parsed.sessions.map((entry) => [entry.sessionId, entry.cwdAliases])).toEqual([
+      ['aliased', ['/home/me/work/api']],
+      ['malformed', undefined]
+    ])
+  })
+
   it('keeps valid sessions when another wire entry is malformed', () => {
     const parsed = parseAiVaultListResult({
       sessions: [validSession(), { id: 42 }],
@@ -29,20 +45,6 @@ describe('parseAiVaultListResult', () => {
     expect(parsed.sessions).toHaveLength(1)
     expect(parsed.sessions[0]?.agent).toBe('codex')
     expect(parsed.sessions[0]?.sessionId).toBe('session-1')
-    expect(parsed.issues).toEqual([])
-  })
-
-  it('accepts an all-unknown-agent response as an empty supported session list', () => {
-    const parsed = parseAiVaultListResult({
-      sessions: [
-        { ...validSession('future-1'), agent: 'future-agent' },
-        { ...validSession('future-2'), agent: 'newer-agent' }
-      ],
-      issues: [],
-      scannedAt: '2026-07-27T00:00:00.000Z'
-    })
-
-    expect(parsed.sessions).toEqual([])
     expect(parsed.issues).toEqual([])
   })
 

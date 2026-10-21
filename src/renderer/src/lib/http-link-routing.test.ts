@@ -8,6 +8,8 @@ import {
   resolveLocalhostHttpLinkDisplayUrl
 } from './http-link-routing'
 
+import type { ExecutionHostId } from '../../../shared/execution-host'
+
 const toastErrorMock = vi.hoisted(() => vi.fn())
 
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))
@@ -17,6 +19,13 @@ const registerLocalhostLabelMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
 const openRuntimeBrowserTabMock = vi.fn(() => Promise.resolve())
+
+function noActiveWorkspace(): {
+  activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
+} {
+  return { activeWorktreeId: null, activeWorkspaceExecutionHostId: null }
+}
 
 const storeState = {
   settings: undefined as
@@ -29,6 +38,7 @@ const storeState = {
       }
     | undefined,
   setActiveWorktree: setActiveWorktreeMock,
+  ...noActiveWorkspace(),
   createBrowserTab: createBrowserTabMock,
   repos: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
   projects: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
@@ -46,6 +56,7 @@ const storeState = {
 beforeEach(() => {
   vi.clearAllMocks()
   storeState.settings = undefined
+  Object.assign(storeState, noActiveWorkspace())
   storeState.workspacePortScansByKey = {}
   registerHttpLinkStoreAccessor(() => storeState)
   registerWorkspaceHttpLinkBrowserOpener(openRuntimeBrowserTabMock)
@@ -67,6 +78,16 @@ afterEach(() => {
 })
 
 describe('openHttpLink', () => {
+  it('keeps the selected host of the active workspace a link opens in', () => {
+    storeState.settings = { openLinksInApp: true }
+    storeState.activeWorktreeId = 'wt-1'
+    storeState.activeWorkspaceExecutionHostId = 'ssh:box'
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(setActiveWorktreeMock).toHaveBeenCalledWith('wt-1', 'ssh:box')
+  })
+
   it('routes into Orca when openLinksInApp is on and a worktree is known', () => {
     storeState.settings = { openLinksInApp: true }
 
@@ -137,6 +158,41 @@ describe('openHttpLink', () => {
 
     expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps explicitly local links local while a remote runtime is active', () => {
+    storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'remote-1' }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true,
+      sourceOwner: { kind: 'local' }
+    })
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openRuntimeBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('routes opted-in links without a source owner through the active runtime', () => {
+    storeState.settings = {
+      openLinksInApp: true,
+      activeRuntimeEnvironmentId: ' remote-1 '
+    }
+
+    openHttpLink('https://github.com/acme/widgets/pull/123', {
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true
+    })
+
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledExactlyOnceWith({
+      workspaceId: 'wt-1',
+      url: 'https://github.com/acme/widgets/pull/123',
+      intent: { kind: 'url' }
+    })
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(openUrlMock).not.toHaveBeenCalled()
   })
 
   it('routes to the system browser when a remote runtime environment is active', () => {

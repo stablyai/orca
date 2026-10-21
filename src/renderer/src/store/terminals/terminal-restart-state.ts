@@ -1,5 +1,13 @@
 import { isSameCodexRestartNoticeAccount } from '../slices/codex-restart-notice-account-identity'
+import type { AccountRestartAgent } from './terminal-contracts'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+
+// Why: Codex notice cleanup shares this map with Claude switch restarts and must not drop them.
+function dropQueuedCodexRestart(pending: Record<string, AccountRestartAgent>, ptyId: string): void {
+  if (pending[ptyId] === 'codex') {
+    delete pending[ptyId]
+  }
+}
 
 export function createTerminalRestartActions(
   set: TerminalStoreSet,
@@ -9,8 +17,8 @@ export function createTerminalRestartActions(
   | 'consumeSuppressedPtyExit'
   | 'isPtyShutdownPending'
   | 'suppressPtyExit'
-  | 'queueCodexPaneRestarts'
-  | 'consumePendingCodexPaneRestart'
+  | 'queuePaneAccountRestarts'
+  | 'consumePendingPaneAccountRestart'
   | 'markCodexRestartNotices'
   | 'clearCodexRestartNotice'
   | 'dismissCodexRestartNotices'
@@ -21,7 +29,7 @@ export function createTerminalRestartActions(
       let wasSuppressed = false
       set((s) => {
         if (!s.suppressedPtyExitIds[ptyId]) {
-          return {}
+          return s
         }
         wasSuppressed = true
         const next = { ...s.suppressedPtyExitIds }
@@ -36,11 +44,18 @@ export function createTerminalRestartActions(
         suppressedPtyExitIds: { ...s.suppressedPtyExitIds, [ptyId]: true }
       }))
     },
-    queueCodexPaneRestarts: (ptyIds) => {
+    queuePaneAccountRestarts: (ptyIds, agent) => {
       if (ptyIds.length === 0) {
         return
       }
       set((s) => {
+        const pendingPaneAccountRestarts = {
+          ...s.pendingPaneAccountRestarts,
+          ...Object.fromEntries(ptyIds.map((ptyId) => [ptyId, agent] as const))
+        }
+        if (agent === 'claude') {
+          return { pendingPaneAccountRestarts }
+        }
         // Why: the prompt is answered the moment the user asks for a restart. A
         // pane whose tab isn't mounted can only restart when it next mounts, and
         // leaving the prompt up re-showed a button that now does nothing.
@@ -56,26 +71,24 @@ export function createTerminalRestartActions(
           }
         }
         return {
-          pendingCodexPaneRestartIds: {
-            ...s.pendingCodexPaneRestartIds,
-            ...Object.fromEntries(ptyIds.map((ptyId) => [ptyId, true] as const))
-          },
+          pendingPaneAccountRestarts,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
         }
       })
     },
-    consumePendingCodexPaneRestart: (ptyId) => {
-      let wasQueued = false
+    consumePendingPaneAccountRestart: (ptyId) => {
+      let queuedAgent: AccountRestartAgent | null = null
       set((s) => {
-        if (!s.pendingCodexPaneRestartIds[ptyId]) {
-          return {}
+        const agent = s.pendingPaneAccountRestarts[ptyId]
+        if (!agent) {
+          return s
         }
-        wasQueued = true
-        const next = { ...s.pendingCodexPaneRestartIds }
+        queuedAgent = agent
+        const next = { ...s.pendingPaneAccountRestarts }
         delete next[ptyId]
-        return { pendingCodexPaneRestartIds: next }
+        return { pendingPaneAccountRestarts: next }
       })
-      return wasQueued
+      return queuedAgent
     },
     markCodexRestartNotices: (notices) => {
       if (notices.length === 0) {
@@ -84,7 +97,7 @@ export function createTerminalRestartActions(
       const noticedPtyIds: string[] = []
       set((s) => {
         const next = { ...s.codexRestartNoticeByPtyId }
-        const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
+        const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
         for (const notice of notices) {
           const existing = next[notice.ptyId]
           // Why one record rather than two lookups: the label and the id of the
@@ -92,20 +105,15 @@ export function createTerminalRestartActions(
           // describing two different accounts.
           const launch = existing ?? notice
           const target = { id: notice.nextAccountId, label: notice.nextAccountLabel }
-          const homeRouteChanged =
-            notice.homeRouteChanged === undefined
-              ? existing?.homeRouteChanged === true
-              : notice.homeRouteChanged
           // Why: a live Codex pane keeps its original launch account until it actually restarts, so A -> B -> A must not leave a stale restart notice.
           if (
-            !homeRouteChanged &&
             isSameCodexRestartNoticeAccount(
               { id: launch.previousAccountId, label: launch.previousAccountLabel },
               target
             )
           ) {
             delete next[notice.ptyId]
-            delete nextPendingCodexPaneRestartIds[notice.ptyId]
+            dropQueuedCodexRestart(nextPendingPaneAccountRestarts, notice.ptyId)
             continue
           }
           next[notice.ptyId] = {
@@ -115,7 +123,6 @@ export function createTerminalRestartActions(
               ? {}
               : { previousAccountId: launch.previousAccountId }),
             ...(notice.nextAccountId === undefined ? {} : { nextAccountId: notice.nextAccountId }),
-            ...(homeRouteChanged ? { homeRouteChanged: true as const } : {}),
             // Why: a queued restart relaunches under whatever account is selected
             // when it runs, so a later switch does not reopen an answered prompt.
             ...(existing?.restartRequested ? { restartRequested: true as const } : {}),
@@ -136,7 +143,7 @@ export function createTerminalRestartActions(
         }
         return {
           codexRestartNoticeByPtyId: next,
-          pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
+          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts
         }
       })
       return noticedPtyIds
@@ -144,15 +151,15 @@ export function createTerminalRestartActions(
     clearCodexRestartNotice: (ptyId) => {
       set((s) => {
         if (!s.codexRestartNoticeByPtyId[ptyId]) {
-          return {}
+          return s
         }
         const next = { ...s.codexRestartNoticeByPtyId }
-        const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
+        const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
         delete next[ptyId]
-        delete nextPendingCodexPaneRestartIds[ptyId]
+        dropQueuedCodexRestart(nextPendingPaneAccountRestarts, ptyId)
         return {
           codexRestartNoticeByPtyId: next,
-          pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
+          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts
         }
       })
     },
@@ -162,7 +169,7 @@ export function createTerminalRestartActions(
         // stays so `previousAccountLabel` still names the pane's launch account,
         // but every consumer treats it as answered (prompt hidden, input freed).
         const next = { ...s.codexRestartNoticeByPtyId }
-        const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
+        const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
         let changed = false
         for (const ptyId of ptyIds) {
           const notice = next[ptyId]
@@ -171,15 +178,15 @@ export function createTerminalRestartActions(
           }
           const { restartRequested: _restartRequested, ...kept } = notice
           next[ptyId] = { ...kept, dismissed: true }
-          delete nextPendingCodexPaneRestartIds[ptyId]
+          dropQueuedCodexRestart(nextPendingPaneAccountRestarts, ptyId)
           changed = true
         }
         if (!changed) {
-          return {}
+          return s
         }
         return {
           codexRestartNoticeByPtyId: next,
-          pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
+          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts
         }
       })
     },
@@ -187,14 +194,14 @@ export function createTerminalRestartActions(
       set((s) => {
         const notice = s.codexRestartNoticeByPtyId[ptyId]
         if (!notice?.restartRequested) {
-          return {}
+          return s
         }
         const { restartRequested: _restartRequested, ...kept } = notice
-        const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
-        delete nextPendingCodexPaneRestartIds[ptyId]
+        const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
+        dropQueuedCodexRestart(nextPendingPaneAccountRestarts, ptyId)
         return {
           codexRestartNoticeByPtyId: { ...s.codexRestartNoticeByPtyId, [ptyId]: kept },
-          pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
+          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts
         }
       })
     }

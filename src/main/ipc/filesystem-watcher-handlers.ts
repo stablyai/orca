@@ -1,10 +1,13 @@
 import { ipcMain } from 'electron'
+import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 import { onSshFilesystemProviderRegistered } from '../providers/ssh-filesystem-dispatch'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { getRemoteWatcherKey } from './filesystem-watcher-paths'
 import {
   cancelInFlightRemoteInstallIfUnowned,
+  forgetCancelledInstallWaiter,
   forgetDesiredRemoteWatcher,
+  registerWatcherSenderCleanup,
   releaseRemoteWatchListener
 } from './filesystem-watcher-listener-lifecycle'
 import {
@@ -30,6 +33,7 @@ export function registerFilesystemWatcherHandlers(): void {
   ipcMain.handle(
     'fs:watchWorktree',
     async (event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      const senderSignal = registerWatcherSenderCleanup(event.sender)
       if (args.connectionId) {
         // Why: a real new watch reopens the subsystem after closeAllWatchers latched it shut (also resets tests between cases).
         watcherLifecycleState.remoteWatchersClosed = false
@@ -42,6 +46,9 @@ export function registerFilesystemWatcherHandlers(): void {
           args.connectionId,
           args.worktreePath
         )
+        if (!isCurrentWatcherSender(event.sender, senderSignal)) {
+          return
+        }
         if (result === 'capacity') {
           // Why straight to the dormant backoff: the cap is full until some other root is released,
           // which a 1 Hz reinstall cannot bring about — it only adds relay load per refused root.
@@ -55,7 +62,14 @@ export function registerFilesystemWatcherHandlers(): void {
               `[filesystem-watcher] SSH filesystem provider unavailable; retrying watch for ${args.worktreePath} on connection ${args.connectionId}`
             )
           }
-          scheduleRemoteWatcherRetry(event.sender, args.connectionId, args.worktreePath)
+          // Why: writes before the retry lands were never reported, and editor tabs may be stale from an earlier unwatched spell.
+          scheduleRemoteWatcherRetry(
+            event.sender,
+            args.connectionId,
+            args.worktreePath,
+            undefined,
+            true
+          )
           return
         }
         return
@@ -74,6 +88,11 @@ export function registerFilesystemWatcherHandlers(): void {
         // Why: the caller stopped watching on purpose — drop the intent or a later provider
         // registration would resurrect a watch nobody asked for.
         forgetDesiredRemoteWatcher(key, _event.sender.id)
+        forgetCancelledInstallWaiter(
+          watcherLifecycleState.cancelledRemoteInstallWaiters,
+          key,
+          _event.sender.id
+        )
         const suspended = watcherLifecycleState.suspendedRemoteWatcherListeners.get(key)
         suspended?.listeners.delete(_event.sender.id)
         if (suspended?.listeners.size === 0) {

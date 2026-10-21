@@ -34,20 +34,6 @@ function trimEnd(s: string): string {
   return s.trimEnd()
 }
 
-function shouldSyncPropIntoEditor(
-  currentMarkdown: string,
-  propContent: string,
-  lastCommittedMarkdown: string
-): boolean {
-  if (propContent === lastCommittedMarkdown) {
-    return false
-  }
-  if (currentMarkdown === propContent) {
-    return false
-  }
-  return true
-}
-
 /**
  * Simulates the onCreate flow: empty-list repair then getMarkdown().
  */
@@ -131,27 +117,6 @@ describe('document soft-break round-trip', () => {
     } finally {
       editor.destroy()
     }
-  })
-})
-
-// -----------------------------------------------------------------------
-// 3. Rich editor content sync must ignore its own mount-time round-trip
-//    differences, but still accept genuine external file changes.
-// -----------------------------------------------------------------------
-describe('content sync gating', () => {
-  it('does not re-sync on mount when only the normalized markdown differs', () => {
-    const disk = 'Line one\nLine two'
-    const normalizedMarkdown = simulateOnCreate(disk)
-
-    expect(shouldSyncPropIntoEditor(normalizedMarkdown, disk, disk)).toBe(false)
-  })
-
-  it('does re-sync when disk content actually changes externally', () => {
-    const oldDisk = 'Line one\nLine two'
-    const newDisk = 'Line one\nLine two\nLine three'
-    const normalizedCurrentMarkdown = simulateOnCreate(oldDisk)
-
-    expect(shouldSyncPropIntoEditor(normalizedCurrentMarkdown, newDisk, oldDisk)).toBe(true)
   })
 })
 

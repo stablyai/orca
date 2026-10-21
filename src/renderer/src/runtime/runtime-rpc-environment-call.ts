@@ -1,12 +1,20 @@
 import { callAbortableRuntimeEnvironment } from './abortable-runtime-environment-call'
+import { observePairingRefusal } from './runtime-environment-pairing-refresh'
 
-export async function callRuntimeEnvironmentWithRevision(args: {
+export function callRuntimeEnvironmentWithRevision(
+  args: Parameters<typeof callRuntimeEnvironmentOnce>[0]
+): Promise<unknown> {
+  return observePairingRefusal(callRuntimeEnvironmentOnce(args))
+}
+
+async function callRuntimeEnvironmentOnce(args: {
   environmentId: string
   method: string
   params: unknown
   timeoutMs?: number
   signal?: AbortSignal
   expectedEnvironmentPairingRevision?: number
+  expectedEnvironmentRuntimeId?: string
 }): Promise<unknown> {
   if (args.signal) {
     return callAbortableRuntimeEnvironment(
@@ -15,7 +23,8 @@ export async function callRuntimeEnvironmentWithRevision(args: {
       args.params,
       args.timeoutMs,
       args.signal,
-      args.expectedEnvironmentPairingRevision
+      args.expectedEnvironmentPairingRevision,
+      args.expectedEnvironmentRuntimeId
     )
   }
   return window.api.runtimeEnvironments.call({
@@ -23,6 +32,7 @@ export async function callRuntimeEnvironmentWithRevision(args: {
     method: args.method,
     params: args.params,
     timeoutMs: args.timeoutMs,
-    expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
+    expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision,
+    expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId
   })
 }

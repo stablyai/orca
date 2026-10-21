@@ -3,7 +3,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type * as WebRuntimeSessionModule from './web-runtime-session'
+import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
 import type * as WebSessionTerminalHandleEventsModule from './web-session-terminal-handle-events'
 
 vi.mock('./web-session-terminal-handle-events', async (importOriginal) => {
@@ -18,7 +18,10 @@ vi.mock('./web-session-terminal-handle-events', async (importOriginal) => {
 vi.mock('./use-runtime-session-mirror-environment-key', async () => {
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
   return {
-    useRuntimeSessionMirrorEnvironmentKey: frameOrderingMocks.runtimeSessionMirrorEnvironmentKey
+    useRuntimeSessionMirrorEnvironmentKeys: () => ({
+      environmentKey: frameOrderingMocks.runtimeSessionMirrorEnvironmentKey(),
+      resubscribeSignal: ''
+    })
   }
 })
 
@@ -27,8 +30,8 @@ vi.mock('./web-session-terminal-orphan-recovery', async () => {
   return { recoverWebSessionTerminalOrphansBeforeApply: frameOrderingMocks.recoverSnapshot }
 })
 
-vi.mock('./web-runtime-session', async (importOriginal) => {
-  const actual = await importOriginal<typeof WebRuntimeSessionModule>()
+vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
+  const actual = await importOriginal<typeof WebRuntimeTerminalCreationModule>()
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
   return { ...actual, createWebRuntimeSessionTerminal: frameOrderingMocks.createTerminal }
 })
@@ -53,7 +56,7 @@ import {
   WT
 } from './host-session-mirror-frame-fixtures'
 import {
-  expectReplayedResume,
+  expectHostOwnedRecordNotResumed,
   findSubscription,
   installFrameOrderingHarness,
   publish,
@@ -68,12 +71,10 @@ import {
   clearHostSessionMirrorHydration,
   hasHostSessionMirrorHydrated
 } from './host-session-mirror-hydration'
-import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session'
-import {
-  clearWebSessionTabsTrackingForEnvironment,
-  useWebSessionTabsSync,
-  WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS
-} from './web-session-tabs-sync'
+import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snapshot'
+import { clearWebSessionTabsTrackingForEnvironment } from './web-session-tabs-sync/tracking-lifecycle'
+import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
+import { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './web-session-tabs-sync/state'
 import { WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from './window-visibility-subscription-parking'
 
 /**
@@ -113,7 +114,7 @@ describe('a global singular frame whose patch never lands', () => {
     })
 
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, WT, 'codex-session-patch-throw')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-patch-throw')
   })
 
   it('settles nothing when the patch itself throws mid-apply', async () => {
@@ -146,7 +147,7 @@ describe('a global singular frame whose patch never lands', () => {
     })
 
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, WT, 'codex-session-apply-throw')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-apply-throw')
   })
 })
 
@@ -176,7 +177,7 @@ describe('a stale frame against a newer accepted view', () => {
     })
 
     expect(hasHostSessionMirrorHydrated(ENV, WT)).toBe(true)
-    expectReplayedResume(paneKey, WT, 'codex-session-stale-settle')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-stale-settle')
   })
 })
 
@@ -222,10 +223,9 @@ describe('a deferred visibility-resume repair patch', () => {
       authoritative: true
     })
 
-    // The tombstone repair DID reach the store: the background mirror retracted,
-    // which is the host answering — the parked resume is finally justified.
+    // The repair settles hydration; a visibility retraction does not authorize a resume.
     expect(tabIds(BG_WT)).not.toContain(BG_MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, BG_WT, 'codex-session-tombstone')
+    expectHostOwnedRecordNotResumed(paneKey, BG_WT, 'codex-session-tombstone')
   })
 })
 
@@ -251,10 +251,56 @@ describe('the eager post-create list answers for its worktree', () => {
       await settle()
     })
 
-    // The list retracted the mirror tab and its patch landed, so this worktree
-    // has its verdict: the parked resume must drain, not wait for a stream.
+    // The list settled hydration, but the retracted tab must stay absent.
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, WT, 'codex-session-eager-refresh')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-eager-refresh')
+  })
+
+  it('does not resurrect a worktree the stream retracted while the list was in flight', async () => {
+    // The refresh path is a production apply path (close, create, activation, split, PTY
+    // reconnect) that reached `decide` with no place in receipt order at all. A list the host
+    // answered before the close then landed after the retraction and put the tab back.
+    renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+
+    let resolveList!: (response: unknown) => void
+    runtimeCall.mockImplementation((request: { method: string }) =>
+      request.method === 'session.tabs.list'
+        ? new Promise((resolve) => {
+            resolveList = resolve
+          })
+        : new Promise(() => {})
+    )
+    const refreshed = refreshWebRuntimeSessionTabsSnapshot(ENV, WT)
+    await act(settle)
+
+    // The close lands on the stream while that list is still out.
+    await publish(findSubscription('session.tabs.subscribeAll'), {
+      type: 'snapshot',
+      worktree: WT,
+      publicationEpoch: `removed:${(1_700_000_000_000).toString(36)}`,
+      snapshotVersion: 0,
+      removed: true,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: []
+    })
+    expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
+
+    // The pre-close answer arrives last, at a higher version than anything since.
+    resolveList({
+      id: 'list',
+      ok: true as const,
+      result: { ...makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID), snapshotVersion: 9 },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    await act(async () => {
+      await refreshed
+      await settle()
+    })
+
+    expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
   })
 
   it('settles nothing when the list answers for a workspace the mirror never writes', async () => {
@@ -428,7 +474,7 @@ describe('a host frame for a workspace the mirror never writes', () => {
     })
 
     expect(hasHostSessionMirrorHydrated(ENV, BG_WT)).toBe(true)
-    expectReplayedResume(paneKey, BG_WT, 'codex-session-floating-member')
+    expectHostOwnedRecordNotResumed(paneKey, BG_WT, 'codex-session-floating-member')
   })
 })
 
@@ -475,7 +521,7 @@ describe('a store subscriber that throws after the commit', () => {
     )
 
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, WT, 'codex-session-subscriber-throw')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-subscriber-throw')
     warn.mockRestore()
   })
 })

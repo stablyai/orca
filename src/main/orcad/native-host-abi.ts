@@ -25,7 +25,7 @@ export type NativeHostAbi = {
   nodeAbi: string
 }
 
-/** Stock Ubuntu 20.04. See docs/reference/linux-glibc-compatibility.md. */
+/** Stock Ubuntu 20.04. */
 export const GLIBC_FLOOR = '2.31'
 
 type ReportHeader = { glibcVersionRuntime?: unknown }
@@ -76,6 +76,14 @@ export function detectNativeHostAbi(): NativeHostAbi {
     glibcVersion,
     nodeAbi: process.versions.modules
   }
+}
+
+/** Highest Node-API version this runtime supports, or null when it reports none. */
+export function hostNodeApiVersion(
+  versions: NodeJS.ProcessVersions = process.versions
+): number | null {
+  const napi = Number.parseInt(versions.napi ?? '', 10)
+  return Number.isInteger(napi) && napi > 0 ? napi : null
 }
 
 /** `linux-x64-glibc`, `linux-arm64-musl`, `darwin-arm64`, `win32-x64`. */

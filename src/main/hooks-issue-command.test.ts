@@ -37,6 +37,10 @@ vi.mock('./git/runner', async () => ({
   gitExecFileSync: gitExecFileSyncMock
 }))
 
+vi.mock('./git/check-ignored-paths', () => ({
+  checkIgnoredPaths: vi.fn().mockResolvedValue([])
+}))
+
 describe('readIssueCommand', () => {
   it('prefers the local override over the shared orca.yaml command', async () => {
     const fs = await import('node:fs')
@@ -85,6 +89,25 @@ describe('readIssueCommand', () => {
 })
 
 describe('writeIssueCommand', () => {
+  it('checks file ignore rules in the selected WSL distro', async () => {
+    const { writeIssueCommand } = await import('./issue-command-file')
+    const { checkIgnoredPaths } = await import('./git/check-ignored-paths')
+    const fs = await import('node:fs')
+    vi.mocked(checkIgnoredPaths).mockResolvedValueOnce(['.orca/issue-command'])
+    vi.mocked(fs.writeFileSync).mockClear()
+
+    await writeIssueCommand(TEST_REPO_PATH, 'local command', { wslDistro: 'Ubuntu' })
+
+    expect(checkIgnoredPaths).toHaveBeenLastCalledWith(TEST_REPO_PATH, ['.orca/issue-command'], {
+      wslDistro: 'Ubuntu'
+    })
+    expect(fs.writeFileSync).toHaveBeenCalledExactlyOnceWith(
+      TEST_ISSUE_COMMAND_PATH,
+      'local command\n',
+      'utf-8'
+    )
+  })
+
   it('writes only the local override file and keeps .orca ignored locally', async () => {
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockImplementation(
@@ -98,7 +121,7 @@ describe('writeIssueCommand', () => {
     })
 
     const { writeIssueCommand } = await import('./issue-command-file')
-    writeIssueCommand(TEST_REPO_PATH, 'local command')
+    await writeIssueCommand(TEST_REPO_PATH, 'local command')
 
     expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
       TEST_GITIGNORE_PATH,
@@ -115,7 +138,7 @@ describe('writeIssueCommand', () => {
   it('deletes the local override when the override is cleared', async () => {
     const { writeIssueCommand } = await import('./issue-command-file')
     const fs = await import('node:fs')
-    writeIssueCommand(TEST_REPO_PATH, '   ')
+    await writeIssueCommand(TEST_REPO_PATH, '   ')
 
     expect(vi.mocked(fs.rmSync)).toHaveBeenCalledWith(TEST_ISSUE_COMMAND_PATH, {
       force: true

@@ -1,6 +1,7 @@
 import type { PullRequestDraftContext } from '../../shared/pull-request-generation'
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
 import { isSafeReviewHeadFetchRemote } from '../../shared/review-head-tracking-ref'
+import { ReviewDraftContextError } from '../../shared/review-draft-context-error'
 import {
   canQueryRemoteBaseRefs,
   getPullRequestRemoteRefState,
@@ -25,7 +26,10 @@ async function safeExec(execGit: GitExec, args: string[]): Promise<string> {
   try {
     const { stdout } = await execGit(args, { maxBuffer: MAX_PULL_REQUEST_CONTEXT_BYTES })
     return stdout.trim()
-  } catch {
+  } catch (error) {
+    if (error instanceof ReviewDraftContextError) {
+      throw error
+    }
     return ''
   }
 }
@@ -204,7 +208,14 @@ export async function getPullRequestDraftContext(
 
   const range = `${mergeBase}..HEAD`
   const [commitSummary, changeSummary, patch] = await Promise.all([
-    safeExec(execGit, ['log', '--pretty=format:- %s', '--max-count=50', range]),
+    safeExec(execGit, [
+      'log',
+      '--no-show-signature',
+      '--no-color',
+      '--pretty=format:- %s',
+      '--max-count=50',
+      range
+    ]),
     safeExec(execGit, ['diff', '--name-status', range]),
     safeExec(execGit, ['diff', '--patch', '--minimal', '--no-color', '--no-ext-diff', range])
   ])

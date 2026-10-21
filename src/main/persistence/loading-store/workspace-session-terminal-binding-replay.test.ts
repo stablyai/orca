@@ -168,4 +168,45 @@ describe('workspace session terminal binding replay', () => {
       [LEAF_TWO]: 'pty-b'
     })
   })
+
+  it('fails closed when one tab id is duplicated inside a single worktree list', () => {
+    // Map indexing is last-wins where a linear find was first-wins; the ambiguity
+    // fence must skip these ids so the two strategies can never disagree.
+    const prior = session(null)
+    prior.tabsByWorktree = {
+      [WORKTREE_A]: [
+        terminalTab(WORKTREE_A, 'duplicate-tab', 'pty-first'),
+        terminalTab(WORKTREE_A, 'duplicate-tab', 'pty-last')
+      ]
+    }
+    const incoming = session(null)
+    incoming.tabsByWorktree = {
+      [WORKTREE_A]: [terminalTab(WORKTREE_A, 'duplicate-tab', null)]
+    }
+
+    preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, bindingRecovery as never)
+
+    expect(incoming.tabsByWorktree[WORKTREE_A]![0]!.ptyId).toBeNull()
+  })
+
+  it('indexes prior tabs once when replaying a large workspace snapshot', () => {
+    let reads = 0
+    const prior = session(null)
+    prior.tabsByWorktree.worktree = Array.from({ length: 1000 }, (_, i) => ({
+      ...terminalTab('worktree', `tab-${i}`, `pty-${i}`),
+      get id() {
+        reads++
+        return `tab-${i}`
+      }
+    }))
+    const incoming = session(null)
+    incoming.tabsByWorktree.worktree = Array.from({ length: 1000 }, (_, i) =>
+      terminalTab('worktree', `tab-${i}`, null)
+    )
+    preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, bindingRecovery as never)
+    expect(reads).toBeLessThan(10_000)
+    expect(incoming.tabsByWorktree.worktree.map((tab) => tab.ptyId)).toEqual(
+      Array.from({ length: 1000 }, (_, i) => `pty-${i}`)
+    )
+  })
 })

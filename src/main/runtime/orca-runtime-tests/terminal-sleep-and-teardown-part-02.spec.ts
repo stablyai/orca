@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
+import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import {
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
   listWorktrees
 } from '../orca-runtime-test-mocks.spec'
 import type { RuntimeClientEvent } from '../orca-runtime-test-mocks.spec'
+import { refusedMobileSessionTabClose } from '../mobile-session-tab-close-outcome'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -250,10 +252,12 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ phase: 'started', ptyIds: ['pty-before-sleep'] })
     ])
     let spawnLeaseAcquired = false
-    const spawnLease = runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID).then((release) => {
-      spawnLeaseAcquired = true
-      return release
-    })
+    const spawnLease = runtime
+      .acquireWorktreeTerminalSpawn(spawnWorktreeTarget(TEST_WORKTREE_ID, null))
+      .then((release) => {
+        spawnLeaseAcquired = true
+        return release
+      })
     await Promise.resolve()
     expect(spawnLeaseAcquired).toBe(false)
 
@@ -280,7 +284,9 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses
     })
-    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+    )
 
     const sleep = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     await Promise.resolve()
@@ -304,7 +310,9 @@ describe('OrcaRuntimeService', () => {
         getForegroundProcess: async () => null,
         listProcesses
       })
-      const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+      const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+        spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+      )
 
       const sleep = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
       const rejection = expect(sleep).rejects.toThrow('terminal_worktree_sleep_timeout')
@@ -315,7 +323,9 @@ describe('OrcaRuntimeService', () => {
 
       expect(listProcesses).not.toHaveBeenCalled()
       expect(stopAndWait).not.toHaveBeenCalled()
-      const releaseNextSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+      const releaseNextSpawn = await runtime.acquireWorktreeTerminalSpawn(
+        spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+      )
       releaseNextSpawn()
     } finally {
       vi.useRealTimers()
@@ -350,7 +360,9 @@ describe('OrcaRuntimeService', () => {
     await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
 
     // The wake acquires the mutation and emits 'woken'; a throwing subscriber must not surface.
-    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+    )
     releaseSpawn()
 
     // Isolation: the second subscriber still received the 'woken' event.
@@ -418,7 +430,9 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ phase: 'committed', ptyIds: ['pty-preserved-history'] })
     ])
     await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
-    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+    )
     releaseSpawn()
 
     const sleepEvents = events.filter((event) => event.type === 'worktreeTerminalSleepState')
@@ -608,5 +622,25 @@ describe('OrcaRuntimeService', () => {
       postStopFailure: 'terminal_liveness_unavailable'
     })
     expect(stopped).toEqual(['pty-1'])
+  })
+
+  it('explains a refused workspace close instead of throwing the raw refusal enum', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    vi.spyOn(runtime, 'closeMobileSessionTab').mockResolvedValue(
+      refusedMobileSessionTabClose('stale-terminal', { snapshotRepublished: true })
+    )
+
+    // Why: this message is what the Sleep-workspace toast and `orca terminal close --all` print.
+    await expect(runtime.closeTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).rejects.toThrow(
+      'A replacement terminal took this tab over while it was closing, so the tab was kept open. Try again.'
+    )
   })
 })

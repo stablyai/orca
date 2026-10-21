@@ -1,4 +1,17 @@
-import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
+import {
+  clearLastConfirmedClientValues,
+  deleteLastConfirmedClientValue,
+  getLastConfirmedClientValue,
+  setLastConfirmedClientValue as storeLastConfirmedClientValue
+} from './task-page-github-confirmed-client-values'
+export {
+  deleteLastConfirmedClientValue,
+  getLastConfirmedClientValue
+} from './task-page-github-confirmed-client-values'
+import type {
+  GitHubAssignableUser,
+  GitHubOwnerRepo
+} from '../../../shared/github/pull-request-types'
 import type {
   PendingOp,
   StickyHideEntry,
@@ -15,7 +28,6 @@ export type {
 import {
   serializeTaskPageGitHubMutationKey,
   taskPageGitHubItemKey,
-  taskPageGitHubLastConfirmedKey,
   taskPageGitHubSnapshotKey
 } from './task-page-github-work-item-mutation-keys'
 import { clearTaskPageGitHubQuietStates } from './task-page-github-work-item-quiet-state'
@@ -37,7 +49,6 @@ const listeners = new Set<Listener>()
 const pendingByKey = new Map<string, PendingOp>()
 const generations = new Map<string, number>()
 const confirmedSnapshots = new Map<string, GitHubAssignableUser[]>()
-const lastConfirmedClientValues = new Map<string, unknown>()
 /**
  * Why: after confirm, pending ops are gone but lastConfirmed/snapshots stay keyed
  * by sourceScope. Overlay must still resolve the same scope or authority is lost.
@@ -79,7 +90,7 @@ export function getTaskPageGitHubConfirmedAuthorityItemKeys(): ReadonlySet<strin
  */
 export function clearTaskPageGitHubConfirmedAuthority(): void {
   confirmedSnapshots.clear()
-  lastConfirmedClientValues.clear()
+  clearLastConfirmedClientValues()
   itemSourceScopeByItemKey.clear()
 }
 /**
@@ -234,38 +245,16 @@ export function deleteConfirmedListSnapshot(
 ): void {
   confirmedSnapshots.delete(taskPageGitHubSnapshotKey(sourceScope, repoId, itemId, family))
 }
-export function getLastConfirmedClientValue(
-  sourceScope: string | null,
-  repoId: string,
-  itemId: string,
-  family: string
-): unknown {
-  return lastConfirmedClientValues.get(
-    taskPageGitHubLastConfirmedKey(sourceScope, repoId, itemId, family)
-  )
-}
 export function setLastConfirmedClientValue(
   sourceScope: string | null,
   repoId: string,
   itemId: string,
   family: string,
-  value: unknown
+  value: unknown,
+  ownerRepo?: GitHubOwnerRepo | null
 ): void {
   rememberItemSourceScope(repoId, itemId, sourceScope)
-  lastConfirmedClientValues.set(
-    taskPageGitHubLastConfirmedKey(sourceScope, repoId, itemId, family),
-    value
-  )
-}
-export function deleteLastConfirmedClientValue(
-  sourceScope: string | null,
-  repoId: string,
-  itemId: string,
-  family: string
-): void {
-  lastConfirmedClientValues.delete(
-    taskPageGitHubLastConfirmedKey(sourceScope, repoId, itemId, family)
-  )
+  storeLastConfirmedClientValue(sourceScope, repoId, itemId, family, value, ownerRepo)
 }
 export function clearConfirmedAuthorityForItem(repoId: string, itemId: string): void {
   const sourceScope = resolveItemSourceScope(repoId, itemId)
@@ -318,7 +307,7 @@ export function resetTaskPageGitHubMutationRegistryForTests(): void {
   pendingByKey.clear()
   generations.clear()
   confirmedSnapshots.clear()
-  lastConfirmedClientValues.clear()
+  clearLastConfirmedClientValues()
   itemSourceScopeByItemKey.clear()
   stickyHideByItemKey.clear()
   softHiddenItemKeys.clear()

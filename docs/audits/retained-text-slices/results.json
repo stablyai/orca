@@ -1,0 +1,140 @@
+{
+  "node": "v26.6.0",
+  "platform": "darwin",
+  "parentChars": 2097152,
+  "count": 8,
+  "bundles": {
+    "before": "b1f295283888921d8d473649185b5146ed8379bc8344b2bf04a0a4fcf334b5ec",
+    "after": "74444cedf1564c7092a46058f331ad2acc55b222b09340d5a19ca5a76de611fb"
+  },
+  "results": [
+    {
+      "kind": "github-long-line",
+      "fixed": false,
+      "entries": 8,
+      "logicalChars": 131072,
+      "logicalBytes": 131072,
+      "heapDelta": 16787512
+    },
+    {
+      "kind": "github-earlier-error",
+      "fixed": false,
+      "entries": 8,
+      "logicalChars": 43816,
+      "logicalBytes": 131064,
+      "heapDelta": 33577840
+    },
+    {
+      "kind": "gitlab-long-line",
+      "fixed": false,
+      "entries": 8,
+      "logicalChars": 131072,
+      "logicalBytes": 131072,
+      "heapDelta": 16793640
+    },
+    {
+      "kind": "terminal-session-buffer",
+      "fixed": false,
+      "entries": 8,
+      "logicalChars": 4194304,
+      "logicalBytes": 4194304,
+      "heapDelta": 33555624
+    },
+    {
+      "kind": "terminal-eager-buffer",
+      "fixed": false,
+      "entries": 8,
+      "logicalChars": 4194304,
+      "logicalBytes": 4194304,
+      "heapDelta": 33556040
+    },
+    {
+      "kind": "terminal-recent-output",
+      "fixed": false,
+      "entries": 8,
+      "logicalChars": 524288,
+      "logicalBytes": 524288,
+      "heapDelta": 33558752
+    },
+    {
+      "kind": "terminal-error",
+      "fixed": false,
+      "entries": 8,
+      "logicalChars": 32000,
+      "logicalBytes": 32000,
+      "heapDelta": 33555864
+    },
+    {
+      "kind": "terminal-deferred-reattach",
+      "fixed": false,
+      "entries": 8,
+      "logicalChars": 4194304,
+      "logicalBytes": 4194304,
+      "heapDelta": 33565384
+    },
+    {
+      "kind": "github-long-line",
+      "fixed": true,
+      "entries": 8,
+      "logicalChars": 131072,
+      "logicalBytes": 131072,
+      "heapDelta": 145224
+    },
+    {
+      "kind": "github-earlier-error",
+      "fixed": true,
+      "entries": 8,
+      "logicalChars": 43816,
+      "logicalBytes": 131064,
+      "heapDelta": 112744
+    },
+    {
+      "kind": "gitlab-long-line",
+      "fixed": true,
+      "entries": 8,
+      "logicalChars": 131072,
+      "logicalBytes": 131072,
+      "heapDelta": 147312
+    },
+    {
+      "kind": "terminal-session-buffer",
+      "fixed": true,
+      "entries": 8,
+      "logicalChars": 4194304,
+      "logicalBytes": 4194304,
+      "heapDelta": 4195032
+    },
+    {
+      "kind": "terminal-eager-buffer",
+      "fixed": true,
+      "entries": 8,
+      "logicalChars": 4194304,
+      "logicalBytes": 4194304,
+      "heapDelta": 4202608
+    },
+    {
+      "kind": "terminal-recent-output",
+      "fixed": true,
+      "entries": 8,
+      "logicalChars": 524288,
+      "logicalBytes": 524288,
+      "heapDelta": 527384
+    },
+    {
+      "kind": "terminal-error",
+      "fixed": true,
+      "entries": 8,
+      "logicalChars": 32000,
+      "logicalBytes": 32000,
+      "heapDelta": 33336
+    },
+    {
+      "kind": "terminal-deferred-reattach",
+      "fixed": true,
+      "entries": 8,
+      "logicalChars": 4194304,
+      "logicalBytes": 4194304,
+      "heapDelta": 4198352
+    }
+  ]
+}

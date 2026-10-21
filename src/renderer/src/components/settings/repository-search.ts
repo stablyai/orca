@@ -24,6 +24,25 @@ export function getRepositoryPaneSearchEntries(
       getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
   return [
     {
+      title: translate('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
+      description: translate(
+        'components.RepositoryJiraProjectSection.description',
+        'Default the Jira issue picker and Tasks list to this project. You can change it for each worktree.'
+      ),
+      keywords: [
+        repo.displayName,
+        ...translateSearchKeyword('components.RepositoryJiraProjectSection.keywordJira', 'jira'),
+        ...translateSearchKeyword(
+          'components.RepositoryJiraProjectSection.keywordDefaultProject',
+          'default project'
+        ),
+        ...translateSearchKeyword(
+          'components.RepositoryJiraProjectSection.keywordIssuePicker',
+          'issue picker'
+        )
+      ]
+    },
+    {
       title: translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
       description: translate(
         'auto.components.settings.repository.search.883aad2801',
@@ -76,6 +95,40 @@ export function getRepositoryPaneSearchEntries(
         )
       ]
     },
+    ...(!isFolder
+      ? [
+          {
+            title: translate(
+              'auto.components.settings.repository.search.githubAccount',
+              'GitHub Account'
+            ),
+            description: translate(
+              'auto.components.settings.repository.search.githubAccountDescription',
+              'Bind a keyring gh login for this project’s GitHub API calls.'
+            ),
+            keywords: [
+              repo.displayName,
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.9dc60d7f6d',
+                'github'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.githubAccountKeyword',
+                'github account'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.ghAccount',
+                'gh account'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.login',
+                'login'
+              ),
+              ...translateSearchKeyword('auto.components.settings.repository.search.token', 'token')
+            ]
+          }
+        ]
+      : []),
     ...(repo.upstream && !isFolder
       ? [
           {

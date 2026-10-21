@@ -4,6 +4,8 @@ import {
   type TerminalColdParkPolicyOverrides
 } from './terminal-hidden-view-parking'
 import { getParkedTerminalWatcherTabIds } from './terminal-parked-tab-watchers'
+import { resolveTabScrollbackBuffers } from './leaf-scrollback-resolution'
+import { useAppStore } from '@/store'
 
 export type TerminalWorktreeParkingDebugVerdict = {
   worktreeId: string
@@ -51,6 +53,9 @@ export function registerTerminalParkingDebugHandle(): void {
     parkDelayMs:
       getTerminalParkingPolicyOverrides().coldParkDelayMs ?? TERMINAL_TAB_COLD_PARK_DELAY_MS,
     parkedTabIds: () => getParkedTerminalWatcherTabIds(),
+    // Why through the resolver: a spec that reads one store home directly reports a false zero
+    // whenever the bytes live in the other one.
+    resolveLeafScrollback: (tabId) => resolveTabScrollbackBuffers(useAppStore.getState(), tabId),
     retentionLimit: getTerminalParkingPolicyOverrides().retentionLimit ?? null,
     worktreeVerdicts: () => worktreeVerdicts
   }

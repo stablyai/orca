@@ -9,8 +9,9 @@ import { prCacheKey } from './cache-identity'
 import { isFresh } from './cache-policy'
 import { buildGitHubPRRefreshStateClearToken } from './pr-refresh-state'
 import { githubHostedReviewFallbackPRNumber, prLookupHintKey } from './pr-result-routing'
+import { nextLookupGeneration } from '../lookup-generation-sequence'
 import { inflightPRRequests, prRequestGenerations } from './request-coordination'
-import { settingsForGitHubRepoOwner } from './work-item-routing'
+import { getGitHubSourceTarget, settingsForGitHubRepoOwner } from './work-item-routing'
 import {
   findWorktreeById,
   shouldApplyDivergedLinkedPRClear,
@@ -113,7 +114,7 @@ export const createPullRequestActions = (
       return inflightRequest.promise
     }
 
-    const generation = (prRequestGenerations.get(cacheKey) ?? 0) + 1
+    const generation = nextLookupGeneration()
     const requestStartedAt = Date.now()
     const requestStartedHostedReviewEntry = get().hostedReviewCache[hostedReviewCacheKey]
     const requestStartedPRRefreshState = get().prRefreshStates[cacheKey]
@@ -133,6 +134,7 @@ export const createPullRequestActions = (
       repo,
       repoId,
       requestSettings,
+      requestTarget: getGitHubSourceTarget(get(), repo),
       cacheKey,
       cached,
       linkedPRNumber,

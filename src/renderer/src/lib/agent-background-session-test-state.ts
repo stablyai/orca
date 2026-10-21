@@ -24,7 +24,13 @@ export type AgentBackgroundSessionTestState = {
       | { kind: 'windows-host' }
       | { kind: 'wsl'; distro: string | null }
   }[]
-  repos: { id: string; connectionId: string | null; path: string; projectGroupId?: string | null }[]
+  repos: {
+    id: string
+    connectionId: string | null
+    path: string
+    projectGroupId?: string | null
+    executionHostId?: `runtime:${string}`
+  }[]
   folderWorkspaces: {
     id: string
     projectGroupId: string
@@ -163,6 +169,8 @@ export function useRemoteAgentBackgroundRuntime(state: AgentBackgroundSessionTes
     activeRuntimeEnvironmentId: 'env-1',
     terminalMainSideEffectAuthority: undefined
   }
+  // The client stamps a server's rows on arrival; focus alone never names the owner.
+  state.repos = state.repos.map((repo) => ({ ...repo, executionHostId: 'runtime:env-1' }))
 }
 
 /** The tab id reserved before the spawn; the run tab adopts it once the PTY is live. */
@@ -188,7 +196,6 @@ export function stubAgentBackgroundSessionWindow(mocks: {
   spawn: TestMock
   write: TestMock
   kill: TestMock
-  markTrusted: TestMock
   runtimeEnvironmentCall: TestMock
   runtimeEnvironmentSubscribe: TestMock
 }): void {
@@ -196,11 +203,11 @@ export function stubAgentBackgroundSessionWindow(mocks: {
     dispatchEvent: mocks.dispatchEvent,
     api: {
       pty: { spawn: mocks.spawn, write: mocks.write, kill: mocks.kill },
-      agentTrust: { markTrusted: mocks.markTrusted },
       runtime: { call: vi.fn() },
       runtimeEnvironments: {
         call: mocks.runtimeEnvironmentCall,
-        subscribe: mocks.runtimeEnvironmentSubscribe
+        subscribe: mocks.runtimeEnvironmentSubscribe,
+        cancelSubscription: vi.fn(async () => undefined)
       }
     }
   })
@@ -215,7 +222,6 @@ export function resetAgentBackgroundSessionTestHarness(args: {
   spawn: TestMock
   write: TestMock
   kill: TestMock
-  markTrusted: TestMock
   dispatchEvent: TestMock
   getLaunchPlatform: TestMock
   runtimeCall: TestMock
@@ -267,7 +273,6 @@ export function resetAgentBackgroundSessionTestHarness(args: {
     spawn: args.spawn,
     write: args.write,
     kill: args.kill,
-    markTrusted: args.markTrusted,
     runtimeEnvironmentCall: args.runtimeTransportCall,
     runtimeEnvironmentSubscribe: args.runtimeSubscribe
   })

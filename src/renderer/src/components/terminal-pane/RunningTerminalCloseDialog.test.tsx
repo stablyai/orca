@@ -109,26 +109,10 @@ describe('RunningTerminalCloseDialog', () => {
     await renderDialog({ onConfirm: vi.fn(), copyKind: 'agent' }, updateSettings)
 
     expect(document.body.textContent).toContain('Stop this agent?')
+    expect(document.body.textContent).toContain(
+      'This terminal will not resume automatically. Cancel and put the workspace to sleep to resume it later.'
+    )
     expect(getButton('Stop Agent')).toBeTruthy()
-  })
-
-  it('persists the opt-out when "don\'t ask again" is checked', async () => {
-    const onConfirm = vi.fn()
-    const updateSettings = vi.fn().mockResolvedValue(undefined)
-
-    await renderDialog({ onConfirm }, updateSettings)
-
-    await act(async () => {
-      getCheckbox().click()
-    })
-    await act(async () => {
-      getButton('Stop and Close').click()
-    })
-
-    expect(updateSettings).toHaveBeenCalledWith({
-      skipCloseTerminalWithRunningProcessConfirm: true
-    })
-    expect(onConfirm).toHaveBeenCalledTimes(1)
   })
 
   // Why: this queue opens after an async probe while the pinned queue opens synchronously,

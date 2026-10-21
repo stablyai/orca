@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-29T03:29:52.000Z",
+  "platform": "darwin",
+  "command": ["codex", "--dangerously-bypass-approvals-and-sandbox"],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.157.0, plain launch on a fresh CODEX_HOME whose config.toml sets check_for_update_on_startup = true, with a version.json cache naming 0.159.0 checked moments earlier (so no network check) and CODEX_MANAGED_BY_NPM=1 so Codex offers an update command. Over the provisional screen Codex paints `Update available · 0.157.0 → 0.159.0`, `1. Update now (runs `npm install -g @openai/codex`)` / `2. Skip` / `3. Skip until next version` and the key row `enter continue · esc skip`, where older builds wrote `Press enter to continue`. Enter picks Update now. No key was sent (only automatic terminal-query replies). Cut 6 s after spawn. Home-directory user name redacted by hand, same length.",
+  "exitCode": null
+}

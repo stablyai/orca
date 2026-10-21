@@ -3,7 +3,7 @@
 // `/proc`-or-lsof-backed IPC fallback for shells that never emit OSC 7 (agent
 // TUIs, minimal sh). Both layers can legitimately come back empty, so the
 // helper always finishes by returning the caller's worktree-root fallback.
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 
 export type PaneCwdEntry = {
   cwd: string

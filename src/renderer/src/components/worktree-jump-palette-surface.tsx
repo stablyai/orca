@@ -1,3 +1,5 @@
+import { ShortcutKeyCombo } from './ShortcutKeyCombo'
+import { WorktreeJumpPaletteTaskSearchStatus } from './worktree-jump-palette-task-search-status'
 import type React from 'react'
 import { CommandDialog, CommandEmpty, CommandInput, CommandList } from '@/components/ui/command'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -20,6 +22,10 @@ export function WorktreeJumpPaletteSurface({
 }: {
   controller: WorktreeJumpPaletteController
 }): React.JSX.Element {
+  const selectedTask = controller.taskItems.find(
+    (item) => item.id === controller.commandSelectedItemId
+  )
+  const modKey = navigator.userAgent.includes('Mac') ? '⌘' : 'Ctrl'
   const emptyState = getWorktreeJumpPaletteEmptyState(controller)
   const resultCount = getWorktreeJumpPaletteResultCount(controller)
   const paletteDialog = (
@@ -32,7 +38,7 @@ export function WorktreeJumpPaletteSurface({
       title={translate('auto.components.WorktreeJumpPalette.4ee378034d', 'Jump to...')}
       description={translate(
         'auto.components.WorktreeJumpPalette.2770f02910',
-        'Search chats, terminals, worktrees, settings, and actions'
+        'Search chats, terminals, workspaces, tasks, settings, and actions'
       )}
       overlayClassName="bg-black/55 backdrop-blur-[2px]"
       contentClassName="top-[min(10%,4rem)] w-[900px] max-w-[96vw] max-h-[min(90vh,calc(100vh-1.5rem))] overflow-hidden rounded-xl border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)] backdrop-blur-xl"
@@ -40,8 +46,18 @@ export function WorktreeJumpPaletteSurface({
         loop: true,
         value: controller.commandSelectedItemId,
         onValueChange: controller.handleCommandSelectionChange,
-        className: 'bg-transparent',
+        className: 'jump-palette-command bg-transparent',
         onKeyDownCapture: (event: React.KeyboardEvent) => {
+          if (
+            selectedTask &&
+            event.key === 'Enter' &&
+            (navigator.userAgent.includes('Mac') ? event.metaKey : event.ctrlKey)
+          ) {
+            event.preventDefault()
+            event.stopPropagation()
+            controller.handleSelectTask(selectedTask.result, true)
+            return
+          }
           if (
             controller.selectionMovedByUserRef &&
             ['ArrowDown', 'ArrowUp', 'Home', 'End', 'PageDown', 'PageUp'].includes(event.key)
@@ -55,7 +71,7 @@ export function WorktreeJumpPaletteSurface({
         ref={controller.inputRef}
         placeholder={translate(
           'auto.components.WorktreeJumpPalette.27f10cca63',
-          'Search chats, terminals, worktrees, settings, and actions...'
+          'Search chats, terminals, workspaces, tasks, settings, and actions...'
         )}
         value={controller.query}
         onValueChange={controller.emojiInput.handleValueChange}
@@ -64,9 +80,9 @@ export function WorktreeJumpPaletteSurface({
         onKeyDown={(event) => controller.emojiInput.handleKeyDown(event)}
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
-        className="h-12 text-[14px] placeholder:text-muted-foreground/75"
+        className="h-12 min-w-0 flex-1"
         trailing={
-          <div ref={controller.setDialogElementFromNode}>
+          <div ref={controller.setDialogElementFromNode} className="shrink-0">
             <PaletteFilterMenu
               model={controller.filterModel}
               filter={controller.filter}
@@ -131,9 +147,20 @@ export function WorktreeJumpPaletteSurface({
             ))}
           </>
         )}
+        <WorktreeJumpPaletteTaskSearchStatus
+          loading={controller.taskSearchLoading}
+          failures={controller.taskSearchFailures}
+          onRetry={controller.retryTaskSearch}
+        />
       </CommandList>
       <div className="flex items-center justify-end border-t border-border/60 px-3.5 py-2.5 text-[11px] text-muted-foreground/82">
         <div className="flex items-center gap-2">
+          {selectedTask ? (
+            <>
+              <ShortcutKeyCombo keys={[modKey, 'Enter']} />
+              <span>{translate('worktreeJumpPalette.taskCreate', 'Create workspace')}</span>
+            </>
+          ) : null}
           <FooterKey>
             {translate('auto.components.WorktreeJumpPalette.f65d992a11', 'Enter')}
           </FooterKey>

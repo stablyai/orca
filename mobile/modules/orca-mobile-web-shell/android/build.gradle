@@ -1,0 +1,25 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcamobilewebshell'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcamobilewebshell'
+}
+
+dependencies {
+  // Already on the APK classpath at this exact version via react-native-webview
+  // (node_modules/react-native-webview/android/gradle.properties), so this adds no artifact.
+  implementation 'androidx.webkit:webkit:1.14.0'
+  // The android.jar used by JVM unit tests stubs org.json, so the real parser has to be on the
+  // test classpath or every manifest check would read null.
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.json:json:20240303'
+}

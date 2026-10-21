@@ -9,27 +9,66 @@ import {
 } from './browser-session-proxy'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { isAutoGrantedBrowserSessionPermission } from './browser-session-permission-policy'
-import { setupGoogleAuthUserAgentOverride } from './browser-session-ua'
-import { setBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
+import { installBrowserSessionUserAgentPolicy } from './browser-session-ua'
+import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
 import {
   allowsBrowserWebAuthnPermission,
   clearBrowserWebAuthnAccessHandlers,
   installBrowserWebAuthnAccessHandlers
 } from './browser-webauthn-access'
 import { noticeDocPreviewDownloadBlocked } from './doc-preview-download-block-notice'
+import { isRemoteCliDrivenGuest } from './desktop-browser-bridge/remote-cli-driven-workspaces'
 
 // Why: one shared installer keeps every partition's deny-by-default permission/download policies from drifting apart.
 const configuredPartitions = new Set<string>()
+const userAgentPolicyDisposerBySession = new WeakMap<Session, () => void>()
+
+export function retireBrowserSessionUserAgentPolicy(sess: Session): void {
+  const dispose = userAgentPolicyDisposerBySession.get(sess)
+  if (!dispose) {
+    return
+  }
+  userAgentPolicyDisposerBySession.delete(sess)
+  dispose()
+}
+
+function configureBrowserSessionUserAgentPolicy(sess: Session, installExceptions: boolean): void {
+  sess.setUserAgent(getBrowserProcessUserAgentIdentity().userAgent)
+  if (!installExceptions) {
+    retireBrowserSessionUserAgentPolicy(sess)
+    return
+  }
+  if (userAgentPolicyDisposerBySession.has(sess)) {
+    return
+  }
+  userAgentPolicyDisposerBySession.set(
+    sess,
+    installBrowserSessionUserAgentPolicy(sess, (request) =>
+      browserManager.resolveBrowserGuestRequestUserAgent(request)
+    )
+  )
+}
+
+// Why: an SSH host scripting a page must not read the desktop clipboard through it.
+function deniesRemoteCliDrivenClipboardRead(permission: string, webContentsId?: number): boolean {
+  return permission === 'clipboard-read' && isRemoteCliDrivenGuest(webContentsId)
+}
 
 /** Drop only the installer memo; retired-session guards remain fail-closed. */
 export function forgetBrowserSessionPartitionConfiguration(partition: string): void {
   configuredPartitions.delete(partition)
 }
 const handleWillDownload = (
-  _event: Electron.Event,
+  event: Electron.Event,
   item: Electron.DownloadItem,
   webContents: Electron.WebContents
 ): void => {
+  // Why: a host-driven page could otherwise write a host-chosen file into this desktop's Downloads.
+  if (isRemoteCliDrivenGuest(webContents.id)) {
+    event.preventDefault()
+    console.info('[desktop-browser-bridge] refused a download from a page an SSH host drives')
+    return
+  }
   browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
 }
 
@@ -69,17 +108,22 @@ function resolvePermissionNoticeUrl(
 export type BrowserPartitionDownloadPolicy = 'route' | 'deny'
 export type BrowserPartitionPermissionPolicy = 'browser' | 'deny'
 
-export function installBrowserSessionPartitionPolicies(
+// Why async despite no await: the user agent policy is configured before the first suspension, and
+// getBrowserProcessUserAgentIdentity throws when the process identity was never initialized. Callers
+// report failure through the promise (`void install(...).catch(...)`), so a synchronous throw would
+// escape every one of them and gate browser-session startup on bookkeeping that is allowed to fail.
+export async function installBrowserSessionPartitionPolicies(
   profile: BrowserSessionProfile,
   options: {
     downloads?: BrowserPartitionDownloadPolicy
     permissions?: BrowserPartitionPermissionPolicy
     applyAppWideProxy?: boolean
+    userAgentExceptions?: boolean
   } = {}
 ): Promise<void> {
   const { partition } = profile
   const sess = session.fromPartition(partition)
-  setBrowserSessionUserAgentMode(sess, profile.userAgentMode ?? 'clean')
+  configureBrowserSessionUserAgentPolicy(sess, options.userAgentExceptions !== false)
   // Why: route partitions own a SOCKS transport policy that the app proxy must not overwrite.
   const proxyReady = (
     options.applyAppWideProxy === false ? Promise.resolve() : applyProxyToBrowserSession(sess)
@@ -92,9 +136,6 @@ export function installBrowserSessionPartitionPolicies(
   }
 
   browserManager.installCertificateRequestGuard(sess)
-  if (profile.userAgentMode !== 'native') {
-    setupGoogleAuthUserAgentOverride(sess)
-  }
   if (options?.permissions === 'deny') {
     sess.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
     sess.setPermissionCheckHandler(() => false)
@@ -130,7 +171,21 @@ export function installBrowserSessionPartitionPolicies(
         )
         return
       }
-      const allowed = isAutoGrantedBrowserSessionPermission(permission)
+      if (
+        permission === 'openExternal' &&
+        browserManager.requestExternalAppLaunch(
+          webContents,
+          'externalURL' in details ? details.externalURL : undefined,
+          () => resolvePermissionNoticeUrl(webContents, details) || null
+        )
+      ) {
+        // Why: Orca launches the app itself after the user says yes, so Chromium's own launch stays denied.
+        callback(false)
+        return
+      }
+      const allowed =
+        isAutoGrantedBrowserSessionPermission(permission) &&
+        !deniesRemoteCliDrivenClipboardRead(permission, webContents?.id)
       if (!allowed) {
         const rawUrl = resolvePermissionNoticeUrl(webContents, details)
         browserManager.notifyPermissionDenied({
@@ -141,7 +196,10 @@ export function installBrowserSessionPartitionPolicies(
       }
       callback(allowed)
     })
-    sess.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
+    sess.setPermissionCheckHandler((webContents, permission, _origin, details) => {
+      if (deniesRemoteCliDrivenClipboardRead(permission, webContents?.id)) {
+        return false
+      }
       if (permission === 'media') {
         return hasSystemMediaAccess(details?.mediaType)
       }
@@ -168,6 +226,7 @@ export function installBrowserSessionPartitionPolicies(
 export function clearBrowserSessionPartitionPolicies(partition: string, sess: Session): void {
   // Why: the Electron Session survives partition deletion; clear callbacks/listeners so removed profiles don't retain closures.
   invalidateBrowserSessionProxyApplication(sess)
+  retireBrowserSessionUserAgentPolicy(sess)
   configuredPartitions.delete(partition)
   browserManager.removeCertificateRequestGuard(sess)
   sess.removeListener('will-download', handleWillDownload)
@@ -176,22 +235,4 @@ export function clearBrowserSessionPartitionPolicies(partition: string, sess: Se
   sess.setPermissionRequestHandler(null)
   sess.setPermissionCheckHandler(null)
   sess.setDisplayMediaRequestHandler(null)
-}
-
-export function applyBrowserSessionUserAgentModes(profiles: BrowserSessionProfile[]): void {
-  for (const profile of profiles) {
-    const partition = profile.partition
-    try {
-      const sess = session.fromPartition(partition)
-      const userAgentMode = profile.userAgentMode ?? 'clean'
-      setBrowserSessionUserAgentMode(sess, userAgentMode)
-
-      if (profile.userAgentMode === 'native') {
-        continue
-      }
-      setupGoogleAuthUserAgentOverride(sess)
-    } catch {
-      /* session not available yet (e.g. unit tests or pre-ready) */
-    }
-  }
 }

@@ -1,8 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+
+// These transport fixtures never read abandoned-launch ownership from the app store.
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -121,6 +134,34 @@ describe('createRemoteRuntimePtyTransport', () => {
     runtimeCall.mockImplementation(async (args: { method: string }) => {
       if (args.method === 'session.tabs.activate') {
         return { ok: false, error: { code: 'runtime_error', message: 'tab_not_found' } }
+      }
+      if (args.method === 'session.tabs.list') {
+        // Why: the inventory — not activation's rejection — is what proves this leaf was removed,
+        // and a surviving sibling leaf is what makes the absence authoritative rather than a
+        // host that has not republished the tab yet.
+        return {
+          ok: true,
+          result: {
+            worktree: 'id:wt-1',
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 2,
+            activeGroupId: 'group-1',
+            activeTabId: 'host-tab-1::leaf-2',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'host-tab-1::leaf-2',
+                parentTabId: 'host-tab-1',
+                leafId: 'leaf-2',
+                title: 'Terminal 2',
+                isActive: true,
+                status: 'ready',
+                terminal: 'terminal-2'
+              }
+            ]
+          }
+        }
       }
       if (args.method === 'terminal.recoverPane') {
         return {

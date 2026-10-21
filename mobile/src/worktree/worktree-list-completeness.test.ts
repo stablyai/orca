@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildSections, type Worktree } from './workspace-list-sections'
+import { NO_PROJECT_SECTION_CATALOG, buildSections, type Worktree } from './workspace-list-sections'
 import {
   applyDesktopViewSettings,
   type MobileViewState,
-  type WorkspaceViewSettings
+  type WorkspaceViewSettings,
+  INITIAL_MOBILE_VIEW,
+  rowFiltersForView
 } from './workspace-view-settings'
-import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from './mobile-workspace-statuses'
 
 // Regression guard for "host page shows lots of worktrees, repo shows only a
 // few". The removed getHostScopedWorktrees filtered the list to worktrees whose
@@ -36,37 +37,28 @@ function worktree(repoId: string, id: string, repo = repoId): Worktree {
   }
 }
 
-const base: MobileViewState = {
-  groupMode: 'repo',
-  sortMode: 'recent',
-  hideSleeping: false,
-  hideDefaultBranch: false,
-  filterRepoIds: [],
-  collapsedGroups: [],
-  workspaceStatuses: DEFAULT_MOBILE_WORKSPACE_STATUSES
-}
+const base: MobileViewState = { ...INITIAL_MOBILE_VIEW, sharesOtherClientFilter: true }
 
 // Reconstruct the list the host screen renders: apply the synced desktop
-// settings, then build sections exactly as the screen does. `repoIdsByName` is
-// the display-name-keyed map the screen builds from repo.list.
+// settings, then build sections exactly as the screen does. `catalogRepos` are
+// [displayName, id] rows of the repo.list catalog the screen groups by.
 function visibleWorktreeIds(
   worktrees: Worktree[],
-  repoIdsByName: Map<string, string>,
+  catalogRepos: readonly (readonly [string, string])[],
   desktop: WorkspaceViewSettings = {}
 ): string[] {
   const state = applyDesktopViewSettings(base, desktop)
   const sections = buildSections(
     worktrees,
-    state.sortMode,
-    {
-      filterRepoIds: new Set(state.filterRepoIds),
-      hideSleeping: state.hideSleeping,
-      hideDefaultBranch: state.hideDefaultBranch
-    },
+    state.sortBy,
+    rowFiltersForView(state),
     '',
-    state.groupMode,
+    state.groupBy,
     new Set(),
-    repoIdsByName,
+    {
+      ...NO_PROJECT_SECTION_CATALOG,
+      repos: catalogRepos.map(([displayName, id]) => ({ id, displayName, path: `/repos/${id}` }))
+    },
     state.workspaceStatuses,
     new Set(state.collapsedGroups)
   )
@@ -81,9 +73,9 @@ describe('every worktree stays visible regardless of repo.list contents', () => 
       worktree('orca-local', 'b'),
       worktree('orca-runtime', 'c')
     ]
-    const repoIdsByName = new Map([['orca-runtime', 'orca-runtime']])
+    const catalogRepos = [['orca-runtime', 'orca-runtime']] as const
 
-    expect(visibleWorktreeIds(worktrees, repoIdsByName)).toEqual(['a', 'b', 'c'])
+    expect(visibleWorktreeIds(worktrees, catalogRepos)).toEqual(['a', 'b', 'c'])
   })
 
   it('shows every worktree when the same repo name maps to two host-specific ids', () => {
@@ -94,29 +86,32 @@ describe('every worktree stays visible regardless of repo.list contents', () => 
       worktree('orca-local', 'local-2', 'orca'),
       worktree('orca-runtime', 'runtime-1', 'orca')
     ]
-    // Name-keyed map collapses "orca" to a single id, as the host screen builds it.
-    const repoIdsByName = new Map([['orca', 'orca-runtime']])
+    // The catalog names only one of the two "orca" repos.
+    const catalogRepos = [['orca', 'orca-runtime']] as const
 
-    expect(visibleWorktreeIds(worktrees, repoIdsByName)).toEqual([
-      'local-1',
-      'local-2',
-      'runtime-1'
-    ])
+    expect(visibleWorktreeIds(worktrees, catalogRepos)).toEqual(['local-1', 'local-2', 'runtime-1'])
   })
 
-  it('shows every worktree even when the desktop carries a host scope', () => {
-    // Host scope must never reach the mobile list either (it has no mobile UI).
+  it("narrows to the desktop's shown hosts, and its legacy scope alone narrows too", () => {
+    // The phone's host filter is the desktop's: rows on hosts it hides are hidden here as well.
     const worktrees = [worktree('local-repo', 'x'), worktree('runtime-repo', 'y')]
-    const repoIdsByName = new Map([
+    const catalogRepos = [
       ['local-repo', 'local-repo'],
       ['runtime-repo', 'runtime-repo']
-    ])
+    ] as const
 
     expect(
-      visibleWorktreeIds(worktrees, repoIdsByName, {
-        workspaceHostScope: 'runtime:devbox',
-        visibleWorkspaceHostIds: ['runtime:devbox']
-      } as unknown as WorkspaceViewSettings)
+      visibleWorktreeIds(worktrees, catalogRepos, { visibleWorkspaceHostIds: ['runtime:devbox'] })
+    ).toEqual([])
+    expect(
+      visibleWorktreeIds(worktrees, catalogRepos, {
+        visibleWorkspaceHostIds: null,
+        workspaceHostScope: 'local'
+      })
     ).toEqual(['x', 'y'])
+    expect(visibleWorktreeIds(worktrees, catalogRepos, { workspaceHostScope: 'all' })).toEqual([
+      'x',
+      'y'
+    ])
   })
 })

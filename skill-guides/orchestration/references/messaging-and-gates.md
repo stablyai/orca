@@ -36,12 +36,20 @@ ORCA orchestration send --to dispatch:<dispatch_id> --subject "Follow-up" --body
 
 Do not substitute a remote terminal handle. Omit `--from` for ordinary
 coordinator calls; a dispatched worker instead copies the exact `--from` and
-capability arguments in its preamble. `check` is the exception: it identifies
+other arguments in its preamble. `check` is the exception: it identifies
 its caller with `--terminal`, never `--from`.
 
 Group addresses include `@all`, `@idle`, `@claude`, `@codex`, `@opencode`,
-`@gemini`, `@droid`, `@grok`, `@cursor`, and `@worktree:<id>`. Use them only for
-intentional fan-out status or questions. `worker_done`, heartbeat, and other
+`@gemini`, `@droid`, `@grok`, `@cursor`, and `@worktree:<id>`. Every group but
+`@worktree:<id>` means the live Dispatches of the sender's own Run. Mail goes
+to each `dispatch:<id>` mailbox, except a worker coordinating a child Run
+receives it in that `run:<id>` mailbox. A sender bound to no Run is refused;
+`--run` must match the group audience and never grants membership.
+A Run group excludes its owning coordinator; a worker raising a blocker sends
+to `run:<id>`. A worker that created its own Run addresses that Run's workers,
+not its siblings. `@worktree:<id>` reaches matching workspace terminals,
+including coordinators. Use groups only for intentional fan-out status or
+questions. `worker_done`, heartbeat, and other
 Dispatch lifecycle messages never target groups.
 
 ## Questions and gates

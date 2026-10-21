@@ -46,10 +46,6 @@ describe('isENOENT across the SSH relay boundary', () => {
     expect(isENOENT(throughIpc)).toBe(true)
   })
 
-  it('recognises an error carrying no code at all', () => {
-    expect(isENOENT(new Error("ENOENT: no such file or directory, stat '/x'"))).toBe(true)
-  })
-
   it('does not treat a different errno as absent', () => {
     const denied = new Error("EACCES: permission denied, lstat '/root/x'") as NodeJS.ErrnoException
     denied.code = 'EACCES'

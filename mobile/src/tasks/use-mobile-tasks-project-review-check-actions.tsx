@@ -2,13 +2,17 @@ import type { ProjectMetadataActionsModel } from './use-mobile-tasks-project-met
 import { useCallback } from './mobile-tasks-dependencies'
 import {
   type GitHubAssignableUser,
-  type GitHubDetailCheck,
   type GitHubDetailFile,
   type GitHubProjectRow,
-  isSuccess,
   projectRowGitHubRepository,
   splitReviewerList
 } from './mobile-tasks-legacy-foundation'
+import {
+  githubPullRequestChecksRead,
+  githubPullRequestChecksRerun,
+  githubPullRequestFileViewedWrite,
+  githubReviewerRequest
+} from './mobile-task-item-state-operations'
 
 export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataActionsModel) {
   const {
@@ -37,8 +41,8 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.requestPRReviewers',
+        const reply = await githubReviewerRequest.request(
+          client,
           {
             repo: `id:${repo.id}`,
             prNumber: row.content.number,
@@ -47,10 +51,7 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
+        const result = githubReviewerRequest.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to request reviewers')
         }
@@ -115,8 +116,8 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.prChecks',
+        const reply = await githubPullRequestChecksRead.request(
+          client,
           {
             repo: `id:${repo.id}`,
             prNumber: row.content.number,
@@ -126,13 +127,9 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        if (!Array.isArray(response.result)) {
-          throw new Error('Invalid checks response')
-        }
-        const checks = response.result as GitHubDetailCheck[]
+        // The reader answers an array of readable rows, so the hand-rolled shape test this call
+        // site kept is gone: a reply that is not one now names the method it came from.
+        const checks = githubPullRequestChecksRead.interpret(reply)
         setProjectRowDetail((current) =>
           current?.provider === 'github' ? { ...current, checks } : current
         )
@@ -160,8 +157,8 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.rerunPRChecks',
+        const reply = await githubPullRequestChecksRerun.request(
+          client,
           {
             repo: `id:${repo.id}`,
             prNumber: row.content.number,
@@ -171,10 +168,7 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
           },
           { timeoutMs: 60_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
+        const result = githubPullRequestChecksRerun.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to rerun checks')
         }
@@ -202,8 +196,8 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.setPRFileViewed',
+        const reply = await githubPullRequestFileViewedWrite.request(
+          client,
           {
             repo: `id:${repo.id}`,
             prRepo: projectRowGitHubRepository(row, activeGitHubProjectHost),
@@ -213,10 +207,7 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        if (response.result !== true) {
+        if (githubPullRequestFileViewedWrite.interpret(reply) !== true) {
           throw new Error('Failed to sync viewed state with GitHub.')
         }
         setProjectRowDetail((current) =>

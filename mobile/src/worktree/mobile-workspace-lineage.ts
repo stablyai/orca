@@ -1,3 +1,8 @@
+import {
+  buildWorktreeOccurrencePlan,
+  getExpandedWorktreeOccurrences,
+  type WorktreeOccurrencePlan
+} from '../../../src/shared/worktree-occurrence-plan'
 import type { Worktree } from './workspace-list-types'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
 
@@ -22,16 +27,14 @@ function hasValidLineageParent(worktree: Worktree, parent: Worktree): boolean {
   )
 }
 
-export function applyMobileWorkspaceLineage(
-  worktrees: readonly Worktree[],
-  collapsedGroups: ReadonlySet<string> = new Set()
-): Worktree[] {
-  const visibleIds = new Set(worktrees.map((worktree) => getWorktreeRowIdentity(worktree)))
+/** Children keyed by parent row identity, over valid edges between the given rows only. */
+export function getMobileWorkspaceLineageChildren(
+  worktrees: readonly Worktree[]
+): Map<string, Worktree[]> {
   const worktreeById = new Map(
     worktrees.map((worktree) => [getWorktreeRowIdentity(worktree), worktree])
   )
   const childrenByParentId = new Map<string, Worktree[]>()
-  const childIds = new Set<string>()
 
   for (const worktree of worktrees) {
     const worktreeId = getWorktreeRowIdentity(worktree)
@@ -43,65 +46,50 @@ export function applyMobileWorkspaceLineage(
     if (
       !parentIdentity ||
       parentIdentity === worktreeId ||
-      !visibleIds.has(parentIdentity) ||
       !parent ||
       !hasValidLineageParent(worktree, parent)
     ) {
       continue
     }
-    childIds.add(worktreeId)
     const children = childrenByParentId.get(parentIdentity) ?? []
     children.push(worktree)
     childrenByParentId.set(parentIdentity, children)
   }
+  return childrenByParentId
+}
 
-  const result: Worktree[] = []
-  const emitted = new Set<string>()
-  const markDescendantsEmitted = (worktree: Worktree): void => {
-    for (const child of childrenByParentId.get(getWorktreeRowIdentity(worktree)) ?? []) {
-      const childId = getWorktreeRowIdentity(child)
-      if (!emitted.has(childId)) {
-        emitted.add(childId)
-        markDescendantsEmitted(child)
-      }
-    }
-  }
-  const emit = (worktree: Worktree, depth: number, isLastChild: boolean): void => {
-    const worktreeId = getWorktreeRowIdentity(worktree)
-    if (emitted.has(worktreeId)) {
-      return
-    }
-    const children = childrenByParentId.get(worktreeId) ?? []
-    const lineageCollapsed =
-      children.length > 0 && collapsedGroups.has(getMobileWorkspaceLineageGroupKey(worktree))
-    emitted.add(worktreeId)
-    result.push({
-      ...worktree,
-      lineageDepth: depth,
-      lineageChildCount: children.length,
-      lineageCollapsed,
-      isLastLineageChild: isLastChild
-    })
-    if (lineageCollapsed) {
-      markDescendantsEmitted(worktree)
-      return
-    }
-    children.forEach((child, index) => {
-      emit(child, depth + 1, index === children.length - 1)
-    })
-  }
+export function getMobileOccurrenceRows(
+  plan: WorktreeOccurrencePlan<Worktree>,
+  sectionKey: string,
+  collapsedGroups: ReadonlySet<string>
+): Worktree[] {
+  return getExpandedWorktreeOccurrences(plan.bySection.get(sectionKey) ?? [], (worktree) =>
+    collapsedGroups.has(getMobileWorkspaceLineageGroupKey(worktree))
+  ).map((occurrence) => ({
+    ...occurrence.row,
+    sectionListKey: occurrence.key,
+    lineageDepth: occurrence.depth,
+    lineageChildCount: occurrence.childCount,
+    lineageCollapsed:
+      occurrence.childCount > 0 &&
+      collapsedGroups.has(getMobileWorkspaceLineageGroupKey(occurrence.row)),
+    isLastLineageChild: occurrence.isLastChild,
+    showProjectName: occurrence.showProjectName
+  }))
+}
 
-  const roots = worktrees.filter((worktree) => !childIds.has(getWorktreeRowIdentity(worktree)))
-  roots.forEach((worktree, index) => {
-    emit(worktree, 0, index === roots.length - 1)
+export function applyMobileWorkspaceLineage(
+  worktrees: readonly Worktree[],
+  collapsedGroups: ReadonlySet<string> = new Set()
+): Worktree[] {
+  const plan = buildWorktreeOccurrencePlan({
+    rows: worktrees,
+    childrenByParentIdentity: getMobileWorkspaceLineageChildren(worktrees),
+    identityOf: getWorktreeRowIdentity,
+    isPinned: () => false,
+    duplicatePinned: false,
+    sectionsOf: () => [{ key: 'all', items: worktrees }],
+    projectIdOf: (worktree) => worktree.repoId
   })
-
-  for (const worktree of worktrees) {
-    if (!emitted.has(getWorktreeRowIdentity(worktree))) {
-      // Why: malformed cyclic lineage should not hide every participant.
-      emit(worktree, 0, true)
-    }
-  }
-
-  return result
+  return getMobileOccurrenceRows(plan, 'all', collapsedGroups)
 }

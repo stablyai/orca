@@ -1,10 +1,10 @@
+import { translate } from '@/i18n/i18n'
 import type { UpdateStatus } from '../../../../../shared/update-status-types'
 
 export function isUpdateCardVisible({
   status,
   dismissedVersion,
   cachedVersion,
-  hasStartedDownload,
   updateUserInitiatedCycle,
   autoDismissed = false,
   collapsed = false
@@ -12,18 +12,11 @@ export function isUpdateCardVisible({
   status: UpdateStatus
   dismissedVersion: string | null
   cachedVersion: string | null
-  hasStartedDownload: boolean
   updateUserInitiatedCycle: boolean
   autoDismissed?: boolean
   collapsed?: boolean
 }): boolean {
   const isUserInitiated = 'userInitiated' in status && Boolean(status.userInitiated)
-  const shouldShowDetailedErrorCard =
-    status.state === 'error' &&
-    (hasStartedDownload ||
-      cachedVersion !== null ||
-      status.version !== undefined ||
-      status.recovery?.kind === 'linux-package-install')
 
   if (status.state === 'checking' && !isUserInitiated) {
     return false
@@ -32,9 +25,6 @@ export function isUpdateCardVisible({
     return false
   }
   if (status.state === 'idle') {
-    return false
-  }
-  if (status.state === 'error' && !shouldShowDetailedErrorCard && !isUserInitiated) {
     return false
   }
   if (cachedVersion && dismissedVersion === cachedVersion && !updateUserInitiatedCycle) {
@@ -63,7 +53,9 @@ export function getUpdateCardAriaLabel(status: UpdateStatus): string {
     case 'downloaded':
       return 'Update ready to install'
     case 'error':
-      return 'Update error'
+      return status.installBlock
+        ? translate('updates.installBlock.waitingLabel', 'Update waiting')
+        : 'Update error'
   }
 }
 

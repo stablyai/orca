@@ -24,7 +24,14 @@ import {
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 export function buildRemoteSettingsSections(
-  { isMac, isWindowsTerminalHost, isWebClient, isDev, repos }: SettingsNavigationBuildOptions,
+  {
+    isMac,
+    isWindowsTerminalHost,
+    isWebClient,
+    isDev,
+    repos,
+    projectGrouping
+  }: SettingsNavigationBuildOptions,
   runtimeEnvironmentsSearchEntry: SettingsNavSection['searchEntries'][number],
   reposById: ReadonlyMap<string, Repo>
 ): SettingsNavSection[] {
@@ -53,11 +60,10 @@ export function buildRemoteSettingsSections(
       ),
       description: isWebClient
         ? 'Connect this browser to a saved Orca server.'
-        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
+        : 'Run Orca on another machine and work on it from here.',
       icon: Server,
       searchEntries: [runtimeEnvironmentsSearchEntry],
-      group: 'remote',
-      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
+      group: 'remote'
     },
     ...(showDesktopOnlySettings && isMac
       ? [
@@ -153,9 +159,10 @@ export function buildRemoteSettingsSections(
         ]
       : []),
     // Why: one nav row per project, not per repo row — a project set up on
-    // multiple hosts (local + a Remote Orca Server, or two clones) collapses to
-    // a single entry. Derived from repos alone so this list matches the panes.
-    ...buildSettingsProjectList(repos).map(({ project, representativeRepoId, setups }) => {
+    // multiple hosts (local + a Remote Orca Server) collapses to a single
+    // entry. Same inputs as the panes so this list matches them.
+    ...buildSettingsProjectList(repos, projectGrouping).map((settingsProject) => {
+      const { project, representativeRepoId, setups, checkoutLabel } = settingsProject
       const representativeRepo = reposById.get(representativeRepoId) ?? repos[0]
       const hostSummary =
         setups.length > 1
@@ -167,7 +174,7 @@ export function buildRemoteSettingsSections(
           : (setups[0]?.path ?? representativeRepo.path)
       return {
         id: `repo-${representativeRepoId}`,
-        title: project.displayName,
+        title: checkoutLabel ?? project.displayName,
         description: `${getRepoKindLabel(project)} • ${hostSummary}`,
         icon: SlidersHorizontal,
         searchEntries: getRepositoryPaneSearchEntries(representativeRepo, {

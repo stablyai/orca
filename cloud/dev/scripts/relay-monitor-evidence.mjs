@@ -8,9 +8,6 @@ const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/
 const SHA = /^[a-f0-9]{40}$/
 const JWT = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/
 const EVIDENCE_MAX_AGE_MS = 5 * 60_000
-// Matches the same-cap cell job timeout-minutes; bounds each predecessor wave.
-const WAVE_PREDECESSOR_TIMEOUT_MS = 75 * 60_000
-const WAVE_INDEX = /^[0-3]$/
 const EVIDENCE_SAMPLE_INTERVAL_MS = 60_000
 const EVIDENCE_MAX_LINEAGE_MS = 25 * 60_000
 const MIGRATION_POLICIES = new Set([
@@ -222,6 +219,10 @@ function validCompletedDryRunState(state, expected, nowMs, maxAgeMs) {
   )
 }
 
+/**
+ * Holds the evidence to 5 minutes on this process's own clock. The single-job rehome enable is
+ * the only caller; it verifies, consumes, and mutates in one job.
+ */
 export async function verifyDryRunAuthority(argv, now = Date.now, repositoryRoot) {
   const values = argumentsByName(argv)
   const directory = resolve(values.directory ?? '')
@@ -232,20 +233,10 @@ export async function verifyDryRunAuthority(argv, now = Date.now, repositoryRoot
     await readFile(join(directory, `${expected.incidentId}.state.json`), 'utf8')
   )
   const requiredMigrationPolicy = values['required-migration-policy']
-  // Later same-cap waves start after sequential predecessor cell rolls, so the
-  // freshness bound grows by one cell-job timeout per predecessor; single-use
-  // consumption, needs-chaining, and each wave's live preflight recheck keep
-  // holding the mutation to current health.
-  const waveIndex = values['wave-index'] ?? '0'
-  if (!WAVE_INDEX.test(waveIndex)) {
-    throw new Error('relay monitor wave index is invalid')
-  }
-  const maxAgeMs =
-    EVIDENCE_MAX_AGE_MS + Number(waveIndex) * WAVE_PREDECESSOR_TIMEOUT_MS
   if (
     !MIGRATION_POLICIES.has(requiredMigrationPolicy) ||
     state.migrationPolicy !== requiredMigrationPolicy ||
-    !validCompletedDryRunState(state, expected, now(), maxAgeMs)
+    !validCompletedDryRunState(state, expected, now(), EVIDENCE_MAX_AGE_MS)
   ) {
     throw new Error('relay monitor dry-run authority is incomplete or stale')
   }

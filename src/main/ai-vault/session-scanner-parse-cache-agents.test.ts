@@ -205,6 +205,61 @@ describe('codex-specific resume behavior', () => {
 })
 
 describe('non-resumable formats keep reuse-only caching', () => {
+  it('re-parses cline when only its messages sidecar changed', async () => {
+    const root = await makeTempDir()
+    const sessionDir = join(root, 'cline-1')
+    await mkdir(sessionDir, { recursive: true })
+    const metadataPath = join(sessionDir, 'cline-1.json')
+    const messagesPath = join(sessionDir, 'cline-1.messages.json')
+    await writeFile(
+      metadataPath,
+      JSON.stringify({
+        session_id: 'cline-1',
+        cwd: '/tmp/cline',
+        started_at: '2026-05-01T10:00:00Z'
+      })
+    )
+    const writeMessages = (text: string): Promise<void> =>
+      writeFile(
+        messagesPath,
+        JSON.stringify({
+          updated_at: '2026-05-01T10:00:01Z',
+          messages: [{ role: 'user', content: [{ type: 'text', text }] }]
+        })
+      )
+    await writeMessages('first ask')
+
+    // Cline reads the sidecar as part of its parse, so a change to it has to
+    // re-parse; there is no metadata-only merge to re-run.
+    const candidate = async (): Promise<SessionFileCandidate> => {
+      const base = await candidateFor('cline', metadataPath)
+      const sidecarStat = await stat(messagesPath)
+      return {
+        ...base,
+        file: {
+          ...base.file,
+          sidecar: {
+            path: messagesPath,
+            mtimeMs: sidecarStat.mtimeMs,
+            sizeBytes: sidecarStat.size
+          }
+        }
+      }
+    }
+
+    const stats = createSessionParseStats()
+    const seeded = await parseAgentSessionFileCached(await candidate(), process.platform, stats)
+    expect(seeded?.title).toBe('first ask')
+    await parseAgentSessionFileCached(await candidate(), process.platform, stats)
+    expect(stats).toMatchObject({ fullParses: 1, reused: 1 })
+
+    await writeMessages('second ask, rather longer than the first')
+    const rewritten = await parseAgentSessionFileCached(await candidate(), process.platform, stats)
+
+    expect(rewritten?.title).toBe('second ask, rather longer than the first')
+    expect(stats).toMatchObject({ fullParses: 2, reused: 1 })
+  })
+
   it('re-parses a changed grok summary fully and reuses it when unchanged', async () => {
     const root = await makeTempDir()
     const sessionDir = join(root, 'session-1')

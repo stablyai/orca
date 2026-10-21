@@ -50,7 +50,17 @@ describe('native chat tool icons', () => {
     expect(nativeChatToolCategory('list')).toBe('listFiles')
     expect(nativeChatToolCategory('shell')).toBe('unknown')
     expect(nativeChatToolCategory('apply_patch')).toBe('fileChange')
+    expect(nativeChatToolCategory('update_plan')).toBe('todoList')
+    expect(nativeChatToolIconName('update_plan')).toBe('list-checks')
+    expect(nativeChatToolRunIconName([{ name: 'update_plan' }])).toBe('list-checks')
     expect(nativeChatToolCategory('web search')).toBe('webSearch')
+  })
+
+  it('counts no Codex helper call as running an agent, since a spawn ends once its helper starts', () => {
+    expect(nativeChatToolCategory('task')).toBe('subAgentActivity')
+    expect(nativeChatToolCategory('spawn_agent')).toBeNull()
+    expect(nativeChatToolCategory('wait_agent')).toBeNull()
+    expect(nativeChatToolCategory('close_agent')).toBeNull()
   })
 
   it('maps the tool names the Claude lane renders verbatim', () => {

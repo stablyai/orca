@@ -1,3 +1,4 @@
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 export class LogicalClientConnectionPath {
@@ -5,7 +6,7 @@ export class LogicalClientConnectionPath {
   private recovery: MobileConnectionPath | null = null
   private recoveryAttempt = 0
   private pairingRejected = false
-  private hostSignedOut = false
+  private relayHostReachability: RelayHostReachability = 'connecting'
   private readonly listeners = new Set<() => void>()
 
   constructor(private readonly isConnected: () => boolean) {}
@@ -36,13 +37,13 @@ export class LogicalClientConnectionPath {
     })
   }
 
-  isHostSignedOut(): boolean {
-    return this.hostSignedOut
+  getRelayHostReachability(): RelayHostReachability {
+    return this.relayHostReachability
   }
 
-  setHostSignedOut(signedOut: boolean): void {
+  setRelayHostReachability(reachability: RelayHostReachability): void {
     this.update(() => {
-      this.hostSignedOut = signedOut
+      this.relayHostReachability = reachability
     })
   }
 
@@ -52,7 +53,7 @@ export class LogicalClientConnectionPath {
     this.recoveryAttempt = 0
     // Why: an authenticated session is the desktop accepting this device.
     this.pairingRejected = false
-    this.hostSignedOut = false
+    this.relayHostReachability = 'connecting'
   }
 
   setRecovery(path: MobileConnectionPath | null, attempt?: number): void {
@@ -81,13 +82,13 @@ export class LogicalClientConnectionPath {
     const previousPath = this.pending()
     const previousAttempt = this.reconnectAttempt(0)
     const previousRejected = this.pairingRejected
-    const previousSignedOut = this.hostSignedOut
+    const previousReachability = this.relayHostReachability
     apply()
     if (
       previousPath === this.pending() &&
       previousAttempt === this.reconnectAttempt(0) &&
       previousRejected === this.pairingRejected &&
-      previousSignedOut === this.hostSignedOut
+      previousReachability === this.relayHostReachability
     ) {
       return
     }

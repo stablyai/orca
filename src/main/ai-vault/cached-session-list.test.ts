@@ -1,21 +1,30 @@
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultListResult } from '../../shared/ai-vault-types'
+import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 
 const {
   filterPathsToRunningWslDistrosAsync,
+  getCachedWslDistros,
+  hasCachedWslDistros,
   listRunningWslHomeDirsAsync,
-  scanAiVaultSessionsInWorker
+  scanAiVaultSessionsInService
 } = vi.hoisted(() => ({
   filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths]),
+  getCachedWslDistros: vi.fn((): string[] | null => null),
+  hasCachedWslDistros: vi.fn(() => false),
   listRunningWslHomeDirsAsync: vi.fn().mockResolvedValue([]),
-  scanAiVaultSessionsInWorker: vi.fn()
+  scanAiVaultSessionsInService: vi.fn()
 }))
 
-vi.mock('./session-scanner-worker-spawn', () => ({
-  scanAiVaultSessionsInWorker,
-  resetAiVaultScannerWorkerForTests: vi.fn()
+vi.mock('./session-scanner-service-spawn', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  scanAiVaultSessionsInService
 }))
 vi.mock('../wsl', () => ({
+  getCachedWslDistros,
+  hasCachedWslDistros,
   listRunningWslHomeDirsAsync
 }))
 vi.mock('../wsl-running-path-filter', () => ({ filterPathsToRunningWslDistrosAsync }))
@@ -37,7 +46,7 @@ function scanResult(scannedAt: string): AiVaultListResult {
 // mid-flight.
 function deferredScan(): { resolve: (value: AiVaultListResult) => void } {
   let resolveFn: (value: AiVaultListResult) => void = () => {}
-  scanAiVaultSessionsInWorker.mockReturnValueOnce(
+  scanAiVaultSessionsInService.mockReturnValueOnce(
     new Promise<AiVaultListResult>((resolve) => {
       resolveFn = resolve
     })
@@ -51,8 +60,10 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
     vi.spyOn(process, 'platform', 'get').mockImplementation(() => platform)
     resetAiVaultSessionListCacheForTests()
     filterPathsToRunningWslDistrosAsync.mockClear()
+    getCachedWslDistros.mockReset().mockReturnValue(null)
+    hasCachedWslDistros.mockReset().mockReturnValue(false)
     listRunningWslHomeDirsAsync.mockReset().mockResolvedValue([])
-    scanAiVaultSessionsInWorker.mockReset()
+    scanAiVaultSessionsInService.mockReset()
   })
   afterEach(() => {
     resetAiVaultSessionListCacheForTests()
@@ -73,26 +84,37 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
 
     // A non-force list must re-scan (cache empty) rather than serve A's stale
     // result — proof A's late .then() did not repopulate the cache.
-    scanAiVaultSessionsInWorker.mockResolvedValueOnce(scanResult('scan-B'))
+    scanAiVaultSessionsInService.mockResolvedValueOnce(scanResult('scan-B'))
     const next = await listAiVaultSessions()
 
     expect(next.scannedAt).toBe('scan-B')
-    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(2)
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(2)
   })
 
   it('caches normally when no invalidation interrupts the scan', async () => {
-    scanAiVaultSessionsInWorker.mockResolvedValueOnce(scanResult('scan-A'))
-    await listAiVaultSessions()
+    scanAiVaultSessionsInService.mockResolvedValueOnce(scanResult('scan-A'))
+    const request = { limit: 1000, scopePaths: ['/project'] }
+    const first = await listAiVaultSessions(request)
 
-    // Second non-force call is a cache hit — no second scan.
-    const cached = await listAiVaultSessions()
+    // A repeat request reuses the same scan entry and its scan ID.
+    const cached = await listAiVaultSessions(request)
 
     expect(cached.scannedAt).toBe('scan-A')
-    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
+    expect(cached.scanId).toBe(first.scanId)
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
     expect(listRunningWslHomeDirsAsync).toHaveBeenCalledTimes(1)
   })
 
-  it('resolves homes only for distros currently reported as running', async () => {
+  it('skips running-distro discovery once a probe has reported no installed WSL distro', async () => {
+    hasCachedWslDistros.mockReturnValue(true)
+    getCachedWslDistros.mockReturnValue([])
+
+    await expect(getAiVaultWslHomeDirs()).resolves.toEqual([])
+    expect(listRunningWslHomeDirsAsync).not.toHaveBeenCalled()
+  })
+
+  it('still discovers running distros before any distro probe has succeeded', async () => {
+    hasCachedWslDistros.mockReturnValue(false)
     listRunningWslHomeDirsAsync.mockResolvedValue(['\\\\wsl.localhost\\Ubuntu\\home\\ada'])
 
     await expect(getAiVaultWslHomeDirs()).resolves.toEqual(['\\\\wsl.localhost\\Ubuntu\\home\\ada'])
@@ -104,5 +126,70 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
 
     await expect(getAiVaultWslHomeDirs()).resolves.toEqual([])
     expect(listRunningWslHomeDirsAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('listAiVaultSessions symlinked scope', () => {
+  let root: string
+  beforeEach(async () => {
+    resetAiVaultSessionListCacheForTests()
+    scanAiVaultSessionsInService.mockReset()
+    root = await realpath(await mkdtemp(join(tmpdir(), 'orca-cached-scope-')))
+  })
+  afterEach(async () => {
+    resetAiVaultSessionListCacheForTests()
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('scans the real path too and keeps real-path sessions in a symlinked workspace', async () => {
+    const realRepo = join(root, 'data', 'api')
+    const linkedRepo = join(root, 'work-api')
+    await mkdir(realRepo, { recursive: true })
+    await symlink(realRepo, linkedRepo, 'junction')
+    const recorded = {
+      id: 'codex:s1',
+      executionHostId: 'local',
+      agent: 'codex',
+      sessionId: 's1',
+      title: 's1',
+      cwd: realRepo,
+      branch: null,
+      model: null,
+      filePath: join(root, 's1.jsonl'),
+      codexHome: null,
+      createdAt: null,
+      updatedAt: null,
+      modifiedAt: '2026-10-20T00:00:00.000Z',
+      messageCount: 1,
+      totalTokens: 0,
+      previewMessages: [],
+      queuedMessageCount: 0,
+      subagentTranscriptCount: 0,
+      resumeCommand: 's1',
+      subagent: null
+    } satisfies AiVaultSession
+    const outOfScope = (id: string): AiVaultSession => ({
+      ...recorded,
+      id: `codex:${id}`,
+      sessionId: id,
+      cwd: join(root, 'elsewhere'),
+      modifiedAt: '2026-10-21T00:00:00.000Z'
+    })
+    scanAiVaultSessionsInService.mockResolvedValueOnce({
+      ...scanResult('scan-A'),
+      sessions: [outOfScope('newer-1'), outOfScope('newer-2'), recorded]
+    })
+
+    const listed = await listAiVaultSessions({ limit: 1, scopePaths: [linkedRepo] })
+
+    expect(scanAiVaultSessionsInService.mock.calls[0]?.[0]).toMatchObject({
+      scopePaths: [linkedRepo, realRepo]
+    })
+    expect(listed.sessions.find((entry) => entry.id === 'codex:s1')?.cwdAliases).toEqual([
+      linkedRepo
+    ])
+    // A cache hit at depth 1 keeps one out-of-scope row; the aliased row must count as in scope.
+    const cached = await listAiVaultSessions({ limit: 1, scopePaths: [linkedRepo] })
+    expect(cached.sessions.map((entry) => entry.id)).toEqual(['codex:newer-1', 'codex:s1'])
   })
 })

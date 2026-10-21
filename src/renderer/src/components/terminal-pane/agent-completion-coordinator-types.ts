@@ -1,5 +1,4 @@
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 
@@ -28,9 +27,7 @@ export type AgentCompletionCoordinatorOptions = {
   /** Remote authorities are event-triggered only; no periodic process polls. */
   isRemotePtyId?: (ptyId: string) => boolean
   getExpectedIncarnationId?: () => string | null
-  getSettings: () => Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   inspectProcess: (
-    settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
     ptyId: string,
     options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ) => Promise<RuntimeTerminalProcessInspection>
@@ -42,6 +39,8 @@ export type AgentCompletionCoordinatorOptions = {
     replacement: RecognizedAgentProcess
   ) => boolean
   shouldSuppressConfirmedProcessExitCompletion?: (exited: RecognizedAgentProcess) => boolean
+  /** Fired once per confirmed exit (settled local absence, or the host's `exited` verdict). */
+  onForegroundAgentExited?: (exited: RecognizedAgentProcess) => void
   isLive: () => boolean
   shouldPollProcessCadence?: () => boolean
   // Why: a host that publishes foreground evidence with its inventory lets a
@@ -55,7 +54,6 @@ export type AgentCompletionCoordinatorOptions = {
   // panes without agent evidence relax to a slow cadence and re-arm from
   // output/title/hook activity. See agent-process-inspection-cost.ts.
   isProcessInspectionCostly?: () => boolean
-  shouldSuppressHookCompletion?: (payload: AgentCompletionStatusSnapshot) => boolean
 }
 
 export type AgentCompletionCoordinator = {
@@ -66,6 +64,8 @@ export type AgentCompletionCoordinator = {
   observeHookStatus: (payload: AgentCompletionStatusSnapshot) => void
   seedHookStatus: (payload: AgentCompletionStatusSnapshot) => void
   startProcessTracking: () => void
+  /** Another reader saw this agent in the foreground; lets the monitor confirm its exit. */
+  observeForegroundAgentProcess: (process: RecognizedAgentProcess) => void
   hasPendingHookDoneCompletion: () => boolean
   resetCompletionState: (options?: { requireFreshWorking?: boolean }) => void
   dispose: () => void

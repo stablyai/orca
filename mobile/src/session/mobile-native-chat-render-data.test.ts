@@ -20,29 +20,30 @@ function user(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
 }
 
+const fold = (messages: NativeChatMessage[]) => foldMobileNativeChatMessages(messages, 'claude')
+
 describe('mobileNativeChatEmptyState', () => {
-  it('invites a first message naming the agent, matching desktop copy', () => {
-    // waiting-session (live agent, no transcript) and ready (loaded, empty) both
-    // resolve to the shared "empty" copy with the agent label substituted.
-    const waiting = mobileNativeChatEmptyState('waiting-session', 'claude')
-    expect(waiting).toEqual({
-      title: 'Start a chat with Claude',
-      subtitle: 'Ask Claude to inspect code, explain output, or make a change.'
+  it('invites a first message into a loaded, empty chat, matching desktop copy', () => {
+    expect(mobileNativeChatEmptyState('ready', 'codex')).toEqual({
+      title: 'Start a chat with Codex',
+      subtitle: 'Ask Codex to inspect code, explain output, or make a change.'
     })
-    expect(mobileNativeChatEmptyState('ready', 'codex')?.title).toBe('Start a chat with Codex')
   })
 
-  it('invites a first message while the transcript file is still unwritten', () => {
-    // The spinner is already gone by then, so a bare list would read as broken.
-    expect(mobileNativeChatEmptyState('awaiting-transcript', 'claude')?.title).toBe(
-      'Start a chat with Claude'
-    )
-  })
+  it.each(['waiting-session', 'awaiting-transcript'] as const)(
+    'says the conversation is not found yet while %s, never that the chat is new',
+    (status) => {
+      // A chat with history whose agent reported no conversation reads the same as a new one.
+      expect(mobileNativeChatEmptyState(status, 'claude')).toEqual({
+        title: "Can't find this conversation yet",
+        subtitle:
+          'Send a message to start one, or open the terminal view to see what Claude is doing.'
+      })
+    }
+  )
 
   it('falls back to "the agent" when the agent is unknown', () => {
-    expect(mobileNativeChatEmptyState('waiting-session', null)?.title).toBe(
-      'Start a chat with the agent'
-    )
+    expect(mobileNativeChatEmptyState('ready', null)?.title).toBe('Start a chat with the agent')
   })
 
   it('prefers the provided error message over the default subtitle', () => {
@@ -66,7 +67,7 @@ function build(
 ): NativeChatMessage[] {
   return buildMobileNativeChatTransientData({
     messages,
-    folded: foldMobileNativeChatMessages(messages),
+    folded: fold(messages),
     streaming,
     pending
   }).data
@@ -79,6 +80,13 @@ describe('buildMobileNativeChatTransientData', () => {
     expect(last.id).toBe('p1')
     expect(last.role).toBe('user')
     expect(last.blocks).toEqual([{ type: 'text', text: 'queued' }])
+  })
+
+  it('times an echo from when it was sent, as desktop times its pending sends', () => {
+    const data = build([assistant('a1', 'hello')], null, [
+      { id: 'p1', text: 'queued', sentAt: 1_792_024_037_937 }
+    ])
+    expect(data.at(-1)?.timestamp).toBe(1_792_024_037_937)
   })
 
   it('renders a pending send with images as text followed by image-ref thumbnails', () => {
@@ -133,13 +141,76 @@ describe('buildMobileNativeChatTransientData', () => {
     ])
   })
 
+  it('leaves out an unrecognised provider event with no words, but keeps failures and sentences', () => {
+    const frameRow = (
+      id: string,
+      kind: string,
+      text: string,
+      tone?: string
+    ): NativeChatMessage => ({
+      id,
+      role: 'system',
+      timestamp: 0,
+      source: 'transcript',
+      blocks: [
+        {
+          type: 'text',
+          text,
+          ...(tone ? { tone } : {}),
+          providerFrame: {
+            provider: 'codex',
+            kind,
+            payload: { head: '{}', byteLength: 2, digest: 'digest', truncated: false }
+          }
+        }
+      ]
+    })
+    const folded = fold([
+      frameRow('wordless', 'notification:future/event', 'codex · notification:future/event'),
+      frameRow(
+        'failure',
+        'notification:future/failure',
+        'codex · notification:future/failure',
+        'error'
+      ),
+      frameRow('sentence', 'notification:warning', 'Sandbox is degraded.'),
+      assistant('a1', 'done')
+    ])
+    expect(folded.map((message) => message.id)).toEqual(['failure', 'sentence', 'a1'])
+  })
+
+  it('draws a turn’s subagents, each written as its own row, as one roster row', () => {
+    const own = (id: string): NativeChatMessage => ({
+      id: `subagent:${id}`,
+      role: 'system',
+      blocks: [
+        { type: 'text', text: `Kicked off subagent ${id}` },
+        { type: 'subagent', id, label: id, state: 'working', groupId: 'turn-1' }
+      ],
+      timestamp: 0,
+      source: 'transcript'
+    })
+    const folded = fold([user('u1', 'audit'), own('a'), assistant('a1', 'started'), own('b')])
+    expect(folded.map((message) => message.id)).toEqual(['u1', 'subagent:a', 'a1'])
+    expect(folded[1]?.blocks).toEqual([
+      {
+        type: 'subagent-group',
+        groupId: 'turn-1',
+        agents: [
+          { id: 'a', label: 'a', state: 'working' },
+          { id: 'b', label: 'b', state: 'working' }
+        ]
+      }
+    ])
+  })
+
   it('renders a lone image marker turn (no caption) as an image-ref block', () => {
     const data = build([user('u1', '[Image: source: /tmp/a.png]')], null, [])
     expect(data[0]?.blocks).toEqual([{ type: 'image-ref', path: '/tmp/a.png' }])
   })
 
   it('keeps the phone-local image visible when the transcript replaces its optimistic echo', () => {
-    const folded = foldMobileNativeChatMessages([
+    const folded = fold([
       user('source', '[Image: source: /tmp/a.png]'),
       user('prompt', '[Image #1] look at this')
     ])
@@ -161,7 +232,7 @@ describe('buildMobileNativeChatTransientData', () => {
   it('restores the local preview onto a marker-only transcript turn', () => {
     const result = buildMobileNativeChatTransientData({
       messages: [user('prompt', '[Image #1]')],
-      folded: foldMobileNativeChatMessages([user('prompt', '[Image #1]')]),
+      folded: fold([user('prompt', '[Image #1]')]),
       streaming: null,
       pending: [],
       imagePreviewsByMessageId: { prompt: ['file:///phone-photo.jpg'] }
@@ -209,7 +280,7 @@ describe('foldMobileNativeChatMessages', () => {
   // whose `tool_use` is older than the window. It used to render as its own
   // bubble of raw shell output with no owning call.
   it('drops a leading tool result whose call is older than the read window', () => {
-    const folded = foldMobileNativeChatMessages([
+    const folded = fold([
       toolResult('orphan', 'Exit code 1\norca-ide not found'),
       assistant('a1', 'Falling back to the installed binary.')
     ])
@@ -217,8 +288,50 @@ describe('foldMobileNativeChatMessages', () => {
     expect(folded.map((message) => message.id)).toEqual(['a1'])
   })
 
+  function planFrame(head: string): NativeChatMessage {
+    return {
+      id: 'plan',
+      role: 'system',
+      timestamp: 0,
+      source: 'transcript',
+      blocks: [
+        {
+          type: 'text',
+          text: 'codex · notification:turn/plan/updated',
+          providerFrame: {
+            provider: 'codex',
+            kind: 'notification:turn/plan/updated',
+            payload: { head, byteLength: head.length, digest: 'digest', truncated: false }
+          }
+        }
+      ]
+    }
+  }
+
+  // Desktop draws a Codex plan update in place, as its task list.
+  it('draws a Codex plan update where it happened, as an update_plan call', () => {
+    const folded = fold([
+      assistant('a1', 'Working.'),
+      toolCall('c1'),
+      toolResult('r1', 'ok'),
+      planFrame('{"plan":[{"step":"Port rows","status":"inProgress"}]}'),
+      toolCall('c2'),
+      toolResult('r2', 'ok')
+    ])
+    expect(folded.map((message) => message.id)).toEqual(['a1', 'plan', 'c2'])
+    expect(folded[1]).toMatchObject({
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', name: 'update_plan', state: 'completed' }]
+    })
+  })
+
+  it('draws nothing for a plan update it cannot read', () => {
+    const folded = fold([assistant('a1', 'Working.'), planFrame('{}')])
+    expect(folded.map((message) => message.id)).toEqual(['a1'])
+  })
+
   it('still folds a result whose call is inside the window', () => {
-    const folded = foldMobileNativeChatMessages([
+    const folded = fold([
       assistant('a1', 'Checking which binary is on PATH.'),
       toolCall('c1'),
       toolResult('r1', 'orca-ide not found')
@@ -233,7 +346,7 @@ describe('foldMobileNativeChatMessages', () => {
   })
 
   it('keeps a mixed Claude tool result with a harness sidecar paired', () => {
-    const folded = foldMobileNativeChatMessages([
+    const folded = fold([
       toolCall('c1'),
       {
         id: 'mixed',
@@ -253,22 +366,22 @@ describe('foldMobileNativeChatMessages', () => {
     ])
   })
 
-  it('keeps a hidden interruption from authorizing a later result', () => {
-    const folded = foldMobileNativeChatMessages([
-      toolCall('c1'),
+  it('draws a skill command the user ran as their message, as desktop does', () => {
+    // The rows the host reader decoded from a Claude Code session where `/hello Kelvin` ran a skill.
+    const folded = fold([
       {
-        id: 'interrupt',
-        role: 'user',
-        blocks: [{ type: 'text', text: '[Request interrupted by user]' }],
-        timestamp: 1,
-        source: 'transcript'
+        ...user(
+          'd7306d00',
+          '<command-message>hello</command-message>\n<command-name>/hello</command-name>\n<command-args>Kelvin</command-args>'
+        ),
+        parentId: 'f615a2bf'
       },
-      toolResult('orphan', 'stale output')
+      { ...assistant('0d3481c0', 'Hello, Kelvin!'), parentId: 'fa9d5ee6' }
     ])
 
-    expect(folded.map((message) => message.id)).toEqual(['c1'])
-    expect(folded[0]?.blocks).toEqual([
-      { type: 'tool-call', name: 'Bash', input: { command: 'command -v orca-ide' } }
+    expect(folded.map((message) => [message.role, message.blocks])).toEqual([
+      ['user', [{ type: 'text', text: '/hello Kelvin' }]],
+      ['assistant', [{ type: 'text', text: 'Hello, Kelvin!' }]]
     ])
   })
 })
@@ -363,7 +476,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       row('noise', 'user', '<system-reminder>hidden boundary'),
       row('a1', 'assistant', 'arrived later')
     ]
-    const folded = foldMobileNativeChatMessages(messages)
+    const folded = fold(messages)
     expect(folded.map((message) => message.id)).toEqual(['a1'])
 
     const { data } = buildMobileNativeChatTransientData({
@@ -399,7 +512,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       },
       row('a2', 'assistant', 'done')
     ]
-    const folded = foldMobileNativeChatMessages(messages)
+    const folded = fold(messages)
     expect(folded.map((message) => message.id)).toEqual(['a1', 'a2'])
 
     const { data } = buildMobileNativeChatTransientData({
@@ -418,7 +531,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       user('prompt', '[Image #1] earlier image'),
       row('a2', 'assistant', 'done')
     ]
-    const folded = foldMobileNativeChatMessages(messages)
+    const folded = fold(messages)
     expect(folded.map((message) => message.id)).toEqual(['a1', 'prompt', 'a2'])
 
     const { data } = buildMobileNativeChatTransientData({
@@ -428,5 +541,34 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       pending: [{ id: 'p1', text: 'sent after the image source', baselineTailMessageId: 'source' }]
     })
     expect(data.map((message) => message.id)).toEqual(['a1', 'prompt', 'p1', 'a2'])
+  })
+})
+
+describe("mobile shows the conversation, never a subagent's rows", () => {
+  it("keeps the spawn's one line and drops what the subagent said and did", () => {
+    const child = { agentId: 'task-1', producerKind: 'agent' as const }
+    const folded = fold([
+      user('ask', 'review the PR'),
+      {
+        id: 'spawn',
+        role: 'system',
+        blocks: [{ type: 'text', text: 'Kicked off 1 subagent' }],
+        timestamp: 0,
+        source: 'transcript'
+      },
+      { ...assistant('child-said', 'The PR is CLEAN.'), ...child },
+      {
+        id: 'child-grep',
+        role: 'assistant',
+        blocks: [{ type: 'tool-call', name: 'Grep', input: {} }],
+        timestamp: 0,
+        source: 'transcript',
+        ...child
+      },
+      assistant('answer', 'Delegated; nothing to fix.')
+    ])
+
+    expect(folded.map((message) => message.id)).toEqual(['ask', 'spawn', 'answer'])
+    expect(folded[2]?.blocks).toEqual([{ type: 'text', text: 'Delegated; nothing to fix.' }])
   })
 })

@@ -19,10 +19,12 @@ export function useWorktreeCardActivationActions({
   isActive,
   activationRowKey,
   onActivate,
+  onWorktreeCardClick,
   onImmediateActivate,
   isDeleting,
   isSshDisconnected,
   updateWorktreeMeta,
+  setWorkspaceUnreadByUser,
   openModal
 }: Pick<
   WorktreeCardProps,
@@ -33,9 +35,13 @@ export function useWorktreeCardActivationActions({
   | 'isActive'
   | 'activationRowKey'
   | 'onActivate'
+  | 'onWorktreeCardClick'
   | 'onImmediateActivate'
 > &
-  Pick<Foundation, 'isSshDisconnected' | 'updateWorktreeMeta' | 'openModal'> &
+  Pick<
+    Foundation,
+    'isSshDisconnected' | 'updateWorktreeMeta' | 'setWorkspaceUnreadByUser' | 'openModal'
+  > &
   Pick<LinkedDetails, 'isDeleting'>) {
   const worktreeRef = useRef(worktree)
   useLayoutEffect(() => {
@@ -73,6 +79,7 @@ export function useWorktreeCardActivationActions({
         event.stopPropagation()
         return
       }
+      onWorktreeCardClick?.()
       // Why: route sidebar clicks through the shared activation path so the back/forward stack stays complete.
       recordRendererCrashBreadcrumb('sidebar_worktree_activate', {
         worktreeId: worktree.id,
@@ -98,6 +105,7 @@ export function useWorktreeCardActivationActions({
       activationRowKey,
       isSshDisconnected,
       onActivate,
+      onWorktreeCardClick,
       onImmediateActivate,
       onSelectionGesture
     ]
@@ -151,13 +159,9 @@ export function useWorktreeCardActivationActions({
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
       event.stopPropagation()
-      updateWorktreeMeta(
-        worktree.id,
-        { isUnread: !worktree.isUnread },
-        { executionHostId: worktree.hostId ?? 'local' }
-      )
+      setWorkspaceUnreadByUser(worktree.id, !worktree.isUnread, worktree.hostId ?? 'local')
     },
-    [worktree.hostId, worktree.id, worktree.isUnread, updateWorktreeMeta]
+    [worktree.hostId, worktree.id, worktree.isUnread, setWorkspaceUnreadByUser]
   )
 
   return { handleClick, handleRenameTitle, handleDoubleClick, handleToggleUnreadQuick }

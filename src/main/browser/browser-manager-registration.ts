@@ -1,21 +1,26 @@
 import { webContents } from 'electron'
 import { browserDownloadDestinationReservations } from './browser-download-destination'
 import { isWorkspaceDocPageId } from './doc-preview-guest-policy'
-import type { BrowserSessionUserAgentMode } from '../../shared/browser-workspace-types'
 import type { BrowserGuestRegistration } from './browser-manager-types'
 import { BrowserManagerGuestPolicy } from './browser-manager-guest-policy'
+import {
+  cancelBrowserPagePrompts,
+  showBrowserPagePromptsAwaitingRegistration
+} from './browser-page-prompts'
 
 export abstract class BrowserManagerRegistration extends BrowserManagerGuestPolicy {
-  registerGuest({
-    browserPageId,
-    browserTabId: legacyBrowserTabId,
-    workspaceId,
-    worktreeId,
-    sessionProfileId,
-    userAgentMode,
-    webContentsId,
-    rendererWebContentsId
-  }: BrowserGuestRegistration): boolean {
+  registerGuest(
+    {
+      browserPageId,
+      browserTabId: legacyBrowserTabId,
+      workspaceId,
+      worktreeId,
+      sessionProfileId,
+      webContentsId,
+      rendererWebContentsId
+    }: BrowserGuestRegistration,
+    options?: { retainPreviousGuestPolicies?: boolean }
+  ): boolean {
     const browserTabId = browserPageId ?? legacyBrowserTabId
     // Why refuse rather than overwrite: the two halves of the registry must stay disjoint, or one
     // id resolves in both and the tool door silently prefers the document guest over the page.
@@ -47,8 +52,13 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
 
     const previousWebContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (previousWebContentsId !== undefined && previousWebContentsId !== webContentsId) {
-      this.retireStaleGuestWebContents(previousWebContentsId)
-      this.viewportPresetActiveByTabId.delete(browserTabId)
+      if (options?.retainPreviousGuestPolicies) {
+        // A staged swap must be able to restore this still-live guest on failure.
+        this.tabIdByWebContentsId.delete(previousWebContentsId)
+      } else {
+        this.retireStaleGuestWebContents(previousWebContentsId)
+      }
+      this.viewportPresetByTabId.delete(browserTabId)
       this.viewportScrollStateByTabId.delete(browserTabId)
     }
     this.webContentsIdByTabId.set(browserTabId, webContentsId)
@@ -57,11 +67,6 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       this.workspaceIdByPageId.set(browserTabId, workspaceId)
     }
     this.sessionProfileIdByPageId.set(browserTabId, sessionProfileId ?? null)
-    if (userAgentMode) {
-      this.userAgentModeByPageId.set(browserTabId, userAgentMode)
-    } else {
-      this.userAgentModeByPageId.delete(browserTabId)
-    }
     this.rendererWebContentsIdByTabId.set(browserTabId, rendererWebContentsId)
     if (worktreeId) {
       this.worktreeIdByTabId.set(browserTabId, worktreeId)
@@ -76,10 +81,17 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.flushPendingPermissionEvents(browserTabId, webContentsId)
     this.flushPendingPopupEvents(browserTabId, webContentsId)
     this.flushPendingDownloadRequests(browserTabId, webContentsId)
+    showBrowserPagePromptsAwaitingRegistration(
+      webContentsId,
+      this.getRendererContextForGuest(webContentsId)
+    )
     return true
   }
 
-  unregisterGuest(browserTabId: string): void {
+  unregisterGuest(
+    browserTabId: string,
+    reason: 'page-closed' | 'guest-destroyed' = 'page-closed'
+  ): void {
     // Why the check on the exit door too: a document page withdraws by revoking its grant, never
     // through here, so its id arriving is misaddressed — and the cancel below would evict that
     // preview's live grab on the strength of it.
@@ -88,6 +100,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     }
     // Why: teardown mid-grab must cancel it so the renderer gets a signal, not a dangling Promise.
     this.cancelGrabOp(browserTabId, 'evicted')
+    cancelBrowserPagePrompts(browserTabId)
 
     // Why: remove attachGuestPolicies listeners so their guest-WebContents closures don't block GC.
     const guestWebContentsId = this.webContentsIdByTabId.get(browserTabId)
@@ -115,10 +128,14 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       mouseWheelZoomCleanup()
       this.mouseWheelZoomCleanupByTabId.delete(browserTabId)
     }
-    // Why: downloads are per-tab chrome; closing the tab must cancel active writes, not orphan them.
+    let hasActiveDownloads = false
     for (const [downloadId, download] of this.downloadsById.entries()) {
       if (download.browserTabId === browserTabId && !download.terminalEvent) {
-        this.cancelDownloadInternal(downloadId, 'Tab closed before download completed.')
+        if (reason === 'page-closed') {
+          this.cancelDownloadInternal(downloadId, 'Tab closed before download completed.')
+        } else {
+          hasActiveDownloads = true
+        }
       }
     }
     const wcId = this.webContentsIdByTabId.get(browserTabId)
@@ -126,15 +143,16 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       this.tabIdByWebContentsId.delete(wcId)
     }
     this.webContentsIdByTabId.delete(browserTabId)
-    this.rendererWebContentsIdByTabId.delete(browserTabId)
+    // A destroyed guest can recover in an open page while its downloads still report progress.
+    if (!hasActiveDownloads) {
+      this.rendererWebContentsIdByTabId.delete(browserTabId)
+    }
     this.workspaceIdByPageId.delete(browserTabId)
     this.sessionProfileIdByPageId.delete(browserTabId)
-    this.userAgentModeByPageId.delete(browserTabId)
     this.worktreeIdByTabId.delete(browserTabId)
     // Why: drop the viewport-op chain so the Map doesn't retain a promise keyed to a destroyed guest.
     this.viewportOpsByTabId.delete(browserTabId)
-    this.viewportUaOverrideMobileByTabId.delete(browserTabId)
-    this.viewportPresetActiveByTabId.delete(browserTabId)
+    this.viewportPresetByTabId.delete(browserTabId)
     this.viewportScrollStateByTabId.delete(browserTabId)
     if (wcId !== undefined) {
       this.pendingNavigationByGuestId.delete(wcId)
@@ -147,13 +165,11 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     browserPageId,
     worktreeId,
     sessionProfileId,
-    userAgentMode,
     webContentsId
   }: {
     browserPageId: string
     worktreeId?: string
     sessionProfileId?: string | null
-    userAgentMode?: BrowserSessionUserAgentMode
     webContentsId: number
   }): boolean {
     // Why the same check on both registration doors: one id resolving in both halves is the exact
@@ -171,17 +187,12 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     const previousWebContentsId = this.webContentsIdByTabId.get(browserPageId)
     if (previousWebContentsId !== undefined && previousWebContentsId !== webContentsId) {
       this.retireStaleGuestWebContents(previousWebContentsId)
-      this.viewportPresetActiveByTabId.delete(browserPageId)
+      this.viewportPresetByTabId.delete(browserPageId)
       this.viewportScrollStateByTabId.delete(browserPageId)
     }
     this.webContentsIdByTabId.set(browserPageId, webContentsId)
     this.tabIdByWebContentsId.set(webContentsId, browserPageId)
     this.sessionProfileIdByPageId.set(browserPageId, sessionProfileId ?? null)
-    if (userAgentMode) {
-      this.userAgentModeByPageId.set(browserPageId, userAgentMode)
-    } else {
-      this.userAgentModeByPageId.delete(browserPageId)
-    }
     if (worktreeId) {
       this.worktreeIdByTabId.set(browserPageId, worktreeId)
     }
@@ -211,11 +222,9 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.pageInitiatedTabBudgetByRootGuestId.clear()
     this.worktreeIdByTabId.clear()
     this.sessionProfileIdByPageId.clear()
-    this.userAgentModeByPageId.clear()
-    this.viewportUaOverrideMobileByTabId.clear()
-    this.viewportPresetActiveByTabId.clear()
+    this.viewportPresetByTabId.clear()
     this.viewportScrollStateByTabId.clear()
-    this.authUserAgentOverrideStateByGuestId.clear()
+    this.cdpUserAgentOverrideStateByGuestId.clear()
     this.pendingNavigationByGuestId.clear()
     this.pendingLoadFailuresByGuestId.clear()
     this.loadErrorsByGuestId.clear()

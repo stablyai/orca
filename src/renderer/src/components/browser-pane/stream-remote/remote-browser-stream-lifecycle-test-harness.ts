@@ -104,7 +104,7 @@ export function createHarness() {
       await gate.wait
     }
     // Models the host closing the subscription and only then rejecting the request, which is what
-    // src/main/ipc/runtime-environments.ts does on a stale pairing.
+    // src/main/ipc/runtime-environments/runtime-environments.ts does on a stale pairing.
     if (closeBeforeNextSubscribeRejects) {
       closeBeforeNextSubscribeRejects = false
       callbacks.onClose?.()

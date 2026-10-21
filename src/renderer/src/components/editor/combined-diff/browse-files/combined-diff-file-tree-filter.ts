@@ -66,7 +66,7 @@ export function getCombinedDiffFileTreeEntriesMatchingStaticFilters({
     return entries
   }
   return entries.filter((entry) => {
-    if (excludedExtensions.has(getEntryExtension(entry))) {
+    if (excludedExtensions.size > 0 && excludedExtensions.has(getEntryExtension(entry))) {
       return false
     }
     return normalizedQuery.length === 0 || getEntrySearchText(entry).includes(normalizedQuery)

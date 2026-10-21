@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import {
@@ -193,21 +191,6 @@ describe('useTerminalProviderSnapshotCapability', () => {
     expect(terminalProviderHasAuthoritativeSnapshot('ssh:target@@pty-1')).toBe(true)
     expect(hook.result.current).toBeGreaterThan(initialRevision)
     hook.unmount()
-  })
-
-  // Why source-pinned: the hook test cannot prove the quiet parking effect consumes the external revision.
-  it('invalidates the Terminal parking pass when a capability verdict changes', () => {
-    const projectionSource = readFileSync(
-      join(__dirname, '../use-terminal-workspace-projection.ts'),
-      'utf8'
-    )
-    const parkingSource = readFileSync(join(__dirname, '../use-terminal-parking-pass.ts'), 'utf8')
-
-    expect(projectionSource).toContain(
-      'const terminalProviderSnapshotCapabilityRevision = useTerminalProviderSnapshotCapability('
-    )
-    expect(projectionSource).toContain('terminalProviderSnapshotCapabilityRevision')
-    expect(parkingSource.match(/terminalProviderSnapshotCapabilityRevision/g)).toHaveLength(2)
   })
 
   it('cancels an unknown-capability retry when the hook unmounts', async () => {

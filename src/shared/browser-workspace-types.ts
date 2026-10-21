@@ -156,12 +156,6 @@ export type BrowserTab = BrowserWorkspace
 
 export type BrowserSessionProfileScope = 'default' | 'isolated' | 'imported'
 
-export type BrowserSessionUserAgentMode = 'clean' | 'native'
-
-export type BrowserSessionProfileCreateOptions = {
-  userAgentMode?: BrowserSessionUserAgentMode
-}
-
 export type BrowserSessionProfileSource = {
   browserFamily:
     | 'chrome'
@@ -183,7 +177,6 @@ export type BrowserSessionProfile = {
   partition: string
   label: string
   source: BrowserSessionProfileSource | null
-  userAgentMode?: BrowserSessionUserAgentMode
 }
 
 export type BrowserCookieImportSummary = {
@@ -191,9 +184,13 @@ export type BrowserCookieImportSummary = {
   importedCookies: number
   skippedCookies: number
   googleCookiesSkipped?: number
-  // Why (STA-4300): cookies whose source partition identity could not be read faithfully are
-  // skipped rather than written unpartitioned, and a skip is only honest if it is reported.
+  // Includes readable cookies withheld to preserve a site with an unreadable partition.
   partitionSkippedCookies?: number
+  // Older peers retain the combined count; no cookie details cross this boundary.
+  partitionSkipBreakdown?: {
+    unreadableCookies: number
+    preservedRelatedCookies: number
+  }
   domains: string[]
   warning?:
     | {

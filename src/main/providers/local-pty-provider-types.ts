@@ -1,5 +1,5 @@
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
-import type { PtySpawnOptions } from './types'
+import type { PtySpawnOptions } from './pty-provider-contract'
 
 export type LocalPtyProviderOptions = {
   /** Why: `ctx.command` (pi/omp/claude) must drive overlay source-dir selection — a disk-presence fallback shadows the other agent's extensions. */
@@ -7,6 +7,7 @@ export type LocalPtyProviderOptions = {
     id: string,
     baseEnv: Record<string, string>,
     ctx?: {
+      explicitEnv?: PtySpawnOptions['env']
       command?: string
       launchAgent?: PtySpawnOptions['launchAgent']
       codexHomePathOverride?: PtySpawnOptions['codexHomePathOverride']
@@ -23,6 +24,7 @@ export type LocalPtyProviderOptions = {
   isHistoryEnabled?: () => boolean
   /** Why: COMSPEC is always cmd.exe, so this callback injects the user's persisted shell preference. Undefined when none set. */
   getWindowsShell?: () => string | undefined
+  getDefaultShell?: () => string | undefined
   getWindowsPowerShellImplementation?: () => 'auto' | 'powershell.exe' | 'pwsh.exe' | undefined
   pwshAvailable?: () => boolean | Promise<boolean>
   onSpawned?: (id: string, incarnationId: string) => void

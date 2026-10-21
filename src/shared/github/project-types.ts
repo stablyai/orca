@@ -5,6 +5,13 @@
 // would obscure ownership of the Project surface.
 
 export type GitHubProjectViewLayout = 'TABLE_LAYOUT' | 'BOARD_LAYOUT' | 'ROADMAP_LAYOUT'
+
+/** Allowlist shared by the host gate, tab strip, and picker — raw.layout is
+ *  cast unchecked, so an unknown future GitHub layout must fail this check
+ *  everywhere at once rather than drifting per call site. */
+export function isRenderableProjectViewLayout(layout: string): boolean {
+  return layout === 'TABLE_LAYOUT' || layout === 'BOARD_LAYOUT' || layout === 'ROADMAP_LAYOUT'
+}
 export type GitHubProjectOwnerType = 'organization' | 'user'
 
 // Why: anything outside this union must render as an empty cell — the
@@ -81,13 +88,18 @@ export type GitHubProjectView = {
   number: number
   name: string
   layout: GitHubProjectViewLayout
-  /** Normalized to '' when GitHub returns null. Why: passing null through as
-   *  `$q` in the items query would change the query shape between filtered
-   *  and unfiltered views; the empty string keeps the GraphQL shape stable. */
+  /** Normalized to '' when GitHub returns null. `ProjectV2.items(query:)` is
+   *  declared `String = ""`, so sending '' and omitting the argument are the
+   *  same request — there is no non-search item field to fall back to. '' is
+   *  therefore only a UI signal: it means "this view is unfiltered". */
   filter: string
   fields: GitHubProjectField[]
   groupByFields: GitHubProjectField[]
   sortByFields: GitHubProjectSort[]
+  /** Board-layout column field(s). Optional for wire compat — older hosts
+   *  don't send it, and hosts fall back to omitting it when the GraphQL
+   *  schema lacks `verticalGroupByFields` (older GHES). */
+  verticalGroupByFields?: GitHubProjectField[]
 }
 
 export type GitHubProjectUser = {

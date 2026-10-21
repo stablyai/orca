@@ -8,7 +8,7 @@ import {
 } from './palette-repo-resolution'
 import { getActiveSimulatorTabId } from './simulator-palette-active-tab'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import { compareBaseSensitivityLocaleText } from './locale-text-collators'
+import { compareBaseSensitivityLocaleText } from '../../../shared/locale-text-collators'
 import {
   comparePaletteTabResults,
   isOmniboxPaletteTabFieldAllowed,
@@ -92,7 +92,7 @@ export const SIMULATOR_TYPE_SEARCH_ALIASES = [
   'emulator'
 ] as const
 
-export function isSimulatorPaletteQueryTooLarge(
+function isSimulatorPaletteQueryTooLarge(
   query: string,
   maxBytes = SIMULATOR_PALETTE_QUERY_MAX_BYTES
 ): boolean {

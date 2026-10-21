@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
-import { WATCH_BATCH_TRAILING_MS } from '../../shared/filesystem-watch-batch-window'
+import {
+  WATCH_BATCH_INTERVAL_MS,
+  WATCH_BATCH_LEADING_MS
+} from '../../shared/filesystem-watch-batch-window'
 
 const { statMock, subscribeMock } = vi.hoisted(() => ({
   statMock: vi.fn(),
@@ -13,6 +16,11 @@ vi.mock('./parcel-watcher-process', () => ({ subscribeViaWatcherProcess: subscri
 
 import { createLocalWatcher } from './filesystem-watcher-local-events'
 import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
+import {
+  subscribeLocalWatcher,
+  unsubscribeLocalWatcher
+} from './filesystem-watcher-local-subscription'
+import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -46,6 +54,110 @@ describe('local filesystem watcher flush serialization', () => {
     })
   })
 
+  it('flushes the first event after quiet at the leading delay', async () => {
+    const root = await createLocalWatcher('/repo', '/repo')
+    root.listeners.set(1, sender as never)
+    watcherCallback?.(null, [{ type: 'delete', path: '/repo/a.ts' }])
+    vi.advanceTimersByTime(WATCH_BATCH_LEADING_MS - 10)
+    // Joins the armed flush instead of pushing it back.
+    watcherCallback?.(null, [{ type: 'delete', path: '/repo/b.ts' }])
+    vi.advanceTimersByTime(9)
+    await flushMicrotasks()
+    expect(sender.send).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    await flushMicrotasks()
+    expect(sender.send).toHaveBeenCalledTimes(1)
+    expect(sender.send.mock.calls[0][1]).toMatchObject({ events: [{}, {}] })
+    expect(root.batch.timer).toBeNull()
+  })
+
+  it('waits a full interval after a flush before the next one', async () => {
+    const root = await createLocalWatcher('/repo', '/repo')
+    root.listeners.set(1, sender as never)
+    watcherCallback?.(null, [{ type: 'delete', path: '/repo/a.ts' }])
+    vi.advanceTimersByTime(WATCH_BATCH_LEADING_MS)
+    await flushMicrotasks()
+    expect(sender.send).toHaveBeenCalledTimes(1)
+    watcherCallback?.(null, [{ type: 'delete', path: '/repo/b.ts' }])
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS - 1)
+    await flushMicrotasks()
+    expect(sender.send).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1)
+    await flushMicrotasks()
+    expect(sender.send).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps flushing a sustained stream on the interval instead of starving', async () => {
+    const root = await createLocalWatcher('/repo', '/repo')
+    root.listeners.set(1, sender as never)
+    for (let elapsed = 0; elapsed < 1_000; elapsed += 10) {
+      watcherCallback?.(null, [{ type: 'delete', path: `/repo/file-${elapsed}.ts` }])
+      vi.advanceTimersByTime(10)
+      await flushMicrotasks()
+    }
+    expect(sender.send.mock.calls.length).toBeGreaterThanOrEqual(
+      1_000 / WATCH_BATCH_INTERVAL_MS - 1
+    )
+  })
+
+  it('cancels an armed flush without a later flush', async () => {
+    const root = await createLocalWatcher('/repo', '/repo')
+    root.listeners.set(1, sender as never)
+    watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
+    vi.advanceTimersByTime(100)
+    watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
+    cancelLocalBatchFlush(root)
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS * 5)
+    await flushMicrotasks()
+    expect(sender.send).not.toHaveBeenCalled()
+    expect(root.batch.timer).toBeNull()
+  })
+
+  it('discards queued and late events after a terminal watcher error', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const root = await createLocalWatcher('/repo', '/repo')
+      root.listeners.set(1, sender as never)
+      watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
+      watcherCallback?.(new Error('watcher interrupted'), [])
+      expect(sender.send).toHaveBeenCalledTimes(1)
+      watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
+      vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
+      await flushMicrotasks()
+      expect(sender.send).toHaveBeenCalledTimes(1)
+      expect(root.batch.cancelled).toBe(true)
+      expect(root.batch.events).toEqual([])
+      expect(root.batch.timer).toBeNull()
+    } finally {
+      errorLog.mockRestore()
+    }
+  })
+
+  it('suppresses an inflight batch and its queued drain after a terminal watcher error', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const pendingStat = deferred<{ isDirectory: () => boolean }>()
+    statMock.mockReturnValueOnce(pendingStat.promise)
+    try {
+      const root = await createLocalWatcher('/repo', '/repo')
+      root.listeners.set(1, sender as never)
+      watcherCallback?.(null, [{ type: 'update', path: '/repo/first.ts' }])
+      vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
+      await flushMicrotasks()
+      expect(statMock).toHaveBeenCalledTimes(1)
+      watcherCallback?.(null, [{ type: 'update', path: '/repo/queued.ts' }])
+      watcherCallback?.(new Error('watcher interrupted'), [])
+      pendingStat.resolve({ isDirectory: () => false })
+      vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS * 5)
+      await flushMicrotasks()
+      expect(sender.send).toHaveBeenCalledTimes(1)
+      expect(statMock).toHaveBeenCalledTimes(1)
+      expect(root.batch.events).toEqual([])
+      expect(root.batch.timer).toBeNull()
+    } finally {
+      errorLog.mockRestore()
+    }
+  })
+
   it('serializes an inflight flush and drains one follow-up without overlap', async () => {
     const firstStat = deferred<{ isDirectory: () => boolean }>()
     const secondStat = deferred<{ isDirectory: () => boolean }>()
@@ -56,12 +168,12 @@ describe('local filesystem watcher flush serialization', () => {
     const secondPath = '/repo/second.ts'
 
     watcherCallback?.(null, [{ type: 'update', path: firstPath }])
-    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
     await flushMicrotasks()
     expect(statMock).toHaveBeenCalledTimes(1)
 
     watcherCallback?.(null, [{ type: 'update', path: secondPath }])
-    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
     await flushMicrotasks()
     expect(statMock).toHaveBeenCalledTimes(1)
     expect(sender.send).not.toHaveBeenCalled()
@@ -90,7 +202,7 @@ describe('local filesystem watcher flush serialization', () => {
     const replacedPath = '/repo/replaced.ts'
 
     watcherCallback?.(null, [{ type: 'update', path: firstPath }])
-    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
     await flushMicrotasks()
     watcherCallback?.(null, [
       { type: 'create', path: transientPath },
@@ -98,7 +210,7 @@ describe('local filesystem watcher flush serialization', () => {
       { type: 'delete', path: replacedPath },
       { type: 'create', path: replacedPath }
     ])
-    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
     await flushMicrotasks()
     expect(statMock).toHaveBeenCalledTimes(1)
 
@@ -120,10 +232,10 @@ describe('local filesystem watcher flush serialization', () => {
     statMock.mockReturnValueOnce(firstStat.promise)
 
     watcherCallback?.(null, [{ type: 'update', path: '/repo/first.ts' }])
-    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
     await flushMicrotasks()
     watcherCallback?.(null, [{ type: 'update', path: '/repo/queued.ts' }])
-    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
     await flushMicrotasks()
     root.listeners.clear()
 
@@ -152,7 +264,7 @@ describe('local filesystem watcher flush serialization', () => {
       null,
       paths.map((path) => ({ type: 'update' as const, path }))
     )
-    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
     // Why a loop, not a fixed microtask count: 5,000 stats through 8 lanes take many turns.
     for (let i = 0; i < eventCount * 4 && sender.send.mock.calls.length === 0; i++) {
       await Promise.resolve()
@@ -185,7 +297,7 @@ describe('local filesystem watcher flush serialization', () => {
         path: `/repo/file-${index}.ts`
       }))
     )
-    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
     await flushMicrotasks()
     expect(statMock).toHaveBeenCalledTimes(8)
 
@@ -200,7 +312,7 @@ describe('local filesystem watcher flush serialization', () => {
     expect(sender.send).not.toHaveBeenCalled()
   })
 
-  it('leaves an open debounce window to the armed timer instead of draining early', async () => {
+  it('leaves an open flush window to the armed timer instead of draining early', async () => {
     const firstStat = deferred<{ isDirectory: () => boolean }>()
     const secondStat = deferred<{ isDirectory: () => boolean }>()
     statMock.mockReturnValueOnce(firstStat.promise).mockReturnValueOnce(secondStat.promise)
@@ -210,12 +322,12 @@ describe('local filesystem watcher flush serialization', () => {
     const otherPath = '/repo/other.ts'
 
     watcherCallback?.(null, [{ type: 'update', path: '/repo/first.ts' }])
-    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+    vi.advanceTimersByTime(WATCH_BATCH_LEADING_MS)
     await flushMicrotasks()
 
-    // Queue an event mid-flush, then settle the flush before its debounce window closes.
+    // Queue an event mid-flush, then settle the flush before its window closes.
     watcherCallback?.(null, [{ type: 'create', path: transientPath }])
-    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS - 50)
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS - 50)
     firstStat.resolve({ isDirectory: () => true })
     await flushMicrotasks()
     expect(sender.send).toHaveBeenCalledTimes(1)
@@ -226,7 +338,7 @@ describe('local filesystem watcher flush serialization', () => {
       { type: 'delete', path: transientPath },
       { type: 'update', path: otherPath }
     ])
-    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
     await flushMicrotasks()
     secondStat.resolve({ isDirectory: () => false })
     await flushMicrotasks()
@@ -235,5 +347,27 @@ describe('local filesystem watcher flush serialization', () => {
     expect((sender.send.mock.calls[1][1] as FsChangedPayload).events).toEqual([
       { kind: 'update', absolutePath: otherPath, isDirectory: false }
     ])
+  })
+
+  it('re-arms the flush window after a re-subscribe inside the teardown grace period', async () => {
+    // Why real timers: fake-timers' refresh() revives a cleared handle, but Node's is a no-op — the bug only shows on real Timeouts.
+    vi.useRealTimers()
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    const listener = { ...sender, id: 7, removeListener: vi.fn(), once: vi.fn() }
+    try {
+      await subscribeLocalWatcher('/repo', listener as never)
+      watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
+      unsubscribeLocalWatcher('/repo', listener.id)
+      await subscribeLocalWatcher('/repo', listener as never)
+      watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
+      await new Promise((resolve) => setTimeout(resolve, WATCH_BATCH_INTERVAL_MS + 50))
+      expect(sender.send).toHaveBeenCalledTimes(1)
+    } finally {
+      for (const teardown of watcherLifecycleState.pendingTeardowns.values()) {
+        clearTimeout(teardown)
+      }
+      watcherLifecycleState.pendingTeardowns.clear()
+      watcherLifecycleState.watchedRoots.clear()
+    }
   })
 })

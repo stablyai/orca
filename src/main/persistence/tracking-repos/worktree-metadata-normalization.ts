@@ -21,6 +21,7 @@ import {
 } from '../loading-store/worktree-identity-metadata'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/meta-persisted-defaults'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
 
 // Why: worktrees deleted outside Orca orphan their worktreeMeta, so the map grew monotonically (63% dead on a heavy install).
 // GC stays narrow: local-host entries only (a local existsSync would falsely condemn SSH/WSL remote paths) and only after a 30-day idle grace.
@@ -99,6 +100,14 @@ function normalizeLinkedMetadata(meta: WorktreeMeta): boolean {
     ? sourceContext
     : null
   let changed = false
+  const linkedItems = getWorkspaceAttachments(meta)
+  if (
+    meta.linkedItems !== undefined &&
+    JSON.stringify(meta.linkedItems) !== JSON.stringify(linkedItems)
+  ) {
+    meta.linkedItems = linkedItems
+    changed = true
+  }
   if (!areWorkspaceLinkedItemsEqual(meta.linkedWorkItem, linkedWorkItem)) {
     meta.linkedWorkItem = linkedWorkItem
     changed = true

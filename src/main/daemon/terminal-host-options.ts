@@ -2,6 +2,7 @@ import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TakePendingOutputResult, TerminalSnapshot } from './types'
+import type { TerminalSpawnGate } from './terminal-spawn-gate'
 
 export type TerminalHostOptions = {
   spawnSubprocess: (opts: {
@@ -15,6 +16,7 @@ export type TerminalHostOptions = {
     startupCommandDelivery?: StartupCommandDelivery
     launchAgent?: TuiAgent
     shellOverride?: string
+    terminalShellArgs?: string[]
     terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     isCanceled?: () => boolean
@@ -33,6 +35,8 @@ export type TerminalHostOptions = {
     snapshot: TerminalSnapshot,
     records: TakePendingOutputResult['records']
   ) => void
+  /** Charged only on the branch that forks; attach and adoption never reach it. */
+  spawnGate?: TerminalSpawnGate
   // Why: tests need deterministic tombstone eviction without thousands of sessions.
   maxTombstones?: number
 }

@@ -1,14 +1,5 @@
-// Why this file exists: deregistering a project used to strand every row it owned. No sweeper could
-// reach them because the missing-directory prune is gated on the repo still being registered.
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { getDefaultWorkspaceSession } from '../shared/constants'
-import { composeWorktreeHostIdentity } from '../shared/worktree/host-qualified-identity'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
-import type { PersistedState } from '../shared/persisted-state-types'
 import {
+  closeTestStores,
   testState,
   createStore,
   writeDataFile,
@@ -16,8 +7,21 @@ import {
   makeRepo,
   makeTerminalTab
 } from './persistence-test-harness'
+// Why this file exists: deregistering a project used to strand every row it owned. No sweeper could
+// reach them because the missing-directory prune is gated on the repo still being registered.
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { rmSync, mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { getDefaultWorkspaceSession } from '../shared/constants'
+import {
+  composeWorktreeHostIdentity,
+  hostWorktreeTarget
+} from '../shared/worktree/host-qualified-identity'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
+import type { PersistedState } from '../shared/persisted-state-types'
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
@@ -67,7 +71,8 @@ describe('deregistered repo residue', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-orphan-sweep-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -75,8 +80,12 @@ describe('deregistered repo residue', () => {
     const seed = await createStore()
     seed.addRepo(makeRepo({ id: LIVE_REPO, path: '/workspace/live' }))
     seed.addRepo(makeRepo({ id: GONE_REPO, path: '/workspace/orphan' }))
-    seed.setWorktreeMetaForHost(LIVE_WORKTREE, 'local', { displayName: 'Live' })
-    seed.setWorktreeMetaForHost(GONE_WORKTREE, 'local', { displayName: 'Orphan' })
+    seed.setWorktreeMeta(hostWorktreeTarget({ id: LIVE_WORKTREE, hostId: 'local' }), {
+      displayName: 'Live'
+    })
+    seed.setWorktreeMeta(hostWorktreeTarget({ id: GONE_WORKTREE, hostId: 'local' }), {
+      displayName: 'Orphan'
+    })
     seed.setWorkspaceSession(sessionFor(GONE_WORKTREE), 'local')
     seed.flush()
 
@@ -186,6 +195,31 @@ describe('deregistered repo residue', () => {
     expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
   })
 
+  // A close record names its workspace only in its value, so like a sleeping agent it must seed the
+  // sweep itself or a removed project's records wait out the TTL.
+  it("drops a close record that is the orphan repo's only residue, and self-clears", async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo({ id: LIVE_REPO, path: '/workspace/live' })],
+      worktreeMeta: {},
+      workspaceSession: {
+        ...getDefaultWorkspaceSession(),
+        closedTerminalTabTombstonesByTabId: {
+          'tab-gone': { worktreeId: GONE_WORKTREE, closedAt: Date.now(), reason: 'user' },
+          'tab-live': { worktreeId: LIVE_WORKTREE, closedAt: Date.now(), reason: 'user' }
+        }
+      }
+    })
+
+    const store = await createStore()
+    store.flush()
+    expect(
+      Object.keys(store.getWorkspaceSession('local').closedTerminalTabTombstonesByTabId ?? {})
+    ).toEqual(['tab-live'])
+    const reloaded = await createStore()
+    expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
+  })
+
   // The session scalars are pruned by bespoke rules, not by owner key, so no owner-key loop reaches
   // them. Each has to be able to seed the sweep on its own or an orphan named only there is stuck.
   it.each([
@@ -222,7 +256,9 @@ describe('deregistered repo residue', () => {
   it('leaves a profile with no orphans byte-identical across reloads', async () => {
     const seed = await createStore()
     seed.addRepo(makeRepo({ id: LIVE_REPO, path: '/workspace/live' }))
-    seed.setWorktreeMetaForHost(LIVE_WORKTREE, 'local', { displayName: 'Live' })
+    seed.setWorktreeMeta(hostWorktreeTarget({ id: LIVE_WORKTREE, hostId: 'local' }), {
+      displayName: 'Live'
+    })
     seed.setWorkspaceSession(sessionFor(LIVE_WORKTREE), 'local')
     seed.flush()
 

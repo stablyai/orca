@@ -92,8 +92,14 @@
   "auto.components.GitHubItemDialog.dc1ca081a8": {
     "ko": "열림"
   },
+  "auto.components.GitHubItemDialog.e15a8b77ef": {
+    "ko": "이 검사에는 인라인 세부정보가 없습니다."
+  },
   "auto.components.GitHubItemDialog.e31651a224": {
     "ko": "실패한 체크 다시 실행"
+  },
+  "auto.components.GitHubItemDialog.e45324fbed": {
+    "ko": "검사 세부정보를 로드하지 못했습니다."
   },
   "auto.components.GitHubItemDialog.e463ec935f": {
     "ko": "체크 재실행 요청됨"
@@ -281,6 +287,9 @@
   "auto.components.PullRequestPage.6885c619e7": {
     "ko": "repos 경로가 없으면 답글을 달 수 없습니다."
   },
+  "auto.components.PullRequestPage.6b1d5ee3e4": {
+    "ko": "이 검사에는 인라인 세부정보가 없습니다."
+  },
   "auto.components.PullRequestPage.710e47aa06": {
     "ko": "PR이 다시 열렸습니다"
   },
@@ -328,6 +337,9 @@
   },
   "auto.components.PullRequestPage.ddfd42f460": {
     "ko": "agent를 시작하기 전에 프롬프트를 검토하세요."
+  },
+  "auto.components.PullRequestPage.e04c027d98": {
+    "ko": "검사 세부정보를 로드하지 못했습니다."
   },
   "auto.components.PullRequestPage.e1f3641bfd": {
     "ko": "소스 브랜치"
@@ -886,9 +898,6 @@
   },
   "auto.components.editor.IpynbViewer.3e4cbf15ea": {
     "ko": "원시"
-  },
-  "auto.components.editor.IpynbViewer.59b6cd874b": {
-    "ko": "코드"
   },
   "auto.components.editor.IpynbViewer.d6f37a640b": {
     "ko": "빈 노트북"
@@ -1787,11 +1796,17 @@
   "auto.components.right.sidebar.FileExplorerRow.3161c4e425": {
     "ko": "폴더"
   },
+  "auto.components.right.sidebar.FileExplorerRow.revealInFinder": {
+    "ko": "Finder에서 보기"
+  },
   "auto.components.right.sidebar.GitHistoryPanel.8232c8b2f2": {
     "ko": "{{value0}} commit 열기: {{value1}}"
   },
   "auto.components.right.sidebar.GitHistoryPanel.9289ba0cb9": {
     "ko": "refs란 무엇인가요?"
+  },
+  "auto.components.right.sidebar.GitHubPRStackMap.316039b5db": {
+    "ko": "검사 결과 대기 중"
   },
   "auto.components.right.sidebar.PortsPanel.0f1d8cd324": {
     "ko": "바인딩"
@@ -1921,6 +1936,9 @@
   },
   "auto.components.right.sidebar.gitlab.mr.merge.state.49ac4fec10": {
     "ko": "검사 실패"
+  },
+  "auto.components.right.sidebar.gitlab.mr.merge.state.bf628700f6": {
+    "ko": "파이프라인이 성공해야 합니다"
   },
   "auto.components.right.sidebar.index.8bc2bbc3a0": {
     "ko": "탐색기"
@@ -2103,13 +2121,13 @@
     "ko": "기본 인수 없음"
   },
   "auto.components.settings.AgentsPane.agentPermissions": {
-    "ko": "Agent 권한"
+    "ko": "에이전트 권한"
   },
   "auto.components.settings.AgentsPane.agentPermissionsDescription": {
-    "ko": "Orca가 agents를 실행할 때 권한 프롬프트를 줄일지, 수동 확인을 유지할지 선택합니다."
+    "ko": "Orca가 에이전트를 실행할 때 권한 프롬프트를 줄일지, 수동 확인을 유지할지 선택합니다."
   },
   "auto.components.settings.AgentsPane.agentPermissionsInfo": {
-    "ko": "Agent 권한 정보"
+    "ko": "에이전트 권한 정보"
   },
   "auto.components.settings.AgentsPane.f9f127d664": {
     "ko": "이 agent의 바이너리 경로나 이름을 재정의하고 기본 실행 인수 또는 환경을 편집합니다."
@@ -2122,18 +2140,6 @@
   },
   "auto.components.settings.AppearancePane.fd89b5487c": {
     "ko": "라이트"
-  },
-  "auto.components.settings.AutoRenameBranchFromWorkSetting.2ee2779c05": {
-    "ko": "{firstPrompt}"
-  },
-  "auto.components.settings.AutoRenameBranchFromWorkSetting.69bf4830c2": {
-    "ko": "Orca의 항목을 포함하도록"
-  },
-  "auto.components.settings.AutoRenameBranchFromWorkSetting.800edb1e54": {
-    "ko": "fix-login-flow"
-  },
-  "auto.components.settings.AutoRenameBranchFromWorkSetting.a4fa380b67": {
-    "ko": "{assistantMessage}"
   },
   "auto.components.settings.AutoRenameBranchFromWorkSetting.d9b65054ef": {
     "ko": ") 작업을 요약하는 짧은 이름으로 변경됩니다. Orca가 직접 이름 붙인 브랜치만 이름을 바꾸며, 푸시된 후에는 이름을 바꾸지 않습니다."
@@ -2226,10 +2232,10 @@
     "ko": "분"
   },
   "auto.components.settings.ExperimentalPane.agentHibernation.title": {
-    "ko": "Agent 최대 절전"
+    "ko": "에이전트 최대 절전"
   },
   "auto.components.settings.ExperimentalPane.agentHibernation.toggleLabel": {
-    "ko": "Agent 최대 절전 전환"
+    "ko": "에이전트 최대 절전 전환"
   },
   "auto.components.settings.ExperimentalPane.newWorktreeCardStyle.copy": {
     "ko": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다."
@@ -2273,20 +2279,8 @@
   "auto.components.settings.GitPane.2351aa5a31": {
     "ko": "Git 사용자 이름"
   },
-  "auto.components.settings.GitPane.36e3de3619": {
-    "ko": "오래된 기록과 비교하지 않도록 합니다. Orca는 해당 브랜치에 commits 되지 않은 변경 사항이나 로컬 전용 commits이 있으면 업데이트를 건너뜁니다."
-  },
-  "auto.components.settings.GitPane.976afc6b3e": {
-    "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고, 일치하는 로컬 브랜치를 안전하게 fast-forward합니다. 예:"
-  },
   "auto.components.settings.GitPane.b9c011fbc2": {
     "ko": "속도 제한"
-  },
-  "auto.components.settings.GitPane.d072a12995": {
-    "ko": "git diff main...HEAD"
-  },
-  "auto.components.settings.GitPane.db3a127eb1": {
-    "ko": "이렇게 하면 다음과 같은 명령이 유지됩니다"
   },
   "auto.components.settings.GitPane.f35007e6e8": {
     "ko": "git-username"
@@ -2325,7 +2319,7 @@
     "ko": "glab auth login"
   },
   "auto.components.settings.ManageSessionsSection.2896a50f50": {
-    "ko": "terminal {{value0}}(으)로 이동"
+    "ko": "터미널 {{value0}}(으)로 이동"
   },
   "auto.components.settings.ManageSessionsSection.33c2a1e1b4": {
     "ko": "세션 {{value0}} 종료"
@@ -2337,16 +2331,13 @@
     "ko": "SSH repos는 원격 파일 시스템을 통해 읽힙니다. 스타터 생성은 워크스페이스 루트 구성으로 제한됩니다."
   },
   "auto.components.settings.MobileEmulatorExamples.4daa95f25a": {
-    "ko": "Orca CLI 스킬이 설치된 프로젝트의 Claude Code, Codex 또는 다른 agent에 이들 중 하나를 붙여넣으세요."
+    "ko": "Orca CLI 스킬이 설치된 프로젝트의 Claude Code, Codex 또는 다른 에이전트에 이들 중 하나를 붙여넣으세요."
   },
   "auto.components.settings.MobileEmulatorSettingsPane.a4f1c82d90": {
     "ko": "비활성화됨"
   },
   "auto.components.settings.MobileEmulatorSettingsPane.ae1612c58c": {
     "ko": "가용성"
-  },
-  "auto.components.settings.MobilePane.35100bca5d": {
-    "ko": "휴대폰에서 terminals을 사용하는 동안 Orca는 휴대폰 화면에 맞게 terminals을 축소합니다. 앱을 닫거나 다른 곳으로 전환하면 terminals이 휴대폰 크기로 유지되는지(대화형 CLI 도구가 리플로우되지 않음) 또는 데스크탑으로 다시 크기가 조정되는지 여부가 제어됩니다. 배너에서 '이 terminals 복원' 또는 '모든 terminals 복원'을 사용해 언제든지 수동으로 크기를 조정할 수 있습니다."
   },
   "auto.components.settings.MobileSettingsPane.b0088412a1": {
     "ko": "또는 다음에서 Android APK를 받으세요"
@@ -2358,7 +2349,7 @@
     "ko": "사용자 정의:"
   },
   "auto.components.settings.NotificationsPane.b6fc369244": {
-    "ko": "백그라운드 terminal이 벨 문자를 내보냅니다."
+    "ko": "백그라운드 터미널에서 벨 문자가 출력됩니다."
   },
   "auto.components.settings.OpenAiTranscriptionKeyDialog.07b26f2742": {
     "ko": "키 지우기"
@@ -2400,7 +2391,7 @@
     "ko": "이 프로젝트는 WSL을 통해 {{value0}}에서 실행됩니다."
   },
   "auto.components.settings.ProjectWindowsRuntimeSetting.runtimeChangeHelp": {
-    "ko": "런타임 변경은 이 프로젝트의 새 terminals, agent 확인, 스킬 검색에 적용됩니다. 기존 terminals은 현재 런타임을 유지합니다."
+    "ko": "런타임 변경은 이 프로젝트의 새 터미널, 에이전트 확인 및 스킬 탐색에 적용됩니다. 기존 터미널은 현재 런타임을 유지합니다."
   },
   "auto.components.settings.ProjectWindowsRuntimeSetting.selectDistro": {
     "ko": "배포판 선택"
@@ -2421,7 +2412,7 @@
     "ko": "사용자 지정 GitHub 이슈 명령"
   },
   "auto.components.settings.RepositoryHooksSection.29397e8bbc": {
-    "ko": "commit 된 repo 명령만 실행하고 로컬 명령은 무시합니다."
+    "ko": "저장소에 커밋된 명령만 실행하고 로컬 명령은 무시합니다."
   },
   "auto.components.settings.RepositoryHooksSection.2cc27dc12b": {
     "ko": "연결된 이슈 명령에 대한 선택적 사용자별 재정의입니다."
@@ -2622,13 +2613,13 @@
     "ko": "\"에 대한 설정을 찾을 수 없습니다."
   },
   "auto.components.settings.Settings.3d9adfe6a5": {
-    "ko": "전역 terminal, 브라우저, Markdown 탭."
+    "ko": "전역 터미널, 브라우저, Markdown 탭."
   },
   "auto.components.settings.Settings.6742c7932c": {
-    "ko": "전역 또는 프로젝트별로 적용되는 저장된 terminal 명령입니다."
+    "ko": "전역 또는 프로젝트별로 적용되는 저장된 터미널 명령입니다."
   },
   "auto.components.settings.Settings.7210ac09c4": {
-    "ko": "agent 활동과 terminal 이벤트에 대한 네이티브 데스크톱 알림입니다."
+    "ko": "에이전트 활동과 터미널 이벤트에 대한 네이티브 데스크톱 알림입니다."
   },
   "auto.components.settings.Settings.9b83cc62c2": {
     "ko": "terminal에서 실행되는 개발자 도구의 macOS 개인정보 보호 접근 권한입니다."
@@ -2637,10 +2628,10 @@
     "ko": "지속 세션, 더 풍부한 원격 상태, 웹 또는 모바일 핸드오프를 위해 원격 Orca 런타임을 페어링합니다."
   },
   "auto.components.settings.Settings.b79b5b31e9": {
-    "ko": "셸, 렌더러, 세션, terminal 동작."
+    "ko": "셸, 렌더러, 세션, 터미널 동작."
   },
   "auto.components.settings.Settings.c2ee313198": {
-    "ko": "SSH를 통해 기존 머신의 파일, terminals, Git, 워크스페이스를 사용합니다."
+    "ko": "SSH를 통해 기존 머신의 파일, 터미널, Git, 워크스페이스를 사용합니다."
   },
   "auto.components.settings.SettingsFormControls.c822571b2e": {
     "ko": " \"{{value0}}\"과(와) 일치"
@@ -2655,13 +2646,13 @@
     "ko": "{{value0}}에서 가져옴"
   },
   "auto.components.settings.SettingsFormControls.search_terminal_themes": {
-    "ko": "terminal 테마 검색"
+    "ko": "터미널 테마 검색"
   },
   "auto.components.settings.ShortcutFilterRail.f733c4b89f": {
     "ko": "명령 또는 키 검색"
   },
   "auto.components.settings.ShortcutTerminalPolicyControl.0f55c6f15c": {
-    "ko": "단축키가 겹칠 때 Orca와 포커스된 terminal 중 어느 쪽이 우선할지 선택합니다."
+    "ko": "단축키가 겹칠 때 Orca와 포커스된 터미널 중 어느 쪽이 우선할지 선택합니다."
   },
   "auto.components.settings.ShortcutsPane.4b7ae34062": {
     "ko": "직접."
@@ -2748,7 +2739,7 @@
     "ko": "끔"
   },
   "auto.components.settings.TerminalAppearanceSection.abcb4dd019": {
-    "ko": "Terminal 커서"
+    "ko": "터미널 커서"
   },
   "auto.components.settings.TerminalAppearanceSection.e070e8aeba": {
     "ko": "막대"
@@ -2760,7 +2751,7 @@
     "ko": "구분선 두께"
   },
   "auto.components.settings.TerminalPane.09bf02de9a": {
-    "ko": "새 terminals 패널을 열 때 사용할 셸입니다. 새 terminals에 적용됩니다."
+    "ko": "새 터미널 패널을 열 때 사용할 셸입니다. 새 터미널에 적용됩니다."
   },
   "auto.components.settings.TerminalPane.0a10420e1a": {
     "ko": "Option을 Alt로 사용"
@@ -2778,7 +2769,7 @@
     "ko": "렌더링"
   },
   "auto.components.settings.TerminalPane.34a0dfa06e": {
-    "ko": "새 워크스페이스를 만들 때 repos 설정 스크립트를 실행할 위치입니다."
+    "ko": "새 워크스페이스를 만들 때 저장소 설정 스크립트를 실행할 위치입니다."
   },
   "auto.components.settings.TerminalPane.3fe1c5bfe0": {
     "ko": "끄기"
@@ -2855,20 +2846,8 @@
   "auto.components.settings.VoicePane.174da92062": {
     "ko": "길게 누르기"
   },
-  "auto.components.settings.VoicePane.295d84b849": {
-    "ko": "한 번 누르면 시작, 다시 누르면 중지. 길게 누르기: 누르고 있는 동안 받아쓰기"
-  },
-  "auto.components.settings.VoicePane.366e1b4f36": {
-    "ko": "포커스된 창에 텍스트를 받아쓰기합니다."
-  },
-  "auto.components.settings.VoicePane.4465596675": {
-    "ko": "누르기"
-  },
   "auto.components.settings.VoicePane.61a16c8141": {
     "ko": "추출 중..."
-  },
-  "auto.components.settings.VoicePane.7cf715f891": {
-    "ko": "누르고 있는 동안"
   },
   "auto.components.settings.VoicePane.901985625d": {
     "ko": "토글"
@@ -2895,10 +2874,10 @@
     "ko": "색상만"
   },
   "auto.components.settings.WarpThemeImportModal.custom_theme_yaml_hint": {
-    "ko": "사용자 지정 및 커뮤니티 테마는 자동 가져오기가 찾을 수 있도록 Warp 테마 폴더에 YAML 파일로 있어야 합니다. Warp의 공개 테마 repo를 클론했다면 Choose Folder를 사용해 해당 체크아웃을 가져오세요."
+    "ko": "사용자 지정 및 커뮤니티 테마를 자동으로 가져오려면 Warp 테마 폴더에 YAML 파일로 저장되어 있어야 합니다. Warp의 공개 테마 저장소를 복제했다면 ‘폴더 선택’을 눌러 복제한 폴더에서 테마를 가져오세요."
   },
   "auto.components.settings.WarpThemeImportModal.description": {
-    "ko": "Warp 테마를 Orca terminal 테마로 가져옵니다."
+    "ko": "Warp 테마를 Orca 터미널 테마로 가져옵니다."
   },
   "auto.components.settings.WarpThemeImportModal.found_in_source": {
     "ko": "{{value0}}에서"
@@ -2937,7 +2916,7 @@
     "ko": "Warp에서 테마 가져오기"
   },
   "auto.components.settings.WarpThemeImportModal.yaml_description": {
-    "ko": "YAML 파일(Warp 형식)을 Orca terminal 테마로 가져옵니다."
+    "ko": "YAML 파일(Warp 형식)을 Orca 터미널 테마로 가져옵니다."
   },
   "auto.components.settings.WarpThemeImportModal.yaml_no_themes_found": {
     "ko": "선택한 파일에서 테마를 찾을 수 없습니다."
@@ -3012,10 +2991,10 @@
     "ko": "Windows"
   },
   "auto.components.settings.agents.search.agentPermissions": {
-    "ko": "Agent 권한"
+    "ko": "에이전트 권한"
   },
   "auto.components.settings.agents.search.agentPermissionsDescription": {
-    "ko": "agent 권한 기본값을 Yolo와 수동 사이에서 전환합니다."
+    "ko": "에이전트 권한 기본값을 Yolo와 수동 사이에서 전환합니다."
   },
   "auto.components.settings.appearance.search.00a028f25f": {
     "ko": "사용량"
@@ -3261,7 +3240,7 @@
     "ko": "최대 절전"
   },
   "auto.components.settings.experimental.search.agentHibernation.title": {
-    "ko": "Agent 최대 절전"
+    "ko": "에이전트 최대 절전"
   },
   "auto.components.settings.experimental.search.newWorktreeCardStyle.description": {
     "ko": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다."
@@ -3345,7 +3324,7 @@
     "ko": "전환"
   },
   "auto.components.settings.git.search.0e993bf00f": {
-    "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고, main 또는 master처럼 일치하는 로컬 브랜치를 안전하게 fast-forward합니다. 이렇게 하면 git diff main...HEAD 같은 명령이 오래된 기록과 비교되지 않습니다. 해당 브랜치에 commits 되지 않은 변경 사항이나 로컬 전용 commits이 있으면 Orca가 업데이트를 건너뜁니다."
+    "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고 main 또는 master 등 일치하는 로컬 브랜치를 안전하게 fast-forward합니다. git diff main...HEAD 같은 명령이 오래된 이력과 비교하지 않도록 하기 위한 동작입니다. 해당 브랜치에 커밋되지 않은 변경 사항이나 로컬에만 있는 커밋이 있으면 Orca가 업데이트를 건너뜁니다."
   },
   "auto.components.settings.git.search.1d2fae1fa2": {
     "ko": "Git 사용자 이름"
@@ -3627,7 +3606,7 @@
     "ko": "클라이언트"
   },
   "auto.components.settings.settingOwnership.agentLaunchDefaults": {
-    "ko": "기본 agent, 명령 재정의, CLI 인수, 실행 환경은 클라이언트 환경설정입니다. SSH 및 원격 서버 실행은 실행 시점에 여전히 호스트 사용 가능 여부를 확인합니다."
+    "ko": "기본 에이전트, 명령 재정의, CLI 인수 및 실행 환경은 선택한 호스트에 저장됩니다."
   },
   "auto.components.settings.settingOwnership.clientDefault": {
     "ko": "클라이언트 기본값"
@@ -3672,7 +3651,7 @@
     "ko": "단축키"
   },
   "auto.components.settings.shortcuts.search.ebd7d81e1d": {
-    "ko": "단축키가 겹칠 때 Orca와 포커스된 terminal 중 어느 쪽이 우선할지 선택합니다."
+    "ko": "단축키가 겹칠 때 Orca와 포커스된 터미널 중 어느 쪽이 우선할지 선택합니다."
   },
   "auto.components.settings.shortcuts.search.f1adebbe8c": {
     "ko": "셸"
@@ -3716,9 +3695,6 @@
   "auto.components.settings.task.tracker.integration.cards.8c20e76308": {
     "ko": "연결된 각 Jira 사이트에는 활성 런타임이 저장한 토큰이 하나씩 있습니다."
   },
-  "auto.components.settings.task.tracker.integration.cards.9fa04a032e": {
-    "ko": "{{value0}}개 사이트{{value1}} 연결됨"
-  },
   "auto.components.settings.task.tracker.integration.cards.a1093a06c7": {
     "ko": "설정 작업을 표시하기 전에 Jira 액세스를 확인하는 중입니다."
   },
@@ -3736,9 +3712,6 @@
   },
   "auto.components.settings.task.tracker.integration.cards.dd3529015d": {
     "ko": "{{value0}} 연결 해제"
-  },
-  "auto.components.settings.task.tracker.integration.cards.e1f5e6424c": {
-    "ko": "{{value0}}개 워크스페이스{{value1}} 연결됨"
   },
   "auto.components.settings.task.tracker.integration.cards.e2ff968276": {
     "ko": "Jira 연결"
@@ -3761,9 +3734,6 @@
   "auto.components.settings.terminal.clipboard.search.5ffcd13c90": {
     "ko": "tmux"
   },
-  "auto.components.settings.terminal.clipboard.search.603818e8d8": {
-    "ko": "terminal 선택 영역이 만들어지는 즉시 자동으로 클립보드에 복사합니다."
-  },
   "auto.components.settings.terminal.clipboard.search.e87c6d776d": {
     "ko": "자동"
   },
@@ -3780,7 +3750,7 @@
     "ko": "ANSI"
   },
   "auto.components.settings.terminal.search.17cc3ea102": {
-    "ko": "terminal 패널 위에 마우스를 올리면 클릭하지 않고도 활성화됩니다. Ghostty의 초점이 마우스를 따라가는 설정을 반영합니다. 선택 및 창 전환이 안전하게 유지됩니다."
+    "ko": "터미널 패널 위에 마우스를 올리면 클릭하지 않고도 활성화됩니다. Ghostty의 focus-follows-mouse 설정과 같은 동작입니다. 선택 및 창 전환은 안전하게 유지됩니다."
   },
   "auto.components.settings.terminal.search.18ce996647": {
     "ko": "수직"
@@ -3801,7 +3771,7 @@
     "ko": "깜박임"
   },
   "auto.components.settings.terminal.search.2610ee3b56": {
-    "ko": "새 워크스페이스가 생성될 때 repos 설정 스크립트가 실행되는 위치: 수직 분할(기본값), 수평 분할 또는 'Setup'이라는 제목의 배경 탭."
+    "ko": "새 워크스페이스를 만들 때 저장소 설정 스크립트를 실행할 위치: 세로 분할(기본값), 가로 분할 또는 'Setup'이라는 제목의 백그라운드 탭."
   },
   "auto.components.settings.terminal.search.2d5ab88b7c": {
     "ko": "구분선 두께"
@@ -3813,7 +3783,7 @@
     "ko": "JetBrains Mono"
   },
   "auto.components.settings.terminal.search.36a1b38bc8": {
-    "ko": "terminal 줄 높이 승수를 제어합니다."
+    "ko": "터미널 줄 높이 승수를 제어합니다."
   },
   "auto.components.settings.terminal.search.38f1b4f4cb": {
     "ko": "키"
@@ -3906,7 +3876,7 @@
     "ko": "Alt"
   },
   "auto.components.settings.terminal.search.c6178a2b4d": {
-    "ko": "마우스를 따라가는 초점"
+    "ko": "마우스를 따라 포커스 이동"
   },
   "auto.components.settings.terminal.search.d8d6f7a3c5": {
     "ko": "macOS"
@@ -3933,7 +3903,7 @@
     "ko": "데몬"
   },
   "auto.components.settings.terminal.search.f7d56b6281": {
-    "ko": "최대 terminal 스크롤백 버퍼 크기입니다."
+    "ko": "보관할 데스크톱 터미널 행입니다."
   },
   "auto.components.settings.terminal.search.fae142a354": {
     "ko": "readline"
@@ -3942,19 +3912,19 @@
     "ko": "버퍼"
   },
   "auto.components.settings.terminal.search.warp_import.description": {
-    "ko": "Warp 테마를 Orca terminal 테마로 가져옵니다."
+    "ko": "Warp 테마를 Orca 터미널 테마로 가져옵니다."
   },
   "auto.components.settings.terminal.search.warp_import.title": {
     "ko": "Warp에서 테마 가져오기"
   },
   "auto.components.settings.terminal.search.yaml_import.description": {
-    "ko": "테마 YAML 파일을 Orca terminal 테마로 가져옵니다."
+    "ko": "테마 YAML 파일을 Orca 터미널 테마로 가져옵니다."
   },
   "auto.components.settings.terminal.search.yaml_import.title": {
     "ko": "YAML에서 가져오기"
   },
   "auto.components.settings.terminal.windows.search.28ff08ed35": {
-    "ko": "창"
+    "ko": "Windows"
   },
   "auto.components.settings.terminal.windows.search.2b4a340ce0": {
     "ko": "배포판"
@@ -4053,10 +4023,10 @@
     "ko": "테마 {{value0}}개를 가져왔습니다."
   },
   "auto.components.settings.useWarpThemeImport.over_limit_one": {
-    "ko": "이 테마를 가져오면 사용자 지정 terminal 테마 {{value0}}개 제한을 초과합니다. 새 테마 1개를 선택 해제하고 다시 시도하세요."
+    "ko": "이 테마를 가져오면 사용자 지정 터미널 테마 {{value0}}개 제한을 초과합니다. 새 테마 1개를 선택 해제하고 다시 시도하세요."
   },
   "auto.components.settings.useWarpThemeImport.over_limit_other": {
-    "ko": "이 테마들을 가져오면 사용자 지정 terminal 테마 {{value0}}개 제한을 초과합니다. 새 테마 {{value1}}개를 선택 해제하고 다시 시도하세요."
+    "ko": "이 테마들을 가져오면 사용자 지정 터미널 테마 {{value0}}개 제한을 초과합니다. 새 테마 {{value1}}개를 선택 해제하고 다시 시도하세요."
   },
   "auto.components.settings.useWarpThemeImport.unknown_error": {
     "ko": "알 수 없는 오류"
@@ -4387,15 +4357,6 @@
   },
   "auto.components.sidebar.add.repo.local.start.actions.runtimeBrowseDescription": {
     "ko": "이 호스트의 기존 Git 리포지토리 또는 폴더"
-  },
-  "auto.components.sidebar.add.repo.local.start.actions.sshBrowseDescription": {
-    "ko": "이 SSH 호스트의 기존 Git 리포지토리 또는 폴더"
-  },
-  "auto.components.sidebar.add.repo.local.start.actions.sshBrowseTitle": {
-    "ko": "SSH 호스트에서 프로젝트 열기"
-  },
-  "auto.components.sidebar.add.repo.local.start.actions.sshCreateUnavailable": {
-    "ko": "아직 SSH 호스트에서는 사용할 수 없습니다."
   },
   "auto.components.sidebar.index.b826a98b6f": {
     "ko": "사용 중"
@@ -4889,12 +4850,6 @@
   "auto.components.terminal.pane.CloseTerminalDialog.stop_command_title": {
     "ko": "실행 중인 명령을 중지할까요?"
   },
-  "auto.components.terminal.pane.MobileDriverOverlay.54f7d6f69d": {
-    "ko": "모든 terminals 제어권 가져오기"
-  },
-  "auto.components.terminal.pane.MobileDriverOverlay.faa367dc74": {
-    "ko": "휴대폰이 이 화면을 휴대폰 크기로 남겨 두었습니다"
-  },
   "auto.components.terminal.pane.TerminalContextMenu.c2f0b72b8d": {
     "ko": "삽입"
   },
@@ -5012,6 +4967,9 @@
   "auto.web.WebConnect.4a4c017be1": {
     "ko": "엔드포인트:"
   },
+  "checksPanel.unlinked.description": {
+    "ko": "이 워크스페이스에서는 PR #{{number}}이(가) 숨겨져 있습니다. 검사와 리뷰 세부정보를 복원하려면 다시 연결하세요."
+  },
   "components.native-chat.approval.allow": {
     "ko": "허용"
   },
@@ -5077,5 +5035,1490 @@
   },
   "dashboardPopout.terminal.close": {
     "ko": "닫기"
+  },
+  "components.native-chat.backgroundTasks.countShellCommandOne": {
+    "ko": "셸 명령 1개"
+  },
+  "components.native-chat.backgroundTasks.countShellMany": {
+    "ko": "셸 {{value0}}개"
+  },
+  "components.native-chat.backgroundTasks.countShellOne": {
+    "ko": "셸 1개"
+  },
+  "components.native-chat.backgroundTasks.groupShell": {
+    "ko": "셸"
+  },
+  "components.native-chat.backgroundTasks.stateWorking": {
+    "ko": "작업 중"
+  },
+  "components.native-chat.status.working": {
+    "ko": "작업 중…"
+  },
+  "components.native-chat.subagents.state.working": {
+    "ko": "작업 중"
+  },
+  "components.workspace.cleanup.browse.agent.working": {
+    "ko": "작업 중"
+  },
+  "auto.lib.orchestration.usage.examples.ab0e9803b7": {
+    "ko": "다른 작업 트리로 작업 인계"
+  },
+  "auto.lib.orchestration.usage.examples.5e0d489fe1": {
+    "ko": "진행 중인 작업 인계"
+  },
+  "auto.lib.orchestration.usage.examples.childSequenceSummary": {
+    "ko": "각 단계가 직전 단계에 의존할 때 하위 에이전트를 순서대로 사용합니다."
+  },
+  "auto.hooks.useSettingsNavigationMetadata.cd50cec5d7": {
+    "ko": "Orca를 통해 여러 코딩 에이전트를 조율합니다."
+  },
+  "auto.components.settings.OrchestrationPane.52e0634e2c": {
+    "ko": "핸드오프, 작업 트리 핸드오버, 순차 또는 병렬 하위 에이전트 작업에 오케스트레이션을 사용하도록 조율 에이전트에게 요청하세요."
+  },
+  "auto.components.settings.OrchestrationPane.832f1f3ee6": {
+    "ko": "사용 중인 터미널에서 직접 설치하시겠어요?"
+  },
+  "auto.components.settings.OrchestrationPane.9bedd2a6e5": {
+    "ko": "에이전트가 Orca를 통해 컨텍스트를 인계하고 작업을 조율할 수 있습니다."
+  },
+  "auto.components.settings.OrchestrationPane.2aacdb0517": {
+    "ko": "핸드오프, 작업 트리 핸드오버, 하위 에이전트 작업 전반에 걸쳐 코딩 에이전트를 조율합니다."
+  },
+  "auto.components.settings.OrchestrationPane.191ac34567": {
+    "ko": "에이전트 오케스트레이션"
+  },
+  "auto.components.settings.OrchestrationPane.nestedWorkerDepthTitle": {
+    "ko": "하위 에이전트 최대 생성 단계"
+  },
+  "auto.components.settings.OrchestrationPane.nestedWorkerDepthDescription": {
+    "ko": "하위 에이전트를 몇 단계까지 생성할 수 있는지 설정합니다. 1이면 조율 에이전트만 하위 에이전트를 생성할 수 있고, 생성된 하위 에이전트는 자신의 하위 에이전트를 생성할 수 없습니다."
+  },
+  "auto.components.settings.OrchestrationSkillAgentCoverage.6dec5ce2d2": {
+    "ko": "에이전트별 스킬 설치 상태"
+  },
+  "auto.components.settings.OrchestrationSkillAgentCoverage.ffe13e36fb": {
+    "ko": "미설치"
+  },
+  "auto.components.settings.OrchestrationSkillAgentCoverage.fullCoverage_other": {
+    "ko": "감지된 {{value0}}개 에이전트 모두에 스킬이 설치되어 있습니다."
+  },
+  "auto.components.settings.OrchestrationSkillAgentCoverage.partialCoverage": {
+    "ko": "감지된 {{value1}}개 에이전트 중 {{value0}}개에 스킬이 설치되어 있습니다."
+  },
+  "auto.components.settings.Settings.475980f53d": {
+    "ko": "Orca를 통해 여러 코딩 에이전트를 조율합니다."
+  },
+  "sessionHistory.settings.computersConsent": {
+    "ko": "각 컴퓨터는 자체 에이전트 대화와 도구 출력의 검색 가능한 사본을 보관합니다. 이 데이터는 해당 컴퓨터 밖으로 전송되지 않습니다."
+  },
+  "settings.appearance.statusBar.zcodeToggleDescription": {
+    "ko": "ZCode Coding Plan 할당량 사용량을 표시합니다."
+  },
+  "auto.components.settings.AppearancePane.ef89200c1f": {
+    "ko": "터미널 패널에 없을 때."
+  },
+  "auto.components.settings.Settings.6d1a27e193": {
+    "ko": "테마, 확대/축소, 앱 및 터미널 모양, 사이드바, 상태 표시줄."
+  },
+  "auto.components.settings.TerminalAppearanceSection.e1a5c25555": {
+    "ko": "터미널 패널"
+  },
+  "auto.components.settings.TerminalAppearanceSection.04cdf85dec": {
+    "ko": "터미널 커서의 불투명도입니다."
+  },
+  "auto.components.settings.TerminalAppearanceSection.b9f1804422": {
+    "ko": "커서 불투명도"
+  },
+  "auto.components.settings.TerminalAppearanceSection.74736cc9b1": {
+    "ko": "커서 깜박임"
+  },
+  "auto.components.settings.TerminalAppearanceSection.db270cc9a9": {
+    "ko": "커서 모양"
+  },
+  "auto.components.settings.TerminalAppearanceSection.d455f2ef4f": {
+    "ko": "Orca 터미널 패널의 기본 커서 모양입니다."
+  },
+  "auto.components.settings.TerminalAppearanceSection.048aac8a64": {
+    "ko": "터미널 타이포그래피"
+  },
+  "auto.components.settings.TerminalFontSizeSetting.0f4c92e595": {
+    "ko": "새 창 및 라이브 업데이트의 기본 터미널 글꼴 크기입니다."
+  },
+  "auto.components.settings.TerminalThemeSections.7add204bd5": {
+    "ko": "다크 모드에서 사용되는 터미널 테마를 선택하세요."
+  },
+  "auto.components.settings.TerminalWindowSection.e86e09b5c7": {
+    "ko": "개별 터미널 색상을 재정의합니다."
+  },
+  "auto.components.settings.TerminalWindowSection.1846f6ee6a": {
+    "ko": "터미널 그리드 주변의 수직 패딩(픽셀)입니다."
+  },
+  "auto.components.settings.TerminalWindowSection.25e2f8e8e1": {
+    "ko": "터미널 그리드 주변의 수평 패딩(픽셀)입니다."
+  },
+  "auto.components.settings.TerminalWindowSection.97950bb087": {
+    "ko": "터미널 창에 배경 흐림을 적용합니다. 다시 시작해야 합니다."
+  },
+  "auto.components.settings.TerminalWindowSection.809f37738d": {
+    "ko": "터미널 배경의 투명도를 제어합니다. 1은 완전히 불투명하고, 0은 완전히 투명합니다."
+  },
+  "auto.components.settings.TerminalWindowSection.03acb60aa0": {
+    "ko": "터미널 배경의 투명도를 제어합니다."
+  },
+  "auto.components.settings.TerminalWindowSection.a2d9f095a7": {
+    "ko": "커서 텍스트"
+  },
+  "auto.components.settings.TerminalWindowSection.cd0700762b": {
+    "ko": "커서 색상"
+  },
+  "auto.components.settings.TerminalWindowSection.da64e8f4c1": {
+    "ko": "터미널 배경색"
+  },
+  "auto.components.settings.TerminalWindowSection.605a35d600": {
+    "ko": "아직 터미널 렌더러에는 적용되지 않습니다. xterm.js에 굵은 글씨 색상 슬롯이 없기 때문입니다. 저장된 값은 유지됩니다."
+  },
+  "auto.components.settings.appearance.search.d18b54ca90": {
+    "ko": "Dock"
+  },
+  "auto.components.settings.appearance.search.zcodeUsageDescription": {
+    "ko": "상태 표시줄에 ZCode Coding Plan 할당량 사용량을 표시합니다."
+  },
+  "auto.components.settings.terminal.search.3023e01415": {
+    "ko": "개별 터미널 색상을 재정의합니다."
+  },
+  "auto.components.settings.terminal.search.4655567c37": {
+    "ko": "터미널 그리드 주변의 수직 패딩(픽셀)입니다."
+  },
+  "auto.components.settings.terminal.search.75691e4911": {
+    "ko": "터미널 그리드 주변의 수평 패딩(픽셀)입니다."
+  },
+  "auto.components.settings.terminal.search.bc2054657a": {
+    "ko": "터미널 창에 배경 흐림을 적용합니다. 다시 시작해야 합니다."
+  },
+  "auto.components.settings.terminal.search.4c643695aa": {
+    "ko": "터미널 배경의 투명도를 제어합니다."
+  },
+  "auto.components.settings.terminal.search.13f6310dd3": {
+    "ko": "다크 모드에서 사용되는 터미널 테마를 선택하세요."
+  },
+  "auto.components.settings.terminal.search.d4f7d1ce5c": {
+    "ko": "터미널 커서의 불투명도입니다."
+  },
+  "auto.components.settings.terminal.search.275a9d6395": {
+    "ko": "Orca 터미널 패널의 기본 커서 모양입니다."
+  },
+  "auto.components.settings.terminal.search.98c18f2c77": {
+    "ko": "터미널 텍스트 글꼴 두께를 제어합니다."
+  },
+  "auto.components.settings.terminal.search.0acdc17891": {
+    "ko": "새 창 및 라이브 업데이트를 위한 기본 터미널 글꼴 모음입니다."
+  },
+  "auto.components.settings.terminal.search.0fe0073f0c": {
+    "ko": "새 창 및 라이브 업데이트의 기본 터미널 글꼴 크기입니다."
+  },
+  "auto.components.settings.TerminalPane.fe20f79dd1": {
+    "ko": "PowerShell 버전"
+  },
+  "auto.components.settings.TerminalPane.822f62ddcd": {
+    "ko": "PowerShell 7+ 다운로드"
+  },
+  "auto.components.settings.TerminalPane.5ed5c95344": {
+    "ko": "새 터미널 패널을 위해 Windows PowerShell과 PowerShell 7+ 중에서 선택하세요."
+  },
+  "auto.components.settings.TerminalPane.3d88af864d": {
+    "ko": "PowerShell 셸 옵션이 새 터미널 패널에 대해 Windows PowerShell을 시작할지 아니면 PowerShell 7+를 시작할지 선택합니다."
+  },
+  "auto.components.settings.TerminalPane.81d86b2dd2": {
+    "ko": "새 패널과 열린 패널에 보관할 데스크톱 터미널 행입니다."
+  },
+  "auto.components.settings.TerminalPane.c3810b2b42": {
+    "ko": "보관할 데스크톱 터미널 행입니다."
+  },
+  "auto.components.settings.TerminalPane.267d020745": {
+    "ko": "스크롤백, 단어 경계 및 플랫폼별 터미널 동작."
+  },
+  "auto.components.settings.TerminalPane.691ce810e0": {
+    "ko": "세로로 분할"
+  },
+  "auto.components.settings.TerminalPane.a9d47451d1": {
+    "ko": "\"새 탭\"은 현재 포커스를 가져가지 않고 \"Setup\"이라는 제목의 백그라운드 탭에서 설정 명령을 엽니다."
+  },
+  "auto.components.settings.TerminalPane.9129b7e805": {
+    "ko": "터미널 패널 위에 마우스를 올리면 클릭하지 않고도 활성화됩니다."
+  },
+  "auto.components.settings.TerminalPane.96fe15def8": {
+    "ko": "터미널 패널의 마우스 및 클립보드 동작."
+  },
+  "auto.components.settings.TerminalPane.45721f3e67": {
+    "ko": "터미널 상호작용"
+  },
+  "auto.components.settings.TerminalPane.7eaccc1424": {
+    "ko": "WebGL은 항상 터미널 패널에 대해 시도됩니다."
+  },
+  "auto.components.settings.TerminalPane.72bc9334a0": {
+    "ko": "라이브 창과 새 창에 대한 터미널 렌더러 동작입니다."
+  },
+  "auto.components.settings.TerminalPane.bd68f3170d": {
+    "ko": "Windows의 새 터미널 패널에 대한 기본 셸을 선택합니다."
+  },
+  "auto.components.settings.TerminalPane.a55eee649f": {
+    "ko": "Windows의 새 터미널 패널에 대한 기본 셸입니다."
+  },
+  "auto.components.settings.TerminalPane.87e678a8af": {
+    "ko": "Windows 셸"
+  },
+  "auto.components.settings.terminal.search.73e9422f19": {
+    "ko": "지원되는 Ghostty 터미널 설정을 한 번만 가져옵니다."
+  },
+  "auto.components.settings.terminal.search.063914c486": {
+    "ko": "JIS 엔(¥) 키를 눌렀을 때 백슬래시(\\)를 대신 보낼지 여부를 설정합니다."
+  },
+  "auto.components.settings.terminal.search.f036794286": {
+    "ko": "활성"
+  },
+  "auto.components.settings.terminal.search.f5d1e3d472": {
+    "ko": "포커스"
+  },
+  "auto.components.settings.terminal.search.015c82349f": {
+    "ko": "블록"
+  },
+  "auto.components.settings.terminal.search.wheel": {
+    "ko": "휠"
+  },
+  "auto.components.settings.terminal.search.tui": {
+    "ko": "TUI"
+  },
+  "auto.components.settings.terminal.search.running": {
+    "ko": "실행 중"
+  },
+  "auto.components.settings.terminal.search.minimumContrast.contrast": {
+    "ko": "대비"
+  },
+  "auto.components.settings.terminal.search.minimumContrast.powerline": {
+    "ko": "Powerline"
+  },
+  "auto.components.settings.terminal.search.minimumContrast.colors": {
+    "ko": "색상"
+  },
+  "auto.components.settings.terminal.windows.search.41a69bc24d": {
+    "ko": "PowerShell 셸 옵션이 새 터미널 패널에 대해 Windows PowerShell을 시작할지 아니면 PowerShell 7+를 시작할지 선택합니다."
+  },
+  "auto.components.settings.terminal.windows.search.713c4a2f92": {
+    "ko": "Windows의 새 터미널 패널에 대한 기본 셸을 선택합니다."
+  },
+  "auto.components.settings.contrast.offDescription": {
+    "ko": "흐린 텍스트와 Powerline 구분 기호를 포함해 프로그램 색상을 그대로 유지합니다."
+  },
+  "auto.components.settings.contrast.auto": {
+    "ko": "자동"
+  },
+  "auto.components.settings.contrast.custom": {
+    "ko": "사용자 지정"
+  },
+  "components.settings.TerminalInteraction.copyTrimsGutterDescription": {
+    "ko": "복사한 텍스트에서 에이전트 출력의 왼쪽 여백을 제거합니다. 선택한 모든 줄에 공통된 들여쓰기만 제거됩니다."
+  },
+  "components.settings.terminal.clipboard.search.gutter": {
+    "ko": "여백"
+  },
+  "components.settings.terminal.clipboard.search.indent": {
+    "ko": "들여쓰기"
+  },
+  "components.settings.terminal.clipboard.search.leading": {
+    "ko": "선행"
+  },
+  "auto.components.settings.ComputerUsePane.697005758f": {
+    "ko": "macOS '개인정보 보호 및 보안'을 열었습니다"
+  },
+  "auto.components.settings.DeveloperPermissionsPane.6f011b9bf6": {
+    "ko": "터미널 도구는 Orca의 macOS 개인정보 보호 환경 안에서 실행됩니다."
+  },
+  "auto.components.settings.DeveloperPermissionsPane.fa809e8ada": {
+    "ko": "macOS '개인정보 보호 및 보안'을 열었습니다"
+  },
+  "auto.components.settings.DeveloperPermissionsPane.e7bb06007c": {
+    "ko": "로컬 네트워크"
+  },
+  "auto.components.settings.DeveloperPermissionsPane.4a73f5217a": {
+    "ko": "다른 로컬 앱을 제어하는 스크립트에 필요한 Apple Events 권한입니다."
+  },
+  "auto.components.settings.DeveloperPermissionsPane.actionRequest": {
+    "ko": "권한 요청"
+  },
+  "auto.components.settings.DeveloperPermissionsPane.connectionTestUnreachable": {
+    "ko": "대상에 연결할 수 없습니다."
+  },
+  "auto.components.settings.DeveloperPermissionsPane.connectionTestHost": {
+    "ko": "호스트"
+  },
+  "auto.components.settings.developer.permissions.search.acad3d4743": {
+    "ko": "터미널 세션에서 사용되는 장치 도구와 LAN 액세스를 허용합니다."
+  },
+  "auto.components.settings.DeveloperPermissionsPane.appStatus": {
+    "ko": "앱: "
+  },
+  "auto.components.settings.DeveloperPermissionsPane.terminalHostStatus": {
+    "ko": "터미널 호스트: "
+  },
+  "auto.components.settings.DeveloperPermissionsPane.terminalHostRecovery": {
+    "ko": "터미널이 보호된 파일을 읽지 못하면 작업을 저장한 뒤 터미널 → 세션 관리에서 닫으세요. 새 터미널도 영향을 받는다면 데몬을 다시 시작하세요. 다시 시작하면 현재 터미널이 모두 닫힙니다."
+  },
+  "auto.components.settings.CliSection.e8012c03a1": {
+    "ko": "에이전트가 Orca 워크스페이스, 터미널 및 진행 명령을 사용할 수 있도록 합니다."
+  },
+  "auto.components.settings.CliSection.36a6f919ba": {
+    "ko": "에이전트가 Orca를 활용해 워크스페이스, 터미널 및 진행 상황을 관리할 수 있도록 합니다."
+  },
+  "auto.components.settings.CliSection.04873eea3e": {
+    "ko": "에이전트 스킬"
+  },
+  "auto.components.settings.CliSection.installFailureConflictRemedy": {
+    "ko": "{{value0}}이(가) 더 이상 필요하지 않다면 제거한 뒤 다시 등록하세요."
+  },
+  "auto.components.settings.GeneralEditorSettingsSection.5a1ea6eaa2": {
+    "ko": "숨김"
+  },
+  "auto.components.settings.GeneralEditorSettingsSection.0df2e4fd12": {
+    "ko": "파일 자동 저장"
+  },
+  "auto.components.settings.GeneralEditorSettingsSection.f1b3ceeb98": {
+    "ko": "변경 비교에서 공백 표시"
+  },
+  "auto.components.settings.GeneralEditorSettingsSection.collapseUnchangedTitle": {
+    "ko": "변경되지 않은 영역 접기"
+  },
+  "auto.components.settings.GeneralUpdateSettingsSection.8311da27ba": {
+    "ko": "업데이트가 준비되었습니다. \"업데이트 다운로드\"를 클릭하여 다운로드하세요."
+  },
+  "auto.components.settings.GeneralUpdateSettingsSection.42717918f4": {
+    "ko": "업데이트 다운로드 ("
+  },
+  "auto.components.settings.GeneralUpdateSettingsSection.e3b9d21c07": {
+    "ko": "업데이트가 준비되었습니다. 시스템 패키지 관리자를 통해 Orca를 업데이트하세요. Orca 자체적으로는 이번 릴리스를 설치할 수 없습니다."
+  },
+  "auto.components.settings.GeneralWorkspaceSettingsSection.bf46474e33": {
+    "ko": "공유 아티팩트를 삭제하기 전에 확인창을 표시합니다. 삭제하면 공개 링크가 있는 사람도 더 이상 접근할 수 없습니다."
+  },
+  "auto.components.settings.OpenInMenuSetting.ba1422ee07": {
+    "ko": "터미널 명령"
+  },
+  "auto.components.settings.general.search.2d9f7b42df": {
+    "ko": "에이전트 스킬"
+  },
+  "auto.components.settings.general.search.preview": {
+    "ko": "미리보기"
+  },
+  "auto.components.settings.general.search.explorer": {
+    "ko": "탐색기"
+  },
+  "auto.components.settings.general.search.collapseUnchanged": {
+    "ko": "변경되지 않은 영역 접기"
+  },
+  "auto.components.settings.general.search.collapseUnchangedKw": {
+    "ko": "접기"
+  },
+  "auto.components.settings.general.search.hideUnchangedKw": {
+    "ko": "변경되지 않은 내용 숨기기"
+  },
+  "auto.components.settings.general.search.foldKw": {
+    "ko": "접기"
+  },
+  "auto.components.settings.general.search.runtime": {
+    "ko": "런타임"
+  },
+  "auto.components.settings.general.search.visibility": {
+    "ko": "표시 여부"
+  },
+  "auto.components.settings.general.search.running_terminal": {
+    "ko": "실행 중"
+  },
+  "auto.components.settings.GeneralRemoteServerUpdates.serverCount": {
+    "ko": "페어링된 서버 {{value0}}개"
+  },
+  "auto.components.settings.GeneralRemoteServerUpdates.availableCount": {
+    "ko": "{{value0}}개 업데이트 가능"
+  },
+  "auto.components.settings.GeneralRemoteServerUpdates.currentCount": {
+    "ko": "{{value0}}개 최신 상태"
+  },
+  "auto.components.settings.GeneralRemoteServerUpdates.manualCount": {
+    "ko": "{{value0}}개 수동 업데이트"
+  },
+  "auto.components.settings.GeneralRemoteServerUpdates.offlineCount": {
+    "ko": "{{value0}}개 오프라인"
+  },
+  "auto.components.settings.GeneralRemoteServerUpdates.title": {
+    "ko": "원격 Orca 서버"
+  },
+  "auto.components.settings.GeneralRemoteServerUpdates.description": {
+    "ko": "이 클라이언트에서 페어링된 Orca 서버를 확인하고 업데이트합니다."
+  },
+  "auto.components.settings.GeneralRemoteServerUpdates.updating": {
+    "ko": "서버 업데이트 중…"
+  },
+  "auto.components.settings.GeneralRemoteServerUpdates.reviewServers": {
+    "ko": "서버 업데이트 확인"
+  },
+  "auto.components.settings.GeneralRemoteServerUpdates.serverCountOne": {
+    "ko": "페어링된 서버 1개"
+  },
+  "auto.components.settings.RemoteServerUpdateDialog.versionUnavailable": {
+    "ko": "버전 확인 불가"
+  },
+  "auto.components.settings.RemoteServerUpdateDialog.restartingHelp": {
+    "ko": "새 버전으로 교체된 서버가 다시 연결되기를 기다리는 중입니다."
+  },
+  "auto.components.settings.RemoteServerUpdateDialog.retry": {
+    "ko": "다시 시도"
+  },
+  "auto.components.settings.RemoteServerUpdateDialog.update": {
+    "ko": "이 서버 업데이트"
+  },
+  "auto.components.settings.RemoteServerUpdateDialog.title": {
+    "ko": "원격 Orca 서버 업데이트"
+  },
+  "auto.components.settings.RemoteServerUpdateDialog.description": {
+    "ko": "페어링된 서버를 확인하고, 지원되는 설치본을 이 Orca 클라이언트에서 업데이트합니다."
+  },
+  "auto.components.settings.RemoteServerUpdateDialog.restartWarning": {
+    "ko": "업데이트하면 이 서버들이 다시 시작됩니다. {{value0}} 및 {{value1}}의 연결이 잠시 끊길 수 있습니다."
+  },
+  "auto.components.settings.RemoteServerUpdateStatus.serviceManagerHelp": {
+    "ko": "서버 호스트에서 Orca를 업데이트하세요. .deb 또는 .rpm으로 설치했다면 시스템 패키지 관리자를, 그 외에는 Orca를 시작하는 서비스 관리자를 사용하세요."
+  },
+  "auto.components.settings.ReleaseChannelSection.channelAriaLabel": {
+    "ko": "업데이트 채널"
+  },
+  "auto.components.settings.ReleaseChannelSection.hourlyWarning": {
+    "ko": "Hourly 빌드는 테스트 게이트 없이 main 브랜치에서 바로 배포되며, Windows 빌드는 서명되지 않습니다. 안정적인 빌드를 준비해 두세요."
+  },
+  "auto.components.settings.ReleaseChannelSection.dailyWarning": {
+    "ko": "Daily 빌드는 테스트 게이트 없이 main 브랜치에서 바로 배포되며, Windows 빌드는 서명되지 않습니다. 안정적인 빌드를 준비해 두세요."
+  },
+  "auto.components.settings.ReleaseChannelSection.adhocWarning": {
+    "ko": "Adhoc 빌드는 아직 병합되지 않은 브랜치에서 만들어지며, Windows 빌드는 서명되지 않습니다. 빌드를 만든 사람이 관리를 중단할 수 있으니 안정적인 빌드를 준비해 두세요."
+  },
+  "auto.components.settings.AccountsPane.codexConfigSyncMissingSource": {
+    "ko": "{{value0}} 파일이 없어 Codex가 마지막으로 동기화된 설정을 계속 사용합니다. 동기화를 재개하려면 해당 파일을 복원하세요."
+  },
+  "auto.components.settings.AccountsPane.codexConfigSyncBlankSource": {
+    "ko": "{{value0}}이(가) 비어 있어 Codex가 마지막으로 동기화된 설정을 계속 사용합니다. 동기화 폴더의 다운로드가 끝나는 동안에는 정상입니다."
+  },
+  "auto.components.settings.AccountsPane.codexConfigSyncUnreadableSource": {
+    "ko": "{{value0}} 파일을 읽을 수 없어 Codex가 마지막으로 동기화된 설정을 계속 사용하고 있습니다. 해당 파일의 권한을 확인하세요."
+  },
+  "auto.components.settings.AccountsPane.d5267cce63": {
+    "ko": "). auth 쿠키로 워크스페이스 탐색은 계속 가능하지만, 사용량 조회에는 auth만으로 충분하지 않습니다. OpenCode Go 인증은 웹 기반이며 Windows와 WSL 터미널에서 공유됩니다."
+  },
+  "auto.components.settings.AccountsPane.37b4b4a3f7": {
+    "ko": "auth=…; __Host-console_session=…"
+  },
+  "auto.components.settings.AccountsPane.codexLoginLinkOpen": {
+    "ko": "열기"
+  },
+  "auto.components.settings.AccountsPane.a7b1e3c5d2": {
+    "ko": "저장된 키 삭제"
+  },
+  "auto.components.settings.AccountsPane.copySelectedConsoleCookie": {
+    "ko": "선택한 콘솔을 열고 로그인한 뒤 DevTools에서 Cookie 요청 헤더를 복사하세요(Network → 임의의 remains 요청 → Cookie)."
+  },
+  "auto.components.settings.AccountsPane.apiKeyInstructions": {
+    "ko": "MiniMax 콘솔 → API 키에서 API 키를 복사하세요. 저장된 API 키가 쿠키보다 우선합니다. 쿠키로 다시 전환하려면 저장된 키 삭제를 사용하세요."
+  },
+  "auto.components.settings.accounts.search.f8374c3151": {
+    "ko": "MiniMax 사용량 추적을 설정합니다. 해외 또는 중국 엔드포인트를 선택한 다음, 세션 쿠키를 붙여넣거나 두 호스트 모두에서 작동하는 API 키를 저장하세요."
+  },
+  "auto.components.settings.accounts.search.d16378a88f": {
+    "ko": "minimax"
+  },
+  "auto.components.settings.accounts.search.b2c4e7f1a8": {
+    "ko": "엔드포인트"
+  },
+  "auto.components.settings.accounts.search.zcodePlan.title": {
+    "ko": "GLM Coding Plan"
+  },
+  "auto.components.settings.accounts.search.zcodePlan.description": {
+    "ko": "Z.AI 또는 Zhipu(BigModel) GLM Coding Plan 사용량을 추적합니다. 사이트를 선택하고 요금제 API 키를 저장하세요."
+  },
+  "auto.components.settings.GrokAccountsSection.e6dadc1e2b": {
+    "ko": "월간 사용량"
+  },
+  "auto.components.settings.GrokAccountsSection.b36fa2c908": {
+    "ko": "로그인되었습니다. Orca가 디스크에 저장된 Grok CLI 세션을 읽어옵니다."
+  },
+  "auto.components.settings.GrokAccountsSection.f08c41de73": {
+    "ko": "세션이 만료되었습니다. Orca가 실행 중인 컴퓨터에서 grok을 실행하고 시작될 때까지 기다리세요. 로그인 요청이 나오면 완료한 뒤 사용량 새로 고침을 클릭하세요. 채팅 메시지는 보내지 않아도 됩니다."
+  },
+  "auto.components.settings.GrokAccountsSection.0bb18642b7": {
+    "ko": "사용량"
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.keySaved": {
+    "ko": "GLM Coding Plan API 키를 저장했습니다."
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.keySaveFailed": {
+    "ko": "GLM Coding Plan 자격 증명 업데이트에 실패했습니다."
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.title": {
+    "ko": "GLM Coding Plan"
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.subtitle": {
+    "ko": "상태 표시줄에서 Z.AI 또는 Zhipu(BigModel) GLM Coding Plan 사용량을 추적합니다. 여기에 요금제 API 키를 저장하면 ZCode CLI 설정이 필요하지 않습니다."
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.consoleLink": {
+    "ko": "API 키 받기"
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.usingCliHelp": {
+    "ko": "Orca는 이 컴퓨터의 ZCode CLI 자격 증명 저장소에서 선택한 Coding Plan을 읽습니다. 대신 여기에서 요금제를 연결하려면 아래에 API 키를 저장하세요."
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.notConfigured": {
+    "ko": "연결된 GLM Coding Plan 없음"
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.siteTitle": {
+    "ko": "요금제 사이트"
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.siteDescription": {
+    "ko": "Coding Plan이 속한 콘솔을 선택하세요. 국제 사이트는 Z.AI, 중국 본토 사이트는 Zhipu BigModel입니다."
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.keyPlaceholder": {
+    "ko": "GLM Coding Plan API 키를 붙여넣으세요"
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.forgetKey": {
+    "ko": "저장된 키 삭제"
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.keyHelp": {
+    "ko": "코딩 도구가 이 요금제에 사용하는 것과 같은 키입니다(예: ANTHROPIC_BASE_URL을 해당 사이트로 지정한 Claude Code). 위에서 사이트를 바꾸면 키를 받는 호스트도 바뀝니다."
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.usageTitle": {
+    "ko": "요금제 사용량"
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.usageDescription": {
+    "ko": "연결된 Coding Plan의 실시간 할당량 구간입니다. 상태 표시줄의 사용량 갱신 주기에 맞춰 새로 고쳐집니다."
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.hostOnly": {
+    "ko": "요금제 사이트와 API 키는 Orca를 실행 중인 컴퓨터의 데스크톱 앱에서 변경하세요."
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.detailsUnavailable": {
+    "ko": "요금제 자격 증명 세부 정보는 Orca를 실행 중인 컴퓨터에서만 볼 수 있습니다."
+  },
+  "accounts.antigravity.scope": {
+    "ko": "{{host}}의 agy 자체 계정을 관리합니다."
+  },
+  "accounts.antigravity.signIn": {
+    "ko": "이 호스트에서 agy를 실행하고 브라우저 로그인을 완료한 후 현재 계정을 저장하세요. 다른 계정을 추가하려면 agy에서 /logout 명령을 실행하고 다시 로그인하세요."
+  },
+  "accounts.antigravity.signedOut": {
+    "ko": "로그인된 agy 자체 계정이 없습니다."
+  },
+  "accounts.antigravity.changed": {
+    "ko": "agy 자체 계정이 변경되었습니다. agy를 시작하기 전에 저장된 계정을 다시 선택하세요."
+  },
+  "accounts.antigravity.save": {
+    "ko": "현재 계정 저장"
+  },
+  "accounts.antigravity.sessions": {
+    "ko": "선택한 계정은 이 호스트의 새 agy 세션에 적용됩니다. 기존 세션은 이전 계정을 계속 사용할 수 있습니다."
+  },
+  "accounts.antigravity.keyword.antigravity": {
+    "ko": "antigravity"
+  },
+  "accounts.antigravity.keyword.accounts": {
+    "ko": "계정"
+  },
+  "settings.accounts.claudeRemoveFolder": {
+    "ko": "Orca는 이 컴퓨터에서 해당 계정의 Claude 폴더와 로그인 정보를 삭제합니다. 시스템 기본 계정과 공유하는 채팅 기록은 유지됩니다. 삭제한 계정이 선택되어 있었다면, 다음에 시작하는 Claude는 시스템 기본 계정을 사용합니다."
+  },
+  "auto.components.settings.AccountsPane.remoteScopeLocalAccountsKeptHostPicker": {
+    "ko": "이 데스크톱에서 관리하는 계정은 그대로 유지됩니다. 확인하려면 설정 상단의 호스트 메뉴에서 이 컴퓨터를 선택하세요."
+  },
+  "auto.components.settings.ZcodeCliSetupSection.apiKey": {
+    "ko": "ZCode API 키 설정"
+  },
+  "auto.components.settings.ZcodeCliSetupSection.apiKeyInstructions": {
+    "ko": "Enter를 눌러 ZCode를 시작한 뒤 /login을 입력하고, 이용 중인 요금제 사이트에 맞는 API 키 옵션을 선택하세요. ZCode에서 입력 내용이 가려지는 프롬프트에 키를 입력하세요."
+  },
+  "auto.components.settings.ZcodeCliSetupSection.bigmodel": {
+    "ko": "BigModel 브라우저 로그인"
+  },
+  "auto.components.settings.ZcodeCliSetupSection.close": {
+    "ko": "설정 터미널 닫기"
+  },
+  "auto.components.settings.ZcodeCliSetupSection.description": {
+    "ko": "GLM을 코딩 에이전트로 사용하려면 로그인하세요. 위의 할당량 API 키는 사용량 조회에만 사용되며, 로그인과 모델 선택은 ZCode에서 별도로 관리합니다."
+  },
+  "auto.components.settings.ZcodeCliSetupSection.help": {
+    "ko": "이용 중인 요금제 사이트의 브라우저 로그인을 선택하거나, 입력 내용이 가려지는 ZCode API 키 설정을 사용하세요. 로그인 후 ZCode를 시작하고 /model로 GLM 모델을 선택하세요."
+  },
+  "auto.components.settings.ZcodeCliSetupSection.loading": {
+    "ko": "로그인 터미널 불러오는 중…"
+  },
+  "auto.components.settings.ZcodeCliSetupSection.oauthInstructions": {
+    "ko": "Enter를 눌러 로그인 명령을 실행한 뒤 ZCode가 출력한 인증 URL을 여세요. 로그인 정보는 이 터미널이 실행되는 호스트에 저장됩니다."
+  },
+  "auto.components.settings.ZcodeCliSetupSection.terminalLabel": {
+    "ko": "ZCode 로그인 터미널"
+  },
+  "auto.components.settings.ZcodeCliSetupSection.terminalTitle": {
+    "ko": "ZCode 로그인"
+  },
+  "auto.components.settings.ZcodeCliSetupSection.title": {
+    "ko": "ZCode로 GLM 사용"
+  },
+  "auto.components.settings.ZcodeCliSetupSection.zai": {
+    "ko": "Z.AI 브라우저 로그인"
+  },
+  "auto.components.settings.ExperimentalPane.a20d5ea365": {
+    "ko": "해당 패널과 상호 작용할 때까지 터미널 벨 또는 에이전트 완료 이벤트 후에 패널 수준 강조 표시를 유지합니다. 신호를 조정하는 동안 실험적입니다."
+  },
+  "auto.components.settings.ExperimentalPane.ec897e8d89": {
+    "ko": "터미널 강조 표시"
+  },
+  "auto.components.settings.ExperimentalPane.88b7613afb": {
+    "ko": "터미널 벨 및 에이전트 완료 이벤트에 대한 지속적인 패널 강조 표시입니다."
+  },
+  "auto.components.settings.ExperimentalPane.agentHibernation.copy": {
+    "ko": "설정된 유휴 시간이 지난 백그라운드 에이전트 터미널을 중지하고, 다시 열 때 지원되는 세션을 재개합니다. 에이전트 최대 절전은 Orca에서 시작한 에이전트의 시작 옵션을 보존합니다. 수동으로 시작한 에이전트는 현재 Orca 기본값으로 재개될 수 있습니다. 안전 모델을 조정하는 동안 제공되는 실험적 기능입니다."
+  },
+  "auto.components.settings.ExperimentalPane.agentHibernation.description": {
+    "ko": "설정된 유휴 시간이 지난 백그라운드 에이전트 터미널을 중지하고, 다시 열 때 지원되는 세션을 재개합니다."
+  },
+  "auto.components.settings.experimental.search.5f067ba0f9": {
+    "ko": "에이전트"
+  },
+  "auto.components.settings.experimental.search.11877246fc": {
+    "ko": "터미널 벨 및 에이전트 완료 이벤트에 대한 지속적인 패널 강조 표시입니다."
+  },
+  "auto.components.settings.experimental.search.9e4ddf776d": {
+    "ko": "터미널 강조 표시"
+  },
+  "auto.components.settings.experimental.search.agentHibernation.agent": {
+    "ko": "에이전트"
+  },
+  "auto.components.settings.experimental.search.agentHibernation.description": {
+    "ko": "설정된 유휴 시간이 지난 백그라운드 에이전트 터미널을 중지하고, 다시 열 때 지원되는 세션을 재개합니다. 에이전트 최대 절전은 Orca에서 시작한 에이전트의 시작 옵션을 보존합니다. 수동으로 시작한 에이전트는 현재 Orca 기본값으로 재개될 수 있습니다."
+  },
+  "auto.components.settings.experimental.search.newWorktreeCardStyle.worktree": {
+    "ko": "워크트리"
+  },
+  "auto.components.settings.experimental.search.nativeChat.openclaude": {
+    "ko": "openclaude"
+  },
+  "auto.components.settings.experimental.search.nativeChat.omp": {
+    "ko": "omp"
+  },
+  "auto.components.settings.experimental.search.agentDashboard.board": {
+    "ko": "보드"
+  },
+  "auto.components.settings.experimental.search.agentDashboard.inWindow": {
+    "ko": "창 내부"
+  },
+  "auto.components.settings.ephemeralVms.search.keywordSandbox": {
+    "ko": "샌드박스"
+  },
+  "auto.components.settings.ephemeralVms.search.keywordCloud": {
+    "ko": "클라우드"
+  },
+  "auto.components.settings.Settings.dev": {
+    "ko": "개발자 도구"
+  },
+  "auto.components.settings.DevToolsPane.nativeActionLayoutCheck": {
+    "ko": "기본 동작 버튼 레이아웃 확인"
+  },
+  "auto.components.settings.DevToolsPane.secondary": {
+    "ko": "보조 동작"
+  },
+  "auto.components.settings.DevToolsPane.secondaryActionClicked": {
+    "ko": "보조 동작을 클릭했습니다."
+  },
+  "auto.components.settings.DevToolsPane.primaryAction": {
+    "ko": "주 동작"
+  },
+  "auto.components.settings.DevToolsPane.primaryActionClicked": {
+    "ko": "주 동작을 클릭했습니다."
+  },
+  "auto.components.settings.DevToolsPane.branchHasChanges": {
+    "ko": "브랜치에 변경 사항이 있습니다"
+  },
+  "auto.components.settings.DevToolsPane.devOnlyCallback": {
+    "ko": "개발 전용 콜백입니다."
+  },
+  "auto.components.settings.DevToolsPane.infoToast": {
+    "ko": "정보 알림"
+  },
+  "auto.components.settings.DevToolsPane.successToast": {
+    "ko": "성공 알림"
+  },
+  "auto.components.settings.DevToolsPane.settingsSaved": {
+    "ko": "설정을 저장했습니다"
+  },
+  "auto.components.settings.DevToolsPane.errorToast": {
+    "ko": "오류 알림"
+  },
+  "auto.components.settings.DevToolsPane.nativeActionToast": {
+    "ko": "기본 동작 버튼이 있는 알림"
+  },
+  "auto.components.settings.DevToolsPane.deleteFailureToast": {
+    "ko": "삭제 실패 알림"
+  },
+  "auto.components.settings.DevToolsPane.behindBaseRefToast": {
+    "ko": "기준 참조 뒤처짐 알림"
+  },
+  "auto.components.settings.DevToolsPane.behindBaseRefToastDescription": {
+    "ko": "설정 링크와 하단 동작 버튼이 포함된 알림을 계속 표시합니다."
+  },
+  "auto.components.settings.DevToolsPane.notificationPlayground": {
+    "ko": "알림 테스트"
+  },
+  "auto.components.settings.DevToolsPane.devOnly": {
+    "ko": "개발 전용"
+  },
+  "auto.components.settings.CommitMessageAiPane.1ef29f8c29": {
+    "ko": "텍스트 레시피에서 '사용자 지정 명령'을 사용할 때 Orca가 실행할 명령줄입니다."
+  },
+  "auto.components.settings.CommitMessageAiPane.4ec89c319e": {
+    "ko": "에이전트"
+  },
+  "auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48": {
+    "ko": "기본 에이전트 사용"
+  },
+  "auto.components.settings.SourceControlAiActionRecipeDefaults.bf84dea6af": {
+    "ko": "Orca가 컨텍스트를 삽입하도록 하려는 경우에만 변수를 사용하십시오. 일반 에이전트 기본 설정을 따르려면 에이전트를 기본값으로 둡니다."
+  },
+  "auto.components.settings.SourceControlAiActionRecipeDefaults.cf01d41bce": {
+    "ko": "각 소스 제어 AI 버튼에서 사용되는 에이전트, CLI 인수 및 명령 템플릿입니다."
+  },
+  "auto.components.settings.SourceControlAiActionRecipeDefaults.926d58e87f": {
+    "ko": "에이전트"
+  },
+  "auto.components.settings.auto.rename.branch.search.672387fb77": {
+    "ko": "브랜치 이름을 생성할 때 사용되는 에이전트 명령 템플릿입니다."
+  },
+  "auto.components.settings.auto.rename.branch.search.3ef3cbe98c": {
+    "ko": "에이전트"
+  },
+  "auto.components.settings.commit.message.ai.search.3766941527": {
+    "ko": "에이전트"
+  },
+  "auto.components.settings.commit.message.ai.search.18b6d38835": {
+    "ko": "각 소스 제어 AI 버튼에서 사용되는 에이전트, CLI 인수 및 명령 템플릿입니다."
+  },
+  "auto.components.settings.git.search.c41e345153": {
+    "ko": "main보다 뒤처짐"
+  },
+  "auto.components.settings.source.control.action.recipe.options.branchName": {
+    "ko": "초기 에이전트 작업에서 Orca가 생성한 브랜치의 이름을 바꿉니다."
+  },
+  "auto.components.settings.source.control.action.recipe.options.supportedAgents": {
+    "ko": "이 레시피에 지원되는 에이전트: {{value0}}."
+  },
+  "auto.components.settings.source.control.action.recipe.options.unsupportedSavedAgent": {
+    "ko": "{{value0}}은(는) 이 텍스트 생성 레시피를 실행할 수 없습니다. 아래에서 지원되는 에이전트 중 하나를 선택하세요."
+  },
+  "settings.agents.codexTerminalServerIsolation.description": {
+    "ko": "Orca의 상태 표시와 탭 닫기가 올바르게 동작하도록 합니다. Codex의 공유 서버와 에이전트 개요를 사용하려면 끄세요. 새 터미널에 적용됩니다."
+  },
+  "auto.components.settings.AgentsPane.d83834f5e6": {
+    "ko": "설치된 에이전트 감지 중…"
+  },
+  "auto.components.settings.AgentsPane.110b74b022": {
+    "ko": "에이전트 없음(빈 터미널)"
+  },
+  "auto.components.settings.AgentsPane.385212c7a1": {
+    "ko": "기본 에이전트"
+  },
+  "auto.components.settings.AgentsPane.13647f9f80": {
+    "ko": "셸 PATH를 다시 읽고 설치된 에이전트를 다시 감지합니다"
+  },
+  "auto.components.settings.AgentsPane.dc4a2ffdc0": {
+    "ko": "명령 재정의 펼치기"
+  },
+  "auto.components.settings.AgentsPane.cea7d97be1": {
+    "ko": "명령 재정의 접기"
+  },
+  "auto.components.settings.AgentsPane.d7625cf8b2": {
+    "ko": "기본 에이전트"
+  },
+  "auto.components.settings.AgentsPane.agentPermissionsTooltip": {
+    "ko": "실행 인수를 재정의한 에이전트에는 적용되지 않습니다."
+  },
+  "auto.components.settings.AgentsPane.03e1a5081a": {
+    "ko": "{{value0}}에서"
+  },
+  "auto.components.settings.AgentsPane.remoteDetectionFailed": {
+    "ko": "설치된 에이전트를 감지하지 못했습니다. 호스트 연결을 확인한 뒤 다시 시도하세요."
+  },
+  "auto.components.settings.AgentsPane.retryDetection": {
+    "ko": "다시 시도"
+  },
+  "auto.components.settings.AgentsPane.noAgentsDetected": {
+    "ko": "감지된 에이전트가 없습니다. 에이전트가 설치되어 있다면 감지 시간이 초과되었을 수 있습니다."
+  },
+  "auto.components.settings.Settings.ec1ba547f7": {
+    "ko": "AI 에이전트를 관리하고, 기본값을 설정하고, 명령을 사용자 지정하세요."
+  },
+  "auto.components.settings.agents.search.96ba2373b6": {
+    "ko": "에이전트"
+  },
+  "auto.components.settings.agents.search.01926b9d8c": {
+    "ko": "AI 코딩 에이전트, 기본 에이전트 및 명령 재정의를 구성합니다."
+  },
+  "auto.components.settings.agents.search.agentRuntime": {
+    "ko": "에이전트 런타임"
+  },
+  "auto.components.settings.agents.search.runtime": {
+    "ko": "런타임"
+  },
+  "auto.components.settings.agents.search.installedAgentsWsl": {
+    "ko": "WSL에 설치된 에이전트"
+  },
+  "auto.components.settings.agents.search.ff457e1e7b": {
+    "ko": "데몬"
+  },
+  "auto.components.settings.general.search.40c9585e43": {
+    "ko": "프롬프트 캐시가 만료될 때까지의 시간을 표시하는 카운트다운 타이머(Claude 에이전트)"
+  },
+  "auto.components.settings.AgentRuntimeSetting.label": {
+    "ko": "에이전트 런타임"
+  },
+  "auto.components.settings.CliSkillRuntimeSetup.windowsPathUnknown": {
+    "ko": "WSL 셸 명령의 PATH를 확인할 수 없습니다"
+  },
+  "auto.components.settings.OrchestrationPane.ae79504732": {
+    "ko": "사용 방법"
+  },
+  "auto.components.settings.OrchestrationSetupCard.e7d2a5146c": {
+    "ko": "에이전트가 Orca를 통해 컨텍스트를 인계하고 작업을 조율할 수 있습니다."
+  },
+  "auto.components.settings.OrchestrationSkillAgentCoverage.fullCoverage_one": {
+    "ko": "감지된 에이전트 1개에 스킬이 설치되어 있습니다."
+  },
+  "auto.components.settings.OrchestrationSkillPromptDialog.b99f375eb2": {
+    "ko": "에이전트용 오케스트레이션 스킬을 설치하려면 터미널에서 이 명령을 실행하세요."
+  },
+  "auto.components.settings.orchestration.search.f5d39af41e": {
+    "ko": "하위 에이전트"
+  },
+  "auto.components.settings.orchestration.search.d86705ba77": {
+    "ko": "멀티 에이전트"
+  },
+  "auto.components.settings.orchestration.search.e05ff36753": {
+    "ko": "메시징, 작업 DAG, 디스패치 및 의사결정 게이트를 통해 여러 코딩 에이전트를 조율합니다."
+  },
+  "auto.components.settings.orchestration.search.c34045764e": {
+    "ko": "에이전트 오케스트레이션"
+  },
+  "auto.components.settings.MobileEmulatorAgentControlRow.d94ca6a623": {
+    "ko": "에이전트가 모바일 에뮬레이터 제어를 포함하여 Orca CLI 명령을 사용할 수 있도록 합니다."
+  },
+  "auto.components.settings.MobileEmulatorAgentControlRow.ff4b7e65d6": {
+    "ko": "코딩 에이전트가 Orca CLI 명령을 사용하여 활성 모바일 에뮬레이터를 제어하도록 합니다."
+  },
+  "auto.components.settings.MobileEmulatorAgentControlRow.2a674aa810": {
+    "ko": "에이전트 모바일 에뮬레이터 제어"
+  },
+  "auto.components.settings.MobileEmulatorSettingsPane.f2f8d97bb6": {
+    "ko": "에이전트 모바일 에뮬레이터 제어"
+  },
+  "auto.components.settings.MobileEmulatorSettingsPane.f9af91ea26": {
+    "ko": "새 모바일 에뮬레이터 작업을 표시하고 에이전트가 활성 에뮬레이터에 연결할 수 있도록 합니다."
+  },
+  "auto.components.settings.MobileEmulatorSettingsPane.bc39d0f115": {
+    "ko": "Orca 및 코딩 에이전트에 대한 모바일 에뮬레이터 지원을 구성합니다."
+  },
+  "auto.components.settings.MobileEmulatorSettingsPane.b2fd62ea75": {
+    "ko": "새 에뮬레이터 탭 및 에이전트 연결 명령을 위한 기본 장치입니다. 자동 선택은 이미 실행 중인 장치를 선호합니다."
+  },
+  "auto.components.settings.Settings.01f9d36292": {
+    "ko": "Orca 및 코딩 에이전트에 대한 모바일 에뮬레이터 지원을 구성합니다."
+  },
+  "auto.components.settings.mobile.emulator.search.f8b871d655": {
+    "ko": "에이전트 CLI"
+  },
+  "auto.components.settings.mobile.emulator.search.ea3eac39bb": {
+    "ko": "에이전트 CLI 제어"
+  },
+  "auto.components.settings.mobile.emulator.search.b8ddd13195": {
+    "ko": "에이전트 에뮬레이터"
+  },
+  "auto.components.settings.mobile.emulator.search.9595354cff": {
+    "ko": "Orca 및 코딩 에이전트에 대한 모바일 에뮬레이터 지원을 구성합니다."
+  },
+  "auto.components.settings.MobileEmulatorSdkStatus.b94ff260e6": {
+    "ko": "Android Studio 다운로드"
+  },
+  "auto.components.settings.BaseRefPicker.086ce7f369": {
+    "ko": "기본 브랜치를 따르는 중({{value0}})"
+  },
+  "auto.components.settings.BaseRefPicker.ee110e1830": {
+    "ko": "기본 기준 참조 없음"
+  },
+  "auto.components.settings.RepositoryHooksSection.fb6bebcf7e": {
+    "ko": "설정 스크립트 실행 시기"
+  },
+  "auto.components.settings.RepositoryHooksSection.54c73d88d0": {
+    "ko": "생성 중인 워크트리의 경로입니다. 초기 설정 명령은 이 디렉터리에서 실행됩니다."
+  },
+  "auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent": {
+    "ko": "에이전트를 시작하기 전에 설정이 완료될 때까지 기다리기"
+  },
+  "auto.components.settings.RepositoryPane.f88db4fece": {
+    "ko": "기본 워크트리 기준 참조"
+  },
+  "auto.components.settings.RepositoryPane.8984d06520": {
+    "ko": "워크트리를 생성할 때 사용할 기본 기준 브랜치 또는 참조입니다."
+  },
+  "auto.components.settings.RepositoryPane.hostStateDisconnected": {
+    "ko": "연결 끊김"
+  },
+  "auto.components.settings.RepositoryPane.hostStateUnknown": {
+    "ko": "알 수 없음"
+  },
+  "auto.components.settings.RepositoryPane.nestedHostLabel": {
+    "ko": "{{value0}} ({{value1}} 경유)"
+  },
+  "auto.components.settings.RepositorySourceControlAiActionRows.0ffb081b3a": {
+    "ko": "기본 에이전트 사용"
+  },
+  "auto.components.settings.RepositorySourceControlAiCustomCommand.0704dd55cd": {
+    "ko": "저장소 명령"
+  },
+  "auto.components.settings.repository.search.d42d1e49c0": {
+    "ko": "orca.yaml과 선택적인 로컬 재정의로 설정하는 파일 기반의 연결된 이슈 명령입니다."
+  },
+  "auto.components.settings.repository.search.cdfe398068": {
+    "ko": "설정 스크립트 실행 시기"
+  },
+  "auto.components.settings.repository.search.5e9445bbfd": {
+    "ko": "기준 설정"
+  },
+  "auto.components.settings.repository.search.visibility": {
+    "ko": "표시 여부"
+  },
+  "auto.components.settings.repository.search.syncFork": {
+    "ko": "포크 동기화"
+  },
+  "auto.components.settings.repository.search.behindUpstream": {
+    "ko": "업스트림보다 뒤처짐"
+  },
+  "auto.components.settings.repository.search.origin": {
+    "ko": "origin"
+  },
+  "auto.components.settings.repository.search.runtime": {
+    "ko": "런타임"
+  },
+  "auto.components.settings.RepositoryForkSyncSection.syncedDescriptionPlural": {
+    "ko": "{{branch}} 브랜치를 커밋 {{count}}개만큼 fast-forward 했습니다."
+  },
+  "auto.components.settings.RepositoryForkSyncSection.diverged": {
+    "ko": "origin에 upstream에 없는 커밋이 있습니다."
+  },
+  "auto.components.settings.RepositoryForkSyncSection.longDescription": {
+    "ko": "이 포크가 upstream보다 뒤처져 있으면 Orca가 기본 브랜치를 안전하게 fast-forward 할 수 있습니다. 브랜치에 로컬에만 있는 커밋이나 충돌이 있으면 업데이트를 건너뜁니다."
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.liveTerminalSingular": {
+    "ko": "{{count}}개의 실행 중인 터미널"
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.liveTerminalPlural": {
+    "ko": "{{count}}개의 실행 중인 터미널"
+  },
+  "auto.components.settings.QuickCommandsPane.c36912efd5": {
+    "ko": "탭 표시줄의 빠른 명령 버튼을 사용하여 실행하거나 터미널 내부를 마우스 오른쪽 버튼으로 클릭하세요."
+  },
+  "auto.components.settings.QuickCommandsPane.9b3e338d62": {
+    "ko": "Enter로 실행"
+  },
+  "auto.components.settings.QuickCommandsPane.89f7e57fcc": {
+    "ko": "저장 호스트"
+  },
+  "auto.components.settings.quick.commands.search.1c5bdcd0f2": {
+    "ko": "저장소"
+  },
+  "auto.components.settings.quick.commands.search.d691c4e8d8": {
+    "ko": "전역적으로 또는 특정 프로젝트로 범위가 지정된 모든 터미널에서 실행할 수 있는 저장된 터미널 명령입니다."
+  },
+  "auto.components.settings.QuickCommandsToolbar.searchLabel": {
+    "ko": "명령 검색"
+  },
+  "settings.browser.userAgent.resetRequiredCommand": {
+    "ko": "명령줄에서 재설정하세요: orca browser identity set --mode <mode> --reset"
+  },
+  "auto.components.settings.BrowserUseEnableSwitch.aea3f45349": {
+    "ko": "에이전트 브라우저 사용 활성화"
+  },
+  "auto.components.settings.BrowserUsePane.b8a1f2d84d": {
+    "ko": "에이전트 브라우저 사용"
+  },
+  "auto.components.settings.browser.search.terminalLinkActions.click": {
+    "ko": "클릭"
+  },
+  "auto.components.settings.browser.search.clientHostedRemote.client": {
+    "ko": "클라이언트"
+  },
+  "auto.components.settings.browser.search.clientHostedRemote.host": {
+    "ko": "호스트"
+  },
+  "auto.components.settings.browser.search.sshWorkspaceRouting.network": {
+    "ko": "네트워크"
+  },
+  "auto.components.settings.browser.use.search.9d97446873": {
+    "ko": "에이전트"
+  },
+  "auto.components.settings.BrowserLinkRoutingModifierSetting.titleSystem": {
+    "ko": "Shift를 누른 채 클릭하면 웹 브라우저에서 열기"
+  },
+  "auto.components.settings.BrowserLinkRoutingModifierSetting.titleOrca": {
+    "ko": "Shift를 누른 채 클릭하면 Orca에서 열기"
+  },
+  "auto.components.settings.BrowserLinkRoutingModifierSetting.descriptionSystem": {
+    "ko": "링크가 Orca에서 열리므로, {{chord}}+클릭 시 시스템 기본 브라우저에서 대신 열립니다."
+  },
+  "auto.components.settings.BrowserLinkRoutingModifierSetting.descriptionOrca": {
+    "ko": "링크가 시스템 기본 브라우저에서 열립니다. 활성화하면 {{chord}}+클릭 시 Orca 내장 브라우저에서 대신 열립니다."
+  },
+  "auto.components.settings.BrowserTerminalLinkActionsSetting.actionsLabel": {
+    "ko": "동작 메뉴 표시"
+  },
+  "auto.components.settings.BrowserTerminalLinkActionsSetting.leaveToTerminalLabel": {
+    "ko": "터미널에 맡기기"
+  },
+  "auto.components.settings.shareSkills.description": {
+    "ko": "공개 목록에 표시되지 않는 링크로 스킬을 공유하세요. 링크가 있는 사람은 누구나 설치할 수 있습니다."
+  },
+  "auto.components.settings.shareSkills.allowAgentPublishing": {
+    "ko": "에이전트와 Orca CLI의 스킬 링크 게시 허용"
+  },
+  "auto.components.settings.shareSkills.allowAgentPublishingDescription": {
+    "ko": "설치된 스킬 중 명령어에 이름을 명시한 스킬을 게시하도록 허용합니다. 스킬 폴더에는 스크립트, 설정 또는 비밀정보가 포함될 수 있으므로 기본적으로 꺼져 있습니다."
+  },
+  "auto.components.settings.shareSkills.selectTitle": {
+    "ko": "스킬을 하나 이상 선택하세요."
+  },
+  "auto.components.settings.shareSkills.copyTitle": {
+    "ko": "공개 목록에 표시되지 않는 링크 복사"
+  },
+  "auto.components.settings.shareSkills.copyDescription": {
+    "ko": "링크가 있는 사람은 누구나 로그인하지 않고 전체 또는 선택한 스킬을 살펴보고 설치할 수 있습니다."
+  },
+  "auto.components.settings.shareSkills.signInTitle": {
+    "ko": "스킬을 공유하려면 로그인하세요."
+  },
+  "auto.components.settings.shareSkills.howToTitle": {
+    "ko": "스킬 공유 방법"
+  },
+  "auto.components.settings.shareSkills.openSkills": {
+    "ko": "스킬 열기"
+  },
+  "auto.components.settings.shareSkills.searchDescription": {
+    "ko": "공개 목록에 표시되지 않는 링크로 스킬을 공유하세요. 링크가 있는 사람은 누구나 설치할 수 있습니다."
+  },
+  "auto.components.settings.shareSkills.showButton": {
+    "ko": "스킬 버튼 표시"
+  },
+  "auto.components.settings.shareSkills.manageInSkills": {
+    "ko": "스킬에서 관리"
+  },
+  "auto.components.settings.ShortcutTerminalPolicyControl.0762983d13": {
+    "ko": "터미널 우선"
+  },
+  "auto.components.settings.ShortcutsPane.f0b35b0b2e": {
+    "ko": "터미널 또는 TUI에 키보드 포커스가 있는 동안에는 비활성화됩니다."
+  },
+  "auto.components.settings.ShortcutsPane.5c65d5db9d": {
+    "ko": "터미널 우선"
+  },
+  "auto.components.settings.ShortcutsPane.dfa8ff612f": {
+    "ko": "터미널이나 TUI에 키보드 포커스가 있는 동안에도 실행됩니다."
+  },
+  "auto.components.settings.ShortcutsPane.25b0004fbf": {
+    "ko": "터미널 활성"
+  },
+  "auto.components.settings.ShortcutsPane.781cb74d22": {
+    "ko": "터미널 패널에서 실행됩니다."
+  },
+  "auto.components.settings.shortcuts.search.4811a8264a": {
+    "ko": "터미널 우선"
+  },
+  "auto.components.settings.shortcuts.search.0f8cb15582": {
+    "ko": "에이전트"
+  },
+  "auto.components.settings.ShortcutCommandBlock.70b5d25583": {
+    "ko": "{{value0}} 단축키"
+  },
+  "auto.components.settings.ShortcutCommandBlock.287e07ddde": {
+    "ko": "변경됨"
+  },
+  "auto.components.settings.ShortcutCommandBlock.3c83cd7d1c": {
+    "ko": "비활성화됨"
+  },
+  "auto.components.settings.ShortcutCommandBlock.a799f90f82": {
+    "ko": "{{value0}} 비활성화"
+  },
+  "auto.components.settings.ShortcutCommandBlock.482a60225d": {
+    "ko": "{{value0}} 활성화"
+  },
+  "auto.components.settings.NotificationsPane.00cd406dbb": {
+    "ko": "보고 있는 워크트리의 알림 숨기기"
+  },
+  "auto.components.settings.NotificationsPane.591fe605b9": {
+    "ko": "터미널 벨"
+  },
+  "auto.components.settings.NotificationsPane.55f901a59b": {
+    "ko": "코딩 에이전트가 작업을 마치고 유휴 상태가 됩니다."
+  },
+  "auto.components.settings.NotificationsPane.ca76d06fd2": {
+    "ko": "에이전트 작업 완료"
+  },
+  "auto.components.settings.notifications.search.a5edee1d99": {
+    "ko": "터미널 벨"
+  },
+  "auto.components.settings.notifications.search.7fa07e9600": {
+    "ko": "에이전트"
+  },
+  "auto.components.settings.notifications.search.bdc1edaeb4": {
+    "ko": "에이전트 작업 완료"
+  },
+  "auto.components.settings.FloatingWorkspacePane.81afb79785": {
+    "ko": "새로운 플로팅 터미널 탭이 여기에서 시작됩니다. Markdown 메모는 Orca의 앱 소유 플로팅 워크스페이스에 저장됩니다."
+  },
+  "auto.components.settings.FloatingWorkspacePane.12aa09f10c": {
+    "ko": "터미널 디렉터리"
+  },
+  "auto.components.settings.floating.workspace.search.ebeedb2f6a": {
+    "ko": "빠른 터미널"
+  },
+  "auto.components.settings.floating.workspace.search.6f183fa1b9": {
+    "ko": "플로팅 터미널"
+  },
+  "auto.components.settings.voice.pane.search.748b33e531": {
+    "ko": "받아쓰기를 켜고 끄거나, 키를 누르는 동안 받아쓰는 방식입니다."
+  },
+  "auto.components.settings.VoiceMicrophoneSetting.unavailable": {
+    "ko": "사용할 수 없음"
+  },
+  "auto.components.NewWorkspaceComposerCard.destroyDisabled": {
+    "ko": "삭제 비활성화됨"
+  },
+  "auto.components.NewWorkspaceComposerCard.destroyConfigured": {
+    "ko": "삭제 명령 설정됨"
+  },
+  "auto.components.NewWorkspaceComposerCard.noDestroyConfigured": {
+    "ko": "삭제 명령 없음"
+  },
+  "auto.components.settings.RuntimeAccessGrantList.fd83b94095": {
+    "ko": "아직 부여된 공유 서버 접근 권한이 없습니다."
+  },
+  "auto.components.settings.RuntimeEnvironmentsPane.b2290ed203": {
+    "ko": "Orca가 이 호스트로 포커스를 옮기고 해당 프로젝트를 불러옵니다. 다른 호스트의 기존 터미널과 브라우저 탭은 계속 유지됩니다."
+  },
+  "auto.components.settings.RuntimeEnvironmentsPane.connectToRemoteServersHelp": {
+    "ko": "다른 Orca 런타임을 페어링한 다음 여기에서 연결하거나 연결을 해제하세요."
+  },
+  "auto.components.settings.RuntimeEnvironmentsPane.versionUnavailable": {
+    "ko": "Orca 버전 확인 불가"
+  },
+  "auto.components.settings.RuntimeEnvironmentsPane.updateServer": {
+    "ko": "업데이트"
+  },
+  "auto.components.settings.RuntimeEnvironmentsPane.reviewServerUpdates": {
+    "ko": "서버 업데이트 확인"
+  },
+  "auto.components.settings.RuntimeEnvironmentsPane.updatingServers": {
+    "ko": "서버 업데이트 중…"
+  },
+  "auto.components.settings.RuntimePairingUrlGenerator.45cf476df3": {
+    "ko": "host, host:port 또는 wss://host/path"
+  },
+  "auto.components.settings.EphemeralVmRuntimesSection.running": {
+    "ko": "실행 중"
+  },
+  "auto.components.settings.EphemeralVmRuntimesSection.description": {
+    "ko": "레시피로 생성한 런타임은 워크스페이스가 소유합니다. 충돌, 생성 실패, 수동 복구 후 남은 오래된 항목을 정리하세요."
+  },
+  "auto.components.settings.EphemeralVmRuntimesSection.copyCleanup": {
+    "ko": "명령어 복사"
+  },
+  "auto.components.settings.EphemeralVmRuntimesSection.stoppingCleanup": {
+    "ko": "중지 중…"
+  },
+  "auto.components.settings.EphemeralVmCleanupStopDialog.cancel": {
+    "ko": "정리 계속"
+  },
+  "auto.components.settings.EphemeralVmCleanupStopDialog.stopping": {
+    "ko": "중지 중…"
+  },
+  "auto.components.settings.SettingsHostScopePicker.description": {
+    "ko": "아래의 계정, 감지된 에이전트 및 터미널 옵션은 이 호스트에 적용됩니다."
+  },
+  "auto.components.settings.SettingsHostScopePicker.label": {
+    "ko": "호스트"
+  },
+  "auto.components.settings.SettingsHostScopePicker.unavailable": {
+    "ko": "{{value0}} (사용 불가)"
+  },
+  "auto.components.settings.SettingsHostScopePicker.unavailableNotice": {
+    "ko": "이 서버는 더 이상 저장되어 있지 않아 정보를 표시할 수 없습니다. 설정 상단에서 다른 호스트를 선택하세요."
+  },
+  "auto.components.settings.SshPassphraseDialog.c624f64b86": {
+    "ko": "계속"
+  },
+  "auto.components.settings.SshTargetForm.allowRemoteCliControl": {
+    "ko": "이 호스트의 orca CLI가 Orca를 제어하도록 허용"
+  },
+  "auto.components.settings.SshTargetForm.allowRemoteCliControlHelp": {
+    "ko": "새 호스트에서는 기본적으로 켜져 있습니다. 이 호스트에서 실행한 orca 명령이 이 호스트의 작업 공간에서만, 연결되어 있는 동안에만 이 데스크톱의 Orca 브라우저 탭을 열고 조작할 수 있게 하고, 이 호스트에서 이전 버전의 Orca가 시작한 터미널이 자신이 감독받는 작업에 대해 오케스트레이션 명령(check, inbox, send, ask, reply)을 실행할 수 있게 합니다. 파일, 클립보드, 쿠키는 읽을 수 없습니다. 끄면 이 호스트 자체의 Orca 서버에만 접근합니다."
+  },
+  "auto.components.settings.AdvancedNetworkSettingsSection.3e431564b5": {
+    "ko": "localhost, 127.0.0.1, *.internal"
+  },
+  "auto.components.settings.AdvancedNetworkSettingsSection.823e0f15b1": {
+    "ko": "Orca 네트워크 요청 및 로컬 터미널의 자식 프로세스에 사용할 프록시 URL입니다."
+  },
+  "auto.components.settings.cli.source.control.integration.cards.d5b3be8ecd": {
+    "ko": "다시 확인"
+  },
+  "auto.components.settings.cli.source.control.integration.cards.1f2b347bd3": {
+    "ko": "MR, 이슈, 할 일, 파이프라인을 지원하는"
+  },
+  "auto.components.settings.cli.source.control.integration.cards.statusUnavailable": {
+    "ko": "사용할 수 없음"
+  },
+  "auto.components.settings.linear.agent.skill.search.linear": {
+    "ko": "Linear"
+  },
+  "auto.components.settings.linear.agent.skill.search.orcaLinear": {
+    "ko": "orca-linear"
+  },
+  "auto.components.settings.bitbucket.integration.card.accountUnknown": {
+    "ko": "Bitbucket Cloud"
+  },
+  "auto.components.settings.UnsealedCredentialNotice.body": {
+    "ko": "{{credential}}이(가) 암호화되지 않은 상태로 저장되어 있습니다. 이 시스템에는 Orca가 사용할 수 있는 OS 키링이 없습니다. 디스크나 디스크 백업을 읽을 수 있는 사람은 이 자격 증명도 읽을 수 있습니다. gnome-keyring 또는 kwallet을 설치하고 잠금 해제한 뒤 다시 저장해 암호화하세요."
+  },
+  "auto.components.settings.artifacts.openArtifacts": {
+    "ko": "아티팩트 열기"
+  },
+  "auto.components.settings.artifacts.showButton": {
+    "ko": "아티팩트 버튼 표시"
+  },
+  "auto.components.settings.Settings.6855b0f77d": {
+    "ko": "Orca를 병렬 에이전트 작업에 유용하게 만드는 핵심 워크플로를 완료합니다."
+  },
+  "sessionHistory.settings.open": {
+    "ko": "열기"
+  },
+  "auto.components.settings.automations.keywordRuns": {
+    "ko": "실행"
+  },
+  "auto.components.settings.Settings.2b4474780a": {
+    "ko": "모양"
+  },
+  "auto.components.settings.TerminalWindowSection.0cb4459fb8": {
+    "ko": "흰색"
+  },
+  "auto.components.settings.TerminalWindowSection.cf37ff69f6": {
+    "ko": "기본"
+  },
+  "auto.components.settings.appearance.search.81ef5abc2f": {
+    "ko": "상태 표시줄에 CPU, 메모리, 터미널 세션 및 워크스페이스 디스크 사용량을 표시합니다."
+  },
+  "auto.components.settings.terminal.search.6c2f9f05c8": {
+    "ko": "배경 흐림 효과"
+  },
+  "auto.components.settings.terminal.search.e989914ad6": {
+    "ko": "글꼴 패밀리"
+  },
+  "auto.components.settings.PrivacyDiagnosticBundleControls.19ec5e29b3": {
+    "ko": "최근 앱 활동과 오류를 민감 정보가 가려진 파일로 모아, 보내기 전에 검토할 수 있게 합니다. 보내기를 선택하기 전까지는 아무것도 업로드되지 않습니다."
+  },
+  "auto.components.settings.privacy.search.2b5a5c312f": {
+    "ko": "PostHog"
+  },
+  "auto.components.settings.orcaAccount.keywordRelay": {
+    "ko": "릴레이"
+  },
+  "auto.components.settings.orcaAccount.keywordCloud": {
+    "ko": "클라우드"
+  },
+  "auto.components.skills.SkillFreshnessStatusPill.needsAttention": {
+    "ko": "스킬 검토"
+  },
+  "auto.components.settings.MobilePane.2e3dd0bc29": {
+    "ko": "기기의 연결 권한을 해제했습니다."
+  },
+  "auto.components.settings.MobilePane.5e2c7a1f84": {
+    "ko": "휴대폰에서 터미널을 사용하는 동안 Orca는 휴대폰 화면에 맞게 터미널을 축소합니다. 앱을 닫거나 다른 앱으로 전환할 때, 휴대폰 화면 크기를 유지할지(대화형 CLI 도구의 레이아웃 재배치 방지) 아니면 데스크톱 크기로 다시 조정할지 제어합니다. 배너에서 언제든지 '복원' 또는 '모두 복원'을 사용해 수동으로 크기를 조정할 수 있습니다."
+  },
+  "auto.components.settings.Settings.c6c01ac209": {
+    "ko": "휴대폰에서 터미널과 에이전트를 제어하세요."
+  },
+  "auto.components.settings.MobileRelayBetaNotice.notice": {
+    "ko": "Orca Relay는 베타 버전입니다."
+  },
+  "auto.components.settings.MobilePairingConnectionOptions.relaySignInDetail": {
+    "ko": "이 데스크톱에서 Orca에 로그인하고 휴대폰 연결을 Orca 서버를 통해 전달합니다. LAN 연결에는 계정이 필요하지 않습니다."
+  },
+  "auto.components.settings.SshPassphraseDialog.ce4fdf7914": {
+    "ko": "다음 연결 대상에 사용할 SSH 키의 암호 문구를 입력하세요:"
+  },
+  "auto.components.settings.SshPassphraseDialog.dbf9b6f2d0": {
+    "ko": "다음 연결 대상의 비밀번호를 입력하세요:"
+  },
+  "auto.components.settings.SshPassphraseDialog.981352fb42": {
+    "ko": "다음 연결 대상의 인증 요청을 완료하세요:"
+  },
+  "auto.components.right.sidebar.SourceControl.compareBaseCommitsAheadOne": {
+    "ko": "{{ref}}보다 커밋 1개 앞서 있음"
+  },
+  "auto.components.right.sidebar.SourceControl.compareBaseCommitsAheadOther": {
+    "ko": "{{ref}}보다 커밋 {{count}}개 앞서 있음"
+  },
+  "auto.components.right.sidebar.SourceControl.compareBaseCommitsBehindOne": {
+    "ko": "{{ref}}보다 커밋 1개 뒤처짐"
+  },
+  "auto.components.right.sidebar.SourceControl.compareBaseCommitsBehindOther": {
+    "ko": "{{ref}}보다 커밋 {{count}}개 뒤처짐"
+  },
+  "components.workspace.cleanup.browse.review.open": {
+    "ko": "열림"
+  },
+  "components.workspace.cleanup.browse.review.unknown": {
+    "ko": "알 수 없음"
+  },
+  "auto.components.right.sidebar.GitHubPRStackMap.e6cb964305": {
+    "ko": "열림"
+  },
+  "auto.components.right.sidebar.GitHubPRStackMap.3511405914": {
+    "ko": "닫힘"
+  },
+  "auto.components.right.sidebar.GitHubPRStackMap.8a9bdc36c0": {
+    "ko": "병합됨"
+  },
+  "auto.components.right.sidebar.GitHubPRStackMap.838aadf512": {
+    "ko": "검사 실패"
+  },
+  "auto.components.mobile.NetworkInterfacePicker.custom-section": {
+    "ko": "사용자 지정"
+  },
+  "auto.components.settings.EphemeralVmRuntimesSection.failed": {
+    "ko": "실패"
+  },
+  "auto.components.skills.SkillBundleInstallOutcome.01c5a12e05": {
+    "ko": "실패"
+  },
+  "auto.components.automations.automation.list.last.run.failed": {
+    "ko": "실패"
+  },
+  "auto.components.settings.CommitMessageAiPane.47e45cbd5a": {
+    "ko": "사용자 지정 명령"
+  },
+  "auto.components.settings.RepositorySourceControlAiActionRows.2b2f38652b": {
+    "ko": "사용자 지정 명령"
+  },
+  "auto.components.settings.RepositorySourceControlAiCustomCommand.ebffc5a28c": {
+    "ko": "사용자 지정 명령"
+  },
+  "auto.components.settings.SourceControlAiActionRecipeDefaults.0740d30915": {
+    "ko": "사용자 지정 명령"
+  },
+  "auto.components.right.sidebar.SourceControlTextGenerationDialogForm.914c8f6ac2": {
+    "ko": "사용자 지정 명령"
+  },
+  "auto.components.feature.wall.AiCommitPrSettingsCard.9ee54037a4": {
+    "ko": "사용자 지정 명령"
+  },
+  "auto.components.settings.AccountsPane.316ca4e610": {
+    "ko": "저장된 쿠키 삭제"
+  },
+  "menu.appearance": {
+    "ko": "모양"
+  },
+  "auto.hooks.useSettingsNavigationMetadata.93d88d20bf": {
+    "ko": "모양"
+  },
+  "auto.components.sidebar.WorkspaceStatusAppearancePopover.74b1413279": {
+    "ko": "모양"
+  },
+  "auto.components.settings.TerminalAppearanceSection.a408266e67": {
+    "ko": "글꼴 패밀리"
+  },
+  "auto.components.settings.CliSection.aa6536977e": {
+    "ko": "터미널에서 명령을 사용할 수 있도록 Orca가 {{value0}}을(를) 등록합니다."
+  },
+  "auto.components.settings.CliSection.cliSkillTerminalAria": {
+    "ko": "CLI 스킬 설치 터미널"
+  },
+  "auto.components.settings.QuickCommandsPane.7784912ed6": {
+    "ko": "저장소"
+  },
+  "auto.components.settings.EphemeralVmCleanupStopDialog.title": {
+    "ko": "정리를 중지하시겠습니까?"
+  },
+  "auto.components.settings.EphemeralVmRuntimesSection.stopCleanupFailed": {
+    "ko": "클라우드 VM 정리를 중지할 수 없습니다."
+  },
+  "auto.components.settings.EphemeralVmsPane.whatBuild": {
+    "ko": "재사용 가능한 기본 이미지를 빌드하고 에이전트를 로그인시킵니다."
+  },
+  "auto.components.settings.EphemeralVmsPane.promptHint": {
+    "ko": "어떤 워크스페이스에서든 에이전트에게 다음과 같이 요청하세요:"
+  },
+  "auto.components.settings.EphemeralVmsPane.skillDescription": {
+    "ko": "저장소에 포함된 환경 레시피를 설정, 빌드, 인증 및 검증합니다."
+  },
+  "auto.components.settings.BrowserTerminalLinkActionsSetting.plainClickDescription": {
+    "ko": "왼쪽 클릭 시 동작 메뉴를 표시할지, URL을 열지, 터미널에 맡길지 선택하세요. Cmd/Ctrl 키를 누른 채 클릭하면 항상 바로 열립니다."
+  },
+  "auto.components.settings.NotificationsPane.2772d2f257": {
+    "ko": "알림을 발생시킨 워크트리가 이미 화면에 보이면 알림을 건너뜁니다."
+  },
+  "auto.components.settings.SshPassphraseDialog.1f3dde805d": {
+    "ko": "SSH 키 암호 문구"
+  },
+  "auto.components.settings.SshPassphraseDialog.8a349e3fac": {
+    "ko": "{{value0}}의 암호 문구"
+  },
+  "auto.components.settings.SshPassphraseDialog.c3ce71aad6": {
+    "ko": "암호 문구를 입력하세요"
+  },
+  "auto.components.settings.AutoRenameBranchFromWorkSetting.commandTemplateDescription": {
+    "ko": "<basePrompt>{basePrompt}</basePrompt> 변수를 사용하면 Orca의 <promptLink>내장 브랜치 이름 프롬프트</promptLink>를 포함할 수 있습니다. <firstPrompt>{firstPrompt}</firstPrompt>와 <assistantMessage>{assistantMessage}</assistantMessage> 변수도 참조할 수 있습니다. Orca는 <example>fix-login-flow</example> 같은 마지막 세그먼트만 생성하며, 브랜치 접두사 설정은 계속 적용됩니다."
+  },
+  "auto.components.settings.GitPane.refreshLocalBaseDescription": {
+    "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고 <mainBranch>main</mainBranch>이나 <masterBranch>master</masterBranch> 같은 해당 로컬 브랜치를 안전하게 앞으로 이동(fast-forward)합니다. 그러면 <diffCommand>git diff main...HEAD</diffCommand> 같은 명령이 오래된 이력과 비교하지 않습니다. 해당 브랜치에 커밋되지 않은 변경 사항이나 로컬에만 있는 커밋이 있으면 Orca는 업데이트를 건너뜁니다."
+  },
+  "auto.components.settings.RepositoryHooksSection.issueCommandDescription": {
+    "ko": "필요하면 기본 명령을 재정의할 수 있습니다. 연결된 이슈 또는 PR의 URL에는 <artifactUrl>{{artifact_url}}</artifactUrl> 변수를 사용하세요."
+  },
+  "auto.components.settings.RepositoryHooksSection.issueCommandSharedDefault": {
+    "ko": "비워 두면 <yaml>orca.yaml</yaml>에 지정된 저장소 기본값을 사용합니다."
+  },
+  "auto.components.settings.RepositoryHooksSection.issueCommandOptionalDefault": {
+    "ko": "비워 두면 <yaml>orca.yaml</yaml>에 지정된 저장소 기본값이 있는 경우 사용합니다."
+  },
+  "auto.components.settings.RepositoryHooksSection.commandSourceDescription": {
+    "ko": "<yaml>orca.yaml</yaml>의 명령과 로컬 명령이 모두 있으면 실행할 명령을 선택하세요."
+  },
+  "auto.components.settings.SshPane.syncedServerSingular": {
+    "ko": "서버 {{count}}개를 동기화했습니다."
+  },
+  "auto.components.settings.SshPane.syncedServerPlural": {
+    "ko": "서버 {{count}}개를 동기화했습니다."
+  },
+  "auto.components.settings.VoicePane.dictationShortcutDescription": {
+    "ko": "{{shortcut}} 단축키를 눌러 포커스된 패널에 텍스트를 받아쓰세요."
+  },
+  "auto.components.settings.VoicePane.dictationModesDescription": {
+    "ko": "토글: {{shortcut}} 단축키를 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다. 길게 누르기: {{shortcut}} 단축키를 누르고 있는 동안 받아쓰기합니다."
+  },
+  "auto.components.settings.task.tracker.integration.cards.connectedSiteSingular": {
+    "ko": "사이트 {{count}}개 연결됨"
+  },
+  "auto.components.settings.task.tracker.integration.cards.connectedSitePlural": {
+    "ko": "사이트 {{count}}개 연결됨"
+  },
+  "auto.components.settings.task.tracker.integration.cards.connectedWorkspaceSingular": {
+    "ko": "워크스페이스 {{count}}개 연결됨"
+  },
+  "auto.components.settings.task.tracker.integration.cards.connectedWorkspacePlural": {
+    "ko": "워크스페이스 {{count}}개 연결됨"
   }
 }

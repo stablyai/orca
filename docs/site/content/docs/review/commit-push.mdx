@@ -6,7 +6,7 @@ You can commit, push, and open the review without leaving Orca. The commit panel
 
 ## Commit
 
-1. Stage changes by hunk or by file from the diff.
+1. Stage changed files from the Source Control panel.
 1. Write a commit message in the bottom panel, or use **Generate with AI** when you want Orca to draft one from the staged changes.
 1. Hit **Commit** (`Cmd-Enter` on macOS, `Ctrl-Enter` on Windows / Linux) when focus is in Source Control and the primary action is Commit.
 
@@ -47,6 +47,8 @@ Amending is explicit — **Commit → Amend**. Orca won't amend commits that hav
 The sidebar **Source Control** panel exposes the same actions without leaving your current view: stage and discard files, write a commit message, and run **Commit**, **Push**, **Pull**, or **Sync** as one-click actions. Paths render as UTF-8 even when they contain non-ASCII characters.
 
 The branch context row at the top shows the current branch (or detached HEAD) stacked above the compare base (`branch → base`) so Create PR and remote actions never hide which branch you're on. When the branch has a usable merge base, a compact chip shows total lines added and removed against that fork point (one ranged diff, not a sum of staged/unstaged areas). Hover the chip for a **Code breakdown** when the host publishes splits: **Source**, **Tests**, and **Generated** (generated only when non-zero) — path heuristics only, not content analysis. Long branch names truncate so they do not cover the chip.
+
+**Committed on Branch** shows changes since the common ancestor with the selected base. Changes made only on the base branch are excluded. If an untracked file overlaps a file deleted or renamed from that ancestor, the line-total chip clears any previously shown number until an exact total is available again. Staging the file restores an exact total.
 
 Right-click a changed file for **Copy Path** / **Copy Relative Path** (relative to the worktree root).
 

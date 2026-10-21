@@ -21,7 +21,8 @@ import {
   clearTokenFile,
   loadToken,
   replaceLegacyWorkspace,
-  saveWorkspaceToken
+  saveWorkspaceToken,
+  getWorkspaceTokenProtection
 } from './linear-token-store'
 import { CredentialDecryptionError } from '../integration-credential-file'
 import type {
@@ -54,7 +55,8 @@ export function getClient(workspaceId?: string | null): LinearClient | null {
 }
 
 export function getClients(
-  workspaceId?: LinearWorkspaceSelection | null
+  workspaceId?: LinearWorkspaceSelection | null,
+  signal?: AbortSignal
 ): LinearClientForWorkspace[] {
   const state = getWorkspaceState()
   const isAllSelection = workspaceId === 'all'
@@ -83,16 +85,20 @@ export function getClients(
     }
     clients.push({
       workspace,
-      client: new (loadLinearSdk().LinearClient)({ apiKey: token }),
+      client: new (loadLinearSdk().LinearClient)({ apiKey: token, ...(signal ? { signal } : {}) }),
       apiKey: token
     })
   }
   return clients
 }
 
-export function getPublicFileUrlClient(entry: LinearClientForWorkspace): LinearClient {
+export function getPublicFileUrlClient(
+  entry: LinearClientForWorkspace,
+  signal?: AbortSignal
+): LinearClient {
   return new (loadLinearSdk().LinearClient)({
     apiKey: entry.apiKey,
+    ...(signal ? { signal } : {}),
     headers: {
       'public-file-urls-expire-in': String(LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS)
     }
@@ -176,6 +182,13 @@ export function getStatus(): LinearConnectionStatus {
   const credentialError = state.workspaces
     .map((workspace) => getCredentialError(workspace.id))
     .find((message) => message !== undefined)
+  // Why any-not-active: sealing is a host-wide property, so a second workspace stored
+  // while the keyring was missing is exposed even when the active one is sealed.
+  const credentialProtection = state.workspaces.some(
+    (workspace) => getWorkspaceTokenProtection(workspace.id) === 'plaintext'
+  )
+    ? 'plaintext'
+    : null
 
   return {
     connected: state.workspaces.length > 0,
@@ -183,7 +196,8 @@ export function getStatus(): LinearConnectionStatus {
     workspaces: state.workspaces,
     activeWorkspaceId: state.activeWorkspaceId,
     selectedWorkspaceId: state.selectedWorkspaceId,
-    ...(credentialError ? { credentialError } : {})
+    ...(credentialError ? { credentialError } : {}),
+    credentialProtection
   }
 }
 

@@ -14,8 +14,14 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
+import { isAgentCapabilitiesDone } from './feature-wall-setup-progress'
 
-export type AgentCapabilityInstallStatusTone = 'ready' | 'pending' | 'checking' | 'error'
+export type AgentCapabilityInstallStatusTone =
+  | 'ready'
+  | 'pending'
+  | 'checking'
+  | 'error'
+  | 'unavailable'
 
 export type AgentCapabilityInstallStatus = {
   label: string
@@ -119,14 +125,18 @@ export function isAgentCapabilityReadinessChecking(readiness: AgentCapabilityRea
   )
 }
 
+export function isAgentCapabilityReadinessComplete(readiness: AgentCapabilityReadiness): boolean {
+  return !isAgentCapabilityReadinessChecking(readiness) && isAgentCapabilitiesDone(readiness)
+}
+
 export function getAgentCapabilityStatusClassName(tone: AgentCapabilityInstallStatusTone): string {
   switch (tone) {
-    case 'ready':
-      return 'text-green-600 dark:text-green-300'
     case 'error':
       return 'text-destructive'
+    case 'ready':
     case 'checking':
     case 'pending':
+    case 'unavailable':
       return 'text-muted-foreground'
   }
 }
@@ -166,8 +176,8 @@ function getSkillInstallStatus(skill: {
   }
   return {
     label: translate(
-      'auto.components.feature.wall.agent.capability.setup.status.aae94eeb52',
-      'Click Install CLI & Skills'
+      'auto.components.feature.wall.agent.capability.setup.status.notInstalled',
+      'Not installed'
     ),
     tone: 'pending'
   }
@@ -211,22 +221,22 @@ function getComputerUseInstallStatus(
       label:
         permissions.unavailableReason === 'web_client'
           ? translate(
-              'auto.components.feature.wall.agent.capability.setup.status.4c8e1f92a7',
-              'open Orca Desktop on this Mac'
+              'auto.components.feature.wall.agent.capability.setup.status.requiresOrcaDesktop',
+              'Requires Orca Desktop'
             )
           : translate(
               'auto.components.feature.wall.agent.capability.setup.status.6d2b0a84e1',
               'Unavailable in this build'
             ),
-      tone: 'pending',
+      tone: 'unavailable',
       installed: true
     }
   }
   if (!permissions.ready) {
     return {
       label: translate(
-        'auto.components.feature.wall.agent.capability.setup.status.21d4f79c93',
-        'click Install CLI & Skills to open macOS access settings'
+        'auto.components.feature.wall.agent.capability.setup.status.needsMacAccess',
+        'Needs macOS access'
       ),
       tone: 'pending',
       installed: true

@@ -16,8 +16,9 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     activeRepoExecutionHostId,
     activeRepoId,
     activeRepoPath,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
+    activeWorktree,
     allocatePullRequestGenerationRequestId,
     branchName,
     createHostedReview,
@@ -82,7 +83,7 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
   })
   const pullRequestGeneration = useSourceControlPullRequestGeneration({
     activeRepo,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     allocatePullRequestGenerationRequestId,
     branchName,
@@ -100,8 +101,9 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     activePullRequestGenerationSeedRestoreKey:
       pullRequestGeneration.activePullRequestGenerationSeedRestoreKey,
     activeRepo,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
+    activeWorktree,
     branchName,
     effectiveBaseRef,
     fetchHostedReviewForBranch,
@@ -154,24 +156,31 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     worktreePath
   })
   const hostedReviewCreationAction = useSourceControlHostedReviewCreation({
+    activePullRequestGenerationKey: pullRequestGeneration.activePullRequestGenerationKey,
     activeRepo,
     activeWorktreeId,
     branchName,
     createHostedReview,
     createPrInFlightRef,
     createStackedHostedReview,
+    handleGeneratePullRequestFields: createReviewComposer.handleGeneratePullRequestFields,
     handlePullRequestCreated: hostedReviewCreated.handlePullRequestCreated,
     hostedReviewCreateCopy,
     hostedReviewCreateProvider,
     hostedReviewCreation,
+    prAiGenerationEnabled: createReviewComposer.prAiGenerationEnabled,
     prBase,
     prBody,
     prDraft,
+    prFieldRevisions: createReviewComposer.prFieldRevisions,
+    prFieldsAreSeedPlaceholders: createReviewComposer.prFieldsAreSeedPlaceholders,
     prGenerating,
     prTitle,
+    pullRequestFieldsInitialized: createReviewComposer.pullRequestFieldsInitialized,
     resolvedPrCreationDefaults,
     setCreatePrInFlightByWorktree,
     setCreatePrIntentNoticeForWorktree,
+    settings,
     worktreePath
   })
 

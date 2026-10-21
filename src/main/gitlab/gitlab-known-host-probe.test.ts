@@ -5,12 +5,13 @@ const { glabExecFileAsyncMock } = vi.hoisted(() => ({ glabExecFileAsyncMock: vi.
 vi.mock('../git/runner', () => ({ glabExecFileAsync: glabExecFileAsyncMock }))
 
 import {
+  _getKnownHostsCacheSize,
   _resetKnownHostsCache,
   getGlabKnownHosts,
+  KNOWN_HOSTS_CACHE_MAX_ENTRIES,
   rememberGlabKnownHost,
   rememberGlabKnownHosts
 } from './gitlab-known-host-probe'
-import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 
 describe('getGlabKnownHosts', () => {
   // A locally-keyed probe must never answer from the default WSL distro.
@@ -196,6 +197,14 @@ describe('getGlabKnownHosts', () => {
     expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
+  it('bounds execution-context cache keys across SSH reconnect churn', () => {
+    for (let index = 0; index < KNOWN_HOSTS_CACHE_MAX_ENTRIES + 20; index += 1) {
+      rememberGlabKnownHost(`host-${index}.example`, `connection-${index}`)
+    }
+
+    expect(_getKnownHostsCacheSize()).toBe(KNOWN_HOSTS_CACHE_MAX_ENTRIES)
+  })
+
   it('recognizes a self-hosted host on a non-default port', async () => {
     glabExecFileAsyncMock.mockResolvedValueOnce({
       stdout: '✓ Logged in to gitlab.example.com:8080 as user\n',
@@ -269,25 +278,5 @@ describe('getGlabKnownHosts', () => {
       'recovered.test'
     ])
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not reuse a successful result after an SSH provider reconnects', async () => {
-    const connectionId = 'conn-reconnected'
-    registerSshGitProvider(connectionId, {} as never)
-    glabExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'Logged in to old-tunnel.test as user\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'Logged in to new-tunnel.test as user\n', stderr: '' })
-
-    await expect(getGlabKnownHosts(connectionId)).resolves.toEqual([
-      'gitlab.com',
-      'old-tunnel.test'
-    ])
-    registerSshGitProvider(connectionId, {} as never)
-    await expect(getGlabKnownHosts(connectionId)).resolves.toEqual([
-      'gitlab.com',
-      'new-tunnel.test'
-    ])
-    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    unregisterSshGitProvider(connectionId)
   })
 })

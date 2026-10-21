@@ -1,4 +1,5 @@
 /* eslint-disable no-control-regex -- Terminal control-sequence parsing intentionally matches raw control bytes. */
+import { ownRetainedString } from '../../shared/own-retained-string'
 import type {
   AdvertisedUrl,
   AdvertisedUrlChangeEvent,
@@ -45,7 +46,7 @@ export class PtyBuffer {
     const chunkHasLineBreak = chunk.includes('\n') || chunk.includes('\r')
     // Keep the suffix directly so oversized chunks never materialize a throwaway full concatenation.
     if (chunk.length >= PER_PTY_BUFFER_LIMIT) {
-      this.raw = chunk.slice(-PER_PTY_BUFFER_LIMIT)
+      this.raw = ownRetainedString(chunk.slice(-PER_PTY_BUFFER_LIMIT))
     } else if (this.raw.length + chunk.length > PER_PTY_BUFFER_LIMIT) {
       this.raw = `${this.raw.slice(-(PER_PTY_BUFFER_LIMIT - chunk.length))}${chunk}`
     } else {

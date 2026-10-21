@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parseSparsePresetDirectories } from './sparse-preset-draft'
+import { setRendererUiLanguage } from '@/i18n/i18n'
+import { parseSparsePresetDirectories, validateSparsePresetName } from './sparse-preset-draft'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -60,5 +61,32 @@ describe('parseSparsePresetDirectories', () => {
       error: null
     })
     expect(split).not.toHaveBeenCalled()
+  })
+})
+
+describe('validateSparsePresetName', () => {
+  const presets = [{ id: 'web', name: 'Web UI' }]
+  it('validates required, length, duplicate, and unchanged names', () => {
+    expect(validateSparsePresetName(' ', presets)).toBe('Name is required.')
+    expect(validateSparsePresetName('a'.repeat(81), presets)).toBe(
+      'Name must be 80 characters or fewer.'
+    )
+    expect(validateSparsePresetName(' web ui ', presets)).toBe(
+      'A preset named “Web UI” already exists.'
+    )
+    expect(validateSparsePresetName('Web UI', presets, 'web')).toBeNull()
+    expect(validateSparsePresetName('a'.repeat(80), presets)).toBeNull()
+  })
+  it('uses Korean validation with a named interpolation', async () => {
+    await setRendererUiLanguage('ko')
+    try {
+      expect(validateSparsePresetName('', presets)).toBe('이름을 입력하세요.')
+      expect(validateSparsePresetName('a'.repeat(81), presets)).toBe('이름은 80자 이하여야 합니다.')
+      expect(validateSparsePresetName('web ui', presets)).toBe(
+        '같은 이름의 프리셋이 이미 있습니다: Web UI'
+      )
+    } finally {
+      await setRendererUiLanguage('en')
+    }
   })
 })

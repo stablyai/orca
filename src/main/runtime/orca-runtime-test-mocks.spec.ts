@@ -29,7 +29,6 @@ export const REVIEW_HEAD_FETCH_TIMEOUT_MS = importedValues.exportedREVIEW_HEAD_F
 export const RUNTIME_GRAPH_RELOAD_TIMEOUT_MS =
   importedValues.exportedRUNTIME_GRAPH_RELOAD_TIMEOUT_MS
 export const RecentPtyOutputBuffer = importedValues.exportedRecentPtyOutputBuffer
-export const RpcDispatcher = importedValues.exportedRpcDispatcher
 export const RuntimeBrowserCommands = importedValues.exportedRuntimeBrowserCommands
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV =
   importedValues.exportedSETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
@@ -38,7 +37,6 @@ export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV =
 export const TERMINAL_INPUT_CHUNK_MAX_BYTES = importedValues.exportedTERMINAL_INPUT_CHUNK_MAX_BYTES
 export const TERMINAL_INPUT_MAX_BYTES = importedValues.exportedTERMINAL_INPUT_MAX_BYTES
 export const TERMINAL_INPUT_TOO_LARGE_ERROR = importedValues.exportedTERMINAL_INPUT_TOO_LARGE_ERROR
-export const TERMINAL_METHODS = importedValues.exportedTERMINAL_METHODS
 export const TUI_AGENT_CONFIG = importedValues.exportedTUI_AGENT_CONFIG
 export const WATCHER_REMOVAL_DRAIN_BUDGET_MS =
   importedValues.exportedWATCHER_REMOVAL_DRAIN_BUDGET_MS
@@ -61,6 +59,8 @@ export const beforeEach = importedValues.exportedBeforeEach
 export const beginWatcherInstall = importedValues.exportedBeginWatcherInstall
 export const buildAgentPromptPasteBytes = importedValues.exportedBuildAgentPromptPasteBytes
 export const buildPreview = importedValues.exportedBuildPreview
+export const cancelLegacyWorkerTerminalRecoveryRetriesForTests =
+  importedValues.exportedCancelLegacyWorkerTerminalRecoveryRetriesForTests
 export const clearConfiguredWorktreeSharedDirectoriesCacheForTests =
   importedValues.exportedClearConfiguredWorktreeSharedDirectoriesCacheForTests
 export const clearSubmodulePathsCacheForTests =
@@ -104,7 +104,8 @@ export const makePaneKey = importedValues.exportedMakePaneKey
 export const mkdir = importedValues.exportedMkdir
 export const mkdirSync = importedValues.exportedMkdirSync
 export const mkdtemp = importedValues.exportedMkdtemp
-export const onTestFinished = importedValues.exportedOnTestFinished
+export const onTestFinished: typeof importedValues.exportedOnTestFinished =
+  importedValues.exportedOnTestFinished
 export const parseOrcaYaml = importedValues.exportedParseOrcaYaml
 export const performance = importedValues.exportedPerformance
 export const projectHostSetupProjectionFromRepos =
@@ -115,8 +116,6 @@ export const recentTerminalOutputIncludesPath =
 export const recentTerminalPathCandidatesIncludePath =
   importedValues.exportedRecentTerminalPathCandidatesIncludePath
 export const registerLocalPtyMemoryRow = importedValues.exportedRegisterLocalPtyMemoryRow
-export const registerSshFilesystemProvider = importedValues.exportedRegisterSshFilesystemProvider
-export const registerSshGitProvider = importedValues.exportedRegisterSshGitProvider
 export const removeWorktree = importedValues.exportedRemoveWorktree
 export const resolveSetupRunnerShell = importedValues.exportedResolveSetupRunnerShell
 export const resolveWorktreeScanCacheTtlMs = importedValues.exportedResolveWorktreeScanCacheTtlMs
@@ -135,9 +134,6 @@ export const setWorktreeWatcherRemoval = importedValues.exportedSetWorktreeWatch
 export const shouldRunSetupForCreate = importedValues.exportedShouldRunSetupForCreate
 export const tmpdir = importedValues.exportedTmpdir
 export const unregisterLocalPtyMemoryRow = importedValues.exportedUnregisterLocalPtyMemoryRow
-export const unregisterSshFilesystemProvider =
-  importedValues.exportedUnregisterSshFilesystemProvider
-export const unregisterSshGitProvider = importedValues.exportedUnregisterSshGitProvider
 export const vi = importedValues.exportedVi
 export const win32 = importedValues.exportedWin32
 export const worktreePathComparison = importedValues.exportedWorktreePathComparison
@@ -176,15 +172,7 @@ export {
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock
 } from './orca-runtime-test-mocks/setup.spec'
-export const sshGitProviders = setup.sshGitProviders
-export const sshProviderGenerations = setup.sshProviderGenerations
 export {
-  getSshGitProviderMock,
-  getSshGitProviderGenerationMock,
-  registerSshGitProviderMock,
-  unregisterSshGitProviderMock,
-  getActiveMultiplexerMock,
-  muxRequestMock,
   invalidateAuthorizedRootsCacheMock,
   prepareLocalWorktreeRootForRepoMock,
   createHostedReviewMock,
@@ -225,7 +213,6 @@ export {
   listGitHubAssignableUsersMock,
   applyAgentStatusHooksEnabledMock,
   detectInstalledAgentsWithShellPathHydrationMock,
-  detectRemoteAgentsMock,
   markCodexProjectTrustedMock,
   markCopilotFolderTrustedMock,
   markCursorWorkspaceTrustedMock,
@@ -233,6 +220,7 @@ export {
   listGitLabWorkItemsMock,
   listGitLabIssuesMock,
   listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
   listGitLabTodosMock,
   getGitLabProjectRefForRemoteMock,
   getGitLabWorkItemByProjectRefMock,
@@ -267,7 +255,7 @@ export type {
 export type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
 export type { FolderWorkspace } from '../../shared/folder-workspace-types'
 export type { GitUsernameModule }
-export type { IPtyProvider } from '../providers/types'
+export type { IPtyProvider } from '../providers/pty-provider-contract'
 export type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
 export type { ProjectGroup } from '../../shared/project-group-types'
 export type { RpcRequest } from './rpc/core'
@@ -288,3 +276,6 @@ export type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/li
 export type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 export type { Worktree } from '../../shared/worktree/types'
 export type { WorktreeMeta } from '../../shared/worktree/meta-types'
+
+export const resolveDefaultBaseRefWithLocalGit =
+  importedValues.exportedResolveDefaultBaseRefWithLocalGit

@@ -1,0 +1,59 @@
+{
+  "node": "v26.6.0",
+  "platform": "darwin",
+  "recordBytes": 67108864,
+  "bundles": {
+    "before": "351b128420e1903ab986594d63ecfb4e5ea851190aeaea35b539825824d72a48",
+    "after": "4838704761e71089c6577a760074183a7fd21d3265ebbc154c33b47eb57602eb"
+  },
+  "results": [
+    {
+      "terminated": false,
+      "fixed": false,
+      "error": null,
+      "bytesRead": 67108864,
+      "decodedBytes": 0,
+      "trailingChars": 67108864,
+      "consumedThrough": 0,
+      "heapDeltaAfterGc": 265160,
+      "externalDeltaAfterRead": 201303426,
+      "maxRssKiB": 254208
+    },
+    {
+      "terminated": false,
+      "fixed": true,
+      "error": "Error: Session transcript record exceeds 10485760 byte limit",
+      "bytesRead": 10551296,
+      "decodedBytes": 0,
+      "trailingChars": 0,
+      "consumedThrough": null,
+      "heapDeltaAfterGc": 190152,
+      "externalDeltaAfterRead": 10528130,
+      "maxRssKiB": 63616
+    },
+    {
+      "terminated": true,
+      "fixed": false,
+      "error": null,
+      "bytesRead": 67108865,
+      "decodedBytes": 67108864,
+      "trailingChars": 0,
+      "consumedThrough": 67108865,
+      "heapDeltaAfterGc": 262968,
+      "externalDeltaAfterRead": 201368963,
+      "maxRssKiB": 254176
+    },
+    {
+      "terminated": true,
+      "fixed": true,
+      "error": "Error: Session transcript record exceeds 10485760 byte limit",
+      "bytesRead": 10551296,
+      "decodedBytes": 0,
+      "trailingChars": 0,
+      "consumedThrough": null,
+      "heapDeltaAfterGc": 190152,
+      "externalDeltaAfterRead": 10528130,
+      "maxRssKiB": 63648
+    }
+  ]
+}

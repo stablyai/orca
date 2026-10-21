@@ -270,7 +270,7 @@ describe('AgentHookServer listener replay', () => {
   // STA-4114: a detach/reattach cycle retires the pane, and nothing lifted the fence.
   // Reviving only on a new turn cannot help a pane re-attached mid-turn (its remaining
   // events are agent_end, not a new-turn event) or one re-attached idle.
-  for (const kind of ['pi', 'omp', 'prime-agent'] as const) {
+  for (const kind of ['pi', 'omp'] as const) {
     it(`re-attaching a retired ${kind} pane restores status without needing a new turn`, async () => {
       const server = new AgentHookServer()
       await server.start({ env: 'production' })

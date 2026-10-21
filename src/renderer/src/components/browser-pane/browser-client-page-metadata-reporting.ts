@@ -62,7 +62,3 @@ export function startBrowserClientPageMetadataPublisher(options: {
 export function forgetBrowserClientPageMetadataReports(browserPageId: string): void {
   warnedByPageId.delete(browserPageId)
 }
-
-export function resetBrowserClientPageMetadataReportsForTests(): void {
-  warnedByPageId.clear()
-}

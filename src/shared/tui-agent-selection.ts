@@ -1,4 +1,5 @@
 import type { TuiAgent } from './tui-agent'
+import type { GlobalSettings } from './global-settings-types'
 import { isTuiAgent } from './tui-agent-config'
 
 // Keep this order in sync with the desktop agent catalog. It defines the
@@ -10,10 +11,16 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'codex',
   'grok',
   'copilot',
+  'opencode2',
   'opencode',
   'mimo-code',
   'ante',
   'trae',
+  'muse',
+  'dsh',
+  'qoder',
+  'qoder-cn',
+  'zcode',
   'pi',
   'omp',
   'prime-agent',
@@ -29,6 +36,7 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'autohand',
   'cline',
   'codebuff',
+  'freebuff',
   'command-code',
   'continue',
   'cursor',
@@ -39,7 +47,9 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'rovo',
   'hermes',
   'devin',
-  'openclaw'
+  'openclaw',
+  'codebuddy',
+  'jcode'
 ] as const satisfies readonly TuiAgent[]
 
 // Why: fresh installs should expose Claude Agent Teams in agent pickers; the
@@ -88,6 +98,24 @@ export function haveSameDisabledTuiAgents(left: unknown, right: unknown): boolea
 
 export function isTuiAgentEnabled(agent: TuiAgent, disabled?: Iterable<unknown> | null): boolean {
   return !normalizeDisabledTuiAgents(disabled).includes(agent)
+}
+
+export function buildAgentAvailabilitySettingsUpdate(
+  settings: Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>,
+  id: TuiAgent,
+  enabled: boolean
+): Pick<GlobalSettings, 'disabledTuiAgents'> & Partial<Pick<GlobalSettings, 'defaultTuiAgent'>> {
+  const latestDisabled = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
+  const nextDisabled = enabled
+    ? latestDisabled.filter((agent) => agent !== id)
+    : latestDisabled.includes(id)
+      ? latestDisabled
+      : [...latestDisabled, id]
+
+  return {
+    disabledTuiAgents: nextDisabled,
+    ...(settings.defaultTuiAgent === id && !enabled ? { defaultTuiAgent: null } : {})
+  }
 }
 
 export function filterEnabledTuiAgents<T extends TuiAgent>(

@@ -1,14 +1,22 @@
 import type { GithubCheckFileActionsModel } from './use-mobile-tasks-github-check-file-actions'
 import { useCallback } from './mobile-tasks-dependencies'
 import {
+  githubIssueCommentWrite,
+  githubReviewCommentReplyWrite
+} from './mobile-task-item-comment-operations'
+import {
+  githubPullRequestMerge,
+  gitlabMergeRequestMerge,
+  linearIssueUpdate
+} from './mobile-task-item-state-operations'
+import {
   type DetailComment,
   type HostedReviewMergeMethod,
   type LinearState,
   type TaskItem,
   commentAuthor,
   createLinearTask,
-  isGitHubPrMergeBlocked,
-  isSuccess
+  isGitHubPrMergeBlocked
 } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActionsModel) {
@@ -41,47 +49,49 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
       setMutatingStatus(true)
       setError('')
       try {
-        const canUseReviewReply =
+        // The same predicate as before, but as the anchor it selects: `commentId` and `line` are
+        // numbers only inside it, which the boolean it used to be could not carry to the send.
+        const reviewAnchor =
           item.source.type === 'pr' &&
           comment.path &&
           typeof comment.line === 'number' &&
           typeof comment.id === 'number'
-        const response = canUseReviewReply
-          ? await client.sendRequest(
-              'github.addPRReviewCommentReply',
-              {
-                repo: `id:${item.source.repoId}`,
-                prNumber: item.source.number,
-                commentId: comment.id,
-                body,
-                threadId: comment.threadId,
-                path: comment.path,
-                line: comment.line
-              },
-              { timeoutMs: 30_000 }
+            ? { path: comment.path, line: comment.line, commentId: comment.id }
+            : null
+        // A review reply and a plain issue comment are different methods, so each arm sends its
+        // own operation rather than one call picking a method string.
+        const replyResult = reviewAnchor
+          ? githubReviewCommentReplyWrite.interpret(
+              await githubReviewCommentReplyWrite.request(
+                client,
+                {
+                  repo: `id:${item.source.repoId}`,
+                  prNumber: item.source.number,
+                  commentId: reviewAnchor.commentId,
+                  body,
+                  threadId: comment.threadId,
+                  path: reviewAnchor.path,
+                  line: reviewAnchor.line
+                },
+                { timeoutMs: 30_000 }
+              )
             )
-          : await client.sendRequest(
-              'github.addIssueComment',
-              {
-                repo: `id:${item.source.repoId}`,
-                number: item.source.number,
-                body: `@${commentAuthor(comment)} ${body}`,
-                type: item.source.type
-              },
-              { timeoutMs: 30_000 }
+          : githubIssueCommentWrite.interpret(
+              await githubIssueCommentWrite.request(
+                client,
+                {
+                  repo: `id:${item.source.repoId}`,
+                  number: item.source.number,
+                  body: `@${commentAuthor(comment)} ${body}`,
+                  type: item.source.type
+                },
+                { timeoutMs: 30_000 }
+              )
             )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
+        if (replyResult.ok === false) {
+          throw new Error(replyResult.error ?? 'Failed to reply')
         }
-        const result = response.result as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
-        }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to reply')
-        }
-        const reply: DetailComment = result.comment ?? {
+        const reply: DetailComment = replyResult.comment ?? {
           id: `local-${Date.now()}`,
           body,
           createdAt: new Date().toISOString(),
@@ -130,33 +140,33 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
       setMutatingStatus(true)
       setError('')
       try {
-        const response =
+        const merged =
           item.provider === 'github'
-            ? await client.sendRequest(
-                'github.mergePR',
-                {
-                  repo: `id:${item.source.repoId}`,
-                  prNumber: item.source.number,
-                  method
-                },
-                { timeoutMs: 60_000 }
+            ? githubPullRequestMerge.interpret(
+                await githubPullRequestMerge.request(
+                  client,
+                  {
+                    repo: `id:${item.source.repoId}`,
+                    prNumber: item.source.number,
+                    method
+                  },
+                  { timeoutMs: 60_000 }
+                )
               )
-            : await client.sendRequest(
-                'gitlab.mergeMR',
-                {
-                  repo: `id:${item.source.repoId}`,
-                  iid: item.source.number,
-                  method,
-                  projectRef: item.source.projectRef
-                },
-                { timeoutMs: 60_000 }
+            : gitlabMergeRequestMerge.interpret(
+                await gitlabMergeRequestMerge.request(
+                  client,
+                  {
+                    repo: `id:${item.source.repoId}`,
+                    iid: item.source.number,
+                    method,
+                    projectRef: item.source.projectRef
+                  },
+                  { timeoutMs: 60_000 }
+                )
               )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to merge')
+        if (merged.ok === false) {
+          throw new Error(merged.error ?? 'Failed to merge')
         }
         setActionItem(null)
         await loadTasks({ silent: true })
@@ -181,14 +191,12 @@ export function useMobileTasksGithubReplyMergeActions(model: GithubCheckFileActi
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest('linear.updateIssue', {
+        const reply = await linearIssueUpdate.request(client, {
           id: item.source.id,
           workspaceId: item.source.workspaceId,
           updates: { stateId: state.id }
         })
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
+        linearIssueUpdate.interpret(reply)
         const nextState = {
           name: state.name,
           type: state.type,

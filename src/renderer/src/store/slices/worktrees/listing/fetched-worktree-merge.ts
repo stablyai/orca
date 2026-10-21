@@ -1,14 +1,18 @@
 import type { StateCreator } from 'zustand'
+import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { routeListingBranchSwitchesThroughGitIdentity } from '../../worktree-listing-branch-switch'
-import { areDetectedWorktreeResultsEqual, areWorktreesEqual } from './worktree-catalog-visibility'
+import {
+  areDetectedWorktreeResultsEqual,
+  areWorktreesEqual,
+  worktreesDifferOnlyInSortOrder
+} from './worktree-catalog-visibility'
 import { mergeDetectedWorktreesForHost } from './detected-worktree-host-merge'
 import {
   getRemovedWorktreeIdsAfterAuthoritativeScan,
   mergeWorktreesForHost,
-  repoHasExactlyOneExecutionHostOwner,
   toVisibleWorktrees,
   worktreeHostMatchOptions,
   worktreeMatchesHost
@@ -17,8 +21,12 @@ import {
   hasBranchScopedHostedReviewContext,
   sanitizeHostedReviewLinksForBranchClears
 } from '../metadata/hosted-review-link-mutation'
-import { isCurrentDetectedWorktreeRefresh } from './detected-worktree-refresh-admission'
+import {
+  worktreeListingRefusal,
+  type WorktreeListingMergeOutcome
+} from './detected-worktree-refresh-admission'
 import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
+import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isDisplayNamePersistencePending } from '../metadata/worktree-meta-persist'
 import { branchName } from '@/lib/git-utils'
 import {
@@ -130,24 +138,28 @@ export function preserveConcurrentDisplayName<T extends Worktree>(
 export function mergeFetchedWorktrees(
   set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
   args: FencedWorktreeMergeArgs
-): boolean {
-  let admitted = false
+): WorktreeListingMergeOutcome {
+  // Why a holder: the updater decides the outcome, and a narrowed `let` would hide that assignment.
+  const decision: { outcome: WorktreeListingMergeOutcome } = { outcome: 'not-current' }
   let authoritativelyRemovedIds: readonly string[] = []
   let authoritativelySeenIds: readonly string[] = []
   set((s) => {
-    if (
-      !isCurrentDetectedWorktreeRefresh(s, args.refresh) ||
-      !repoHasExactlyOneExecutionHostOwner(
-        s,
-        args.repoId,
-        args.hostId,
-        args.ownerWasMissingAtStart &&
-          (!args.refresh.directSshAuthority || s.repos === args.missingDirectSshOwnerReposSnapshot)
-      )
-    ) {
+    // Why against live state: a create or remove reply can have landed while this listing was in
+    // flight. A listing that describes the catalog before that reply must not undo it, so it is
+    // not applied at all -- rows, detected rows and purge alike.
+    const refusal = worktreeListingRefusal(
+      s,
+      args.refresh,
+      args.repoId,
+      args.hostId,
+      args.ownerWasMissingAtStart &&
+        (!args.refresh.directSshAuthority || s.repos === args.missingDirectSshOwnerReposSnapshot)
+    )
+    if (refusal) {
+      decision.outcome = refusal
       return s
     }
-    admitted = true
+    decision.outcome = 'applied'
     const matchOptions = worktreeHostMatchOptions(s, args.repoId, args.hostId)
     const currentWorktrees = s.worktreesByRepo[args.repoId]
     const refreshResult = {
@@ -221,17 +233,32 @@ export function mergeFetchedWorktrees(
       s.detectedWorktreesByRepo[args.repoId],
       mergedDetected
     )
-    if (!worktreesChanged && !detectedChanged && removedIds.length === 0) {
+    const versionPatch = appliedWorktreeCatalogVersionPatch(
+      s,
+      args.repoId,
+      args.hostId,
+      args.refresh.result.catalogVersion
+    )
+    if (
+      !worktreesChanged &&
+      !detectedChanged &&
+      removedIds.length === 0 &&
+      Object.keys(versionPatch).length === 0
+    ) {
       return s
     }
     return {
+      ...versionPatch,
       ...(worktreesChanged
         ? {
             worktreesByRepo: {
               ...s.worktreesByRepo,
               [args.repoId]: mergedWorktrees
             },
-            sortEpoch: s.sortEpoch + 1
+            // Why: an order save re-reads as a sortOrder-only change; re-sorting on it would schedule the next save (#27268).
+            ...(worktreesDifferOnlyInSortOrder(s.worktreesByRepo[args.repoId], mergedWorktrees)
+              ? { sortOrderEpoch: s.sortOrderEpoch + 1 }
+              : { sortEpoch: s.sortEpoch + 1 })
           }
         : {}),
       ...(detectedChanged
@@ -245,12 +272,12 @@ export function mergeFetchedWorktrees(
       ...(removedIds.length > 0
         ? buildWorktreePurgeState(
             s,
-            removedIds.map((id) => ({ id, hostId: args.hostId }))
+            removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId }))
           )
         : {})
     }
   })
-  if (admitted) {
+  if (decision.outcome === 'applied') {
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.
     forgetAuthoritativelyRemovedWorktrees(args.hostId, authoritativelySeenIds)
     rememberAuthoritativelyRemovedWorktrees(args.hostId, authoritativelyRemovedIds)
@@ -263,5 +290,5 @@ export function mergeFetchedWorktrees(
       args.refresh.result.source === 'git' ? authoritativelyRemovedIds : []
     )
   }
-  return admitted
+  return decision.outcome
 }

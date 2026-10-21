@@ -1,6 +1,7 @@
 // Pure id-dedup and windowing for both desktop and mobile native-chat streams.
 
 import {
+  nativeChatMessagesShareTranscriptRow,
   NATIVE_CHAT_SOURCE_PRIORITY,
   type NativeChatMessage,
   type NativeChatSource
@@ -35,10 +36,7 @@ export function mergeNativeChatMessages(
   return mergeNativeChatMessagesWith(existing, incoming, NATIVE_CHAT_SOURCE_PRIORITY)
 }
 
-/** Cap a message list to its most-recent `limit` entries. The base read is
- *  already windowed; this keeps the live-append tail bounded to the same window
- *  so a long run can't grow the list without limit. A non-positive limit means
- *  "no cap". Returns the input reference when no trim is needed. */
+/** Keep the recent tail without splitting a provider row. A non-positive limit means no cap. */
 export function boundNativeChatWindow(
   messages: readonly NativeChatMessage[],
   limit: number
@@ -46,7 +44,11 @@ export function boundNativeChatWindow(
   if (limit <= 0 || messages.length <= limit) {
     return messages as NativeChatMessage[]
   }
-  return messages.slice(messages.length - limit)
+  let start = messages.length - limit
+  while (start > 0 && nativeChatMessagesShareTranscriptRow(messages[start - 1], messages[start])) {
+    start -= 1
+  }
+  return messages.slice(start)
 }
 
 /** Stateful id-dedup merger that caches the id→index map across appends so a

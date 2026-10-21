@@ -7,6 +7,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test as base, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import { waitForActivePanePtyId, waitForActiveTerminalManager } from './helpers/terminal'
+import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
 import {
   clearTerminalPtyWriteLog,
   installTerminalPtyWriteSpy,
@@ -27,6 +28,7 @@ import {
   buildFakeAgentCommandOverride,
   FAKE_AGENT_WINDOWS_SHELL
 } from './helpers/fake-agent-command-override'
+import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './helpers/fake-codex-launch-probes'
 
 type SpawnEvent = { args: string[]; pid: number }
 type TerminalIdentity = Pick<
@@ -44,10 +46,7 @@ const signalLedgerPath = path.join(fakeCliDir, 'terminal-signals.jsonl')
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const args = process.argv.slice(2)
-if (args.includes('app-server')) {
-  process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
-  process.exit(2)
-}
+${FAKE_CODEX_LAUNCH_PROBES_SOURCE}
 appendFileSync(process.env.ORCA_E2E_CODEX_SPAWN_LEDGER, JSON.stringify({ args, pid: process.pid }) + '\\n')
 process.stdout.write('LIVE_AGENT_READY:' + process.pid + '\\n')
 let inputBuffer = ''
@@ -133,16 +132,13 @@ function createSourceRepo(): string {
   return repoPath
 }
 
-async function readWorktreeTerminals(
-  client: RuntimeClient,
-  worktreeId: string
-): Promise<RuntimeTerminalSummary[]> {
-  const listed = await client.call<RuntimeTerminalListResult>('terminal.list', {
-    worktree: `id:${worktreeId}`,
-    limit: 20,
-    requireFreshPtyLiveness: true
-  })
-  return listed.result.terminals
+// Undefined while first-mount adoption has the host refusing to answer; every caller polls past it.
+async function readWorktreeTerminals(client: RuntimeClient, worktreeId: string) {
+  const params = { worktree: `id:${worktreeId}`, limit: 20, requireFreshPtyLiveness: true }
+  const listed = await readFreshTerminalInventory(
+    async () => (await client.call<RuntimeTerminalListResult>('terminal.list', params)).result
+  )
+  return listed?.terminals
     .filter((terminal) => terminal.worktreeId === worktreeId)
     .sort((a, b) => a.handle.localeCompare(b.handle))
 }
@@ -329,9 +325,12 @@ async function assertLiveInventory(
   originals: RuntimeTerminalSummary[]
 ): Promise<void> {
   await expect
-    .poll(async () => (await readWorktreeTerminals(client, worktreeId)).map(liveTerminalIdentity), {
-      timeout: 15_000
-    })
+    .poll(
+      async () => (await readWorktreeTerminals(client, worktreeId))?.map(liveTerminalIdentity),
+      {
+        timeout: 15_000
+      }
+    )
     .toEqual(originals.map(liveTerminalIdentity))
 }
 
@@ -546,7 +545,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
       orcaPage.evaluate(
         async ({ repoId, command, windowsShell }) => {
           const state = window.__store?.getState()
-          await state?.fetchRepos()
+          await state?.fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
           const repo = window.__store?.getState().repos.find((candidate) => candidate.id === repoId)
           if (!repo) {
             return false
@@ -558,7 +557,6 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
             agentCmdOverrides: { codex: command },
             terminalWindowsShell: windowsShell,
             disabledTuiAgents: [],
-            setupScriptLaunchMode: 'new-tab',
             terminalHiddenViewParking: false
           })
           return true
@@ -587,7 +585,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   let originals: RuntimeTerminalSummary[] = []
   await expect
     .poll(async () => {
-      originals = await readWorktreeTerminals(client, worktreeId)
+      originals = (await readWorktreeTerminals(client, worktreeId)) ?? []
       return originals.map(({ connected, writable }) => ({ connected, writable }))
     })
     .toEqual([
@@ -614,6 +612,9 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   expect(agent).toBeTruthy()
   expect(setup).toBeTruthy()
   expect(canary).toBeTruthy()
+  if (!agent?.ptyId || !setup?.ptyId || !canary?.ptyId) {
+    throw new Error('Agent, Setup, and canary terminals must have live PTY identities')
+  }
   await expect.poll(readSpawnLedger).toHaveLength(1)
   await expect.poll(() => readJsonLines<{ pid: number }>(setupLedgerPath)).toHaveLength(1)
   await expect.poll(() => readJsonLines<{ pid: number }>(canaryLedgerPath)).toHaveLength(1)
@@ -644,7 +645,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
     .poll(
       async () => ({
         mountedPtyId: mountedAgentPtyId,
-        liveInventory: (await readWorktreeTerminals(client, worktreeId)).map(liveTerminalIdentity),
+        liveInventory: (await readWorktreeTerminals(client, worktreeId))?.map(liveTerminalIdentity),
         visibleOriginalReady: (
           await terminalAccessibility(orcaPage, agent!.tabId).innerText()
         ).includes(`LIVE_AGENT_READY:${agentPid}`),
@@ -773,7 +774,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   const remountAgentAcceptedMarker = `AGENT_ACCEPTED_${randomUUID()}`
   expect(
     await orcaPage.evaluate(
-      ({ marker, ptyId }) => window.api.pty.writeAccepted(ptyId, `${marker}\r`),
+      ({ marker, ptyId }) => window.api.pty.writeAccepted(ptyId, `${marker}\r`, 'driving'),
       { marker: remountAgentAcceptedMarker, ptyId: agent!.ptyId }
     )
   ).toBe(true)

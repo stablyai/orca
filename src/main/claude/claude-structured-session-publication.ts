@@ -1,52 +1,53 @@
 import type { AgentSessionAcquisition } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { ClaudeInitObservation } from './claude-structured-init-proof'
 import { claudeProviderHandleLink } from './claude-structured-owner-identity'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import type { ClaudeJournalTranslator } from './claude-structured-journal-translation'
+import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
+import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 
+/** The session as published at spawn: nothing the CLI reports at init is assumed yet. */
 export function createClaudeSessionPublication(input: {
   connection: ClaudeSession['connection']
-  init: ClaudeInitObservation
-  initialization?: unknown
-  claudeConfigDir: string
+  providerSessionId: string
   leafUuid: string | null
+  /** The launch's stored leaf: a frame seen before publication is not a completed turn. */
+  turnEndLeafUuid: string | null
   fence: number
   acquisitionGeneration: string
-  resumed: boolean
+  /** The record's chain already heads this provider session: the link resumes, never creates. */
+  continuesChain: boolean
+  forkedFromKey?: string
   prompts: ClaudePromptRegistry
   translator: ClaudeJournalTranslator | null
   events: ClaudeSession['events']
+  unbindReadingControl?: () => void
   process: AgentSessionAcquisition['process']
   linkId?: string
   observedAt: number
   options?: ReadonlyMap<string, string>
-  capabilities: readonly string[]
-  /** Read from `get_settings`; `system/init` never reports an effort. */
-  effort: string | null
+  initialization: ClaudeSession['initialization']
 }): { acquisition: AgentSessionAcquisition; session: ClaudeSession } {
-  const model = input.init.model
-  const effort = input.effort
+  const link = claudeProviderHandleLink({
+    sessionId: input.providerSessionId,
+    leafUuid: input.leafUuid,
+    resumed: input.continuesChain,
+    ...(input.forkedFromKey ? { forkedFromKey: input.forkedFromKey } : {}),
+    fence: input.fence,
+    ...(input.linkId ? { linkId: input.linkId } : {}),
+    observedAt: input.observedAt
+  })
   return {
     acquisition: {
       process: input.process,
-      link: claudeProviderHandleLink({
-        sessionId: input.init.providerSessionId,
-        leafUuid: input.leafUuid,
-        resumed: input.resumed,
-        fence: input.fence,
-        ...(input.linkId ? { linkId: input.linkId } : {}),
-        observedAt: input.observedAt
-      }),
       acquisitionGeneration: input.acquisitionGeneration
     },
     session: {
       connection: input.connection,
-      providerSessionId: input.init.providerSessionId,
-      claudeConfigDir: input.claudeConfigDir,
+      providerSessionId: input.providerSessionId,
       leafUuid: input.leafUuid,
+      turnEndLeafUuid: input.turnEndLeafUuid,
       fence: input.fence,
       acquisitionGeneration: input.acquisitionGeneration,
       prompts: input.prompts,
@@ -54,20 +55,27 @@ export function createClaudeSessionPublication(input: {
       retiredDispatchWaiters: [],
       replayContentFallbackBlocked: false,
       backgroundTasks: new ClaudeBackgroundTaskTracker(),
-      commands: new ClaudeSlashCommandCatalog(input.init.message, input.initialization),
+      childWork: new ClaudeChildWorkDecoder(),
+      // Undefined until init: an unread catalog is unavailable, not empty.
+      commands: new ClaudeSlashCommandCatalog(),
       dispatchSequence: 0,
       optionMutationSequence: 0,
       options: new Map(input.options),
-      capabilities: input.capabilities,
-      reportedOptions: {
-        ...(model ? { model } : {}),
-        ...(effort ? { effort } : {})
-      },
+      capabilities: [],
+      reportedOptions: {},
       reportedModelMutation: 0,
-      confirmedOptions: new Set(effort ? ['effort'] : []),
-      restoreSkippedOptions: new Set(),
+      confirmedOptions: new Set(),
+      // Only choices carried in this child's launch can skip their first write.
+      appliedInputOptions: new Map(
+        [...(input.options ?? [])].filter(([key]) => key === 'model' || key === 'effort')
+      ),
+      launchedModel: null,
+      fastModeAtStart: false,
       translator: input.translator,
-      events: input.events
+      events: input.events,
+      ...(input.unbindReadingControl ? { unbindReadingControl: input.unbindReadingControl } : {}),
+      link,
+      initialization: input.initialization
     }
   }
 }

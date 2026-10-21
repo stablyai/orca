@@ -1,5 +1,7 @@
+import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { getCommandTokenPathBasename, getFirstCommandToken } from './command-token-scanner'
+import { extractAgentLaunchCommand } from './agent-command-line-intent'
 
 /**
  * Pi-compatible agent kinds. Both Pi and OMP (omp.sh) consume the same
@@ -49,7 +51,11 @@ const PRIME_AGENT_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG['prime-agent'
 export function detectExplicitPiAgentKindFromCommand(
   command: string | undefined
 ): PiAgentKind | null {
-  const binary = getLaunchBinary(command ?? '')
+  const launchCommand = extractAgentLaunchCommand(command ?? '')
+  if (isFreshOmpLaunchCommand(launchCommand)) {
+    return 'omp'
+  }
+  const binary = getLaunchBinary(launchCommand)
   if (binary === OMP_LAUNCH_BINARY) {
     return 'omp'
   }

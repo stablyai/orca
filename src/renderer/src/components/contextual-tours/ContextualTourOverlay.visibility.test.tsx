@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ContextualTourOverlay } from './ContextualTourOverlay'
 import { useAppStore } from '@/store'
 
@@ -36,7 +36,7 @@ function tourTarget(name: string, top: number): { moveTo: (top: number) => void 
 
 async function settle(ms: number): Promise<void> {
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, ms))
+    await vi.advanceTimersByTimeAsync(ms)
   })
 }
 
@@ -44,7 +44,7 @@ async function setDocumentVisibility(state: 'visible' | 'hidden'): Promise<void>
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
   await act(async () => {
     document.dispatchEvent(new Event('visibilitychange'))
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.advanceTimersByTimeAsync(0)
   })
 }
 
@@ -53,6 +53,16 @@ function ringsTop(): string | undefined {
 }
 
 beforeEach(async () => {
+  vi.useFakeTimers({
+    toFake: [
+      'setTimeout',
+      'clearTimeout',
+      'setInterval',
+      'clearInterval',
+      'requestAnimationFrame',
+      'cancelAnimationFrame'
+    ]
+  })
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   ;(window as unknown as { api: unknown }).api = { ui: { set: () => Promise.resolve() } }
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 })
@@ -69,6 +79,7 @@ afterEach(async () => {
   document.querySelectorAll('[data-contextual-tour-target]').forEach((node) => node.remove())
   await setDocumentVisibility('visible')
   useAppStore.setState({ activeContextualTourId: null, activeContextualTourStepIndex: 0 })
+  vi.useRealTimers()
 })
 
 describe('ContextualTourOverlay full-pass interval visibility gate', () => {
@@ -82,10 +93,10 @@ describe('ContextualTourOverlay full-pass interval visibility gate', () => {
       contextualToursBlockingSurfaceVisible: false,
       activeContextualTourSuppressed: false
     })
-    await act(async () => {
+    act(() => {
       root.render(<ContextualTourOverlay />)
-      await new Promise((resolve) => setTimeout(resolve, 50))
     })
+    await settle(50)
     expect(ringsTop()).toBe('300px')
 
     // Baseline: while visible, the periodic full pass follows a silent move.

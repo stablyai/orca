@@ -4,6 +4,7 @@ import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation
 } from '@/components/terminal-pane/terminal-link-activation'
+import type { TerminalLinkClickBehavior } from '@/components/terminal-pane/terminal-link-click-behavior'
 import {
   buildHttpLinkActions,
   openRoutedHttpLink,
@@ -18,6 +19,7 @@ export type NativeChatWebLinkDeps = {
   destinations: HttpLinkActionDestinations
   /** Off: a plain click opens the routed destination outright, as it did before actions existed. */
   actionsEnabled: boolean
+  plainClickBehavior?: TerminalLinkClickBehavior
   restoreFocus: () => void
   request: (request: LinkActionRequest) => void
 }
@@ -32,6 +34,20 @@ type ChatLinkMouseEvent = Pick<
   preventDefault: () => void
 }
 
+/** Opens a chat link at a chosen destination, or the routed one when none is chosen. */
+export function openNativeChatWebLink(
+  url: string,
+  deps: Pick<NativeChatWebLinkDeps, 'worktreeId' | 'sourceOwner'>,
+  destination: HttpLinkDestination | undefined
+): void {
+  openRoutedHttpLink(url, {
+    worktreeId: deps.worktreeId,
+    sourceOwner: deps.sourceOwner,
+    modifierHeld: false,
+    ...(destination ? { forceDestination: destination } : {})
+  })
+}
+
 /** Returns true when the click was consumed; false leaves the anchor's default. */
 export function handleNativeChatWebLink(
   event: ChatLinkMouseEvent,
@@ -39,12 +55,7 @@ export function handleNativeChatWebLink(
   deps: NativeChatWebLinkDeps
 ): boolean {
   const open = (destination: HttpLinkDestination | undefined): void =>
-    openRoutedHttpLink(url, {
-      worktreeId: deps.worktreeId,
-      sourceOwner: deps.sourceOwner,
-      modifierHeld: false,
-      ...(destination ? { forceDestination: destination } : {})
-    })
+    openNativeChatWebLink(url, deps, destination)
 
   if (isTerminalLinkDirectActivation(event)) {
     event.preventDefault()
@@ -59,11 +70,15 @@ export function handleNativeChatWebLink(
     return false
   }
 
-  event.preventDefault()
   if (!deps.actionsEnabled) {
+    if (deps.plainClickBehavior === 'none') {
+      return false
+    }
+    event.preventDefault()
     open(deps.destinations.primary)
     return true
   }
+  event.preventDefault()
   const keyboardAnchor = event.detail === 0 ? event.currentTarget?.getBoundingClientRect() : null
   deps.request({
     anchorX: keyboardAnchor?.left ?? event.clientX,

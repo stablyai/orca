@@ -1,0 +1,112 @@
+import { z } from 'zod'
+import { prCount, prFlag, prText } from '../session/github-pr-entity-reply-schema'
+import {
+  detailCheckListSchema,
+  taskMutationEnvelopeSchema
+} from './task-provider-entity-reply-schema'
+
+// What a task item's writes answer with, plus the two PR reads that go with them. Checked against
+// the handlers in src/main/runtime/rpc/methods/ — github-issue-methods.ts:16-33,
+// github-pull-request-methods.ts:84-92, github-pull-request-update-methods.ts, gitlab.ts,
+// linear.ts:58-87 — and the shared results they return: GitHubCreateIssueResult and
+// GitHubIssueUpdate's `{ ok } | { ok, error }` in src/shared/issue-mutation-types.ts,
+// GitHubCommentResult in src/shared/github/comment-types.ts, and GitHubPRFileContents in
+// src/shared/github/pull-request-types.ts.
+
+/**
+ * Creating a GitHub or GitLab issue.
+ *
+ * Nothing is required beyond the envelope itself: use-mobile-tasks-task-create-actions.tsx:76
+ * tests `ok === false`, :81 gates the optimistic row on `typeof number === 'number'` and :91 reads
+ * `url ?? ''`. What the schema adds is the container — main read `result.ok` off a string reply
+ * and silently reported success, and off a `null` one it threw a property-read TypeError.
+ */
+export const hostedIssueCreatedSchema = z.looseObject({
+  ok: prFlag('ok'),
+  error: prText('error'),
+  number: prCount('number'),
+  url: prText('url')
+})
+
+/**
+ * Creating a Linear issue, from the composer or from the sub-issue field.
+ *
+ * Also all-optional, for the same reason: both call sites gate on
+ * `result.ok === false || !result.id || !result.identifier`
+ * (use-mobile-tasks-task-create-actions.tsx:125, use-mobile-tasks-linear-item-actions.tsx:123) and
+ * read `title` and `url` behind `??`. `id` and `identifier` are therefore a refusal the call site
+ * already words, not a decode failure.
+ */
+export const linearIssueCreatedSchema = z.looseObject({
+  ok: prFlag('ok'),
+  error: prText('error'),
+  id: prText('id'),
+  identifier: prText('identifier'),
+  title: prText('title'),
+  url: prText('url')
+})
+
+/**
+ * The state and metadata writes: both issue edits, both pull/merge-request edits, both state
+ * toggles, the reviewer request, the checks rerun and both merges.
+ *
+ * One schema for nine methods, because there is one convention and no input on which two of them
+ * would want different answers: every call site reads `ok === false` and raises `error` or its own
+ * copy. Kept separate from the session domain's `githubPrMutationStatusSchemas` even where the
+ * method matches, because that reader answers a `{ structured, ok, error }` verdict its own
+ * outcome module discriminates, where these call sites read the two members directly.
+ */
+export const taskItemMutationSchema = taskMutationEnvelopeSchema
+
+/**
+ * The checks list behind the item sheet's Checks panel and the project row's.
+ *
+ * An array, and each row needs the `name` and `status` the list renders unguarded; a row without
+ * either drops rather than failing the refresh. Both call sites hand the decoded list straight to
+ * `buildGitHubCheckSummary`, whose classifier reads the same two members
+ * (use-mobile-tasks-hosted-comment-review-actions.tsx:245).
+ */
+export const githubPullRequestChecksSchema = detailCheckListSchema
+
+/**
+ * One file's two sides of a pull-request diff.
+ *
+ * The shape is `getPRFileContents`' return at src/main/github/pull-request-file-contents.ts:121-128:
+ * the two contents, the two binary flags, and the two too-large flags it sets only when a side was
+ * skipped for size (:54). Every member stays optional because nothing reads one unguarded — the
+ * call site files the payload under the file path (use-mobile-tasks-github-check-file-actions.tsx
+ * :203), the review panels reach each flag through `?.`, and `splitContentLines`
+ * (github-pr-file-diff.ts:21) takes `string | undefined` behind a falsy guard.
+ * What the schema adds is the container: a string or a `null` reply is now named.
+ */
+export const githubPullRequestFileContentsSchema = z.looseObject({
+  original: prText('original'),
+  modified: prText('modified'),
+  originalIsBinary: prFlag('originalIsBinary'),
+  modifiedIsBinary: prFlag('modifiedIsBinary'),
+  originalTooLarge: prFlag('originalTooLarge'),
+  modifiedTooLarge: prFlag('modifiedTooLarge')
+})
+
+/**
+ * Syncing one file's viewed state.
+ *
+ * `z.boolean()`, the same reader the session domain's two boolean mutations use: `!== true` is the
+ * confirmation rule at both call sites (use-mobile-tasks-project-review-check-actions.tsx:210,
+ * use-mobile-tasks-github-check-file-actions.tsx:94), so a non-boolean read as "not confirmed" was
+ * indistinguishable from a host that declined the write. A real `false` still reaches that rule.
+ */
+export { githubPrMutationConfirmationSchema as taskMutationConfirmationSchema } from '../session/github-pr-mutation-reply-schema'
+
+/**
+ * Setting a Linear issue's workflow state.
+ *
+ * The reply body is unread: use-mobile-tasks-github-reply-merge-actions.tsx:199 calls `interpret`
+ * and discards what it returns, so there is no member to declare. The body is also where this
+ * method refuses — the host answers a rejected update with an in-band `{ ok: false, error }` on an
+ * otherwise successful envelope (src/main/ipc/linear-issue-handlers.ts:117), and
+ * `require-result-or-throw-message` throws only on an outer refusal (rpc-operation.ts:129), so that
+ * refusal reaches no `catch` and the screen moves the issue anyway. Main does the same: it read the
+ * identical payload through `rpcUncheckedPayloadReader` and dropped it on the floor.
+ */
+export const linearIssueUpdatedSchema = z.unknown()

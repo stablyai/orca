@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
 
+vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
+
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({
     publicKey: new Uint8Array(32),
@@ -92,6 +94,7 @@ describe('mobile rpc-client capabilities', () => {
     expect(capabilityRequest.params).toMatchObject({
       clientCapabilities: expect.arrayContaining([
         'agent-session.structured.v1',
+        'agent-session.pending-send-result.v1',
         'agent-session.structured.claude.v1'
       ])
     })

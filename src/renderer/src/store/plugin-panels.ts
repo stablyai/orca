@@ -30,6 +30,13 @@ let pluginListRetryAttempt = 0
 let pluginListRetryTimer: ReturnType<typeof setTimeout> | null = null
 const PLUGIN_LIST_MAX_RETRIES = 2
 
+function clearPluginListRetryTimer(): void {
+  if (pluginListRetryTimer) {
+    clearTimeout(pluginListRetryTimer)
+    pluginListRetryTimer = null
+  }
+}
+
 function schedulePluginListRetry(generation: number): void {
   if (pluginListRetryAttempt >= PLUGIN_LIST_MAX_RETRIES) {
     pluginListRetryAttempt = 0
@@ -52,6 +59,7 @@ export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
   fetchStatus: 'idle',
   fetchPlugins: async () => {
     const generation = ++pluginListGeneration
+    clearPluginListRetryTimer()
     // Why: preload may predate the plugins namespace (web client pairing an
     // older desktop build); treat a missing bridge as "no plugins" fail-soft.
     const pluginsApi = window.api?.plugins
@@ -86,10 +94,7 @@ export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
   setPlugins: (plugins) => {
     pluginListGeneration += 1
     pluginListRetryAttempt = 0
-    if (pluginListRetryTimer) {
-      clearTimeout(pluginListRetryTimer)
-      pluginListRetryTimer = null
-    }
+    clearPluginListRetryTimer()
     set((state) => ({
       plugins,
       fetchStatus: 'ready',

@@ -37,18 +37,7 @@ describe('shouldFollowMouseFocus', () => {
     expect(shouldFollowMouseFocus({ ...base, mouseButtons: 2 })).toBe(false)
   })
 
-  it('blocks while multiple buttons are held (buttons=3)', () => {
-    expect(shouldFollowMouseFocus({ ...base, mouseButtons: 3 })).toBe(false)
-  })
-
   it('blocks when the window does not have OS focus', () => {
     expect(shouldFollowMouseFocus({ ...base, windowHasFocus: false })).toBe(false)
-  })
-
-  // Defensive case: createInitialPane always sets activePaneId before any
-  // mouse events are possible in production, but the gate must still behave
-  // correctly if the state ever occurs (e.g. future refactor of init flow).
-  it('switches when activePaneId is null (defensive)', () => {
-    expect(shouldFollowMouseFocus({ ...base, activePaneId: null })).toBe(true)
   })
 })

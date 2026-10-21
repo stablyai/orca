@@ -12,16 +12,65 @@ const SHAPES = {
   staging: {
     directorOrigin: 'https://relay-staging.onorca.dev',
     domain: 'relay-staging.onorca.dev',
-    allCells: ['staging-gce-c4']
+    allCells: ['staging-gce-c4', 'staging-gce-c5', 'staging-gce-c6', 'staging-gce-c7'],
+    registrationWaves: [['staging-gce-c4'], ['staging-gce-c5', 'staging-gce-c6', 'staging-gce-c7']],
+    promotionWaves: [['staging-gce-c4'], ['staging-gce-c5', 'staging-gce-c6', 'staging-gce-c7']]
   },
   production: {
     directorOrigin: 'https://relay.onorca.dev',
     domain: 'relay.onorca.dev',
-    allCells: ['production-gce-c27', 'production-gce-c28', 'production-gce-c29']
+    allCells: [
+      'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30',
+      'production-gce-c31', 'production-gce-c32', 'production-gce-c33', 'production-gce-c34',
+      'production-gce-c35'
+    ],
+    // The launch set was registered together; each later cell registers alone beside it.
+    registrationWaves: [
+      ['production-gce-c27', 'production-gce-c28', 'production-gce-c29'],
+      ['production-gce-c30'],
+      ['production-gce-c31'],
+      ['production-gce-c32'],
+      ['production-gce-c33'],
+      ['production-gce-c34'],
+      ['production-gce-c35']
+    ],
+    promotionWaves: [
+      ['production-gce-c27'],
+      ['production-gce-c28', 'production-gce-c29'],
+      ['production-gce-c30'],
+      ['production-gce-c31'],
+      ['production-gce-c32'],
+      ['production-gce-c33'],
+      ['production-gce-c34'],
+      ['production-gce-c35']
+    ]
   }
 }
 
-function parseArguments(argv) {
+const PRODUCTION_CANARY_CELL = 'production-gce-c27'
+const STAGING_PROOF_CELL = 'staging-gce-c4'
+const ASIA_REGION = 'asia-east2'
+const ASIA_CELL_SHAPE = { region: ASIA_REGION, capacityRequests: 6_000, connectionHardCap: 3_000 }
+// The US cells at the Asia shape live in the root region; every other cell here is Asia, except
+// the staging dead-cell guard cells, which keep c2's ordinary US shape (staging.tfvars).
+const STAGING_US_CELL_SHAPE = { region: 'us-central1', capacityRequests: 4_000, connectionHardCap: 600 }
+const CELL_SHAPES = {
+  'production-gce-c32': { ...ASIA_CELL_SHAPE, region: 'us-central1' },
+  'production-gce-c33': { ...ASIA_CELL_SHAPE, region: 'us-central1' },
+  'staging-gce-c5': STAGING_US_CELL_SHAPE,
+  'staging-gce-c6': STAGING_US_CELL_SHAPE,
+  'staging-gce-c7': STAGING_US_CELL_SHAPE
+}
+
+function cellShape(cellId) {
+  return CELL_SHAPES[cellId] ?? ASIA_CELL_SHAPE
+}
+
+function cellRegion(cellId) {
+  return cellShape(cellId).region
+}
+
+export function parseRelayAsiaAdmissionArguments(argv) {
   const values = {}
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index]
@@ -58,13 +107,17 @@ function parseArguments(argv) {
     throw new Error('--cell-ids are invalid')
   }
   const exact = (expected) => JSON.stringify([...cells].sort()) === JSON.stringify([...expected].sort())
+  const [launchWave] = shape.registrationWaves
   if (
-    (['inspect', 'initialize', 'register', 'registered', 'verify'].includes(values.mode) &&
-      !exact(shape.allCells)) ||
-    (['promote', 'recover-promotion'].includes(values.mode) && values.environment === 'production' &&
-      !exact(['production-gce-c27']) && !exact(['production-gce-c28', 'production-gce-c29'])) ||
-    (['promote', 'recover-promotion'].includes(values.mode) && values.environment === 'staging' && !exact(shape.allCells)) ||
-    (values.mode === 'rollback' && cells.length === 0)
+    (['inspect', 'verify'].includes(values.mode) &&
+      !exact(shape.allCells) && !shape.registrationWaves.some(exact)) ||
+    // Generation zero predates every later cell, so the boundary freezes only the launch set.
+    (values.mode === 'initialize' && !exact(launchWave)) ||
+    (['register', 'registered'].includes(values.mode) && !shape.registrationWaves.some(exact)) ||
+    (['promote', 'recover-promotion'].includes(values.mode) && !shape.promotionWaves.some(exact)) ||
+    // Rollback takes any reviewed wave or the whole set, never a mixed partial set.
+    (values.mode === 'rollback' && !exact(shape.allCells) &&
+      ![...shape.registrationWaves, ...shape.promotionWaves].some(exact))
   ) throw new Error('--cell-ids do not match the reviewed admission wave')
   const attemptId = values['attempt-id']
   if (!['inspect', 'verify', 'registered'].includes(values.mode) &&
@@ -117,12 +170,12 @@ async function verifyRuntime(fetchImpl, post, shape, cellId, imageDigest, requir
   if (
     runtime.cellId !== cellId ||
     runtime.cellUrl !== origin ||
-    runtime.region !== 'asia-east2' ||
+    runtime.region !== cellRegion(cellId) ||
     runtime.imageDigest !== imageDigest ||
     runtime.draining !== false ||
-    runtime.connectionCapacity?.hardCap !== 3_000 ||
+    runtime.connectionCapacity?.hardCap !== cellShape(cellId).connectionHardCap ||
     runtime.connectionCapacity?.unobservedBound !== 60
-  ) throw new Error(`${cellId} runtime does not match the reviewed Asia shape`)
+  ) throw new Error(`${cellId} runtime does not match its reviewed shape`)
   if (requireDirector) {
     const result = await post(`${shape.directorOrigin}/v1/admin/cell-status`, { v: 1, cellId })
     if (
@@ -236,11 +289,15 @@ export async function operateRelayAsiaAdmission(config, dependencies = {}) {
   const shape = SHAPES[config.environment]
   const fetchImpl = dependencies.fetch ?? fetch
   const post = dependencies.post ?? defaultPost(fetchImpl, config.token)
+  // Only the C4 proof keeps the server-enforced C4-only route (the Asia proof identity can call
+  // nothing else); other staging cells go through the general route, as production does.
+  const stagingProof = config.environment === 'staging' &&
+    config.cells.length === 1 && config.cells[0] === STAGING_PROOF_CELL
   const selectorPost = (path, body) => {
-    if (config.environment !== 'staging' || path !== '/v1/admin/admission-selector/apply') {
+    if (!stagingProof || path !== '/v1/admin/admission-selector/apply') {
       return post(`${shape.directorOrigin}${path}`, body)
     }
-    const state = selectorCellState({ membership: body.membership }, 'staging-gce-c4')
+    const state = selectorCellState({ membership: body.membership }, STAGING_PROOF_CELL)
     if (!['general', 'migration-only'].includes(state)) {
       throw new Error('staging proof can only transition C4 between reviewed states')
     }
@@ -381,9 +438,9 @@ export async function operateRelayAsiaAdmission(config, dependencies = {}) {
         cells: config.cells.map((cellId) => ({
           cellId,
           cellUrl: cellOrigin(shape, cellId),
-          region: 'asia-east2',
-          capacityRequests: 6_000,
-          connectionHardCap: 3_000,
+          region: cellRegion(cellId),
+          capacityRequests: cellShape(cellId).capacityRequests,
+          connectionHardCap: cellShape(cellId).connectionHardCap,
           connectionUnobservedBound: 60
         }))
       },
@@ -415,13 +472,25 @@ export async function operateRelayAsiaAdmission(config, dependencies = {}) {
   if (config.mode === 'promote' && config.cells.some(
     (cellId) => selectorCellState(current.selector, cellId) !== 'migration-only'
   )) throw new Error('Asia promotion requires migration-only cells')
+  // The Asia launch order binds Asia cells only; a US cell is proven by its own canary.
+  const asiaWave = config.cells.every((cellId) => cellRegion(cellId) === ASIA_REGION)
   if (
     config.mode === 'promote' &&
+    asiaWave &&
     config.environment === 'production' &&
-    config.cells.includes('production-gce-c28') &&
-    selectorCellState(current.selector, 'production-gce-c27') !== 'general'
+    !config.cells.includes(PRODUCTION_CANARY_CELL) &&
+    selectorCellState(current.selector, PRODUCTION_CANARY_CELL) !== 'general'
   ) {
     throw new Error('Asia expansion requires the C27 canary to be general')
+  }
+  const [launchWave] = shape.registrationWaves
+  if (
+    config.mode === 'promote' &&
+    asiaWave &&
+    !config.cells.some((cellId) => launchWave.includes(cellId)) &&
+    launchWave.some((cellId) => selectorCellState(current.selector, cellId) !== 'general')
+  ) {
+    throw new Error('a later Asia cell requires every launch cell to be general')
   }
   const result = await applyExactAdmissionSelector(
     selectorPost,
@@ -434,7 +503,7 @@ export async function operateRelayAsiaAdmission(config, dependencies = {}) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const config = parseArguments(process.argv.slice(2))
+  const config = parseRelayAsiaAdmissionArguments(process.argv.slice(2))
   if (!config.token) throw new Error('ORCA_RELAY_ADMIN_ID_TOKEN is required')
   console.log(JSON.stringify(await operateRelayAsiaAdmission(config)))
 }

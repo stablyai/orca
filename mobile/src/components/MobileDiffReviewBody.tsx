@@ -23,7 +23,7 @@ type Props = {
   staleCommentIds: ReadonlySet<string>
   onAddNote: (lineNumber: number) => void
   onEditNote: (comment: DiffComment) => void
-  onRetry: () => void
+  onRetry: (() => void) | undefined
 }
 
 export function MobileDiffReviewBody({
@@ -103,7 +103,7 @@ function DiffUnavailableState({
   onRetry
 }: {
   diffState: ReviewDiffState
-  onRetry: () => void
+  onRetry: (() => void) | undefined
 }) {
   const title =
     diffState.kind === 'binary'

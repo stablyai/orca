@@ -1,0 +1,60 @@
+--- a/src/main/native-chat/agent-session-wire/agent-session-delta-coalescer.ts
++++ b/src/main/native-chat/agent-session-wire/agent-session-delta-coalescer.ts
+@@ -39,0 +40,2 @@
++  /** The caller byte-bounds protected metadata; only ordinary streams use the count cap. */
++  isProtected?: (key: string) => boolean
+@@ -86,2 +88 @@
+-  const streamOrder = new Map<string, number>()
+-  let nextOrder = 0
++  const evictable = new Set<string>()
+@@ -133,2 +134,2 @@
+-        if (streams.size >= maxStreams) {
+-          const oldest = [...streamOrder.entries()].sort((a, b) => a[1] - b[1])[0]?.[0]
++        while (!deps.isProtected?.(key) && evictable.size >= maxStreams) {
++          const oldest = evictable.values().next().value
+@@ -135,0 +137,4 @@
++            if (deps.isProtected?.(oldest)) {
++              evictable.delete(oldest)
++              continue
++            }
+@@ -146 +151 @@
+-            streamOrder.delete(oldest)
++            evictable.delete(oldest)
+@@ -147,0 +153 @@
++          break
+@@ -156 +162,5 @@
+-        streamOrder.set(key, nextOrder++)
++        if (!deps.isProtected?.(key)) {
++          evictable.add(key)
++        }
++      } else if (deps.isProtected?.(key)) {
++        evictable.delete(key)
+@@ -158 +168,2 @@
+-      stream.observedBytes += Buffer.byteLength(delta, 'utf8')
++      const deltaBytes = Buffer.byteLength(delta, 'utf8')
++      stream.observedBytes += deltaBytes
+@@ -165,0 +177 @@
++          deltaBytes,
+@@ -187 +199 @@
+-        streamOrder.delete(key)
++        evictable.delete(key)
+@@ -194 +206 @@
+-      streamOrder.clear()
++      evictable.clear()
+@@ -213,0 +226 @@
++  deltaBytes: number,
+@@ -217,2 +230 @@
+-  const deltaBuffer = Buffer.from(delta, 'utf8')
+-  if (deltaBuffer.byteLength <= available) {
++  if (deltaBytes <= available) {
+@@ -221 +233,3 @@
+-    current.push(delta)
++    if (delta.length > 0) {
++      current.push(delta)
++    }
+@@ -224 +238 @@
+-      retainedBytes: currentBytes + deltaBuffer.byteLength,
++      retainedBytes: currentBytes + deltaBytes,
+@@ -232 +246 @@
+-    deltaBuffer
++    Buffer.from(delta, 'utf8')

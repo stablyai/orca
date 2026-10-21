@@ -56,6 +56,7 @@ import {
   shouldUseGlobalWorktreeVisibility
 } from './worktree-visibility-use-global'
 import { createWorktreeVisibilitySourceMutation } from './worktree-visibility-source-mutation'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -277,7 +278,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
       if ((existing?.length ?? 0) >= MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES) {
         return 'limit'
       }
-      const id = crypto.randomUUID().replaceAll('-', '')
+      const id = createBrowserUuid().replaceAll('-', '')
       const candidate = normalizeCustomWorktreeVisibilitySources([{ id, rootPath }])?.[0]
       if (!candidate) {
         return 'invalid-path'

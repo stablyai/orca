@@ -18,7 +18,8 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'settings', 'preferences'],
-    defaultBindings: platformBindings(['Mod+Comma']),
+    // Leave Cmd/Ctrl+, to terminal apps such as Codex unless the user opts in.
+    defaultBindings: platformBindings([]),
     conflictGroup: 'menu'
   },
   {
@@ -48,7 +49,9 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'previous', 'up'],
-    defaultBindings: platformBindings(['Mod+Shift+ArrowUp'])
+    defaultBindings: platformBindings(['Mod+Shift+ArrowUp']),
+    // Why: default Mod+Shift+Up is the field's select-to-start.
+    allowInTextField: 'non-default-chords'
   },
   {
     id: 'worktree.navigateDown',
@@ -56,7 +59,9 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'next', 'down'],
-    defaultBindings: platformBindings(['Mod+Shift+ArrowDown'])
+    defaultBindings: platformBindings(['Mod+Shift+ArrowDown']),
+    // Why: default Mod+Shift+Down is the field's select-to-end.
+    allowInTextField: 'non-default-chords'
   },
   {
     id: 'workspace.create',

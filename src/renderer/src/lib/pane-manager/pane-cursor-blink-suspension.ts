@@ -12,9 +12,15 @@ import type { Terminal } from '@xterm/xterm'
  * and the pane blinks — redrawing its whole cursor row through
  * `WebglRenderer._updateModel` — until the 5-minute idle timeout.
  *
- * `cursorBlink` is the public option that tears the timer down deterministically
+ * `cursorBlink` is the public option that tears the timer down
  * (`RenderService.handleOptionsChanged` -> `WebglRenderer._updateCursorBlink`), so
  * "a hidden pane does not blink" stops depending on which CSS hid it.
+ *
+ * Not unconditional, though: `_updateCursorBlink` resolves
+ * `decPrivateModes.cursorBlink ?? options.cursorBlink`, and DECSCUSR with a
+ * blinking style (`CSI 5 SP q`) pins that DEC mode. On a pane whose shell or agent
+ * has emitted one, parking the option here has no effect and the hidden pane keeps
+ * blinking. Making this deterministic means clearing the DEC mode too.
  *
  * Resume restores the parked value rather than the settings value, so a pane that
  * was not blinking before the hide never comes back blinking.

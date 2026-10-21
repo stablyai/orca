@@ -1,9 +1,12 @@
 /**
  * Tests for the presence-based mobile driver lock (see docs/mobile-presence-lock.md).
  */
+import './mobile-subscribe-integration.spec'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { listWorktrees } from '../git/worktree'
 import type * as GitUsernameModule from '../git/git-username'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { RuntimePtyController } from './runtime-pty-controller-contract'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([]),
@@ -19,7 +22,8 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   return { ...actual, computeWorktreePath: vi.fn(), ensurePathWithinWorkspace: vi.fn() }
 })
 vi.mock('../ipc/registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: vi.fn()
+  invalidateAuthorizedRootsCache: vi.fn(),
+  invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
@@ -67,6 +71,7 @@ const store = {
 
 // Why (#7588): held-modal repro needs indefinite hold (null); legacy tests need the finite 5s default. Wrap per-test without mutating the shared stub.
 function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
+  vi.mocked(listWorktrees).mockResolvedValue([])
   const effectiveStore = {
     ...store,
     getSettings: () => ({ ...store.getSettings(), mobileAutoRestoreFitMs })
@@ -81,7 +86,7 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
   const fitOverrideEvents: { ptyId: string; mode: string; cols: number; rows: number }[] = []
   let resizeSucceeds = true
 
-  runtime.setPtyController({
+  const controller: RuntimePtyController = {
     write: (_ptyId, data) => {
       writes.push(data)
       return true
@@ -97,7 +102,8 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
       return true
     },
     getSize: (ptyId) => ptySizes.get(ptyId) ?? null
-  })
+  }
+  runtime.setPtyController(controller)
   runtime.setNotifier({
     worktreesChanged: vi.fn(),
     reposChanged: vi.fn(),
@@ -118,6 +124,7 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
 
   return {
     runtime,
+    controller,
     ptySizes,
     resizes,
     writes,
@@ -139,19 +146,37 @@ describe('mobile presence lock — driver state machine', () => {
   })
 
   it('stops a preview paste when mobile claims the floor between chunks', async () => {
-    const { runtime, writes } = createRuntime()
-    let driverChecks = 0
-    vi.spyOn(runtime, 'getDriver').mockImplementation(() => {
-      driverChecks++
-      return driverChecks >= 3 ? { kind: 'mobile', clientId: 'phone-A' } : { kind: 'idle' }
+    const { runtime, controller, writes } = createRuntime()
+    runtime.setMobileDisplayMode('pty-1', 'desktop')
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
+    expect(writes).toHaveLength(0)
+
+    const floorClaim: { current: ReturnType<OrcaRuntimeService['beginMobileInputFloor']> } = {
+      current: null
+    }
+    const originalWrite = controller.write
+    vi.spyOn(controller, 'write').mockImplementationOnce((ptyId, data, inputKind) => {
+      const accepted = originalWrite(ptyId, data, inputKind)
+      floorClaim.current = runtime.beginMobileInputFloor(ptyId, 'phone-A')
+      if (!floorClaim.current) {
+        throw new Error('phone floor reservation was refused')
+      }
+      return accepted
     })
 
-    const result = runtime.writeTerminalPreviewInput('pty-1', 'x'.repeat(32 * 1024))
-    await vi.advanceTimersByTimeAsync(0)
+    try {
+      const result = runtime.writeTerminalPreviewInput('pty-1', 'x'.repeat(32 * 1024))
+      await vi.advanceTimersByTimeAsync(0)
 
-    await expect(result).resolves.toBe(false)
-    expect(writes).toHaveLength(1)
-    expect(Buffer.byteLength(writes[0]!, 'utf8')).toBe(16 * 1024)
+      expect(floorClaim.current).not.toBeNull()
+      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+      await expect(result).resolves.toBe(false)
+      expect(writes).toHaveLength(1)
+      expect(Buffer.byteLength(writes[0]!, 'utf8')).toBe(16 * 1024)
+    } finally {
+      floorClaim.current?.rollback()
+    }
   })
 
   it('handleMobileSubscribe in auto mode transitions idle → mobile{clientId}', async () => {
@@ -495,7 +520,11 @@ describe('mobile presence lock — multi-mobile semantics', () => {
 
     expect(ptySizes.get('pty-1')).toEqual({ cols: 132, rows: 44 })
     expect(resizes.at(-1)).toEqual({ ptyId: 'pty-1', cols: 132, rows: 44 })
-    expect(runtime.getLastRendererSize('pty-1')).toEqual({ cols: 132, rows: 44 })
+    // Why: controller drift must not replace the remembered renderer geometry.
+    ptySizes.set('pty-1', { cols: 160, rows: 50 })
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 49, rows: 20 })
+    expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 132, rows: 44 })
   })
 
   it('updateMobileViewport records viewport without applying layout in desktop mode', async () => {
@@ -521,18 +550,6 @@ describe('mobile presence lock — multi-mobile semantics', () => {
     expect(ptySizes.get('pty-1')).toEqual({ cols: 49, rows: 38 })
   })
 
-  it('updateDesktopViewport records geometry without resizing while mobile is driving', async () => {
-    const { runtime, ptySizes, resizes } = createRuntime()
-    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 49, rows: 20 })
-    resizes.length = 0
-
-    expect(await runtime.updateDesktopViewport('pty-1', { cols: 132, rows: 44 })).toBe(true)
-
-    expect(ptySizes.get('pty-1')).toEqual({ cols: 49, rows: 20 })
-    expect(resizes).toEqual([])
-    expect(runtime.getLastRendererSize('pty-1')).toEqual({ cols: 132, rows: 44 })
-  })
-
   it('updateDesktopViewport records restore geometry while phone-fit override is held', async () => {
     const { runtime, ptySizes, resizes } = createRuntime()
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 49, rows: 20 })
@@ -543,7 +560,6 @@ describe('mobile presence lock — multi-mobile semantics', () => {
 
     expect(ptySizes.get('pty-1')).toEqual({ cols: 49, rows: 20 })
     expect(resizes).toEqual([])
-    expect(runtime.getLastRendererSize('pty-1')).toEqual({ cols: 132, rows: 44 })
 
     expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
     expect(ptySizes.get('pty-1')).toEqual({ cols: 132, rows: 44 })
@@ -728,23 +744,9 @@ describe('mobile presence lock — issue #7588 held-modal restore convergence', 
     // Lock released and banner dismissed despite the failed resize.
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
     expect(runtime.getTerminalFitOverride('pty-1')).toBeNull()
-    expect(runtime.getMobileDisplayMode('pty-1')).toBe('auto')
+    expect(runtime.getMobileDisplayMode('pty-1')).toBe('desktop')
     expect(fitOverrideEvents.slice(notifierBefore).some((e) => e.mode === 'desktop-fit')).toBe(true)
     expect(listenerEvents.slice(listenerBefore).some((e) => e.mode === 'desktop-fit')).toBe(true)
-  })
-
-  // Scenario 5b: explicit take-back releases unconditionally (pre-revision kept the lock for a later auto-restore).
-  it('failed take-back leaves no stranded override or lock', async () => {
-    const { runtime, setResizeSucceeds } = createRuntime()
-
-    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
-
-    setResizeSucceeds(false)
-    expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
-
-    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
-    expect(runtime.getTerminalFitOverride('pty-1')).toBeNull()
-    expect(runtime.getMobileDisplayMode('pty-1')).toBe('auto')
   })
 
   // Scenario 6: phone-initiated desktop switch converges a stale held override via the shared applyMobileDisplayMode seam.
@@ -854,5 +856,75 @@ describe('mobile presence lock — desktop take-back survives passive viewport r
 
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
     expect(ptySizes.get('pty-1')).toEqual({ cols: 40, rows: 20 })
+  })
+})
+
+describe('mobile presence lock — desktop take-back survives automatic resubscribes (#28487)', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('a replayed subscribe after a reconnect does not undo a desktop take-back', async () => {
+    const { runtime, ptySizes, driverEvents } = createRuntime(null)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 40, rows: 20 })
+    expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    const driverEventsBefore = driverEvents.length
+
+    // Why: the socket dropped and came back; the phone replays its stream with no gesture.
+    runtime.onClientDisconnected('phone-A')
+    await vi.advanceTimersByTimeAsync(1_000)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 40, rows: 20 })
+
+    // Why: the disconnect already freed the floor; the replay must not hand it to the phone.
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    expect(runtime.getTerminalFitOverride('pty-1')).toBeNull()
+    expect(
+      driverEvents.slice(driverEventsBefore).find((e) => e.driver.kind === 'mobile')
+    ).toBeUndefined()
+  })
+
+  it('a foreground resubscribe inside the soft-leave grace does not undo a desktop take-back', async () => {
+    const { runtime, ptySizes } = createRuntime(null)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 40, rows: 20 })
+    expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
+
+    runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
+    await vi.advanceTimersByTimeAsync(100)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 40, rows: 20 })
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+  })
+
+  it('typing on the phone after a reconnect re-takes the floor and phone-fits again', async () => {
+    const { runtime, ptySizes } = createRuntime(null)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 40, rows: 20 })
+    expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
+    runtime.onClientDisconnected('phone-A')
+    await vi.advanceTimersByTimeAsync(1_000)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 40, rows: 20 })
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
+
+    await runtime.mobileTookFloor('pty-1', 'phone-A')
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 40, rows: 20 })
+    expect(runtime.getMobileDisplayMode('pty-1')).toBe('auto')
+  })
+
+  it('take-back of a held phone-fit with no subscriber also keeps the next subscribe passive', async () => {
+    const { runtime, ptySizes } = createRuntime(null)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 40, rows: 20 })
+    runtime.onClientDisconnected('phone-A')
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(runtime.getTerminalFitOverride('pty-1')).not.toBeNull()
+
+    expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 40, rows: 20 })
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 })

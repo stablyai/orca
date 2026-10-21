@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   findInstallerAssetName,
-  formatAdhocVersion,
-  formatDailyVersion,
-  formatHourlyVersion,
   getReleaseNotesUrlForVersion,
   getReleaseRepoForChannel,
   getVersionChannel,
@@ -79,13 +76,13 @@ describe('release channel', () => {
   })
 
   it('round-trips an hourly version stamp as UTC', () => {
-    const version = formatHourlyVersion('1.4.160', '202607281405')
+    const version = '1.4.160-hourly.202607281405'
     expect(isHourlyVersion(version)).toBe(true)
     expect(parseHourlyVersionStamp(version)?.toISOString()).toBe('2026-07-28T14:05:00.000Z')
   })
 
   it('round-trips a daily version stamp as UTC', () => {
-    const version = formatDailyVersion('1.4.160', '202607281300')
+    const version = '1.4.160-daily.202607281300'
     expect(isDailyVersion(version)).toBe(true)
     expect(parseDailyVersionStamp(version)?.toISOString()).toBe('2026-07-28T13:00:00.000Z')
   })
@@ -118,7 +115,7 @@ describe('release channel', () => {
   // so two people cutting from different branches inside the same minute is
   // ordinary — at minute resolution the second would collide on the tag.
   it('round-trips an adhoc version stamp as UTC, to the second', () => {
-    const version = formatAdhocVersion('1.4.160', '20260728140533')
+    const version = '1.4.160-adhoc.20260728140533'
     expect(isAdhocVersion(version)).toBe(true)
     expect(parseAdhocVersionStamp(version)?.toISOString()).toBe('2026-07-28T14:05:33.000Z')
   })
@@ -322,6 +319,26 @@ describe('release channel', () => {
       '1.4.160-adhoc.20260728140541',
       '1.4.160-adhoc.20260728140502',
       '1.4.160-adhoc.20260728090000'
+    ])
+  })
+
+  it('sorts dev builds by their cut time across different base versions', () => {
+    const build = (version: string): ReleaseBuild => ({
+      tag: `v${version}`,
+      version,
+      channel: 'adhoc',
+      name: null,
+      publishedAt: null,
+      releaseUrl: `https://github.com/stablyai/orca-adhoc/releases/tag/v${version}`,
+      installerUrl: null
+    })
+    const sorted = sortReleaseBuildsNewestFirst([
+      build('1.4.207-adhoc.20260919025813'),
+      build('1.4.206-adhoc.20260919173504')
+    ])
+    expect(sorted.map((entry) => entry.version)).toEqual([
+      '1.4.206-adhoc.20260919173504',
+      '1.4.207-adhoc.20260919025813'
     ])
   })
 })

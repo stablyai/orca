@@ -54,7 +54,7 @@ async function openClientTab(page: Page, worktreeId: string, tabId: string): Pro
       state?.setActiveView('terminal')
       state?.setActiveWorktree(worktreeId)
       state?.setActiveTab(tabId)
-      state?.setActiveTabType('terminal')
+      state?.setActiveTabType('terminal', worktreeId)
     },
     { tabId, worktreeId }
   )

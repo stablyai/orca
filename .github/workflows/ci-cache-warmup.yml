@@ -1,0 +1,103 @@
+name: Warm shared CI caches
+
+on:
+  # Cache-input pushes seed immediately; this schedule repairs eviction and image changes.
+  schedule:
+    - cron: '41 */6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ci-cache-warmup.yml'
+      - '.github/workflows/ci-cache-warmup-platform-jobs.yml'
+      - '.github/workflows/ci-cache-warmup-platforms.yml'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/restore-pnpm-verification/**'
+      - '.github/actions/prepare-native-runtime/**'
+      - '.github/actions/prepare-windows-cli-launcher/**'
+      - '.github/actions/prepare-git-compatibility/**'
+      - '.github/actions/prepare-headless-compiler/**'
+      - 'config/scripts/headless-detector-compiler-cache.mjs'
+      - '.github/actions/prepare-linux-package-fixture/**'
+      - '.github/actions/prepare-wayland-clipboard/**'
+      - 'native/wayland-clipboard/**'
+      - 'config/scripts/build-wayland-clipboard.mjs'
+      - 'config/docker/headless-serve-shutdown/**'
+      - 'config/docker/cli-launch-contract/**'
+      - 'config/docker/daemon-shutdown-descendants/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - 'config/pnpmfile.cjs'
+      - 'config/scripts/ensure-native-runtime.mjs'
+      - 'config/scripts/initialize-windows-native-toolchain.mjs'
+      - 'config/scripts/capture-windows-native-environment.cmd'
+      - 'config/scripts/rebuild-native-deps.mjs'
+      - 'config/scripts/node-pty-job-ownership.cjs'
+      - 'config/scripts/windows-pe-machine.cjs'
+      - 'config/scripts/windows-process-tree-gyp-rebuild.mjs'
+      - 'config/scripts/windows-process-tree-creation-time.cjs'
+      - 'config/scripts/install-electron-package-binary.mjs'
+      - 'config/scripts/electron-platform-path.mjs'
+      - 'config/scripts/zip-extractor-command.mjs'
+      - 'src/shared/zip-extractor-command.ts'
+      - 'config/scripts/shared-electron-dist-cache.mjs'
+      - 'config/scripts/space-sharing-copy.mjs'
+      - 'config/patches/**'
+      - 'native/windows-registry/**'
+      - 'native/windows-security/**'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    paths:
+      - '.github/workflows/ci-cache-warmup.yml'
+      - '.github/actions/prepare-headless-compiler/**'
+      - 'config/scripts/headless-detector-compiler-cache.mjs'
+      - '.github/actions/prepare-wayland-clipboard/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cache-warmup-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  warm:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    concurrency:
+      group: ci-cache-warmup-linux-x64-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Default-branch caches can be restored by every PR; PR caches cannot.
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+          cache-electron-package: 'true'
+          cache-pnpm-store-lookup-only: 'true'
+
+      - uses: ./.github/actions/prepare-headless-compiler
+        with:
+          seed: 'true'
+
+      - name: Populate shared Electron archive
+        run: node config/scripts/install-electron-package-binary.mjs
+
+      - uses: ./.github/actions/prepare-git-compatibility
+
+      - uses: ./.github/actions/prepare-wayland-clipboard
+        with:
+          save-cache: 'true'
+
+  warm-platforms:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/ci-cache-warmup-platform-jobs.yml

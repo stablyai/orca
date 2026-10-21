@@ -3,6 +3,8 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TerminalPreviewApi } from '../../../../preload/api/dashboard-api'
+import type { TerminalPreviewConnectResult } from '../../../../shared/terminal-preview'
 
 const terminalHarness = vi.hoisted(() => ({
   instances: [] as {
@@ -78,6 +80,7 @@ vi.mock('@xterm/xterm', () => ({
     scrollToBottom = vi.fn()
     selectAll = vi.fn()
     getSelection = vi.fn(() => this.selectionText)
+    hasSelection = vi.fn(() => this.selectionText !== '')
     attachCustomKeyEventHandler = vi.fn((handler: (event: KeyboardEvent) => boolean) => {
       this.customKeyHandler = handler
     })
@@ -137,14 +140,43 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
+type RemotePreviewSubscription = {
+  terminal: string
+  callbacks: {
+    onSnapshot: (data: string, meta?: { cols?: number; rows?: number; seq?: number }) => void
+    onData: (data: string, meta?: { seq?: number }) => void
+  }
+}
+const multiplexerHarness = vi.hoisted(() => {
+  const environments: string[] = []
+  const subscriptions: RemotePreviewSubscription[] = []
+  return { environments, subscriptions, sendInput: vi.fn(() => true), close: vi.fn() }
+})
+vi.mock('@/runtime/remote-runtime-terminal-multiplexer', () => ({
+  getRemoteRuntimeTerminalMultiplexer: (environmentId: string) => {
+    multiplexerHarness.environments.push(environmentId)
+    return {
+      subscribeTerminal: async (args: RemotePreviewSubscription) => {
+        multiplexerHarness.subscriptions.push(args)
+        return {
+          sendInput: multiplexerHarness.sendInput,
+          claimViewport: vi.fn(() => true),
+          close: multiplexerHarness.close
+        }
+      }
+    }
+  }
+}))
+
 import { AgentTerminalPreview } from './AgentTerminalPreview'
+import { resetRemoteRuntimeTerminalPreviewSessionsForTests } from './remote-runtime-terminal-preview-api'
 
 describe('AgentTerminalPreview', () => {
   const input = vi.fn(async (_ptyId: string, _data: string) => true)
   const fit = vi.fn(async (_ptyId: string, cols: number, rows: number) => ({ cols, rows }))
   const ack = vi.fn(async () => {})
   const unsubscribe = vi.fn(async () => {})
-  const connect = vi.fn()
+  const connect = vi.fn<TerminalPreviewApi['connect']>()
   const readClipboardText = vi.fn(async () => 'clip-text')
   const writeClipboardText = vi.fn(async () => {})
   const writeTerminalClipboardText = vi.fn(async () => {})
@@ -189,6 +221,10 @@ describe('AgentTerminalPreview', () => {
 
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
+    resetRemoteRuntimeTerminalPreviewSessionsForTests()
+    multiplexerHarness.environments.length = 0
+    multiplexerHarness.subscriptions.length = 0
     vi.clearAllMocks()
   })
 
@@ -211,7 +247,8 @@ describe('AgentTerminalPreview', () => {
     expect(input).toHaveBeenCalledTimes(1)
     expect(input).toHaveBeenCalledWith('pty-1', 'k')
 
-    act(() => terminal.writeCallbacks.shift()?.())
+    // Why drain all: the connection's kitty restore write queues ahead of the live chunk.
+    act(() => terminal.writeCallbacks.splice(0).forEach((callback) => callback()))
     expect(ack).toHaveBeenCalledWith('pty-1', 4)
   })
 
@@ -249,12 +286,20 @@ describe('AgentTerminalPreview', () => {
     expect(writeClipboardText).not.toHaveBeenCalled()
   })
 
-  it('does not install the IME native-text forwarder off macOS', async () => {
+  it('does not install the IME native-text forwarder on Windows', async () => {
+    platformState.value = 'win32'
     render(<AgentTerminalPreview ptyId="pty-1" />)
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
     await waitFor(() => expect(terminalHarness.instances[0]!.customKeyHandler).not.toBeNull())
     expect(imeHarness.forwarders).toHaveLength(0)
     expect(imeHarness.trackers).toHaveLength(0)
+  })
+
+  // fcitx4 delivers a single-character pick as the Space/digit keypress's text (#28213).
+  it('installs the IME native-text forwarder on desktop Linux', async () => {
+    platformState.value = 'linux'
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(imeHarness.forwarders).toHaveLength(1))
   })
 
   // The bridge omitted this dependency entirely, so every Preview
@@ -269,6 +314,11 @@ describe('AgentTerminalPreview', () => {
     render(<AgentTerminalPreview ptyId="pty-1" />)
     await waitFor(() => expect(imeHarness.forwarders).toHaveLength(1))
     await waitFor(() => expect(imeHarness.forwarders[0]!.getKittyKeyboardFlags()).toBe(8))
+    // The popout xterm gets the same flags, so its encoder agrees with the mirror.
+    expect(terminalHarness.instances[0]!.write).toHaveBeenCalledWith(
+      '\x1b[<99u\x1b[=8u',
+      expect.any(Function)
+    )
 
     // Live output keeps advancing the same mirror the forwarder reads.
     act(() => {
@@ -354,6 +404,37 @@ describe('AgentTerminalPreview', () => {
     )
     expect(handled).toBe(true)
     expect(writeTerminalClipboardText).not.toHaveBeenCalled()
+  })
+
+  it('hands unselected Cmd+C to a kitty app and copies a selection instead', async () => {
+    platformState.value = 'darwin'
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+    const cmdC = (type: string): KeyboardEvent =>
+      new KeyboardEvent(type, { key: 'c', code: 'KeyC', metaKey: true, cancelable: true })
+
+    // A plain shell's unselected Cmd+C sends nothing.
+    expect(terminal.customKeyHandler!(cmdC('keydown'))).toBe(false)
+    expect(terminal.customKeyHandler!(cmdC('keyup'))).toBe(false)
+
+    act(() => {
+      emitData?.({ type: 'data', ptyId: 'pty-1', data: '\x1b[>1u', bytes: 5 })
+    })
+    expect(terminal.customKeyHandler!(cmdC('keydown'))).toBe(true)
+    expect(terminal.customKeyHandler!(cmdC('keyup'))).toBe(true)
+
+    // A highlight of blank cells copies no text but is still Orca's selection, as in the pane.
+    Object.assign(terminal, { hasSelection: () => true })
+    expect(terminal.customKeyHandler!(cmdC('keydown'))).toBe(false)
+    expect(terminal.customKeyHandler!(cmdC('keyup'))).toBe(false)
+    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
+
+    terminal.selectionText = 'selected text'
+    expect(terminal.customKeyHandler!(cmdC('keydown'))).toBe(false)
+    expect(terminal.customKeyHandler!(cmdC('keyup'))).toBe(false)
+    expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text')
   })
 
   it('selects all terminal text on Cmd+A and blocks xterm handling', async () => {
@@ -503,7 +584,7 @@ describe('AgentTerminalPreview', () => {
   it('does not let a redelivered kitty push outlive the TUI pop', async () => {
     connect.mockResolvedValueOnce({
       snapshot: { data: '\x1b[>1u', cols: 80, rows: 24, seq: 1 },
-      replay: ['\x1b[>1u']
+      replay: [{ data: '\x1b[>1u', mode: 'replay' }]
     })
     render(<AgentTerminalPreview ptyId="pty-1" />)
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
@@ -554,10 +635,7 @@ describe('AgentTerminalPreview', () => {
   })
 
   it('keeps the existing terminal visible while a resync snapshot is captured', async () => {
-    let resolveRefresh!: (value: {
-      snapshot: { data: string; cols: number; rows: number; seq: number }
-      replay: string[]
-    }) => void
+    let resolveRefresh!: (value: TerminalPreviewConnectResult) => void
     connect
       .mockResolvedValueOnce({
         snapshot: { data: 'first', cols: 80, rows: 24, seq: 1 },
@@ -685,5 +763,41 @@ describe('AgentTerminalPreview', () => {
     view.unmount()
     await vi.advanceTimersByTimeAsync(150)
     expect(connect).toHaveBeenCalledTimes(2)
+  })
+
+  it("previews a paired host's pane from that host, not this app's main process", async () => {
+    render(<AgentTerminalPreview ptyId="remote:env-1@@term-7" />)
+
+    await waitFor(() => expect(multiplexerHarness.subscriptions).toHaveLength(1))
+    expect(multiplexerHarness.environments).toEqual(['env-1'])
+    expect(multiplexerHarness.subscriptions[0]!.terminal).toBe('term-7')
+    expect(connect).not.toHaveBeenCalled()
+
+    act(() =>
+      multiplexerHarness.subscriptions[0]!.callbacks.onSnapshot('agent screen', {
+        cols: 100,
+        rows: 30,
+        seq: 5
+      })
+    )
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    expect(terminal.write).toHaveBeenCalledWith('agent screen', expect.any(Function))
+
+    act(() => multiplexerHarness.subscriptions[0]!.callbacks.onData('live', { seq: 9 }))
+    expect(terminal.write).toHaveBeenCalledWith('live', expect.any(Function))
+    act(() => {
+      terminalHarness.userInputListener?.()
+      terminal.onDataListener?.('y')
+    })
+    expect(multiplexerHarness.sendInput).toHaveBeenCalledWith('y')
+  })
+
+  it('shows the unavailable message instead of a blank dialog when the bridge is missing', async () => {
+    // The web client's fallback proxy resolves every missing bridge call to undefined.
+    Object.assign(window.api.terminalPreview, { connect: async () => undefined })
+    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
+
+    await waitFor(() => expect(view.getByText(/No live terminal/)).toBeInTheDocument())
   })
 })

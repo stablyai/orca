@@ -10,6 +10,13 @@ export type WorktreeDeleteState = {
   canForceDelete: boolean
   forceDeleteReason: WorktreeForceDeleteReason | null
   lockReason?: string | null
+  /** The removal was refused by a failed archive hook, so "Delete anyway" is offered (#19334). */
+  canWaiveArchiveHook?: boolean
 }
 
 export type WorktreeDeleteStateTarget = Pick<Worktree, 'id' | 'hostId'>
+
+/** True once the row's own removal has started; a queued row still owns its terminals and may stay. */
+export function hasWorktreeTeardownStarted(state: WorktreeDeleteState | undefined): boolean {
+  return state?.isDeleting === true && state.phase !== 'queued'
+}

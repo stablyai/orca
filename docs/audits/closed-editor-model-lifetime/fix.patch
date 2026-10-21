@@ -1,0 +1,485 @@
+===================================================================
+--- a/src/renderer/src/app-shell/use-app-shell-services.ts
++++ b/src/renderer/src/app-shell/use-app-shell-services.ts
+@@ -1,0 +2,1 @@
++import { useClosedEditorTabCleanup } from '../components/editor/useClosedEditorTabCleanup'
+@@ -32,0 +34,1 @@
++  useClosedEditorTabCleanup()
+===================================================================
+--- a/src/renderer/src/components/editor/EditorPanel.tsx
++++ b/src/renderer/src/components/editor/EditorPanel.tsx
+@@ -15,1 +14,0 @@
+-import { useClosedEditorTabCleanup } from './useClosedEditorTabCleanup'
+@@ -145,1 +143,0 @@
+-  useClosedEditorTabCleanup(openFiles)
+===================================================================
+--- a/src/renderer/src/components/editor/closed-editor-tab-controller.ts
++++ b/src/renderer/src/components/editor/closed-editor-tab-controller.ts
+@@ -0,0 +1,234 @@
++import type { StoreApi } from 'zustand'
++import type { editor } from 'monaco-editor'
++import type { OpenFile } from '@/store/slices/editor'
++import { editorModelRegistry } from '@/lib/editor-model-registry'
++import { disposeClosedEditorModels, type ClosedEditorTab } from './closed-editor-tab-disposal'
++import type { MonacoModelRegistry, DisposableMonacoModel } from './diff-monaco-model-disposal'
++
++type EditorStore = Pick<StoreApi<{ openFiles: OpenFile[] }>, 'getState' | 'subscribe'>
++type RetainedModel = {
++  files: Map<string, ClosedEditorTab>
++  detach: { dispose(): void }
++  dispose: { dispose(): void }
++}
++
++function ownerKey(file: ClosedEditorTab): string {
++  return JSON.stringify([file.id, file.mode, file.filePath])
++}
++
++export function attachClosedEditorTabCleanup(
++  store: EditorStore,
++  bridge = editorModelRegistry
++): () => void {
++  let registry = bridge.get()
++  let previousFiles = store.getState().openFiles
++  const pendingFiles = new Map<string, ClosedEditorTab>()
++  const candidateModels = new Set<editor.ITextModel>()
++  const retainedModels = new Map<editor.ITextModel, RetainedModel>()
++  let active = true
++  let scheduled = false
++  let generation = 0
++
++  const releaseRetainedModel = (model: editor.ITextModel): void => {
++    const retained = retainedModels.get(model)
++    if (!retained) {
++      return
++    }
++    retainedModels.delete(model)
++    retained.detach.dispose()
++    retained.dispose.dispose()
++    retained.files.clear()
++  }
++
++  const clearPending = (): void => {
++    generation += 1
++    scheduled = false
++    pendingFiles.clear()
++    candidateModels.clear()
++    for (const model of retainedModels.keys()) {
++      releaseRetainedModel(model)
++    }
++  }
++
++  const schedule = (): void => {
++    if (!active || scheduled) {
++      return
++    }
++    scheduled = true
++    const queuedGeneration = generation
++    queueMicrotask(() => {
++      if (!active || generation !== queuedGeneration) {
++        return
++      }
++      scheduled = false
++      flush()
++    })
++  }
++
++  const retainAttachedModel = (candidate: DisposableMonacoModel, file: ClosedEditorTab): void => {
++    if (!registry) {
++      return
++    }
++    const model = registry.editor.getModel(registry.Uri.parse(candidate.uri.toString()))
++    if (!model || model !== candidate) {
++      return
++    }
++    let retained = retainedModels.get(model)
++    if (!retained) {
++      retained = {
++        files: new Map(),
++        detach: model.onDidChangeAttached(schedule),
++        dispose: model.onWillDispose(() => releaseRetainedModel(model))
++      }
++      retainedModels.set(model, retained)
++    }
++    retained.files.set(ownerKey(file), file)
++  }
++
++  const flush = (): void => {
++    const currentRegistry = registry
++    if (!currentRegistry) {
++      if (candidateModels.size === 0) {
++        pendingFiles.clear()
++      }
++      return
++    }
++    const flushGeneration = generation
++    let checkedOpenFiles: OpenFile[] | null = null
++    let openIds = new Set<string>()
++    let openEditUris = new Set<string>()
++    const stillOwned = (file: ClosedEditorTab): boolean => {
++      const openFiles = store.getState().openFiles
++      if (openFiles !== checkedOpenFiles) {
++        checkedOpenFiles = openFiles
++        openIds = new Set(openFiles.map((openFile) => openFile.id))
++        openEditUris = new Set(
++          openFiles
++            .filter((openFile) => openFile.mode === 'edit')
++            .map(
++              (openFile) =>
++                currentRegistry?.Uri.parse(openFile.filePath).toString() ?? openFile.filePath
++            )
++        )
++      }
++      return (
++        openIds.has(file.id) ||
++        (file.mode === 'edit' &&
++          openEditUris.has(currentRegistry?.Uri.parse(file.filePath).toString() ?? file.filePath))
++      )
++    }
++    const disposeCaptured = (
++      files: ClosedEditorTab[],
++      models: ReadonlySet<editor.ITextModel>
++    ): void => {
++      if (!currentRegistry) {
++        return
++      }
++      const fencedRegistry: MonacoModelRegistry = {
++        Uri: currentRegistry.Uri,
++        editor: {
++          getModel(uri) {
++            if (!currentRegistry.Uri.isUri(uri)) {
++              return null
++            }
++            const model = currentRegistry.editor.getModel(uri)
++            return model && models.has(model) ? model : null
++          },
++          getModels: () =>
++            [...models].filter((model) => currentRegistry.editor.getModel(model.uri) === model)
++        }
++      }
++      disposeClosedEditorModels(
++        fencedRegistry,
++        files,
++        retainAttachedModel,
++        (file) => active && generation === flushGeneration && !stillOwned(file)
++      )
++    }
++
++    const files = [...pendingFiles.values()].filter((file) => !stillOwned(file))
++    const models = new Set(candidateModels)
++    pendingFiles.clear()
++    candidateModels.clear()
++    disposeCaptured(files, models)
++    if (active && generation !== flushGeneration) {
++      for (const file of files) {
++        pendingFiles.set(ownerKey(file), file)
++      }
++      for (const model of models) {
++        if (!model.isDisposed()) {
++          candidateModels.add(model)
++        }
++      }
++      schedule()
++      return
++    }
++
++    for (const [model, retained] of retainedModels) {
++      if (!active || generation !== flushGeneration) {
++        return
++      }
++      if (currentRegistry?.editor.getModel(model.uri) !== model) {
++        releaseRetainedModel(model)
++        continue
++      }
++      const closedFiles = [...retained.files.values()].filter((file) => !stillOwned(file))
++      if (closedFiles.length === 0) {
++        releaseRetainedModel(model)
++      } else if (!model.isAttachedToEditor()) {
++        releaseRetainedModel(model)
++        disposeCaptured(closedFiles, new Set([model]))
++      }
++    }
++  }
++
++  const unsubscribe = store.subscribe(() => {
++    const openFiles = store.getState().openFiles
++    if (openFiles === previousFiles) {
++      return
++    }
++    const previous = previousFiles
++    previousFiles = openFiles
++    const liveIds = new Set(openFiles.map((file) => file.id))
++    let removed = false
++    let removedDiff = false
++    for (const file of previous) {
++      if (!liveIds.has(file.id)) {
++        const descriptor = { id: file.id, mode: file.mode, filePath: file.filePath }
++        pendingFiles.set(ownerKey(descriptor), descriptor)
++        removed = true
++        if (file.mode === 'edit' && registry) {
++          const model = registry.editor.getModel(registry.Uri.parse(file.filePath))
++          if (model) {
++            candidateModels.add(model)
++          }
++        } else if (file.mode === 'diff') {
++          removedDiff = true
++        }
++      }
++    }
++    if (removedDiff && registry) {
++      for (const model of registry.editor.getModels()) {
++        candidateModels.add(model)
++      }
++    }
++    if (removed || retainedModels.size > 0) {
++      schedule()
++    }
++  })
++  const unsubscribeRegistry = bridge.subscribe(() => {
++    // Registry notifications invalidate callbacks, not custody of captured models.
++    generation += 1
++    scheduled = false
++    registry = bridge.get()
++    if (pendingFiles.size > 0 || retainedModels.size > 0) {
++      schedule()
++    }
++  })
++  return () => {
++    active = false
++    unsubscribe()
++    unsubscribeRegistry()
++    clearPending()
++  }
++}
+===================================================================
+--- a/src/renderer/src/components/editor/closed-editor-tab-disposal.ts
++++ b/src/renderer/src/components/editor/closed-editor-tab-disposal.ts
+@@ -11,1 +11,2 @@
+-  type MonacoModelRegistry
++  type MonacoModelRegistry,
++  type DisposableMonacoModel
+@@ -18,8 +19,4 @@
+-/**
+- * Releases the Monaco models and view-state cache entries owned by a batch of closed tabs.
+- *
+- * Why the batch shape: every prefix sweep here is a full scan of a shared registry or cache, so
+- * doing one per closed tab makes "close all"/worktree-switch quadratic in retained models. Takes
+- * the monaco namespace as an argument so it stays testable without importing `monaco-editor`.
+- */
+-export function disposeClosedEditorTabs(
++export type ClosedEditorTab = Pick<OpenFile, 'id' | 'mode' | 'filePath'>
++
++// One registry sweep avoids quadratic close-all work.
++export function disposeClosedEditorModels(
+@@ -27,1 +24,3 @@
+-  closedFiles: readonly OpenFile[]
++  closedFiles: readonly ClosedEditorTab[],
++  onAttachedModel?: (model: DisposableMonacoModel, file: ClosedEditorTab) => void,
++  isStillClosed: (file: ClosedEditorTab) => boolean = () => true
+@@ -33,1 +32,50 @@
+-  const diffModelPathPrefixes: string[] = []
++  const diffFilesByPrefix = new Map<string, ClosedEditorTab>()
++  for (const closedFile of closedFiles) {
++    if (!isStillClosed(closedFile)) {
++      continue
++    }
++    if (closedFile.mode === 'edit') {
++      const model = monacoRegistry.editor.getModel(monacoRegistry.Uri.parse(closedFile.filePath))
++      if (model?.isAttachedToEditor()) {
++        onAttachedModel?.(model, closedFile)
++      } else {
++        model?.dispose()
++      }
++    } else if (closedFile.mode === 'diff') {
++      const { originalModelPathPrefix, modifiedModelPathPrefix } =
++        getDiffViewerMonacoModelPathPrefixes(closedFile.id)
++      diffFilesByPrefix.set(originalModelPathPrefix, closedFile)
++      diffFilesByPrefix.set(modifiedModelPathPrefix, closedFile)
++    }
++  }
++
++  disposeUnattachedMonacoModelsByPathPrefixes(
++    monacoRegistry,
++    [...diffFilesByPrefix.keys()],
++    (model, prefix) => {
++      const file = diffFilesByPrefix.get(prefix)
++      if (file) {
++        onAttachedModel?.(model, file)
++      }
++    },
++    (prefix) => {
++      const file = diffFilesByPrefix.get(prefix)
++      return file !== undefined && isStillClosed(file)
++    }
++  )
++}
++
++export function disposeClosedEditorTabs(
++  monacoRegistry: MonacoModelRegistry,
++  closedFiles: readonly ClosedEditorTab[],
++  onAttachedModel?: (model: DisposableMonacoModel, file: ClosedEditorTab) => void,
++  isStillClosed: (file: ClosedEditorTab) => boolean = () => true
++): void {
++  disposeClosedEditorModels(monacoRegistry, closedFiles, onAttachedModel, isStillClosed)
++  disposeClosedEditorTabCaches(closedFiles, isStillClosed)
++}
++
++export function disposeClosedEditorTabCaches(
++  closedFiles: readonly ClosedEditorTab[],
++  isStillClosed: (file: ClosedEditorTab) => boolean = () => true
++): void {
+@@ -39,0 +88,3 @@
++    if (!isStillClosed(closedFile)) {
++      continue
++    }
+@@ -42,3 +92,0 @@
+-        // Why: the edit model URI is constructed via monaco.Uri.parse(filePath)
+-        // to match @monaco-editor/react's `path` prop convention.
+-        monacoRegistry.editor.getModel(monacoRegistry.Uri.parse(closedFile.filePath))?.dispose()
+@@ -46,1 +93,0 @@
+-        // Why: markdown and mermaid surfaces keep mode-scoped scroll positions.
+@@ -53,1 +99,0 @@
+-        // Why: only 'edit' tabs ever get a PDF scroll key (see EditorContent).
+@@ -57,2 +102,0 @@
+-        // Why: preview tabs own pane-scoped preview scroll cache entries even
+-        // though they do not retain Monaco models.
+@@ -62,6 +106,1 @@
+-      case 'diff': {
+-        // Why: kept diff models are keyed by tab id, and fallback recovery can
+-        // append generation suffixes; closing the tab owns that whole namespace.
+-        const { originalModelPathPrefix, modifiedModelPathPrefix } =
+-          getDiffViewerMonacoModelPathPrefixes(closedFile.id)
+-        diffModelPathPrefixes.push(originalModelPathPrefix, modifiedModelPathPrefix)
++      case 'diff':
+@@ -73,1 +111,0 @@
+-      }
+@@ -80,2 +117,0 @@
+-
+-  disposeUnattachedMonacoModelsByPathPrefixes(monacoRegistry, diffModelPathPrefixes)
+===================================================================
+--- a/src/renderer/src/components/editor/diff-monaco-model-disposal.ts
++++ b/src/renderer/src/components/editor/diff-monaco-model-disposal.ts
+@@ -15,1 +15,1 @@
+-type DisposableMonacoModel = Pick<editor.ITextModel, 'dispose' | 'isAttachedToEditor'> & {
++export type DisposableMonacoModel = Pick<editor.ITextModel, 'dispose' | 'isAttachedToEditor'> & {
+@@ -91,1 +91,3 @@
+-  modelPathPrefixes: readonly string[]
++  modelPathPrefixes: readonly string[],
++  onAttachedModel?: (model: DisposableMonacoModel, prefix: string) => void,
++  isStillOwned: (prefix: string) => boolean = () => true
+@@ -109,5 +111,9 @@
+-    if (
+-      isOwnedByPathPrefix(model.uri.toString(true), ownedPrefixes, bounds) ||
+-      isOwnedByPathPrefix(model.uri.toString(), ownedPrefixes, bounds)
+-    ) {
+-      disposeUnattachedMonacoModel(model)
++    const prefix =
++      findOwnedPathPrefix(model.uri.toString(true), ownedPrefixes, bounds) ??
++      findOwnedPathPrefix(model.uri.toString(), ownedPrefixes, bounds)
++    if (prefix !== undefined && isStillOwned(prefix)) {
++      if (model.isAttachedToEditor()) {
++        onAttachedModel?.(model, prefix)
++      } else {
++        model.dispose()
++      }
+@@ -122,1 +128,1 @@
+-function isOwnedByPathPrefix(
++function findOwnedPathPrefix(
+@@ -126,1 +132,1 @@
+-): boolean {
++): string | undefined {
+@@ -128,1 +134,1 @@
+-    return true
++    return uriString
+@@ -140,1 +146,1 @@
+-      return true
++      return uriString.slice(0, boundary)
+@@ -144,1 +150,1 @@
+-  return false
++  return undefined
+===================================================================
+--- a/src/renderer/src/components/editor/useClosedEditorTabCleanup.ts
++++ b/src/renderer/src/components/editor/useClosedEditorTabCleanup.ts
+@@ -1,4 +1,3 @@
+-import { useEffect, useRef } from 'react'
+-import * as monaco from 'monaco-editor'
+-import type { OpenFile } from '@/store/slices/editor'
+-import { disposeClosedEditorTabs } from './closed-editor-tab-disposal'
++import { useEffect } from 'react'
++import { useAppStore } from '@/store'
++import { attachClosedEditorTabCleanup } from './closed-editor-tab-controller'
+@@ -6,16 +5,2 @@
+-export function useClosedEditorTabCleanup(openFiles: OpenFile[]): void {
+-  const prevOpenFilesRef = useRef<Map<string, OpenFile>>(new Map())
+-
+-  useEffect(() => {
+-    const currentFilesById = new Map(openFiles.map((f) => [f.id, f]))
+-    const closedFiles: OpenFile[] = []
+-    for (const [prevId, prevFile] of prevOpenFilesRef.current) {
+-      if (!currentFilesById.has(prevId)) {
+-        closedFiles.push(prevFile)
+-      }
+-    }
+-    // Why one call for the whole removal batch: each sweep scans a shared registry/cache, so
+-    // per-tab sweeps make a "close all" quadratic in retained models.
+-    disposeClosedEditorTabs(monaco, closedFiles)
+-    prevOpenFilesRef.current = currentFilesById
+-  }, [openFiles])
++export function useClosedEditorTabCleanup(): void {
++  useEffect(() => attachClosedEditorTabCleanup(useAppStore), [])
+===================================================================
+--- a/src/renderer/src/lib/editor-model-registry.ts
++++ b/src/renderer/src/lib/editor-model-registry.ts
+@@ -0,0 +1,38 @@
++import type * as Monaco from 'monaco-editor'
++
++export type EditorModelRegistryBridge = {
++  get(): typeof Monaco | null
++  subscribe(listener: () => void): () => void
++  register(registry: typeof Monaco): () => void
++}
++
++export function createEditorModelRegistry(): EditorModelRegistryBridge {
++  let registration: { registry: typeof Monaco } | null = null
++  const listeners = new Set<() => void>()
++  const notify = (): void => {
++    for (const listener of listeners) {
++      listener()
++    }
++  }
++  return {
++    get: (): typeof Monaco | null => registration?.registry ?? null,
++    subscribe(listener: () => void): () => void {
++      listeners.add(listener)
++      return () => listeners.delete(listener)
++    },
++    register(registry: typeof Monaco): () => void {
++      const next = { registry }
++      registration = next
++      notify()
++      return () => {
++        if (registration !== next) {
++          return
++        }
++        registration = null
++        notify()
++      }
++    }
++  }
++}
++
++export const editorModelRegistry = createEditorModelRegistry()
+===================================================================
+--- a/src/renderer/src/lib/monaco-setup.ts
++++ b/src/renderer/src/lib/monaco-setup.ts
+@@ -1,0 +2,1 @@
++import { editorModelRegistry } from './editor-model-registry'
+@@ -12,0 +14,1 @@
++import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
+@@ -81,0 +84,1 @@
++registerShellMarkdownAliases(monaco)
+@@ -92,0 +96,5 @@
++
++const unregisterEditorModelRegistry = editorModelRegistry.register(monaco)
++if (import.meta.hot) {
++  import.meta.hot.dispose(unregisterEditorModelRegistry)
++}

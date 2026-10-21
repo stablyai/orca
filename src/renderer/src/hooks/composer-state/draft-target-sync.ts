@@ -6,6 +6,7 @@ export type DraftTargetSyncInput = Pick<
   | 'agentPrompt'
   | 'attachmentPaths'
   | 'baseBranch'
+  | 'baseBranchNamesWorkspace'
   | 'compareBaseRef'
   | 'eligibleRepos'
   | 'fetchSparsePresets'
@@ -19,6 +20,7 @@ export type DraftTargetSyncInput = Pick<
   | 'name'
   | 'note'
   | 'persistDraft'
+  | 'pendingInitialWorkspaceTarget'
   | 'repoId'
   | 'selectedProjectGroup'
   | 'selectedRepo'
@@ -36,6 +38,7 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     agentPrompt,
     attachmentPaths,
     baseBranch,
+    baseBranchNamesWorkspace,
     compareBaseRef,
     eligibleRepos,
     fetchSparsePresets,
@@ -49,6 +52,7 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     name,
     note,
     persistDraft,
+    pendingInitialWorkspaceTarget,
     repoId,
     selectedProjectGroup,
     selectedRepo,
@@ -98,7 +102,7 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
       linkedPR,
       linkedGitLabIssue,
       linkedGitLabMR,
-      ...(baseBranch !== undefined ? { baseBranch } : {}),
+      ...(baseBranch !== undefined ? { baseBranch, baseBranchNamesWorkspace } : {}),
       ...(compareBaseRef !== undefined ? { compareBaseRef } : {})
     })
   }, [
@@ -106,6 +110,7 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     agentPrompt,
     attachmentPaths,
     baseBranch,
+    baseBranchNamesWorkspace,
     compareBaseRef,
     linkedIssue,
     linkedPR,
@@ -124,13 +129,13 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
 
   // Auto-pick the first eligible repo if we somehow start with none selected.
   useEffect(() => {
-    if (isProjectGroupTarget) {
+    if (isProjectGroupTarget || pendingInitialWorkspaceTarget) {
       return
     }
     if (!repoId && eligibleRepos[0]?.id) {
       setRepoId(eligibleRepos[0].id)
     }
-  }, [eligibleRepos, isProjectGroupTarget, repoId, setRepoId])
+  }, [eligibleRepos, isProjectGroupTarget, pendingInitialWorkspaceTarget, repoId, setRepoId])
 
   useEffect(() => {
     if (!selectedProjectGroup) {

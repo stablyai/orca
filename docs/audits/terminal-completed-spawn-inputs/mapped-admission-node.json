@@ -1,0 +1,84 @@
+{
+  "node": "v26.6.0",
+  "electron": null,
+  "v8": "14.6.202.34-node.26",
+  "sourceMode": "mapped modules with working-tree dependencies",
+  "sourceHashes": {
+    "src/main/daemon/session-output-pipeline.ts": {
+      "baseline": "99ff9d936469a59e07f979b19344815c8636cd58a985e139614f221e99eaf8c9",
+      "fixed": "94f6f221d85388274d585ad714fda25c32a824942950074e4e95b85c94a6771f"
+    },
+    "src/main/daemon/terminal-host-session-create.ts": {
+      "baseline": "44fb82244a3307b5c89ebf724640be585dfe1b79566d11649b38eaf518c54d32",
+      "fixed": "d54cbaff13c8daba1766e4fec24a6903ecdf1486249f1a9e5d96a207de410309"
+    },
+    "src/main/daemon/terminal-host.ts": {
+      "baseline": "5216562b3c10c5fce4238614dc3a81887c970359a60e7e23179c6dfa15ccbcca",
+      "fixed": "f22856504559a6bb78498c6d5aae07cbbd80a21019723278a560628e0142236f"
+    },
+    "src/main/daemon/daemon-terminal-admission.ts": "14d1d8bbf4b662c98db123719741daffc3d0fe911d3a6a08d3516be666068251",
+    "src/main/daemon/daemon-pty-spawn-preparations.ts": "77c94466578a5066af069e45eb5e87a64b73b88580a13b2172b2ea846b434f4e"
+  },
+  "phases": {
+    "baseline": {
+      "attached": {
+        "request": false,
+        "payload": false,
+        "preparation": true,
+        "options": true,
+        "env": true,
+        "history": true,
+        "signal": true
+      },
+      "detached": {
+        "request": false,
+        "payload": false,
+        "preparation": true,
+        "options": true,
+        "env": true,
+        "history": true,
+        "signal": true
+      },
+      "disposed": {
+        "request": false,
+        "payload": false,
+        "preparation": false,
+        "options": false,
+        "env": false,
+        "history": false,
+        "signal": false
+      },
+      "historyVisibleAfterCollection": true
+    },
+    "fixed": {
+      "attached": {
+        "request": false,
+        "payload": false,
+        "preparation": true,
+        "options": false,
+        "env": false,
+        "history": false,
+        "signal": true
+      },
+      "detached": {
+        "request": false,
+        "payload": false,
+        "preparation": false,
+        "options": false,
+        "env": false,
+        "history": false,
+        "signal": false
+      },
+      "disposed": {
+        "request": false,
+        "payload": false,
+        "preparation": false,
+        "options": false,
+        "env": false,
+        "history": false,
+        "signal": false
+      },
+      "historyVisibleAfterCollection": true
+    }
+  }
+}

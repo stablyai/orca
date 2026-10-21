@@ -4,6 +4,7 @@ import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { AgentBrowserBridgeRawProcess } from './agent-browser-bridge-raw-process'
 import type { AgentBrowserCleanupOptions } from './agent-browser-bridge-types'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
+import { runOutsideRemoteCliBrowserScope } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawProcess {
   async onTabClosed(webContentsId: number): Promise<void> {
@@ -106,7 +107,11 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
       // Why: the daemon persists sessions (incl. CDP port) across restarts; close the stale one first or it ignores --cdp and hits the dead port.
       await this.closeStaleAgentBrowserSession(sessionName)
 
-      const proxy = new CdpWsProxy(wc)
+      const proxy = new CdpWsProxy(
+        wc,
+        () => this.browserManager.holdPaintForCapture(webContentsId),
+        () => this.browserManager.guardUserFocusForAgentInput(webContentsId)
+      )
       const cdpEndpoint = await proxy.start()
 
       this.sessions.set(sessionName, {
@@ -122,63 +127,14 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
       })
     }
 
-    const promise = createSession()
+    // Why: the proxy's sockets keep the async scope they were created in; a host's would refuse
+    // every later command on this page, the desktop's included, after that host's request ended.
+    const promise = runOutsideRemoteCliBrowserScope(createSession)
     this.pendingSessionCreation.set(sessionName, promise)
     try {
       await promise
     } finally {
       this.pendingSessionCreation.delete(sessionName)
-    }
-  }
-
-  protected async restartSessionForTarget(
-    sessionName: string,
-    browserPageId: string,
-    webContentsId: number,
-    options: { recreate: boolean } = { recreate: true }
-  ): Promise<void> {
-    const pendingCreation = this.pendingSessionCreation.get(sessionName)
-    if (pendingCreation) {
-      await pendingCreation.catch(() => {})
-    }
-
-    const session = this.sessions.get(sessionName)
-    if (session) {
-      if (session.activeInterceptPatterns.length > 0) {
-        this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
-      }
-      this.sessions.delete(sessionName)
-      this.pendingSessionCreation.delete(sessionName)
-      if (session.activeProcess) {
-        this.cancelledProcesses.add(session.activeProcess)
-        try {
-          session.activeProcess.kill()
-        } catch {
-          // Process may already be exiting.
-        }
-        session.activeProcess = null
-      }
-
-      const destroy = (async (): Promise<void> => {
-        try {
-          await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'], {
-            timeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS
-          })
-        } catch {
-          // Session may already be dead.
-        }
-        await session.proxy.stop()
-      })()
-      this.pendingSessionDestruction.set(sessionName, destroy)
-      try {
-        await destroy
-      } finally {
-        this.pendingSessionDestruction.delete(sessionName)
-      }
-    }
-
-    if (options.recreate) {
-      await this.ensureSession(sessionName, browserPageId, webContentsId)
     }
   }
 
@@ -204,15 +160,23 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
 
     const session = this.sessions.get(sessionName)
     if (!session) {
-      this.rejectQueuedCommandsForClosedSession(sessionName)
+      if (!options.keepQueuedCommands) {
+        this.rejectQueuedCommandsForClosedSession(sessionName)
+      }
       return
     }
 
     this.sessions.delete(sessionName)
     this.pendingSessionCreation.delete(sessionName)
+    // Why: a retired session's page stays open, so the fresh one must keep its interception.
+    if (options.keepQueuedCommands && session.activeInterceptPatterns.length > 0) {
+      this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
+    }
 
     // Why: queued commands would hang forever if we just delete the queue — drain and reject them.
-    this.rejectQueuedCommandsForClosedSession(sessionName)
+    if (!options.keepQueuedCommands) {
+      this.rejectQueuedCommandsForClosedSession(sessionName)
+    }
 
     if (session.activeProcess) {
       // Why: rejecting the queue isn't enough for an in-flight command — kill the process so callers don't wait out the exec timeout.

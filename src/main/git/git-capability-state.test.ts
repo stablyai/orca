@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearGitCapabilityStateForTests,
   getLocalGitCapabilityCache,
-  getSshGitCapabilityCache,
   withLocalGitCapabilityCacheForExecution
 } from './git-capability-state'
 import {
@@ -31,14 +30,15 @@ describe('Git capability execution-host state', () => {
     )
   })
 
-  it('shares one SSH provider lifetime without leaking into a replacement provider', () => {
-    const provider = {}
-    const replacementProvider = {}
-
-    expect(getSshGitCapabilityCache(provider)).toBe(getSshGitCapabilityCache(provider))
-    expect(getSshGitCapabilityCache(provider)).not.toBe(
-      getSshGitCapabilityCache(replacementProvider)
-    )
+  it('bounds local capability entries during WSL distro churn', () => {
+    const first = getLocalGitCapabilityCache({ wslDistro: 'first-distro' })
+    first.rememberUnsupported('worktree-list-z')
+    for (let index = 0; index < 132; index += 1) {
+      getLocalGitCapabilityCache({ wslDistro: `distro-${index}` })
+    }
+    expect(
+      getLocalGitCapabilityCache({ wslDistro: 'first-distro' }).shouldTry('worktree-list-z')
+    ).toBe(true)
   })
 
   it('uses native capability state for a prepared host-routed WSL worktree', async () => {

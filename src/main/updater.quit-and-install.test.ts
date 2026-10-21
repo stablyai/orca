@@ -21,7 +21,7 @@ vi.mock('electron', () => moduleFactories.electron())
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
 vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
-vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+vi.mock('./ipc/pty/kill-all', () => moduleFactories.ptyKillAll())
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
@@ -180,6 +180,98 @@ describe('updater', () => {
     expect(killAllPtyMock).toHaveBeenCalledTimes(1)
     expect(onBeforeQuit.mock.invocationCallOrder[0]).toBeLessThan(
       killAllPtyMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('aborts native install when required pre-quit cleanup fails', async () => {
+    vi.useFakeTimers()
+
+    const onBeforeQuit = vi.fn().mockRejectedValue(new Error('profile state export failed'))
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await loadUpdaterModule()
+
+    setupAutoUpdater(mainWindow as never, {
+      onBeforeQuit,
+      onBeforeQuitFailure: 'abort'
+    })
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(killAllPtyMock).not.toHaveBeenCalled()
+    expect(isQuittingForUpdate()).toBe(false)
+    expect(sendMock).toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({
+        state: 'error',
+        message: expect.stringContaining('Could not restart to install the update')
+      })
+    )
+  })
+
+  it('keeps optional pre-quit cleanup fail-and-continue behavior by default', async () => {
+    vi.useFakeTimers()
+
+    const onBeforeQuit = vi.fn().mockRejectedValue(new Error('optional cleanup failed'))
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
+
+    setupAutoUpdater(mainWindow as never, { onBeforeQuit })
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+    expect(killAllPtyMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows a required profile export to finish beyond the optional cleanup budget', async () => {
+    vi.useFakeTimers()
+    const onBeforeQuit = vi.fn(() => new Promise<void>((resolve) => setTimeout(resolve, 5_000)))
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: updater only reads the mocked webContents.send in this lifecycle test.
+    setupAutoUpdater(mainWindow as never, { onBeforeQuit, onBeforeQuitFailure: 'abort' })
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(2_600)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(2_500)
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledOnce()
+  })
+
+  it('aborts native install when required pre-quit cleanup times out', async () => {
+    vi.useFakeTimers()
+
+    const onBeforeQuit = vi.fn(() => new Promise<void>(() => {}))
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await loadUpdaterModule()
+
+    setupAutoUpdater(mainWindow as never, {
+      onBeforeQuit,
+      onBeforeQuitFailure: 'abort'
+    })
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(90_000)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(killAllPtyMock).not.toHaveBeenCalled()
+    expect(isQuittingForUpdate()).toBe(false)
+    expect(sendMock).toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({
+        state: 'error',
+        message: expect.stringContaining('Could not restart to install the update')
+      })
     )
   })
 

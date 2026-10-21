@@ -28,6 +28,8 @@ export type PtySubprocessOptions = {
   launchAgent?: TuiAgent
   /** Explicit shell executable path/basename requested by the renderer. */
   shellOverride?: string
+  /** Optional Unix interactive profile args; ignored for command and agent launches. */
+  terminalShellArgs?: string[]
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   isCanceled?: () => boolean
@@ -82,7 +84,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
 
   let spawned: SpawnedDaemonPty
   try {
-    spawned = spawnNativeDaemonPty({
+    spawned = await spawnNativeDaemonPty({
       shellPath: launch.shellPath,
       shellArgs: launch.shellArgs,
       spawnCwd: launch.spawnCwd,

@@ -71,17 +71,17 @@ describe('disposeHeadlessTerminal write ordering', () => {
       events.push(`write:${emulators.indexOf(this)}:${data.trim()}`)
       return write.call(this, data, opts)
     })
-    vi.spyOn(HeadlessEmulator.prototype, 'dispose').mockImplementation(
-      function (this: HeadlessEmulator) {
-        events.push(`dispose:${emulators.indexOf(this)}`)
-        return dispose.call(this)
-      }
-    )
+    vi.spyOn(HeadlessEmulator.prototype, 'dispose').mockImplementation(function (
+      this: HeadlessEmulator
+    ) {
+      events.push(`dispose:${emulators.indexOf(this)}`)
+      return dispose.call(this)
+    })
 
     const runtime = createRuntime()
     // Queued but not yet parsed: the chain link is still pending here.
     runtime.onPtyData(PTY_ID, 'QUEUED-BEFORE-DISPOSE\r\n', 1)
-    runtime.resetPtyModelAfterMigrationFailure(PTY_ID)
+    runtime.preparePtyExecutionContext(PTY_ID, null, { resetIncarnation: true })
     runtime.onPtyData(PTY_ID, 'ISSUED-AFTER-DISPOSE\r\n', 2)
     await runtime.serializeHiddenOutputRecoveryBuffer(PTY_ID)
 
@@ -95,7 +95,7 @@ describe('disposeHeadlessTerminal write ordering', () => {
   it('leaves the post-disposal emulator holding only post-disposal output', async () => {
     const runtime = createRuntime()
     runtime.onPtyData(PTY_ID, 'QUEUED-BEFORE-DISPOSE\r\n', 1)
-    runtime.resetPtyModelAfterMigrationFailure(PTY_ID)
+    runtime.preparePtyExecutionContext(PTY_ID, null, { resetIncarnation: true })
     runtime.onPtyData(PTY_ID, 'ISSUED-AFTER-DISPOSE\r\n', 2)
 
     const snapshot = await runtime.serializeHiddenOutputRecoveryBuffer(PTY_ID)

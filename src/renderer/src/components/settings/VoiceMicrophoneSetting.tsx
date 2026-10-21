@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import type { VoiceSettings } from '../../../../shared/speech-types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
@@ -9,11 +10,55 @@ import {
   microphoneDeviceIdFromSelectValue,
   type VoiceMicrophoneDevice
 } from '@/components/dictation/microphone-devices'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 type VoiceMicrophoneSettingProps = {
   voiceSettings: VoiceSettings
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
+}
+
+function readMediaDeviceError(error: unknown): { name: string; message?: string } {
+  if (!error || typeof error !== 'object') {
+    return { name: '' }
+  }
+  // Why: an own `name`/`message` key can hold undefined/null; String() would
+  // turn that into the literal "undefined" and render it to the user.
+  const name = 'name' in error ? String(error.name ?? '') : ''
+  const message = 'message' in error ? String(error.message ?? '').trim() || undefined : undefined
+  return { name, message }
+}
+
+function isMicrophonePermissionDenied(error: unknown): boolean {
+  const { name } = readMediaDeviceError(error)
+  return name === 'NotAllowedError' || name === 'SecurityError'
+}
+
+function microphoneAccessErrorMessage(error: unknown): string {
+  const { name, message } = readMediaDeviceError(error)
+  if (name === 'NotAllowedError' || name === 'SecurityError') {
+    return translate(
+      'auto.components.settings.VoiceMicrophoneSetting.permissionDenied',
+      'Microphone access is blocked. Grant it in your system settings, then try again.'
+    )
+  }
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+    return translate(
+      'auto.components.settings.VoiceMicrophoneSetting.noMicrophoneFound',
+      'No microphone was found. Connect one, then try again.'
+    )
+  }
+  return message
+    ? translate(
+        'auto.components.settings.VoiceMicrophoneSetting.openFailedDetail',
+        'Could not open the microphone. {{value0}}',
+        { value0: message }
+      )
+    : translate(
+        'auto.components.settings.VoiceMicrophoneSetting.openFailed',
+        'Could not open the microphone.'
+      )
 }
 
 function sameDeviceList(
@@ -36,17 +81,11 @@ export function VoiceMicrophoneSetting({
   const [devices, setDevices] = useState<VoiceMicrophoneDevice[]>([])
   const [devicesKnown, setDevicesKnown] = useState(false)
   const [accessPending, setAccessPending] = useState(false)
-  const mountedRef = useRef(true)
+  const [accessError, setAccessError] = useState<string | null>(null)
+  const mountedRef = useMountedRef()
   // Why: devicechange fires several times per Bluetooth connect; drop enumerations
   // that resolve out of order so a stale list cannot land last.
   const refreshGenerationRef = useRef(0)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
 
   const refreshDevices = useCallback(async (): Promise<void> => {
     const generation = refreshGenerationRef.current + 1
@@ -65,7 +104,7 @@ export function VoiceMicrophoneSetting({
     }
     setDevicesKnown(next.length > 0)
     setDevices((current) => (sameDeviceList(current, next) ? current : next))
-  }, [])
+  }, [mountedRef])
 
   // Why: voiceSettings.enabled is a dependency so enabling dictation re-scans —
   // that toggle is often when mic permission lands and real labels appear.
@@ -83,25 +122,84 @@ export function VoiceMicrophoneSetting({
     }
   }, [refreshDevices, voiceSettings.enabled])
 
-  // Why: enumerateDevices hides ids and labels until mic permission is granted, so
-  // the list stays empty until something opens a stream at least once.
+  // A generic stream grants discovery even when the saved device is stale.
+  const openStreamAndRefreshDevices = useCallback(async (): Promise<void> => {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    stream.getTracks().forEach((track) => track.stop())
+    await refreshDevices()
+  }, [refreshDevices])
+
   const requestMicrophoneAccess = useCallback(async (): Promise<void> => {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       return
     }
     setAccessPending(true)
+    setAccessError(null)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      stream.getTracks().forEach((track) => track.stop())
-      await refreshDevices()
-    } catch {
-      // Denied or unavailable — the hint stays visible so the user can retry.
+      try {
+        await openStreamAndRefreshDevices()
+        return
+      } catch (error) {
+        if (!isMicrophonePermissionDenied(error)) {
+          throw error
+        }
+      }
+
+      let result: Awaited<ReturnType<typeof window.api.developerPermissions.request>>
+      try {
+        result = await window.api.developerPermissions.request({ id: 'microphone' })
+      } catch (error) {
+        // Why separate: this one DID cross IPC, so the wrapper must be stripped — and the microphone
+        // was never reopened, so reporting it as an open failure would invert the provenance.
+        if (mountedRef.current) {
+          setAccessError(
+            extractIpcErrorMessage(
+              error,
+              translate(
+                'auto.components.settings.VoicePane.ad5d036ecc',
+                'Could not request microphone permission. Voice dictation was not enabled.'
+              )
+            )
+          )
+        }
+        return
+      }
+      if (!mountedRef.current) {
+        return
+      }
+      if (result.status !== 'granted') {
+        setAccessError(
+          result.openedSystemSettings
+            ? translate(
+                'auto.components.settings.VoiceMicrophoneSetting.openedSystemSettings',
+                'Opened macOS Privacy & Security. Grant microphone access, then try again.'
+              )
+            : translate(
+                'auto.components.settings.VoiceMicrophoneSetting.permissionDenied',
+                'Microphone access is blocked. Grant it in your system settings, then try again.'
+              )
+        )
+        return
+      }
+      await openStreamAndRefreshDevices()
+      if (mountedRef.current) {
+        toast.success(
+          translate(
+            'auto.components.settings.VoicePane.cd9fe37556',
+            'Microphone permission granted'
+          )
+        )
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        setAccessError(microphoneAccessErrorMessage(error))
+      }
     } finally {
       if (mountedRef.current) {
         setAccessPending(false)
       }
     }
-  }, [refreshDevices])
+  }, [mountedRef, openStreamAndRefreshDevices])
 
   const { options, selectedValue } = useMemo(
     () =>
@@ -138,12 +236,18 @@ export function VoiceMicrophoneSetting({
         </p>
         {showAccessHint && (
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            <p className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.VoiceMicrophoneSetting.accessHint',
-                'Allow microphone access to list input devices.'
-              )}
-            </p>
+            {accessError ? (
+              <p className="text-xs text-destructive" role="alert">
+                {accessError}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.VoiceMicrophoneSetting.accessHint',
+                  'Allow microphone access to list input devices.'
+                )}
+              </p>
+            )}
             <Button
               variant="outline"
               size="sm"

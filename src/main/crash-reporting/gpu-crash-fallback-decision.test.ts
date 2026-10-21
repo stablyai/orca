@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
-  DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
   GpuCrashFallbackTracker,
   isGpuChildProcessType,
   isGpuFallbackCrashCandidate
@@ -120,11 +118,6 @@ describe('GpuCrashFallbackTracker', () => {
     expect(isGpuChildProcessType('gpu')).toBe(true)
     expect(isGpuChildProcessType('Utility')).toBe(false)
     expect(isGpuChildProcessType(undefined)).toBe(false)
-  })
-
-  it('ships conservative defaults', () => {
-    expect(DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS).toBe(30_000)
-    expect(DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD).toBe(3)
   })
 })
 

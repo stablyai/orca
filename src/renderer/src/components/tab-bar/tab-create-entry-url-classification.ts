@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { isValid as isListedDomain } from 'psl'
+import { parse as parseDomain } from 'tldts'
 import { classifySchemeLessLocalDevAddress } from '../../../../shared/browser-url'
 
 const HOST_FILE_EXTENSIONS = new Set([
@@ -33,6 +33,11 @@ export type HostUrlClassification =
   | { kind: 'blocked'; message: string }
   | { kind: 'host-url'; url: string }
 
+export type HostUrlClassificationOptions = {
+  /** Require a listed suffix even without a path, so `App.vue` is not a host. */
+  requireListedDomain?: boolean
+}
+
 function invalidUrl(): { kind: 'blocked'; message: string } {
   return {
     kind: 'blocked',
@@ -54,7 +59,16 @@ function parseHttpUrl(query: string): ExplicitUrlClassification {
   }
 }
 
-function splitHostCandidate(query: string): { host: string; port: string | null } | null {
+// Hosting-provider suffixes such as `github.io` are themselves registrable ICANN domains.
+function isListedDomain(host: string): boolean {
+  const parsed = parseDomain(host, { allowPrivateDomains: false })
+  return parsed.domain !== null && parsed.isIcann === true
+}
+
+function splitHostCandidate(
+  query: string,
+  requireListedDomain = false
+): { host: string; port: string | null } | null {
   if (/[\\\s]/.test(query)) {
     return null
   }
@@ -73,7 +87,8 @@ function splitHostCandidate(query: string): { host: string; port: string | null 
   if (
     host.toLowerCase() !== 'localhost' &&
     !IPV4_PATTERN.test(host) &&
-    (!DOMAIN_PATTERN.test(host) || (authorityEnd !== -1 && !isListedDomain(host)))
+    (!DOMAIN_PATTERN.test(host) ||
+      ((authorityEnd !== -1 || requireListedDomain) && !isListedDomain(host)))
   ) {
     return null
   }
@@ -132,8 +147,11 @@ export function classifyExplicitUrl(query: string): ExplicitUrlClassification | 
   return invalidUrl()
 }
 
-export function classifyHostUrl(query: string): HostUrlClassification | null {
-  const candidate = splitHostCandidate(query)
+export function classifyHostUrl(
+  query: string,
+  options: HostUrlClassificationOptions = {}
+): HostUrlClassification | null {
+  const candidate = splitHostCandidate(query, options.requireListedDomain)
   if (!candidate) {
     const localDevUrl = classifySchemeLessLocalDevAddress(query)
     if (localDevUrl?.hostname) {

@@ -3,11 +3,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { performSend, type AgentSessionTurnContext } from './structured-agent-session-turns'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const journals = createTrackedJournalOpener()
 
@@ -22,9 +27,9 @@ beforeEach(async () => {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
-    journalDir: root
+    stateDirectory: root
   })
 })
 
@@ -34,6 +39,54 @@ afterEach(async () => {
 })
 
 describe('structured send idempotency', () => {
+  it.each([
+    ['a refused write', 'provider_write_failed: broken pipe'],
+    ['a dead host', 'host_restarted_before_acknowledgement'],
+    [
+      'a codex turn an older Orca could not name',
+      'codex app-server started a turn it did not name in time'
+    ]
+  ])('never puts an unknown back on the wire after %s', async (_case, reason) => {
+    const body: AgentJournalMessageItem = {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'retry' }]
+    }
+    const input = { clientMessageId: 'retry-id', payloadFingerprint: 'fingerprint', body }
+    await journal.appendSubmission({ ...input, fence: 1 })
+    await journal.markPendingSubmissionsUnknown(2, reason)
+    const before = journal.snapshot()
+    const dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
+
+    const result = await performSend(
+      {
+        logger: recordingStructuredAgentSessionLogger().logger,
+        sessionId: 'session-1',
+        journal,
+        fence: 2,
+        agents: NO_STRUCTURED_AGENTS,
+        agent: 'codex',
+        adapter: { dispatch } as unknown as StructuredAgentSessionAdapter,
+        persistOptions: async () => undefined,
+        resolvedBy: 'caller',
+        publish: vi.fn(),
+        now: () => 1
+      },
+      input
+    )
+
+    // The recorded outcome comes back verbatim: no dispatch, no new row, and the
+    // doubt is neither cleared nor sharpened into a rejection.
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      ok: true,
+      value: { submission: { dispatchState: 'unknown', reason } }
+    })
+    expect(journal.snapshot()).toEqual(before)
+    // And the refusal does not resurrect a recovered submission as still working.
+    expect(hasUnansweredStructuredAgentSessionDispatch(journal.submissions(), 2)).toBe(false)
+  })
+
   it('does not redispatch one send id reused across caller ledgers', async () => {
     const body: AgentJournalMessageItem = {
       kind: 'message',
@@ -50,9 +103,12 @@ describe('structured send idempotency', () => {
       }
     }))
     const context: AgentSessionTurnContext = {
+      logger: createStructuredAgentSessionLogger(),
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: { dispatch } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
       resolvedBy: 'caller',
@@ -72,11 +128,16 @@ describe('structured send idempotency', () => {
     await performSend(context, input)
     const replay = await performSend(context, input)
 
+    // Acceptance records the one submission; the reused id answers with it and writes nothing.
+    // Handing it over is the delivery loop's, never a second accept's.
     expect(replay).toMatchObject({
       ok: true,
-      value: { clientMessageId: 'shared-send-id', submission: { dispatchState: 'accepted' } }
+      value: {
+        clientMessageId: 'shared-send-id',
+        submission: { dispatchState: 'pending', handoverRecorded: true }
+      }
     })
-    expect(dispatch).toHaveBeenCalledOnce()
+    expect(dispatch).not.toHaveBeenCalled()
     expect(journal.submissions()).toHaveLength(1)
   })
 })

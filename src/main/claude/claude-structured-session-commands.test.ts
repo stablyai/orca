@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { ClaudeAtRestCommandCatalog } from './claude-at-rest-commands'
 import {
   adapterFor,
   fakeClaude,
@@ -34,7 +36,10 @@ describe('session command updates', () => {
     }
     claude.connections[0].handlers.onMessage?.(frame)
     await tick()
-    expect(adapter.readCommands('session-1')).toEqual([{ name: 'plugin:check', kind: 'skill' }])
+    expect(adapter.readCommands('session-1')).toEqual([
+      { name: 'plugin:check', kind: 'skill' },
+      { name: 'doctor', kind: 'command' }
+    ])
     expect(changed).toHaveBeenCalledTimes(1)
     claude.connections[0].handlers.onMessage?.(frame)
     await tick()
@@ -55,8 +60,14 @@ it.each([
   const adapter = adapterFor(claude)
   try {
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    const described = commands[0]?.description
     expect(adapter.readCommands('session-1')).toEqual(
-      commands.map(({ name }) => ({ name, kind: 'command', kindUnspecified: true }))
+      commands.map(({ name, description }) => ({
+        name,
+        kind: 'command',
+        kindUnspecified: true,
+        ...(description ? { description } : {})
+      }))
     )
     expect(claude.connections[0].sent).toEqual([])
     expect(claude.connections[0].calls.map(({ subtype }) => subtype)).toEqual([
@@ -70,7 +81,10 @@ it.each([
       slash_commands: ['project:check'],
       skills: ['project:check']
     })
-    expect(adapter.readCommands('session-1')).toEqual([{ name: 'project:check', kind: 'skill' }])
+    // The stream init classifies the name; the control seed's text survives it.
+    expect(adapter.readCommands('session-1')).toEqual([
+      { name: 'project:check', kind: 'skill', ...(described ? { description: described } : {}) }
+    ])
   } finally {
     await adapter.closeSession('session-1')
   }
@@ -100,4 +114,19 @@ it('keeps a buffered stream catalog newer than the initialization response', asy
   } finally {
     await adapter.closeSession('session-1')
   }
+})
+
+it("answers a resting chat's `/` menu only for chats this host runs", async () => {
+  const listed = [{ name: 'review-pr', kind: 'skill' as const }]
+  const catalog = new ClaudeAtRestCommandCatalog({
+    resolveWorkspacePath: async () => '/work',
+    probe: async () => listed
+  })
+  const local = agentSessionRecordFixture()
+  catalog.read(local)
+  await vi.waitFor(() => expect(catalog.read(local)).toEqual(listed))
+
+  // Same workspace and account on another host: only that host can read its folders.
+  const remote = { ...local, location: { ...local.location, executionHostId: 'ssh:box' as const } }
+  expect(catalog.read(remote)).toBeUndefined()
 })

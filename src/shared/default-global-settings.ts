@@ -4,7 +4,7 @@ import type { VoiceSettings } from './speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT, DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
 import { TASK_PROVIDERS } from './task-providers'
-import { getDefaultSourceControlAiSettings } from './source-control-ai'
+import { getDefaultSourceControlAiSettings } from './source-control-ai-settings'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
 import { DEFAULT_DISABLED_TUI_AGENTS } from './tui-agent-selection'
@@ -40,6 +40,7 @@ export function buildDefaultSettings(args: {
     autoRenameBranchFromWorkDefaultedOn: true,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
+    jiraIssueKeyCasing: 'lowercase',
     theme: 'system',
     leftSidebarAppearanceMode: 'default',
     leftSidebarTintColor: DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
@@ -72,6 +73,9 @@ export function buildDefaultSettings(args: {
     terminalGpuAcceleration: 'auto',
     // Why 'auto': enable ligatures only for known ligature fonts, never forced. Resolver in shared/terminal-ligatures.ts.
     terminalLigatures: 'auto',
+    // Why on: the addon is lazy-loaded off the critical path and only creates
+    // canvas layers once a pane receives an image; parser/decoder setup still has overhead.
+    terminalInlineImages: true,
     terminalCursorStyle: 'block',
     terminalCursorStyleDefaultedToBlock: true,
     terminalCursorBlink: true,
@@ -89,6 +93,7 @@ export function buildDefaultSettings(args: {
     terminalRightClickToPaste: args.terminalRightClickToPaste,
     terminalRightClickToPasteDefaultedForPlatform: true,
     terminalWindowsShell: 'powershell.exe',
+    terminalDefaultShell: '',
     terminalWindowsWslDistro: null,
     localAccountRuntime: 'auto',
     localAccountRuntimeDefaultedToAutoForAllUsers: true,
@@ -105,6 +110,9 @@ export function buildDefaultSettings(args: {
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
     terminalClipboardOnSelect: false,
+    // Why: only the run of spaces shared by every selected line is dropped, so
+    // relative indentation survives and the clipboard loses only the gutter.
+    terminalCopyTrimsGutter: true,
     // Why: default on so Zellij/tmux/nvim copy works out of the box. Query
     // replies stay disabled and payload size is capped in the OSC 52 handler.
     // This default only covers new profiles; existing ones persisted `false`
@@ -113,23 +121,31 @@ export function buildDefaultSettings(args: {
     terminalAllowOsc52Clipboard: true,
     terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true,
     claudeAgentTeamsMode: 'off',
-    setupScriptLaunchMode: 'new-tab',
     terminalScrollbackRows: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
     httpProxyUrl: '',
     httpProxyBypassRules: '',
+    nodeDistMirrorUrl: '',
     electronHttp1CompatibilityMode: false,
     openLinksInApp: false,
     localhostWorktreeLabelsEnabled: false,
     openLinksInAppPreferencePrompted: false,
     openLinksInAppModifierInverts: false,
     terminalLinkActionPopoverEnabled: true,
-    openAgentTabsInChatByDefault: false,
+    terminalLinkClickBehavior: 'actions',
+    terminalUrlMiddleClickBehavior: 'open',
     experimentalNativeChat: false,
-    experimentalStructuredNativeChat: false,
+    nativeChatResumeWorkOnRestart: false,
+    nativeChatQueueFollowUps: true,
+    nativeChatInlineVisuals: true,
+    nativeChatInheritShellEnvironment: true,
+    nativeChatShellEnvironmentVariables: [],
     nativeChatSessionOptions: {},
+    // The shipped Claude and Codex arguments carry their bypass flags.
+    nativeChatPermissionMode: 'full-access',
     openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
+    followSymlinkedDirectories: false,
     sourceControlViewMode: 'list',
     sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
     sourceControlCompareAgainstUpstream: false,
@@ -158,6 +174,7 @@ export function buildDefaultSettings(args: {
     diffDefaultView: 'inline',
     diffWordWrap: false,
     diffShowWhitespace: false,
+    diffCollapseUnchangedRegions: false,
     combinedDiffFileTreeVisibleByDefault: false,
     prBotAuthorOverrides: [],
     promptCacheTimerEnabled: false,
@@ -184,7 +201,10 @@ export function buildDefaultSettings(args: {
     pluginConsents: {},
     devPluginPaths: [],
     claudeAgentTeamsDefaultDisabledMigrated: true,
+    sshRemoteCliControlExistingHostsMigrated: true,
     skipDeleteWorktreeConfirm: false,
+    alwaysForceDeleteWorktrees: false,
+    alwaysForceDeletePreservedBranches: false,
     skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
     skipDeleteArtifactConfirm: false,
@@ -200,14 +220,19 @@ export function buildDefaultSettings(args: {
     minimaxGroupId: '',
     minimaxUsageModels: 'general',
     minimaxEndpoint: 'overseas',
+    zcodePlanSite: 'zai',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },
     agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },
     agentYoloDefaultsMigrated: true,
     agentStatusHooksEnabled: true,
+    agentWorkspaceTrustEnabled: true,
+    codexTerminalServerIsolation: true,
+    codexSharedServerWarning: true,
     tabAutoGenerateTitle: false,
     confirmClosePinnedTab: true,
+    editorPreviewTabsEnabled: true,
     keepComputerAwakeWhileAgentsRun: false,
     // Why: 'auto' probes keyboard layout so non-US users can type Option chars like @/€/[ out of the box (issue #903). See src/renderer/src/lib/keyboard-layout/*.
     terminalMacOptionAsAlt: 'auto',
@@ -223,6 +248,7 @@ export function buildDefaultSettings(args: {
     mobilePairingConnectionMode: 'automatic',
     mobilePairingCustomAddress: null,
     mobilePairingCustomAddresses: [],
+    machineName: '',
     // Why: off keeps the cosmetic overlay unmounted for users who never opt in.
     experimentalPet: false,
     experimentalActivity: false,
@@ -232,6 +258,7 @@ export function buildDefaultSettings(args: {
     agentHibernationIdleMs: 30 * 60 * 1000,
     experimentalNewWorktreeCardStyle: false,
     experimentalEphemeralVms: false,
+    experimentalWslHosts: false,
     compactWorktreeCards: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,

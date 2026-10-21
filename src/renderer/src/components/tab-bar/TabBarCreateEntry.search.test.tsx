@@ -79,6 +79,18 @@ function press(key: string): void {
   })
 }
 
+function rowTexts(): string[] {
+  return [...container.querySelectorAll('[role="option"]')].map((row) => row.textContent ?? '')
+}
+
+function seedBrowserHistory(url: string, title: string): void {
+  useAppStore.setState({
+    browserUrlHistory: [
+      { url, normalizedUrl: url.replace(/\/$/, ''), title, lastVisitedAt: 1, visitCount: 1 }
+    ]
+  })
+}
+
 beforeEach(() => {
   fileListMock.current = { files: [], loading: false, loadError: null }
   tabSearchMock.calls = []
@@ -99,6 +111,143 @@ afterEach(() => {
 })
 
 describe('TabBarCreateEntry search behavior', () => {
+  it.each([false, true])('searches weak file matches on Enter (delayed listing: %s)', (delayed) => {
+    const readyListing = {
+      files: [
+        'tests/e2e/terminal-split-activation-latency-main-probe.ts',
+        'src/main/linear/issue-context-inline-media.test.ts',
+        'src/renderer/src/components/editor/combined-diff/resolve-changes/combined-diff-section-cache-match.ts'
+      ],
+      loading: false,
+      loadError: null
+    }
+    fileListMock.current = delayed ? { files: [], loading: true, loadError: null } : readyListing
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    renderEntry({ onOpenEntry })
+    setQuery('asciinema')
+
+    if (delayed) {
+      expect(container.querySelector('[aria-selected="true"]')).toBeNull()
+      submit()
+      expect(onOpenEntry).not.toHaveBeenCalled()
+      fileListMock.current = readyListing
+      renderEntry({ onOpenEntry })
+    }
+
+    expect(container.querySelector('[role="option"]')?.textContent).toContain('Search Google')
+    expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain(
+      'Search Google'
+    )
+    submit()
+    expect(onOpenEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classification: { kind: 'search', engine: 'google', query: 'asciinema' }
+      })
+    )
+  })
+
+  it.each([false, true])(
+    'keeps a typed host and its pages above unrelated files (visited root: %s)',
+    (visitedRoot) => {
+      fileListMock.current.files = [
+        'mobile/rpc-foundation/goldens/matrix-transport.capability-probe-status.get-1.json',
+        'mobile/rpc-foundation/goldens/matrix-files.terminal-path-tap-files.open-1.json',
+        'mobile/rpc-foundation/goldens/matrix-files.terminal-path-tap-files.resolveterminalpath-1.json'
+      ]
+      const url = visitedRoot ? 'https://linear.app/' : 'https://linear.app/acme/issues'
+      seedBrowserHistory(url, 'Linear')
+      const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+      renderEntry({ onOpenEntry })
+      setQuery('linear.app')
+
+      const rows = rowTexts()
+      const pageIndex = rows.findIndex((row) => row.includes('Open page'))
+      expect(pageIndex).toBeGreaterThanOrEqual(0)
+      expect(rows.findIndex((row) => row.includes('Open file'))).toBeGreaterThan(pageIndex)
+      expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain('linear.app')
+      submit()
+      expect(onOpenEntry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classification: visitedRoot
+            ? { kind: 'explicit-url', url }
+            : { kind: 'host-url', url: 'https://linear.app/' }
+        })
+      )
+    }
+  )
+
+  it('still opens a visited host above a filename that contains it', () => {
+    fileListMock.current.files = ['config/localhost.ts']
+    seedBrowserHistory('http://localhost/', 'Local')
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    renderEntry({ onOpenEntry })
+    setQuery('localhost')
+
+    submit()
+    expect(onOpenEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classification: { kind: 'explicit-url', url: 'http://localhost/' }
+      })
+    )
+  })
+
+  // A code-host page title carries the file path, so it matches path queries too.
+  it.each([false, true])(
+    'keeps a matching page below local rows for a path query (typed: %s)',
+    (typed) => {
+      fileListMock.current.files = [
+        'src/renderer/src/components/tab-bar/TabBarCreateEntry.tsx',
+        'src/renderer/src/components/tab-bar/TabBarCreateEntryRow.tsx'
+      ]
+      seedBrowserHistory(
+        'https://github.com/acme/app/blob/main/src/renderer/src/components/tab-bar/TabBarCreateEntry.tsx',
+        'app/src/renderer/src/components/tab-bar/TabBarCreateEntry.tsx at main · acme/app'
+      )
+      const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+      renderEntry({ onOpenEntry })
+      const query = 'components/tab-bar/TabBarCreate'
+      if (typed) {
+        for (let length = 1; length <= query.length; length += 1) {
+          setQuery(query.slice(0, length))
+        }
+      } else {
+        setQuery(query)
+      }
+
+      const rows = rowTexts()
+      const pageIndex = rows.findIndex((row) => row.includes('Open page'))
+      expect(pageIndex).toBeGreaterThan(rows.findLastIndex((row) => row.includes('Open file')))
+      submit()
+      expect(onOpenEntry).toHaveBeenCalledOnce()
+      expect(onOpenEntry.mock.calls[0]?.[0].classification.kind).not.toBe('explicit-url')
+    }
+  )
+
+  it.each(['a', 'ab', 'asciinema'])('waits for an exact filename before arming %s', (query) => {
+    fileListMock.current = { files: [], loading: true, loadError: null }
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    renderEntry({ onOpenEntry })
+    setQuery(query)
+
+    expect(container.querySelector('[aria-selected="true"]')).toBeNull()
+    submit()
+    expect(onOpenEntry).not.toHaveBeenCalled()
+
+    fileListMock.current = { files: [`docs/${query}`], loading: false, loadError: null }
+    renderEntry({ onOpenEntry })
+    expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain('Open file')
+    submit()
+    expect(onOpenEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classification: {
+          kind: 'existing-file',
+          matchKind: 'exact-basename',
+          relativePath: `docs/${query}`
+        }
+      })
+    )
+  })
+
   it('tracks the configured provider and submits its exact classification', () => {
     const onOpenEntry = vi.fn().mockResolvedValue(undefined)
     renderEntry({ onOpenEntry })

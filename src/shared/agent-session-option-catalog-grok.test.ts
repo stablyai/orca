@@ -10,7 +10,7 @@ import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import { parseBuiltSessionOptionCommand } from './native-chat-session-option-commands'
 
-function grokEffortOption(modelId = 'grok-4.6'): CatalogOption {
+function grokEffortOption(modelId = 'grok-4.7'): CatalogOption {
   const model = GROK_SESSION_OPTION_CATALOG.models.find((candidate) => candidate.id === modelId)!
   return model.options.find((option) => option.id === 'effort')!
 }
@@ -32,7 +32,8 @@ describe('grok session option catalog', () => {
         isDefault
       }))
     ).toEqual([
-      { id: 'grok-4.6', label: 'Grok 4.6', isDefault: true },
+      { id: 'grok-4.7', label: 'Grok 4.7', isDefault: true },
+      { id: 'grok-4.6', label: 'Grok 4.6', isDefault: undefined },
       { id: 'grok-4.5', label: 'Grok 4.5', isDefault: undefined }
     ])
   })
@@ -50,6 +51,7 @@ describe('grok session option catalog', () => {
 
   it('offers each model only the tiers its own grok menu advertises', () => {
     // grok warns and ignores a tier the active model lacks, so 4.5 must not list xhigh.
+    expect(effortValues(grokEffortOption('grok-4.7'))).toEqual(['low', 'medium', 'high', 'xhigh'])
     expect(effortValues(grokEffortOption('grok-4.6'))).toEqual(['low', 'medium', 'high', 'xhigh'])
     expect(effortValues(grokEffortOption('grok-4.5'))).toEqual(['low', 'medium', 'high'])
   })
@@ -179,41 +181,46 @@ describe('grok launch args', () => {
   })
 })
 
-describe('grok agentArgsOverride', () => {
-  const modelOverride = GROK_SESSION_OPTION_CATALOG.modelApply.agentArgsOverride!
-  const effortOverride = grokEffortOption().apply.agentArgsOverride!
+describe('grok agent-arg overrides', () => {
+  const removeModel = GROK_SESSION_OPTION_CATALOG.modelApply.removeAgentArgs!
+  const removeEffort = grokEffortOption().apply.removeAgentArgs!
 
-  it('detects a user-supplied model flag in every spelling', () => {
+  it('strips a user-supplied model flag in every spelling', () => {
     for (const tokens of [
       ['-m', 'grok-build'],
       ['-mgrok-build'],
       ['--model', 'grok-build'],
       ['--model=grok-build']
     ]) {
-      expect(modelOverride(tokens)).toBe(true)
+      expect(removeModel(tokens)).toEqual([])
     }
   })
 
   it('does not fire on a different flag or a positional that contains -m', () => {
-    expect(modelOverride(['--model-context', '8000'])).toBe(false)
-    expect(modelOverride(['summarize-my-diff'])).toBe(false)
-    expect(modelOverride(['--reasoning-effort', 'low'])).toBe(false)
-    expect(modelOverride([])).toBe(false)
+    for (const tokens of [
+      ['--model-context', '8000'],
+      ['summarize-my-diff'],
+      ['--reasoning-effort', 'low'],
+      []
+    ]) {
+      expect(removeModel(tokens)).toEqual(tokens)
+    }
   })
 
-  it('detects both effort spellings', () => {
-    expect(effortOverride(['--effort', 'low'])).toBe(true)
-    expect(effortOverride(['--reasoning-effort=low'])).toBe(true)
-    expect(effortOverride(['--effortless'])).toBe(false)
+  it('strips both effort spellings', () => {
+    expect(removeEffort(['--effort', 'low', '--reasoning-effort=high', '--keep'])).toEqual([
+      '--keep'
+    ])
+    expect(removeEffort(['--effortless'])).toEqual(['--effortless'])
   })
 
-  it('drops only the overridden key from the launch record', () => {
+  it('drops only the overridden key from the launch record and argv', () => {
     expect(
       resolveAgentSessionOptionLaunch('grok', { model: 'grok-4.5', effort: 'high' }, [
         '--reasoning-effort=low'
       ])
     ).toEqual({
-      args: ['-m', 'grok-4.5', '--reasoning-effort', 'high'],
+      args: ['-m', 'grok-4.5'],
       appliedValues: { model: 'grok-4.5' }
     })
   })
@@ -351,6 +358,7 @@ describe('mergeDiscoveredAuthoritativeModels', () => {
 
   it('drops the unmatched seed row the additive merge would have kept', () => {
     expect(mergeCatalogModels(seed, discovered('grok-build')).map(({ id }) => id)).toEqual([
+      'grok-4.7',
       'grok-4.6',
       'grok-4.5',
       'grok-build'

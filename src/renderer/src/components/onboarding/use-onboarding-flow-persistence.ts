@@ -1,12 +1,16 @@
 import { useCallback, useRef } from 'react'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
-import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../../shared/constants'
+import {
+  ONBOARDING_FINAL_STEP,
+  ONBOARDING_FLOW_VERSION
+} from '../../../../shared/onboarding-defaults'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { applyAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
+import type { AgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
 import type { StepId, StepNumber } from './use-onboarding-flow-types'
 
 export async function persistStep(
@@ -22,6 +26,18 @@ export async function persistStep(
 
 function selectedAgentOrBlank(agent: TuiAgent | null): TuiAgent | 'blank' {
   return agent ?? 'blank'
+}
+
+/** Yolo mode covers chats too, once flipped in this flow; like the Arguments it writes, a custom
+ *  new-chat mode is kept. */
+export function onboardingChatPermissionSetting(
+  current: AgentChatPermissionMode | undefined,
+  yolo: boolean,
+  chosen: boolean
+): Partial<Pick<GlobalSettings, 'nativeChatPermissionMode'>> {
+  return !chosen || current === 'accept-edits' || current === 'auto'
+    ? {}
+    : { nativeChatPermissionMode: yolo ? 'full-access' : 'ask' }
 }
 
 export function buildCompletedOnboardingNotificationSettings(
@@ -133,6 +149,8 @@ type PersistCurrentStepDeps = {
   currentStepId: StepId
   selectedAgent: TuiAgent | null
   yoloPermissions: boolean
+  /** Whether the person flipped Yolo mode in this flow; a replay left untouched keeps chats as set. */
+  yoloPermissionsChosen: { readonly current: boolean }
   theme: GlobalSettings['theme']
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
@@ -149,6 +167,7 @@ export function usePersistCurrentStep({
   currentStepId,
   selectedAgent,
   yoloPermissions,
+  yoloPermissionsChosen,
   theme,
   settings,
   updateSettings,
@@ -169,7 +188,12 @@ export function usePersistCurrentStep({
             mode: yoloPermissions ? 'yolo' : 'manual',
             agentDefaultArgs: settings.agentDefaultArgs,
             agentDefaultEnv: settings.agentDefaultEnv
-          })
+          }),
+          ...onboardingChatPermissionSetting(
+            settings.nativeChatPermissionMode,
+            yoloPermissions,
+            yoloPermissionsChosen.current
+          )
         })
         const choseAgent = defaultTuiAgent !== 'blank'
         const wasAlreadyChosen = onboardingChecklist.choseAgent
@@ -227,6 +251,7 @@ export function usePersistCurrentStep({
     theme,
     updateSettings,
     yoloPermissions,
+    yoloPermissionsChosen,
     setError
   ])
 }

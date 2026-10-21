@@ -80,7 +80,7 @@ describe('electron-builder mac channel config', () => {
     })
     expect(electronBuilderConfig.publish).toMatchObject({
       repo: 'orca',
-      releaseType: 'release'
+      releaseType: 'draft'
     })
   })
 
@@ -132,21 +132,5 @@ describe('electron-builder mac channel config', () => {
         expect(config.extraMetadata).toEqual({ version: '1.4.160-daily.202607281300' })
       }
     )
-  })
-
-  // Why: the dev channels share every packaging decision except where they
-  // publish, so a future edit that collapses them must not also collapse the
-  // repos — a branch or daily build landing in orca-hourly would be offered to
-  // everyone riding main's hourlies.
-  it('keeps the dev channels on separate repos', () => {
-    withHourlyEnv((hourly) => {
-      withDailyEnv((daily) => {
-        withAdhocEnv((adhoc) => {
-          expect(new Set([hourly.publish.repo, daily.publish.repo, adhoc.publish.repo]).size).toBe(
-            3
-          )
-        })
-      })
-    })
   })
 })

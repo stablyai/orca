@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import {
+  resetAgentLaunchPanesForTests,
+  trackRunningAgentLaunchPane
+} from '../agent-launch/agent-launch-pane-attachment'
 import {
   CANARY_INCARNATION_ID,
   CANARY_LEAF_ID,
@@ -18,7 +22,8 @@ import {
   SIBLING_PTY_ID,
   STALE_TAB_ID,
   TAB_ID,
-  WORKTREE_ID
+  WORKTREE_ID,
+  type CloseContinuityHarness
 } from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
 
 describe('terminal close and handle incarnation continuity', () => {
@@ -72,25 +77,27 @@ describe('terminal close and handle incarnation continuity', () => {
     unsubscribe()
   })
 
-  it('publishes no retirement or absence when the durable headless close fails', async () => {
+  it('still kills and keeps the removal when the durable headless close fails to flush', async () => {
     const harness = await createStaleTabCloseHarness({ headless: true })
-    const published = vi.fn()
-    const unsubscribe = harness.runtime.onMobileSessionTabsChanged(published)
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     harness.rejectPersistenceFlush(new Error('disk-full'))
 
-    await expect(harness.runtime.closeTerminalTab(harness.terminal.handle)).rejects.toThrow(
-      'disk-full'
-    )
-
-    expect(harness.kill).not.toHaveBeenCalled()
-    expect(published).not.toHaveBeenCalled()
-    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
-    const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-    expect(snapshot).toMatchObject({
-      tabs: [expect.objectContaining({ parentTabId: TAB_ID, leafId: LEAF_ID })]
+    await expect(harness.runtime.closeTerminalTab(harness.terminal.handle)).resolves.toMatchObject({
+      tabId: TAB_ID,
+      closeMode: 'tab'
     })
-    expect(snapshot.retiredTerminalSurfaces).toBeUndefined()
-    unsubscribe()
+
+    // Why: a failed flush is bookkeeping; the user's close still stops its process and the
+    // in-memory removal stays for the next flush to write.
+    expect(harness.kill).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID)
+    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
+    const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    expect(snapshot.tabs).toEqual([])
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[runtime] failed to persist terminal close:',
+      expect.any(Error)
+    )
+    errorSpy.mockRestore()
   })
 
   it('publishes each split leaf retirement with its own terminal handle', async () => {
@@ -587,5 +594,77 @@ describe('terminal close and handle incarnation continuity', () => {
     harness.runtime['invalidateAllHandlesForPty'](PTY_ID)
 
     await expect(waiting).rejects.toThrow('terminal_handle_stale')
+  })
+})
+
+function launchIn(leafId: string) {
+  return trackRunningAgentLaunchPane({
+    worktreeId: WORKTREE_ID,
+    paneKey: makePaneKey(TAB_ID, leafId)
+  })
+}
+
+describe("a pane close main starts (a phone's, the CLI's)", () => {
+  afterEach(() => {
+    resetAgentLaunchPanesForTests()
+  })
+
+  it('stops a launch still running in that pane, and only that one', async () => {
+    const harness = createHarness({ publishMobileSurface: true })
+    harness.syncSplitFixtureGraph()
+    const closed = launchIn(LEAF_ID)
+    const sibling = launchIn(SIBLING_LEAF_ID)
+    const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+      (candidate) => candidate.ptyId === PTY_ID
+    )
+    if (!terminal) {
+      throw new Error('fixture pane has no terminal handle')
+    }
+
+    await harness.runtime.closeTerminal(terminal.handle)
+
+    expect(harness.closeTerminalPane).toHaveBeenCalledWith(TAB_ID, LEAF_ID)
+    expect(closed.closedByUser()).toBe(true)
+    expect(sibling.closedByUser()).toBe(false)
+  })
+})
+
+async function closeByPty(harness: CloseContinuityHarness): Promise<unknown> {
+  const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+    (candidate) => candidate.ptyId === PTY_ID
+  )
+  if (!terminal) {
+    throw new Error('fixture pane has no terminal handle')
+  }
+  return harness.runtime.closeTerminal(terminal.handle)
+}
+
+/** A PTY-backed tab with no paired-viewer surface: the path orcad serves to the CLI. */
+function headlessPtyTab(): CloseContinuityHarness {
+  const harness = createHarness({ registerPtyBacked: true })
+  harness.syncFixtureTabWithoutLeaf()
+  harness.setVerifiedStopResult(true)
+  return harness
+}
+
+describe('closing a terminal by PTY on a host without a renderer tab', () => {
+  it('stops the PTY without asking a missing renderer to close the tab', async () => {
+    const harness = headlessPtyTab()
+    harness.syncEmptyGraph()
+
+    await expect(closeByPty(harness)).resolves.toMatchObject({ tabId: TAB_ID })
+
+    expect(harness.closeTerminalTab).not.toHaveBeenCalled()
+    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, expect.anything())
+  })
+
+  it('does not fail the close when the advisory renderer notification throws', async () => {
+    const harness = headlessPtyTab()
+    harness.syncEmptyGraph()
+    harness.closeTerminal.mockImplementation(() => {
+      throw new Error('renderer gone')
+    })
+
+    await expect(closeByPty(harness)).resolves.toMatchObject({ tabId: TAB_ID })
   })
 })

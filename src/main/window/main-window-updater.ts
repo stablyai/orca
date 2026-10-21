@@ -16,7 +16,9 @@ import {
   quitAndInstall,
   setupAutoUpdater,
   showLinuxPackage,
-  type UpdateInstallMode
+  type PreQuitCleanupFailureMode,
+  type UpdateInstallMode,
+  type UpdaterSetupOptions
 } from '../updater'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
@@ -28,55 +30,101 @@ export function ensureAutoUpdaterConfigured(): void {
   pendingAutoUpdaterSetup?.()
 }
 
+type UpdaterSetupHooks = {
+  onBeforeUpdateQuit?: () => void | Promise<void>
+  onBeforeUpdateQuitFailure?: PreQuitCleanupFailureMode
+  updateInstallMode?: UpdateInstallMode
+}
+
+function buildUpdaterSetupOptions(store: Store, options?: UpdaterSetupHooks): UpdaterSetupOptions {
+  return {
+    getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
+    onBeforeQuit: async () => {
+      try {
+        await options?.onBeforeUpdateQuit?.()
+      } finally {
+        await store.flushPendingAsync()
+      }
+    },
+    setLastUpdateCheckAt: (timestamp) => {
+      store.updateUI({ lastUpdateCheckAt: timestamp })
+    },
+    getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
+    getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
+    setPendingUpdateNudgeId: (id) => {
+      // Why: only the apply branch also nulls dismissedUpdateVersion so relaunch can't resurrect the old hidden card; clearing must not, or it un-dismisses.
+      if (id) {
+        store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
+      } else {
+        store.updateUI({ pendingUpdateNudgeId: null })
+      }
+    },
+    setDismissedUpdateNudgeId: (id) => {
+      store.updateUI({ dismissedUpdateNudgeId: id })
+    },
+    getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
+    onBeforeQuitFailure: options?.onBeforeUpdateQuitFailure,
+    installMode: options?.updateInstallMode
+  }
+}
+
+/**
+ * Headless serve has no window, so the window-driven setup above never runs and remote clients see
+ * the updater as unavailable forever (#22261). Deferred past readiness: the require is slow.
+ */
+export function setupHeadlessServeAutoUpdater(store: Store, options: UpdaterSetupHooks): void {
+  setImmediate(() => {
+    try {
+      setupAutoUpdater(null, buildUpdaterSetupOptions(store, options))
+      logStartupMilestone('updater-setup-done')
+    } catch (error) {
+      console.warn(
+        '[serve] updater setup failed:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
+  })
+}
+
 export function scheduleMainWindowAutoUpdaterSetup(
   mainWindow: BrowserWindow,
   store: Store,
-  options?: {
-    onBeforeUpdateQuit?: () => void | Promise<void>
-    updateInstallMode?: UpdateInstallMode
-  }
+  options?: UpdaterSetupHooks
 ): void {
   // Why: setupAutoUpdater sync-require()s electron-updater (slow on cold Windows w/ Defender, #7225), so defer past first paint; timer fallback covers crash-looping renderers.
   let updaterSetupDone = false
+  let updaterSetupFallback: ReturnType<typeof setTimeout> | null = null
+  const clearDeferredSetup = (): void => {
+    if (updaterSetupFallback) {
+      clearTimeout(updaterSetupFallback)
+      updaterSetupFallback = null
+    }
+    if (pendingAutoUpdaterSetup === setupAutoUpdaterDeferred) {
+      pendingAutoUpdaterSetup = null
+    }
+  }
   const setupAutoUpdaterDeferred = (): void => {
     if (updaterSetupDone || mainWindow.isDestroyed()) {
       return
     }
     updaterSetupDone = true
-    setupAutoUpdater(mainWindow, {
-      getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-      onBeforeQuit: async () => {
-        try {
-          await options?.onBeforeUpdateQuit?.()
-        } finally {
-          await store.flushPendingAsync()
-        }
-      },
-      setLastUpdateCheckAt: (timestamp) => {
-        store.updateUI({ lastUpdateCheckAt: timestamp })
-      },
-      getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
-      getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
-      setPendingUpdateNudgeId: (id) => {
-        // Why: only the apply branch also nulls dismissedUpdateVersion so relaunch can't resurrect the old hidden card; clearing must not, or it un-dismisses.
-        if (id) {
-          store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
-        } else {
-          store.updateUI({ pendingUpdateNudgeId: null })
-        }
-      },
-      setDismissedUpdateNudgeId: (id) => {
-        store.updateUI({ dismissedUpdateNudgeId: id })
-      },
-      getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
-      installMode: options?.updateInstallMode
-    })
-    logStartupMilestone('updater-setup-done')
+    try {
+      setupAutoUpdater(mainWindow, buildUpdaterSetupOptions(store, options))
+      logStartupMilestone('updater-setup-done')
+    } finally {
+      clearDeferredSetup()
+    }
   }
   pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
   mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
-  const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
+  updaterSetupFallback = setTimeout(() => {
+    updaterSetupFallback = null
+    setupAutoUpdaterDeferred()
+  }, UPDATER_SETUP_FALLBACK_MS)
   updaterSetupFallback.unref?.()
+  if (updaterSetupDone) {
+    clearDeferredSetup()
+  }
 }
 
 export function registerUpdaterHandlers(_store: Store): void {
@@ -113,12 +161,20 @@ export function registerUpdaterHandlers(_store: Store): void {
   })
   ipcMain.handle(
     'updater:listBuilds',
-    async (_event, channel: ReleaseChannel): Promise<ReleaseBuildListResult> => {
+    async (
+      _event,
+      channel: ReleaseChannel,
+      options?: { force?: boolean }
+    ): Promise<ReleaseBuildListResult> => {
       if (!RELEASE_CHANNELS.includes(channel)) {
         return { ok: false, channel, message: `Unknown release channel "${channel}".` }
       }
       try {
-        return { ok: true, channel, builds: await listAvailableReleaseBuilds(channel) }
+        return {
+          ok: true,
+          channel,
+          builds: await listAvailableReleaseBuilds(channel, { force: options?.force === true })
+        }
       } catch (error) {
         // Why: a network/rate-limit failure is expected here; return it as data so
         // the picker can render the reason instead of rejecting the invoke.

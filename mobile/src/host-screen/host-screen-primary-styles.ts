@@ -36,10 +36,15 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
   },
   hostIdentity: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
     minWidth: 0,
     marginRight: spacing.md
+  },
+  hostIdentityLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minWidth: 0 },
+  hostPlatformText: {
+    marginLeft: 16,
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 16
   },
   hostNameText: {
     flex: 1,
@@ -82,15 +87,7 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
     gap: spacing.sm
   },
   embeddedFilterChip: {
-    flex: 1,
-    minWidth: 0,
-    height: 30,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 0
-  },
-  embeddedModeButton: {
-    flex: 1,
+    flexShrink: 1,
     minWidth: 0,
     height: 30,
     justifyContent: 'center',
@@ -117,21 +114,6 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: colors.textPrimary
-  },
-  modeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 1,
-    minWidth: 0,
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  sortLabel: {
-    flexShrink: 1,
-    minWidth: 0,
-    fontSize: 12,
-    color: colors.textSecondary
   },
   toolbarSpacer: {
     flex: 1

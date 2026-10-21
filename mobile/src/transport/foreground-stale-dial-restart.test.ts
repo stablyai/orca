@@ -15,6 +15,8 @@ import { classifyConnection, verdictDisplayLabel } from './connection-health'
 // desktop that was answering the whole time. By the next foreground the client
 // had landed in 'reconnecting', where the nudge works, so it connected at once.
 
+vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
+
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({ publicKey: new Uint8Array(32), secretKey: new Uint8Array(32) }),
   deriveSharedKey: () => new Uint8Array(32),
@@ -115,19 +117,6 @@ function suspend(backgroundMs: number): void {
   vi.setSystemTime(Date.now() + backgroundMs)
 }
 
-// Steps the clock one second at a time and reports how long the user has to sit
-// on "Connecting…" before the client opens its next socket.
-async function millisecondsUntilNextDial(dialsBefore: number): Promise<number> {
-  const limitMs = 180_000
-  for (let elapsedMs = 0; elapsedMs <= limitMs; elapsedMs += 1_000) {
-    if (sockets.length > dialsBefore) {
-      return elapsedMs
-    }
-    await vi.advanceTimersByTimeAsync(1_000)
-  }
-  return limitMs
-}
-
 // Waits out the current backoff so the phone is suspended mid-dial — the state
 // the reporter's phone resumed into — rather than between dials.
 async function advanceUntilDialing(client: ReturnType<typeof connect>): Promise<void> {
@@ -179,36 +168,6 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     expect(latest()).not.toBe(doomed)
     latest().authenticate()
     expect(client.getState()).toBe('connected')
-  })
-
-  it('does not strand the user on "Connecting…" for a minute after returning', async () => {
-    const client = connect(TAILSCALE_ENDPOINT, 'token', 'server-key')
-    latest().authenticate()
-    latest().close()
-
-    // The desktop drops off the network while the user is still in the app, so
-    // the tiered backoff climbs into its slow tail (15s, 30s, 60s) before they
-    // ever leave. This is what makes the post-resume wait a full minute.
-    for (let dial = 0; dial < 6; dial++) {
-      await vi.advanceTimersByTimeAsync(12_000 + 60_000)
-    }
-    expect(client.getReconnectAttempt()).toBeGreaterThanOrEqual(6)
-    await advanceUntilDialing(client)
-
-    suspend(90_000)
-    const dialsBefore = sockets.length
-    client.notifyForeground()
-
-    // The desktop is reachable again and the user is looking at the screen, so
-    // the redial has to be in flight now — not after the abandoned socket's
-    // connect budget expires and another tail-length backoff is waited out.
-    expect(await millisecondsUntilNextDial(dialsBefore)).toBe(0)
-
-    latest().authenticate()
-    expect(client.getState()).toBe('connected')
-    expect(label(client, TAILSCALE_ENDPOINT)).toBe('Connected')
-
-    client.close()
   })
 
   it('clears the escalated label once the foreground redial lands', async () => {

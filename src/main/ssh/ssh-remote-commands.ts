@@ -1,16 +1,12 @@
 import {
-  RELAY_INSTALL_COMPLETE_FILENAME,
-  relayArtifactFilenames
-} from '../../shared/relay-artifacts'
-import {
-  RELAY_INSTALL_MODEL,
   remoteInstallListingRegexSource,
   type RemoteInstallModel
-} from './remote-install-model'
+} from '../managed-server/install/remote-install-model'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, joinRemotePath, remoteDirname } from './ssh-remote-platform'
-import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
-import { shellEscape } from './ssh-connection-utils'
+import { powerShellCommand } from './ssh-remote-powershell'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../shared/powershell-native-argument'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 
 export function readRemoteHomeCommand(host: RemoteHostPlatform): string {
   if (!isWindowsRemoteHost(host)) {
@@ -19,26 +15,9 @@ export function readRemoteHomeCommand(host: RemoteHostPlatform): string {
   return powerShellCommand("Write-Output ([Environment]::GetFolderPath('UserProfile'))")
 }
 
-export function makeRemoteDirectoryCommand(host: RemoteHostPlatform, remotePath: string): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `mkdir -p ${shellEscape(remotePath)}`
-  }
-  // New-Item has no -LiteralPath parameter; using it breaks stock Windows PowerShell.
-  return powerShellCommand(
-    `$null = New-Item -ItemType Directory -Force -Path ${powerShellLiteral(remotePath)}`
-  )
-}
-
-export function makeRemoteExecutableCommand(host: RemoteHostPlatform, remotePath: string): string {
-  if (isWindowsRemoteHost(host)) {
-    return powerShellCommand(`if (Test-Path -LiteralPath ${powerShellLiteral(remotePath)}) { }`)
-  }
-  return `chmod +x ${shellEscape(remotePath)} 2>/dev/null; true`
-}
-
 export function removeRemoteFileCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
-    return `rm -f ${shellEscape(remotePath)} 2>/dev/null; true`
+    return `rm -f ${quotePosixShell(remotePath)} 2>/dev/null; true`
   }
   return powerShellCommand(
     `Remove-Item -LiteralPath ${powerShellLiteral(remotePath)} -Force -ErrorAction SilentlyContinue`
@@ -47,7 +26,7 @@ export function removeRemoteFileCommand(host: RemoteHostPlatform, remotePath: st
 
 export function removeRemoteTreeCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
-    return `rm -rf ${shellEscape(remotePath)}`
+    return `rm -rf ${quotePosixShell(remotePath)}`
   }
   return powerShellCommand(
     `Remove-Item -LiteralPath ${powerShellLiteral(remotePath)} -Recurse -Force -ErrorAction SilentlyContinue`
@@ -60,7 +39,7 @@ export function moveRemoteTreeCommand(
   destinationPath: string
 ): string {
   if (!isWindowsRemoteHost(host)) {
-    return `mv ${shellEscape(sourcePath)} ${shellEscape(destinationPath)} 2>&1 && echo MOVED || echo BUSY`
+    return `mv ${quotePosixShell(sourcePath)} ${quotePosixShell(destinationPath)} 2>&1 && echo MOVED || echo BUSY`
   }
   return powerShellCommand(
     [
@@ -72,22 +51,23 @@ export function moveRemoteTreeCommand(
   )
 }
 
-export function promoteRemoteTreeContentsCommand(
+// A concurrent installer may already have recreated the original directory.
+export function restoreRemoteTreeCommand(
   host: RemoteHostPlatform,
-  sourcePath: string,
-  destinationPath: string
+  source: string,
+  destination: string
 ): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `cp -a ${shellEscape(sourcePath)}/. ${shellEscape(destinationPath)}/ && rm -rf ${shellEscape(sourcePath)}`
+  if (isWindowsRemoteHost(host)) {
+    return powerShellCommand(
+      `if (-not (Test-Path -LiteralPath ${powerShellLiteral(destination)})) { Move-Item -LiteralPath ${powerShellLiteral(source)} -Destination ${powerShellLiteral(destination)} -ErrorAction Stop; 'MOVED' } else { 'BUSY' }`
+    )
   }
-  return powerShellCommand(
-    `$ErrorActionPreference = 'Stop'; Get-ChildItem -LiteralPath ${powerShellLiteral(sourcePath)} -Force -ErrorAction Stop | Copy-Item -Destination ${powerShellLiteral(destinationPath)} -Recurse -Force -ErrorAction Stop; Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Recurse -Force -ErrorAction Stop`
-  )
+  return `if [ ! -e ${quotePosixShell(destination)} ] && [ ! -L ${quotePosixShell(destination)} ]; then mv ${quotePosixShell(source)} ${quotePosixShell(destination)} && echo MOVED; else echo BUSY; fi`
 }
 
 export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
-    return `touch ${shellEscape(remotePath)}`
+    return `touch ${quotePosixShell(remotePath)}`
   }
   return powerShellCommand(
     `Set-Content -LiteralPath ${powerShellLiteral(remotePath)} -Value '' -NoNewline`
@@ -95,44 +75,28 @@ export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath
 }
 
 /**
- * A partial install must read as MISSING, so every file the manifest ships is
- * probed — not a hand-kept subset. A relay that advertises the AI Vault title
- * service but lacks the WSL transcript helper would otherwise pass this probe
- * and then answer WSL title requests with silence.
- */
-export function probeRelayInstalledCommand(
-  host: RemoteHostPlatform,
-  remoteRelayDir: string
-): string {
-  return probeRemoteInstallCompleteCommand(host, remoteRelayDir, [
-    ...relayArtifactFilenames(isWindowsRemoteHost(host)),
-    RELAY_INSTALL_COMPLETE_FILENAME
-  ])
-}
-
-/**
- * The model-agnostic form: any install is complete when its directory exists and every
- * named artifact is a regular file inside it.
- *
- * Why the caller passes the list: orcad and the relay ship different artifacts, and a probe
- * that checked a shared subset would call a torn install complete.
+ * An install is complete when its directory exists and every named artifact is a regular
+ * file inside it. A partial install must read as MISSING, so the caller passes the whole list.
  */
 export function probeRemoteInstallCompleteCommand(
   host: RemoteHostPlatform,
   remoteInstallDir: string,
   requiredFilenames: readonly string[]
 ): string {
-  const remoteRelayDir = remoteInstallDir
-  const required = requiredFilenames.map((filename) =>
-    joinRemotePath(host, remoteRelayDir, filename)
-  )
   if (!isWindowsRemoteHost(host)) {
-    const fileTests = required.map((path) => `&& test -f ${shellEscape(path)} `).join('')
-    return `test -d ${shellEscape(remoteRelayDir)} ${fileTests}&& echo OK || echo MISSING`
+    // Why relative to the dir: repeating a long slot path per artifact pushed the probe past the
+    // exec-size budget gateways enforce (#30491). The subshell keeps the cd from leaking.
+    const fileTests = requiredFilenames
+      .map((filename) => `&& test -f ${quotePosixShell(filename)} `)
+      .join('')
+    return `(cd ${quotePosixShell(remoteInstallDir)} 2>/dev/null ${fileTests}) && echo OK || echo MISSING`
   }
+  const required = requiredFilenames.map((filename) =>
+    joinRemotePath(host, remoteInstallDir, filename)
+  )
   return powerShellCommand(
     [
-      `$dir = ${powerShellLiteral(remoteRelayDir)}`,
+      `$dir = ${powerShellLiteral(remoteInstallDir)}`,
       `$required = @(${required.map((path) => powerShellLiteral(path)).join(', ')})`,
       '$ok = Test-Path -LiteralPath $dir -PathType Container',
       'foreach ($f in $required) { if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { $ok = $false } }',
@@ -141,11 +105,7 @@ export function probeRemoteInstallCompleteCommand(
   )
 }
 
-export const MAX_RELAY_GC_LISTING_ENTRIES = 64
-
-export function listRelayBaseDirsCommand(host: RemoteHostPlatform, baseDir: string): string {
-  return listRemoteInstallBaseDirsCommand(host, baseDir, RELAY_INSTALL_MODEL)
-}
+export const MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES = 64
 
 /**
  * List one model's version dirs (and its own tombstones) under `~/.orca-remote/`.
@@ -163,9 +123,9 @@ export function listRemoteInstallBaseDirsCommand(
   if (!isWindowsRemoteHost(host)) {
     const statusPrefix = '__ORCA_RELAY_GC_FIND_STATUS__'
     return [
-      `base=${shellEscape(baseDir)}; [ -d "$base" ] || exit 0;`,
+      `base=${quotePosixShell(baseDir)}; [ -d "$base" ] || exit 0;`,
       `{ find "$base" -mindepth 1 -maxdepth 1 -type d -name '${model.dirPrefix}-*' -print; status=$?; printf '\n${statusPrefix}%s\n' "$status"; } |`,
-      String.raw`awk 'BEGIN { count=0; status=-1 } /^${statusPrefix}[0-9]+$/ { status=substr($0, ${statusPrefix.length + 1}); next } { name=$0; sub(/^.*\//, "", name); if (name ~ /${namePattern}/ && count < ${MAX_RELAY_GC_LISTING_ENTRIES}) { entries[count++]=name } } END { if (status != 0) exit 1; for (i=0; i<count; i++) print entries[i] }'`
+      String.raw`awk 'BEGIN { count=0; status=-1 } /^${statusPrefix}[0-9]+$/ { status=substr($0, ${statusPrefix.length + 1}); next } { name=$0; sub(/^.*\//, "", name); if (name ~ /${namePattern}/ && count < ${MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES}) { entries[count++]=name } } END { if (status != 0) exit 1; for (i=0; i<count; i++) print entries[i] }'`
     ].join(' ')
   }
   return powerShellCommand(
@@ -176,103 +136,18 @@ export function listRemoteInstallBaseDirsCommand(
       // Why the pattern goes in verbatim: a single-quoted PowerShell string is already
       // literal, so `\.` reaches `-match` as the regex escape it is meant to be.
       `Get-ChildItem -LiteralPath $base -Directory -Filter '${model.dirPrefix}-*' -ErrorAction Stop | Where-Object { $_.Name -match '${namePattern}' } | Select-Object -First ` +
-        `${MAX_RELAY_GC_LISTING_ENTRIES} | ForEach-Object { $_.Name }`,
+        `${MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES} | ForEach-Object { $_.Name }`,
       '}'
     ].join('\n')
   )
 }
 
-export function probeDirectoryExistsCommand(host: RemoteHostPlatform, remotePath: string): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `test -d ${shellEscape(remotePath)} && echo LOCKED || echo OPEN`
-  }
-  return powerShellCommand(
-    `if (Test-Path -LiteralPath ${powerShellLiteral(remotePath)} -PathType Container) { 'LOCKED' } else { 'OPEN' }`
-  )
-}
-
 export function probeFileExistsCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
-    return `test -f ${shellEscape(remotePath)} && echo COMPLETE || echo PARTIAL`
+    return `test -f ${quotePosixShell(remotePath)} && echo COMPLETE || echo PARTIAL`
   }
   return powerShellCommand(
     `if (Test-Path -LiteralPath ${powerShellLiteral(remotePath)} -PathType Leaf) { 'COMPLETE' } else { 'PARTIAL' }`
-  )
-}
-
-type WindowsRelayLivenessOptions = {
-  nodePath: string
-  pipePaths: string[]
-}
-
-export function relayLivenessProbeCommand(
-  host: RemoteHostPlatform,
-  dir: string,
-  windowsOptions?: WindowsRelayLivenessOptions
-): string {
-  if (!isWindowsRemoteHost(host)) {
-    return (
-      `state=DEAD; for f in ${shellEscape(dir)}/relay-*.sock ${shellEscape(dir)}/relay.sock; do ` +
-      `[ -S "$f" ] && state=ALIVE && break; ` +
-      'done; echo "$state"'
-    )
-  }
-  if (!windowsOptions) {
-    return powerShellCommand("'ALIVE'")
-  }
-  const js = [
-    'const fs=require("fs"),path=require("path"),net=require("net");',
-    'const [dir,...seed]=process.argv.slice(1);',
-    'const valid=/^\\\\\\\\[.?]\\\\pipe\\\\orca-relay-[0-9a-f]{20}$/i;',
-    'const pipes=[];',
-    'let markerCount=0;',
-    'for(const p of seed){if(valid.test(p)&&!pipes.includes(p))pipes.push(p)}',
-    'try{for(const name of fs.readdirSync(dir)){',
-    'if(!name.startsWith(".windows-active-pipe-"))continue;',
-    'markerCount++;',
-    'const p=fs.readFileSync(path.join(dir,name),"utf8").trim();',
-    'if(valid.test(p)&&!pipes.includes(p))pipes.push(p)',
-    '}}catch{}',
-    'if(markerCount===0&&pipes.length===0){process.stdout.write("ALIVE");process.exit(0)}',
-    'let i=0;',
-    'function done(ok){process.stdout.write(ok?"ALIVE":"WAITING")}',
-    'function next(){',
-    'const pipe=pipes[i++];',
-    'if(!pipe)return done(false);',
-    'const s=net.connect(pipe);',
-    'let settled=false;',
-    'function finish(ok){if(settled)return;settled=true;s.destroy();if(ok)done(true);else next()}',
-    's.setTimeout(200);',
-    's.on("connect",()=>finish(true));',
-    's.on("timeout",()=>finish(false));',
-    's.on("error",()=>finish(false));',
-    '}',
-    'next();'
-  ].join('')
-  return commandWithNodePath(
-    host,
-    windowsOptions.nodePath,
-    dir,
-    [
-      `& ${powerShellLiteral(windowsOptions.nodePath)}`,
-      '-e',
-      powerShellNativeArg(js),
-      powerShellNativeArg(dir),
-      ...windowsOptions.pipePaths.map((pipePath) => powerShellNativeArg(pipePath))
-    ].join(' ')
-  )
-}
-
-export function commandInRemoteDirectory(
-  host: RemoteHostPlatform,
-  remoteDir: string,
-  command: string
-): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `cd ${shellEscape(remoteDir)} && ${command}`
-  }
-  return powerShellCommand(
-    `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(remoteDir)}; ${command}`
   )
 }
 
@@ -284,7 +159,7 @@ export function commandWithNodePath(
 ): string {
   const nodeBinDir = remoteDirname(nodePath, host)
   if (!isWindowsRemoteHost(host)) {
-    return `export PATH=${shellEscape(nodeBinDir)}:$PATH && cd ${shellEscape(remoteDir)} && ${command}`
+    return `export PATH=${quotePosixShell(nodeBinDir)}:$PATH && cd ${quotePosixShell(remoteDir)} && ${command}`
   }
   const windowsNodeBinDir = nodeBinDir.replace(/\//g, '\\')
   return powerShellCommand(

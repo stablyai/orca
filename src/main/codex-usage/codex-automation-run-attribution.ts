@@ -1,6 +1,7 @@
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { CodexUsagePersistedState } from './types'
 import { estimateCostUsd } from './codex-usage-cost-estimate'
+import { shouldForceAutomationUsageScan } from '../usage/automation-usage-scan-forcing'
 
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
@@ -15,16 +16,7 @@ type CodexAutomationAttributionDeps = {
   /** Callback, not a snapshot: refresh mutates persisted state in place. */
   getState: () => CodexUsagePersistedState
   refresh: (force: boolean) => Promise<{ lastScanError: string | null }>
-}
-
-function shouldForceAutomationUsageScan(
-  scanState: CodexUsagePersistedState['scanState'],
-  completedAt: number
-): boolean {
-  const { lastScanCompletedAt, lastScanError } = scanState
-  // Why: attribution needs a scan after the run finishes, but repeated
-  // lookups after that point should not rescan all Codex session history.
-  return Boolean(lastScanError) || lastScanCompletedAt === null || lastScanCompletedAt < completedAt
+  isScanning: () => boolean
 }
 
 export async function resolveCodexAutomationRunUsage(
@@ -62,7 +54,7 @@ export async function resolveCodexAutomationRunUsage(
   }
 
   const scanState = await deps.refresh(
-    shouldForceAutomationUsageScan(deps.getState().scanState, input.completedAt)
+    shouldForceAutomationUsageScan(deps.getState().scanState, input.completedAt, deps.isScanning())
   )
   if (scanState.lastScanError) {
     return unavailable('scan_failed', scanState.lastScanError)
@@ -108,6 +100,9 @@ export async function resolveCodexAutomationRunUsage(
       acc.outputTokens += entry.outputTokens
       acc.reasoningOutputTokens += entry.reasoningOutputTokens
       acc.totalTokens += entry.totalTokens
+      acc.longContextInputTokens += entry.longContextInputTokens
+      acc.longContextCachedInputTokens += entry.longContextCachedInputTokens
+      acc.longContextOutputTokens += entry.longContextOutputTokens
       return acc
     },
     {
@@ -116,7 +111,10 @@ export async function resolveCodexAutomationRunUsage(
       cachedInputTokens: 0,
       outputTokens: 0,
       reasoningOutputTokens: 0,
-      totalTokens: 0
+      totalTokens: 0,
+      longContextInputTokens: 0,
+      longContextCachedInputTokens: 0,
+      longContextOutputTokens: 0
     }
   )
   const scopedModelRows = session.locationModelBreakdown.filter(
@@ -128,24 +126,14 @@ export async function resolveCodexAutomationRunUsage(
   let hasKnownCost = false
   if (scopedModelRows.length > 0) {
     for (const modelRow of scopedModelRows) {
-      const cost = estimateCostUsd(
-        modelRow.modelKey,
-        modelRow.inputTokens,
-        modelRow.cachedInputTokens,
-        modelRow.outputTokens
-      )
+      const cost = estimateCostUsd(modelRow.modelKey, modelRow)
       if (cost !== null) {
         hasKnownCost = true
         estimatedCostUsd += cost
       }
     }
   } else if (!session.hasMixedModels) {
-    const cost = estimateCostUsd(
-      session.primaryModel,
-      totals.inputTokens,
-      totals.cachedInputTokens,
-      totals.outputTokens
-    )
+    const cost = estimateCostUsd(session.primaryModel, totals)
     if (cost !== null) {
       hasKnownCost = true
       estimatedCostUsd += cost

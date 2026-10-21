@@ -149,7 +149,9 @@ function estimateValueBytes(value: unknown, depth: number, ctx: EstimateContext)
   if (ArrayBuffer.isView(value)) {
     return BYTES_OBJECT_BASE + value.byteLength
   }
-  return BYTES_OBJECT_BASE + estimatePlainObjectEntries(value, depth, ctx)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the typeof switch and null check above leave only a non-null, non-collection object here.
+  const plainObject = value as Record<string, unknown>
+  return BYTES_OBJECT_BASE + estimatePlainObjectEntries(plainObject, depth, ctx)
 }
 
 function estimateArrayElements(value: unknown[], depth: number, ctx: EstimateContext): number {
@@ -208,7 +210,11 @@ function estimateIterableEntries(
     : Math.round((sampledBytes / sampledCount + BYTES_ENTRY_OVERHEAD) * size)
 }
 
-function estimatePlainObjectEntries(value: object, depth: number, ctx: EstimateContext): number {
+function estimatePlainObjectEntries(
+  value: Record<string, unknown>,
+  depth: number,
+  ctx: EstimateContext
+): number {
   let ownCount = 0
   const sampledKeys: string[] = []
   const entryFloor = depth === 0 ? ENTRY_DESCENT_RESERVE : 0
@@ -232,7 +238,7 @@ function estimatePlainObjectEntries(value: object, depth: number, ctx: EstimateC
   let sampledBytes = 0
   for (const key of sampledKeys) {
     sampledBytes += BYTES_STRING_BASE + key.length * BYTES_PER_CHAR
-    sampledBytes += estimateValueBytes((value as Record<string, unknown>)[key], depth + 1, ctx)
+    sampledBytes += estimateValueBytes(value[key], depth + 1, ctx)
   }
   return sampledKeys.length === 0
     ? 0

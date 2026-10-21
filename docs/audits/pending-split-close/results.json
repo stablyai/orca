@@ -1,0 +1,65 @@
+{
+  "comparison": "Actual split close/IPC transport and temporary daemon socket tests; before reverses only fix.patch in a temporary Vite transform",
+  "sourceHashes": {
+    "src/renderer/src/components/terminal-pane/ipc-pty-connect.ts": {
+      "before": "7fe38b17d9a1c105bd93088d70086feb0c08f7f80f4513ffd975c5b4bc2167b0",
+      "after": "29985c0b538f701341fb8eca383386ad20f9326090dff452d4b2703b49fc4ea3"
+    },
+    "src/renderer/src/components/terminal-pane/pty-transport-types.ts": {
+      "before": "ab404437789ca3f7da2e8d0757778a1098bbe43dc4e04c5b0f112e7a4456c11c",
+      "after": "15dcd4cb02cceffca4c3b880f6b2688fbd14e6ea1421984d5873f100fa39b5fb"
+    },
+    "src/renderer/src/components/terminal-pane/pty-transport.ts": {
+      "before": "0455dba126457eb50a6075a8b265b29016aa5ed8c0730948e23d4f864bd8d5b3",
+      "after": "b5ac687bbb5c21e94a433d4a66f9b8fca46b3004f331f128c44bfa21b32a3838"
+    },
+    "src/renderer/src/components/terminal-pane/use-terminal-pane-close-actions.ts": {
+      "before": "978003ccd82d0af5dce5501edaa7c20c87170e590a5f3f06e55b28f9e4f0323f",
+      "after": "bbfeb2385fd120a7a1407d043011fb689b5c2b652c31150de44061f1edb76a7b"
+    },
+    "src/renderer/src/store/slices/terminal-tab-retirement.ts": {
+      "before": "e622afc63524826732f1779a6180d17b51ac5a2c705654062cc0907ea735db4f",
+      "after": "21a5f350885851398e316201686e073e3560c107b4b9d1b2e08eea6e07ec980f"
+    },
+    "src/renderer/src/components/terminal-pane/retire-unbound-ipc-terminal-pane.ts": {
+      "current": "3194229bdd3c992e8459cdad727a3931653953b204854486b8aaf4d129152d24"
+    },
+    "src/renderer/src/components/terminal-pane/pending-split-close-test-fixture.ts": {
+      "current": "5fddc75178546161448f8a84b43f0e7da41c7dbb986682a09f8f7ec4e44617bf"
+    },
+    "src/renderer/src/components/terminal-pane/pending-split-close.test.ts": {
+      "current": "106abb33917dd403606af413558bfe95730a064199d4f7085c4970d38cfde0cc"
+    },
+    "docs/audits/pending-split-close/daemon-proof.test.ts": {
+      "current": "0a29132942a9f8aa60ceada3498fb4fb344c1c0e14a8c9b4cbc8ed4cfa9543d9"
+    }
+  },
+  "before": {
+    "exitCode": 1,
+    "passed": 10,
+    "failed": 14,
+    "failedCases": [
+      "explicit split close retires a real daemon cold restore whose reply is pending",
+      "the explicit late reply retries a kill that completed before adapter admission",
+      "explicit split close retires a pending reattach before and after its reply",
+      "explicit split close retires a pending cold-restore-new before and after its reply",
+      "explicit split close retires a pending ordinary-fresh before and after its reply",
+      "protects a same-leaf replacement that adopts after explicit close",
+      "protects a different-tab replacement that adopts after explicit close",
+      "protects a new-transport-map replacement that adopts after explicit close",
+      "retains explicit close intent across repeated generic destroy calls",
+      "preserves a different returned reattach identity",
+      "retries an eager provider failure when the same-ID reply arrives",
+      "does not invent a late session after a rejected spawn",
+      "routes direct SSH retirement through the existing IPC identity",
+      "retires a local folder-workspace split without a git worktree row"
+    ]
+  },
+  "after": {
+    "exitCode": 0,
+    "passed": 24,
+    "failed": 0,
+    "failedCases": []
+  },
+  "passed": true
+}

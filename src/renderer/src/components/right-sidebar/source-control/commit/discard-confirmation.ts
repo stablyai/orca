@@ -9,14 +9,19 @@ export type DiscardConfirmationCopy = {
   confirmLabel: string
 }
 
+/**
+ * Discard removes untracked files; staged additions retain their index version.
+ */
+export function discardDeletesEntryFile(entry: Pick<GitStatusEntry, 'area' | 'status'>): boolean {
+  return entry.area === 'untracked' || entry.status === 'untracked'
+}
+
 export function getDiscardEntryConfirmationCopy(
   entry: Pick<GitStatusEntry, 'area' | 'path' | 'status'>
 ): DiscardConfirmationCopy {
   const name = basename(entry.path)
 
-  // Why: untracked and newly-added paths have no HEAD version to restore.
-  // Orca's discard path removes the working-tree file in those cases.
-  if (entry.area === 'untracked' || entry.status === 'untracked' || entry.status === 'added') {
+  if (discardDeletesEntryFile(entry)) {
     return {
       title: translate(
         'auto.components.right.sidebar.source.control.discard.confirmation.96c772bee9',
@@ -39,8 +44,8 @@ export function getDiscardEntryConfirmationCopy(
         { value0: name }
       ),
       description: translate(
-        'auto.components.right.sidebar.source.control.discard.confirmation.40e9357b2a',
-        'This will restore the file from HEAD and discard the deletion. This cannot be undone.'
+        'sourceControl.discard.restoreStagedVersionDescription',
+        'This will restore the last staged version and discard the deletion. This cannot be undone.'
       ),
       confirmLabel: 'Restore'
     }
@@ -53,8 +58,8 @@ export function getDiscardEntryConfirmationCopy(
       { value0: name }
     ),
     description: translate(
-      'auto.components.right.sidebar.source.control.discard.confirmation.1426c2efff',
-      'This will revert all changes to this file. This cannot be undone.'
+      'sourceControl.discard.unstagedChangesDescription',
+      'This will revert the unstaged changes to this file. This cannot be undone.'
     ),
     confirmLabel: 'Discard'
   }

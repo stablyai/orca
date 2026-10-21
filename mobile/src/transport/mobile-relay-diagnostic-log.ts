@@ -1,3 +1,4 @@
+import { RelayOuterError } from './mobile-relay-e2ee-link'
 import type { RelayRecoveryLog } from './mobile-relay-recovery-log'
 import { RelayDirectorHttpError } from './mobile-relay-resume-director'
 
@@ -23,7 +24,8 @@ export function logRelayDialFailure(
       : base
   log(source === 'dial' ? 'relay dial failed' : 'active relay session failed', detail, {
     level: 'error',
-    code: source === 'dial' ? 'relay-dial-failed' : 'relay-session-failed'
+    code: source === 'dial' ? 'relay-dial-failed' : 'relay-session-failed',
+    ...(error instanceof RelayOuterError ? { relayCloseCode: error.code } : {})
   })
 }
 

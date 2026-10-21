@@ -63,7 +63,8 @@ export function recordVisibilityResumeInventoryReceipt(args: {
     recordReceivedWebSessionTabsRemoval(
       environmentId,
       missing.snapshot.worktree,
-      inventoryReceivedFrame
+      inventoryReceivedFrame,
+      missing.snapshot.publicationEpoch
     )
     return {
       environmentId,

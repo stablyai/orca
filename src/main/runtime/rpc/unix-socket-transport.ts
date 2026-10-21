@@ -1,6 +1,7 @@
 // Why: this is the original Unix socket / named pipe transport extracted from
 // runtime-rpc.ts. It preserves the exact same behavior: newline-delimited JSON,
-// 30s idle timeout, 1MB max message, 32 max connections, chmod 0o600 on Unix.
+// 30s idle timeout (suspended while a dispatch is in flight), 1MB max message,
+// 32 max connections, chmod 0o600 on Unix.
 // It also owns the keepalive timer and per-connection abort signal so the
 // server-side handler can cancel long-poll dispatches when the client goes
 // away. See design doc §3.1.
@@ -105,6 +106,7 @@ export class UnixSocketTransport implements RpcTransport {
   private handleConnection(socket: Socket): void {
     this.activeSockets.add(socket)
     let buffer = ''
+    let retainedBytes = 0
     let oversized = false
     // Why: each in-flight dispatch registers its own AbortController here so
     // `socket.on('close')` can abort them all at once. Keeping the set scoped
@@ -113,6 +115,16 @@ export class UnixSocketTransport implements RpcTransport {
     // on the same socket — future-proofing for a persistent CLI socket that
     // multiplexes sequential requests.
     const inflight = new Set<() => void>()
+    // Why: Node's idle timer counts raw byte silence, so a slow dispatch (e.g.
+    // worktree.create on a large repo) reads as a dead peer and gets reaped.
+    // Suspend the reap while dispatches are pending; quiet connections without
+    // dispatches still reap after the timeout. On a local socket the kernel
+    // delivers close for a dead peer, so nothing else relied on byte silence.
+    const rearmIdleTimer = (): void => {
+      if (!socket.destroyed) {
+        socket.setTimeout(inflight.size > 0 ? 0 : RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS)
+      }
+    }
 
     socket.setEncoding('utf8')
     socket.setNoDelay(true)
@@ -134,10 +146,12 @@ export class UnixSocketTransport implements RpcTransport {
         return
       }
       buffer += chunk
+      // setEncoding('utf8') keeps split codepoints intact, so chunk byte lengths add exactly.
+      retainedBytes += Buffer.byteLength(chunk, 'utf8')
       // Why: the Orca runtime lives in Electron main, so it must reject
       // oversized local RPC frames instead of letting a local client grow an
       // unbounded buffer and stall the app.
-      if (Buffer.byteLength(buffer, 'utf8') > MAX_RUNTIME_RPC_MESSAGE_BYTES) {
+      if (retainedBytes > MAX_RUNTIME_RPC_MESSAGE_BYTES) {
         oversized = true
         this.messageHandler?.('', (response) => {
           socket.write(`${response}\n`)
@@ -145,22 +159,31 @@ export class UnixSocketTransport implements RpcTransport {
         })
         return
       }
+      if (!chunk.includes('\n')) {
+        return
+      }
       let newlineIndex = buffer.indexOf('\n')
       while (newlineIndex !== -1) {
         const rawMessage = buffer.slice(0, newlineIndex).trim()
         buffer = buffer.slice(newlineIndex + 1)
         if (rawMessage) {
-          this.dispatchMessage(socket, rawMessage, inflight)
+          this.dispatchMessage(socket, rawMessage, inflight, rearmIdleTimer)
         }
         newlineIndex = buffer.indexOf('\n')
       }
+      retainedBytes = Buffer.byteLength(buffer, 'utf8')
     })
   }
 
   // Why: the keepalive timer is opt-in per request via `startKeepalive()`.
   // Short RPCs never call it and pay no timer overhead; only long-poll
   // handlers (e.g. orchestration.check --wait) arm it. See §3.1.
-  private dispatchMessage(socket: Socket, rawMessage: string, inflight: Set<() => void>): void {
+  private dispatchMessage(
+    socket: Socket,
+    rawMessage: string,
+    inflight: Set<() => void>,
+    rearmIdleTimer: () => void
+  ): void {
     let replied = false
     let keepaliveTimer: NodeJS.Timeout | null = null
     // Why: each dispatch needs its own abort signal and keepalive timer
@@ -181,9 +204,11 @@ export class UnixSocketTransport implements RpcTransport {
         abortController.abort()
       }
       inflight.delete(abortDispatch)
+      rearmIdleTimer()
     }
     const abortDispatch = (): void => cleanupDispatch(true)
     inflight.add(abortDispatch)
+    rearmIdleTimer()
 
     const reply = (response: string): void => {
       if (replied) {

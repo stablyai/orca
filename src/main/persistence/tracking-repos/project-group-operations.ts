@@ -6,7 +6,7 @@ import {
   normalizeProjectGroupName
 } from '../../../shared/project-groups'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { removeWorkspaceSessionOwner } from '../restoring-sessions/session-owner-removal'
+import { removeWorkspaceSessionOwnersEverywhere } from '../restoring-sessions/session-owner-removal'
 
 export type ProjectGroupMutationOperations = {
   state: PersistedState
@@ -105,13 +105,11 @@ export class ProjectGroupPersistenceOperations {
     for (const workspace of this.state.folderWorkspaces ?? []) {
       if (deletedGroupIds.has(workspace.projectGroupId)) {
         removedFolderWorkspaceKeys.add(folderWorkspaceKey(workspace.id))
-        this.state.workspaceSession = removeWorkspaceSessionOwner(
-          this.state.workspaceSession,
-          folderWorkspaceKey(workspace.id)
-        )!
         this.removeWorkspaceLineageForFolderParent(workspace.id)
       }
     }
+    // Every partition, not just the local blob: the same reason `removeFolderWorkspace` does.
+    removeWorkspaceSessionOwnersEverywhere(this.state, removedFolderWorkspaceKeys)
     this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
       (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
     )

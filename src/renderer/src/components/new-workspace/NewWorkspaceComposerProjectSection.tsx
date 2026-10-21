@@ -27,10 +27,12 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'selectedRepoConnectInProgress'
   | 'onConnectSelectedRepo'
   | 'selectedProjectHostSetupId'
+  | 'selectedRepoExecutionHostId'
   | 'onEphemeralVmRecipeChange'
   | 'selectedEphemeralVmRecipeId'
   | 'ephemeralVmRecipeError'
 > & {
+  disabled?: boolean
   projectDescriptionId: string
   onAddProject: () => void
   focusNameInput: () => void
@@ -48,6 +50,7 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
 }
 
 export function NewWorkspaceComposerProjectSection({
+  disabled = false,
   projectOptions = EMPTY_PROJECT_OPTIONS,
   selectedProjectId = null,
   onProjectChange,
@@ -62,6 +65,7 @@ export function NewWorkspaceComposerProjectSection({
   shouldShowRunTargetPicker,
   projectHostSetupOptions,
   selectedProjectHostSetupId,
+  selectedRepoExecutionHostId,
   handleProjectHostSetupChange,
   ephemeralVmRecipes,
   selectedEphemeralVmRecipeId = null,
@@ -80,7 +84,7 @@ export function NewWorkspaceComposerProjectSection({
   selectedProjectName
 }: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
   return (
-    <div className="space-y-1">
+    <fieldset disabled={disabled} className="space-y-1">
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <label className="text-xs font-medium text-muted-foreground">
@@ -148,6 +152,7 @@ export function NewWorkspaceComposerProjectSection({
           <RunTargetCombobox
             hostOptions={projectHostSetupOptions ?? []}
             hostValue={selectedProjectHostSetupId ?? null}
+            hostExecutionHostId={selectedRepoExecutionHostId}
             onHostChange={handleProjectHostSetupChange}
             recipes={ephemeralVmRecipes}
             recipeValue={selectedEphemeralVmRecipeId}
@@ -198,6 +203,6 @@ export function NewWorkspaceComposerProjectSection({
           </Button>
         </div>
       ) : null}
-    </div>
+    </fieldset>
   )
 }

@@ -35,14 +35,14 @@ export function openLinearIssueWorkspaceOrStart(
   const workspaceScope = parseWorkspaceKey(attached.id)
   const activation =
     workspaceScope?.type === 'folder'
-      ? activateAndRevealFolderWorkspace(
-          workspaceScope.folderWorkspaceId,
-          attached.hostId ? { executionHostId: attached.hostId } : undefined
-        )
-      : activateAndRevealWorktree(
-          attached.id,
-          attached.hostId ? { executionHostId: attached.hostId } : {}
-        )
+      ? activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, {
+          navigationIntent: 'user-open',
+          ...(attached.hostId ? { executionHostId: attached.hostId } : {})
+        })
+      : activateAndRevealWorktree(attached.id, {
+          navigationIntent: 'user-open',
+          ...(attached.hostId ? { executionHostId: attached.hostId } : {})
+        })
   if (activation === false) {
     toast.error(
       translate(

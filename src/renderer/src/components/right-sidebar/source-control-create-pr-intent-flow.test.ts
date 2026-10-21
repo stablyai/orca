@@ -390,6 +390,21 @@ describe('source-control Create PR intent flow helpers', () => {
     })
   })
 
+  it('never downgrades a "Create as draft" choice to a ready review', () => {
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(
+        { base: 'main', title: 'Feature branch', body: '', draft: true },
+        {
+          success: true,
+          fields: { base: 'main', title: 'Generated title', body: 'Details', draft: false }
+        }
+      )
+    ).toEqual({
+      ok: true,
+      fields: { base: 'main', title: 'Generated title', body: 'Details', draft: true }
+    })
+  })
+
   it('surfaces the commit failure summary in the Create PR intent notice', () => {
     expect(
       getCreatePrIntentCommitFailureNoticeMessage(

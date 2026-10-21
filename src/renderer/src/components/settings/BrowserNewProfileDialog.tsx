@@ -6,7 +6,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { useAppStore } from '../../store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
-import { BrowserProfileUserAgentOption } from '../browser-profile-user-agent-option'
 
 type BrowserNewProfileDialogProps = {
   open: boolean
@@ -19,13 +18,11 @@ export function BrowserNewProfileDialog({
 }: BrowserNewProfileDialogProps): React.JSX.Element {
   const mountedRef = useMountedRef()
   const [newProfileName, setNewProfileName] = useState('')
-  const [useNativeUserAgent, setUseNativeUserAgent] = useState(false)
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
 
   const handleClose = (): void => {
     onOpenChange(false)
     setNewProfileName('')
-    setUseNativeUserAgent(false)
   }
 
   return (
@@ -54,11 +51,7 @@ export function BrowserNewProfileDialog({
             try {
               const profile = await useAppStore
                 .getState()
-                .createBrowserSessionProfile(
-                  'isolated',
-                  trimmed,
-                  useNativeUserAgent ? { userAgentMode: 'native' } : undefined
-                )
+                .createBrowserSessionProfile('isolated', trimmed)
               if (!mountedRef.current) {
                 return
               }
@@ -97,12 +90,6 @@ export function BrowserNewProfileDialog({
             maxLength={50}
             className="mb-3"
           />
-          <div className="mb-4">
-            <BrowserProfileUserAgentOption
-              checked={useNativeUserAgent}
-              onCheckedChange={setUseNativeUserAgent}
-            />
-          </div>
           <DialogFooter>
             <Button type="button" variant="outline" size="sm" onClick={handleClose}>
               {translate('auto.components.settings.BrowserPane.81ff774667', 'Cancel')}

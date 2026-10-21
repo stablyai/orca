@@ -1,3 +1,5 @@
+import type { PaneSpawnReservation } from '../pane/spawn-reservation'
+import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentProviderSessionMetadata,
@@ -9,17 +11,17 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalStartupCwdMissingDirFallback } from '../../../../shared/terminal-startup-cwd'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence'
-import type { PtySpawnResult } from '../../../providers/types'
-import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import type { CodexSessionResumePreparation } from '../../../codex/codex-session-resume-home'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import type {
   CodexHomePtySpawnedLifecycleArgs,
   GetSelectedCodexHomePath,
   PrepareClaudeAuth,
   PrepareCodexSessionResume
 } from '../host-env/types'
-import type { CodexResumeLaunch, PreparedCodexResumeHome } from '../host-env/codex-resume'
 import type { StablePaneOwner } from '../pane/stable-owner'
+import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
+import type { ResolvedPtyHost } from '../provider/registry'
+import type { PtySpawnCodexResumeDeps } from '../spawn-host-env'
 
 export type PtySpawnIpcArgs = {
   cols: number
@@ -41,6 +43,7 @@ export type PtySpawnIpcArgs = {
   sessionId?: string
   shellOverride?: string
   projectRuntime?: ProjectExecutionRuntimeResolution
+  terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: {
     foreground?: unknown
     background?: unknown
@@ -50,6 +53,14 @@ export type PtySpawnIpcArgs = {
   // Why: closes the SIGKILL race (INVESTIGATION.md) by letting main sync-flush the binding before pty:spawn returns; only the Ctrl+T daemon-host path threads these.
   tabId?: string
   leafId?: string
+  // Why: a pane with a live owner is otherwise reattached, so a restart names the PTY it replaces.
+  replacesPtyId?: string
+  // Untyped on purpose: parseTerminalPanePlacement is the one check, and drops what it rejects.
+  placement?: unknown
+  // Untyped on purpose: isRestoreSpawnIntent is the one check; anything else is undeclared.
+  spawnIntent?: unknown
+  // Untyped on purpose: planPaneAgentLaunch's AgentLaunch.safeParse is the one check.
+  agentLaunch?: unknown
   // Why: renderer-threaded launch telemetry (telemetry-plan.md§Agent launch semantics); loosely typed because the main-side schema validator is the single enforcement point.
   telemetry?: {
     agent_kind?: unknown
@@ -63,11 +74,20 @@ export type AdoptStablePaneArgs = {
   rows: number
   cwd?: string
   connectionId?: string | null
-  worktreeId: string
+  worktreeId?: string
   preAllocatedHandle?: string
   tabId: string
   leafId: string
+  onAdopted?: (result: PtySpawnResult) => void
+  completed?: AdoptStablePaneResult
   ownsPaneSpawnReservation?: true
+  reservation?: PaneSpawnReservation
+  stoppedPtyId?: string
+  renderer?: boolean
+  signal?: AbortSignal
+  spawnFresh?: (operation: PaneSpawnOperation) => Promise<PtySpawnResult>
+  /** See StablePaneSpawnContext; adoption holds the pane's reservation through its fresh launch. */
+  keepAbsentBinding?: (dead: ReplacedPaneOwner) => void
 }
 
 export type AdoptStablePaneResult = {
@@ -76,7 +96,7 @@ export type AdoptStablePaneResult = {
   materialized?: true
 }
 
-export type PtySpawnIpcDeps = {
+export type PtySpawnIpcDeps = PtySpawnCodexResumeDeps & {
   runtime?: OrcaRuntimeService
   store?: Store
   getSettings?: () => GlobalSettings
@@ -86,38 +106,21 @@ export type PtySpawnIpcDeps = {
     prepareCodexSessionResume?: PrepareCodexSessionResume
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
   }
-  getLocalPtyStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
+  getLocalPtyStartupPromise: (hostId?: ResolvedPtyHost) => Promise<void> | undefined
   adoptStablePane: (args: AdoptStablePaneArgs) => Promise<AdoptStablePaneResult | null>
-  assertFolderWorkspacePtyPathUsable: (worktreeId: string | undefined) => Promise<void> | void
+  assertWorkspaceAcceptsNewPty: (
+    worktreeId: string | undefined,
+    sessionId?: string
+  ) => Promise<void> | void
   resolvePtySpawnStartupCwd: (
     worktreeId: string | undefined,
     cwd: string | undefined,
     missingDirFallback?: TerminalStartupCwdMissingDirFallback
   ) => string | undefined
   localStartupCwdDirectoryExists: (path: string) => boolean
-  prepareCodexResumeHome: (args: {
-    connectionId?: string | null
-    launchAgent?: TuiAgent
-    providerSession?: AgentProviderSessionMetadata
-    target: CodexAccountSelectionTarget
-    launchEnv?: NodeJS.ProcessEnv
-    workspacePath?: string
-  }) => PreparedCodexResumeHome | null
-  noCodexResumeLaunch: (command: string | undefined) => CodexResumeLaunch
-  resolveCodexResumeLaunch: (
-    command: string | undefined,
-    prepared: PreparedCodexResumeHome
-  ) => Promise<CodexResumeLaunch>
-  reconcileSharedRuntimeResumeHome: (
-    resumeHome: Extract<CodexSessionResumePreparation, { outcome: 'resume' }>,
-    resolveCurrent: () => string | null | Promise<string | null>
-  ) => Promise<string>
-  stripSequencedStartupResumeArgv: <T extends Record<string, string> | undefined>(
-    env: T,
-    launch: CodexResumeLaunch
-  ) => T
   transitionSpawnHiddenRendererPtyDeliveryState: (id: string, hidden: boolean) => void
   trustedTerminalHandleEnv: Set<string>
   sendPtySpawnedToRenderer: (id: string) => void
   syncPtyBackgroundedDelivery: (id: string, caller: string) => void
+  stopReplacedPty: (id: string) => Promise<void>
 }

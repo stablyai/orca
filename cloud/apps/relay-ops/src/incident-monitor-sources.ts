@@ -24,7 +24,7 @@ import {
 const NumericSchema = z.union([z.number(), z.string()])
   .transform(Number)
   .pipe(z.number().finite())
-const MonitoringPointSchema = z.object({
+export const MonitoringPointSchema = z.object({
   interval: z.object({ endTime: z.string() }),
   value: z.object({
     doubleValue: NumericSchema.optional(),
@@ -35,7 +35,7 @@ const MonitoringPointSchema = z.object({
     }).optional()
   })
 })
-const MonitoringResponseSchema = z.object({
+export const MonitoringResponseSchema = z.object({
   timeSeries: z.array(z.object({ points: z.array(MonitoringPointSchema) })).default([]),
   nextPageToken: z.string().optional()
 })
@@ -144,10 +144,17 @@ export const GOOGLE_METRICS: GoogleMetricDefinition[] = [
       'resource.type="cloud_run_revision" AND metric.label."response_code_class"="5xx"',
     aggregation: 'window-sum',
     emptyIsZero: true
+  },
+  {
+    signal: 'auth.requests',
+    type: 'run.googleapis.com/request_count',
+    resourceFilter: 'resource.type="cloud_run_revision"',
+    aggregation: 'window-sum',
+    emptyIsZero: true
   }
 ]
 
-function pointValue(point: z.infer<typeof MonitoringPointSchema>): number {
+export function pointValue(point: z.infer<typeof MonitoringPointSchema>): number {
   return (
     point.value.doubleValue ??
     point.value.int64Value ??
@@ -181,7 +188,7 @@ function targetFilter(
   )
 }
 
-async function googleJson(
+export async function googleJson(
   fetchImpl: typeof fetch,
   token: string,
   url: URL | string,
@@ -414,21 +421,111 @@ function relaySignals(
   return { observedAt, signals }
 }
 
+const ADMIN_RETRY_ATTEMPTS = 3
+const ADMIN_RETRY_INTERVAL_MS = 5_000
+const ADMIN_RETRYABLE_STATUSES = new Set([500, 502, 503, 504])
+const AdminErrorBodySchema = z.object({ error: z.string() })
+// The director's /v1/admin/cell-status maps any thrown operation error onto 404
+// with an {error: message} body, so a Cloud SQL pool connect timeout arrives
+// here as a 404. These are the pool-acquire and transient SQLSTATE messages the
+// relay app's own isRelayDatabaseTransientError treats as re-runnable.
+const ADMIN_TRANSIENT_ERROR_MESSAGES = [
+  'timeout exceeded when trying to connect',
+  'Connection terminated due to connection timeout',
+  'Connection terminated unexpectedly',
+  'database_temporarily_unavailable',
+  'deadlock detected',
+  'canceling statement due to',
+  'too many connections',
+  'the database system is shutting down',
+  'the database system is starting up'
+]
+
+const defaultWait = async (ms: number): Promise<void> =>
+  await new Promise((resolveWait) => setTimeout(resolveWait, ms))
+
+// A dropped socket or the 30 s AbortSignal firing; both leave the request with
+// no verdict, and every admin read here is a plain query.
+function transientFetchFailure(error: unknown): boolean {
+  if (error instanceof TypeError) return true
+  const name = (error as { name?: unknown } | null)?.name
+  return name === 'AbortError' || name === 'TimeoutError'
+}
+
+function adminErrorMessage(body: string): string | null {
+  const parsed = AdminErrorBodySchema.safeParse(
+    ((): unknown => {
+      try {
+        return JSON.parse(body)
+      } catch {
+        return null
+      }
+    })()
+  )
+  return parsed.success ? parsed.data.error : null
+}
+
+function retryableAdminStatus(status: number, body: string): boolean {
+  if (ADMIN_RETRYABLE_STATUSES.has(status)) return true
+  // 401/403/400/413 and a 404 for 'director_only' are decisions, not weather.
+  if (status !== 404) return false
+  const message = adminErrorMessage(body)
+  return (
+    message !== null &&
+    ADMIN_TRANSIENT_ERROR_MESSAGES.some((transient) => message.includes(transient))
+  )
+}
+
+// Step 5: cell-status refuses a reserve cell with exactly this 404 body; any other 404 stays a failure.
+class AdminReserveCellRefusal extends Error {
+  constructor(status: number) {
+    super(`Relay admin telemetry returned ${status}`)
+  }
+}
+
 async function adminPost(
   fetchImpl: typeof fetch,
   origin: string,
   token: string,
   path: string,
-  body: unknown
+  body: unknown,
+  wait: (ms: number) => Promise<void> = defaultWait
 ): Promise<unknown> {
-  const response = await fetchImpl(`${origin}${path}`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000)
-  })
-  if (!response.ok) throw new Error(`Relay admin telemetry returned ${response.status}`)
-  return await response.json()
+  for (let attempt = 1; ; attempt++) {
+    const lastAttempt = attempt >= ADMIN_RETRY_ATTEMPTS
+    let response: Response
+    try {
+      response = await fetchImpl(`${origin}${path}`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(30_000)
+      })
+    } catch (error) {
+      if (lastAttempt || !transientFetchFailure(error)) throw error
+      console.warn(
+        `relay admin telemetry retrying ${path} after network failure` +
+          ` (attempt ${attempt}/${ADMIN_RETRY_ATTEMPTS})`
+      )
+      await wait(ADMIN_RETRY_INTERVAL_MS)
+      continue
+    }
+    if (response.ok) return await response.json()
+    // Status only: the body carries a director error message, which must not
+    // reach the log the way an identity would.
+    const errorBody = await response.text().catch(() => '')
+    if (response.status === 404 && adminErrorMessage(errorBody) === 'cell_in_reserve_mode') {
+      throw new AdminReserveCellRefusal(response.status)
+    }
+    if (lastAttempt || !retryableAdminStatus(response.status, errorBody)) {
+      throw new Error(`Relay admin telemetry returned ${response.status}`)
+    }
+    console.warn(
+      `relay admin telemetry retrying ${path} after ${response.status}` +
+        ` (attempt ${attempt}/${ADMIN_RETRY_ATTEMPTS})`
+    )
+    await wait(ADMIN_RETRY_INTERVAL_MS)
+  }
 }
 
 export async function directorSignals(
@@ -436,7 +533,8 @@ export async function directorSignals(
   expectedSelector: AdmissionSelector,
   gcloud: GcloudClient,
   nowMs: number,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  wait: (ms: number) => Promise<void> = defaultWait
 ): Promise<{
   source: IncidentSource
   selector: AdmissionSelector
@@ -452,7 +550,8 @@ export async function directorSignals(
       environment.directorOrigin,
       token,
       '/v1/admin/admission-selector/status',
-      { v: 1 }
+      { v: 1 },
+      wait
     )
   ).selector
   const selector = {
@@ -461,19 +560,32 @@ export async function directorSignals(
   }
   const statuses: Array<{
     cell: RelayOpsEnvironment['cells'][number]
-    status: z.infer<typeof CellStatusSchema>['status']
+    status: ({ reserve: false } & z.infer<typeof CellStatusSchema>['status']) | { reserve: true }
   }> = []
   for (const cell of environment.cells) {
+    let response: unknown
+    try {
+      response = await adminPost(
+        fetchImpl,
+        environment.directorOrigin,
+        token,
+        '/v1/admin/cell-status',
+        { v: 1, cellId: cell.cellId },
+        wait
+      )
+    } catch (error) {
+      if (!(error instanceof AdminReserveCellRefusal)) throw error
+      statuses.push({ cell, status: { reserve: true } })
+      continue
+    }
     statuses.push({
       cell,
-      status: CellStatusSchema.parse(
-        await adminPost(fetchImpl, environment.directorOrigin, token, '/v1/admin/cell-status', {
-          v: 1,
-          cellId: cell.cellId
-        })
-      ).status
+      status: { reserve: false, ...CellStatusSchema.parse(response).status }
     })
   }
+  const reserveCellIds = new Set(
+    statuses.filter(({ status }) => status.reserve).map(({ cell }) => cell.cellId)
+  )
   const migrationEntries: Array<{
     sourceCellId: string
     migration: z.infer<typeof MigrationStatusSchema>
@@ -482,6 +594,8 @@ export async function directorSignals(
   for (const source of environment.cells) {
     for (const target of environment.cells) {
       if (source.cellId === target.cellId || !migrationTargets.has(target.cellId)) continue
+      // The director refuses migration reads, and every migration, on a reserve cell.
+      if (reserveCellIds.has(source.cellId)) continue
       migrationEntries.push({
         sourceCellId: source.cellId,
         migration: MigrationStatusSchema.parse(
@@ -495,7 +609,8 @@ export async function directorSignals(
               sourceCellId: source.cellId,
               targetCellId: target.cellId,
               completeReady: false
-            }
+            },
+            wait
           )
         )
       })
@@ -512,6 +627,24 @@ export async function directorSignals(
   const signals: Record<string, IncidentSignal> = {}
   for (const { cell, status } of statuses) {
     const prefix = `cell.${cell.cellId}`
+    if (status.reserve) {
+      // cell-status carries the live cap; unset in Terraform keeps the evaluator's default, as there.
+      if (cell.connectionHardCap !== null) {
+        addSignal(signals, `${prefix}.connection_hard_cap`, cell.connectionHardCap, nowAt)
+      }
+      // Legacy admission needs relay_cells.enabled, which only cell-status reads: left missing.
+      if (selector.generation !== 0) {
+        addSignal(
+          signals,
+          `${prefix}.admission_state`,
+          ['existing-only', 'migration-only', 'general'].indexOf(
+            selectorCellState(selector, cell.cellId)
+          ),
+          nowAt
+        )
+      }
+      continue
+    }
     const admissionState = effectiveAdmissionState(
       selector,
       status.enabled,
@@ -556,12 +689,13 @@ export async function directorSignals(
   return {
     source: { observedAt: nowAt, signals },
     selector,
-    cells: statuses.map(({ cell }) => ({
+    cells: statuses.map(({ cell, status }) => ({
       cellId: cell.cellId,
       region: cell.region,
       runtimeKnown: true,
       powered: true,
-      expectedAdmissionState: selectorCellState(expectedSelector, cell.cellId)
+      expectedAdmissionState: selectorCellState(expectedSelector, cell.cellId),
+      ...(status.reserve ? { reserve: true } : {})
     }))
   }
 }
@@ -571,6 +705,7 @@ export type IncidentSampleCollectorOptions = {
   expectedSelector: AdmissionSelector
   fetchImpl?: typeof fetch
   now?: () => number
+  wait?: (ms: number) => Promise<void>
 }
 
 export function createIncidentSampleCollector(
@@ -610,7 +745,8 @@ export function createIncidentSampleCollector(
         options.expectedSelector,
         gcloud,
         nowMs,
-        fetchImpl
+        fetchImpl,
+        options.wait ?? defaultWait
       ),
       cloudMetricEntries
     ])

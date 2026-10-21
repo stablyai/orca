@@ -1,10 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 
-import {
-  isComposerFieldToFieldFocus,
-  WORKSPACE_COMPOSER_ROOT_SELECTOR
-} from './smart-workspace-source-popover-focus'
+import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
 
 describe('isComposerFieldToFieldFocus', () => {
   it('returns true when focus moves between fields inside the composer root', () => {
@@ -57,9 +54,5 @@ describe('isComposerFieldToFieldFocus', () => {
         relatedTarget: null
       })
     ).toBe(false)
-  })
-
-  it('exports the composer root selector used by the card', () => {
-    expect(WORKSPACE_COMPOSER_ROOT_SELECTOR).toBe('[data-workspace-composer-root="true"]')
   })
 })

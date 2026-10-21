@@ -40,6 +40,17 @@ describe('PtyProcessListAdmission', () => {
     ).toThrow('invalid_pty_process_list')
   })
 
+  it('keeps the host verdict that a PTY is exiting', () => {
+    const admission = new PtyProcessListAdmission()
+
+    expect(admission.admit({ id: 'pty-1', cwd: '/repo', title: 'shell', exiting: true })).toEqual({
+      id: 'pty-1',
+      cwd: '/repo',
+      title: 'shell',
+      exiting: true
+    })
+  })
+
   it('strips unknown provider payloads from admitted process metadata', () => {
     const admission = new PtyProcessListAdmission()
 

@@ -54,19 +54,11 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     getAgentLaunchConfigForStatusEntry: vi.fn((entry: { paneKey: string }) => {
       return getState().agentLaunchConfigByPaneKey[entry.paneKey]?.launchConfig
     }),
-    getAgentLaunchConfigForStatusMetadata: vi.fn(
-      (metadata: { paneKey: string; launchToken?: string }) => {
-        return metadata.launchToken
-          ? getState().agentLaunchConfigByPaneKey[metadata.paneKey]?.launchConfig
-          : undefined
-      }
-    ),
     clearSleepingAgentSession: vi.fn((paneKey: string) => {
       delete getState().sleepingAgentSessionsByPaneKey[paneKey]
     }),
     registerAgentLaunchConfig: vi.fn(),
     clearAgentLaunchConfig: vi.fn(),
-    markWorktreeUnread: vi.fn(),
     observeTerminalGitHubPullRequestLink: vi.fn(),
     recordTerminalInput: vi.fn(),
     setAgentStatus: vi.fn(
@@ -98,9 +90,8 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     clearPaneForegroundAgent: vi.fn((paneKey: string) => {
       delete getState().paneForegroundAgentByPaneKey[paneKey]
     }),
-    markTerminalTabUnread: vi.fn(),
-    markTerminalPaneUnread: vi.fn(),
-    markAgentCompletionPaneUnread: vi.fn()
+    markTerminalBell: vi.fn(),
+    markAgentAttentionUnread: vi.fn()
   } as StoreState
 }
 
@@ -123,9 +114,14 @@ export function buildActiveRuntimeEnvironmentState(
 ): StoreState {
   return {
     ...current,
+    // The client stamps a server's rows on arrival; focus alone never names the owner.
+    repos: current.repos.map((repo) => ({
+      ...repo,
+      executionHostId: repo.executionHostId ?? `runtime:${environmentId}`
+    })),
     settings: {
       ...current.settings,
       activeRuntimeEnvironmentId: environmentId
     }
-  } as StoreState
+  }
 }

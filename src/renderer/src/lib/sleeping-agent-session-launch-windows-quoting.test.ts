@@ -41,6 +41,9 @@ const store = {
     Object.values(store.worktreesByRepo)
       .flat()
       .find((worktree) => worktree.id === id),
+  sshConnectionStates: new Map<string, { remotePlatform?: NodeJS.Platform }>(),
+  sshStateByEnvironment: new Map(),
+  runtimeStatusByEnvironmentId: new Map(),
   tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
@@ -78,9 +81,9 @@ const record: SleepingAgentSessionRecord = {
   updatedAt: 1
 }
 
-async function launch(): Promise<string | undefined> {
+async function launch(sessionRecord = record): Promise<string | undefined> {
   const { launchSleepingAgentSession } = await import('./sleeping-agent-session-launch')
-  launchSleepingAgentSession(record)
+  launchSleepingAgentSession(sessionRecord)
   const options = mockCreateTab.mock.calls.at(-1)?.[3] as
     | { pendingStartup?: { command: string } }
     | undefined
@@ -97,6 +100,7 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
       activeRuntimeEnvironmentId: null
     }
     store.repos = [{ id: 'repo-1', connectionId: null, path: 'C:\\Users\\neil\\repo' }]
+    store.sshConnectionStates = new Map()
     store.worktreesByRepo = {
       'repo-1': [
         {
@@ -113,25 +117,19 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
   it('quotes the resume argv for a cmd.exe tab', async () => {
     store.settings.terminalWindowsShell = 'cmd.exe'
 
-    await expect(launch()).resolves.toBe(
-      `codex "--dangerously-bypass-approvals-and-sandbox" "resume" "${SESSION_ID}"`
-    )
+    await expect(launch()).resolves.toBe(`codex "resume" "${SESSION_ID}"`)
   })
 
   it('keeps PowerShell quoting for a powershell tab', async () => {
     store.settings.terminalWindowsShell = 'powershell.exe'
 
-    await expect(launch()).resolves.toBe(
-      `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
-    )
+    await expect(launch()).resolves.toBe(`codex 'resume' '${SESSION_ID}'`)
   })
 
   it('quotes the resume argv for a Git Bash tab', async () => {
     store.settings.terminalWindowsShell = 'git-bash'
 
-    await expect(launch()).resolves.toBe(
-      `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
-    )
+    await expect(launch()).resolves.toBe(`codex 'resume' '${SESSION_ID}'`)
   })
 
   it('ignores the local Windows shell setting for an SSH workspace', async () => {
@@ -148,8 +146,53 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
       ]
     }
 
-    await expect(launch()).resolves.toBe(
-      `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
+    await expect(launch()).resolves.toBe(`codex 'resume' '${SESSION_ID}'`)
+  })
+  it.each([
+    ['cmd.exe', 'omp "--resume" "C:\\custom sessions\\session.jsonl"'],
+    ['powershell.exe', "omp '--resume' 'C:\\custom sessions\\session.jsonl'"]
+  ])('keeps a hook-only OMP locator when waking into %s', async (shell, expected) => {
+    store.settings.terminalWindowsShell = shell
+    const omp: SleepingAgentSessionRecord = {
+      ...record,
+      agent: 'omp',
+      providerSession: {
+        key: 'session_id',
+        id: SESSION_ID,
+        transcriptPath: 'C:\\custom sessions\\session.jsonl'
+      }
+    }
+    await expect(launch(omp)).resolves.toBe(expected)
+  })
+  it('quotes for PowerShell on an SSH host that reported Windows', async () => {
+    store.settings.terminalWindowsShell = 'cmd.exe'
+    store.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: 'C:\\repo' }]
+    store.sshConnectionStates = new Map([['ssh-1', { remotePlatform: 'win32' }]])
+    const omp: SleepingAgentSessionRecord = {
+      ...record,
+      agent: 'omp',
+      providerSession: {
+        key: 'session_id',
+        id: SESSION_ID,
+        transcriptPath: "C:\\neil's sessions\\session.jsonl"
+      }
+    }
+    await expect(launch(omp)).resolves.toBe("omp '--resume' 'C:\\neil''s sessions\\session.jsonl'")
+  })
+  it('keeps the remote OMP path instead of using the local Windows shell or UUID', async () => {
+    store.settings.terminalWindowsShell = 'cmd.exe'
+    store.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+    const omp: SleepingAgentSessionRecord = {
+      ...record,
+      agent: 'omp',
+      providerSession: {
+        key: 'session_id',
+        id: SESSION_ID,
+        transcriptPath: '/remote/custom sessions/session.jsonl'
+      }
+    }
+    await expect(launch(omp)).resolves.toBe(
+      "omp '--resume' '/remote/custom sessions/session.jsonl'"
     )
   })
 })

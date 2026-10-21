@@ -3,13 +3,18 @@ import { useCallback } from './mobile-tasks-dependencies'
 import {
   type DetailComment,
   type GitHubDetailFile,
-  type GitHubPRFileContents,
   type GitHubProjectRow,
   type HostedReviewMergeMethod,
   type TaskItem,
-  isSuccess,
   projectRowGitHubRepository
 } from './mobile-tasks-legacy-foundation'
+import {
+  githubIssueUpdate,
+  githubPullRequestFileContentsRead,
+  githubPullRequestMerge,
+  githubPullRequestStateUpdate
+} from './mobile-task-item-state-operations'
+import { githubReviewCommentWrite } from './mobile-task-item-comment-operations'
 
 export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckActionsModel) {
   const {
@@ -62,8 +67,8 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
       setPrFileLoadingPath(file.path)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.prFileContents',
+        const reply = await githubPullRequestFileContentsRead.request(
+          client,
           {
             repo: `id:${repo.id}`,
             prNumber: row.content.number,
@@ -76,13 +81,8 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        setPrFileContents((current) => ({
-          ...current,
-          [file.path]: response.result as GitHubPRFileContents
-        }))
+        const contents = githubPullRequestFileContentsRead.interpret(reply)
+        setPrFileContents((current) => ({ ...current, [file.path]: contents }))
       } catch (err) {
         setProjectRowDetailError(
           err instanceof Error ? err.message : 'Failed to load file contents'
@@ -125,8 +125,8 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.addPRReviewComment',
+        const reply = await githubReviewCommentWrite.request(
+          client,
           {
             repo: `id:${repo.id}`,
             prNumber: row.content.number,
@@ -138,14 +138,7 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
-        }
+        const result = githubReviewCommentWrite.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to add review comment')
         }
@@ -203,8 +196,8 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.mergePR',
+        const reply = await githubPullRequestMerge.request(
+          client,
           {
             repo: `id:${repo.id}`,
             prNumber: row.content.number,
@@ -213,10 +206,7 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
           },
           { timeoutMs: 60_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
+        const result = githubPullRequestMerge.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to merge pull request')
         }
@@ -257,26 +247,26 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
       setError('')
       const nextState = item.source.state === 'closed' ? 'open' : 'closed'
       try {
-        const method = item.source.type === 'issue' ? 'github.updateIssue' : 'github.updatePRState'
-        const params =
+        // The method and its params were a pair of local ternaries over the item type, not a step
+        // handed in at runtime, so each arm sends its own operation with its own params type.
+        const updated =
           item.source.type === 'issue'
-            ? {
-                repo: `id:${item.source.repoId}`,
-                number: item.source.number,
-                updates: { state: nextState }
-              }
-            : {
-                repo: `id:${item.source.repoId}`,
-                prNumber: item.source.number,
-                updates: { state: nextState }
-              }
-        const response = await client.sendRequest(method, params)
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to update GitHub status')
+            ? githubIssueUpdate.interpret(
+                await githubIssueUpdate.request(client, {
+                  repo: `id:${item.source.repoId}`,
+                  number: item.source.number,
+                  updates: { state: nextState }
+                })
+              )
+            : githubPullRequestStateUpdate.interpret(
+                await githubPullRequestStateUpdate.request(client, {
+                  repo: `id:${item.source.repoId}`,
+                  prNumber: item.source.number,
+                  updates: { state: nextState }
+                })
+              )
+        if (updated.ok === false) {
+          throw new Error(updated.error ?? 'Failed to update GitHub status')
         }
         setActionItem(null)
         await loadTasks({ silent: true })

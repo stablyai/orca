@@ -5,10 +5,12 @@ import {
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR,
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit,
+  clipboardFormatsIncludeImage,
   clipboardImageThumbnailSize,
   type ClipboardImageThumbnail
 } from '../../../../shared/clipboard-image'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
+import { blobToBase64, convertImageBlobToPng } from '@/lib/image-blob-png'
 import { copyClipboardTextViaExecCommand } from '../web-clipboard-copy-fallback'
 import { callRuntimeEnvelope, callRuntimeResult } from './web-runtime-calls'
 
@@ -24,54 +26,8 @@ export const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
 
 export const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
 
-export function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : ''
-      const commaIndex = result.indexOf(',')
-      resolve(commaIndex === -1 ? result : result.slice(commaIndex + 1))
-    }
-    reader.onerror = () => reject(reader.error ?? new Error('Failed to read clipboard image'))
-    reader.readAsDataURL(blob)
-  })
-}
-
 export function assertClipboardImageBlobWithinLimit(blob: Blob): void {
   assertClipboardImageByteLengthWithinLimit(blob.size)
-}
-
-export async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
-  assertClipboardImageBlobWithinLimit(blob)
-  const bitmap = await createImageBitmap(blob)
-  try {
-    assertClipboardImageDimensionsWithinLimit(bitmap)
-    const canvas = document.createElement('canvas')
-    canvas.width = bitmap.width
-    canvas.height = bitmap.height
-    const context = canvas.getContext('2d')
-    if (!context || canvas.width <= 0 || canvas.height <= 0) {
-      throw new Error('Clipboard image could not be decoded')
-    }
-    context.drawImage(bitmap, 0, 0)
-    return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((png) => {
-        if (!png) {
-          reject(new Error('Clipboard image could not be encoded as PNG'))
-          return
-        }
-        try {
-          assertClipboardImageBlobWithinLimit(png)
-        } catch (error) {
-          reject(error)
-          return
-        }
-        resolve(png)
-      }, 'image/png')
-    })
-  } finally {
-    bitmap.close()
-  }
 }
 
 async function readClipboardImageBlob(): Promise<Blob | null> {
@@ -220,4 +176,12 @@ export async function saveClipboardImageAsTempFileInRuntime(
     ).catch(() => {})
     throw error
   }
+}
+
+export async function clipboardHasImage(): Promise<boolean | null> {
+  if (!navigator.clipboard?.read) {
+    return null
+  }
+  const items = await navigator.clipboard.read()
+  return items.some((item) => clipboardFormatsIncludeImage(item.types))
 }

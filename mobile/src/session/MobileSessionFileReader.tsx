@@ -1,3 +1,5 @@
+import { MobileFileMediaPreview } from '../files/MobileFileMediaPreview'
+import type { MobileFilePreviewRpcSender } from '../files/mobile-file-preview-operations'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   FlatList,
@@ -30,15 +32,19 @@ import type {
   RenderableDiffLine
 } from './mobile-session-route-types'
 import { DiffLineRow } from './MobileSessionDiffLineRow'
+import { sendableMobileDiffComments } from './mobile-diff-comments'
+import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 
 export function FileReader({
   doc,
+  client = null,
   title,
   relativePath,
   language,
   diffCommentActions
 }: {
   doc: FileDocState | undefined
+  client?: MobileFilePreviewRpcSender | null
   title: string
   relativePath: string
   language?: string
@@ -176,19 +182,19 @@ export function FileReader({
     )
   }
   if (doc.status === 'error') {
-    return (
-      <View style={styles.markdownState}>
-        <Text style={styles.markdownError}>{doc.message}</Text>
-      </View>
-    )
+    return <MobileLoadErrorState message={doc.message} />
   }
 
   if (doc.kind === 'diff') {
     const activeDiffSyntax =
       diffSyntax?.doc === doc && diffSyntax.language === syntaxLanguage ? diffSyntax.lines : null
     const commentCount = diffCommentActions?.comments.length ?? 0
-    const unsentCommentCount =
-      diffCommentActions?.comments.filter((comment) => !comment.sentAt).length ?? 0
+    const unsentCommentCount = diffCommentActions
+      ? sendableMobileDiffComments(
+          diffCommentActions.comments,
+          diffCommentActions.sendingCommentIds
+        ).length
+      : 0
     const commentsBusy = diffCommentActions?.busy === true
     const canCopyNotes = commentCount > 0 && !commentsBusy
     const canSendNotes = unsentCommentCount > 0 && !commentsBusy
@@ -250,6 +256,9 @@ export function FileReader({
     )
   }
 
+  if (doc.kind === 'media') {
+    return <MobileFileMediaPreview media={doc.media} client={client} title={title} />
+  }
   if (doc.kind === 'image') {
     return (
       <View style={styles.imagePreviewContainer}>

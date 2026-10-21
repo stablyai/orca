@@ -1,5 +1,6 @@
 import { getPowerShellOmpShellWrapper } from './pty/omp-shell-wrapper'
-import { getPowerShellCodexShellLaunchPreflight } from './pty/codex-shell-launch-preflight'
+import { MANAGED_DATA_ACCOUNT_POWERSHELL_RESTORE } from '../shared/managed-data-account-shell'
+import { getPowerShellAgentWrappers } from '../shared/powershell-agent-wrappers'
 export { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 
 /**
@@ -39,6 +40,7 @@ const POWERSHELL_OSC133_BOOTSTRAP = `# Orca OSC 133 shell integration for PowerS
 # Profiles have already loaded normally by the time -EncodedCommand runs.
 # Restore managed ownership before the shell-integration compatibility guard.
 if ($env:ORCA_OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR }
+${MANAGED_DATA_ACCOUNT_POWERSHELL_RESTORE}
 if ($env:ORCA_MIMOCODE_HOME) { $env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME }
 if ($env:ORCA_CODEX_HOME) { $env:CODEX_HOME = $env:ORCA_CODEX_HOME }
 
@@ -56,7 +58,7 @@ if ($ExecutionContext.SessionState.LanguageMode -eq "FullLanguage" -and
     } catch { Write-Error $_ -ErrorAction Continue }
 
 ${getPowerShellOmpShellWrapper()}
-${getPowerShellCodexShellLaunchPreflight()}
+${getPowerShellAgentWrappers()}
 
     $Global:__OrcaOsc133State = @{
         OriginalPrompt = $function:prompt
@@ -99,8 +101,15 @@ ${getPowerShellCodexShellLaunchPreflight()}
 }
 `
 
+// Why strip comment lines: they document the source, but in the payload they only spend the
+// command-line budget that lets a startup command ride along (windows-shell-args.ts).
+const POWERSHELL_OSC133_BOOTSTRAP_PAYLOAD = POWERSHELL_OSC133_BOOTSTRAP.replace(
+  /^[ \t]*#.*\n/gm,
+  ''
+)
+
 export function getPowerShellOsc133Bootstrap(): string {
-  return POWERSHELL_OSC133_BOOTSTRAP
+  return POWERSHELL_OSC133_BOOTSTRAP_PAYLOAD
 }
 
 export function isPowerShellExecutableName(shellName: string): boolean {

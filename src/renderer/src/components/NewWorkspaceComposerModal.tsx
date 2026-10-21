@@ -27,6 +27,7 @@ import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
+import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 
 // Why: match App-level AddRepoDialog loading — the add flow is off the hot
 // path for the composer, so keep its clone/SSH machinery out of the entry render.
@@ -42,6 +43,7 @@ type ComposerModalData = {
   linkedWorkItem?: LinkedWorkItemSummary | null
   initialGitHubWorkItem?: GitHubWorkItem | null
   taskSourceContext?: TaskSourceContext | null
+  initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialBaseBranch?: string
   initialWorkspaceStatus?: WorkspaceStatus
   enableIssueAutomation?: boolean
@@ -73,6 +75,7 @@ function ComposerModalBody({
   modalData: ComposerModalData
   onClose: () => void
 }): React.JSX.Element {
+  const dialogRef = useRef<HTMLDivElement>(null)
   const submitCancelledRef = useRef(false)
   const handleDismiss = useCallback(() => {
     submitCancelledRef.current = true
@@ -83,7 +86,13 @@ function ComposerModalBody({
   return (
     <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
       <DialogContent
+        ref={dialogRef}
         className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg"
+        onEscapeKeyDown={(event) => {
+          if (dialogRef.current?.querySelector('[data-sparse-preset-editor]')) {
+            event.preventDefault()
+          }
+        }}
         onOpenAutoFocus={(event) => {
           // Why: Radix's FocusScope fires this once the dialog has mounted.
           // preventDefault stops it from focusing whatever first-tabbable it
@@ -133,6 +142,7 @@ function QuickTabBody({
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
     initialGitHubWorkItem: modalData.initialGitHubWorkItem ?? null,
     initialTaskSourceContext: modalData.taskSourceContext ?? null,
+    initialWorkspaceTarget: modalData.initialWorkspaceTarget ?? null,
     initialRepoId: modalData.initialRepoId,
     initialEphemeralVmRecipeId: modalData.initialEphemeralVmRecipeId,
     initialProjectGroupId: modalData.initialProjectGroupId,
@@ -142,8 +152,7 @@ function QuickTabBody({
     onCreated: onClose,
     isSubmissionCancelled,
     ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {}),
-    enableIssueAutomation: modalData.enableIssueAutomation === true,
-    createGateMode: 'quick'
+    enableIssueAutomation: modalData.enableIssueAutomation === true
   })
   // Why: the composer's built-in `onOpenAgentSettings` handler navigates to
   // the settings page and closes the modal. For the quick-create flow we want
@@ -178,14 +187,22 @@ function QuickTabBody({
     setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
   }
   const quickAgent = resolvedQuickAgentSelection.quickAgent
+  const [quickSelectionCleared, setQuickSelectionCleared] = useState(false)
+  const quickSetupOnly = quickAgent === null && quickSelectionCleared
 
   const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
     setQuickAgentOverride(agent)
+    setQuickSelectionCleared(false)
+  }, [])
+
+  const handleQuickSetupOnlySelect = useCallback(() => {
+    setQuickAgentOverride(null)
+    setQuickSelectionCleared(true)
   }, [])
 
   const handleCreate = useCallback(async (): Promise<void> => {
-    await submitQuick(quickAgent)
-  }, [quickAgent, submitQuick])
+    await submitQuick(quickAgent, { setupOnly: quickSetupOnly })
+  }, [quickAgent, quickSetupOnly, submitQuick])
   // Why: Add Project layers over the composer as a nested dialog instead of
   // replacing it in the activeModal slot — closing the composer mid-flow (and
   // losing the typed name/prompt) was the old, abrupt behavior. Once opened it
@@ -261,7 +278,7 @@ function QuickTabBody({
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
         return
       }
-      if (createDisabled) {
+      if (createDisabled || composerRef.current?.hasAttribute('data-sparse-preset-editing')) {
         return
       }
       event.preventDefault()
@@ -284,23 +301,23 @@ function QuickTabBody({
         </DialogTitle>
         <DialogDescription className="sr-only">
           {translate(
-            'auto.components.NewWorkspaceComposerModal.fa90f739a5',
-            'Choose the project, workspace name, and agent before creating the workspace.'
+            'components.newWorkspace.createDescription',
+            'Choose the project and workspace name. Select an agent if you want to start one.'
           )}
         </DialogDescription>
       </DialogHeader>
       <NewWorkspaceComposerCard
         contextualTourSource={modalData.contextualTourSource}
-        // Why: the scroll container clips children (overflow-y-auto forces overflow-x to auto),
-        // while Orca's standard field focus ring paints 3px outside the control and the ghost
-        // "Advanced" disclosure pulls its padded hover highlight ~8px left to align its label with
-        // the field labels. Inset px-2 so both stay fully visible instead of clipped at the edge.
-        containerClassName="min-h-0 flex-1 overflow-y-auto px-2 scrollbar-sleek"
+        // Keep focus rings and the Advanced hover highlight inside the scroll padding.
+        containerClassName="px-2"
+        contentClassName="-mx-2 flex-1 overflow-y-auto px-2 pb-1 scrollbar-sleek"
         composerRef={composerRef}
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
         onQuickAgentChange={handleQuickAgentChange}
+        quickSetupOnly={quickSetupOnly}
+        onQuickSetupOnlySelect={handleQuickSetupOnlySelect}
         {...cardProps}
         primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}

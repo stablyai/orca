@@ -1,0 +1,94 @@
+{
+  "testFiles": 1,
+  "total": 12,
+  "passed": 5,
+  "failed": 7,
+  "cases": [
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership does not recreate closed-tab UA intent after a late touch completion",
+      "status": "failed",
+      "failures": [
+        "AssertionError: expected true to be undefined\n    at ./src/main/browser/browser-manager-viewport-ownership.test.ts:109:37\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file://./node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      ]
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership does not restore closed-tab UA intent after a failed clear",
+      "status": "failed",
+      "failures": [
+        "AssertionError: expected true to be undefined\n    at ./src/main/browser/browser-manager-viewport-ownership.test.ts:126:42\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file://./node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      ]
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership preserves replacement desktop intent after an old clear fails",
+      "status": "failed",
+      "failures": [
+        "AssertionError: expected true to be false // Object.is equality\n    at ./src/main/browser/browser-manager-viewport-ownership.test.ts:142:42\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file://./node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      ]
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership preserves replacement mobile intent after an old clear resumes",
+      "status": "failed",
+      "failures": [
+        "AssertionError: expected false to be true // Object.is equality\n    at ./src/main/browser/browser-manager-viewport-ownership.test.ts:160:42\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file://./node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      ]
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership same-owner clear failure still restores the legitimate earlier intent",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership old apply cannot overwrite a replacement guest desktop intent",
+      "status": "failed",
+      "failures": [
+        "AssertionError: expected true to be false // Object.is equality\n    at ./src/main/browser/browser-manager-viewport-ownership.test.ts:185:41\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file://./node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      ]
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership an old native profile cannot write UA intent after replacement with a default profile",
+      "status": "failed",
+      "failures": [
+        "AssertionError: expected true to be undefined\n    at ./src/main/browser/browser-manager-viewport-ownership.test.ts:197:49\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file://./node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      ]
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership old queued operations cannot remove or join a replacement promise tail",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership normal same-owner toggles preserve last-requested order and remove the promise tail",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership native UA mode remains unchanged with mobile=false",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership native UA mode remains unchanged with mobile=true",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership late rejected clears cannot repopulate all registries after unregisterAll",
+      "status": "failed",
+      "failures": [
+        "AssertionError: expected 16 to be +0 // Object.is equality\n    at ./src/main/browser/browser-manager-viewport-ownership.test.ts:278:28\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file://./node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      ]
+    }
+  ]
+}

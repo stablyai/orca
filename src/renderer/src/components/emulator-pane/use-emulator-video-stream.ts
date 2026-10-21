@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 // Decodes the Android H.264 stream (scrcpy access units forwarded over the
 // emulator:videoStream* IPC) with WebCodecs and paints it to a <canvas>. The
@@ -32,7 +33,7 @@ const H264_CODEC = 'avc1.640028'
 type StreamSize = { width: number; height: number }
 
 function newVideoStreamId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
+  return createBrowserUuid()
 }
 
 export function useEmulatorVideoStream(

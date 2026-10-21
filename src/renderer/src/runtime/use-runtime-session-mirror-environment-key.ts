@@ -32,10 +32,24 @@ export function selectRuntimeSessionMirrorTargetInputs(
   }
 }
 
-export function buildRuntimeSessionMirrorEnvironmentKey(
+export type RuntimeSessionMirrorEnvironmentKeys = {
+  /**
+   * Identity of the mirrored set. Every retained-state stamp is cut from these fields, so moving
+   * this key invalidates the mirror -- which is exactly why a flap must not move it (#19647).
+   */
+  environmentKey: string
+  /**
+   * Advances when a mirrored host answers again after contact was lost. Purely an effect
+   * dependency: it reinstalls the subscriptions the dead transport took with it, and is
+   * deliberately absent from `environmentKey` so no frame can be stamped with it.
+   */
+  resubscribeSignal: string
+}
+
+export function buildRuntimeSessionMirrorEnvironmentKeys(
   inputs: RuntimeSessionMirrorTargetInputs
-): string {
-  return getReachableRuntimeSessionMirrorTargets({
+): RuntimeSessionMirrorEnvironmentKeys {
+  const targets = getReachableRuntimeSessionMirrorTargets({
     settings: { activeRuntimeEnvironmentId: inputs.activeRuntimeEnvironmentId },
     repos: inputs.repos,
     worktreesByRepo: inputs.worktreesByRepo,
@@ -45,14 +59,20 @@ export function buildRuntimeSessionMirrorEnvironmentKey(
     runtimeEnvironments: inputs.runtimeEnvironments,
     runtimeStatusByEnvironmentId: inputs.runtimeStatusByEnvironmentId
   })
-    .map(
-      ({ environmentId, runtimeId, connectionGeneration, pairingRevision }) =>
-        `${environmentId}\u0001${runtimeId}\u0001${connectionGeneration}\u0001${pairingRevision}`
-    )
-    .join('\u0000')
+  return {
+    environmentKey: targets
+      .map(
+        ({ environmentId, runtimeId, connectionGeneration, pairingRevision }) =>
+          `${environmentId}\u0001${runtimeId}\u0001${connectionGeneration}\u0001${pairingRevision}`
+      )
+      .join('\u0000'),
+    resubscribeSignal: targets
+      .map(({ environmentId, hostContactEpoch }) => `${environmentId}\u0001${hostContactEpoch}`)
+      .join('\u0000')
+  }
 }
 
-export function useRuntimeSessionMirrorEnvironmentKey(): string {
+export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEnvironmentKeys {
   // Why: agent/tab writes are hot; scan host ownership only when one of its sources changes.
   const inputs = useAppStore(useShallow(selectRuntimeSessionMirrorTargetInputs))
   const {
@@ -67,7 +87,7 @@ export function useRuntimeSessionMirrorEnvironmentKey(): string {
   } = inputs
   return useMemo(
     () =>
-      buildRuntimeSessionMirrorEnvironmentKey({
+      buildRuntimeSessionMirrorEnvironmentKeys({
         activeRuntimeEnvironmentId,
         repos,
         worktreesByRepo,
