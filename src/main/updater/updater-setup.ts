@@ -89,6 +89,10 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     return super.resolveUpdateInstallMode(isServeMode)
   }
 
+  setUpdateInstallMode(mode: UpdateInstallMode): void {
+    this.updateInstallMode = mode
+  }
+
   async getLinuxPackageInstallInstructions(): Promise<LinuxPackageInstallInstructions> {
     return super.getLinuxPackageInstallInstructions()
   }
