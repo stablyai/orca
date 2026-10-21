@@ -1095,7 +1095,9 @@
       },
       "machineWorktreeCreation": {
         "noCloneUrl": "このプロジェクトにはマシンへクローンできるリモートがありません。",
-        "cloneFailed": "マシンにプロジェクトを準備できませんでした。"
+        "cloneFailed": "マシンにプロジェクトを準備できませんでした。",
+        "createUnsettled": "プロバイダーはまだ {{name}} を作成中かもしれません。1 分後に再試行してください。",
+        "createUnchecked": "{{name}} が作成済みか確認できませんでした。"
       },
       "machines": {
         "machineCopy": {
@@ -1137,7 +1139,10 @@
           "startingMachine": "マシンを起動",
           "settingUpRepo": "リポジトリを準備",
           "startingAgent": "Agent を起動",
-          "openingTerminal": "ターミナルを開く"
+          "openingTerminal": "ターミナルを開く",
+          "creating": "作成中…",
+          "canceled": "キャンセル済み",
+          "cloningProject": "{{project}} をクローン中…"
         },
         "machineStart": {
           "readFailed": "{{name}} に接続できませんでした。",
@@ -1145,7 +1150,10 @@
           "wakeFailed": "{{name}} を起動できませんでした。",
           "connectFailed": "{{name}} に接続できませんでした。",
           "noProjectRoot": "プロバイダーは {{name}} 上のプロジェクトの場所を示しませんでした。",
-          "noServer": "Orca は {{name}} でサーバーを起動できませんでした。プロジェクトの準備にはサーバーが必要です。"
+          "noServer": "Orca は {{name}} でサーバーを起動できませんでした。プロジェクトの準備にはサーバーが必要です。",
+          "createFailed": "{{name}} を作成できませんでした。",
+          "nameTaken": "{{name}} という名前のマシンは既にあります。詳細設定で別の名前を選んでください。",
+          "createStillRunning": "プロバイダーはまだ {{name}} を作成しています。1 分後にもう一度お試しください。"
         },
         "machineProviderActions": {
           "signInStarted": "{{provider}} へのサインインを完了してから、新しいワークツリーに戻ってください。",
@@ -3021,7 +3029,8 @@
             "767951265d": "ワークツリーの作成中に問題が発生しました。",
             "vmProvisioningTitle": "VMのプロビジョニング",
             "cancelProvisioning": "キャンセル",
-            "vmProvisioningLogEmpty": "レシピの出力を待っています…"
+            "vmProvisioningLogEmpty": "レシピの出力を待っています…",
+            "newMachine": "新しいマシン"
           },
           "MachineCreationStatus": {
             "failedTitle": "{{name}} を準備できませんでした",
@@ -3030,7 +3039,23 @@
             "retry": "再試行",
             "removeWorktree": "ワークツリーを削除",
             "showLog": "ログを表示",
-            "logEmpty": "プロバイダーの出力を待っています…"
+            "logEmpty": "プロバイダーの出力を待っています…",
+            "canceledDetail": "キャンセル前に {{provider}} がマシンを起動した可能性があります。",
+            "newMachineOn": "{{provider}} の新しいマシン {{machine}}",
+            "canceled": "キャンセルしました",
+            "cancel": "キャンセル",
+            "canceledCreated": "{{machine}} は {{provider}} で作成済みで、まだ実行中です。",
+            "canceledDeleted": "この作成で残ったマシンを削除しました。"
+          },
+          "MachineLeftoverCheck": {
+            "check": "残ったマシンを確認",
+            "none": "残ったマシンはありません",
+            "delete": "{{name}} を削除",
+            "deleted": "残ったマシンを削除しました",
+            "checkAgain": "もう一度確認",
+            "unknown": "確認のために {{provider}} に接続できませんでした。",
+            "deleteFailed": "削除できませんでした。{{reason}}",
+            "notFoundYet": "まだ見つかりません。"
           }
         }
       },
@@ -5494,7 +5519,8 @@
         "PendingWorktreeRow": {
           "af21e953d1": "ワークツリーの作成をキャンセルする",
           "188f6922a0": "キャンセル",
-          "creatingWorkspace": "ワークスペースを作成中…"
+          "creatingWorkspace": "ワークスペースを作成中…",
+          "canceled": "キャンセル済み"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "キャンセル",
@@ -14869,7 +14895,8 @@
           "RunTargetCombobox": {
             "listLabel": "実行ターゲット",
             "label": "実行先",
-            "browse": "実行ターゲットを参照"
+            "browse": "実行ターゲットを参照",
+            "newMachine": "新しいマシン"
           },
           "SetProjectLocationDialog": {
             "title": "プロジェクトの場所を設定する",
@@ -14891,11 +14918,28 @@
             "showDetails": "詳細を表示",
             "noMachines": "マシンなし",
             "signInOnServer": "{{server}} でサインインが必要です",
-            "noLocation": "ここではプロジェクト未設定"
+            "noLocation": "ここではプロジェクト未設定",
+            "newMachine": "{{provider}} に新しいマシン…"
           },
           "RunTargetRowList": {
             "sshHosts": "SSH ホスト",
             "otherHosts": "その他のホスト"
+          },
+          "MachineCreateFields": {
+            "machine": "マシン",
+            "lifetime": "存続期間",
+            "deleteAfter": "削除までの時間",
+            "image": "イメージ",
+            "machineName": "マシン名",
+            "sameAsWorktree": "ワークツリーと同じ",
+            "days_one": "1 日",
+            "days_other": "{{count}} 日",
+            "hours_one": "1 時間",
+            "hours_other": "{{count}} 時間",
+            "minutes_one": "1 分",
+            "minutes_other": "{{count}} 分",
+            "finalName": "名前: {{name}}",
+            "fallbackName": "名前: machine-…（一意の名前）"
           }
         }
       },

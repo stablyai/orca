@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { MachineProviderSnapshot, MachineRecord } from '../../../../shared/machine-inventory'
 import type { MachineChoice } from '@/lib/machines/machine-group-options'
+import type { MachineCreateDraft } from '@/lib/machines/machine-create-draft'
 import type { AppState } from '../types'
 
 /** A worktree's machine wake as its terminals see it: they hold their attach until it clears. */
@@ -21,6 +22,9 @@ export type MachinesSlice = {
   setWorktreeMachineWake: (worktreeId: string, wake: WorktreeMachineWake | null) => void
   /** The machine a composer had chosen when sign-in closed it; read once when it reopens. */
   composerMachineRestore: MachineChoice | null
+  /** The new-machine draft a composer had when sign-in closed it; read once when it reopens. */
+  composerDraftRestore: MachineCreateDraft | null
+  setComposerDraftRestore: (draft: MachineCreateDraft | null) => void
   setComposerMachineRestore: (choice: MachineChoice | null) => void
   applyMachineSnapshot: (snapshot: MachineProviderSnapshot) => void
   /** Main's full provider list: reported ones apply as pushes do, unreported ones are gone. */
@@ -68,6 +72,8 @@ export const createMachinesSlice: StateCreator<AppState, [], [], MachinesSlice> 
       return { machineWakeByWorktreeId: next }
     }),
   composerMachineRestore: null,
+  composerDraftRestore: null,
+  setComposerDraftRestore: (composerDraftRestore) => set({ composerDraftRestore }),
   setComposerMachineRestore: (composerMachineRestore) => set({ composerMachineRestore }),
   applyMachineSnapshot: (snapshot) =>
     set((state) =>

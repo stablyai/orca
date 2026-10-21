@@ -53,6 +53,8 @@ const machines = {
   get: vi.fn(),
   wake: vi.fn(),
   connect: vi.fn(),
+  create: vi.fn(),
+  list: vi.fn(),
   onProgress: vi.fn(() => () => {})
 }
 
@@ -291,6 +293,148 @@ describe('prepareMachineRequest', () => {
     expect(store.applyEnvironmentMachine).toHaveBeenCalledWith(
       'env-2',
       expect.objectContaining({ id: 'box-1' })
+    )
+  })
+
+  it('creates the machine once, records it for Retry, then sets up the project', async () => {
+    machines.create.mockResolvedValue({ ok: true, value: record({ id: 'box-new' }) })
+    machines.get.mockResolvedValue({ ok: true, value: record({ id: 'box-new' }) })
+    store.setupProjectClone.mockResolvedValue({
+      project: { id: 'project-1' },
+      setup: { id: 'setup-1', projectId: 'project-1', hostId: 'runtime:env-1' },
+      repo: { id: 'repo-machine', path: '/home/dev/src/web' }
+    })
+    const create = { operationId: 'op-1', name: 'feature', lifetime: 'temporary' as const }
+    const machine = {
+      sourceRepoId: 'repo-local',
+      projectId: 'project-1',
+      providerKey: PROVIDER,
+      machineName: 'feature',
+      create
+    }
+
+    const prepared = await prepareMachineRequest('creation-1', { ...REQUEST, machine }, machine)
+
+    expect(machines.list).not.toHaveBeenCalled()
+    expect(machines.create).toHaveBeenCalledWith({ providerKey: PROVIDER, ...create })
+    expect(store.updatePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
+      request: expect.objectContaining({
+        machine: expect.objectContaining({ create: { ...create, attempted: true } })
+      })
+    })
+    expect(prepared?.machine?.machineId).toBe('box-new')
+  })
+
+  it('on Retry adopts the machine an earlier attempt made instead of creating another', async () => {
+    machines.list.mockResolvedValue({
+      ok: true,
+      value: {
+        machines: [record({ id: 'box-old', creatingOperationId: 'op-1' })],
+        pendingCreates: []
+      }
+    })
+    machines.get.mockResolvedValue({ ok: true, value: record({ id: 'box-old' }) })
+    const machine = {
+      ...MACHINE,
+      machineId: undefined,
+      create: {
+        operationId: 'op-1',
+        name: 'feature',
+        lifetime: 'persistent' as const,
+        attempted: true
+      }
+    }
+
+    await prepareMachineRequest('creation-1', { ...REQUEST, machine }, machine)
+
+    expect(machines.create).not.toHaveBeenCalled()
+    expect(machines.connect).toHaveBeenCalledWith(expect.objectContaining({ machineId: 'box-old' }))
+  })
+
+  it('on Retry refuses to create while the earlier outcome is unknown', async () => {
+    const machine = {
+      ...MACHINE,
+      machineId: undefined,
+      create: {
+        operationId: 'op-1',
+        name: 'feature',
+        lifetime: 'persistent' as const,
+        attempted: true
+      }
+    }
+    machines.list.mockResolvedValueOnce({
+      ok: true,
+      value: { machines: [], pendingCreates: [{ operationId: 'op-1' }] }
+    })
+    expect(await prepareMachineRequest('creation-1', { ...REQUEST, machine }, machine)).toBeNull()
+    machines.list.mockResolvedValueOnce({ ok: false, code: 'timeout', message: 'ssh timed out' })
+    expect(await prepareMachineRequest('creation-1', { ...REQUEST, machine }, machine)).toBeNull()
+
+    expect(machines.create).not.toHaveBeenCalled()
+    expect(store.updatePendingWorktreeCreation).toHaveBeenLastCalledWith('creation-1', {
+      status: 'error',
+      error: 'Couldn’t check whether feature was already created.'
+    })
+  })
+
+  it('names a taken machine name plainly', async () => {
+    machines.create.mockResolvedValue({ ok: false, code: 'conflict', message: 'exists' })
+    const machine = {
+      ...MACHINE,
+      machineId: undefined,
+      create: { operationId: 'op-3', name: 'feature', lifetime: 'persistent' as const }
+    }
+
+    await prepareMachineRequest('creation-1', { ...REQUEST, machine }, machine)
+
+    expect(store.updatePendingWorktreeCreation).toHaveBeenLastCalledWith('creation-1', {
+      status: 'error',
+      error: 'A machine named feature already exists. Pick another name in Advanced.'
+    })
+  })
+
+  it('stops after a cancel without connecting', async () => {
+    machines.create.mockImplementation(async () => {
+      store.pendingWorktreeCreations['creation-1'].machineProgress = {
+        activity: 'creating',
+        canceled: true
+      }
+      return { ok: true, value: record({ id: 'box-new' }) }
+    })
+    const machine = {
+      ...MACHINE,
+      machineId: undefined,
+      create: { operationId: 'op-2', name: 'feature', lifetime: 'persistent' as const }
+    }
+
+    expect(await prepareMachineRequest('creation-1', { ...REQUEST, machine }, machine)).toBeNull()
+    expect(machines.connect).not.toHaveBeenCalled()
+  })
+
+  it('never creates a machine when Retry is canceled while it checks the earlier attempt', async () => {
+    machines.list.mockImplementation(async () => {
+      store.pendingWorktreeCreations['creation-1'].machineProgress = {
+        activity: 'creating',
+        canceled: true
+      }
+      return { ok: true, value: { machines: [], pendingCreates: [] } }
+    })
+    const machine = {
+      ...MACHINE,
+      machineId: undefined,
+      create: {
+        operationId: 'op-1',
+        name: 'feature',
+        lifetime: 'persistent' as const,
+        attempted: true
+      }
+    }
+
+    expect(await prepareMachineRequest('creation-1', { ...REQUEST, machine }, machine)).toBeNull()
+    expect(machines.create).not.toHaveBeenCalled()
+    expect(store.updatePendingWorktreeCreation).not.toHaveBeenCalledWith(
+      'creation-1',
+      expect.objectContaining({ status: 'error' })
     )
   })
 })

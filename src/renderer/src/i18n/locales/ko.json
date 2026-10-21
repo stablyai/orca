@@ -1095,7 +1095,9 @@
       },
       "machineWorktreeCreation": {
         "noCloneUrl": "이 프로젝트에는 머신에 복제할 원격 저장소가 없습니다.",
-        "cloneFailed": "머신에 프로젝트를 설정할 수 없습니다."
+        "cloneFailed": "머신에 프로젝트를 설정할 수 없습니다.",
+        "createUnsettled": "공급자가 아직 {{name}}을(를) 만드는 중일 수 있습니다. 1분 후 다시 시도하세요.",
+        "createUnchecked": "{{name}}이(가) 이미 만들어졌는지 확인할 수 없습니다."
       },
       "machines": {
         "machineCopy": {
@@ -1137,7 +1139,10 @@
           "startingMachine": "머신 시작",
           "settingUpRepo": "저장소 설정",
           "startingAgent": "에이전트 시작",
-          "openingTerminal": "터미널 여는 중"
+          "openingTerminal": "터미널 여는 중",
+          "creating": "만드는 중…",
+          "canceled": "취소됨",
+          "cloningProject": "{{project}} 복제 중…"
         },
         "machineStart": {
           "readFailed": "{{name}}에 연결할 수 없습니다.",
@@ -1145,7 +1150,10 @@
           "wakeFailed": "{{name}}을(를) 깨울 수 없습니다.",
           "connectFailed": "{{name}}에 연결할 수 없습니다.",
           "noProjectRoot": "공급자가 {{name}}에서 프로젝트 위치를 알려 주지 않았습니다.",
-          "noServer": "Orca가 {{name}}에서 서버를 시작할 수 없습니다. 프로젝트를 설정하려면 서버가 필요합니다."
+          "noServer": "Orca가 {{name}}에서 서버를 시작할 수 없습니다. 프로젝트를 설정하려면 서버가 필요합니다.",
+          "createFailed": "{{name}}을(를) 만들 수 없습니다.",
+          "nameTaken": "{{name}} 이름의 머신이 이미 있습니다. 고급에서 다른 이름을 선택하세요.",
+          "createStillRunning": "공급자가 아직 {{name}}을(를) 만들고 있습니다. 1분 후에 다시 시도하세요."
         },
         "machineProviderActions": {
           "signInStarted": "{{provider}} 로그인을 마친 후 새 워크트리로 돌아가세요.",
@@ -3021,7 +3029,8 @@
             "767951265d": "작업 트리를 만드는 중에 문제가 발생했습니다.",
             "vmProvisioningTitle": "VM 프로비저닝",
             "cancelProvisioning": "취소",
-            "vmProvisioningLogEmpty": "레시피 출력을 기다리는 중…"
+            "vmProvisioningLogEmpty": "레시피 출력을 기다리는 중…",
+            "newMachine": "새 머신"
           },
           "MachineCreationStatus": {
             "failedTitle": "{{name}}을(를) 설정할 수 없습니다",
@@ -3030,7 +3039,23 @@
             "retry": "다시 시도",
             "removeWorktree": "워크트리 제거",
             "showLog": "로그 보기",
-            "logEmpty": "공급자 출력을 기다리는 중…"
+            "logEmpty": "공급자 출력을 기다리는 중…",
+            "canceledDetail": "취소하기 전에 {{provider}}이(가) 머신을 시작했을 수 있습니다.",
+            "newMachineOn": "{{provider}}의 새 머신 {{machine}}",
+            "canceled": "취소됨",
+            "cancel": "취소",
+            "canceledCreated": "{{machine}}은(는) {{provider}}에 이미 만들어졌고 아직 실행 중입니다.",
+            "canceledDeleted": "이 생성으로 남은 머신을 삭제했습니다."
+          },
+          "MachineLeftoverCheck": {
+            "check": "남은 머신 확인",
+            "none": "남은 머신 없음",
+            "delete": "{{name}} 삭제",
+            "deleted": "남은 머신을 삭제했습니다",
+            "checkAgain": "다시 확인",
+            "unknown": "확인하기 위해 {{provider}}에 연결할 수 없습니다.",
+            "deleteFailed": "삭제할 수 없습니다. {{reason}}",
+            "notFoundYet": "아직 찾은 것이 없습니다."
           }
         }
       },
@@ -5494,7 +5519,8 @@
         "PendingWorktreeRow": {
           "af21e953d1": "워크트리 만들기 취소",
           "188f6922a0": "취소",
-          "creatingWorkspace": "워크스페이스 만드는 중…"
+          "creatingWorkspace": "워크스페이스 만드는 중…",
+          "canceled": "취소됨"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "취소",
@@ -14869,7 +14895,8 @@
           "RunTargetCombobox": {
             "listLabel": "실행 대상",
             "label": "실행 위치",
-            "browse": "실행 대상 검색"
+            "browse": "실행 대상 검색",
+            "newMachine": "새 머신"
           },
           "SetProjectLocationDialog": {
             "title": "프로젝트 위치 설정",
@@ -14891,11 +14918,28 @@
             "showDetails": "세부 정보 보기",
             "noMachines": "머신 없음",
             "signInOnServer": "{{server}}에서 로그인 필요",
-            "noLocation": "여기에 프로젝트가 설정되지 않음"
+            "noLocation": "여기에 프로젝트가 설정되지 않음",
+            "newMachine": "{{provider}}에 새 머신…"
           },
           "RunTargetRowList": {
             "sshHosts": "SSH 호스트",
             "otherHosts": "기타 호스트"
+          },
+          "MachineCreateFields": {
+            "machine": "머신",
+            "lifetime": "수명",
+            "deleteAfter": "삭제 시점",
+            "image": "이미지",
+            "machineName": "머신 이름",
+            "sameAsWorktree": "워크트리와 동일",
+            "days_one": "1일",
+            "days_other": "{{count}}일",
+            "hours_one": "1시간",
+            "hours_other": "{{count}}시간",
+            "minutes_one": "1분",
+            "minutes_other": "{{count}}분",
+            "finalName": "이름: {{name}}",
+            "fallbackName": "이름: machine-… (고유한 이름)"
           }
         }
       },

@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertTriangle, GitBranch, X } from 'lucide-react'
+import { AlertTriangle, Box, GitBranch, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 
 /**
@@ -11,12 +11,15 @@ export default function WorktreeCreationTabStrip({
   title,
   isError,
   reserveCollapsedSidebarHeaderSpace,
-  onCancel
+  onCancel,
+  machineLabel = null
 }: {
   title: string
   isError: boolean
   reserveCollapsedSidebarHeaderSpace: boolean
   onCancel: () => void
+  /** Where a machine-backed worktree is going, shown where the real tab bar names its host. */
+  machineLabel?: string | null
 }): React.JSX.Element {
   return (
     <div className="flex h-[36px] shrink-0 items-stretch border-b border-border bg-card">
@@ -58,6 +61,12 @@ export default function WorktreeCreationTabStrip({
           <X className="size-3" />
         </button>
       </div>
+      {machineLabel ? (
+        <div className="ml-auto flex items-center gap-1.5 px-3 text-xs text-muted-foreground">
+          <Box className="size-3.5 shrink-0" />
+          <span className="truncate">{machineLabel}</span>
+        </div>
+      ) : null}
     </div>
   )
 }

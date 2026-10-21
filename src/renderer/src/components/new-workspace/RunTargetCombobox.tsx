@@ -11,8 +11,6 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from './use-type-ahead-combobox'
 import {
   buildRunTargetRows,
-  getEphemeralVmLabel,
-  getRecipeDetail,
   isSelectableRunTargetRow,
   readyHostRowKey,
   RUN_TARGET_ADD_HOST_KEY,
@@ -20,13 +18,10 @@ import {
 } from './run-target-options'
 import { useRunTargetMachines, type RunTargetMachineProps } from './use-run-target-machines'
 import type { MachineRowModel } from './run-target-machine-rows'
-import { MachineStateLabel } from '@/components/machines/MachineStateLabel'
 import { useNow } from '@/hooks/use-now'
-import { formatMachineSummary } from '@/lib/machines/machine-copy'
 import { AddHostSubmenuRow } from './RunTargetSubmenus'
-import { machineGroupLabel } from './RunTargetMachineRow'
 import RunTargetRowList from './RunTargetRowList'
-import RunTargetField from './RunTargetField'
+import RunTargetField, { describeCommittedTarget } from './RunTargetField'
 import { HostListOverflowNote } from '@/components/host-picker/HostListOverflowNote'
 
 type RunTargetComboboxProps = {
@@ -133,9 +128,13 @@ export default function RunTargetCombobox({
   const armedRow =
     rows.find((row) => row.key === armedKey) ?? rows.find(isSelectableRunTargetRow) ?? null
   // Only a committed selection paints the field; typing replaces it.
+  const creatingMachine = machines?.creating ?? null
   const committed =
     query.length === 0 &&
-    (selectedMachine !== null || selectedRecipe !== null || selectedHost !== null)
+    (creatingMachine !== null ||
+      selectedMachine !== null ||
+      selectedRecipe !== null ||
+      selectedHost !== null)
 
   // Closing also drops any open submenu, which the shared hook doesn't know about.
   const close = useCallback((): void => {
@@ -201,7 +200,7 @@ export default function RunTargetCombobox({
 
   const activateMachineRow = useCallback(
     (row: MachineRowModel): void => {
-      if (row.kind === 'machine') {
+      if (row.kind === 'machine' || row.kind === 'machine-create') {
         onRecipeChange?.(null)
       }
       // Why: a paired server's machine runs worktrees at the project's location on it.
@@ -277,16 +276,12 @@ export default function RunTargetCombobox({
     [close, setOpen]
   )
 
-  const fieldLabel = selectedMachine
-    ? selectedMachine.machine.name
-    : selectedRecipe
-      ? `${getEphemeralVmLabel()} / ${selectedRecipe.name}`
-      : (selectedHost?.label ?? '')
-  const fieldDetail = selectedMachine
-    ? formatMachineSummary(machineGroupLabel(selectedMachine.group), selectedMachine.machine)
-    : selectedRecipe
-      ? getRecipeDetail(selectedRecipe)
-      : (selectedHost?.path ?? '')
+  const field = describeCommittedTarget({
+    creatingMachine,
+    selectedMachine,
+    selectedRecipe,
+    selectedHost
+  })
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -301,16 +296,11 @@ export default function RunTargetCombobox({
         onOpenRequest={() => setOpen(true)}
         onToggle={() => setOpen(!open)}
         committed={committed}
-        kind={selectedMachine ? 'machine' : selectedRecipe ? 'recipe' : 'host'}
-        // Why: Running is the expected state, so only another state earns the dot and word.
-        status={
-          selectedMachine && selectedMachine.machine.state !== 'running' ? (
-            <MachineStateLabel state={selectedMachine.machine.state} />
-          ) : null
-        }
+        kind={field.kind}
+        status={field.status}
         hostId={selectedHost?.hostId ?? null}
-        label={fieldLabel}
-        detail={fieldDetail}
+        label={field.label}
+        detail={field.detail}
         listId={listId}
         hasArmedRow={armedRow !== null}
         inputRef={inputRef}

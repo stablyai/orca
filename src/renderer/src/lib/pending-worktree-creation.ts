@@ -19,6 +19,7 @@ import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/tas
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
 import type { MachineProviderKey } from '../../../shared/machine-inventory'
+import type { MachineLifetime } from '../../../shared/machine-provider-protocol'
 
 /** Two-phase status reported by the main process while a worktree is created.
  *  `preparing` covers renderer-side preflight before `createWorktree` starts;
@@ -74,11 +75,21 @@ export type WorktreeCreationRequest = {
     sourceRepoId: string
     projectId: string
     providerKey: MachineProviderKey
-    machineId: string
+    /** Set once the machine exists; a create fills it in before setup starts. */
+    machineId?: string
     /** Shown while the machine starts, before any host row knows it. */
     machineName: string
     /** A paired server's machine: woken through that server, then used at the selected location. */
     environmentId?: string
+    create?: {
+      operationId: string
+      name: string
+      lifetime: MachineLifetime
+      ttlSeconds?: number
+      image?: string
+      /** Set once the create has been sent, so a Retry looks for its machine before re-sending. */
+      attempted?: boolean
+    }
   }
   /** Captured from the repo/run owner at submit time so Retry keeps the same
    *  local-vs-runtime progress behavior even if the focused runtime changes. */
@@ -170,8 +181,15 @@ export type PendingWorktreeCreation = {
   loaderVisible: boolean
   error?: string
   provisioningLog?: string
-  /** Machine-backed creates only: what starting the machine is doing now. */
-  machineProgress?: { activity: 'waking' | 'connecting' }
+  /** Machine-backed creates only: what the first stage is doing, and how long it took once done. */
+  machineProgress?: {
+    activity: 'creating' | 'waking' | 'connecting'
+    readyAfterMs?: number
+    /** Set by Cancel; the pane then offers a check for a leftover machine. */
+    canceled?: boolean
+    /** The leftover machine a canceled create made was deleted from its pane. */
+    leftoverDeleted?: boolean
+  }
   /** Git's checkout meter during a local `git worktree add`; absent when git
    *  printed none (fast or sparse checkouts, SSH and runtime creates). */
   checkoutProgress?: WorktreeCheckoutProgress

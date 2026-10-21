@@ -9,6 +9,9 @@ import {
 import { translate } from '@/i18n/i18n'
 
 function statusLabel(entry: PendingWorktreeCreation): string {
+  if (entry.machineProgress?.canceled) {
+    return translate('auto.components.sidebar.PendingWorktreeRow.canceled', 'Canceled')
+  }
   if (entry.status === 'error') {
     return entry.error ?? 'Creation failed'
   }
@@ -53,7 +56,9 @@ export function PendingWorktreeRow({
     return <HostCreationRow repoName={repoName} />
   }
 
-  const isError = entry.status === 'error'
+  // Why: a machine create the user canceled is their choice, not a failure.
+  const isError = entry.status === 'error' && !entry.machineProgress?.canceled
+  const isCanceled = entry.machineProgress?.canceled === true
   return (
     <div
       className={cn(
@@ -78,6 +83,8 @@ export function PendingWorktreeRow({
         <span className="flex size-4 shrink-0 items-center justify-center">
           {isError ? (
             <AlertTriangle className="size-3.5 text-destructive" />
+          ) : isCanceled ? (
+            <X className="size-3.5 text-muted-foreground" />
           ) : (
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
           )}
@@ -106,7 +113,7 @@ export function PendingWorktreeRow({
         onClick={() => useAppStore.getState().removePendingWorktreeCreation(creationId)}
         className={cn(
           'mr-1 flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-opacity hover:bg-sidebar-accent hover:text-foreground focus-visible:opacity-100',
-          isError ? 'opacity-100' : 'can-hover:opacity-0 group-hover:opacity-100'
+          isError || isCanceled ? 'opacity-100' : 'can-hover:opacity-0 group-hover:opacity-100'
         )}
       >
         <X className="size-3.5" />

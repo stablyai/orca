@@ -7,6 +7,7 @@ import {
   ChevronUp,
   Info,
   LogIn,
+  Plus,
   RefreshCw
 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -36,7 +37,7 @@ function groupAside(group: MachineGroupOption, now: number): string | null {
         'Sent an invalid response'
       )
     case 'ready':
-      return group.machines.length + group.archived.length === 0
+      return group.machines.length + group.archived.length === 0 && !group.canCreate
         ? translate('auto.components.new.workspace.RunTargetMachineRow.noMachines', 'No machines')
         : null
     case 'sign-in':
@@ -123,6 +124,16 @@ function rowContent(row: Exclude<MachineRowModel, { kind: 'machine-group' }>): {
         ),
         detail: '',
         dimmed: true
+      }
+    case 'machine-create':
+      return {
+        icon: <Plus className={ICON} />,
+        label: translate(
+          'auto.components.new.workspace.RunTargetMachineRow.newMachine',
+          'New machine on {{provider}}…',
+          { provider }
+        ),
+        detail: ''
       }
     case 'machine-sign-in':
       return {

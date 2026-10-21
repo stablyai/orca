@@ -61,6 +61,21 @@ describe('buildMachineGroupOptions', () => {
     expect(status('invalid-response')).toEqual({ kind: 'invalid-response' })
     expect(status('timeout')).toEqual({ kind: 'unreachable', lastSeenAt: 5 })
   })
+
+  it('offers create only for this app’s providers that support it', () => {
+    const canCreate = (
+      verbs: ('create' | 'wake')[],
+      environment: { id: string; name: string } | null
+    ) =>
+      buildMachineGroupOptions({
+        snapshots: [snapshot([], { capabilities: { verbs, lifetimes: ['temporary'] } })],
+        isBound: () => false,
+        environment
+      })[0].canCreate
+    expect(canCreate(['create'], null)).toBe(true)
+    expect(canCreate(['wake'], null)).toBe(false)
+    expect(canCreate(['create'], { id: 'env-2', name: 'build-box' })).toBe(false)
+  })
 })
 
 describe('findMachineForHost', () => {

@@ -1095,7 +1095,9 @@
       },
       "machineWorktreeCreation": {
         "noCloneUrl": "此项目没有可克隆到机器上的远程仓库。",
-        "cloneFailed": "无法在机器上设置项目。"
+        "cloneFailed": "无法在机器上设置项目。",
+        "createUnsettled": "提供方可能仍在创建 {{name}}。请一分钟后重试。",
+        "createUnchecked": "无法确认 {{name}} 是否已创建。"
       },
       "machines": {
         "machineCopy": {
@@ -1137,7 +1139,10 @@
           "startingMachine": "启动机器",
           "settingUpRepo": "设置仓库",
           "startingAgent": "启动智能体",
-          "openingTerminal": "打开终端"
+          "openingTerminal": "打开终端",
+          "creating": "正在创建…",
+          "canceled": "已取消",
+          "cloningProject": "正在克隆 {{project}}…"
         },
         "machineStart": {
           "readFailed": "无法连接 {{name}}。",
@@ -1145,7 +1150,10 @@
           "wakeFailed": "无法唤醒 {{name}}。",
           "connectFailed": "无法连接到 {{name}}。",
           "noProjectRoot": "提供方未说明 {{name}} 上项目的位置。",
-          "noServer": "Orca 无法在 {{name}} 上启动其服务器，而设置项目需要该服务器。"
+          "noServer": "Orca 无法在 {{name}} 上启动其服务器，而设置项目需要该服务器。",
+          "createFailed": "无法创建 {{name}}。",
+          "nameTaken": "已存在名为 {{name}} 的机器。请在高级选项中选择其他名称。",
+          "createStillRunning": "提供方仍在创建 {{name}}。请一分钟后重试。"
         },
         "machineProviderActions": {
           "signInStarted": "完成 {{provider}} 登录后，返回你的新工作树。",
@@ -3021,7 +3029,8 @@
             "767951265d": "创建工作树时出现问题。",
             "vmProvisioningTitle": "正在预配虚拟机",
             "cancelProvisioning": "取消",
-            "vmProvisioningLogEmpty": "正在等待环境模板输出…"
+            "vmProvisioningLogEmpty": "正在等待环境模板输出…",
+            "newMachine": "新机器"
           },
           "MachineCreationStatus": {
             "failedTitle": "无法设置 {{name}}",
@@ -3030,7 +3039,23 @@
             "retry": "重试",
             "removeWorktree": "移除工作树",
             "showLog": "显示日志",
-            "logEmpty": "正在等待提供方输出…"
+            "logEmpty": "正在等待提供方输出…",
+            "canceledDetail": "在你取消之前，{{provider}} 可能已启动了一台机器。",
+            "newMachineOn": "{{provider}} 上的新机器 {{machine}}",
+            "canceled": "已取消",
+            "cancel": "取消",
+            "canceledCreated": "{{machine}} 已在 {{provider}} 上创建，仍在运行。",
+            "canceledDeleted": "此次创建遗留的机器已删除。"
+          },
+          "MachineLeftoverCheck": {
+            "check": "检查是否有遗留机器",
+            "none": "没有遗留机器",
+            "delete": "删除 {{name}}",
+            "deleted": "已删除遗留机器",
+            "checkAgain": "再次检查",
+            "unknown": "无法连接 {{provider}} 进行检查。",
+            "deleteFailed": "无法删除。{{reason}}",
+            "notFoundYet": "暂未找到。"
           }
         }
       },
@@ -5494,7 +5519,8 @@
         "PendingWorktreeRow": {
           "af21e953d1": "取消工作树创建",
           "188f6922a0": "取消",
-          "creatingWorkspace": "正在创建工作区…"
+          "creatingWorkspace": "正在创建工作区…",
+          "canceled": "已取消"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "取消",
@@ -14869,7 +14895,8 @@
           "RunTargetCombobox": {
             "listLabel": "运行目标",
             "label": "运行在",
-            "browse": "浏览运行目标"
+            "browse": "浏览运行目标",
+            "newMachine": "新机器"
           },
           "SetProjectLocationDialog": {
             "title": "设置项目位置",
@@ -14891,11 +14918,28 @@
             "showDetails": "显示详情",
             "noMachines": "没有机器",
             "signInOnServer": "需要在 {{server}} 上登录",
-            "noLocation": "此处未设置项目"
+            "noLocation": "此处未设置项目",
+            "newMachine": "在 {{provider}} 上新建机器…"
           },
           "RunTargetRowList": {
             "sshHosts": "SSH 主机",
             "otherHosts": "其他主机"
+          },
+          "MachineCreateFields": {
+            "machine": "机器",
+            "lifetime": "生命周期",
+            "deleteAfter": "删除时间",
+            "image": "镜像",
+            "machineName": "机器名称",
+            "sameAsWorktree": "与工作树相同",
+            "days_one": "1 天",
+            "days_other": "{{count}} 天",
+            "hours_one": "1 小时",
+            "hours_other": "{{count}} 小时",
+            "minutes_one": "1 分钟",
+            "minutes_other": "{{count}} 分钟",
+            "finalName": "名称：{{name}}",
+            "fallbackName": "名称：machine-…（唯一名称）"
           }
         }
       },

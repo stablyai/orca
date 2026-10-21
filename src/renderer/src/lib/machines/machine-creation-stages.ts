@@ -1,7 +1,7 @@
 import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
 import { translate } from '@/i18n/i18n'
 
-export type MachineStageState = 'done' | 'active' | 'pending' | 'failed'
+export type MachineStageState = 'done' | 'active' | 'pending' | 'failed' | 'stopped'
 
 export type MachineStageId = 'starting-machine' | 'setting-up-repo' | 'starting-agent'
 
@@ -12,8 +12,15 @@ export type MachineStage = {
   state: MachineStageState
 }
 
+function formatSeconds(ms: number): string {
+  const seconds = Math.max(1, Math.round(ms / 1000))
+  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+}
+
 function machineActivityLabel(entry: PendingWorktreeCreation): string {
   switch (entry.machineProgress?.activity) {
+    case 'creating':
+      return translate('auto.lib.machines.machineCreationStages.creating', 'Creating…')
     case 'waking':
       return translate('auto.lib.machines.machineCreationStages.waking', 'Waking…')
     case 'connecting':
@@ -23,10 +30,18 @@ function machineActivityLabel(entry: PendingWorktreeCreation): string {
   }
 }
 
-function repoActivityLabel(entry: PendingWorktreeCreation): string {
+function repoActivityLabel(entry: PendingWorktreeCreation, projectName: string | null): string {
   switch (entry.phase) {
     case 'setting-up-project':
-      return translate('auto.lib.machines.machineCreationStages.cloning', 'Cloning…')
+      return projectName
+        ? translate(
+            'auto.lib.machines.machineCreationStages.cloningProject',
+            'Cloning {{project}}…',
+            {
+              project: projectName
+            }
+          )
+        : translate('auto.lib.machines.machineCreationStages.cloning', 'Cloning…')
     case 'fetching':
       return translate('auto.lib.machines.machineCreationStages.fetching', 'Fetching base branch…')
     case 'creating':
@@ -45,10 +60,15 @@ function repoActivityLabel(entry: PendingWorktreeCreation): string {
  * The three stages a person cares about while a worktree is made on a machine. Only the stage
  * that failed turns red; a stage a provider never reports simply ticks when the next one starts.
  */
-export function getMachineCreationStages(entry: PendingWorktreeCreation): MachineStage[] {
+export function getMachineCreationStages(
+  entry: PendingWorktreeCreation,
+  projectName: string | null = null
+): MachineStage[] {
   const onMachine = entry.phase === 'starting-machine' || entry.phase === 'preparing'
-  const failed = entry.status === 'error'
-  const current: MachineStageState = failed ? 'failed' : 'active'
+  const canceled = entry.machineProgress?.canceled === true
+  const failed = entry.status === 'error' && !canceled
+  const failedOrActive: MachineStageState = failed ? 'failed' : 'active'
+  const current: MachineStageState = canceled ? 'stopped' : failedOrActive
   return [
     {
       id: 'starting-machine',
@@ -56,14 +76,14 @@ export function getMachineCreationStages(entry: PendingWorktreeCreation): Machin
         'auto.lib.machines.machineCreationStages.startingMachine',
         'Starting machine'
       ),
-      detail: onMachine && !failed ? machineActivityLabel(entry) : '',
+      detail: startingMachineDetail(entry, onMachine, failed, canceled),
       state: onMachine ? current : 'done'
     },
     {
       id: 'setting-up-repo',
       label: translate('auto.lib.machines.machineCreationStages.settingUpRepo', 'Setting up repo'),
-      detail: onMachine || failed ? '' : repoActivityLabel(entry),
-      state: onMachine ? 'pending' : current
+      detail: onMachine || failed ? '' : repoActivityLabel(entry, projectName),
+      state: onMachine ? 'pending' : failedOrActive
     },
     {
       id: 'starting-agent',
@@ -74,4 +94,20 @@ export function getMachineCreationStages(entry: PendingWorktreeCreation): Machin
       state: 'pending'
     }
   ]
+}
+
+function startingMachineDetail(
+  entry: PendingWorktreeCreation,
+  onMachine: boolean,
+  failed: boolean,
+  canceled: boolean
+): string {
+  if (!onMachine) {
+    const readyAfter = entry.machineProgress?.readyAfterMs
+    return readyAfter === undefined ? '' : formatSeconds(readyAfter)
+  }
+  if (canceled) {
+    return translate('auto.lib.machines.machineCreationStages.canceled', 'Canceled')
+  }
+  return failed ? '' : machineActivityLabel(entry)
 }

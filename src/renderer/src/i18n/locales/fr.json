@@ -1199,7 +1199,9 @@
       },
       "machineWorktreeCreation": {
         "noCloneUrl": "Ce projet n’a pas de dépôt distant à cloner sur la machine.",
-        "cloneFailed": "Impossible de configurer le projet sur la machine."
+        "cloneFailed": "Impossible de configurer le projet sur la machine.",
+        "createUnsettled": "Le fournisseur crée peut-être encore {{name}}. Réessayez dans une minute.",
+        "createUnchecked": "Impossible de vérifier si {{name}} a déjà été créée."
       },
       "machines": {
         "machineCopy": {
@@ -1241,7 +1243,10 @@
           "startingMachine": "Démarrage de la machine",
           "settingUpRepo": "Configuration du dépôt",
           "startingAgent": "Démarrage de l’agent",
-          "openingTerminal": "Ouverture du terminal"
+          "openingTerminal": "Ouverture du terminal",
+          "creating": "Création…",
+          "canceled": "Annulé",
+          "cloningProject": "Clonage de {{project}}…"
         },
         "machineStart": {
           "readFailed": "Impossible de joindre {{name}}.",
@@ -1249,7 +1254,10 @@
           "wakeFailed": "Impossible de réveiller {{name}}.",
           "connectFailed": "Impossible de se connecter à {{name}}.",
           "noProjectRoot": "Le fournisseur n’a pas indiqué où se trouvent les projets sur {{name}}.",
-          "noServer": "Orca n’a pas pu démarrer son serveur sur {{name}}, nécessaire pour configurer le projet."
+          "noServer": "Orca n’a pas pu démarrer son serveur sur {{name}}, nécessaire pour configurer le projet.",
+          "createFailed": "Impossible de créer {{name}}.",
+          "nameTaken": "Une machine nommée {{name}} existe déjà. Choisissez un autre nom dans Avancé.",
+          "createStillRunning": "Le fournisseur crée encore {{name}}. Réessayez dans une minute."
         },
         "machineProviderActions": {
           "signInStarted": "Terminez la connexion à {{provider}}, puis revenez à votre nouveau worktree.",
@@ -3129,7 +3137,8 @@
             "767951265d": "Un problème est survenu lors de la création du worktree.",
             "vmProvisioningTitle": "Provisionnement de la VM",
             "cancelProvisioning": "Annuler",
-            "vmProvisioningLogEmpty": "En attente de la sortie de la recette…"
+            "vmProvisioningLogEmpty": "En attente de la sortie de la recette…",
+            "newMachine": "Nouvelle machine"
           },
           "MachineCreationStatus": {
             "failedTitle": "Impossible de configurer {{name}}",
@@ -3138,7 +3147,23 @@
             "retry": "Réessayer",
             "removeWorktree": "Supprimer le worktree",
             "showLog": "Afficher le journal",
-            "logEmpty": "En attente de la sortie du fournisseur…"
+            "logEmpty": "En attente de la sortie du fournisseur…",
+            "canceledDetail": "{{provider}} a peut-être démarré une machine avant votre annulation.",
+            "newMachineOn": "Nouvelle machine {{machine}} sur {{provider}}",
+            "canceled": "Annulé",
+            "cancel": "Annuler",
+            "canceledCreated": "{{machine}} a déjà été créée sur {{provider}} et tourne toujours.",
+            "canceledDeleted": "La machine laissée par cette création a été supprimée."
+          },
+          "MachineLeftoverCheck": {
+            "check": "Rechercher une machine restante",
+            "none": "Aucune machine restante",
+            "delete": "Supprimer {{name}}",
+            "deleted": "Machine restante supprimée",
+            "checkAgain": "Vérifier à nouveau",
+            "unknown": "Impossible de joindre {{provider}} pour vérifier.",
+            "deleteFailed": "Impossible de la supprimer. {{reason}}",
+            "notFoundYet": "Rien trouvé pour l’instant."
           }
         }
       },
@@ -5640,7 +5665,8 @@
         "PendingWorktreeRow": {
           "af21e953d1": "Annuler la création du worktree",
           "188f6922a0": "Annuler",
-          "creatingWorkspace": "Création de l'espace de travail…"
+          "creatingWorkspace": "Création de l'espace de travail…",
+          "canceled": "Annulé"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Annuler",
@@ -14986,7 +15012,8 @@
           "RunTargetCombobox": {
             "listLabel": "Cibles d'exécution",
             "label": "Exécuter sur",
-            "browse": "Parcourir les cibles d'exécution"
+            "browse": "Parcourir les cibles d'exécution",
+            "newMachine": "Nouvelle machine"
           },
           "RunTargetMachineRow": {
             "differentAccount": "Connecté avec un autre compte",
@@ -14999,11 +15026,28 @@
             "showDetails": "Afficher les détails",
             "noMachines": "Aucune machine",
             "signInOnServer": "Connexion requise sur {{server}}",
-            "noLocation": "Projet non configuré ici"
+            "noLocation": "Projet non configuré ici",
+            "newMachine": "Nouvelle machine sur {{provider}}…"
           },
           "RunTargetRowList": {
             "sshHosts": "Hôtes SSH",
             "otherHosts": "Autres hôtes"
+          },
+          "MachineCreateFields": {
+            "machine": "Machine",
+            "lifetime": "Durée de vie",
+            "deleteAfter": "Supprimer après",
+            "image": "Image",
+            "machineName": "Nom de la machine",
+            "sameAsWorktree": "Identique au worktree",
+            "days_one": "1 jour",
+            "days_other": "{{count}} jours",
+            "hours_one": "1 heure",
+            "hours_other": "{{count}} heures",
+            "minutes_one": "1 minute",
+            "minutes_other": "{{count}} minutes",
+            "finalName": "Sera nommée {{name}}",
+            "fallbackName": "Sera nommée machine-… (un nom unique)"
           }
         }
       },

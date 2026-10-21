@@ -659,6 +659,14 @@
       },
       "new": {
         "workspace": {
+          "MachineCreateFields": {
+            "days_one": "1 day",
+            "days_other": "{{count}} days",
+            "hours_one": "1 hour",
+            "hours_other": "{{count}} hours",
+            "minutes_one": "1 minute",
+            "minutes_other": "{{count}} minutes"
+          },
           "SmartWorkspaceNameField": {
             "69ce292138": "linear",
             "9c004911c3": "gitlab"

@@ -12,6 +12,7 @@ import {
 } from '@/lib/text-control-paste'
 import { translate } from '@/i18n/i18n'
 import { ComposerParentWorktreePicker } from './ComposerParentWorktreePicker'
+import MachineCreateFields from './MachineCreateFields'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 
 function SetupCommandPreview({
@@ -31,6 +32,7 @@ function SetupCommandPreview({
 type NewWorkspaceComposerAdvancedSectionProps = Pick<
   NewWorkspaceComposerCardProps,
   | 'advancedOpen'
+  | 'machineSelection'
   | 'smartNameSelection'
   | 'name'
   | 'onNameValueChange'
@@ -74,6 +76,7 @@ type NewWorkspaceComposerAdvancedSectionProps = Pick<
 
 export function NewWorkspaceComposerAdvancedSection({
   advancedOpen,
+  machineSelection,
   sparseEditing,
   onSparseEditingChange,
   smartNameSelection,
@@ -165,6 +168,14 @@ export function NewWorkspaceComposerAdvancedSection({
               : '-translate-y-1 opacity-0 delay-0'
           )}
         >
+          {machineSelection?.draft ? (
+            <MachineCreateFields
+              draft={machineSelection.draft}
+              capabilities={machineSelection.getCapabilities(machineSelection.draft.providerKey)}
+              worktreeName={name}
+              onChange={machineSelection.setDraft}
+            />
+          ) : null}
           {smartNameSelection ? (
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">

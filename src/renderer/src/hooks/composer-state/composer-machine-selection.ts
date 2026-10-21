@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { MachineRecord } from '../../../../shared/machine-inventory'
+import type { MachineProviderKey, MachineRecord } from '../../../../shared/machine-inventory'
+import type { MachineProviderCapabilities } from '../../../../shared/machine-provider-protocol'
+import {
+  createMachineDraft,
+  resolveMachineName,
+  type MachineCreateDraft
+} from '@/lib/machines/machine-create-draft'
+import { formatMachineDraftSummary } from '@/lib/machines/machine-copy'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import { useNow } from '@/hooks/use-now'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import {
   buildMachineGroupOptions,
@@ -33,6 +42,10 @@ export type ComposerMachineSelection = {
   picker: RunTargetMachineProps
   /** The selected location's machine is stopped, so nothing should probe its repo yet. */
   selectedHostAsleep: boolean
+  /** A machine to create on submit; exclusive with `selected`. */
+  draft: MachineCreateDraft | null
+  setDraft: (draft: MachineCreateDraft) => void
+  getCapabilities: (providerKey: MachineProviderKey) => MachineProviderCapabilities | undefined
 }
 
 function findOption(
@@ -82,8 +95,12 @@ export function useComposerMachineSelection({
   const [chosen, setChosen] = useState<MachineChoice | null>(
     () => useAppStore.getState().composerMachineRestore
   )
+  const [draft, setDraft] = useState<MachineCreateDraft | null>(
+    () => useAppStore.getState().composerDraftRestore
+  )
   useEffect(() => {
     useAppStore.getState().setComposerMachineRestore(null)
+    useAppStore.getState().setComposerDraftRestore(null)
   }, [])
   const sources = useMachineSources()
 
@@ -141,46 +158,88 @@ export function useComposerMachineSelection({
   }, [groups, projectHostSetups, sources])
 
   const selected = useMemo((): SelectedMachine | null => {
+    if (draft) {
+      return null
+    }
     if (chosen) {
       return findOption(groups, chosen)
     }
     // Why: reopening on a machine-backed location must still wake that machine on submit.
     const match = selectedHostId ? findMachineForHost(selectedHostId, sources) : null
     return match ? findOption(groups, choiceFor(match)) : null
-  }, [chosen, groups, selectedHostId, sources])
+  }, [chosen, draft, groups, selectedHostId, sources])
 
   const selectedHostAsleep = useMemo(() => {
     const match = selectedHostId ? findMachineForHost(selectedHostId, sources) : null
     return match ? machineNeedsWake(match.machine.state) : false
   }, [selectedHostId, sources])
 
-  const onChange = useCallback(
-    (machine: MachineOption | null): void =>
-      setChosen(
-        machine
-          ? {
-              providerKey: machine.providerKey,
-              machineId: machine.machineId,
-              environmentId: machine.environmentId
-            }
-          : null
-      ),
-    []
+  const onChange = useCallback((machine: MachineOption | null): void => {
+    setChosen(
+      machine
+        ? {
+            providerKey: machine.providerKey,
+            machineId: machine.machineId,
+            environmentId: machine.environmentId
+          }
+        : null
+    )
+    setDraft(null)
+  }, [])
+
+  const getCapabilities = useCallback(
+    (providerKey: MachineProviderKey) =>
+      sources.self.find((snapshot) => snapshot.providerKey === providerKey)?.capabilities,
+    [sources]
   )
+  const onCreate = useCallback(
+    (providerKey: MachineProviderKey): void => {
+      setChosen(null)
+      setDraft(createMachineDraft(providerKey, getCapabilities(providerKey)))
+    },
+    [getCapabilities]
+  )
+
+  const now = useNow(60_000, draft !== null)
+  const creating = useMemo(() => {
+    if (!draft) {
+      return null
+    }
+    const providerName = groups.find(
+      (group) => group.environmentId === null && group.providerKey === draft.providerKey
+    )?.name
+    return {
+      providerKey: draft.providerKey,
+      summary: formatMachineDraftSummary(providerName ?? '', draft, now)
+    }
+  }, [draft, groups, now])
 
   const picker = useMemo(
     (): RunTargetMachineProps => ({
       groups,
       selected,
       onChange,
-      onProviderAction: runProviderAction
+      onProviderAction: runProviderAction,
+      onCreate,
+      creating
     }),
-    [groups, onChange, selected]
+    [creating, groups, onChange, onCreate, selected]
   )
 
   return useMemo(
-    () => (enabled ? { selected, machineHostIds, picker, selectedHostAsleep } : null),
-    [enabled, machineHostIds, picker, selected, selectedHostAsleep]
+    () =>
+      enabled
+        ? {
+            selected,
+            machineHostIds,
+            picker,
+            selectedHostAsleep,
+            draft,
+            setDraft,
+            getCapabilities
+          }
+        : null,
+    [draft, enabled, getCapabilities, machineHostIds, picker, selected, selectedHostAsleep]
   )
 }
 
@@ -189,9 +248,27 @@ export function useComposerMachineSelection({
  * rides along when it must be woken first.
  */
 export function buildMachineCreationRequest(
-  selected: SelectedMachine | null,
-  args: { sourceRepoId: string; projectId: string }
+  selection: Pick<ComposerMachineSelection, 'draft' | 'selected'>,
+  args: { sourceRepoId: string; projectId: string; worktreeName: string }
 ): WorktreeCreationRequest['machine'] {
+  const { draft, selected } = selection
+  if (draft) {
+    const name = resolveMachineName(draft, args.worktreeName, createBrowserUuid)
+    return {
+      sourceRepoId: args.sourceRepoId,
+      projectId: args.projectId,
+      providerKey: draft.providerKey,
+      machineName: name,
+      create: {
+        // Why: one id per submit, so Retry adopts this create's machine instead of making another.
+        operationId: createBrowserUuid(),
+        name,
+        lifetime: draft.lifetime,
+        ...(draft.ttlSeconds ? { ttlSeconds: draft.ttlSeconds } : {}),
+        ...(draft.image ? { image: draft.image } : {})
+      }
+    }
+  }
   if (!selected) {
     return undefined
   }

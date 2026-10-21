@@ -14,9 +14,14 @@ export type MachineRowModel =
   | { key: string; kind: 'machine'; group: MachineGroupOption; machine: MachineOption }
   | { key: string; kind: 'machine-more'; group: MachineGroupOption; expanded: boolean }
   | { key: string; kind: 'machine-archived'; group: MachineGroupOption; open: boolean }
+  | { key: string; kind: 'machine-create'; group: MachineGroupOption }
   | { key: string; kind: 'machine-sign-in'; group: MachineGroupOption }
   | { key: string; kind: 'machine-retry'; group: MachineGroupOption }
   | { key: string; kind: 'machine-details'; group: MachineGroupOption }
+
+export function machineCreateRowKey(groupKey: string): string {
+  return `machine-create:${groupKey}`
+}
 
 export function machineRowKey(
   machine: Pick<MachineOption, 'environmentId' | 'providerKey' | 'machineId'>
@@ -72,6 +77,9 @@ function groupRows(group: MachineGroupOption, view: MachineGroupView): MachineRo
   if (overflow) {
     rows.push({ key: `machine-more:${key}`, kind: 'machine-more', group, expanded: view.expanded })
   }
+  if (group.canCreate) {
+    rows.push({ key: machineCreateRowKey(key), kind: 'machine-create', group })
+  }
   return rows
 }
 
@@ -82,6 +90,9 @@ function searchRows(group: MachineGroupOption, query: string): MachineRowModel[]
   // Why: search reaches every machine, archived ones included, with no cap.
   const found = [...group.machines.filter(matches), ...group.archived.filter(matches)]
   const rows = found.map((machine) => machineRow(group, machine))
+  if (providerMatches && group.status.kind === 'ready' && group.canCreate) {
+    rows.push({ key: machineCreateRowKey(group.key), kind: 'machine-create', group })
+  }
   return rows.length > 0
     ? [{ key: `machine-group:${group.key}`, kind: 'machine-group', group }, ...rows]
     : []

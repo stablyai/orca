@@ -1,10 +1,12 @@
 import { useCallback, useState } from 'react'
+import type { MachineProviderKey } from '../../../../shared/machine-inventory'
 import {
   isMachineOptionPickable,
   type MachineGroupOption,
   type MachineOption
 } from '@/lib/machines/machine-group-options'
 import {
+  machineCreateRowKey,
   machineRowKey,
   type MachineGroupView,
   type MachineRowModel
@@ -22,6 +24,10 @@ export type RunTargetMachineProps = {
   selected: { group: MachineGroupOption; machine: MachineOption } | null
   onChange: (machine: MachineOption | null) => void
   onProviderAction: (action: MachineProviderAction) => void
+  /** Starts a draft for a new machine on the provider; the composer creates it on submit. */
+  onCreate: (providerKey: MachineProviderKey) => void
+  /** The machine the composer will create, summarized for the field. */
+  creating: { providerKey: MachineProviderKey; summary: string } | null
 }
 
 const COLLAPSED: MachineGroupView = { expanded: false, archivedOpen: false }
@@ -43,6 +49,8 @@ export function useRunTargetMachines(machines: RunTargetMachineProps | undefined
   const selected = machines?.selected ?? null
   const onChange = machines?.onChange
   const onProviderAction = machines?.onProviderAction
+  const onCreate = machines?.onCreate
+  const creatingProviderKey = machines?.creating?.providerKey ?? null
 
   const updateView = useCallback(
     (providerKey: string, change: (view: MachineGroupView) => MachineGroupView): void =>
@@ -81,6 +89,10 @@ export function useRunTargetMachines(machines: RunTargetMachineProps | undefined
           // Why: the group refreshes in place, so the picker stays open to show the result.
           onProviderAction?.({ kind: 'retry', group: row.group })
           return
+        case 'machine-create':
+          onCreate?.(row.group.providerKey)
+          close()
+          return
         case 'machine-sign-in':
           close()
           onProviderAction?.({ kind: 'sign-in', group: row.group })
@@ -90,13 +102,17 @@ export function useRunTargetMachines(machines: RunTargetMachineProps | undefined
           onProviderAction?.({ kind: 'details', group: row.group })
       }
     },
-    [onChange, onProviderAction, updateView]
+    [onChange, onCreate, onProviderAction, updateView]
   )
 
   return {
     groups,
     views,
-    selectedRowKey: selected ? machineRowKey(selected.machine) : null,
+    selectedRowKey: creatingProviderKey
+      ? machineCreateRowKey(`\0${creatingProviderKey}`)
+      : selected
+        ? machineRowKey(selected.machine)
+        : null,
     activate
   }
 }

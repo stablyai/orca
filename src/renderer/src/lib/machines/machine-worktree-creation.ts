@@ -2,11 +2,18 @@ import { toast } from 'sonner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectHostSetupResult } from '../../../../shared/project-types'
 import { useAppStore } from '@/store'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type {
+  PendingWorktreeCreation,
+  WorktreeCreationRequest
+} from '@/lib/pending-worktree-creation'
 import { appendProvisioningLog } from '@/lib/pending-creation-provisioning-log'
 import {
+  checkCreateOutcome,
+  waitForCreatedMachine,
+  createMachine,
   startMachine,
   subscribeMachineProgress,
+  type MachineActivity,
   type MachineStep
 } from '@/lib/machines/machine-start'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -18,14 +25,104 @@ import { describeMachineFailure } from '@/lib/machines/machine-copy'
 
 type MachineRequest = NonNullable<WorktreeCreationRequest['machine']>
 
+function currentEntry(creationId: string): PendingWorktreeCreation | null {
+  const entry = useAppStore.getState().pendingWorktreeCreations[creationId]
+  // Why: Cancel keeps the entry so its pane can offer the leftover check; work stops all the same.
+  return entry && !entry.machineProgress?.canceled ? entry : null
+}
+
 function stillPending(creationId: string): boolean {
-  return Boolean(useAppStore.getState().pendingWorktreeCreations[creationId])
+  return currentEntry(creationId) !== null
+}
+
+function setActivity(creationId: string, activity: MachineActivity): void {
+  if (stillPending(creationId)) {
+    useAppStore
+      .getState()
+      .updatePendingWorktreeCreation(creationId, { machineProgress: { activity } })
+  }
+}
+
+function recordRequest(creationId: string, request: WorktreeCreationRequest): void {
+  if (stillPending(creationId)) {
+    useAppStore.getState().updatePendingWorktreeCreation(creationId, { request })
+  }
+}
+
+type CreateRequest = NonNullable<MachineRequest['create']>
+
+/**
+ * The machine for a create, made at most once per operation id. A retried create first asks the
+ * provider whether the earlier attempt left a machine and adopts it; while that is unknown, it
+ * refuses rather than risk a second machine. Null once canceled: a Cancel during the check must
+ * never go on to create (and bill) a machine.
+ */
+async function ensureCreatedMachine(
+  creationId: string,
+  machine: MachineRequest,
+  create: CreateRequest
+): Promise<MachineStep<string> | null> {
+  if (create.attempted) {
+    const outcome = await checkCreateOutcome(machine.providerKey, create.operationId)
+    if (!stillPending(creationId)) {
+      return null
+    }
+    switch (outcome.kind) {
+      case 'found': {
+        // Why: the earlier attempt may have left it mid-create; connect only once it runs.
+        const settled = await waitForCreatedMachine(
+          outcome.machine,
+          () => !stillPending(creationId)
+        )
+        // Why: a canceled wait still names the machine; the caller stops before using it.
+        return !settled || settled.ok ? { ok: true, value: outcome.machine.id } : settled
+      }
+      case 'pending':
+        return {
+          ok: false,
+          error: translate(
+            'auto.lib.machineWorktreeCreation.createUnsettled',
+            'The provider may still be creating {{name}}. Try again in a minute.',
+            { name: create.name }
+          )
+        }
+      case 'unknown':
+        return {
+          ok: false,
+          error: translate(
+            'auto.lib.machineWorktreeCreation.createUnchecked',
+            'Couldn’t check whether {{name}} was already created.',
+            { name: create.name }
+          ),
+          detail: outcome.message
+        }
+      case 'none':
+        break
+    }
+  }
+  const entry = currentEntry(creationId)
+  // Why: the last check before a paid create; anything earlier may have been canceled since.
+  if (!entry) {
+    return null
+  }
+  if (!create.attempted) {
+    // Why: recorded before the call, so a Retry after any outcome knows to look first.
+    recordRequest(creationId, {
+      ...entry.request,
+      machine: { ...machine, create: { ...create, attempted: true } }
+    })
+  }
+  const unsubscribe = subscribeMachineProgress(create.operationId, (chunk) =>
+    appendProvisioningLog(creationId, chunk)
+  )
+  const created = await createMachine(machine.providerKey, create).finally(unsubscribe)
+  return created.ok ? { ok: true, value: created.value.id } : created
 }
 
 /** Shows one plain sentence; the raw cause goes behind "Show log". */
 function fail(creationId: string, error: string, detail?: string): null {
   const store = useAppStore.getState()
-  if (!store.pendingWorktreeCreations[creationId]) {
+  if (!stillPending(creationId)) {
     return null
   }
   if (detail) {
@@ -45,6 +142,9 @@ async function wakePairedMachine(
   machine: MachineRequest,
   environmentId: string
 ): Promise<WorktreeCreationRequest | null> {
+  if (!machine.machineId) {
+    return request
+  }
   useAppStore
     .getState()
     .updatePendingWorktreeCreation(creationId, { machineProgress: { activity: 'waking' } })
@@ -140,20 +240,37 @@ export async function prepareMachineRequest(
   if (machine.environmentId) {
     return wakePairedMachine(creationId, request, machine, machine.environmentId)
   }
+  let machineId = machine.machineId
+  let current = request
+  if (!machineId && machine.create) {
+    setActivity(creationId, 'creating')
+    const created = await ensureCreatedMachine(creationId, machine, machine.create)
+    if (!created) {
+      return null
+    }
+    if (!created.ok) {
+      return fail(creationId, created.error, created.detail)
+    }
+    machineId = created.value
+    // Why: Retry must reuse this machine, never create a second one.
+    const latest = currentEntry(creationId)?.request.machine ?? machine
+    current = { ...request, machine: { ...latest, machineId } }
+    recordRequest(creationId, current)
+  }
+  if (!machineId || !stillPending(creationId)) {
+    return null
+  }
   const operationId = createBrowserUuid()
   const unsubscribe = subscribeMachineProgress(operationId, (chunk) =>
     appendProvisioningLog(creationId, chunk)
   )
   const started = await startMachine(
-    { providerKey: machine.providerKey, machineId: machine.machineId },
+    { providerKey: machine.providerKey, machineId },
     {
       name: machine.machineName,
       operationId,
       isCanceled: () => !stillPending(creationId),
-      onActivity: (activity) =>
-        useAppStore
-          .getState()
-          .updatePendingWorktreeCreation(creationId, { machineProgress: { activity } })
+      onActivity: (activity) => setActivity(creationId, activity)
     }
   ).finally(unsubscribe)
   if (!started) {
@@ -162,6 +279,16 @@ export async function prepareMachineRequest(
   if (!started.ok) {
     return fail(creationId, started.error, started.detail)
   }
+  const entry = currentEntry(creationId)
+  if (!entry) {
+    return null
+  }
+  useAppStore.getState().updatePendingWorktreeCreation(creationId, {
+    machineProgress: {
+      activity: entry.machineProgress?.activity ?? 'connecting',
+      readyAfterMs: Date.now() - entry.startedAt
+    }
+  })
   try {
     // Why: the first connect may have just deployed this server; host badges and setup read it.
     useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
@@ -184,9 +311,9 @@ export async function prepareMachineRequest(
     return null
   }
   const prepared: WorktreeCreationRequest = {
-    ...request,
+    ...current,
     repoId: setup.value.repo.id,
-    ...getPortableBaseSelection(request),
+    ...getPortableBaseSelection(current),
     workspaceRunContext: {
       kind: 'workspace-run',
       projectId: setup.value.setup.projectId,

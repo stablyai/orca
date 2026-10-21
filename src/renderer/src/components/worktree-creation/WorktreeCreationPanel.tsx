@@ -63,9 +63,20 @@ export default function WorktreeCreationPanel({
     <div className="absolute inset-0 flex flex-col bg-background">
       <WorktreeCreationTabStrip
         title={title}
-        isError={isError}
+        // Why: a canceled machine start is the user's choice, not a failure.
+        isError={isError && !entry.machineProgress?.canceled}
         reserveCollapsedSidebarHeaderSpace={reserveCollapsedSidebarHeaderSpace}
         onCancel={dismiss}
+        machineLabel={
+          entry.request.machine && !entry.machineProgress?.leftoverDeleted
+            ? entry.request.machine.create && !entry.request.machine.machineId
+              ? translate(
+                  'auto.components.worktree.creation.WorktreeCreationPanel.newMachine',
+                  'New machine'
+                )
+              : entry.request.machine.machineName
+            : null
+        }
       />
 
       {/* Body: a quiet top-left annotation on the surface the terminal will

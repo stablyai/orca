@@ -1094,7 +1094,9 @@
       },
       "machineWorktreeCreation": {
         "noCloneUrl": "Este proyecto no tiene un remoto para clonar en la máquina.",
-        "cloneFailed": "No se pudo configurar el proyecto en la máquina."
+        "cloneFailed": "No se pudo configurar el proyecto en la máquina.",
+        "createUnsettled": "Puede que el proveedor siga creando {{name}}. Inténtalo de nuevo en un minuto.",
+        "createUnchecked": "No se pudo comprobar si {{name}} ya se creó."
       },
       "machines": {
         "machineCopy": {
@@ -1136,7 +1138,10 @@
           "startingMachine": "Iniciando máquina",
           "settingUpRepo": "Configurando repositorio",
           "startingAgent": "Iniciando agente",
-          "openingTerminal": "Abriendo terminal"
+          "openingTerminal": "Abriendo terminal",
+          "creating": "Creando…",
+          "canceled": "Cancelado",
+          "cloningProject": "Clonando {{project}}…"
         },
         "machineStart": {
           "readFailed": "No se pudo contactar con {{name}}.",
@@ -1144,7 +1149,10 @@
           "wakeFailed": "No se pudo activar {{name}}.",
           "connectFailed": "No se pudo conectar con {{name}}.",
           "noProjectRoot": "El proveedor no indicó dónde van los proyectos en {{name}}.",
-          "noServer": "Orca no pudo iniciar su servidor en {{name}}, que necesita para configurar el proyecto."
+          "noServer": "Orca no pudo iniciar su servidor en {{name}}, que necesita para configurar el proyecto.",
+          "createFailed": "No se pudo crear {{name}}.",
+          "nameTaken": "Ya existe una máquina llamada {{name}}. Elige otro nombre en Avanzado.",
+          "createStillRunning": "El proveedor sigue creando {{name}}. Vuelve a intentarlo en un minuto."
         },
         "machineProviderActions": {
           "signInStarted": "Termina de iniciar sesión en {{provider}} y vuelve a tu nuevo worktree.",
@@ -3020,7 +3028,8 @@
             "767951265d": "Algo salió mal al crear el worktree.",
             "vmProvisioningTitle": "Provisionando VM",
             "cancelProvisioning": "Cancelar",
-            "vmProvisioningLogEmpty": "Esperando output de la receta..."
+            "vmProvisioningLogEmpty": "Esperando output de la receta...",
+            "newMachine": "Nueva máquina"
           },
           "MachineCreationStatus": {
             "failedTitle": "No se pudo configurar {{name}}",
@@ -3029,7 +3038,23 @@
             "retry": "Reintentar",
             "removeWorktree": "Quitar worktree",
             "showLog": "Mostrar registro",
-            "logEmpty": "Esperando la salida del proveedor…"
+            "logEmpty": "Esperando la salida del proveedor…",
+            "canceledDetail": "{{provider}} puede haber iniciado una máquina antes de cancelar.",
+            "newMachineOn": "Nueva máquina {{machine}} en {{provider}}",
+            "canceled": "Cancelado",
+            "cancel": "Cancelar",
+            "canceledCreated": "{{machine}} ya se creó en {{provider}} y sigue en ejecución.",
+            "canceledDeleted": "Se eliminó la máquina que dejó esta creación."
+          },
+          "MachineLeftoverCheck": {
+            "check": "Buscar una máquina sobrante",
+            "none": "No hay máquina sobrante",
+            "delete": "Eliminar {{name}}",
+            "deleted": "Máquina sobrante eliminada",
+            "checkAgain": "Comprobar de nuevo",
+            "unknown": "No se pudo contactar con {{provider}} para comprobarlo.",
+            "deleteFailed": "No se pudo eliminar. {{reason}}",
+            "notFoundYet": "Aún no se ha encontrado nada."
           }
         }
       },
@@ -5508,7 +5533,8 @@
         "PendingWorktreeRow": {
           "af21e953d1": "Cancelar creación del worktree",
           "188f6922a0": "Cancelar",
-          "creatingWorkspace": "Creando workspace…"
+          "creatingWorkspace": "Creando workspace…",
+          "canceled": "Cancelado"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Cancelar",
@@ -14864,7 +14890,8 @@
           "RunTargetCombobox": {
             "listLabel": "Run targets",
             "label": "Run on",
-            "browse": "Browse run targets"
+            "browse": "Browse run targets",
+            "newMachine": "Nueva máquina"
           },
           "SetProjectLocationDialog": {
             "title": "Establecer ubicación del proyecto",
@@ -14886,11 +14913,28 @@
             "showDetails": "Mostrar detalles",
             "noMachines": "Sin máquinas",
             "signInOnServer": "Requiere iniciar sesión en {{server}}",
-            "noLocation": "Proyecto sin configurar aquí"
+            "noLocation": "Proyecto sin configurar aquí",
+            "newMachine": "Nueva máquina en {{provider}}…"
           },
           "RunTargetRowList": {
             "sshHosts": "Hosts SSH",
             "otherHosts": "Otros hosts"
+          },
+          "MachineCreateFields": {
+            "machine": "Máquina",
+            "lifetime": "Duración",
+            "deleteAfter": "Eliminar tras",
+            "image": "Imagen",
+            "machineName": "Nombre de la máquina",
+            "sameAsWorktree": "Igual que el worktree",
+            "days_one": "1 día",
+            "days_other": "{{count}} días",
+            "hours_one": "1 hora",
+            "hours_other": "{{count}} horas",
+            "minutes_one": "1 minuto",
+            "minutes_other": "{{count}} minutos",
+            "finalName": "Se llamará {{name}}",
+            "fallbackName": "Se llamará machine-… (un nombre único)"
           }
         }
       },

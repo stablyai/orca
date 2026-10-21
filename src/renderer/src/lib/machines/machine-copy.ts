@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/machine-provider-protocol'
 import { translate } from '@/i18n/i18n'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { getDraftExpiry, type MachineCreateDraft } from './machine-create-draft'
 
 const clockTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
 
@@ -38,6 +39,20 @@ export function formatMachineSummary(
   const parts = [providerName, getMachineLifetimeLabel(machine.lifetime)]
   if (machine.expiresAt !== null) {
     parts.push(formatMachineExpiryInline(machine.expiresAt))
+  }
+  return parts.join(' · ')
+}
+
+/** The Run-on detail for a machine about to be created: provider, lifetime, and when it goes. */
+export function formatMachineDraftSummary(
+  providerName: string,
+  draft: MachineCreateDraft,
+  now: number
+): string {
+  const expiry = getDraftExpiry(draft, now)
+  const parts = [providerName, getMachineLifetimeLabel(draft.lifetime)]
+  if (expiry !== null) {
+    parts.push(formatMachineExpiryInline(expiry))
   }
   return parts.join(' · ')
 }

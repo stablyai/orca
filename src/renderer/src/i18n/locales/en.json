@@ -1293,7 +1293,9 @@
       },
       "machineWorktreeCreation": {
         "noCloneUrl": "This project has no remote to clone onto the machine.",
-        "cloneFailed": "Couldn’t set up the project on the machine."
+        "cloneFailed": "Couldn’t set up the project on the machine.",
+        "createUnsettled": "The provider may still be creating {{name}}. Try again in a minute.",
+        "createUnchecked": "Couldn’t check whether {{name}} was already created."
       },
       "machines": {
         "machineCopy": {
@@ -1335,7 +1337,10 @@
           "startingMachine": "Starting machine",
           "settingUpRepo": "Setting up repo",
           "startingAgent": "Starting agent",
-          "openingTerminal": "Opening terminal"
+          "openingTerminal": "Opening terminal",
+          "creating": "Creating…",
+          "cloningProject": "Cloning {{project}}…",
+          "canceled": "Canceled"
         },
         "machineStart": {
           "readFailed": "Couldn’t reach {{name}}.",
@@ -1343,7 +1348,10 @@
           "wakeFailed": "Couldn’t wake {{name}}.",
           "connectFailed": "Couldn’t connect to {{name}}.",
           "noProjectRoot": "The provider didn’t say where projects live on {{name}}.",
-          "noServer": "Orca couldn’t start its server on {{name}}, which it needs to set up the project."
+          "noServer": "Orca couldn’t start its server on {{name}}, which it needs to set up the project.",
+          "nameTaken": "A machine named {{name}} already exists. Pick another name in Advanced.",
+          "createFailed": "Couldn’t create {{name}}.",
+          "createStillRunning": "The provider is still creating {{name}}. Try again in a minute."
         },
         "machineProviderActions": {
           "signInStarted": "Finish signing in to {{provider}}, then go back to your new worktree.",
@@ -3267,7 +3275,8 @@
             "767951265d": "Something went wrong while creating the worktree.",
             "vmProvisioningTitle": "Provisioning VM",
             "cancelProvisioning": "Cancel",
-            "vmProvisioningLogEmpty": "Waiting for recipe output…"
+            "vmProvisioningLogEmpty": "Waiting for recipe output…",
+            "newMachine": "New machine"
           },
           "MachineCreationStatus": {
             "failedTitle": "Couldn’t set up {{name}}",
@@ -3276,7 +3285,23 @@
             "retry": "Retry",
             "removeWorktree": "Remove worktree",
             "showLog": "Show log",
-            "logEmpty": "Waiting for provider output…"
+            "logEmpty": "Waiting for provider output…",
+            "canceledCreated": "{{machine}} was already created on {{provider}} and is still running.",
+            "canceledDetail": "{{provider}} may have started a machine before you canceled.",
+            "newMachineOn": "New machine {{machine}} on {{provider}}",
+            "canceled": "Canceled",
+            "cancel": "Cancel",
+            "canceledDeleted": "The machine this create left behind was deleted."
+          },
+          "MachineLeftoverCheck": {
+            "checkAgain": "Check again",
+            "check": "Check for a leftover machine",
+            "unknown": "Couldn’t reach {{provider}} to check.",
+            "none": "No leftover machine",
+            "delete": "Delete {{name}}",
+            "deleteFailed": "Couldn’t delete it. {{reason}}",
+            "deleted": "Leftover machine deleted",
+            "notFoundYet": "Nothing found yet."
           }
         }
       },
@@ -5801,7 +5826,8 @@
         "PendingWorktreeRow": {
           "af21e953d1": "Cancel worktree creation",
           "188f6922a0": "Cancel",
-          "creatingWorkspace": "Creating workspace…"
+          "creatingWorkspace": "Creating workspace…",
+          "canceled": "Canceled"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Cancel",
@@ -15164,7 +15190,8 @@
           "RunTargetCombobox": {
             "listLabel": "Run targets",
             "label": "Run on",
-            "browse": "Browse run targets"
+            "browse": "Browse run targets",
+            "newMachine": "New machine"
           },
           "RunTargetMachineRow": {
             "differentAccount": "Signed in as a different account",
@@ -15177,11 +15204,28 @@
             "showDetails": "Show details",
             "noMachines": "No machines",
             "signInOnServer": "Needs sign-in on {{server}}",
-            "noLocation": "Project not set up here"
+            "noLocation": "Project not set up here",
+            "newMachine": "New machine on {{provider}}…"
           },
           "RunTargetRowList": {
             "sshHosts": "SSH hosts",
             "otherHosts": "Other hosts"
+          },
+          "MachineCreateFields": {
+            "days_one": "1 day",
+            "days_other": "{{count}} days",
+            "hours_one": "1 hour",
+            "hours_other": "{{count}} hours",
+            "minutes_one": "1 minute",
+            "minutes_other": "{{count}} minutes",
+            "machine": "Machine",
+            "lifetime": "Lifetime",
+            "deleteAfter": "Delete after",
+            "image": "Image",
+            "machineName": "Machine name",
+            "sameAsWorktree": "Same as the worktree",
+            "finalName": "Named {{name}}",
+            "fallbackName": "Named machine-… (a unique name)"
           }
         }
       },

@@ -165,9 +165,10 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
 
       const machine =
         ephemeralVmsEnabled && machineSelection && selectedWorkspaceTarget.status === 'ready'
-          ? buildMachineCreationRequest(machineSelection.selected, {
+          ? buildMachineCreationRequest(machineSelection, {
               sourceRepoId: repoId,
-              projectId: selectedWorkspaceTarget.target.projectId
+              projectId: selectedWorkspaceTarget.target.projectId,
+              worktreeName: workspaceName
             })
           : undefined
 

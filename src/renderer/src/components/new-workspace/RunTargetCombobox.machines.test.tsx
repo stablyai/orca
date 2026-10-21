@@ -47,7 +47,8 @@ const group: MachineGroupOption = {
   serverName: null,
   status: { kind: 'ready' },
   machines: ['omarchy-dev', 'pr-2231', 'perf-bench', 'gpu-box'].map((name) => machine(name)),
-  archived: []
+  archived: [],
+  canCreate: false
 }
 
 function renderPicker(
@@ -55,6 +56,7 @@ function renderPicker(
 ) {
   const onChange = vi.fn()
   const onProviderAction = vi.fn()
+  const onCreate = vi.fn()
   const onHostChange = vi.fn()
   render(
     <RunTargetCombobox
@@ -63,10 +65,24 @@ function renderPicker(
       onHostChange={onHostChange}
       recipes={[]}
       recipeValue={null}
-      machines={{ groups: [group], selected: null, onChange, onProviderAction, ...machines }}
+      machines={{
+        groups: [group],
+        selected: null,
+        onChange,
+        onProviderAction,
+        onCreate,
+        creating: null,
+        ...machines
+      }}
     />
   )
-  return { onChange, onProviderAction, onHostChange, field: screen.getByRole('combobox') }
+  return {
+    onChange,
+    onProviderAction,
+    onCreate,
+    onHostChange,
+    field: screen.getByRole('combobox')
+  }
 }
 
 afterEach(cleanup)
@@ -102,7 +118,14 @@ describe('run target machines', () => {
         hostValue="local-setup"
         recipes={[]}
         recipeValue={null}
-        machines={{ groups: [group], selected: null, onChange: vi.fn(), onProviderAction: vi.fn() }}
+        machines={{
+          groups: [group],
+          selected: null,
+          onChange: vi.fn(),
+          onProviderAction: vi.fn(),
+          onCreate: vi.fn(),
+          creating: null
+        }}
       />
     )
     const hosts = screen.getByRole('group', { name: 'SSH hosts' })
@@ -130,7 +153,14 @@ describe('run target machines', () => {
         recipes={[]}
         recipeValue={null}
         onRecipeChange={onRecipeChange}
-        machines={{ groups: [group], selected: null, onChange, onProviderAction: vi.fn() }}
+        machines={{
+          groups: [group],
+          selected: null,
+          onChange,
+          onProviderAction: vi.fn(),
+          onCreate: vi.fn(),
+          creating: null
+        }}
       />
     )
 
@@ -176,5 +206,20 @@ describe('run target machines', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Sign in to Omarchy' }))
 
     expect(onProviderAction).toHaveBeenCalledWith({ kind: 'sign-in', group: signIn })
+  })
+
+  it('starts a new machine from the provider group and paints the draft in the field', () => {
+    const creatable = { ...group, canCreate: true }
+    const { onCreate } = renderPicker({ groups: [creatable] })
+    fireEvent.click(screen.getByRole('option', { name: 'New machine on Omarchy…' }))
+    expect(onCreate).toHaveBeenCalledWith(PROVIDER)
+
+    cleanup()
+    renderPicker({
+      groups: [creatable],
+      creating: { providerKey: PROVIDER, summary: 'Omarchy · Temporary · deletes 6:00 PM' }
+    })
+    const field = screen.getByRole('combobox', { name: 'Run on' })
+    expect(field.parentElement?.parentElement?.textContent).toContain('New machine')
   })
 })

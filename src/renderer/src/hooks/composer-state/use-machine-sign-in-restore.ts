@@ -67,6 +67,7 @@ export function useMachineSignInRestore(
           const current = latest.current
           const reopen = buildComposerReopenData(current.modalData, current.snapshot)
           const chosen = current.machineSelection?.selected?.machine ?? null
+          const draft = current.machineSelection?.draft ?? null
           signInToMachineProvider(action.group.providerKey, () => {
             const store = useAppStore.getState()
             store.setComposerMachineRestore(
@@ -78,6 +79,7 @@ export function useMachineSignInRestore(
                   }
                 : null
             )
+            store.setComposerDraftRestore(draft)
             store.openModal('new-workspace-composer', reopen)
           })
         }
