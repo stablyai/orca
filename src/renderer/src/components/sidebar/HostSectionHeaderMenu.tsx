@@ -38,6 +38,8 @@ import { HostRenameDialog } from './HostRenameDialog'
 import { HostRemoveDialog } from './HostRemoveDialog'
 import { RuntimeRepairDialog } from '../settings/RuntimeRepairDialog'
 import { resolveHostRemoval } from './host-rename-remove'
+import { MachineMenuItems } from '@/components/machines/MachineMenuItems'
+import { useMachineForHost } from '@/store/machines'
 
 function blockedTitle(reason: 'client-too-old' | 'server-too-old'): string {
   return reason === 'server-too-old'
@@ -77,6 +79,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
   const [removeOpen, setRemoveOpen] = useState(false)
   const [repairOpen, setRepairOpen] = useState(false)
   const mountedRef = useMountedRef()
+  const machine = useMachineForHost(row.hostId)
   const sshStatus = useAppStore((s) => {
     const parsed = parseExecutionHostId(row.hostId)
     if (parsed?.kind !== 'ssh') {
@@ -224,6 +227,15 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56">
+        {machine ? (
+          <>
+            <MachineMenuItems
+              match={machine}
+              label={`${machine.machine.name} · ${machine.snapshot.name}`}
+            />
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         {model.actions.includes('runtime-repair') && (
           <>
             <DropdownMenuItem

@@ -5,7 +5,12 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { machineNeedsWake } from './machine-display-state'
 import { describeMachineFailure } from './machine-copy'
-import { findMachineForHost, type MachineMatch } from './machine-host-match'
+import {
+  findMachineForHost,
+  machineHostKeyForWorktree,
+  type MachineMatch
+} from './machine-host-match'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { wakeMachine } from './machine-wake'
 
 type WakeOutcome = { ok: true } | { ok: false; code: MachineProviderErrorCode | null }
@@ -104,4 +109,23 @@ export function wakeMachineForHost(
         )
     }
   })
+}
+
+/**
+ * The Wake button on a stopped machine's surfaces: the same wake as opening the worktree, so a
+ * terminal holds its attach and names the outcome. Without a worktree it still wakes, announced.
+ */
+export function wakeStoppedMachine(match: MachineMatch, worktreeId?: string): Promise<void> {
+  if (worktreeId) {
+    const state = useAppStore.getState()
+    const worktree = findWorktreeById(state.worktreesByRepo, worktreeId)
+    const repo = worktree ? state.repos.find((candidate) => candidate.id === worktree.repoId) : null
+    const hostKey = worktree ? machineHostKeyForWorktree(worktree, repo) : null
+    if (hostKey) {
+      return wakeMachineForHost(hostKey, worktreeId)
+    }
+  }
+  return machineNeedsWake(match.machine.state)
+    ? startAnnouncedWake(match, undefined).then(() => undefined)
+    : Promise.resolve()
 }

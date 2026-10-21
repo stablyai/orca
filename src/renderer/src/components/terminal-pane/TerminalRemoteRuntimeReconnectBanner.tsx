@@ -5,6 +5,8 @@ import { translate } from '@/i18n/i18n'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import type { WslHostUnavailableReason } from './use-wsl-host-unavailable-reason'
 import { WslHostUnavailableBanner } from './WslHostUnavailableBanner'
+import { StoppedMachineBanner } from '@/components/machines/StoppedMachineBanner'
+import type { MachineMatch } from '@/lib/machines/machine-host-match'
 
 type VisibleRecoveryPhase = Extract<
   PtyTransportRecoveryState['phase'],
@@ -40,7 +42,9 @@ export function TerminalRemoteRuntimeReconnectBanner({
   wslHostUnavailable = null,
   pairingRefused = false,
   wakingMachineName = null,
-  wakeFailure = null
+  wakeFailure = null,
+  stoppedMachine = null,
+  machineWorktreeId
 }: {
   phase: VisibleRecoveryPhase
   onReconnect: () => void
@@ -52,9 +56,16 @@ export function TerminalRemoteRuntimeReconnectBanner({
   wakingMachineName?: string | null
   /** Why waking `wakingMachineName` failed; the button then retries the wake. */
   wakeFailure?: string | null
+  /** The pane's machine sleeps or is archived, so nothing reconnects until it wakes. */
+  stoppedMachine?: MachineMatch | null
+  /** The pane's worktree, so Wake holds its terminals like opening it does. */
+  machineWorktreeId?: string
 }): React.JSX.Element {
   if (wslHostUnavailable) {
     return <WslHostUnavailableBanner reason={wslHostUnavailable} />
+  }
+  if (stoppedMachine && wakingMachineName === null) {
+    return <StoppedMachineBanner match={stoppedMachine} worktreeId={machineWorktreeId} />
   }
   const retrying = phase !== 'disconnected' && !pairingRefused
   const waking = retrying && wakingMachineName !== null
@@ -160,7 +171,8 @@ export function DelayedRemoteRuntimeReconnectBanner({
   const revealed = useRemoteRuntimeRecoveryBannerRevealed(
     props.phase === 'disconnected' ||
       Boolean(props.wslHostUnavailable) ||
-      Boolean(props.pairingRefused)
+      Boolean(props.pairingRefused) ||
+      Boolean(props.stoppedMachine && !props.wakingMachineName)
   )
   return revealed ? <TerminalRemoteRuntimeReconnectBanner key={epoch} {...props} /> : null
 }

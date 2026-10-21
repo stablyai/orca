@@ -12,6 +12,7 @@ import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
   findMachineForHost,
+  getArchivedMachineHostIds,
   type MachineMatch,
   type MachineSources
 } from '@/lib/machines/machine-host-match'
@@ -55,6 +56,18 @@ export function ensureMachinesLoaded(): void {
   if (!subscribed) {
     subscribed = true
     machinesApi.onChanged((snapshot) => useAppStore.getState().applyMachineSnapshot(snapshot))
+    machinesApi.onExpiryWarning((warning) =>
+      useAppStore.getState().applyMachineExpiryWarning(warning)
+    )
+    // Why: a reloaded window still shows warnings main raised before it.
+    void machinesApi.expiryWarnings().then(
+      (result) => {
+        for (const warning of result.ok ? result.value : []) {
+          useAppStore.getState().applyMachineExpiryWarning(warning)
+        }
+      },
+      () => {}
+    )
     window.api.plugins.onChanged(() => {
       if (loadState === 'loading') {
         reloadQueued = true
@@ -82,11 +95,19 @@ export function refreshMachineProviders(maxAgeMs: number): void {
  * asks the server to re-list rather than answer from its cache, which may be stale while its own
  * window is hidden.
  */
+/**
+ * Per paired server, how many action results (wake, sleep) have landed. A list that began before
+ * one landed may carry the machine's earlier state, so it is dropped for a fresh read instead.
+ * Purely client-side, so any server version works.
+ */
+const environmentActionResults = new Map<string, number>()
+
 export async function loadEnvironmentMachines(
   environmentId: string,
   { refresh = false }: { refresh?: boolean } = {}
 ): Promise<void> {
   const store = useAppStore.getState()
+  const startedAfter = environmentActionResults.get(environmentId) ?? 0
   try {
     const result = await callRuntimeRpc<MachineActionResult<unknown>>(
       { kind: 'environment', environmentId },
@@ -94,6 +115,11 @@ export async function loadEnvironmentMachines(
       refresh ? { refresh: true } : {},
       { suppressFeatureInteraction: true }
     )
+    if ((environmentActionResults.get(environmentId) ?? 0) !== startedAfter) {
+      // Why: an action finished while this read was out; a read started now includes it.
+      void loadEnvironmentMachines(environmentId, { refresh: true })
+      return
+    }
     if (result.ok) {
       const snapshots = parseRemoteMachineSnapshots(result.value)
       if (snapshots) {
@@ -120,6 +146,10 @@ export function applyEnvironmentMachineResult(
   environmentId: string,
   result: MachineActionResult<unknown>
 ): void {
+  environmentActionResults.set(
+    environmentId,
+    (environmentActionResults.get(environmentId) ?? 0) + 1
+  )
   const machine = result.ok ? parseRemoteMachineRecord(result.value) : null
   if (machine) {
     useAppStore.getState().applyEnvironmentMachine(environmentId, machine)
@@ -233,8 +263,40 @@ export function getMachineSources(): MachineSources {
   return selectMachineSources(state.machineProviders, state.machineEnvironmentProviders)
 }
 
-/** The machine a host runs on, or null for every other host. */
+type MatchCache = { sources: MachineSources; byHost: Map<string, MachineMatch | null> }
+let matchCache: MatchCache | null = null
+
+/**
+ * A host's match, computed once per inventory: the cache belongs to one sources object, so a
+ * machine change drops it whole and any other store update reuses every row's answer.
+ */
+function matchForHost(hostKey: string, sources: MachineSources): MachineMatch | null {
+  if (matchCache?.sources !== sources) {
+    matchCache = { sources, byHost: new Map() }
+  }
+  const held = matchCache.byHost.get(hostKey)
+  if (held !== undefined) {
+    return held
+  }
+  const match = findMachineForHost(hostKey, sources)
+  matchCache.byHost.set(hostKey, match)
+  return match
+}
+
+/** The machine a host runs on, or null for every other host; re-renders only when it changes. */
 export function useMachineForHost(hostKey: string | null | undefined): MachineMatch | null {
+  return useAppStore((state) =>
+    hostKey
+      ? matchForHost(
+          hostKey,
+          selectMachineSources(state.machineProviders, state.machineEnvironmentProviders)
+        )
+      : null
+  )
+}
+
+/** Hosts the sidebar folds under "Archived machines (n)". */
+export function useArchivedMachineHostIds(): ReadonlySet<string> {
   const sources = useMachineSources()
-  return useMemo(() => findMachineForHost(hostKey, sources), [hostKey, sources])
+  return useMemo(() => getArchivedMachineHostIds(sources.self), [sources])
 }

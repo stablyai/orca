@@ -1217,7 +1217,9 @@
           "failureTimeout": "Le fournisseur n’a pas répondu à temps.",
           "failureUnsupported": "Le fournisseur ne peut pas faire cela pour cette machine.",
           "failureCancelled": "L’opération a été annulée.",
-          "failureUnavailable": "Le fournisseur a rencontré un problème."
+          "failureUnavailable": "Le fournisseur a rencontré un problème.",
+          "onProvider": "{{machine}} sur {{provider}}",
+          "actionConflict": "Une autre action est en cours sur {{name}}."
         },
         "machineDisplayState": {
           "starting": "Démarrage",
@@ -1262,6 +1264,48 @@
         "machineProviderActions": {
           "signInStarted": "Terminez la connexion à {{provider}}, puis revenez à votre nouveau worktree.",
           "backToComposer": "Revenir au nouveau worktree"
+        },
+        "machineActions": {
+          "archive": "Archiver",
+          "copySsh": "Copier la commande SSH",
+          "retry": "Réessayer",
+          "refresh": "Actualiser",
+          "delete": "Supprimer…",
+          "copied": "Commande SSH copiée",
+          "wakeFailed": "Impossible de réveiller {{name}}",
+          "sleepFailed": "Impossible de mettre {{name}} en veille",
+          "archiveFailed": "Impossible d’archiver {{name}}",
+          "wakeMachine": "Réveiller la machine",
+          "sleepMachine": "Mettre la machine en veille",
+          "refreshFailed": "Impossible d’actualiser {{provider}}",
+          "sleepAgentsOne": "1 agent travaille sur {{name}}",
+          "sleepAgents": "{{count}} agents travaillent sur {{name}}",
+          "sleepAgentsBody": "Mettre la machine en veille les arrête.",
+          "sleepAnyway": "Mettre en veille quand même"
+        },
+        "machineExpiryWarning": {
+          "uncommitted": "{{count}} modifications non validées",
+          "unpushed": "{{count}} commits non poussés",
+          "warningAt": "Supprimée à {{time}} · {{work}}",
+          "unpushedOne": "1 commit non poussé",
+          "uncommittedOne": "1 modification non validée",
+          "unknown": "Impossible de vérifier le travail non enregistré"
+        },
+        "machineDeleteWork": {
+          "checking": "Vérification…",
+          "uncommittedUnknown": "Impossible de vérifier les modifications non validées",
+          "uncommitted_one": "1 non validée",
+          "uncommitted_other": "{{count}} non validées",
+          "unpushedUnknown": "Impossible de vérifier les commits non poussés",
+          "noUpstream": "Jamais poussé",
+          "unpushed_one": "1 non poussé",
+          "unpushed_other": "{{count}} non poussés",
+          "noChanges": "Aucune modification",
+          "allUnknown": "Impossible de vérifier le travail non enregistré"
+        },
+        "machineDelete": {
+          "worktreesLeft": "{{name}} a été supprimée, mais {{count}} de ses worktrees sont toujours listés. Retirez-les depuis leur menu.",
+          "stillThere": "{{name}} n’a pas été supprimée. Le fournisseur l’indique encore comme {{state}}."
         }
       }
     },
@@ -6860,6 +6904,9 @@
           "outsideDistro": "Choisissez un dossier dans {{value0}}.",
           "underDistro": "Cet hôte ne peut ajouter que des dossiers sous \\\\wsl.localhost\\{{value0}}.",
           "windowsDrive": "Les dossiers sur un lecteur Windows restent sur cet ordinateur. Choisissez cet ordinateur comme hôte pour en ajouter un."
+        },
+        "ArchivedMachinesRow": {
+          "label": "Machines archivées ({{count}})"
         }
       },
       "shared": {
@@ -8695,7 +8742,8 @@
           "pairedTwice": "Même serveur que {{value0}}, associé deux fois. Supprimez-en un pour pouvoir modifier ses projets.",
           "removeDefaultServerDescription": "Ce serveur est l’hôte par défaut des nouveaux projets. Choisissez-en un autre dans « Les nouveaux projets s’ouvrent sur » avant de le supprimer. Les sessions existantes ne sont pas touchées.",
           "connectedNewProjectsHint": "Connecté à {{value0}}. Pour y créer les nouveaux projets par défaut, choisissez-le dans « Les nouveaux projets s’ouvrent sur ».",
-          "removeDefaultServerBlocked": "Ce serveur est l’hôte par défaut des nouveaux projets. Choisissez-en un autre dans « Les nouveaux projets s’ouvrent sur » avant de le supprimer."
+          "removeDefaultServerBlocked": "Ce serveur est l’hôte par défaut des nouveaux projets. Choisissez-en un autre dans « Les nouveaux projets s’ouvrent sur » avant de le supprimer.",
+          "serverMachineDeleted": "Machine supprimée"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copier {{value0}}"
@@ -18477,6 +18525,49 @@
         "copyFailed": "Impossible de copier le lien.",
         "signingIn": "Connexion…",
         "cancel": "Annuler"
+      },
+      "machines": {
+        "DashboardMachinesStrip": {
+          "noAgents": "aucun agent",
+          "oneAgent": "1 agent",
+          "agents": "{{count}} agents",
+          "actions": "Actions de la machine",
+          "title": "Machines",
+          "expand": "Afficher les machines",
+          "collapse": "Masquer les machines"
+        },
+        "MachineDeleteDialog": {
+          "confirm": "Supprimer la machine",
+          "confirmWithWorktree": "Supprimer la machine et 1 worktree",
+          "confirmWithWorktrees": "Supprimer la machine et {{count}} worktrees",
+          "failed": "Impossible de supprimer {{name}}",
+          "title": "Supprimer {{name}}",
+          "descriptionWithWorktrees": "Supprime la machine sur {{provider}} et les {{count}} worktrees qu’elle contient. Action irréversible.",
+          "description": "Supprime la machine sur {{provider}}. Action irréversible.",
+          "unpushed": "{{count}} commits non poussés de ces worktrees seront perdus.",
+          "archiveInstead": "Archiver plutôt",
+          "cancel": "Annuler",
+          "unpushedOne": "1 commit non poussé de ces worktrees sera perdu.",
+          "machineTotal": "Dans ces worktrees : {{work}}",
+          "descriptionWithWorktree": "Supprime la machine sur {{provider}} et le worktree qu’elle contient. Cette action est irréversible."
+        },
+        "StoppedMachineBanner": {
+          "archived": "{{name}} est archivée",
+          "sleeping": "{{name}} est en veille",
+          "body": "Réveillez-la pour reprendre ce terminal.",
+          "wake": "Réveiller la machine",
+          "gone": "{{name}} a été supprimée",
+          "goneBody": "Ce terminal ne peut pas reprendre. Retirez le worktree depuis son menu quand vous avez fini.",
+          "unreachable": "Impossible de joindre {{name}}",
+          "unreachableBody": "Elle est peut-être encore en démarrage. Si cela persiste, mettez-la en veille puis réveillez-la depuis son menu.",
+          "reopenBody": "Ce terminal reprend quand la machine se réveille.",
+          "stopping": "{{name}} se met en veille"
+        }
+      },
+      "worktreeCreation": {
+        "MachineLeftoverCheck": {
+          "stillThere": "Le fournisseur l’indique encore. Réessayez dans une minute."
+        }
       }
     },
     "i18n": {

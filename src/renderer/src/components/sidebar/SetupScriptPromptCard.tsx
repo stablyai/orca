@@ -30,6 +30,7 @@ import { translate } from '@/i18n/i18n'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useWorktreeById } from '@/store/selectors'
+import { useStoppedMachineForHost } from '../machines/use-worktree-machine'
 
 function SetupScriptPromptCard(): React.JSX.Element | null {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
@@ -56,12 +57,21 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     [activeRepoId, activeWorktree, repos, settings]
   )
   const activeRepoHostIdentity = activeRepo ? getRepoHostIdentity(activeRepo) : null
+  // Why: a sleeping, archived or deleted machine can't be inspected, so "Couldn't verify" misleads.
+  const machineStopped =
+    useStoppedMachineForHost(activeRepo ? getRepoExecutionHostId(activeRepo) : null) !== null
   const isDismissed = activeRepoHostIdentity
     ? isSetupScriptPromptDismissed(activeRepoHostIdentity, dismissedRepoIds)
     : false
 
   useEffect(() => {
-    if (!sidebarOpen || !activeRepo || !isGitRepoKind(activeRepo) || isDismissed) {
+    if (
+      !sidebarOpen ||
+      !activeRepo ||
+      !isGitRepoKind(activeRepo) ||
+      isDismissed ||
+      machineStopped
+    ) {
       setPromptState(null)
       setDetectedSetupDraft('')
       return
@@ -97,7 +107,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     return () => {
       cancelled = true
     }
-  }, [activeRepo, inspectionRetryKey, isDismissed, settings, sidebarOpen])
+  }, [activeRepo, inspectionRetryKey, isDismissed, machineStopped, settings, sidebarOpen])
 
   const openLocalCommandSettings = useCallback(
     (repoId: string, hostId: ReturnType<typeof getRepoExecutionHostId>) =>
@@ -351,7 +361,8 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     !activeRepo ||
     !activeRepoHostIdentity ||
     !isGitRepoKind(activeRepo) ||
-    isDismissed
+    isDismissed ||
+    machineStopped
   const renderedPromptState = useRenderedSetupScriptPromptState({
     promptState,
     activeRepoId: activeRepo?.id ?? null,

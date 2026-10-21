@@ -110,8 +110,10 @@ export function RuntimeServerRow({
   const row = useRuntimeServerRowState(environment, details)
   const actionBusy = connecting || switching || disconnecting || removing
   const repairable = row.repairRoute === 'access-link'
+  // A retired server ran on a machine that was deleted; Connect would only dial a dead endpoint.
+  const retired = Boolean(environment.retiredAt)
   // Why: the revoked host rejects this token on every Connect; Re-pair is the only way back.
-  const canConnect = !(row.accessRevoked && repairable)
+  const canConnect = !retired && !(row.accessRevoked && repairable)
   const updateActionable = remoteUpdate?.phase === 'available' || remoteUpdate?.phase === 'failed'
   const deployment = getOrcadSshDeployment(environment)
   const sshAccess = environment.sshAccess
@@ -145,7 +147,8 @@ export function RuntimeServerRow({
     connecting,
     disconnecting,
     remoteUpdate,
-    managedNotRunning: Boolean(managed?.status && !managed.status.activeVersion)
+    managedNotRunning: Boolean(managed?.status && !managed.status.activeVersion),
+    retired
   })
 
   const endpoint =

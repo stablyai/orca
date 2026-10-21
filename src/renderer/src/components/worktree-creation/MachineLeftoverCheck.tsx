@@ -60,13 +60,24 @@ export default function MachineLeftoverCheck({
   const remove = async (machine: LeftoverMachine): Promise<void> => {
     setState({ kind: 'deleting', machine })
     const deleted = await window.api.machines.delete({ providerKey, machineId: machine.id })
-    if (deleted.ok) {
+    // Why: main answers with the machine as the provider left it; only `gone` means it went.
+    const gone = deleted.ok && deleted.value.state === 'gone'
+    if (gone) {
       onDeleted()
     }
     setState(
-      deleted.ok
+      gone
         ? { kind: 'deleted' }
-        : { kind: 'found', machine, error: describeMachineFailure(deleted.code) }
+        : {
+            kind: 'found',
+            machine,
+            error: deleted.ok
+              ? translate(
+                  'auto.components.worktreeCreation.MachineLeftoverCheck.stillThere',
+                  'The provider still lists it. Try again in a minute.'
+                )
+              : describeMachineFailure(deleted.code)
+          }
     )
   }
 

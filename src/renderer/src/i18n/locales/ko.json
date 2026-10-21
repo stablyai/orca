@@ -1113,7 +1113,9 @@
           "failureTimeout": "공급자가 제시간에 응답하지 않았습니다.",
           "failureUnsupported": "공급자가 이 머신에서 그 작업을 할 수 없습니다.",
           "failureCancelled": "취소되었습니다.",
-          "failureUnavailable": "공급자에 문제가 발생했습니다."
+          "failureUnavailable": "공급자에 문제가 발생했습니다.",
+          "onProvider": "{{provider}}의 {{machine}}",
+          "actionConflict": "{{name}}에서 다른 작업이 진행 중입니다."
         },
         "machineDisplayState": {
           "starting": "시작 중",
@@ -1158,6 +1160,48 @@
         "machineProviderActions": {
           "signInStarted": "{{provider}} 로그인을 마친 후 새 워크트리로 돌아가세요.",
           "backToComposer": "새 워크트리로 돌아가기"
+        },
+        "machineActions": {
+          "archive": "보관",
+          "copySsh": "SSH 명령 복사",
+          "retry": "다시 시도",
+          "refresh": "새로 고침",
+          "delete": "삭제…",
+          "copied": "SSH 명령을 복사했습니다",
+          "wakeFailed": "{{name}}을(를) 깨울 수 없습니다",
+          "sleepFailed": "{{name}}을(를) 절전시킬 수 없습니다",
+          "archiveFailed": "{{name}}을(를) 보관할 수 없습니다",
+          "wakeMachine": "머신 깨우기",
+          "sleepMachine": "머신 절전",
+          "refreshFailed": "{{provider}}을(를) 새로 고칠 수 없습니다",
+          "sleepAgentsOne": "{{name}}에서 에이전트 1개가 작업 중입니다",
+          "sleepAgents": "{{name}}에서 에이전트 {{count}}개가 작업 중입니다",
+          "sleepAgentsBody": "머신을 절전하면 중지됩니다.",
+          "sleepAnyway": "그래도 절전"
+        },
+        "machineExpiryWarning": {
+          "uncommitted": "커밋되지 않은 변경 {{count}}개",
+          "unpushed": "푸시되지 않은 커밋 {{count}}개",
+          "warningAt": "{{time}}에 삭제 · {{work}}",
+          "unpushedOne": "푸시되지 않은 커밋 1개",
+          "uncommittedOne": "커밋되지 않은 변경 1개",
+          "unknown": "저장되지 않은 작업을 확인할 수 없습니다"
+        },
+        "machineDeleteWork": {
+          "checking": "확인 중…",
+          "uncommittedUnknown": "커밋되지 않은 변경을 확인할 수 없습니다",
+          "uncommitted_one": "커밋 안 됨 1개",
+          "uncommitted_other": "커밋 안 됨 {{count}}개",
+          "unpushedUnknown": "푸시되지 않은 커밋을 확인할 수 없습니다",
+          "noUpstream": "푸시한 적 없음",
+          "unpushed_one": "푸시 안 됨 1개",
+          "unpushed_other": "푸시 안 됨 {{count}}개",
+          "noChanges": "변경 없음",
+          "allUnknown": "저장되지 않은 작업을 확인할 수 없습니다"
+        },
+        "machineDelete": {
+          "worktreesLeft": "{{name}}을(를) 삭제했지만 워크트리 {{count}}개가 아직 목록에 있습니다. 각 메뉴에서 제거하세요.",
+          "stillThere": "{{name}}이(가) 삭제되지 않았습니다. 공급자가 아직 {{state}} 상태로 표시합니다."
         }
       }
     },
@@ -6752,6 +6796,9 @@
           "outsideDistro": "{{value0}} 안의 폴더를 선택하세요.",
           "underDistro": "이 호스트는 \\\\wsl.localhost\\{{value0}} 아래의 폴더만 추가할 수 있습니다.",
           "windowsDrive": "Windows 드라이브의 폴더는 이 컴퓨터에 남습니다. 추가하려면 이 컴퓨터를 호스트로 선택하세요."
+        },
+        "ArchivedMachinesRow": {
+          "label": "보관된 머신 ({{count}})"
         }
       },
       "shared": {
@@ -8534,7 +8581,8 @@
           "pairedTwice": "{{value0}}와(과) 같은 서버가 두 번 페어링되었습니다. 프로젝트를 편집하려면 하나를 제거하세요.",
           "removeDefaultServerDescription": "이 서버는 새 프로젝트의 기본 호스트입니다. 제거하기 전에 '새 프로젝트를 여는 위치'에서 다른 서버를 선택하세요. 기존 세션은 그대로 유지됩니다.",
           "connectedNewProjectsHint": "{{value0}}에 연결되었습니다. 새 프로젝트를 기본적으로 이곳에 만들려면 '새 프로젝트를 여는 위치'에서 선택하세요.",
-          "removeDefaultServerBlocked": "이 서버는 새 프로젝트의 기본 호스트입니다. 제거하기 전에 '새 프로젝트를 여는 위치'에서 다른 서버를 선택하세요."
+          "removeDefaultServerBlocked": "이 서버는 새 프로젝트의 기본 호스트입니다. 제거하기 전에 '새 프로젝트를 여는 위치'에서 다른 서버를 선택하세요.",
+          "serverMachineDeleted": "머신 삭제됨"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "{{value0}} 복사"
@@ -18373,6 +18421,49 @@
         "copyFailed": "링크를 복사할 수 없습니다.",
         "signingIn": "로그인 중…",
         "cancel": "취소"
+      },
+      "machines": {
+        "DashboardMachinesStrip": {
+          "noAgents": "에이전트 없음",
+          "oneAgent": "에이전트 1개",
+          "agents": "에이전트 {{count}}개",
+          "actions": "머신 작업",
+          "title": "머신",
+          "expand": "머신 보기",
+          "collapse": "머신 숨기기"
+        },
+        "MachineDeleteDialog": {
+          "confirm": "머신 삭제",
+          "confirmWithWorktree": "머신과 워크트리 1개 삭제",
+          "confirmWithWorktrees": "머신과 워크트리 {{count}}개 삭제",
+          "failed": "{{name}}을(를) 삭제할 수 없습니다",
+          "title": "{{name}} 삭제",
+          "descriptionWithWorktrees": "{{provider}}의 머신과 그 안의 워크트리 {{count}}개를 삭제합니다. 되돌릴 수 없습니다.",
+          "description": "{{provider}}의 머신을 삭제합니다. 되돌릴 수 없습니다.",
+          "unpushed": "이 워크트리의 푸시되지 않은 커밋 {{count}}개가 사라집니다.",
+          "archiveInstead": "대신 보관",
+          "cancel": "취소",
+          "unpushedOne": "이 워크트리의 푸시되지 않은 커밋 1개가 사라집니다.",
+          "machineTotal": "이 워크트리 전체: {{work}}",
+          "descriptionWithWorktree": "{{provider}}의 머신과 그 위의 워크트리를 삭제합니다. 되돌릴 수 없습니다."
+        },
+        "StoppedMachineBanner": {
+          "archived": "{{name}}이(가) 보관되었습니다",
+          "sleeping": "{{name}}이(가) 절전 중입니다",
+          "body": "깨우면 이 터미널이 다시 시작됩니다.",
+          "wake": "머신 깨우기",
+          "gone": "{{name}}이(가) 삭제되었습니다",
+          "goneBody": "이 터미널은 다시 시작할 수 없습니다. 끝나면 메뉴에서 워크트리를 제거하세요.",
+          "unreachable": "{{name}}에 연결할 수 없습니다",
+          "unreachableBody": "아직 시작 중일 수 있습니다. 계속되면 메뉴에서 절전 후 다시 깨우세요.",
+          "reopenBody": "머신이 깨어나면 이 터미널이 다시 시작됩니다.",
+          "stopping": "{{name}}이(가) 절전 모드로 전환 중입니다"
+        }
+      },
+      "worktreeCreation": {
+        "MachineLeftoverCheck": {
+          "stillThere": "공급자에 아직 표시됩니다. 1분 후에 다시 시도하세요."
+        }
       }
     },
     "i18n": {

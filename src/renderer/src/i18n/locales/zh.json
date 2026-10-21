@@ -1113,7 +1113,9 @@
           "failureTimeout": "提供方未及时响应。",
           "failureUnsupported": "提供方无法对这台机器执行该操作。",
           "failureCancelled": "已取消。",
-          "failureUnavailable": "提供方遇到了问题。"
+          "failureUnavailable": "提供方遇到了问题。",
+          "onProvider": "{{provider}} 上的 {{machine}}",
+          "actionConflict": "{{name}} 上正在执行另一个操作。"
         },
         "machineDisplayState": {
           "starting": "启动中",
@@ -1158,6 +1160,48 @@
         "machineProviderActions": {
           "signInStarted": "完成 {{provider}} 登录后，返回你的新工作树。",
           "backToComposer": "返回新建工作树"
+        },
+        "machineActions": {
+          "archive": "归档",
+          "copySsh": "复制 SSH 命令",
+          "retry": "重试",
+          "refresh": "刷新",
+          "delete": "删除…",
+          "copied": "已复制 SSH 命令",
+          "wakeFailed": "无法唤醒 {{name}}",
+          "sleepFailed": "无法让 {{name}} 休眠",
+          "archiveFailed": "无法归档 {{name}}",
+          "wakeMachine": "唤醒机器",
+          "sleepMachine": "让机器休眠",
+          "refreshFailed": "无法刷新 {{provider}}",
+          "sleepAgentsOne": "{{name}} 上有 1 个智能体正在工作",
+          "sleepAgents": "{{name}} 上有 {{count}} 个智能体正在工作",
+          "sleepAgentsBody": "让机器休眠会停止它们。",
+          "sleepAnyway": "仍然休眠"
+        },
+        "machineExpiryWarning": {
+          "uncommitted": "{{count}} 个未提交的更改",
+          "unpushed": "{{count}} 个未推送的提交",
+          "warningAt": "{{time}} 删除 · {{work}}",
+          "unpushedOne": "1 个未推送的提交",
+          "uncommittedOne": "1 个未提交的更改",
+          "unknown": "无法检查未保存的工作"
+        },
+        "machineDeleteWork": {
+          "checking": "正在检查…",
+          "uncommittedUnknown": "无法检查未提交的更改",
+          "uncommitted_one": "1 个未提交",
+          "uncommitted_other": "{{count}} 个未提交",
+          "unpushedUnknown": "无法检查未推送的提交",
+          "noUpstream": "从未推送",
+          "unpushed_one": "1 个未推送",
+          "unpushed_other": "{{count}} 个未推送",
+          "noChanges": "无更改",
+          "allUnknown": "无法检查未保存的工作"
+        },
+        "machineDelete": {
+          "worktreesLeft": "已删除 {{name}}，但仍列出其 {{count}} 个工作树。请从各自菜单中移除。",
+          "stillThere": "{{name}} 未被删除。提供方仍将其列为 {{state}}。"
         }
       }
     },
@@ -6752,6 +6796,9 @@
           "outsideDistro": "请选择 {{value0}} 内的文件夹。",
           "underDistro": "此主机只能添加 \\\\wsl.localhost\\{{value0}} 下的文件夹。",
           "windowsDrive": "Windows 驱动器上的文件夹保留在此计算机上。请选择此计算机作为主机以添加。"
+        },
+        "ArchivedMachinesRow": {
+          "label": "已归档的机器（{{count}}）"
         }
       },
       "shared": {
@@ -8534,7 +8581,8 @@
           "pairedTwice": "与 {{value0}} 是同一台服务器，被配对了两次。请移除其中一个，以便编辑其项目。",
           "removeDefaultServerDescription": "此服务器是新项目的默认主机。移除前请在“新项目打开位置”中选择其他主机。现有会话不受影响。",
           "connectedNewProjectsHint": "已连接到 {{value0}}。若要默认在此创建新项目，请在“新项目打开位置”中选择它。",
-          "removeDefaultServerBlocked": "此服务器是新项目的默认主机。移除前请在“新项目打开位置”中选择其他主机。"
+          "removeDefaultServerBlocked": "此服务器是新项目的默认主机。移除前请在“新项目打开位置”中选择其他主机。",
+          "serverMachineDeleted": "机器已删除"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "复制 {{value0}}"
@@ -18373,6 +18421,49 @@
         "copyFailed": "无法复制链接。",
         "signingIn": "正在登录…",
         "cancel": "取消"
+      },
+      "machines": {
+        "DashboardMachinesStrip": {
+          "noAgents": "没有智能体",
+          "oneAgent": "1 个智能体",
+          "agents": "{{count}} 个智能体",
+          "actions": "机器操作",
+          "title": "机器",
+          "expand": "显示机器",
+          "collapse": "隐藏机器"
+        },
+        "MachineDeleteDialog": {
+          "confirm": "删除机器",
+          "confirmWithWorktree": "删除机器和 1 个工作树",
+          "confirmWithWorktrees": "删除机器和 {{count}} 个工作树",
+          "failed": "无法删除 {{name}}",
+          "title": "删除 {{name}}",
+          "descriptionWithWorktrees": "删除 {{provider}} 上的机器及其上的 {{count}} 个工作树。此操作无法撤销。",
+          "description": "删除 {{provider}} 上的机器。此操作无法撤销。",
+          "unpushed": "这些工作树上 {{count}} 个未推送的提交将丢失。",
+          "archiveInstead": "改为归档",
+          "cancel": "取消",
+          "unpushedOne": "这些工作树上 1 个未推送的提交将丢失。",
+          "machineTotal": "这些工作树合计：{{work}}",
+          "descriptionWithWorktree": "删除 {{provider}} 上的机器及其上的工作树。此操作无法撤销。"
+        },
+        "StoppedMachineBanner": {
+          "archived": "{{name}} 已归档",
+          "sleeping": "{{name}} 正在休眠",
+          "body": "唤醒它以恢复此终端。",
+          "wake": "唤醒机器",
+          "gone": "{{name}} 已删除",
+          "goneBody": "此终端无法恢复。完成后请从菜单中移除该工作树。",
+          "unreachable": "无法连接到 {{name}}",
+          "unreachableBody": "它可能仍在启动。如果一直如此，请从菜单中将其休眠后再唤醒。",
+          "reopenBody": "机器唤醒后，此终端将恢复。",
+          "stopping": "{{name}} 正在进入休眠"
+        }
+      },
+      "worktreeCreation": {
+        "MachineLeftoverCheck": {
+          "stillThere": "提供方仍列出它。请一分钟后重试。"
+        }
       }
     },
     "i18n": {

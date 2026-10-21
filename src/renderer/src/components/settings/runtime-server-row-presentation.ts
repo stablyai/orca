@@ -33,10 +33,22 @@ export type RuntimeServerStatusInput = {
   remoteUpdate: RemoteServerUpdateEntry | undefined
   /** A managed server whose loaded status has no active version. */
   managedNotRunning?: boolean
+  /** The server ran on a machine that was deleted. */
+  retired?: boolean
 }
 
 /** One status per row; it replaces the old stack of "Disconnected", "Offline" and "Status unavailable". */
 export function getRuntimeServerStatusIndicator(input: RuntimeServerStatusInput): ServerRowStatus {
+  // Why first: a retired server's machine is gone, so it is not reconnectable whatever it last said.
+  if (input.retired) {
+    return {
+      label: translate(
+        'auto.components.settings.RuntimeEnvironmentsPane.serverMachineDeleted',
+        'Machine deleted'
+      ),
+      tone: 'muted'
+    }
+  }
   // Why: the host answered and refused our token, so "Disconnected" would misstate a reachable host.
   if (input.accessRevoked) {
     return {

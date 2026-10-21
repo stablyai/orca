@@ -627,6 +627,12 @@
           }
         }
       },
+      "machines": {
+        "MachineDeleteDialog": {
+          "unpushed": "{{count}} unpushed commits on these worktrees will be lost.",
+          "unpushedOne": "1 unpushed commit on these worktrees will be lost."
+        }
+      },
       "mobile": {
         "MobileHero": {
           "79d2f480da": "Network interface to advertise",
@@ -2921,6 +2927,20 @@
         "permissionDenied": "Permission denied.",
         "symlink": "Symbolic links cannot be attached.",
         "unsupported": "Unsupported file type."
+      },
+      "machines": {
+        "machineDeleteWork": {
+          "uncommitted_one": "1 uncommitted",
+          "uncommitted_other": "{{count}} uncommitted",
+          "unpushed_one": "1 unpushed",
+          "unpushed_other": "{{count}} unpushed"
+        },
+        "machineExpiryWarning": {
+          "uncommitted": "{{count}} uncommitted changes",
+          "uncommittedOne": "1 uncommitted change",
+          "unpushed": "{{count}} unpushed commits",
+          "unpushedOne": "1 unpushed commit"
+        }
       },
       "terminal": {
         "shortcut": {

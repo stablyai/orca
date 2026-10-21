@@ -8,6 +8,7 @@ import { NewerDaemonHoldBanner } from './NewerDaemonHoldBanner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { useAppStore } from '@/store'
+import { useWorktreeStoppedMachine } from '@/components/machines/use-worktree-machine'
 import { useWslHostUnavailableReason } from './use-wsl-host-unavailable-reason'
 import { useManagedPairingRefusedEnvironmentId } from './use-managed-pairing-refused'
 import { DelayedRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
@@ -184,6 +185,7 @@ export function TerminalPaneRecoveryPortals({
     const wake = state.machineWakeByWorktreeId[controller.worktreeId]
     return wake && !wake.failure ? wake.machineName : null
   })
+  const stoppedMachine = useWorktreeStoppedMachine(controller.worktreeId)
   if (showSshReconnectOverlay) {
     return null
   }
@@ -217,6 +219,8 @@ export function TerminalPaneRecoveryPortals({
             wslHostUnavailable={wslHostUnavailable}
             pairingRefused={pairingRefusedEnvironmentId !== null}
             wakingMachineName={wakingMachineName}
+            stoppedMachine={stoppedMachine}
+            machineWorktreeId={controller.worktreeId}
           />,
           pane.container,
           `remote-runtime-reconnect-${pane.id}`

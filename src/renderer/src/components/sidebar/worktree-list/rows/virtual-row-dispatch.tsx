@@ -1,6 +1,7 @@
 import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
@@ -17,6 +18,7 @@ import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-c
 import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
 import type { useHostHeaderDrag } from '../../host-header-drag'
 import { HostSectionHeader } from './HostSectionHeader'
+import { ArchivedMachinesRow } from './ArchivedMachinesRow'
 import { renderFolderWorkspaceVirtualRow, type FolderWorkspaceRowContext } from './folder-row'
 import {
   renderImportedWorktreesVirtualRow,
@@ -32,6 +34,8 @@ import { renderWorktreeSectionHeaderRow, type SectionHeaderRowContext } from './
 import type { WorktreeRowDragState } from '../drag/row-state'
 
 export type WorktreeVirtualRowContext = {
+  /** Hosts of archived machines; their worktree rows read as dormant. */
+  archivedMachineHostIds: ReadonlySet<string>
   renderRows: RenderRow[]
   firstHeaderIndex: number
   activeStickyHeaderIndexRef: React.MutableRefObject<number | null>
@@ -176,6 +180,23 @@ export function renderWorktreeVirtualRow(
     return renderLineageGroupVirtualRow(ctx, row, vItem)
   }
 
+  if (row.type === 'archived-machines') {
+    return (
+      <div
+        key={vItem.key}
+        role="presentation"
+        data-worktree-virtual-row
+        data-worktree-virtual-row-key={String(vItem.key)}
+        data-index={vItem.index}
+        ref={ctx.measureVirtualRowElement}
+        className="absolute left-0 right-0 top-0"
+        style={{ transform: getVirtualRowTransform(vItem.start) }}
+      >
+        <ArchivedMachinesRow count={row.count} expanded={row.expanded} />
+      </div>
+    )
+  }
+
   if (row.type === 'imported-worktrees-card') {
     return renderImportedWorktreesVirtualRow({
       row,
@@ -232,9 +253,12 @@ export function renderWorktreeVirtualRow(
       data-index={vItem.index}
       ref={ctx.measureVirtualRowElement}
       data-workspace-status-drop-target={itemWorkspaceStatus ? '' : undefined}
+      data-archived-machine={ctx.archivedMachineHostIds.has(
+        getWorktreeExecutionHostId(row.worktree, row.repo)
+      )}
       data-workspace-status={itemWorkspaceStatus ?? undefined}
       className={cn(
-        'absolute left-0 right-0 top-0',
+        'absolute left-0 right-0 top-0 data-[archived-machine=true]:opacity-60',
         row.worktree.id === ctx.worktreeDragState.draggingWorktreeId && 'pointer-events-none',
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'

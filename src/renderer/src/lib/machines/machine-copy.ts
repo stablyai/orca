@@ -5,6 +5,9 @@ import type {
 import { translate } from '@/i18n/i18n'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { getDraftExpiry, type MachineCreateDraft } from './machine-create-draft'
+import { getMachineDisplayState, getMachineDisplayStateLabel } from './machine-display-state'
+import { machineLocalExpiresAt } from '../../../../shared/machine-inventory'
+import type { MachineMatch } from './machine-host-match'
 
 const clockTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
 
@@ -105,4 +108,65 @@ export function describeMachineFailure(code: MachineProviderErrorCode): string {
         'The provider ran into a problem.'
       )
   }
+}
+
+/** "omarchy-dev on Omarchy · Running · Temporary · deletes 4:12 PM", for tooltips. */
+export function describeMachine(match: MachineMatch): string {
+  const { machine, snapshot } = match
+  const parts = [
+    translate('auto.lib.machines.machineCopy.onProvider', '{{machine}} on {{provider}}', {
+      machine: machine.name,
+      provider: snapshot.name
+    }),
+    getMachineDisplayStateLabel(getMachineDisplayState(machine.state)),
+    getMachineLifetimeLabel(machine.lifetime)
+  ]
+  const expiry = machineLocalExpiresAt(machine, snapshot.clockOffsetMs)
+  if (machine.lifetime === 'temporary' && expiry !== null) {
+    parts.push(formatMachineExpiryInline(expiry))
+  }
+  return parts.join(' · ')
+}
+
+/** A menu action's failure; `conflict` there means another action on the machine is still running. */
+export function describeMachineActionFailure(code: MachineProviderErrorCode, name: string): string {
+  return code === 'conflict'
+    ? translate(
+        'auto.lib.machines.machineCopy.actionConflict',
+        'Another action is running on {{name}}.',
+        { name }
+      )
+    : describeMachineFailure(code)
+}
+
+/** "ux-1 was deleted": why a sleeping, archived or deleted machine's worktree can't be reached. */
+export function getStoppedMachineTitle(match: MachineMatch): string {
+  const name = match.machine.name
+  if (match.machine.state === 'gone') {
+    return translate('auto.components.machines.StoppedMachineBanner.gone', '{{name}} was deleted', {
+      name
+    })
+  }
+  if (match.machine.state === 'stopping') {
+    return translate(
+      'auto.components.machines.StoppedMachineBanner.stopping',
+      '{{name}} is going to sleep',
+      { name }
+    )
+  }
+  return match.machine.state === 'archived'
+    ? translate('auto.components.machines.StoppedMachineBanner.archived', '{{name}} is archived', {
+        name
+      })
+    : translate('auto.components.machines.StoppedMachineBanner.sleeping', '{{name}} is asleep', {
+        name
+      })
+}
+
+// The transport's own wording for a machine's server it can't reach; never shown raw.
+const MACHINE_CONNECTION_ERROR =
+  /runtimeEnvironments:call|port forward failed|Runtime environment is manually disconnected/i
+
+export function isMachineConnectionError(error: string): boolean {
+  return MACHINE_CONNECTION_ERROR.test(error)
 }

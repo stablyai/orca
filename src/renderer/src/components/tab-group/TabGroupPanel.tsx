@@ -5,6 +5,7 @@ import { useAppStore } from '../../store'
 import TabBar from '../tab-bar/TabBar'
 
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
+import { WorktreeLocationChip } from '../machines/WorktreeLocationChip'
 import { TabGroupPaneActionsMenu } from './TabGroupPaneActionsMenu'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
@@ -70,6 +71,7 @@ export default function TabGroupPanel({
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
+  const machinesEnabled = useAppStore((state) => state.settings?.experimentalEphemeralVms === true)
   const {
     activeTab,
     agentSessionItems,
@@ -295,6 +297,7 @@ export default function TabGroupPanel({
               className={actionChromeClassName}
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
+              {machinesEnabled ? <WorktreeLocationChip worktreeId={worktreeId} /> : null}
               <TabBarQuickCommandsButton
                 worktreeId={worktreeId}
                 groupId={groupId}

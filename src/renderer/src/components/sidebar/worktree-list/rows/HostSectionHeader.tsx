@@ -1,11 +1,40 @@
 import React from 'react'
-import { AlertTriangle, ChevronDown, Loader2, Server, ServerOff } from 'lucide-react'
+import {
+  AlertTriangle,
+  Archive,
+  Box,
+  ChevronDown,
+  Loader2,
+  Monitor,
+  Server,
+  ServerOff
+} from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { HostSectionHeaderMenu } from '../../HostSectionHeaderMenu'
 import { stopRepoHeaderMenuEvent } from './header-event-guards'
 import { getHostHeaderDetail } from './host-header-detail'
+import { MachineStateDot } from '@/components/machines/MachineStateLabel'
+import { useMachineForHost } from '@/store/machines'
+import { describeMachine } from '@/lib/machines/machine-copy'
+import {
+  getMachineDisplayState,
+  getMachineDisplayStateLabel,
+  type MachineDisplayState
+} from '@/lib/machines/machine-display-state'
+
+/** Only states that need attention get words on the header; the dot carries the rest. */
+function getMachineHeaderDetail(
+  state: MachineDisplayState | null
+): { text: string; tone: 'warning' | 'muted' } | null {
+  if (state === 'unreachable') {
+    return { text: getMachineDisplayStateLabel(state), tone: 'warning' }
+  }
+  return state === 'gone' || state === 'archived'
+    ? { text: getMachineDisplayStateLabel(state), tone: 'muted' }
+    : null
+}
 
 function formatSectionActivityLabel(count: number, label: string): string {
   return `${count} ${label}${count === 1 ? '' : 's'}`
@@ -61,7 +90,13 @@ export function HostSectionHeader({
 }): React.JSX.Element {
   const isBlocked = row.health === 'blocked'
   const isDisconnected = row.health === 'disconnected'
-  const detail = getHostHeaderDetail(row)
+  const machine = useMachineForHost(row.hostId)
+  const machineState = machine ? getMachineDisplayState(machine.machine.state) : null
+  // Why: a machine's header says its state; host transport detail would repeat the machine name.
+  const machineDetail = machine ? getMachineHeaderDetail(machineState) : null
+  const hostDetail = machine ? null : getHostHeaderDetail(row)
+  // Why: per spec C2, a Gone or Archived machine mutes its header; Unreachable only turns yellow.
+  const machineMuted = machineState === 'gone' || machineState === 'archived'
   return (
     <div className="px-2 pt-1">
       {/* Why: outlined card + server glyph marks hosts as machines, not mere groups. */}
@@ -73,9 +108,9 @@ export function HostSectionHeader({
         className={cn(
           'group/host-header flex h-8 w-full cursor-pointer items-center gap-2 rounded-md border px-2 text-left transition-all',
           onDragPointerDown && 'cursor-grab active:cursor-grabbing',
-          isBlocked
+          isBlocked && !machine
             ? 'border-destructive/40 bg-destructive/10'
-            : isDisconnected
+            : machineMuted || (isDisconnected && !machine)
               ? 'border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35 text-muted-foreground'
               : 'border-worktree-sidebar-border bg-worktree-sidebar-accent/70',
           dragging && 'pointer-events-none opacity-0'
@@ -89,30 +124,59 @@ export function HostSectionHeader({
           }
         }}
       >
-        {isDisconnected ? (
+        {machineState === 'archived' ? (
+          <Archive className="size-3.5 shrink-0 text-muted-foreground" />
+        ) : machine ? (
+          <Box className="size-3.5 shrink-0 text-muted-foreground" />
+        ) : row.kind === 'local' ? (
+          <Monitor className="size-3.5 shrink-0 text-muted-foreground" />
+        ) : isDisconnected ? (
           <ServerOff className="size-3.5 shrink-0 text-muted-foreground/80" />
         ) : (
           <Server className="size-3.5 shrink-0 text-muted-foreground" />
         )}
-        <HostHeaderHealthIcon health={row.health} />
+        {/* Why: a machine's state dot already says it; transport health would contradict a sleeping machine. */}
+        {machine ? null : <HostHeaderHealthIcon health={row.health} />}
         {/* Why: badge hugs the label (like repo headers) instead of floating by the hover controls. */}
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span
             className={cn(
               'min-w-0 truncate text-[12px] font-semibold leading-none',
-              isDisconnected ? 'text-muted-foreground' : 'text-foreground'
+              machineMuted || (isDisconnected && !machine)
+                ? 'text-muted-foreground'
+                : 'text-foreground'
             )}
           >
-            {row.label}
+            {machine ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>{machine.machine.name}</span>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={6}>
+                  {describeMachine(machine)}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              row.label
+            )}
           </span>
-          {detail ? (
+          {machineState ? <MachineStateDot state={machineState} /> : null}
+          {machineDetail ? (
+            <span
+              data-tone={machineDetail.tone}
+              className="shrink-0 truncate text-[10px] leading-none text-muted-foreground data-[tone=warning]:text-status-warning"
+            >
+              {machineDetail.text}
+            </span>
+          ) : null}
+          {hostDetail ? (
             <span
               className={cn(
                 'shrink-0 truncate text-[10px] leading-none',
-                detail.isWarning ? 'text-destructive' : 'text-muted-foreground/70'
+                hostDetail.isWarning ? 'text-destructive' : 'text-muted-foreground/70'
               )}
             >
-              {detail.text}
+              {hostDetail.text}
             </span>
           ) : null}
           <SectionMetricsBadge count={row.count} />

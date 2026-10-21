@@ -6,6 +6,9 @@ import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
 import CacheTimer from './CacheTimer'
 import { WorktreeHostContextBadge } from './WorktreeHostContextBadge'
+import { MachineHostBadge } from '@/components/machines/MachineHostBadge'
+import { useMachineForHost } from '@/store/machines'
+import { machineHostKeyForWorktree } from '@/lib/machines/machine-host-match'
 import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
 import { TruncatedSidebarLabel } from './truncated-sidebar-label'
 import { getDirectoryName } from './worktree-card-model'
@@ -43,6 +46,7 @@ export function WorktreeCardMetaRow({
     showMetaRowDetails,
     detailsAndPorts
   } = presentation
+  const machine = useMachineForHost(machineHostKeyForWorktree(worktree, repo))
 
   return (
     <div className="flex items-center gap-1.5 min-w-0" data-worktree-card-meta-row="">
@@ -56,7 +60,13 @@ export function WorktreeCardMetaRow({
           </div>
         )}
 
-        {showHostContextBadge && <WorktreeHostContextBadge label={contextLabel ?? ''} />}
+        {showHostContextBadge ? (
+          machine ? (
+            <MachineHostBadge match={machine} />
+          ) : (
+            <WorktreeHostContextBadge label={contextLabel ?? ''} />
+          )
+        ) : null}
 
         {showIdentityInNewCard ? (
           <TruncatedSidebarLabel

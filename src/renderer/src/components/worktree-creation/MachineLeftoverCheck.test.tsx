@@ -63,6 +63,18 @@ describe('MachineLeftoverCheck', () => {
     )
   })
 
+  it('keeps offering Delete when the provider still lists the machine afterwards', async () => {
+    machines.list.mockResolvedValue(
+      listed([{ id: 'm-1', name: 'box', state: 'running', creatingOperationId: 'op-1' }])
+    )
+    machines.delete.mockResolvedValue({ ok: true, value: { id: 'm-1', state: 'error' } })
+    renderCheck()
+    fireEvent.click(screen.getByRole('button', { name: 'Check for a leftover machine' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete box' }))
+    await waitFor(() => expect(screen.getByText(/The provider still lists it/)).toBeTruthy())
+    expect(screen.getByRole('button', { name: 'Delete box' })).toBeTruthy()
+  })
+
   it('offers Delete at once for a machine the create already reported', () => {
     renderCheck({ id: 'm-1', name: 'box' })
     expect(screen.getByRole('button', { name: 'Delete box' })).toBeTruthy()

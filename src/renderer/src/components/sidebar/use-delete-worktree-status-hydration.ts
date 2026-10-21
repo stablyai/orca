@@ -18,12 +18,15 @@ export function useDeleteWorktreeStatusHydration({
   isOpen,
   deleteTargets,
   visibleTargets,
-  repoMap
+  repoMap,
+  includeMainWorktrees = false
 }: {
   isOpen: boolean
   deleteTargets: readonly Worktree[]
   visibleTargets: readonly Worktree[]
   repoMap: ReadonlyMap<string, Repo>
+  /** Deleting a whole machine loses its primary checkout too, so it needs that status as well. */
+  includeMainWorktrees?: boolean
 }): ReadonlyMap<string, GitStatusResult['entries'] | null> {
   const repos = useAppStore((state) => state.repos)
   const generation = isOpen ? deleteTargets.map(getWorktreeHostIdentity).join('\n') : ''
@@ -44,7 +47,9 @@ export function useDeleteWorktreeStatusHydration({
     const currentState = useAppStore.getState()
     const targets = orderDeleteWorktreeStatusHydrationTargets({
       targets: deleteTargets.filter(
-        (target) => !target.isMainWorktree && !isFolderWorkspaceDelete(repoMap, target)
+        (target) =>
+          (includeMainWorktrees || !target.isMainWorktree) &&
+          !isFolderWorkspaceDelete(repoMap, target)
       ),
       visibleTargets,
       activeWorktreeId: currentState.activeWorktreeId,
@@ -93,7 +98,7 @@ export function useDeleteWorktreeStatusHydration({
     return () => {
       controller.abort()
     }
-  }, [deleteTargets, generation, isOpen, repoMap, repos, visibleTargets])
+  }, [deleteTargets, generation, includeMainWorktrees, isOpen, repoMap, repos, visibleTargets])
 
   return currentStatusByIdentity
 }

@@ -1311,7 +1311,9 @@
           "failureTimeout": "The provider didn’t answer in time.",
           "failureUnsupported": "The provider can’t do that for this machine.",
           "failureCancelled": "It was canceled.",
-          "failureUnavailable": "The provider ran into a problem."
+          "failureUnavailable": "The provider ran into a problem.",
+          "onProvider": "{{machine}} on {{provider}}",
+          "actionConflict": "Another action is running on {{name}}."
         },
         "machineDisplayState": {
           "starting": "Starting",
@@ -1356,6 +1358,48 @@
         "machineProviderActions": {
           "signInStarted": "Finish signing in to {{provider}}, then go back to your new worktree.",
           "backToComposer": "Back to new worktree"
+        },
+        "machineActions": {
+          "archive": "Archive",
+          "copySsh": "Copy SSH command",
+          "retry": "Retry",
+          "refresh": "Refresh",
+          "delete": "Delete…",
+          "copied": "SSH command copied",
+          "wakeFailed": "Couldn’t wake {{name}}",
+          "sleepFailed": "Couldn’t put {{name}} to sleep",
+          "archiveFailed": "Couldn’t archive {{name}}",
+          "wakeMachine": "Wake machine",
+          "sleepMachine": "Sleep machine",
+          "refreshFailed": "Couldn’t refresh {{provider}}",
+          "sleepAgentsOne": "1 agent is working on {{name}}",
+          "sleepAgents": "{{count}} agents are working on {{name}}",
+          "sleepAgentsBody": "Sleeping the machine stops them.",
+          "sleepAnyway": "Sleep anyway"
+        },
+        "machineExpiryWarning": {
+          "uncommitted": "{{count}} uncommitted changes",
+          "unpushed": "{{count}} unpushed commits",
+          "warningAt": "Deletes {{time}} · {{work}}",
+          "uncommittedOne": "1 uncommitted change",
+          "unpushedOne": "1 unpushed commit",
+          "unknown": "Couldn’t check unsaved work"
+        },
+        "machineDeleteWork": {
+          "checking": "Checking…",
+          "uncommittedUnknown": "Couldn’t check uncommitted changes",
+          "uncommitted_one": "1 uncommitted",
+          "uncommitted_other": "{{count}} uncommitted",
+          "unpushedUnknown": "Couldn’t check unpushed commits",
+          "noUpstream": "Never pushed",
+          "unpushed_one": "1 unpushed",
+          "unpushed_other": "{{count}} unpushed",
+          "noChanges": "No changes",
+          "allUnknown": "Couldn’t check unsaved work"
+        },
+        "machineDelete": {
+          "worktreesLeft": "Deleted {{name}}, but {{count}} of its worktrees are still listed. Remove them from their menu.",
+          "stillThere": "{{name}} wasn’t deleted. The provider still lists it as {{state}}."
         }
       }
     },
@@ -7027,6 +7071,9 @@
           "outsideDistro": "Pick a folder inside {{value0}}.",
           "underDistro": "This host can only add folders under \\\\wsl.localhost\\{{value0}}.",
           "windowsDrive": "Folders on a Windows drive stay on this computer. Choose this computer as the host to add one."
+        },
+        "ArchivedMachinesRow": {
+          "label": "Archived machines ({{count}})"
         }
       },
       "shared": {
@@ -8872,7 +8919,8 @@
           "pairedTwice": "Same server as {{value0}}, paired twice. Remove one so its projects can be edited.",
           "removeDefaultServerDescription": "This server is the default host for new projects. Choose another one under New projects open on before removing it. Existing host sessions are left alone.",
           "connectedNewProjectsHint": "Connected to {{value0}}. To create new projects there by default, choose it under New projects open on.",
-          "removeDefaultServerBlocked": "This server is the default host for new projects. Choose another one under New projects open on before removing it."
+          "removeDefaultServerBlocked": "This server is the default host for new projects. Choose another one under New projects open on before removing it.",
+          "serverMachineDeleted": "Machine deleted"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copy {{value0}}"
@@ -18635,6 +18683,49 @@
         "copyFailed": "Could not copy the link.",
         "signingIn": "Signing in…",
         "cancel": "Cancel"
+      },
+      "machines": {
+        "DashboardMachinesStrip": {
+          "noAgents": "no agents",
+          "oneAgent": "1 agent",
+          "agents": "{{count}} agents",
+          "actions": "Machine actions",
+          "title": "Machines",
+          "expand": "Show machines",
+          "collapse": "Hide machines"
+        },
+        "MachineDeleteDialog": {
+          "confirm": "Delete machine",
+          "confirmWithWorktree": "Delete machine and 1 worktree",
+          "confirmWithWorktrees": "Delete machine and {{count}} worktrees",
+          "failed": "Couldn’t delete {{name}}",
+          "title": "Delete {{name}}",
+          "descriptionWithWorktrees": "Deletes the machine on {{provider}} and the {{count}} worktrees on it. This can’t be undone.",
+          "description": "Deletes the machine on {{provider}}. This can’t be undone.",
+          "unpushed": "{{count}} unpushed commits on these worktrees will be lost.",
+          "archiveInstead": "Archive instead",
+          "cancel": "Cancel",
+          "unpushedOne": "1 unpushed commit on these worktrees will be lost.",
+          "machineTotal": "Across these worktrees: {{work}}",
+          "descriptionWithWorktree": "Deletes the machine on {{provider}} and the worktree on it. This can’t be undone."
+        },
+        "StoppedMachineBanner": {
+          "archived": "{{name}} is archived",
+          "sleeping": "{{name}} is asleep",
+          "body": "Wake it to resume this terminal.",
+          "wake": "Wake machine",
+          "gone": "{{name}} was deleted",
+          "goneBody": "This terminal can’t resume. Remove the worktree from its menu when you’re done.",
+          "unreachable": "Can’t reach {{name}}",
+          "unreachableBody": "It may still be starting. If this stays, sleep and wake it from its menu.",
+          "reopenBody": "This terminal resumes when the machine wakes.",
+          "stopping": "{{name}} is going to sleep"
+        }
+      },
+      "worktreeCreation": {
+        "MachineLeftoverCheck": {
+          "stillThere": "The provider still lists it. Try again in a minute."
+        }
       }
     },
     "i18n": {

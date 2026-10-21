@@ -1,4 +1,6 @@
 import { createPortal } from 'react-dom'
+import { useTerminalMachineBanner } from '@/components/machines/use-worktree-machine'
+import { StoppedMachineBanner } from '@/components/machines/StoppedMachineBanner'
 import { TerminalPaneFileDropOwner } from './TerminalPaneFileDropOwner'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import TerminalSearch from '@/components/TerminalSearch'
@@ -121,6 +123,7 @@ export function TerminalPaneSurface({
     worktreeId
   } = controller
   // Why: an SSH, runtime, or not-yet-known host must not be described with this client's OS/shell.
+  const machineBanner = useTerminalMachineBanner(worktreeId, visibleTerminalError)
   const paneOnClient = useAppStore(
     (state) => getKnownExecutionHostIdForWorktree(state, worktreeId) === LOCAL_EXECUTION_HOST_ID
   )
@@ -194,7 +197,11 @@ export function TerminalPaneSurface({
       />
       {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
           toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
-      {visibleTerminalError && isActive && !showSshReconnectOverlay && activePane
+      {/* Why: on a stopped or deleted machine the transport error is expected; say why instead. */}
+      {machineBanner && isActive && activePane
+        ? createPortal(<StoppedMachineBanner {...machineBanner} />, activePane.container)
+        : null}
+      {visibleTerminalError && !machineBanner && isActive && !showSshReconnectOverlay && activePane
         ? createPortal(
             <TerminalErrorToast
               error={visibleTerminalError}

@@ -21,6 +21,7 @@ import {
 import './agent-board-transitions.css'
 import { translate } from '@/i18n/i18n'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
+import { DashboardMachinesStrip } from '../machines/DashboardMachinesStrip'
 
 /** Ack an agent in the pop-out window: relayed over IPC to the main renderer.
  *  ?. shields dialog-opening from dev-HMR preload skew (renderer updates hot,
@@ -120,6 +121,8 @@ function KanbanColumn({
 
 type AgentKanbanBoardProps = {
   snapshot: DashboardSnapshot
+  /** Only the main window holds machine inventory and the Delete dialog, so the pop-out omits it. */
+  showMachines?: boolean
   /** Sizing for the outermost container. The pop-out fills the window
    *  (h-screen w-screen); the in-window drawer fills its host (h-full w-full). */
   containerClassName?: string
@@ -146,7 +149,8 @@ export function AgentKanbanBoard({
   onAckAgent = ackAgentViaPopoutRelay,
   onRevealAgent = revealAgentViaPopoutRelay,
   onClose,
-  headerActions
+  headerActions,
+  showMachines = false
 }: AgentKanbanBoardProps): React.JSX.Element {
   const visibleBuckets = useMemo(
     () =>
@@ -296,6 +300,7 @@ export function AgentKanbanBoard({
           onFiltersChange={setFilters}
           searchInputRef={searchInputRef}
         />
+        {showMachines ? <DashboardMachinesStrip cards={snapshot.cards} /> : null}
         <div className="scrollbar-sleek flex min-h-0 flex-1 overflow-x-auto p-3">
           {/* Auto margins center the capped board and collapse during horizontal overflow. */}
           <div className="mx-auto flex w-full max-w-[1280px] gap-3">

@@ -1,4 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
+import { useArchivedMachineHostIds } from '@/store/machines'
+import { groupArchivedMachineHosts } from '../listing/archived-machine-hosts'
 import { useAppStore } from '@/store'
 import { getProjectHeaderHostContexts } from '../rows/project-header-host-context'
 import { translate } from '@/i18n/i18n'
@@ -89,7 +91,17 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const scrollSuppression = useWorktreeSidebarScrollSuppression(scrollRef)
   const { markDirectScrollInput, markScrollMovement } = scrollSuppression
 
-  const renderRows = useMemo(() => buildRenderableRows(rows), [rows])
+  const archivedMachineHostIds = useArchivedMachineHostIds()
+  const archivedMachinesExpanded = useAppStore((s) => s.archivedMachinesExpanded)
+  const renderRows = useMemo(
+    () =>
+      groupArchivedMachineHosts(
+        buildRenderableRows(rows),
+        archivedMachineHostIds,
+        archivedMachinesExpanded
+      ),
+    [archivedMachineHostIds, archivedMachinesExpanded, rows]
+  )
   const firstHeaderIndex = useMemo(
     () => renderRows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
     [renderRows]
@@ -320,6 +332,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   }, [markScrollMovement])
 
   const rowContext = buildWorktreeVirtualRowContext({
+    archivedMachineHostIds,
     props,
     renderRows,
     firstHeaderIndex,

@@ -116,7 +116,11 @@ describe('MachineCreationStatus', () => {
     vi.stubGlobal(
       'window',
       Object.assign(window, {
-        api: { machines: { delete: vi.fn().mockResolvedValue({ ok: true, value: {} }) } }
+        api: {
+          machines: {
+            delete: vi.fn().mockResolvedValue({ ok: true, value: { id: 'm-1', state: 'gone' } })
+          }
+        }
       })
     )
     const created = entry({

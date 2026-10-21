@@ -20,6 +20,7 @@ import { machineNeedsWake } from '@/lib/machines/machine-display-state'
 import { findMachineForHost, type MachineMatch } from '@/lib/machines/machine-host-match'
 import { getProjectHostSetupSelectionKey } from '@/lib/project-host-setup-options'
 import { useAppStore } from '@/store'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { runMachineProviderRowAction } from '@/lib/machines/machine-provider-actions'
 import { ensureMachinesLoaded, refreshMachineProviders, useMachineSources } from '@/store/machines'
@@ -145,9 +146,15 @@ export function useComposerMachineSelection({
     return [...own, ...paired]
   }, [projectHostSetups, projectId, runtimeEnvironments, sources])
 
-  // Why: only a host whose machine is listed may hide; any other stays pickable as a host.
+  // Why: only a host whose machine is listed may hide; any other stays pickable as a host. A
+  // retired server ran on a deleted machine, so it can never run anything again.
   const machineHostIds = useMemo(() => {
-    const hostIds = new Set<string>()
+    const retired = new Set(
+      runtimeEnvironments
+        .filter((environment) => environment.retiredAt)
+        .map((environment) => toRuntimeExecutionHostId(environment.id))
+    )
+    const hostIds = new Set<string>(retired)
     for (const setup of projectHostSetups) {
       const match = findMachineForHost(setup.hostId, sources)
       if (match && findOption(groups, choiceFor(match))) {
@@ -155,7 +162,7 @@ export function useComposerMachineSelection({
       }
     }
     return hostIds
-  }, [groups, projectHostSetups, sources])
+  }, [groups, projectHostSetups, runtimeEnvironments, sources])
 
   const selected = useMemo((): SelectedMachine | null => {
     if (draft) {

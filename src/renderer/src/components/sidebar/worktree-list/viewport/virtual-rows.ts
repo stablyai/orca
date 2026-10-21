@@ -90,6 +90,9 @@ export function estimateRenderRowSize(
         : 0)
     )
   }
+  if (row?.type === 'archived-machines') {
+    return HOST_HEADER_ROW_HEIGHT
+  }
   if (row?.type === 'lineage-group') {
     return 100 + Math.max(0, row.rows.length - 1) * 96
   }

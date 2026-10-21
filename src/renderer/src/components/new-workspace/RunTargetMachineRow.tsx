@@ -98,7 +98,8 @@ function rowContent(row: Exclude<MachineRowModel, { kind: 'machine-group' }>): {
               'Project not set up here'
             ),
         status: <MachineStateLabel state={machine.state} />,
-        dimmed: archived || machine.state === 'unreachable' || !pickable
+        dimmed:
+          archived || machine.state === 'unreachable' || machine.state === 'error' || !pickable
       }
     }
     case 'machine-more':

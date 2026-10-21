@@ -46,6 +46,14 @@ describe('runtime server status indicator', () => {
     })
   })
 
+  it("says a deleted machine's retired server is gone, ahead of any connection state", () => {
+    expect(
+      getRuntimeServerStatusIndicator(
+        statusInput({ retired: true, accessRevoked: true, connectionState: 'reconnecting' })
+      )
+    ).toEqual({ label: 'Machine deleted', tone: 'muted' })
+  })
+
   it('says unreachable, not offline, when the probe got no answer', () => {
     expect(getRuntimeServerStatusIndicator(statusInput({ probeFailed: true })).label).toBe(
       'Unreachable'
