@@ -36,6 +36,7 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 
+/** Registers the reattach mode reset regression tests for the PTY connection layer. */
 export function registerPtyConnectionReattachModeResetTests(): void {
   let mockStoreState: StoreState
   let transportFactoryQueue: MockTransport[] = []
@@ -564,8 +565,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       })
     })
 
-    // Why: issue #8291 — the reattach reset wiped the mouse modes the daemon snapshot had just
-    // rehydrated, so xterm re-enabled its row-wise selection over a still-running TUI.
+    /**
+     * Returns the reattach reset for a snapshot payload, with optional connect metadata.
+     *
+     * Why: issue #8291 — the reattach reset wiped the mouse modes the daemon snapshot had just
+     * rehydrated, so xterm re-enabled its row-wise selection over a still-running TUI.
+     */
     const reattachSnapshotResetFor = async (
       snapshot: string,
       connect: { isAlternateScreen?: boolean } = {}
