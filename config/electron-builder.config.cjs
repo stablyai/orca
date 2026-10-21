@@ -375,6 +375,7 @@ module.exports = {
     'out/main/gitlab/project-ref-parser.js',
     'out/main/grok/**',
     'out/main/hermes/**',
+    'out/main/macos-tree-clone.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
     'out/main/startup/http1-compatibility-marker.js',
