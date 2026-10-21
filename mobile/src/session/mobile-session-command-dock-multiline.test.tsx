@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', () => ({
@@ -42,6 +42,8 @@ vi.mock('expo-haptics', () => ({
 }))
 
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
+import { MobileTerminalInputActions } from './MobileTerminalInputActions'
+import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -62,6 +64,7 @@ function commandController(draft: Draft, sent: string[]): MobileSessionControlle
     liveInputCapture: '',
     activeHandle: 'terminal-1',
     customKeys: [],
+    visibleAccessoryRows: [],
     setShowCustomKeyModal: noop,
     setDeleteKeyTarget: noop,
     visibleBuiltInAccessoryKeys: [],
@@ -111,21 +114,112 @@ afterEach(() => {
   tree = null
 })
 
+function mount(controller: MobileSessionController): void {
+  act(() => {
+    tree = create(createElement(MobileSessionCommandDock, { controller }))
+  })
+}
+
+function commandField(): ReactTestInstance {
+  const field = tree?.root.findByProps({ placeholder: 'Type a command…' })
+  if (!field) {
+    throw new Error('command field missing')
+  }
+  return field
+}
+
+function hostChildren(node: ReactTestInstance): ReactTestInstance[] {
+  return node.children.filter((child): child is ReactTestInstance => typeof child !== 'string')
+}
+
+function accessibilityLabels(node: ReactTestInstance): string[] {
+  const labels: string[] = []
+  const label = node.props.accessibilityLabel
+  if (typeof label === 'string') {
+    labels.push(label)
+  }
+  for (const child of hostChildren(node)) {
+    labels.push(...accessibilityLabels(child))
+  }
+  return labels
+}
+
+function dockHierarchy(): string[] {
+  const field = commandField()
+  const bar = field.parent
+  if (!bar) {
+    throw new Error('input bar missing')
+  }
+  expect(bar.props.style).toBe(styles.inputBar)
+  expect(bar.props.style).toMatchObject({ flexDirection: 'row', alignItems: 'flex-end' })
+  expect(styles.textInput).toMatchObject({ flex: 1, maxHeight: 120 })
+  expect(field.props.style).toEqual(expect.arrayContaining([styles.textInput]))
+  const actions = tree?.root.findByType(MobileTerminalInputActions)
+  expect(actions?.parent).toBe(bar)
+  expect(actions?.props.buttonStyle).toBe(styles.dictationButton)
+  expect(styles.dictationButton).toMatchObject({ width: 32, height: 32 })
+  expect(accessibilityLabels(bar)).toEqual([
+    'Attach a photo',
+    'Start voice dictation',
+    'Send command'
+  ])
+  return hostChildren(bar).map((child) => {
+    if (typeof child.type === 'string') {
+      return child.type
+    }
+    if (typeof child.type === 'function') {
+      return child.type.name
+    }
+    return 'node'
+  })
+}
+
 describe('multiline command input', () => {
+  it('keeps image, mic, and send beside a single-line command', () => {
+    const draft: Draft = { input: 'echo first' }
+    mount(commandController(draft, []))
+    const hierarchy = dockHierarchy()
+    expect(commandField().props.value).toBe('echo first')
+
+    act(() => {
+      commandField().props.onContentSizeChange({ nativeEvent: { contentSize: { height: 34 } } })
+    })
+    expect(dockHierarchy()).toEqual(hierarchy)
+    expect(commandField().props.style).toEqual(expect.arrayContaining([{ height: 34 }]))
+  })
+
+  it('grows the field without moving the buttons or remounting the input bar', () => {
+    const draft: Draft = { input: 'echo first' }
+    mount(commandController(draft, []))
+    const hierarchy = dockHierarchy()
+
+    act(() => {
+      commandField().props.onContentSizeChange({ nativeEvent: { contentSize: { height: 48 } } })
+    })
+    expect(commandField().props.value).toBe('echo first')
+    expect(dockHierarchy()).toEqual(hierarchy)
+    expect(commandField().props.style).toEqual(expect.arrayContaining([{ height: 48 }]))
+    expect(commandField().parent?.props.style).toBe(styles.inputBar)
+
+    act(() => {
+      commandField().props.onContentSizeChange({ nativeEvent: { contentSize: { height: 34 } } })
+    })
+    expect(commandField().props.value).toBe('echo first')
+    expect(dockHierarchy()).toEqual(hierarchy)
+    expect(commandField().props.style).toEqual(expect.arrayContaining([{ height: 34 }]))
+  })
+
   it('inserts a newline on return and sends the whole buffer from the send button', () => {
     const draft: Draft = { input: 'echo first' }
     const sent: string[] = []
     const buffer = 'echo first\necho second'
 
-    act(() => {
-      tree = create(
-        createElement(MobileSessionCommandDock, { controller: commandController(draft, sent) })
-      )
-    })
-    const field = () => tree?.root.findByProps({ placeholder: 'Type a command…' })
+    mount(commandController(draft, sent))
+    const hierarchy = dockHierarchy()
+    const field = () => commandField()
 
     act(() => {
-      field()?.props.onChangeText(buffer)
+      field().props.onChangeText(buffer)
     })
     expect(sent).toEqual([])
 
@@ -134,14 +228,30 @@ describe('multiline command input', () => {
         createElement(MobileSessionCommandDock, { controller: commandController(draft, sent) })
       )
     })
-    expect(field()?.props.multiline).toBe(true)
-    expect(field()?.props.submitBehavior).toBe('newline')
-    expect(field()?.props.returnKeyType).toBe('default')
-    expect(field()?.props.value).toBe(buffer)
+    expect(dockHierarchy()).toEqual(hierarchy)
+    expect(field().props.multiline).toBe(true)
+    expect(field().props.numberOfLines).toBe(1)
+    expect(field().props.submitBehavior).toBe('newline')
+    expect(field().props.returnKeyType).toBe('default')
+    expect(field().props.value).toBe(buffer)
+
+    act(() => {
+      field().props.onContentSizeChange({ nativeEvent: { contentSize: { height: 60 } } })
+    })
+    expect(dockHierarchy()).toEqual(hierarchy)
+    expect(field().props.style).toEqual(expect.arrayContaining([{ height: 60 }]))
+
+    act(() => {
+      field().props.onContentSizeChange({ nativeEvent: { contentSize: { height: 180 } } })
+    })
+    expect(dockHierarchy()).toEqual(hierarchy)
+    expect(field().props.style).toEqual(expect.arrayContaining([{ height: 120 }]))
 
     act(() => {
       tree?.root.findByProps({ accessibilityLabel: 'Send command' }).props.onPress()
     })
     expect(sent).toEqual([buffer])
+    expect(commandField().props.value).toBe(buffer)
+    expect(dockHierarchy()).toEqual(hierarchy)
   })
 })
