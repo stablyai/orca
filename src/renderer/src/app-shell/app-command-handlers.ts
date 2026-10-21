@@ -77,11 +77,7 @@ export function useAppShortcutActions() {
   )
 }
 
-export function getKeybindingContext(target: EventTarget | null): KeybindingContext {
-  return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
-    ? 'terminal'
-    : 'app'
-}
+export { getKeybindingContext } from '@/lib/keybinding-context'
 
 /**
  * The tab id the inline rename editor listens on, which differs per tab kind: a terminal tab is

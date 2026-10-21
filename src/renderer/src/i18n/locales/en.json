@@ -9006,6 +9006,8 @@
           "38e86e206a": "Customize shortcuts visually or edit",
           "47f8f7aef9": "Keyboard Shortcuts",
           "f0b35b0b2e": "Disabled while a terminal or TUI has keyboard focus.",
+          "6d2e8b4a1f": "Emacs editor",
+          "9c4f1e7b3d": "Inactive while the file editor has keyboard focus and the Emacs preset is on.",
           "5c65d5db9d": "Terminal first",
           "dfa8ff612f": "Also runs while a terminal or TUI has keyboard focus.",
           "2a0e8aeccf": "Orca first",

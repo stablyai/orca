@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
   activateGoldenWorktree,
@@ -15,11 +16,25 @@ function countOccurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1
 }
 
+// Why: Playwright's keyboard dispatches straight into the renderer and never reaches Electron's
+// before-input-event, where Orca resolves app shortcuts such as quick open. A native input event
+// walks the whole path: main-process allowlist → renderer handlers → Monaco.
+async function pressNativeControlChord(app: ElectronApplication, keyCode: string): Promise<void> {
+  await app.evaluate(({ BrowserWindow }, code) => {
+    const target = BrowserWindow.getAllWindows()[0]
+    target?.webContents.sendInputEvent({ type: 'keyDown', keyCode: code, modifiers: ['control'] })
+    target?.webContents.sendInputEvent({ type: 'keyUp', keyCode: code, modifiers: ['control'] })
+  }, keyCode)
+}
+
 // Exercises the real monaco-emacs adapter against the live Monaco file editor: line movement,
 // the kill ring (C-k / C-y), mark + region copy (C-SPC / M-w), the C-x prefix echo, and C-g.
-// Saving goes through autosave rather than a save chord: on Linux/Windows Ctrl+S is Emacs's
-// incremental search, and routing it is the editor-keybinding-context follow-up in #30055.
+// It also proves the editor keybinding context: an Orca chord that collides with an Emacs chord
+// (Ctrl+P, bound to quick open here the way it is by default on Linux/Windows) reaches the editor
+// while it has focus and still opens quick open everywhere else. Saving goes through autosave:
+// with the Emacs preset Ctrl+S is incremental search, not save.
 test('@golden emacs keybindings drive the Monaco file editor', async ({
+  electronApp,
   orcaPage,
   testRepoPath,
   registerPostElectronShutdownCleanup
@@ -43,6 +58,15 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
   await expect
     .poll(() => orcaPage.evaluate(() => window.__store?.getState().settings?.editorKeybindings))
     .toBe('emacs')
+  // Why: macOS binds quick open to Cmd+P, so the Ctrl+P collision only exists after this override.
+  await orcaPage.evaluate(() =>
+    window.__store?.getState().setKeybindingOverride('worktree.quickOpen', ['Ctrl+P'])
+  )
+  await expect
+    .poll(() =>
+      orcaPage.evaluate(() => window.__store?.getState().keybindings['worktree.quickOpen'])
+    )
+    .toEqual(['Ctrl+P'])
 
   await activateGoldenWorktree(orcaPage, testRepoPath, fixture.worktreePath)
   await openFileExplorer(orcaPage)
@@ -82,10 +106,16 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
   // Mark + region copy, then yank: C-SPC sets the mark (echoed in the status row), C-e extends the
   // region to end of line, M-w copies it and deactivates the mark, C-y pastes it on a new line.
   // The click lands on the trailing empty line, so C-p first moves onto the only line of text.
-  await kb.press('Control+p')
+  // Ctrl+P is also Orca's quick-open chord: with the editor focused it must stay an Emacs key, so
+  // it is sent natively to pass through the main-process router. If Orca consumed it, no line would
+  // be copied below and the yank count would stay at 1.
+  await pressNativeControlChord(electronApp, 'p')
   await kb.press('Control+a')
   await kb.press('Control+Space')
   await expect(statusBar).toContainText('Mark set', { timeout: 5_000 })
+  expect(await orcaPage.evaluate(() => window.__store?.getState().activeModal)).not.toBe(
+    'quick-open'
+  )
   await kb.press('Control+e')
   await kb.press('Alt+w')
   await expect(statusBar).not.toContainText('Mark set', { timeout: 5_000 })
@@ -118,4 +148,19 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
   await expect
     .poll(() => readFileSync(indexPath, 'utf8'), { timeout: 10_000 })
     .toMatch(/^\s+export const hello = "world"/m)
+
+  // Outside the editor the same chord is Orca's again: quick open opens from app focus.
+  await orcaPage.evaluate(() => {
+    const active = document.activeElement
+    if (active instanceof HTMLElement) {
+      active.blur()
+    }
+  })
+  await pressNativeControlChord(electronApp, 'p')
+  await expect
+    .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeModal), {
+      timeout: 5_000
+    })
+    .toBe('quick-open')
+  await kb.press('Escape')
 })

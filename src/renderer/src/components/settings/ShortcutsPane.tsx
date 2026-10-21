@@ -55,6 +55,7 @@ export function ShortcutsPane(): React.JSX.Element {
     (state) => state.settings?.terminalShortcutPolicy ?? 'orca-first'
   )
   const updateSettings = useAppStore((state) => state.updateSettings)
+  const editorKeybindings = useAppStore((state) => state.settings?.editorKeybindings)
   const keybindings = useAppStore((state) => state.keybindings)
   const keybindingSnapshot = useAppStore((state) => state.keybindingSnapshot)
   const disabledTuiAgents = useAppStore(
@@ -134,6 +135,7 @@ export function ShortcutsPane(): React.JSX.Element {
         keybindings,
         conflictByAction,
         terminalShortcutPolicy,
+        editorKeybindings,
         platform,
         managedBrowserCreationEnabled,
         mobileEmulatorCreationEnabled,
@@ -145,6 +147,7 @@ export function ShortcutsPane(): React.JSX.Element {
     [
       agentDashboardEnabled,
       conflictByAction,
+      editorKeybindings,
       groups,
       keybindings,
       managedBrowserCreationEnabled,

@@ -30,6 +30,8 @@ import { installMonacoVimMode } from './monaco-vim-mode'
 import { installMonacoEmacsMode } from './monaco-emacs-mode'
 import { VimCheatsheet } from './VimCheatsheet'
 import { isEditorKeybindingsPreset } from '../../../../shared/editor-keybindings-preset'
+import { useEditorKeymapFocusMirror } from './use-editor-keymap-focus-mirror'
+import { EDITOR_KEYMAP_ATTRIBUTE } from '@/lib/keybinding-context'
 
 /** Reserved height (px) for the keymap status bar row; keep in sync with the render class. */
 const KEYMAP_STATUS_BAR_HEIGHT = 22
@@ -130,6 +132,7 @@ export default function MonacoEditor({
       : 'default'
   const vimModeEnabled = editorKeybindings === 'vim'
   const emacsModeEnabled = editorKeybindings === 'emacs'
+  useEditorKeymapFocusMirror(editorContainerRef, emacsModeEnabled)
   const estimatedAutoHeight = useMemo(() => {
     if (!autoHeight) {
       return null
@@ -339,6 +342,7 @@ export default function MonacoEditor({
     <div
       ref={editorContainerRef}
       data-orca-file-editor
+      {...{ [EDITOR_KEYMAP_ATTRIBUTE]: emacsModeEnabled ? 'emacs' : undefined }}
       // Why: a flex column lets the keymap status bar occupy a real row below the editor instead of
       // overlaying it. autoHeight editors are content-sized (and never show the bar), so they keep
       // the plain block layout.
