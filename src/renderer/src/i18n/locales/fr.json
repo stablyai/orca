@@ -248,6 +248,55 @@
         "sharper": "Plus net",
         "terminalControlledHint": "Défini par l’interface du terminal.",
         "terminalControlledTooltip": "Suit l’interface du terminal. Désactivez Utiliser l’interface du terminal pour le modifier."
+      },
+      "background": {
+        "previewLabel": "Aperçu de l'arrière-plan",
+        "error": {
+          "tooLarge": "Cette image dépasse 20 Mo. Choisissez un fichier plus petit.",
+          "unsupportedType": "Ce fichier n'est pas une image prise en charge. Utilisez PNG, JPEG, GIF ou WebP.",
+          "unreadable": "Orca n'a pas pu lire ce fichier.",
+          "pickSaveFailed": "Orca n'a pas pu copier cette image. Réessayez.",
+          "stagingMissing": "L'image sélectionnée n'est plus disponible. Choisissez-la à nouveau.",
+          "applyFailed": "Orca n'a pas pu enregistrer les réglages d'arrière-plan. Réessayez."
+        },
+        "imageStaged": "Nouvelle image sélectionnée.",
+        "imageRemoved": "L'image sera supprimée.",
+        "imageSet": "Image personnalisée utilisée.",
+        "imageNone": "Aucune image sélectionnée.",
+        "imageMissing": "Impossible de charger l'image d'arrière-plan. Choisissez une autre image ou supprimez-la.",
+        "scope": {
+          "window": "Toute la fenêtre",
+          "workspace": "Espace de travail uniquement"
+        },
+        "image": "Image",
+        "chooseImage": "Choisir une image…",
+        "pickDialogTitle": "Choisir une image d'arrière-plan",
+        "removeImage": "Supprimer",
+        "scopeLabel": "Afficher l'image dans",
+        "scopeDescription": "Couvre toute la fenêtre, ou seulement l'espace de travail entre les barres latérales.",
+        "imageOpacity": "Opacité de l'image",
+        "imageOpacityDescription": "Degré de visibilité de l'image à travers l'interface.",
+        "blur": "Flou de l'image",
+        "blurDescription": "Adoucit l'image pour que le texte reste facile à lire.",
+        "panelOpacity": "Opacité des panneaux",
+        "panelOpacityDescription": "Opacité de la barre de titre, des barres latérales et de la barre d'onglets lorsqu'une image est définie.",
+        "terminalOpacity": "Opacité de l'arrière-plan du terminal",
+        "terminalOpacityDescription": "Identique au réglage d'opacité du terminal ; baissez-la pour voir l'image derrière les terminaux.",
+        "unapplied": "Modifications non appliquées",
+        "discard": "Ignorer",
+        "apply": "Appliquer",
+        "title": "Arrière-plan",
+        "description": "Affiche une image derrière Orca et rend les panneaux translucides.",
+        "keyword": {
+          "wallpaper": "fond d'écran",
+          "image": "image",
+          "picture": "illustration",
+          "photo": "photo",
+          "blur": "flou",
+          "opacity": "opacité",
+          "transparency": "transparence",
+          "translucent": "translucide"
+        }
       }
     },
     "browser": {

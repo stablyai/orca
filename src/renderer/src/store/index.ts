@@ -45,6 +45,7 @@ import { createRecentlyClosedTabsSlice } from './slices/recently-closed-tabs'
 import { createOrcaProfilesSlice } from './slices/orca-profiles'
 import { createNewIssueDraftSlice } from './slices/new-issue-draft'
 import { createFeedbackDraftSlice } from './slices/feedback-draft'
+import { createAppBackgroundDraftSlice } from './slices/app-background-draft'
 import { createTaskCreationDraftsSlice } from './slices/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
@@ -135,6 +136,7 @@ export const useAppStore = create<AppState>()(
           ...createOrcaProfilesSlice(...a),
           ...createNewIssueDraftSlice(...a),
           ...createFeedbackDraftSlice(...a),
+          ...createAppBackgroundDraftSlice(...a),
           ...createTaskCreationDraftsSlice(...a),
           ...createRemoteServerUpdatesSlice(...a),
           ...createTerminalQuickCommandHostsSlice(...a),

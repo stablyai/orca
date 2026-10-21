@@ -165,6 +165,7 @@ function Sidebar({
       <div
         ref={sidebarRef}
         className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
+        data-app-background-surface="worktree-sidebar"
         style={leftSidebarStyle}
         {...dropHandlers}
       >

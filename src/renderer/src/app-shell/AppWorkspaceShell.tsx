@@ -11,6 +11,8 @@ import { TitlebarLeftControls } from './TitlebarLeftControls'
 import { RightSidebarToggle, TitlebarMainStrip } from './TitlebarMainStrip'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
+import { useScopedAppBackground } from './use-app-background-appearance'
+import { AppBackgroundLayer } from '../components/app-background/AppBackgroundLayer'
 
 const Landing = lazy(() => import('../components/Landing'))
 const WorktreeCreationPanel = lazy(
@@ -95,6 +97,7 @@ export function AppWorkspaceShell(props: {
   const { layout, floatingWorkspace } = props
   const titlebarLeftControls = <TitlebarLeftControls layout={layout} />
   const titlebarMainStrip = <TitlebarMainStrip layout={layout} />
+  const workspaceBackground = useScopedAppBackground('workspace')
   // Why: keep virtualized scroll memory above the sidebar's workspace/landing remount so the left list doesn't restart at scrollTop 0.
   const scrollOffsetRef = useRef(0)
   const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
@@ -161,7 +164,12 @@ export function AppWorkspaceShell(props: {
               layout.activeView !== 'artifacts' ? (
                 <div className="titlebar">{titlebarMainStrip}</div>
               ) : null}
-              <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
+              <div
+                className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden"
+                data-app-background={workspaceBackground?.host['data-app-background']}
+                style={workspaceBackground?.host.style}
+              >
+                {workspaceBackground ? <AppBackgroundLayer {...workspaceBackground.layer} /> : null}
                 {/* Why: match the RightSidebar header's 36px/top-0 so the toggle's vertical center is identical open vs closed — else the icon jitters. */}
                 {layout.workspaceChromeActive && !layout.rightSidebarOpen && (
                   <div

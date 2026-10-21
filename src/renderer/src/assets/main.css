@@ -1007,6 +1007,73 @@ html.native-shell .app-layout {
   background: var(--bg-titlebar, var(--card));
 }
 
+/* ── App background image ────────────────────────────── */
+
+/* Why: every rule keys off a host attribute so a scaled-down settings preview can
+   reuse them; without a host (no image) nothing here applies. */
+[data-app-background] {
+  /* Why: a white wash flattens an image far more than a black one at the same alpha,
+     so light themes fade panels harder to keep the image visible. */
+  --app-panel-alpha: calc(var(--app-panel-opacity, 1) * 65%);
+  position: relative;
+  /* Why: lets the z-index:-1 image layer sit under in-flow siblings without escaping the host. */
+  isolation: isolate;
+}
+
+/* Why: the window host is the app root, and isolating it traps the inline sonner toaster and
+   in-app overlays under body-portaled dialogs; its layer sits in the root context instead,
+   above only the canvas (body's background propagates there; html, #root and .app-layout paint none). */
+.app-layout[data-app-background] {
+  isolation: auto;
+}
+
+.dark [data-app-background],
+[data-app-background].dark {
+  --app-panel-alpha: calc(var(--app-panel-opacity, 1) * 85%);
+}
+
+.app-background-layer {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+[data-app-background] .titlebar,
+[data-app-background] .titlebar-left-floating {
+  background: color-mix(
+    in srgb,
+    var(--bg-titlebar, var(--card)) var(--app-panel-alpha),
+    transparent
+  );
+}
+
+[data-app-background] .titlebar-left:not(.titlebar-left-floating),
+[data-app-background] [data-app-background-surface='worktree-sidebar'] {
+  background: color-mix(in srgb, var(--worktree-sidebar) var(--app-panel-alpha), transparent);
+}
+
+[data-app-background] [data-app-background-surface='card'] {
+  background: color-mix(in srgb, var(--card) var(--app-panel-alpha), transparent);
+}
+
+[data-app-background] [data-app-background-surface='sidebar'] {
+  background: color-mix(in srgb, var(--sidebar) var(--app-panel-alpha), transparent);
+}
+
+[data-app-background] [data-app-background-surface='background'] {
+  background: color-mix(in srgb, var(--background) var(--app-panel-alpha), transparent);
+}
+
+/* Why: the pane root already paints the translucent terminal fill under the titles;
+   a second copy here would double its opacity over the image. */
+[data-app-background] .pane-title-bar {
+  background-color: transparent;
+}
+
 .titlebar-traffic-light-pad {
   width: calc(80px / var(--ui-zoom-factor, 1));
   flex-shrink: 0;

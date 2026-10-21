@@ -321,6 +321,55 @@
         "sharper": "Sharper",
         "terminalControlledHint": "Set by terminal interface.",
         "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this."
+      },
+      "background": {
+        "previewLabel": "Background preview",
+        "error": {
+          "tooLarge": "That image is larger than 20 MB. Choose a smaller file.",
+          "unsupportedType": "That file is not a supported image. Use PNG, JPEG, GIF, or WebP.",
+          "unreadable": "Orca could not read that file.",
+          "pickSaveFailed": "Orca could not copy that image. Try again.",
+          "stagingMissing": "The selected image is no longer available. Choose it again.",
+          "applyFailed": "Orca could not save the background settings. Try again."
+        },
+        "imageStaged": "New image selected.",
+        "imageRemoved": "Image will be removed.",
+        "imageSet": "Custom image in use.",
+        "imageNone": "No image selected.",
+        "imageMissing": "The background image could not be loaded. Choose another image or remove it.",
+        "scope": {
+          "window": "Entire window",
+          "workspace": "Workspace only"
+        },
+        "image": "Image",
+        "chooseImage": "Choose Image…",
+        "pickDialogTitle": "Choose background image",
+        "removeImage": "Remove",
+        "scopeLabel": "Show Image In",
+        "scopeDescription": "Cover the whole window, or only the workspace between the sidebars.",
+        "imageOpacity": "Image Opacity",
+        "imageOpacityDescription": "How strongly the image shows through.",
+        "blur": "Image Blur",
+        "blurDescription": "Soften the image so text stays easy to read.",
+        "panelOpacity": "Panel Opacity",
+        "panelOpacityDescription": "Opacity of the title bar, sidebars, and tab bar while an image is set.",
+        "terminalOpacity": "Terminal Background Opacity",
+        "terminalOpacityDescription": "Same as the terminal opacity setting; lower it to see the image behind terminals.",
+        "unapplied": "Unapplied changes",
+        "discard": "Discard",
+        "apply": "Apply",
+        "title": "Background",
+        "description": "Show an image behind Orca and make panels translucent.",
+        "keyword": {
+          "wallpaper": "wallpaper",
+          "image": "image",
+          "picture": "picture",
+          "photo": "photo",
+          "blur": "blur",
+          "opacity": "opacity",
+          "transparency": "transparency",
+          "translucent": "translucent"
+        }
       }
     },
     "browser": {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
@@ -10,6 +10,7 @@ import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { safeFit } from '@/lib/pane-manager/pane-fit'
 import { _resetTerminalViewAttributesPublisherForTest } from './terminal-view-attributes-publisher'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
+import { acquireAppBackgroundBlobUrl } from '../app-background/app-background-blob-cache'
 
 function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {
   isConnected: () => boolean
@@ -394,6 +395,113 @@ describe('applyTerminalAppearance theme assignment', () => {
 
     // Latest wins, exactly one write: intermediate hidden values never touch xterm.
     expect(writes).toEqual([21])
+  })
+})
+
+describe('applyTerminalAppearance over a background image', () => {
+  const IMAGE_ID = '22222222-2222-4222-8222-222222222222.png'
+  const releases: (() => void)[] = []
+
+  afterEach(() => {
+    releases.splice(0).forEach((release) => release())
+    vi.unstubAllGlobals()
+  })
+
+  function stubImageRead(bytes: ArrayBuffer | null): void {
+    vi.stubGlobal('window', {
+      api: { appBackground: { read: vi.fn().mockResolvedValue(bytes) } }
+    })
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:terminal-test', revokeObjectURL: vi.fn() })
+  }
+
+  async function loadImage(): Promise<void> {
+    const handle = acquireAppBackgroundBlobUrl({ id: IMAGE_ID })
+    releases.push(handle.release)
+    await handle.url
+  }
+
+  function applyTo(settings: ReturnType<typeof getDefaultSettings>): {
+    xtermBackground: string | undefined
+    rootBackground: string | undefined
+  } {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the pane members exercised by appearance logic.
+    const pane = {
+      id: 1,
+      terminal: { options: {}, cols: 80, rows: 24 },
+      container: { dataset: {}, getBoundingClientRect: () => ({ width: 800, height: 600 }) },
+      fitAddon: { proposeDimensions: () => ({ cols: 80, rows: 24 }) }
+    } as unknown as ManagedPane
+    const setPaneStyleOptions = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the manager members exercised by appearance logic.
+    const manager = {
+      getPanes: () => [pane],
+      setPaneLigaturesEnabled: vi.fn(),
+      setPaneInlineImagesEnabled: vi.fn(),
+      setPaneStyleOptions
+    } as unknown as PaneManager
+    applyTerminalAppearance(
+      manager,
+      settings,
+      false,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map()
+    )
+    return {
+      xtermBackground: pane.terminal.options.theme?.background,
+      rootBackground: setPaneStyleOptions.mock.calls[0]?.[0]?.splitBackground
+    }
+  }
+
+  const translucent = {
+    ...getDefaultSettings('/tmp'),
+    theme: 'light' as const,
+    terminalColorOverrides: { background: '#ffffff' },
+    terminalBackgroundOpacity: 0.6
+  }
+
+  it('leaves the pane root as the only translucent fill once the image loads', async () => {
+    stubImageRead(new ArrayBuffer(4))
+    await loadImage()
+
+    const { xtermBackground, rootBackground } = applyTo({
+      ...translucent,
+      appBackgroundImageId: IMAGE_ID
+    })
+
+    expect(xtermBackground).toBe('rgba(255, 255, 255, 0)')
+    expect(rootBackground).toBe('rgba(255, 255, 255, 0.6)')
+  })
+
+  it('keeps the xterm fill unchanged without a background image', () => {
+    const { xtermBackground, rootBackground } = applyTo(translucent)
+
+    expect(xtermBackground).toBe('rgba(255, 255, 255, 0.6)')
+    expect(rootBackground).toBe('rgba(255, 255, 255, 0.6)')
+  })
+
+  it('keeps the xterm fill while the image is missing', async () => {
+    stubImageRead(null)
+    await loadImage()
+
+    const { xtermBackground } = applyTo({ ...translucent, appBackgroundImageId: IMAGE_ID })
+
+    expect(xtermBackground).toBe('rgba(255, 255, 255, 0.6)')
+  })
+
+  it('keeps an opaque terminal opaque over the image', async () => {
+    stubImageRead(new ArrayBuffer(4))
+    await loadImage()
+
+    const { xtermBackground } = applyTo({
+      ...translucent,
+      appBackgroundImageId: IMAGE_ID,
+      terminalBackgroundOpacity: 1
+    })
+
+    expect(xtermBackground).toBe('rgba(255, 255, 255, 1)')
   })
 })
 

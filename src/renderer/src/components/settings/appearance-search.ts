@@ -8,8 +8,10 @@ import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { getStatusBarToggles } from './appearance-status-bar-search'
 import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import { getAppBackgroundEntries } from './appearance-background-search'
 
 export {
+  getAppBackgroundEntries,
   getMenuBarIconEntries,
   getStatusBarToggles,
   getSystemTrayEntries,
@@ -250,12 +252,14 @@ type AppearancePaneSearchOptions = {
   showDesktopThemeImports?: boolean
   showSystemTray?: boolean
   showMenuBarIcon?: boolean
+  showAppBackground?: boolean
 }
 
 export function getAppearancePaneSearchEntries(
   options: AppearancePaneSearchOptions = {}
 ): SettingsSearchEntry[] {
   return [
+    ...getAppBackgroundEntries(options),
     ...getAppearanceSectionEntries(),
     ...getThemeEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),

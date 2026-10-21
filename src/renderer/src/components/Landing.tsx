@@ -252,7 +252,10 @@ export default function Landing(): React.JSX.Element {
   }, [createTargetLabel, createWorktreeShortcut, nextWorktreeShortcut, previousWorktreeShortcut])
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-background">
+    <div
+      className="absolute inset-0 flex items-center justify-center bg-background"
+      data-app-background-surface="background"
+    >
       <div className="w-full max-w-lg px-6">
         <div className="flex flex-col items-center gap-4 py-8">
           <div

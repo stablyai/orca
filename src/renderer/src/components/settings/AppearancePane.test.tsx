@@ -10,28 +10,35 @@ import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platfo
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
+import type { AppBackgroundDraft } from '../../store/slices/app-background-draft'
 
-const mocks = vi.hoisted(() => ({
-  state: {
-    appPlatform: 'linux' as NodeJS.Platform,
-    availableStatusBarToggles: [] as {
-      description: string
-      id: StatusBarItem
-      keywords: string[]
-      title: string
-      toggleDescription: string
-    }[],
-    settingsSearchQuery: 'automations',
-    statusBarItems: [],
-    toggleStatusBarItem: vi.fn(),
-    usagePercentageDisplay: 'used' as 'used' | 'remaining',
-    setUsagePercentageDisplay: vi.fn(),
-    recordFeatureInteraction: vi.fn(),
-    setWorktreeCardMode: vi.fn(),
-    appearanceAccordionDeepLink: null as 'interface' | 'terminal' | 'window' | null,
-    clearAppearanceAccordionDeepLink: vi.fn()
+const mocks = vi.hoisted(() => {
+  // Why a function: a typed `null` initializer would narrow the field to `null`.
+  const noDraft = (): AppBackgroundDraft | null => null
+  return {
+    state: {
+      appPlatform: 'linux' as NodeJS.Platform,
+      availableStatusBarToggles: [] as {
+        description: string
+        id: StatusBarItem
+        keywords: string[]
+        title: string
+        toggleDescription: string
+      }[],
+      settingsSearchQuery: 'automations',
+      statusBarItems: [],
+      toggleStatusBarItem: vi.fn(),
+      usagePercentageDisplay: 'used' as 'used' | 'remaining',
+      setUsagePercentageDisplay: vi.fn(),
+      recordFeatureInteraction: vi.fn(),
+      setWorktreeCardMode: vi.fn(),
+      appearanceAccordionDeepLink: null as 'interface' | 'terminal' | 'window' | null,
+      clearAppearanceAccordionDeepLink: vi.fn(),
+      appBackgroundDraft: noDraft(),
+      syncAppBackgroundDraftWithSettings: vi.fn()
+    }
   }
-}))
+})
 
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
@@ -200,7 +207,7 @@ async function rerenderAppearancePane(
 
 function appearanceSectionToggle(
   container: HTMLElement,
-  sectionId: 'interface' | 'terminal' | 'chat' | 'window'
+  sectionId: 'background' | 'interface' | 'terminal' | 'chat' | 'window'
 ): HTMLButtonElement | undefined {
   return Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')).find(
     (button) => button.getAttribute('aria-controls') === `appearance-section-${sectionId}`
@@ -224,6 +231,7 @@ describe('AppearancePane', () => {
     mocks.state.appPlatform = 'linux'
     mocks.state.settingsSearchQuery = 'automations'
     mocks.state.appearanceAccordionDeepLink = null
+    mocks.state.appBackgroundDraft = null
     mocks.state.usagePercentageDisplay = 'used'
     // UIZoomControl reads window.api.ui on mount; the inline-expansion pane can
     // render the full Interface section, so provide a minimal renderer bridge
@@ -651,6 +659,80 @@ describe('AppearancePane', () => {
       'true'
     )
     expect(mocks.state.clearAppearanceAccordionDeepLink).toHaveBeenCalled()
+  })
+
+  it('shows the Background section first on desktop, collapsed by default', async () => {
+    mocks.state.settingsSearchQuery = ''
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+
+    const backgroundToggle = appearanceSectionToggle(container, 'background')
+    expect(backgroundToggle?.getAttribute('aria-expanded')).toBe('false')
+    const firstSectionToggle = container.querySelector(
+      'button[aria-controls^="appearance-section-"]'
+    )
+    expect(firstSectionToggle?.getAttribute('aria-controls')).toBe('appearance-section-background')
+  })
+
+  it('opens Background and flags it in the summary while a draft is unapplied', async () => {
+    mocks.state.settingsSearchQuery = ''
+    const values = {
+      scope: 'window' as const,
+      imageOpacity: 1,
+      blur: 4,
+      panelOpacity: 0.8,
+      terminalBackgroundOpacity: 1
+    }
+    mocks.state.appBackgroundDraft = {
+      ...values,
+      blur: 9,
+      image: { kind: 'unchanged' },
+      snapshot: { ...values, imageId: null }
+    }
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+
+    const backgroundToggle = appearanceSectionToggle(container, 'background')
+    expect(backgroundToggle?.getAttribute('aria-expanded')).toBe('true')
+
+    await act(async () => {
+      backgroundToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(backgroundToggle?.getAttribute('aria-expanded')).toBe('false')
+    expect(backgroundToggle?.textContent).toContain('Unapplied changes')
+  })
+
+  it('keeps the Background summary clean without unapplied changes', async () => {
+    mocks.state.settingsSearchQuery = ''
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+
+    expect(appearanceSectionToggle(container, 'background')?.textContent).not.toContain(
+      'Unapplied changes'
+    )
+  })
+
+  it('hides the Background section in the web client', async () => {
+    mocks.state.settingsSearchQuery = ''
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    try {
+      const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+      expect(appearanceSectionToggle(container, 'background')).toBeUndefined()
+      expect(container.querySelector('[data-testid="appearance-background-section"]')).toBeNull()
+      expect(appearanceSectionToggle(container, 'interface')).toBeDefined()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('force-opens only the Background section for a background search', async () => {
+    mocks.state.settingsSearchQuery = 'wallpaper'
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+
+    expect(appearanceSectionToggle(container, 'background')?.getAttribute('aria-expanded')).toBe(
+      'true'
+    )
+    expect(container.querySelector('[data-testid="app-background-preview"]')).not.toBeNull()
+    expect(appearanceSectionToggle(container, 'interface')).toBeUndefined()
+    expect(appearanceSectionToggle(container, 'terminal')).toBeUndefined()
   })
 
   it('disables section toggles while searching so clearing search does not surprise-collapse', async () => {

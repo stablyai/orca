@@ -144,6 +144,55 @@
         "sharper": "Más nítido",
         "terminalControlledHint": "Lo controla la interfaz del terminal.",
         "terminalControlledTooltip": "Coincide con la interfaz del terminal. Desactiva Usar la interfaz del terminal para cambiarlo."
+      },
+      "background": {
+        "previewLabel": "Vista previa del fondo",
+        "error": {
+          "tooLarge": "La imagen supera los 20 MB. Elige un archivo más pequeño.",
+          "unsupportedType": "Ese archivo no es una imagen compatible. Usa PNG, JPEG, GIF o WebP.",
+          "unreadable": "Orca no pudo leer ese archivo.",
+          "pickSaveFailed": "Orca no pudo copiar esa imagen. Inténtalo de nuevo.",
+          "stagingMissing": "La imagen seleccionada ya no está disponible. Vuelve a elegirla.",
+          "applyFailed": "Orca no pudo guardar la configuración del fondo. Inténtalo de nuevo."
+        },
+        "imageStaged": "Nueva imagen seleccionada.",
+        "imageRemoved": "La imagen se quitará.",
+        "imageSet": "Usando una imagen personalizada.",
+        "imageNone": "No hay ninguna imagen seleccionada.",
+        "imageMissing": "No se pudo cargar la imagen de fondo. Elige otra imagen o quítala.",
+        "scope": {
+          "window": "Toda la ventana",
+          "workspace": "Solo el área de trabajo"
+        },
+        "image": "Imagen",
+        "chooseImage": "Elegir imagen…",
+        "pickDialogTitle": "Elegir imagen de fondo",
+        "removeImage": "Quitar",
+        "scopeLabel": "Mostrar imagen en",
+        "scopeDescription": "Cubre toda la ventana o solo el área de trabajo entre las barras laterales.",
+        "imageOpacity": "Opacidad de la imagen",
+        "imageOpacityDescription": "Cuánto se ve la imagen a través de la interfaz.",
+        "blur": "Desenfoque de la imagen",
+        "blurDescription": "Suaviza la imagen para que el texto siga siendo fácil de leer.",
+        "panelOpacity": "Opacidad de los paneles",
+        "panelOpacityDescription": "Opacidad de la barra de título, las barras laterales y la barra de pestañas cuando hay una imagen.",
+        "terminalOpacity": "Opacidad del fondo del terminal",
+        "terminalOpacityDescription": "Es el mismo ajuste de opacidad del terminal; bájalo para ver la imagen detrás de los terminales.",
+        "unapplied": "Cambios sin aplicar",
+        "discard": "Descartar",
+        "apply": "Aplicar",
+        "title": "Fondo",
+        "description": "Muestra una imagen detrás de Orca y vuelve translúcidos los paneles.",
+        "keyword": {
+          "wallpaper": "fondo de pantalla",
+          "image": "imagen",
+          "picture": "ilustración",
+          "photo": "foto",
+          "blur": "desenfoque",
+          "opacity": "opacidad",
+          "transparency": "transparencia",
+          "translucent": "translúcido"
+        }
       }
     },
     "browser": {

@@ -25,7 +25,7 @@ export type UISliceContextual = {
     setupId?: string
   ) => void
   /** One-shot Appearance accordion to expand for nested Settings deep links (e.g. Usage percentages under Window & Sidebar). Cleared when Appearance consumes it. */
-  appearanceAccordionDeepLink: 'interface' | 'terminal' | 'window' | null
+  appearanceAccordionDeepLink: 'background' | 'interface' | 'terminal' | 'window' | null
   setAppearanceAccordionDeepLink: (
     section: NonNullable<UISliceContextual['appearanceAccordionDeepLink']>
   ) => void

@@ -144,6 +144,55 @@
         "sharper": "くっきり",
         "terminalControlledHint": "ターミナルの外観設定に従います。",
         "terminalControlledTooltip": "ターミナルの外観に合わせています。変更するには「ターミナルの外観に合わせる」をオフにしてください。"
+      },
+      "background": {
+        "previewLabel": "背景のプレビュー",
+        "error": {
+          "tooLarge": "画像が 20 MB を超えています。小さいファイルを選択してください。",
+          "unsupportedType": "サポートされていない画像形式です。PNG、JPEG、GIF、WebP を使用してください。",
+          "unreadable": "Orca はこのファイルを読み込めませんでした。",
+          "pickSaveFailed": "Orca は画像をコピーできませんでした。もう一度お試しください。",
+          "stagingMissing": "選択した画像は利用できなくなりました。もう一度選択してください。",
+          "applyFailed": "Orca は背景の設定を保存できませんでした。もう一度お試しください。"
+        },
+        "imageStaged": "新しい画像が選択されています。",
+        "imageRemoved": "画像は削除されます。",
+        "imageSet": "カスタム画像を使用中です。",
+        "imageNone": "画像が選択されていません。",
+        "imageMissing": "背景画像を読み込めませんでした。別の画像を選択するか、削除してください。",
+        "scope": {
+          "window": "ウィンドウ全体",
+          "workspace": "ワークスペースのみ"
+        },
+        "image": "画像",
+        "chooseImage": "画像を選択…",
+        "pickDialogTitle": "背景画像を選択",
+        "removeImage": "削除",
+        "scopeLabel": "画像の表示範囲",
+        "scopeDescription": "ウィンドウ全体、または左右のサイドバーの間のワークスペースだけを覆います。",
+        "imageOpacity": "画像の不透明度",
+        "imageOpacityDescription": "画像がどの程度透けて見えるかを設定します。",
+        "blur": "画像のぼかし",
+        "blurDescription": "画像をぼかして文字を読みやすく保ちます。",
+        "panelOpacity": "パネルの不透明度",
+        "panelOpacityDescription": "画像を設定しているときのタイトルバー、サイドバー、タブバーの不透明度です。",
+        "terminalOpacity": "ターミナル背景の不透明度",
+        "terminalOpacityDescription": "ターミナルの不透明度設定と同じです。下げるとターミナルの背後に画像が見えます。",
+        "unapplied": "未適用の変更",
+        "discard": "破棄",
+        "apply": "適用",
+        "title": "背景",
+        "description": "Orca の背後に画像を表示し、パネルを半透明にします。",
+        "keyword": {
+          "wallpaper": "壁紙",
+          "image": "画像",
+          "picture": "ピクチャ",
+          "photo": "写真",
+          "blur": "ぼかし",
+          "opacity": "不透明度",
+          "transparency": "透明度",
+          "translucent": "半透明"
+        }
       }
     },
     "browser": {

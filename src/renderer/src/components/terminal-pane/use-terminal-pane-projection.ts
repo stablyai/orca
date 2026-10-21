@@ -4,8 +4,7 @@ import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
   isTerminalBackgroundLight,
   normalizeColor,
-  resolveEffectiveTerminalAppearance,
-  resolveOpaqueTerminalBackground
+  resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
 import { agentLaunchPaneOutcomeForLeaf } from './agent-launch-pane-notice-text'
@@ -19,6 +18,7 @@ import { canContinueAgentSessionInNewSession } from './terminal-agent-session-co
 import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-actions'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { usePaneTitleBackground } from './use-pane-title-background'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { canPaneOfferResumeInNewChat } from '../tab-bar/tab-session-history-switch'
@@ -65,11 +65,12 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     appSurface: effectiveAppearance?.mode,
     backgroundOpacity: settings?.terminalBackgroundOpacity
   })
-  const paneTitleBackground =
-    resolveOpaqueTerminalBackground(terminalBackground, {
-      appSurface: effectiveAppearance?.mode,
-      backgroundOpacity: settings?.terminalBackgroundOpacity
-    }) ?? (titleUsesLightSurface ? '#ffffff' : '#000000')
+  const paneTitleBackground = usePaneTitleBackground({
+    settings,
+    terminalBackground,
+    appSurface: effectiveAppearance?.mode,
+    titleUsesLightSurface
+  })
   const terminalContentVisible = isVisible || shouldMeasureHiddenStartup
   const hiddenStartupStyle: CSSProperties = shouldMeasureHiddenStartup
     ? { opacity: 0, pointerEvents: 'none' }

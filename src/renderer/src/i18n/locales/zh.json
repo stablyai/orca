@@ -144,6 +144,55 @@
         "sharper": "更清晰",
         "terminalControlledHint": "由终端界面设置。",
         "terminalControlledTooltip": "正在匹配终端外观。要更改此项，请关闭“匹配终端外观”。"
+      },
+      "background": {
+        "previewLabel": "背景预览",
+        "error": {
+          "tooLarge": "该图片超过 20 MB，请选择较小的文件。",
+          "unsupportedType": "该文件不是受支持的图片格式，请使用 PNG、JPEG、GIF 或 WebP。",
+          "unreadable": "Orca 无法读取该文件。",
+          "pickSaveFailed": "Orca 无法复制该图片，请重试。",
+          "stagingMissing": "所选图片已不可用，请重新选择。",
+          "applyFailed": "Orca 无法保存背景设置，请重试。"
+        },
+        "imageStaged": "已选择新图片。",
+        "imageRemoved": "图片将被移除。",
+        "imageSet": "正在使用自定义图片。",
+        "imageNone": "未选择图片。",
+        "imageMissing": "无法加载背景图片。请选择其他图片或将其移除。",
+        "scope": {
+          "window": "整个窗口",
+          "workspace": "仅工作区"
+        },
+        "image": "图片",
+        "chooseImage": "选择图片…",
+        "pickDialogTitle": "选择背景图片",
+        "removeImage": "移除",
+        "scopeLabel": "图片显示范围",
+        "scopeDescription": "覆盖整个窗口，或仅覆盖两侧边栏之间的工作区。",
+        "imageOpacity": "图片不透明度",
+        "imageOpacityDescription": "图片透出的明显程度。",
+        "blur": "图片模糊",
+        "blurDescription": "柔化图片，让文字保持清晰易读。",
+        "panelOpacity": "面板不透明度",
+        "panelOpacityDescription": "设置背景图片时，标题栏、侧边栏和标签栏的不透明度。",
+        "terminalOpacity": "终端背景不透明度",
+        "terminalOpacityDescription": "与终端不透明度设置相同；调低后可看到终端后方的图片。",
+        "unapplied": "有未应用的更改",
+        "discard": "放弃",
+        "apply": "应用",
+        "title": "背景",
+        "description": "在 Orca 后方显示图片，并让面板半透明。",
+        "keyword": {
+          "wallpaper": "壁纸",
+          "image": "图片",
+          "picture": "图像",
+          "photo": "照片",
+          "blur": "模糊",
+          "opacity": "不透明度",
+          "transparency": "透明度",
+          "translucent": "半透明"
+        }
       }
     },
     "browser": {

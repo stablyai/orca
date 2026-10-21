@@ -6,7 +6,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 export const USAGE_PERCENTAGE_DISPLAY_SETTING_ID = 'usage-percentage-display'
 
 /** Appearance section keys that can be force-opened for nested deep links. */
-export type AppearanceAccordionSection = 'interface' | 'terminal' | 'window'
+export type AppearanceAccordionSection = 'background' | 'interface' | 'terminal' | 'window'
 
 /**
  * Map a Settings subsection id to the Appearance section that must be open

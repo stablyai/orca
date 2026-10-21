@@ -144,6 +144,55 @@
         "sharper": "선명하게",
         "terminalControlledHint": "터미널 인터페이스 설정을 따릅니다.",
         "terminalControlledTooltip": "터미널 모양에 맞추는 중입니다. 변경하려면 터미널 모양에 맞추기를 끄세요."
+      },
+      "background": {
+        "previewLabel": "배경 미리보기",
+        "error": {
+          "tooLarge": "이미지가 20MB보다 큽니다. 더 작은 파일을 선택하세요.",
+          "unsupportedType": "지원되지 않는 이미지 형식입니다. PNG, JPEG, GIF 또는 WebP를 사용하세요.",
+          "unreadable": "Orca가 해당 파일을 읽을 수 없습니다.",
+          "pickSaveFailed": "Orca가 이미지를 복사할 수 없습니다. 다시 시도하세요.",
+          "stagingMissing": "선택한 이미지를 더 이상 사용할 수 없습니다. 다시 선택하세요.",
+          "applyFailed": "Orca가 배경 설정을 저장할 수 없습니다. 다시 시도하세요."
+        },
+        "imageStaged": "새 이미지가 선택되었습니다.",
+        "imageRemoved": "이미지가 제거됩니다.",
+        "imageSet": "사용자 지정 이미지를 사용 중입니다.",
+        "imageNone": "선택된 이미지가 없습니다.",
+        "imageMissing": "배경 이미지를 불러올 수 없습니다. 다른 이미지를 선택하거나 제거하세요.",
+        "scope": {
+          "window": "창 전체",
+          "workspace": "워크스페이스만"
+        },
+        "image": "이미지",
+        "chooseImage": "이미지 선택…",
+        "pickDialogTitle": "배경 이미지 선택",
+        "removeImage": "제거",
+        "scopeLabel": "이미지 표시 범위",
+        "scopeDescription": "창 전체 또는 양쪽 사이드바 사이의 워크스페이스만 덮습니다.",
+        "imageOpacity": "이미지 불투명도",
+        "imageOpacityDescription": "이미지가 비쳐 보이는 정도입니다.",
+        "blur": "이미지 흐림",
+        "blurDescription": "이미지를 부드럽게 처리해 텍스트를 읽기 쉽게 유지합니다.",
+        "panelOpacity": "패널 불투명도",
+        "panelOpacityDescription": "이미지가 설정되어 있을 때 제목 표시줄, 사이드바, 탭 표시줄의 불투명도입니다.",
+        "terminalOpacity": "터미널 배경 불투명도",
+        "terminalOpacityDescription": "터미널 불투명도 설정과 같습니다. 낮추면 터미널 뒤의 이미지가 보입니다.",
+        "unapplied": "적용되지 않은 변경 사항",
+        "discard": "취소",
+        "apply": "적용",
+        "title": "배경",
+        "description": "Orca 뒤에 이미지를 표시하고 패널을 반투명하게 만듭니다.",
+        "keyword": {
+          "wallpaper": "배경화면",
+          "image": "이미지",
+          "picture": "그림",
+          "photo": "사진",
+          "blur": "흐림",
+          "opacity": "불투명도",
+          "transparency": "투명도",
+          "translucent": "반투명"
+        }
       }
     },
     "browser": {

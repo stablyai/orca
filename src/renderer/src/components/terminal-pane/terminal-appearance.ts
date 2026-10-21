@@ -31,6 +31,7 @@ import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-he
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+import { isAppBackgroundImageShowing } from '@/components/app-background/app-background-visibility'
 
 export function hexToRgba(hex: string, alpha: number): string {
   let clean = hex.replace('#', '')
@@ -89,6 +90,22 @@ export function composeActiveTerminalTheme(
     }
   }
   return theme
+}
+
+/** Theme handed to xterm itself; `theme` stays the source for OSC replies and the pane root fill. */
+export function resolvePaneSurfaceTheme(
+  baseTheme: ITheme | null,
+  theme: ITheme | null,
+  settings: Parameters<typeof composeActiveTerminalTheme>[1],
+  overBackgroundImage: boolean
+): ITheme | null {
+  const opacity = settings.terminalBackgroundOpacity
+  if (!overBackgroundImage || opacity === undefined || opacity >= 1) {
+    return theme
+  }
+  // Why: the WebGL renderer repaints the fill over the pane root (and drops premultiplied alpha,
+  // so light fills turn opaque); a zero-alpha fill leaves the root as the only layer.
+  return composeActiveTerminalTheme(baseTheme, { ...settings, terminalBackgroundOpacity: 0 })
 }
 
 /** Publishes composed terminal appearance at app start so hidden-at-launch PTYs can query OSC 10/11
@@ -151,6 +168,12 @@ export function applyTerminalAppearance(
   // Publish composed appearance to main's hidden-PTY query responder — the only point it exists; deduped in the publisher.
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
+  const paneTheme = resolvePaneSurfaceTheme(
+    baseTheme,
+    theme,
+    settings,
+    isAppBackgroundImageShowing(settings)
+  )
 
   const terminalFontWeights = resolveTerminalFontWeights(
     settings.terminalFontWeight,
@@ -163,8 +186,8 @@ export function applyTerminalAppearance(
 
   for (const pane of manager.getPanes()) {
     // Why value-gated: writing options.theme rebuilds the palette, discarding TUI OSC 4/10/11/12 mutations; skip on no-op change.
-    if (theme && !composedTerminalThemesEqual(pane.terminal.options.theme, theme)) {
-      pane.terminal.options.theme = theme
+    if (paneTheme && !composedTerminalThemesEqual(pane.terminal.options.theme, paneTheme)) {
+      pane.terminal.options.theme = paneTheme
     }
     // Gate off the configured theme background; the live OSC-11 background is deliberately preserved by the
     // theme write above, so a TUI that repaints its background at runtime won't re-gate (known limitation).

@@ -14,6 +14,12 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
+import {
+  DEFAULT_APP_BACKGROUND_BLUR_PX,
+  DEFAULT_APP_BACKGROUND_IMAGE_OPACITY,
+  DEFAULT_APP_BACKGROUND_PANEL_OPACITY,
+  DEFAULT_APP_BACKGROUND_SCOPE
+} from './app-background-settings'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 
@@ -45,6 +51,11 @@ export function buildDefaultSettings(args: {
     leftSidebarAppearanceMode: 'default',
     leftSidebarTintColor: DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
     leftSidebarTintOpacity: DEFAULT_LEFT_SIDEBAR_TINT_OPACITY,
+    appBackgroundImageId: null,
+    appBackgroundScope: DEFAULT_APP_BACKGROUND_SCOPE,
+    appBackgroundImageOpacity: DEFAULT_APP_BACKGROUND_IMAGE_OPACITY,
+    appBackgroundBlur: DEFAULT_APP_BACKGROUND_BLUR_PX,
+    appBackgroundPanelOpacity: DEFAULT_APP_BACKGROUND_PANEL_OPACITY,
     uiLanguage: UI_LANGUAGE_SYSTEM,
     appIcon: DEFAULT_APP_ICON_ID,
     appFontFamily: args.appFontFamily,
