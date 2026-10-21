@@ -39,6 +39,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     projectHostSetups: [],
     projectGroups: [],
     folderWorkspaces: [],
+    hydratedFolderCatalogHostIds: [],
     folderWorkspacePathStatuses: {},
     floatingWorkspacePath: null,
     setFloatingWorkspacePath: (path) =>

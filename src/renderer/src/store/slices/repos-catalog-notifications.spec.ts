@@ -87,6 +87,7 @@ export function registerReposCatalogNotificationsTests(): void {
     store.setState({
       projectGroups: [{ ...group, executionHostId: 'local' }],
       folderWorkspaces: [{ ...folder, executionHostId: 'local' }],
+      hydratedFolderCatalogHostIds: ['local'],
       folderWorkspacePathStatuses: {
         cached: {
           status: { path: folder.folderPath, exists: true },
