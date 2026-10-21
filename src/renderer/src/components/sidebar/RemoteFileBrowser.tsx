@@ -1,12 +1,13 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import type React from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { LoaderCircle, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { filterEntries, joinPath, parentPath, type DirEntry } from './remote-file-browser-helpers'
 import { RemoteFileBrowserBreadcrumbs } from './RemoteFileBrowserBreadcrumbs'
 import { RemoteFileBrowserEntryList } from './RemoteFileBrowserEntryList'
+import { initialRemoteFileBrowserHighlight } from './remote-file-browser-highlight'
 import { useRemoteFileBrowserFilterKeyCommands } from './use-remote-file-browser-filter-key-commands'
 import { useRemoteFileBrowserListing } from './use-remote-file-browser-listing'
 import { useRemoteFileBrowserPathPreview } from './use-remote-file-browser-path-preview'
@@ -40,6 +41,9 @@ export function RemoteFileBrowser({
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [fileHint, setFileHint] = useState(false)
+  // Tied to the list it was moved on, so any new listing or filter starts from its own default.
+  const [highlight, setHighlight] = useState<{ entries: DirEntry[]; index: number } | null>(null)
+  const listboxId = useId()
   const genRef = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -156,6 +160,19 @@ export function RemoteFileBrowser({
   }, [resolvedPath, navigate, pathFlavor])
 
   const filteredEntries = useMemo(() => filterEntries(entries, filter), [entries, filter])
+  const previewFilteredEntries = useMemo(
+    () => (preview ? filterEntries(preview.entries, preview.filter) : null),
+    [preview]
+  )
+  const displayEntries = previewFilteredEntries ?? filteredEntries
+  const activeIndex =
+    highlight?.entries === displayEntries
+      ? highlight.index
+      : initialRemoteFileBrowserHighlight(displayEntries, preview !== null && preview.filter === '')
+  const moveHighlight = useCallback(
+    (index: number) => setHighlight({ entries: displayEntries, index }),
+    [displayEntries]
+  )
 
   const triggerFileHint = useCallback(() => {
     if (fileHintTimerRef.current) {
@@ -216,6 +233,10 @@ export function RemoteFileBrowser({
     filter,
     setFilter,
     filteredEntries,
+    displayEntries,
+    activeIndex,
+    moveHighlight,
+    listParentPath,
     preview,
     discardPreview,
     resolvedPath,
@@ -259,6 +280,8 @@ export function RemoteFileBrowser({
             'auto.components.sidebar.RemoteFileBrowser.2300612806',
             'Type to filter or enter a path…'
           )}
+          aria-controls={listboxId}
+          aria-activedescendant={activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined}
           aria-invalid={!!preview?.error}
           aria-describedby={preview?.error ? 'remote-file-browser-path-error' : undefined}
           className={cn(
@@ -286,7 +309,9 @@ export function RemoteFileBrowser({
         loading={loading}
         error={error}
         entries={entries}
-        filteredEntries={filteredEntries}
+        displayEntries={displayEntries}
+        activeIndex={activeIndex}
+        listboxId={listboxId}
         filter={filter}
         preview={preview}
         isPreviewActive={isPreviewActive}

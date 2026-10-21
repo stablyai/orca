@@ -7,6 +7,8 @@ import {
   parsePathInput,
   type DirEntry
 } from './remote-file-browser-helpers'
+import { stepRemoteFileBrowserHighlight } from './remote-file-browser-highlight'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import type { PreviewState } from './remote-file-browser-path-preview-resolver'
 import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'
 
@@ -14,6 +16,10 @@ export type RemoteFileBrowserFilterKeyCommandsArgs = {
   filter: string
   setFilter: Dispatch<SetStateAction<string>>
   filteredEntries: DirEntry[]
+  displayEntries: readonly DirEntry[]
+  activeIndex: number
+  moveHighlight: (index: number) => void
+  listParentPath: string
   preview: PreviewState | null
   discardPreview: () => void
   resolvedPath: string
@@ -30,6 +36,10 @@ export function useRemoteFileBrowserFilterKeyCommands({
   filter,
   setFilter,
   filteredEntries,
+  displayEntries,
+  activeIndex,
+  moveHighlight,
+  listParentPath,
   preview,
   discardPreview,
   resolvedPath,
@@ -43,13 +53,31 @@ export function useRemoteFileBrowserFilterKeyCommands({
 }: RemoteFileBrowserFilterKeyCommandsArgs): (e: KeyboardEvent<HTMLInputElement>) => void {
   return useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !isImeOwnedKeyboardEvent(e)) {
+        if (displayEntries.length > 0 && !preview?.loading) {
+          e.preventDefault()
+          const delta = e.key === 'ArrowDown' ? 1 : -1
+          moveHighlight(stepRemoteFileBrowserHighlight(activeIndex, delta, displayEntries.length))
+        }
+        return
+      }
       if (e.key === 'Enter') {
+        if (preview?.error || preview?.loading) {
+          e.preventDefault()
+          return
+        }
+        const highlighted = displayEntries[activeIndex]
+        if (highlighted) {
+          e.preventDefault()
+          if (highlighted.isDirectory) {
+            navigate(joinPath(listParentPath, highlighted.name, pathFlavor))
+          } else {
+            triggerFileHint()
+          }
+          return
+        }
         if (preview) {
           // Path mode Enter.
-          if (preview.error || preview.loading) {
-            e.preventDefault()
-            return
-          }
           const parsed = parsePathInput(filter, pathFlavor)
           // Fully-resolved directory (trailing `/` or bare base marker): navigate to the preview path itself.
           if (parsed.mode === 'path' && parsed.trailingFilter === '') {
@@ -104,6 +132,10 @@ export function useRemoteFileBrowserFilterKeyCommands({
     [
       filter,
       filteredEntries,
+      displayEntries,
+      activeIndex,
+      moveHighlight,
+      listParentPath,
       preview,
       navigate,
       navigateInto,
