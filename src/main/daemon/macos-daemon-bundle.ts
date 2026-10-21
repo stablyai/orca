@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, rename } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { cloneMacTree } from '../../shared/macos-tree-clone'
+import { cloneMacTree } from '../macos-tree-clone'
 import { rm } from '../asar-transparent-fs'
 import { ensurePrivateDir } from './daemon-private-file-modes'
 import { inspectMacProcessCodeIdentity } from './daemon-mac-code-identity'
@@ -72,12 +72,6 @@ async function readCodesignField(
   return line.slice(prefix.length)
 }
 
-async function copyBundle(source: string, destination: string, signal: AbortSignal): Promise<void> {
-  if (!(await cloneMacTree(source, destination, { signal, rm }))) {
-    throw new Error('Could not copy the macOS terminal host')
-  }
-}
-
 /** The copy of the running app's helper for its build, published once and reused after. */
 export async function materializeMacDaemonBundle(
   root: string,
@@ -106,7 +100,7 @@ export async function materializeMacDaemonBundle(
   try {
     const stagedBundle = macDaemonCopyBundlePath(staging)
     await mkdir(dirname(stagedBundle))
-    await copyBundle(source, stagedBundle, signal)
+    await cloneMacTree(source, stagedBundle, signal)
     // The copy must satisfy the running app's requirement to inherit Orca's privacy grants.
     const requirement = await readCodesignField(
       ['--display', '-r-', appBundle],

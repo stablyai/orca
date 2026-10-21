@@ -1,36 +1,31 @@
-import { rm as nodeRm } from 'node:fs/promises'
+import { basename } from 'node:path'
 import { runProcess } from '@orca/process-host'
-
-export type MacTreeCloneOptions = {
-  signal?: AbortSignal
-  /** Electron main passes its asar-transparent `rm`; plain Node's is the default. */
-  rm?: typeof nodeRm
-}
+import { rm } from './asar-transparent-fs'
 
 /**
  * Copies `source` to `destination`, whose parent must exist, keeping symlinks as links. One
  * `/bin/cp` per tree is several times faster than Node's file-by-file `fs.cp` on APFS.
- * Resolves false when neither a clone nor a plain copy succeeds.
  */
 export async function cloneMacTree(
   source: string,
   destination: string,
-  options: MacTreeCloneOptions = {}
-): Promise<boolean> {
-  const rm = options.rm ?? nodeRm
+  signal?: AbortSignal
+): Promise<void> {
   // APFS clone first; a failed clone can leave a partial tree on other filesystems.
   // Clearing also keeps `cp -R` from nesting `source` inside an existing `destination`.
-  for (const args of [['-cR'], ['-R']]) {
+  for (const flags of ['-cR', '-R']) {
     await rm(destination, { recursive: true, force: true })
+    // Why no timeout: a large tree at background I/O priority can outlast the 30 s default.
     const result = await runProcess({
       program: '/bin/cp',
-      args: [...args, source, destination],
+      args: [flags, source, destination],
+      timeoutMs: null,
       maxOutputBytes: 8192,
-      signal: options.signal
+      signal
     })
-    if (result.code === 0 && !result.timedOut) {
-      return true
+    if (result.code === 0) {
+      return
     }
   }
-  return false
+  throw new Error(`Could not copy ${basename(source)}`)
 }

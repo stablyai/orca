@@ -50,7 +50,6 @@ describe('relocateServeSupervisor', () => {
     appRoot,
     userDataPath: userData,
     pid: 4242,
-    platform: process.platform,
     isProcessAlive: () => false,
     execve: vi.fn(),
     log: vi.fn(),
@@ -157,10 +156,9 @@ describe('relocateServeSupervisor', () => {
     }
   )
 
-  // Why both platforms on macOS: `cp -cR` must match the `fs.cp` copy other hosts still use.
-  it.skipIf(process.platform !== 'darwin').each(['darwin', 'linux'] as const)(
-    'copies contents, symlinks and executable bits verbatim (%s copy)',
-    async (platform) => {
+  it.skipIf(process.platform === 'win32')(
+    'copies contents, symlinks and executable bits verbatim',
+    async () => {
       const modules = join(resources, 'node_modules')
       await mkdir(join(modules, '.bin'))
       await writeFile(join(modules, 'ws', 'cli.js'), '#!/usr/bin/env node\n')
@@ -169,7 +167,7 @@ describe('relocateServeSupervisor', () => {
       await symlink('../gone/index.js', join(modules, '.bin', 'dangling'))
       await symlink(join(root, 'outside'), join(modules, 'absolute'))
       await symlink('ws', join(modules, 'ws-alias'))
-      const d = deps({ platform })
+      const d = deps()
       await expect(relocateServeSupervisor(d)).resolves.toBe('relocated')
 
       const snapshot = join(String(vi.mocked(d.execve).mock.calls[0][1][1]), '..', '..', '..', '..')

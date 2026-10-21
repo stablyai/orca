@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto'
 import { constants, readFileSync, statSync } from 'node:fs'
 import { cp, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { cloneMacTree } from '../../shared/macos-tree-clone'
+import { cloneMacTree } from '../../main/macos-tree-clone'
 import { isProcessAlive } from '../../shared/serve-bundle-coordination'
 
 /** Set on the re-run supervisor: the app root its own `__dirname` no longer points at. */
@@ -27,7 +27,6 @@ export type SupervisorRelocationDeps = {
   appRoot: string
   userDataPath: string
   pid: number
-  platform: NodeJS.Platform
   isProcessAlive: (pid: number) => boolean
   execve: (file: string, args: string[], env: NodeJS.ProcessEnv) => void
   log: (line: string) => void
@@ -64,17 +63,10 @@ async function exists(path: string): Promise<boolean> {
 /** Who runs from each copy, kept beside the copies so it never blocks publishing one. */
 const usersDir = (root: string, id: string): string => join(root, USERS_DIR, id)
 
-async function copyTree(
-  source: string,
-  destination: string,
-  platform: NodeJS.Platform
-): Promise<void> {
+async function copyTree(source: string, destination: string): Promise<void> {
   // Why not fs.cp on macOS: it clones file by file, several times slower than one `cp -c`.
-  if (platform === 'darwin') {
-    if (!(await cloneMacTree(source, destination))) {
-      throw new Error(`could not copy ${basename(source)}`)
-    }
-    return
+  if (process.platform === 'darwin') {
+    return cloneMacTree(source, destination)
   }
   // Why FICLONE: on reflink filesystems the copy shares blocks with the app.
   await cp(source, destination, {
@@ -88,8 +80,7 @@ async function buildSnapshot(
   resources: string,
   root: string,
   id: string,
-  pid: number,
-  platform: NodeJS.Platform
+  pid: number
 ): Promise<void> {
   // Why mark before checking: another supervisor's cleanup keeps any copy with a live user.
   await mkdir(usersDir(root, id), { recursive: true })
@@ -105,7 +96,7 @@ async function buildSnapshot(
     // Why both: bare requires from out/ walk up into Resources/node_modules.
     for (const name of [PACKAGED_APP_ROOT_NAME, 'node_modules']) {
       if (await exists(join(resources, name))) {
-        await copyTree(join(resources, name), join(temporary, name), platform)
+        await copyTree(join(resources, name), join(temporary, name))
       }
     }
     await writeFile(join(temporary, COMPLETE_MARKER), '')
@@ -190,7 +181,7 @@ export async function relocateServeSupervisor(
   const cliEntry = join(root, id, PACKAGED_APP_ROOT_NAME, 'out', 'cli', 'index.js')
   try {
     await mkdir(root, { recursive: true, mode: 0o700 })
-    await buildSnapshot(dirname(deps.appRoot), root, id, deps.pid, deps.platform)
+    await buildSnapshot(dirname(deps.appRoot), root, id, deps.pid)
     await removeUnusedSnapshots(root, id, deps.isProcessAlive)
   } catch (error) {
     deps.log(
@@ -223,7 +214,6 @@ export function relocateThisServeSupervisor(
     appRoot,
     userDataPath,
     pid: process.pid,
-    platform: process.platform,
     isProcessAlive,
     execve: (file, args, env) => {
       if (!process.execve) {
