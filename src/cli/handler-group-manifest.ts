@@ -15,6 +15,16 @@ export type HandlerGroup = {
 // Why: `keys` mirrors each group's exported record and is verified against the
 // real exports by handler-group-manifest.test.ts, so drift fails CI, not dispatch.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
+  {
+    name: 'work-inbox-mcp',
+    keys: ['inbox mcp'],
+    load: async () => (await import('./handlers/work-inbox-mcp.js')).WORK_INBOX_MCP_HANDLERS
+  },
+  {
+    name: 'work-inbox-ask',
+    keys: ['inbox ask', 'inbox ack'],
+    load: async () => (await import('./handlers/work-inbox-ask.js')).WORK_INBOX_ASK_HANDLERS
+  },
   JIRA_HANDLER_GROUP,
   LINEAR_HANDLER_GROUP,
   REFERENCE_HANDLER_GROUP,

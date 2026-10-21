@@ -18234,6 +18234,48 @@
         "copyFailed": "无法复制链接。",
         "signingIn": "正在登录…",
         "cancel": "取消"
+      },
+      "work-inbox": {
+        "status": {
+          "open": "未回答",
+          "answered": "已回答",
+          "cancelled": "已关闭，未回答",
+          "delivered": "智能体已收到",
+          "awaitingReceipt": "等待智能体接收"
+        },
+        "error": {
+          "conflict": "在你的答案保存前，这个问题已有变化。草稿已保留，请查看上方的当前状态。",
+          "notFound": "此主机上已找不到这个问题。草稿已保留。",
+          "unreachable": "无法确认答案是否已保存。在主机确认之前无法编辑；重试会发送同一个答案，不会重复。"
+        },
+        "closeQuestion": "关闭且不回答",
+        "reopen": "重新开启问题",
+        "statusFailed": "无法确认变更是否完成。请刷新并检查状态后重试。",
+        "yourAnswer": "你的答案",
+        "options": "答案选项",
+        "selectionHint": "选择一个选项，再发送答案。",
+        "addNote": "补充说明（可选）",
+        "answerLabel": "答案",
+        "noAnswerShape": "这个问题没有选项，也不接受文字回答。",
+        "retry": "重试",
+        "send": "发送答案",
+        "emptyOpen": "目前没有智能体在等你。当智能体需要你做决定时，它的问题会出现在这里。",
+        "emptyHistory": "还没有已回答或已关闭的问题。",
+        "title": "工作收件箱",
+        "description": "智能体向你提出的问题。提问的智能体收到你的答案后会继续工作。",
+        "tabOpen": "未回答",
+        "tabHistory": "历史记录",
+        "filterProject": "按项目筛选",
+        "allProjects": "所有项目",
+        "filterAgent": "按智能体筛选",
+        "allAgents": "所有智能体",
+        "refresh": "刷新",
+        "unsupported": "此主机上的 Orca 版本尚不支持工作收件箱。",
+        "loadFailed": "无法加载收件箱。草稿已保留。",
+        "loading": "正在加载问题…",
+        "showMore": "显示更多",
+        "capped": "仅显示前 200 个问题。按项目或智能体筛选可查看其余问题。",
+        "sidebarLabel": "工作收件箱"
       }
     },
     "i18n": {
