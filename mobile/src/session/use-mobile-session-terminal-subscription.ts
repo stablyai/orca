@@ -192,10 +192,7 @@ export function useMobileSessionTerminalSubscription(
             // never equals a phone viewport and armed a zero-delay resubscribe loop (STA-3337).
             const cols = hostCols ?? viewportRef.current?.cols ?? 80
             const rows = hostRows ?? viewportRef.current?.rows ?? 24
-            const initialData =
-              typeof data.serialized === 'string' && data.serialized.length > 0
-                ? data.serialized
-                : ''
+            const initialData = typeof data.serialized === 'string' ? data.serialized : ''
             const oscLinks = isTerminalOscLinkRanges(data.oscLinks) ? data.oscLinks : undefined
             const ref = getTerminalRef(handle)
             // Why: only mark initialized once init() reaches the WebView, else later scrollback is dropped and the terminal stays blank.
@@ -207,7 +204,8 @@ export function useMobileSessionTerminalSubscription(
               })
               return
             }
-            ref.init({ cols, rows, initialData, oscLinks, frame: terminalFrameRef.current })
+            const frame = terminalFrameRef.current
+            ref.init({ cols, rows, initialData, preserveScroll: true, oscLinks, frame })
             initializedHandlesRef.current.add(handle)
             if (data.displayMode) {
               const displayMode = data.displayMode as MobileDisplayMode
