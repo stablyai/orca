@@ -178,7 +178,7 @@ export async function abortOrcadMigrationCutover(
  * A committed read may come from memory the server never flushed; only commit()'s acknowledgement,
  * which flushes before it answers, may move the journal to committed.
  */
-async function confirmDurableCommit(
+export async function confirmDurableCommit(
   destination: OrcadMigrationDestinationCatalog,
   manifest: OrcadMigrationManifest
 ): Promise<OrcadMigrationCatalogState> {
@@ -236,7 +236,8 @@ function recordObservedState(
   return next
 }
 
-async function abortWithRecovery(
+/** Aborts staging; a failed abort is decided by a re-read, never assumed. */
+export async function abortWithRecovery(
   destination: OrcadMigrationDestinationCatalog,
   manifest: OrcadMigrationManifest
 ): Promise<OrcadMigrationCatalogState> {

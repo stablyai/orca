@@ -14,6 +14,7 @@ import {
   createMigrationJournalDirectory,
   orderMigrationJournalChain
 } from '../migrating-orcad-catalog/migration-journal-directory'
+import { assertWslMoveManifestFits } from './wsl-move-manifest-budget'
 import {
   isWslMoveDesktopRewriteRegistryComplete,
   pendingWslMoveDesktopRewriteStores
@@ -109,6 +110,10 @@ export function writeWslMoveCutover(userDataPath: string, cutover: WslMoveCutove
   if (!existing && parsed.rewrittenStores.length > 0) {
     throw new Error('wsl_move_ledger_changed')
   }
+  if (!existing) {
+    // New moves only: a record already on disk must stay resumable whatever its size.
+    assertWslMoveManifestFits(parsed.manifest)
+  }
   if (existing) {
     assertWslMoveUpdate(existing, parsed, head)
   } else if (!head) {
@@ -201,5 +206,40 @@ export function removeWslMoveCutover(userDataPath: string, migrationId: string):
   ) {
     throw new Error('wsl_move_in_flight')
   }
-  journals.remove(userDataPath, migrationId)
+  removeNewestInChain(userDataPath, record)
+}
+
+/**
+ * Only the newest move of a distro goes: a later move names this one as what it supersedes, so
+ * removing it would break the chain and leave every project of that distro unreadable.
+ */
+function removeNewestInChain(userDataPath: string, record: WslMoveCutover | undefined): void {
+  if (!record) {
+    return
+  }
+  if (
+    listWslMoveCutoverChain(userDataPath, record.journalKey).at(-1)?.migrationId !==
+    record.migrationId
+  ) {
+    throw new Error('wsl_move_superseded')
+  }
+  journals.remove(userDataPath, record.migrationId)
+}
+
+/**
+ * Resets a move that never reached `destination-committed`; the caller has proved the destination
+ * holds no commit of it (wsl-move-reset). Its fence and session freeze lift with the record.
+ */
+export function removeUncommittedWslMoveCutover(userDataPath: string, migrationId: string): void {
+  const record = listWslMoveCutovers(userDataPath).find(
+    (entry) => entry.migrationId === migrationId
+  )
+  if (
+    record &&
+    WSL_MOVE_CUTOVER_PHASES.indexOf(record.phase) >=
+      WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
+  ) {
+    throw new Error('wsl_move_committed')
+  }
+  removeNewestInChain(userDataPath, record)
 }

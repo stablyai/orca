@@ -186,4 +186,28 @@ describe('WSL move journal', () => {
     writeFileSync(journalPath('move-1'), JSON.stringify(edited))
     expect(() => listWslMoveCutovers(userDataPath)).toThrow('stay fenced')
   })
+
+  it('refuses to remove a move a later move of its distro supersedes, so the chain stays readable', () => {
+    seedWslMoveCutover(userDataPath, cutover('move-1', 'retained'))
+    seedWslMoveCutover(
+      userDataPath,
+      cutover('move-2', 'retained', { supersedesMigrationId: 'move-1' }, { repoIds: ['repo-2'] })
+    )
+    seedWslMoveCutover(
+      userDataPath,
+      cutover('move-3', 'retained', { supersedesMigrationId: 'move-2' }, { repoIds: ['repo-3'] })
+    )
+
+    expect(() => removeWslMoveCutover(userDataPath, 'move-2')).toThrow('wsl_move_superseded')
+    expect(() => removeWslMoveCutover(userDataPath, 'move-1')).toThrow('wsl_move_superseded')
+    expect(
+      listWslMoveCutoverChain(userDataPath, 'local-wsl:ubuntu').map((c) => c.migrationId)
+    ).toEqual(['move-1', 'move-2', 'move-3'])
+    // Newest first, one at a time, and the chain reads after every step.
+    removeWslMoveCutover(userDataPath, 'move-3')
+    expect(listWslMoveCutoverChain(userDataPath, 'local-wsl:ubuntu')).toHaveLength(2)
+    removeWslMoveCutover(userDataPath, 'move-2')
+    removeWslMoveCutover(userDataPath, 'move-1')
+    expect(listWslMoveCutovers(userDataPath)).toEqual([])
+  })
 })

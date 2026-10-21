@@ -94,7 +94,12 @@ export function parseOrcadMigrationCatalogReferenceAbortResult(
     throw new Error('orcad_migration_catalog_abort_result_invalid')
   }
   if (record.state === 'committed') {
-    return { state: 'committed', ...migrationIdentity(manifest), aborted: false }
+    return {
+      state: 'committed',
+      ...migrationIdentity(manifest),
+      aborted: false,
+      ...(record.durableCommitted === true ? { durableCommitted: true as const } : {})
+    }
   }
   if (record.state === 'absent' && record.durableAbsent === true) {
     return {
