@@ -137,3 +137,11 @@ relay_region_rehome_source_cell_ids = [
 
 # Push is currently provisioned only in production.
 push_gateway_enabled = false
+
+relay_dedicated_database_enabled = true
+# The first staging create hit an Enterprise Plus stockout and its name is reserved after deletion.
+# Enterprise Plus failed with "insufficient resources" in every us-central1 zone and tier on 10-16
+# (it created in us-east1), so staging rehearses on Enterprise; the move mechanism is the same.
+relay_dedicated_database_name    = "orca-cloud-staging-relay-db3"
+relay_dedicated_database_edition = "ENTERPRISE"
+relay_dedicated_database_tier    = "db-custom-2-7680"
