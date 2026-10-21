@@ -157,7 +157,8 @@ function assertWslMoveUpdate(
 }
 
 /**
- * The rewrite ledger only grows, and only while the desktop rewrites (`destination-committed`):
+ * The rewrite ledger, and the seeded host workspaces beside it, only grow, and only while the
+ * desktop rewrites (`destination-committed`):
  * append-only and without duplicates, so a stale writer cannot drop another's entry. Leaving that
  * phase needs a complete registry and every registered store recorded.
  */
@@ -171,6 +172,15 @@ function assertWslMoveLedgerUpdate(existing: WslMoveCutover, next: WslMoveCutove
   if (
     after.length > before.length &&
     (existing.phase !== 'destination-committed' || next.phase !== 'destination-committed')
+  ) {
+    throw new Error('wsl_move_ledger_changed')
+  }
+  const seededBefore = existing.seededHostWorkspaceIds ?? []
+  const seededAfter = new Set(next.seededHostWorkspaceIds ?? [])
+  if (
+    !seededBefore.every((id) => seededAfter.has(id)) ||
+    (seededAfter.size > seededBefore.length &&
+      (existing.phase !== 'destination-committed' || next.phase !== 'destination-committed'))
   ) {
     throw new Error('wsl_move_ledger_changed')
   }

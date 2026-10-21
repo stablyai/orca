@@ -1,5 +1,6 @@
 /** A valid WSL move journal record whose manifest is bound to it. */
 import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationDormantStatePayload } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import {
   wslMoveJournalKey,
   type WslMoveCutover,
@@ -11,7 +12,8 @@ export function wslMoveCutoverFixture(
   migrationId = 'move-1',
   phase: WslMoveCutoverPhase = 'prepared',
   extra: Partial<WslMoveCutover> = {},
-  scope: { repoIds?: string[]; folderWorkspaceIds?: string[] } = {}
+  scope: { repoIds?: string[]; folderWorkspaceIds?: string[] } = {},
+  dormantState?: OrcadMigrationDormantStatePayload
 ): WslMoveCutover {
   const repoIds = scope.repoIds ?? ['repo-1']
   const folderWorkspaceIds = scope.folderWorkspaceIds ?? []
@@ -49,7 +51,8 @@ export function wslMoveCutoverFixture(
         lastActivityAt: 0,
         createdAt: 0,
         updatedAt: 0
-      }))
+      })),
+      ...(dormantState ? { dormantState } : {})
     },
     destinationEnvironmentId: 'wsl:Ubuntu'
   }

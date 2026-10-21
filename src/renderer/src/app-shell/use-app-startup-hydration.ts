@@ -120,6 +120,8 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         await timeRendererStartupStep('repo-catalog-settlement', () =>
           actions.awaitLocalRepoCatalogSettlement()
         )
+        // Before the session read: a moved project's local rows must leave before the host's merge in.
+        const wslMovedProjectsPromise = useAppStore.getState().fetchWslMovedProjects()
         // Why: folder workspaces merge against projectGroups (repos.ts fetchFolderWorkspacesForAllHosts),
         // so keep this chain ordered while overlapping it with session-scoped hydration.
         const localCatalogChain = (async () => {
@@ -129,20 +131,18 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
             actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
           )
-          // Before hydration: a moved project's chats hydrate only once it is known to be moved.
-          await timeRendererStartupStep('fetch-wsl-moved-projects', () =>
-            useAppStore.getState().fetchWslMovedProjects()
-          )
         })()
-        const sessionReadPromise = runtimeHostsPromise.then((startupRuntimeHostIds) =>
-          // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
-          timeRendererStartupStep('session-get', () =>
-            fetchWorkspaceSessionWithRuntimeHostOwners(
-              window.api.session,
-              useAppStore.getState().repos,
-              startupRuntimeHostIds
+        const sessionReadPromise = Promise.all([runtimeHostsPromise, wslMovedProjectsPromise]).then(
+          ([startupRuntimeHostIds]) =>
+            // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
+            timeRendererStartupStep('session-get', () =>
+              fetchWorkspaceSessionWithRuntimeHostOwners(
+                window.api.session,
+                useAppStore.getState().repos,
+                startupRuntimeHostIds,
+                useAppStore.getState().wslMovedProjects
+              )
             )
-          )
         )
         const hydrationSessionChain = sessionReadPromise.then(async (sessionRead) => {
           const hydrationRepoIds = collectWorktreeHydrationRepoIdsFromSession(

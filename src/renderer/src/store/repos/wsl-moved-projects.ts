@@ -59,7 +59,8 @@ function sameMovedProjects(
   )
 }
 
-function movedProjectForKey(
+/** The moved project a session key names by id alone, before the catalog says whose it is. */
+export function movedProjectForKey(
   projects: readonly WslMovedProject[],
   workspaceKey: string
 ): WslMovedProject | null {

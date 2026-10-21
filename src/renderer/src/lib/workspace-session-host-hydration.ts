@@ -22,6 +22,8 @@ import {
   normalizeWorkspaceSessionKeyToWorktreeId
 } from './workspace-session-host-contention'
 import { nonLocalHostSessionEntries, type HostSessionSlices } from './workspace-session-host-split'
+import type { WslMovedProject } from '../../../shared/wsl-move/wsl-moved-project'
+import { withoutWslMovedLocalRows } from '../store/repos/wsl-moved-local-session-rows'
 
 type SessionReadApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
@@ -161,7 +163,8 @@ export async function fetchWorkspaceSessionFromHosts(
 export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   api: SessionReadApi,
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[],
-  additionalRuntimeHostIds: readonly ExecutionHostId[] = []
+  additionalRuntimeHostIds: readonly ExecutionHostId[] = [],
+  wslMovedProjects: readonly WslMovedProject[] = []
 ): Promise<WorkspaceSessionHostRead> {
   const readPartition = async (hostId: ExecutionHostId): Promise<WorkspaceSessionState | null> => {
     try {
@@ -172,7 +175,8 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
     }
   }
   const slices: HostSessionSlices = {
-    [LOCAL_EXECUTION_HOST_ID]: await api.get()
+    // Before the merge: a moved workspace's retained rows share tab ids with its host's live ones.
+    [LOCAL_EXECUTION_HOST_ID]: withoutWslMovedLocalRows(await api.get(), wslMovedProjects)
   }
   // Why: startup can know saved runtime session hosts before their repo
   // catalogs hydrate, so include those partitions in the first read.

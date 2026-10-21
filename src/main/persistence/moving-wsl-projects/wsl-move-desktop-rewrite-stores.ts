@@ -12,6 +12,8 @@ export type WslMoveDesktopRewriteContext = {
   rewritePath: OrcadMigrationPathRewriter
   /** The execution host the moved projects now belong to. */
   destinationHostId: `runtime:${string}`
+  /** Durable before it returns; `cutover.seededHostWorkspaceIds` holds what earlier runs recorded. */
+  recordSeededHostWorkspaceIds: (workspaceIds: readonly string[]) => void
 }
 
 export type WslMoveMainRewriteStore = {

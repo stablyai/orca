@@ -127,6 +127,9 @@ export const mainProcessState = {
   // Why published: the default-session proxy must be applied before the first app-owned fetcher,
   // but window creation has no reason to queue behind it (the request guard already fences it).
   initialProxyApplicationReady: Promise.resolve(),
+  // Why awaited before runtime services: the first window's session and UI reads must see a
+  // committed WSL move's rewrite. Bounded, never rejects, and resolved at once with the gate off.
+  wslMoveStartupRewriteReady: Promise.resolve(),
   // Why published: i18n/menu init no longer precedes the launch phase, so the one launch-phase
   // path that reads a translated string (the runtime-RPC startup failure dialog) waits on this.
   // Never rejects: the phase's own failure is surfaced by initializeMainProcessReady.

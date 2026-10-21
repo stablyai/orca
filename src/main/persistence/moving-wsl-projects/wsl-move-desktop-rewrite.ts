@@ -30,12 +30,39 @@ export type WslMoveDesktopRewritePassOptions = {
   warn?: (message: string) => void
 }
 
-function rewriteContext(cutover: Readonly<WslMoveCutover>): WslMoveDesktopRewriteContext {
+function rewriteContext(
+  userDataPath: string,
+  cutover: Readonly<WslMoveCutover>
+): WslMoveDesktopRewriteContext {
   return {
     cutover,
     rewritePath: createUncToLinuxPathRewriter(cutover.manifest.source.distro),
-    destinationHostId: toRuntimeExecutionHostId(cutover.destinationEnvironmentId)
+    destinationHostId: toRuntimeExecutionHostId(cutover.destinationEnvironmentId),
+    recordSeededHostWorkspaceIds: (workspaceIds) =>
+      recordSeededHostWorkspaces(userDataPath, cutover.migrationId, workspaceIds)
   }
+}
+
+/** Through the journal's compare-and-swap, like a ledger entry: the record only grows. */
+function recordSeededHostWorkspaces(
+  userDataPath: string,
+  migrationId: string,
+  workspaceIds: readonly string[]
+): void {
+  const current = readCommittedCutover(userDataPath, migrationId)
+  if (!current) {
+    throw new Error('wsl_move_record_missing')
+  }
+  const recorded = current.seededHostWorkspaceIds ?? []
+  const added = workspaceIds.filter((id) => !recorded.includes(id))
+  if (added.length === 0) {
+    return
+  }
+  writeWslMoveCutover(userDataPath, {
+    ...current,
+    seededHostWorkspaceIds: [...recorded, ...added],
+    updatedAt: new Date().toISOString()
+  })
 }
 
 /** Fresh from disk: the ledger write must extend what is there now, not what a pass started with. */
@@ -106,7 +133,11 @@ async function rewriteMainStores(
       continue
     }
     const timeoutMs = options.storeTimeoutMs ?? WSL_MOVE_REWRITE_STORE_TIMEOUT_MS
-    await withStoreTimeout(() => store.run(rewriteContext(before)), timeoutMs, `${store.id} run`)
+    await withStoreTimeout(
+      () => store.run(rewriteContext(userDataPath, before)),
+      timeoutMs,
+      `${store.id} run`
+    )
     await withStoreTimeout(() => store.flush(), timeoutMs, `${store.id} flush`)
     const current = readCommittedCutover(userDataPath, migrationId)
     if (!current) {
@@ -151,7 +182,10 @@ export function runWslMoveDesktopRewritePass(
   return next
 }
 
-/** Startup, and after a move commits: a no-op unless the internal WSL hosts gate is open. */
+/**
+ * After a move commits: a no-op unless the internal WSL hosts gate is open. Its caller must run it
+ * with no window open, or after the renderer stores (7d) stop writing the old routing back.
+ */
 export function runGatedWslMoveDesktopRewritePass(
   options: WslMoveDesktopRewritePassOptions
 ): Promise<void> {

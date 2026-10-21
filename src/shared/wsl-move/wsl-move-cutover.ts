@@ -41,6 +41,8 @@ const WslMoveCutoverSchema = z.object({
   provenExitedSessionIds: z.array(z.string().min(1).max(1_024)).max(10_000),
   // Desktop stores already rewritten after commit, so a crash redoes only the rest.
   rewrittenStores: z.array(z.string().min(1).max(128)).max(256),
+  // Workspaces the host partition was seeded with, so a re-run never revives a closed tab.
+  seededHostWorkspaceIds: z.array(z.string().min(1).max(4_096)).max(10_000).optional(),
   supersedesMigrationId: z.string().min(1).max(128).optional(),
   manifest: z.unknown()
 })

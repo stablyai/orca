@@ -13,8 +13,9 @@ import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getCanonicalUserDataPath } from '../persistence'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
 import { recoverInterruptedWslMoves } from '../persistence/moving-wsl-projects/wsl-move-reset'
+import { runWslMoveStartupRewrite } from '../persistence/moving-wsl-projects/wsl-move-startup-rewrite'
+import { registerWslMoveMainRewriteStores } from '../persistence/moving-wsl-projects/wsl-move-main-rewrite-stores'
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
 import { initializeBrowserClientHostId } from '../browser/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
@@ -134,6 +135,9 @@ export async function initializeReadyFoundation(): Promise<void> {
   // Why this early: the first window stamps the hosting id into its renderer's argv, so the durable
   // read has to have happened by then or the renderer and the browser-host lease disagree.
   initializeBrowserClientHostId(profile.profileDirectory)
+  // Why before the store loads: its pane normalization tells a moved project's retained rows from
+  // a rival host's, and no handler or runtime may give a moving project a new terminal.
+  loadWslMoveFence(getAppEnvironment().getPath('userData'))
   const profileState = await createProfileStateStoreForStartup({
     dataFile: profile.dataFile,
     databaseFile: profile.stateDatabaseFile,
@@ -153,11 +157,11 @@ export async function initializeReadyFoundation(): Promise<void> {
   state.store = store
   setNodeDistMirrorSettingReader(() => store.getSettings().nodeDistMirrorUrl)
   const userDataPath = getAppEnvironment().getPath('userData')
-  // Why before any handler or runtime: a project a WSL move is taking must never get a new terminal.
-  loadWslMoveFence(userDataPath)
-  // Resets a move interrupted before commit, then finishes one that committed; gated off, no-ops.
-  void recoverInterruptedWslMoves(userDataPath).then(() =>
-    runGatedWslMoveDesktopRewritePass({ userDataPath })
+  registerWslMoveMainRewriteStores(store)
+  // Resets a move interrupted before commit, then finishes one that committed; main-process-ready
+  // waits on both, bounded. Gated off, neither runs.
+  state.wslMoveStartupRewriteReady = runWslMoveStartupRewrite({ userDataPath }, () =>
+    recoverInterruptedWslMoves(userDataPath)
   )
   // Why: create pending readiness before the guard can observe the default session.
   // Why parked on state instead of awaited here: Dock/Launchpad launches don't inherit shell
