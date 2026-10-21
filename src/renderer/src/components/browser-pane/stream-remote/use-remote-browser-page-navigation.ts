@@ -122,7 +122,19 @@ export function useRemoteBrowserPageNavigation({
       if (!operationToken) {
         return
       }
-      const pageId = await lifecycle.session.ensureRemotePage(operationToken)
+      let pageId: string | null
+      try {
+        pageId = await lifecycle.session.ensureRemotePage(operationToken)
+      } catch (error) {
+        // Why: callers discard this promise, so a transport failure here must not escape unhandled.
+        if (isCurrentRemoteOperationToken(operationToken)) {
+          setPaneNotice({
+            kind: 'consequence',
+            text: error instanceof Error ? error.message : 'Remote browser command failed.'
+          })
+        }
+        return
+      }
       if (!pageId) {
         return
       }

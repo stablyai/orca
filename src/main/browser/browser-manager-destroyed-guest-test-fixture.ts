@@ -15,7 +15,7 @@ export class DestroyedGuestTestManager extends BrowserManager {
       contextMenus: this.contextMenuCleanupByTabId.size,
       grabShortcuts: this.grabShortcutCleanupByTabId.size,
       appShortcuts: this.shortcutForwardingCleanupByTabId.size,
-      wheelHandlers: this.mouseWheelZoomCleanupByTabId.size,
+      guestMouseHandlers: this.guestMouseCleanupByTabId.size,
       renderers: this.rendererWebContentsIdByTabId.size,
       workspaces: this.workspaceIdByPageId.size,
       worktrees: this.worktreeIdByTabId.size,

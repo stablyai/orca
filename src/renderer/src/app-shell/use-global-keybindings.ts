@@ -38,6 +38,7 @@ import {
   type AppShortcutState,
   type ShortcutDispatchInput
 } from './app-command-handlers'
+import { installMouseHistoryButtons } from './mouse-history-buttons'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
 
@@ -86,6 +87,9 @@ export function useGlobalKeybindings(args: {
     const unregisterAppCommandDispatcher = registerAppCommandDispatcher((actionId) =>
       (createAppCommandHandlers(shortcutStateRef.current).get(actionId) ?? (() => false))()
     )
+    const uninstallMouseHistoryButtons = installMouseHistoryButtons(window, (actionId) => {
+      createAppCommandHandlers(shortcutStateRef.current).get(actionId)?.()
+    })
 
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
       const state = shortcutStateRef.current
@@ -327,6 +331,7 @@ export function useGlobalKeybindings(args: {
     window.addEventListener('blur', onBlur)
     return () => {
       unregisterAppCommandDispatcher()
+      uninstallMouseHistoryButtons()
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keyup', onKeyUp, { capture: true })
       window.removeEventListener('blur', onBlur)
