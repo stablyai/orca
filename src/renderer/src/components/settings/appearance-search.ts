@@ -8,6 +8,7 @@ import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { getStatusBarToggles } from './appearance-status-bar-search'
 import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import { getAvailableEditorColorThemeOptions } from '@/lib/editor-theme'
 
 export {
   getMenuBarIconEntries,
@@ -30,6 +31,37 @@ export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] 
     ]
   }
 ])
+
+export const getCodeEditorAppearanceSearchEntries = createLocalizedCatalog(
+  (): SettingsSearchEntry[] => [
+    {
+      title: translate(
+        'auto.components.settings.appearance.search.codeEditorTheme.title',
+        'Editor Color Theme'
+      ),
+      description: translate(
+        'auto.components.settings.appearance.search.codeEditorTheme.description',
+        'Syntax highlighting theme used by file editors and diff views.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.codeEditorTheme.editor',
+          'editor'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.codeEditorTheme.code',
+          'code'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.codeEditorTheme.syntax',
+          'syntax highlighting'
+        ),
+        // Why: index every picker label so any theme name (e.g. "Nord") finds this section.
+        ...getAvailableEditorColorThemeOptions().map((option) => option.label)
+      ]
+    }
+  ]
+)
 
 export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
