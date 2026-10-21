@@ -16,6 +16,7 @@ import { superviseForegroundServe } from './serve-update-supervisor'
 import { isSupervisedSpawnHeld } from './serve-supervised-stop'
 import { redactingSpawn, shouldRedactSupervisedStdout } from './serve-pairing-redaction'
 import { orcadServeArgs, type ServeOrcaAppArgs } from '../../shared/orcad-serve-argv'
+import { SPEECH_RECOGNIZER_DIR_ENV } from '../../shared/speech-recognizer-package'
 
 /** A first run may download and verify the pinned Node; bound it well past that. */
 const SELECTION_TIMEOUT_MS = 10 * 60_000
@@ -72,7 +73,9 @@ export function serveWithOrcad(
   /** The caller's environment without `ELECTRON_RUN_AS_NODE`. */
   baseEnv: NodeJS.ProcessEnv,
   /** The app's browser client; the slot does not carry one, so orcad serves it from here. */
-  webClientRoot?: string
+  webClientRoot?: string,
+  /** The app's speech recognizer; the slot does not carry one either. */
+  speechRecognizerDir?: string
 ): Promise<number> {
   const spec: ProcessSpec = {
     program: selection.runtime,
@@ -84,7 +87,9 @@ export function serveWithOrcad(
       ...baseEnv,
       // The desktop's profile: its instance lock makes the two refuse each other.
       ORCA_USER_DATA: userDataPath,
-      ORCA_VERSION: selection.version
+      ORCA_VERSION: selection.version,
+      // Always set: a value inherited from an Orca terminal would name another install's copy.
+      [SPEECH_RECOGNIZER_DIR_ENV]: speechRecognizerDir ?? ''
     }
   }
   const spawnChild = shouldRedactSupervisedStdout(args.supervise === true)

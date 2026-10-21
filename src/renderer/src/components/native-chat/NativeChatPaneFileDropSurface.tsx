@@ -51,7 +51,7 @@ export function NativeChatPaneFileDropSurface({
   const ownerRef = useRef<HTMLElement | null>(null)
   const [sequence] = useState(createOsFileDropSequence)
   const attachOwner = useOsFileDropOwner(ownerRef, {
-    consumer: 'agent',
+    consumer: (destination) => destination?.preparationConsumer ?? 'agent',
     sequence,
     canAccept: () => Boolean(registration && !registration.getClaim().disabled),
     captureDestination: () => registration?.getClaim().captureExternalDrop(),

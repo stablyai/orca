@@ -13,23 +13,27 @@ import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import { recoverWslOrcad, type WslOrcadRecoveryReason } from './wsl-orcad-liveness-recovery'
 import {
-  attachSupervisedWatch,
   confirmsRunning,
-  disarmSupervised,
-  defaultSchedule,
-  ensureHolderQuietly,
   EXIT_SETTLE_MS,
   failedExit,
+  gatherWslLivenessEvidence
+} from './wsl-orcad-liveness-evidence'
+import {
+  attachSupervisedWatch,
   cancellableWait,
-  gatherWslLivenessEvidence,
+  defaultSchedule,
+  ensureHolderQuietly,
+  subscribeWake
+} from './wsl-orcad-liveness-monitor'
+import {
+  disarmSupervised,
   newSupervised,
-  subscribeWake,
   WSL_ORCAD_HEARTBEAT_MS,
   type Supervised,
   type Trigger,
   type WslOrcadLivenessDependencies,
   type WslOrcadTimer
-} from './wsl-orcad-liveness-model'
+} from './wsl-orcad-liveness-state'
 import {
   classifyWslOrcadLiveness,
   type WslLivenessEvidence,

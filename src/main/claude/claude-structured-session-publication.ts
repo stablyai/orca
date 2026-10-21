@@ -66,7 +66,7 @@ export function createClaudeSessionPublication(input: {
       reportedModelMutation: 0,
       confirmedOptions: new Set(),
       // Only choices carried in this child's launch can skip their first write.
-      reusableOptions: new Map(
+      appliedInputOptions: new Map(
         [...(input.options ?? [])].filter(([key]) => key === 'model' || key === 'effort')
       ),
       launchedModel: null,

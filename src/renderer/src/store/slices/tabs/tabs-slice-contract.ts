@@ -162,8 +162,6 @@ export type TabsSlice = {
       groupId: string
       index?: number
       splitDirection?: TabSplitDirection
-      /** The split's new group id, as main minted it; layout-owner builds only. */
-      newGroupId?: string
     }
   ) => boolean
   setTabGroupSplitRatio: (worktreeId: string, nodePath: string, ratio: number) => void

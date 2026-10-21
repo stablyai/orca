@@ -151,13 +151,7 @@ describe('editor autosave changed-on-disk conflict flow', () => {
     // Why: mimic hydration — the scan has not yet compared disk against the
     // persisted baseline, so autosave must hold off (a slow remote read must
     // not lose a race to this timer).
-    store.setState({
-      openFiles: store
-        .getState()
-        .openFiles.map((f) =>
-          f.id === '/repo/file.ts' ? { ...f, pendingDiskBaselineVerification: true } : f
-        )
-    } as never)
+    store.getState().setPendingDiskBaselineVerification('/repo/file.ts', true)
 
     const cleanup = attachEditorAutosaveController(withLoadedBaselines(store))
     try {

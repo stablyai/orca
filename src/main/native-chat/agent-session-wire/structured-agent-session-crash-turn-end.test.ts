@@ -102,7 +102,6 @@ function crashedClaudeRecord(): AgentSessionRecord {
       leaseDeadlineAt: LAST_RENEWED_AT + 30_000,
       lastRenewedAt: LAST_RENEWED_AT,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'key-1',
       claimStatus: 'live',
       unreconciled: false,

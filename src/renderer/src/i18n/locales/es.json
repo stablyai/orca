@@ -12540,7 +12540,6 @@
         "sshManagedHostRemove": {
           "description": "Orca se ejecuta en {{label}}. En Orca en tus hosts SSH, usa Detener… para quitar Orca del host, u Olvidar… si el host ya no existe. Después podrás eliminar este host SSH.",
           "open": "Abrir Orca en tus hosts SSH",
-          "descriptionServers": "Orca se ejecuta en {{label}}. En Servidores remotos de Orca, abre el menú ⋯ de Orca en {{label}} y elige «Detener…» para quitar Orca del host, o «Olvidar…» si el host ya no existe. Después podrás quitar este host SSH.",
           "openServers": "Abrir Servidores remotos de Orca"
         },
         "managedServers": {
@@ -12564,7 +12563,6 @@
             "confirmForget": "Olvidar en este escritorio",
             "keepLinked": "Mantener vinculado",
             "forgetDescription": "Desvincula este servidor aquí sin contactar con su host. Si el host vuelve, es posible que el servidor siga ejecutándose allí.",
-            "title": "Orca en {{host}}",
             "orcaVersion": "Orca en este host: {{version}}",
             "stopOrcaDescription": "Detiene Orca en el host SSH y lo quita de esta lista.",
             "updateOrcaOnHost": "Actualizar Orca en este host"
@@ -12909,9 +12907,6 @@
           "emptyDescription": "Empareja un equipo de desarrollo, una máquina en la nube o un escritorio en casa. Sus sesiones siguen ejecutándose allí cuando este equipo entra en reposo.",
           "movePaused": "Traslado en pausa",
           "shareTitle": "Compartir este equipo",
-          "shareDescriptionNamed": "Permite que un navegador, un teléfono u otro Orca trabajen en {{name}}.",
-          "shareDescription": "Permite que un navegador, un teléfono u otro Orca trabajen en este equipo.",
-          "shareButton": "Compartir…",
           "done": "Listo",
           "unreachableLead": "Orca no pudo acceder a este servidor.",
           "updateFailedLead": "La última actualización no terminó.",
@@ -18595,6 +18590,7 @@
         "permissionFullAccessCodexDescription": "Nunca pregunta; puede editar cualquier archivo y usar la red",
         "permissionFullAccessSharedDescription": "Nunca pregunta antes de ediciones o comandos",
         "pasteFailed": "Error al pegar.",
+        "tooManySkills": "Tu mensaje no se envió a {{agent}}. Selecciona como máximo {{limit}} archivos de habilidades e inténtalo de nuevo.",
         "commandAttachmentsUnsupported": "Quita los archivos adjuntos antes de usar un comando de la sesión de chat.",
         "optionValueShort": {
           "minimal": "Mín.",
@@ -20294,6 +20290,7 @@
   },
   "aiVault": {
     "antigravityReferenceDescription": "Continúa en una nueva conversación de la CLI de Antigravity usando esta transcripción como referencia.",
+    "searchHitSourceHost": "Encontrada en {{value0}}",
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → CLI",
     "continueInCli": "Continuar en la CLI",
@@ -20465,7 +20462,17 @@
   "tabHoverCard": {
     "browser": "Navegador",
     "editor": "Editor",
-    "terminal": "Terminal"
+    "terminal": "Terminal",
+    "namingFailure": {
+      "regenerating": "Regenerando…",
+      "regenerate": "Regenerar nombre",
+      "title": "No se pudo nombrar este chat",
+      "description": "El agente de nombres de chat se detuvo con un error, así que el chat conserva su primer mensaje como nombre.",
+      "viewError": "ver error",
+      "dialogTitle": "Falló el nombre automático del chat",
+      "dialogDescriptionStart": "Orca no pudo generar un nombre para",
+      "dialogDescriptionEnd": "a partir de su primer mensaje."
+    }
   },
   "updates": {
     "installBlock": {

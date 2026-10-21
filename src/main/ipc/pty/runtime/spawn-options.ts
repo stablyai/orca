@@ -6,17 +6,10 @@ import {
   routesFreshSpawnsToLocalProvider,
   beginPtySpawnForWorktree
 } from '../host-env/fresh-spawn-routing'
-import { resolveStablePaneOwner } from '../pane/stable-owner'
-import {
-  joinPaneSpawn,
-  makePaneSpawnReservationKey,
-  reservePaneSpawn,
-  paneSpawnReservationsByOwnerKey
-} from '../pane/spawn-reservation'
+import { makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import {
   assemblePtySpawnEnvDeletions,
   assemblePtySpawnLaunchOptions,
-  restoreProvisionalPtySize,
   seedPtySpawnSize
 } from '../spawn-options-assembly'
 import type { RuntimePtySpawnState } from './spawn-state'
@@ -153,52 +146,8 @@ export async function buildRuntimePtySpawnOptions(
   ) {
     throw new Error('terminal_pane_identity_changed')
   }
-  if (!ctx.paneSpawnReservationKey) {
-    ctx.paneSpawnReservationKey = resolvedPaneSpawnReservationKey
-    const existingPaneSpawn = ctx.spawnIdentityPaneKey
-      ? paneSpawnReservationsByOwnerKey.get(resolvedPaneSpawnReservationKey!)
-      : undefined
-    const concurrentResult = existingPaneSpawn ? await joinPaneSpawn(existingPaneSpawn) : null
-    if (concurrentResult) {
-      const concurrentOwner = resolveStablePaneOwner(
-        ctx.deps.runtime,
-        ctx.deps.store,
-        ctx.spawnIdentityPaneKey,
-        args.worktreeId,
-        args.connectionId
-      )
-      if (
-        !concurrentOwner?.handle ||
-        concurrentOwner.ptyId !== concurrentResult.id ||
-        (concurrentOwner.incarnationId !== undefined &&
-          concurrentResult.incarnationId !== undefined &&
-          concurrentOwner.incarnationId !== concurrentResult.incarnationId)
-      ) {
-        throw new Error('terminal_pane_owner_unknown')
-      }
-      const reattach = {
-        id: concurrentOwner.ptyId,
-        ...(concurrentOwner.incarnationId ? { incarnationId: concurrentOwner.incarnationId } : {}),
-        stablePaneOwner: {
-          handle: concurrentOwner.handle,
-          tabId: concurrentOwner.tabId,
-          leafId: concurrentOwner.leafId
-        }
-      }
-      restoreProvisionalPtySize({
-        sessionId: ctx.sessionId,
-        sessionAppId: ctx.effectiveSessionAppId,
-        reattachId: reattach.id,
-        hadSessionSizeBeforeAttach: ctx.hadSessionSizeBeforeAttach,
-        sessionSizeBeforeAttach: ctx.sessionSizeBeforeAttach
-      })
-      return reattach
-    }
-  }
+  ctx.paneSpawnReservationKey = resolvedPaneSpawnReservationKey
   ctx.finishTerminalInstall = beginPtySpawnForWorktree(args.worktreeId, ctx.cwd, args.connectionId)
-  ctx.paneSpawnReservation ??= ctx.paneSpawnReservationKey
-    ? reservePaneSpawn(ctx.paneSpawnReservationKey)
-    : null
   ctx.stablePaneOwner = null
   ctx.stablePaneBindingPersisted = false
   ctx.rejectedRegistrationCandidate = null

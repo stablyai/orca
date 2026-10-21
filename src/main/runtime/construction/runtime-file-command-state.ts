@@ -34,14 +34,15 @@ import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
 import type { RuntimeRepoSelector } from '../runtime-repo-selector'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { WindowLayoutCommand } from '../runtime-layout-apply'
-import {
-  openEditorFileInWindow,
-  openEditorFileThroughLayoutOwner
-} from '../files/editor-open-through-layout-owner'
+import { createRuntimeEditorFileOpener } from '../files/editor-open-through-layout-owner'
 
 export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
+  protected abstract hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
+    worktreeId?: string,
+    options?: { force?: boolean }
+  ): Set<string>
+  abstract notifyMobileSessionTabsChanged(worktreeId: string): void
   abstract resolveRuntimeFileTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree
     executionHostId: ExecutionHostId
@@ -134,34 +135,15 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         absolutePath
       }),
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
-    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation, position) => {
-      // The UI cannot open a tab in a workspace that has no row.
-      if (isChatScratchWorktreeId(worktreeId)) {
-        throw new Error('chat_scratch_not_openable')
+    openFile: createRuntimeEditorFileOpener({
+      getNotifier: () => this.notifier,
+      applyLayoutCommand: (command) => this.applyLayoutCommand(command),
+      groupFor: (id) => this.editorOpenGroupFor(id),
+      publishHeadlessTabs: (id) => {
+        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(id, { force: true })
+        this.notifyMobileSessionTabsChanged(id)
       }
-      const open = {
-        worktreeId,
-        filePath,
-        relativePath,
-        runtimeEnvironmentId,
-        navigation,
-        position
-      }
-      // Switch point: main writes the tab itself, window or none; a window only shows it.
-      return ORCA_LAYOUT_OWNER_IS_MAIN
-        ? openEditorFileThroughLayoutOwner(
-            {
-              applyLayoutCommand: (command) => this.applyLayoutCommand(command),
-              groupFor: (id) => this.editorOpenGroupFor(id),
-              ...(this.notifier?.revealEditorTab
-                ? { revealEditorTab: (shown) => this.notifier?.revealEditorTab?.(shown) }
-                : {}),
-              openInWindow: (inWindow) => openEditorFileInWindow(this.notifier, inWindow)
-            },
-            open
-          )
-        : openEditorFileInWindow(this.notifier, open)
-    },
+    }),
     openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation) => {
       if (isChatScratchWorktreeId(worktreeId)) {
         throw new Error('chat_scratch_not_openable')

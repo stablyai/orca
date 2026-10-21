@@ -29,7 +29,6 @@ function lease(overrides: Partial<AgentSessionLease> = {}): AgentSessionLease {
     leaseDeadlineAt: 1_000,
     lastRenewedAt: 500,
     handoffOperationId: null,
-    journalCheckpoint: null,
     claimKeyId: 'key-1',
     claimStatus: 'live',
     unreconciled: false,

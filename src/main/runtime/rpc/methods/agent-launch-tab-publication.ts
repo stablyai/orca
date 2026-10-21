@@ -147,6 +147,8 @@ export async function publishAgentLaunchTabEarly(
   if (
     params.target.kind !== 'existing' ||
     params.reuseTerminal ||
+    // An explicit chat's tab is the session's; a refusal is answered after admission, not here.
+    params.surface === 'chat' ||
     !readsEarlyLaunchTab(context) ||
     !runtime.canPublishAgentLaunchTab() ||
     // A running pane is attached to, never launched into; this launch is refused and must not
@@ -170,7 +172,8 @@ export async function publishAgentLaunchTabEarly(
       workspacePath: workspace.path,
       ...(params.cwd ? { cwd: params.cwd } : {})
     },
-    settings
+    settings,
+    ...(params.surface ? { surface: params.surface } : {})
   })
   // A chat's tab is the session's; it appears when the session is created.
   if (preflight.mode !== 'terminal') {

@@ -59,6 +59,8 @@ export type DaemonSpawnerOptions = {
   launcher: DaemonLauncher
   /** Test seam; production uses the default window. */
   respawnThrottle?: DaemonRespawnThrottle
+  /** Why here: restart reuses this spawner, so the launch policy's recycle choice survives it. */
+  staleDaemonRecycleVersion?: string | null
 }
 
 export class DaemonSpawner {
@@ -69,9 +71,11 @@ export class DaemonSpawner {
   private tokenPath: string
   private pidPath: string
   private respawnThrottle: DaemonRespawnThrottle
+  readonly staleDaemonRecycleVersion: string | null
 
   constructor(opts: DaemonSpawnerOptions) {
     this.runtimeDir = opts.runtimeDir
+    this.staleDaemonRecycleVersion = opts.staleDaemonRecycleVersion ?? null
     this.launcher = opts.launcher
     this.respawnThrottle = opts.respawnThrottle ?? new DaemonRespawnThrottle()
     this.socketPath = getDaemonSocketPath(this.runtimeDir)

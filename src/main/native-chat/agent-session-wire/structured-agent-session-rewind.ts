@@ -41,8 +41,7 @@ export async function rewindStructuredAgentSession(
   } = context
   const fields = { itemId: params.itemId, expectedEpoch: params.expectedEpoch }
   const operation = { method: 'agentSession.rewind', fields }
-  // A fork is made by the agent's next launch, so it rewinds at rest; any other rewind is the
-  // running provider's own.
+  // A fork can be saved without a running agent; other rewinds require the provider itself.
   const agent = store.getRecord(sessionId)?.provider
   const rewindsByFork =
     agent !== undefined &&

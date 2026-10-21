@@ -12545,7 +12545,6 @@
         "sshManagedHostRemove": {
           "description": "{{label}} では Orca が動作しています。[SSH ホスト上の Orca] で「停止…」を使ってホストから Orca を削除するか、ホストがもう存在しない場合は「登録を解除…」を使ってください。その後、この SSH ホストを削除できます。",
           "open": "SSH ホスト上の Orca を開く",
-          "descriptionServers": "Orca は {{label}} で動作しています。「リモート Orca サーバー」で {{label}} 上の Orca の ⋯ メニューを開き、「停止…」でホストから Orca を削除するか、ホストがもう存在しない場合は「削除…」を選んでください。その後、この SSH ホストを削除できます。",
           "openServers": "リモート Orca サーバーを開く"
         },
         "managedServers": {
@@ -12569,7 +12568,6 @@
             "confirmForget": "このデスクトップから登録を解除",
             "keepLinked": "リンクを維持",
             "forgetDescription": "ホストに接続せずに、このサーバーのリンクをここで解除します。ホストが復帰した場合、サーバーはまだそこで動作している可能性があります。",
-            "title": "{{host}} 上の Orca",
             "orcaVersion": "このホストの Orca: {{version}}",
             "stopOrcaDescription": "SSH ホスト上の Orca を停止し、この一覧から削除します。",
             "updateOrcaOnHost": "このホストの Orca を更新"
@@ -12914,9 +12912,6 @@
           "emptyDescription": "開発マシン、クラウドマシン、自宅のデスクトップをペアリングします。このコンピューターがスリープしても、セッションはそこで動き続けます。",
           "movePaused": "移行を一時停止中",
           "shareTitle": "このコンピューターを共有",
-          "shareDescriptionNamed": "ブラウザー、スマートフォン、別の Orca から {{name}} で作業できるようにします。",
-          "shareDescription": "ブラウザー、スマートフォン、別の Orca からこのコンピューターで作業できるようにします。",
-          "shareButton": "共有…",
           "done": "完了",
           "unreachableLead": "Orca はこのサーバーに接続できませんでした。",
           "updateFailedLead": "前回の更新は完了しませんでした。",
@@ -18635,6 +18630,7 @@
         "permissionFullAccessCodexDescription": "確認しません。任意のファイルを編集し、ネットワークを使用できます",
         "permissionFullAccessSharedDescription": "編集やコマンドの前に確認しません",
         "pasteFailed": "貼り付けに失敗しました。",
+        "tooManySkills": "{{agent}} にメッセージを送信できませんでした。選択したスキルファイルを {{limit}} 個以下にして、もう一度お試しください。",
         "commandAttachmentsUnsupported": "チャットセッションのコマンドを使う前に添付ファイルを削除してください。",
         "optionValueShort": {
           "minimal": "最小",
@@ -20059,6 +20055,7 @@
       "empty": "サブ Agent が見つかりませんでした。"
     },
     "antigravityReferenceDescription": "このトランスクリプトを参照として使用して、新規 Antigravity CLI 会話を続けます。",
+    "searchHitSourceHost": "{{value0}} で見つかりました",
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → CLI",
     "continueInCli": "CLIで続行",
@@ -20477,7 +20474,17 @@
   "tabHoverCard": {
     "browser": "ブラウザ",
     "editor": "エディター",
-    "terminal": "ターミナル"
+    "terminal": "ターミナル",
+    "namingFailure": {
+      "regenerating": "再生成中…",
+      "regenerate": "名前を再生成",
+      "title": "このチャットに名前を付けられませんでした",
+      "description": "チャット名 Agent がエラーで停止したため、チャットは最初のメッセージを名前として使います。",
+      "viewError": "エラーを表示",
+      "dialogTitle": "チャットの自動命名に失敗しました",
+      "dialogDescriptionStart": "Orca は",
+      "dialogDescriptionEnd": "の名前を最初のメッセージから生成できませんでした。"
+    }
   },
   "jira": {
     "savedFilters": {

@@ -62,6 +62,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   private readonly teardown: CodexStructuredSessionTeardown
 
   constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
+    this.atRestCommands = deps.atRestCommands
     this.notificationRetries = createCodexStructuredNotificationRetry({
       sessionFor: (sessionId) => this.sessions.get(sessionId),
       translate: (sessionId, session, method, params, observedAt, dispatchSequenceAtReceipt) =>
@@ -85,6 +86,11 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   }
 
   supportsLocation = supportsCodexStructuredLocation
+
+  readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
+    this.sessions.get(sessionId)?.skillReport?.read()
+
+  readonly atRestCommands: CodexStructuredSessionAdapterDeps['atRestCommands']
 
   acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
     acquireCodexStructuredSession({
@@ -136,6 +142,9 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   ): CodexJournalTranslationAdmission {
     if (event.type === 'notification') {
       noteCodexTurnOpened(session, event.method, event.params)
+      if (event.method === 'skills/changed') {
+        session.skillReport?.refresh(true)
+      }
     }
     const admission = session.translator?.handle(event) ?? { accepted: true }
     if (!admission.accepted) {
@@ -231,6 +240,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     try {
       await input.beforeDispatch?.()
       input.signal?.throwIfAborted()
+      input.onInputPreparation?.()
       const turnOptions = await waitForPromiseWithSignal(
         resolvedCodexMessageOptions(session, input.executionOptions),
         input.signal

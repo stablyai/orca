@@ -90,7 +90,8 @@ describe('a server layout under desktop ids', () => {
     expect(desktop.tabs.map((entry) => [entry.id, entry.entityId])).toEqual([
       [toWebTerminalSurfaceTabId('tab-1'), toWebTerminalSurfaceTabId('tab-1')],
       [toWebTerminalSurfaceTabId('term-2'), toWebTerminalSurfaceTabId('term-2')],
-      ['/srv/app/a.ts', '/srv/app/a.ts'],
+      // The mirror names every server file by its owned id, as a restart restores it.
+      ['/srv/app/a.ts', ownedEditorFileId('/srv/app/a.ts', WT, ENV)],
       ['ed-2', ownedEditorFileId('/srv/app/b.ts', WT, ENV)],
       ['br-1', 'browser-1'],
       ['chat-1', 'session-1']
@@ -113,6 +114,26 @@ describe('a server layout under desktop ids', () => {
       }
     ])
     expect(desktop.browserTabs).toEqual(serverLayout().browserTabs)
+  })
+
+  it('names a bare-path tab by its path when the server holds that path under two owners', () => {
+    const layout = serverLayout()
+    const both: PublishedWorkspaceLayout = {
+      ...layout,
+      editorFiles: [
+        {
+          filePath: '/srv/app/a.ts',
+          relativePath: 'a.ts',
+          language: 'typescript',
+          runtimeEnvironmentId: 'other-env'
+        },
+        ...layout.editorFiles
+      ]
+    }
+    const mapped = serverLayoutForDesktop(both, ENV, handles)
+    expect(mapped.tabs.find((entry) => entry.id === '/srv/app/a.ts')?.entityId).toBe(
+      ownedEditorFileId('/srv/app/a.ts', WT, ENV)
+    )
   })
 
   it('binds a pane to its session.tabs handle, and a bound pane without one stays pending', () => {

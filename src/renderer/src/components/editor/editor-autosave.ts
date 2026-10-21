@@ -48,8 +48,6 @@ export type EditorSaveFileTarget = {
   fallbackContent?: string
   /** Only the conflict banner's Overwrite sets this. */
   overwrite?: true
-  /** A save sent from the mobile app; its refusal is reported to mobile, not the desktop banner. */
-  origin?: 'mobile'
 }
 
 export type EditorSaveAndCloseDetail = {

@@ -67,8 +67,16 @@ describe('structured status feed execution authority lifecycle', () => {
     const feed = getStructuredAgentSessionStatusFeed({ kind: 'local' })
     feed.activate()
     await vi.advanceTimersByTimeAsync(0)
-    subscription().emit({ type: 'snapshot', sessions: [owned, done] })
+    expect(feed.getNamingActive('running')).toBeNull()
+    subscription().emit({
+      type: 'snapshot',
+      sessions: [owned, done],
+      namingActiveSessionIds: ['running']
+    })
+    subscription().emit({ type: 'snapshot', sessions: [] })
+    expect(feed.getNamingActive('running')).toBe(true)
     subscription().emit({ type: 'end' })
+    expect(feed.getNamingActive('running')).toBeNull()
     expect(subscription().unsubscribe).toHaveBeenCalledOnce()
     expect(feed.getSnapshot().get('running')).toEqual({
       ...owned,
@@ -80,7 +88,11 @@ describe('structured status feed execution authority lifecycle', () => {
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
     expect(vi.getTimerCount()).toBe(1)
     await vi.advanceTimersByTimeAsync(250)
-    subscription(1).emit({ type: 'snapshot', sessions: [done] })
+    subscription(1).emit({ type: 'snapshot', sessions: [] })
+    expect(feed.getNamingActive('running')).toBeNull()
+    subscription(1).emit({ type: 'snapshot', sessions: [done], namingActiveSessionIds: [] })
+    subscription().emit({ type: 'snapshot', sessions: [], namingActiveSessionIds: ['running'] })
+    expect(feed.getNamingActive('running')).toBe(false)
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
     subscription(1).emit({ type: 'status', session: owned })
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBe(true)

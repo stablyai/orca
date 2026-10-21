@@ -3,7 +3,7 @@
  * stacks, and the unified dispatcher pops the most recently closed tab of any
  * kind (terminal/browser/editor) in true cross-type MRU order.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
 
@@ -48,6 +48,10 @@ import {
   restoreRecentlyClosedTabPosition
 } from './recently-closed-tabs'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
+import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
+import { endLayoutFramePositions } from '@/runtime/layout-frame-position'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -55,6 +59,11 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
 const WT = 'repo1::/path/wt1'
@@ -74,19 +83,53 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+/** A layout-owner build's main, applying the window's commands, with its frames drawn into
+ *  `store`; nothing to open otherwise. */
+async function mainWithFrames(store: ReturnType<typeof createTestStore>): Promise<() => void> {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return () => {}
+  }
+  layoutApplyTestTransport.reset()
+  layoutApplyTestTransport.useMainModel(
+    loadMainLayoutModel('local', buildWorkspaceSessionPayload(store.getState()))
+  )
+  layoutApplyTestTransport.answerWith('apply')
+  const sync = openWorkspaceLayoutFrameSync(store)
+  sync.start()
+  await layoutApplyTestTransport.settle()
+  return () => {
+    sync.close()
+    endLayoutFramePositions()
+  }
+}
+
+/** The user names and colors the tab; a layout-owner build's main frame draws both. */
+async function titleAndColor(store: ReturnType<typeof createTestStore>, tabId: string) {
+  store.getState().setTabCustomTitle(tabId, 'build shell')
+  store.getState().setTabColor(tabId, '#ff0000')
+  await framesDrawn()
+}
+
+/** Main's answers, and the frames they wait on, drawn. */
+async function framesDrawn(): Promise<void> {
+  await layoutApplyTestTransport.settle()
+  for (let turn = 0; turn < 3; turn += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  }
+}
+
 describe('terminal recently-closed capture', () => {
   it('captures a snapshot and kind entry on user close', async () => {
     const store = makeSeededStore()
+    const closeMain = await mainWithFrames(store)
+    onTestFinished(closeMain)
     const tab = store
       .getState()
       .createTab(WT, undefined, undefined, { startupCwd: '/path/wt1/packages/app' })
-    store.getState().setTabCustomTitle(tab.id, 'build shell')
-    await layoutApplyTestTransport.settle()
-    store.getState().setTabColor(tab.id, '#ff0000')
-    await layoutApplyTestTransport.settle()
+    await titleAndColor(store, tab.id)
 
     store.getState().closeTab(tab.id)
-    await layoutApplyTestTransport.settle()
+    await framesDrawn()
 
     expect(store.getState().recentlyClosedTerminalTabsByWorktree[WT]).toEqual([
       expect.objectContaining({
@@ -195,28 +238,26 @@ describe('reopenClosedTerminalTab', () => {
 
   it('recreates a fresh terminal with the snapshot cwd, shell, title, and color', async () => {
     const store = makeSeededStore()
+    const closeMain = await mainWithFrames(store)
+    onTestFinished(closeMain)
     const tab = store
       .getState()
       .createTab(WT, undefined, 'zsh', { startupCwd: '/path/wt1/packages/app' })
-    store.getState().setTabCustomTitle(tab.id, 'build shell')
-    await layoutApplyTestTransport.settle()
-    store.getState().setTabColor(tab.id, '#ff0000')
-    await layoutApplyTestTransport.settle()
+    await titleAndColor(store, tab.id)
     store.getState().closeTab(tab.id)
-    await layoutApplyTestTransport.settle()
+    await framesDrawn()
     expect(store.getState().tabsByWorktree[WT]).toHaveLength(0)
 
     expect(store.getState().reopenClosedTerminalTab(WT)).toBe(true)
-    await layoutApplyTestTransport.settle()
+    await framesDrawn()
 
     const restored = store.getState().tabsByWorktree[WT]
     expect(restored).toHaveLength(1)
     expect(restored[0]).toMatchObject({
       startupCwd: '/path/wt1/packages/app',
-      shellOverride: 'zsh',
-      customTitle: 'build shell',
-      color: '#ff0000'
+      shellOverride: 'zsh'
     })
+    expect(restored[0]).toMatchObject({ customTitle: 'build shell', color: '#ff0000' })
     // Why: a reopened tab is a fresh surface — never the old PTY.
     expect(restored[0].id).not.toBe(tab.id)
     expect(restored[0].ptyId).toBeNull()

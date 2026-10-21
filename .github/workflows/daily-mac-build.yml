@@ -94,6 +94,7 @@ jobs:
     needs: resolve-main
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/node-server-tests.yml
     with:
       ref: ${{ needs.resolve-main.outputs.head_sha }}
@@ -601,6 +602,9 @@ jobs:
     # Only once the mac release is actually live: there is no release to upload
     # into otherwise, and the Windows workflow refuses to create one.
     if: needs.build-daily-mac.outputs.published == 'true'
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/dev-channel-win-build.yml
     secrets: inherit
     with:

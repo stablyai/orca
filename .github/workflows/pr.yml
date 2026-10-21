@@ -432,6 +432,10 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/check-node-runtime-pin.mjs
 
+      - name: Check root and mobile lock the same shared dependencies
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node config/scripts/check-mobile-shared-dependency-versions.mjs
+
       # Why: extraction writes sorted evidence to an isolated temporary path,
       # so feature PRs need one normalized AST pass rather than a three-OS matrix.
       # Use preflight's pinned Bun even when the optional local pin differs.
@@ -1435,6 +1439,9 @@ jobs:
         run: node config/scripts/build-windows-cli-launcher.mjs
 
       - name: Test Windows-specific boundaries
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_REAL_WINDOWS_SKILL_TEST: '1'
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
           src/main/zcode/zcode-plan-api-key-store-native-windows.test.ts
@@ -1464,6 +1471,7 @@ jobs:
           src/shared/__tests__/process-host/windows-command-line.win32.test.ts
           src/shared/__tests__/process-host/windows-cmd-shim-resolution.test.ts
           src/shared/__tests__/process-host/windows-cmd-shim-resolution.win32.test.ts
+          src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
           src/shared/omp-fresh-launch-cmd.win32.test.ts
           src/main/agent-hooks/windows-hook-payload-delivery.test.ts
           src/main/agent-hooks/managed-hook-stdin-lifecycle.test.ts
@@ -1511,6 +1519,16 @@ jobs:
           src/main/ipc/preflight-provider-command-selection.test.ts
           src/main/ipc/preflight-runnable-local-cli.test.ts
           src/main/managed-server/install/remote-node-runtime-store-windows.test.ts
+          src/main/skills/skill-windows-rename-contention.integration.test.ts
+
+      # Why its own step: the CPU burners that make taskkill slow would starve
+      # every other test file sharing the runner.
+      - name: Test Windows tree kill under CPU load
+        env:
+          ORCA_WINDOWS_TREE_KILL_LOAD: '1'
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
 
       # Why the :parallel variant: identical to build:release except the three
       # electron-vite targets overlap instead of running back to back. The Linux package

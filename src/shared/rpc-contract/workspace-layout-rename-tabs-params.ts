@@ -10,7 +10,8 @@ export const RenameTabsCommand = z.object({
       z.object({
         workspace: z.string().min(1),
         tabId: z.string().min(1),
-        title: z.union([z.string(), z.null()])
+        title: z.union([z.string(), z.null()]),
+        replaceExisting: z.literal(true).optional()
       })
     )
     .min(1)

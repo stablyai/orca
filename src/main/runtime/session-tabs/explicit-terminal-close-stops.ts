@@ -1,24 +1,25 @@
 import type { WorktreePtyHostFence } from '../worktree-pty-host-fence'
-import { OrcaRuntimeWithFocusTerminal } from '../terminal/focus/focus-terminal'
-import { EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS } from '../orca-runtime-core'
-import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../shared/pty-liveness-verdict'
 import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
 import type { RuntimePtyTabCloseAuthority } from '../runtime-terminal-state-records'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import { errorMessage } from '../../../shared/error-message'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
+import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import { closeMainOwnedPaneByHandle } from './main-handle-close'
+import {
+  NO_STOP,
+  OrcaRuntimeWithExplicitCloseTabPtyStops,
+  type ExplicitCloseStop
+} from './explicit-terminal-close-pty-stops'
 import {
   closePairedHostLeafFirst,
   isTerminalTabPinnedInSession
 } from './paired-host-terminal-close'
 
-/** How an explicit close's stop of its addressed PTY ended. */
-type ExplicitCloseStop = { stopped: boolean }
-
-const NO_STOP: ExplicitCloseStop = { stopped: false }
-
-export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithFocusTerminal {
+export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithExplicitCloseTabPtyStops {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
+  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
   protected abstract refreshPtyWorktreeRecordsFromController(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId?: string | null,
@@ -42,56 +43,6 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     committedPtyIds: Set<string>
     terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
   }): void
-
-  protected async stopExplicitlyClosedTabPtys(
-    ptyIds: readonly string[],
-    addressedPtyId: string
-  ): Promise<ExplicitCloseStop> {
-    let addressedPtyStop = NO_STOP
-    const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
-    for (const ptyId of ptyIds) {
-      this.markPtyStopRequested(ptyId)
-      const expectedIncarnationId = this.ptysById.get(ptyId)?.incarnationId
-      let stopped = false
-      if (this.ptyController?.stopAndWait) {
-        try {
-          stopped = await this.ptyController.stopAndWait(ptyId, { deadlineMs })
-        } catch (error) {
-          this.markPtyLivenessUnverifiable(ptyId, errorMessage(error))
-        }
-        // Preserve an observed exit when a broader inventory check could not finish.
-        if (
-          !stopped &&
-          expectedIncarnationId &&
-          this.ptysById.get(ptyId)?.incarnationId === expectedIncarnationId &&
-          this.getPtyLivenessVerdict(ptyId)?.status === 'exited'
-        ) {
-          stopped = true
-        }
-        if (!stopped) {
-          const verdict = this.getPtyLivenessVerdict(ptyId)
-          const providerAlreadyRetiredPty =
-            verdict?.status === 'unverifiable' &&
-            verdict.reason === SSH_PROVIDER_UNREGISTERED_REASON
-          if (!providerAlreadyRetiredPty) {
-            this.ptyController.kill(ptyId)
-            if (!verdict || verdict.status === 'live') {
-              this.markPtyLivenessUnverifiable(
-                ptyId,
-                'a follow-up stop was issued but its outcome could not be verified'
-              )
-            }
-          }
-        }
-      } else {
-        stopped = this.ptyController?.kill(ptyId) ?? false
-      }
-      if (ptyId === addressedPtyId) {
-        addressedPtyStop = { stopped }
-      }
-    }
-    return addressedPtyStop
-  }
 
   protected describeTerminalClose(
     handle: string,
@@ -133,6 +84,25 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
   }
 
   async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
+    // Switch point: a pane main owns closes in main's layout, whatever the window lists.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      const mainClose = await closeMainOwnedPaneByHandle(
+        {
+          runtime: this,
+          livePty: () => this.getLivePtyForHandle(handle)?.pty ?? null,
+          liveLeaf: () => this.getLiveLeafForHandle(handle).leaf,
+          applyLayoutCommand: (command) => this.applyLayoutCommand(command),
+          stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
+          describe: (...args) => this.describeTerminalClose(...args)
+        },
+        handle,
+        false
+      )
+      if (mainClose) {
+        this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+        return mainClose
+      }
+    }
     const pty = this.getLivePtyForHandle(handle)
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
     if (pty) {
@@ -281,6 +251,25 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
   }
 
   async closeTerminalTab(handle: string): Promise<RuntimeTerminalClose> {
+    // Switch point: a pane main owns closes in main's layout, whatever the window lists.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      const mainClose = await closeMainOwnedPaneByHandle(
+        {
+          runtime: this,
+          livePty: () => this.getLivePtyForHandle(handle)?.pty ?? null,
+          liveLeaf: () => this.getLiveLeafForHandle(handle).leaf,
+          applyLayoutCommand: (command) => this.applyLayoutCommand(command),
+          stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
+          describe: (...args) => this.describeTerminalClose(...args)
+        },
+        handle,
+        true
+      )
+      if (mainClose) {
+        this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+        return mainClose
+      }
+    }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const closeAuthority: RuntimePtyTabCloseAuthority = {

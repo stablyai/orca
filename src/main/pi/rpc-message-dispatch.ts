@@ -52,6 +52,11 @@ export async function dispatchPiRpcMessage(
       )
     }
   }
+  input.signal?.throwIfAborted()
+  if (!isCurrent() || session.connection.closed) {
+    return exited()
+  }
+  input.onInputPreparation?.()
   const model = input.executionOptions?.model ?? session.initialOptions.model
   if (!input.executionOptions) {
     input.signal?.throwIfAborted()

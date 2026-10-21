@@ -8,7 +8,11 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import type { AgentSessionConversationCommand } from '../../../shared/agent-session-conversation-command'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import {
+  editPersistedTestAgentSessionStore,
+  openTestAgentSessionRecordStore,
+  type PersistedTestAgentSessionStore
+} from '../../runtime/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -79,8 +83,11 @@ async function openHost(): Promise<void> {
   hosts.push(host)
 }
 
-/** A crash and relaunch: the next host opens what the dying one had written, and nothing after. */
-async function restartHost(): Promise<void> {
+/** A crash and relaunch: the next host opens what the dying one had written, and nothing after.
+ *  `olderBuild` edits that state first, as an older build would have left it. */
+async function restartHost(
+  olderBuild?: (persisted: PersistedTestAgentSessionStore) => void
+): Promise<void> {
   await store.renewLeases([])
   const dying = generationRoot()
   generation++
@@ -88,6 +95,9 @@ async function restartHost(): Promise<void> {
     recursive: true,
     filter: (source) => !source.endsWith('.tmp') && !source.includes('.lock')
   })
+  if (olderBuild) {
+    await editPersistedTestAgentSessionStore(generationRoot(), olderBuild)
+  }
   await openHost()
 }
 
@@ -339,15 +349,17 @@ describe('same-conversation clear', () => {
   })
 
   it('allows independently sending a record with an old-build replacement pointer', async () => {
-    const source = store.getRecord(HOST_TEST_SESSION)!
-    await store.setConversationCommand(HOST_TEST_SESSION, source.lease.runtimeFence, {
-      command: 'clear',
-      phase: 'committed',
-      state: 'completed',
-      operationId: hostTestOperationId(),
-      callerKey: caller.callerKey,
-      replacementSessionId: 'old-clear-destination'
+    await restartHost((persisted) => {
+      persisted.records[HOST_TEST_SESSION].conversationCommand = {
+        command: 'clear',
+        phase: 'committed',
+        state: 'completed',
+        operationId: hostTestOperationId(),
+        callerKey: caller.callerKey,
+        replacementSessionId: 'old-clear-destination'
+      }
     })
+    await host.restoreReadableSessions(store.listVisibleSessionIds())
     expect(await host.send(caller, sendParams('still this conversation'))).toMatchObject({
       ok: true
     })

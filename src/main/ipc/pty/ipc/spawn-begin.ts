@@ -11,8 +11,6 @@ import { snapshotCodexPaneHomeRoutes } from '../host-env/codex-home'
 import { getAppPtyId } from '../provider/registry'
 import {
   makePaneSpawnReservationKey,
-  reservePaneSpawn,
-  paneSpawnReservationsByOwnerKey,
   pendingRuntimePaneCreatesByOwnerKey
 } from '../pane/spawn-reservation'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
@@ -111,12 +109,6 @@ export async function beginPtyIpcSpawn(
     if (pendingRuntimeCreate) {
       await pendingRuntimeCreate.promise
     }
-    const existingPaneSpawn = earlyReservationKey
-      ? paneSpawnReservationsByOwnerKey.get(earlyReservationKey)
-      : undefined
-    if (existingPaneSpawn) {
-      return { ...(await existingPaneSpawn.promise), isReattach: true }
-    }
   }
   ctx.earlyStablePaneOwner =
     initialPaneKey && args.worktreeId
@@ -134,9 +126,7 @@ export async function beginPtyIpcSpawn(
   ctx.earlyWorktreeId = args.worktreeId
   // Reserve early so renderer/runtime materialization cannot start duplicate provider spawns.
   ctx.paneSpawnReservationKey = earlyReservationKey
-  ctx.paneSpawnReservation =
-    heldReservation ??
-    (ctx.paneSpawnReservationKey ? reservePaneSpawn(ctx.paneSpawnReservationKey) : null)
+  ctx.paneSpawnReservation = heldReservation ?? null
   ctx.finishTerminalInstall = (): void => {}
   ctx.stablePaneOwner = null
   ctx.stablePaneBindingPersisted = false

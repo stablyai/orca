@@ -1,4 +1,4 @@
-// A rewind by an agent that forks (Claude) saves the fork for its next launch; no provider call.
+// A rewind commits its durable fork's head with the shortened journal, including at rest.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,6 +8,7 @@ import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionRewindFork } from '../../../shared/agent-session-rewind'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -26,13 +27,16 @@ import {
 } from './structured-agent-session-host-test-data'
 import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { recoverStructuredRewind } from './structured-rewind-recovery'
 
 const caller = { callerKey: 'desktop' }
 const SOURCE = '11111111-1111-4111-8111-111111111111'
 const FORK: AgentSessionRewindFork = {
   sessionId: '22222222-2222-4222-8222-222222222222',
   sourceSessionId: SOURCE,
-  replacesSessionId: SOURCE
+  replacesSessionId: SOURCE,
+  materialized: true,
+  resumeCursor: 'fork-answer-1'
 }
 const key = (uuid: string) => agentJournalItemKey({ provider: 'claude', sessionId: SOURCE, uuid })
 let directory: string
@@ -56,6 +60,19 @@ const attachParams = (fence: number | null) =>
 beforeEach(async () => {
   resetHostTestOperationIds()
   failAcquire = false
+  forkForRewind.mockReset()
+  closeSession.mockClear()
+  forkForRewind.mockImplementation(async ({ record, beforeMessage }) => ({
+    ok: true,
+    fork: {
+      ...FORK,
+      sessionId:
+        beforeMessage.uuid === 'prompt-2' ? FORK.sessionId : '33333333-3333-4333-8333-333333333333',
+      ...(beforeMessage.uuid === 'prompt-1' ? { resumeCursor: undefined } : {}),
+      replacesSessionId: agentSessionProviderHandleChainHead(record.providerHandleChain)!.handle
+        .nativeId
+    }
+  }))
   directory = await mkdtemp(join(tmpdir(), 'orca-fork-rewind-'))
   store = await openTestAgentSessionRecordStore(directory)
   const adapter = startsWhenPublished(
@@ -124,12 +141,33 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await host.flushAllStreamedEvents()
   await rm(directory, { recursive: true, force: true })
 })
 
+async function rewindSecondPrompt() {
+  const fields = {
+    itemId: key('prompt-2'),
+    expectedEpoch: (await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch
+  }
+  return host.rewind(caller, {
+    ...fields,
+    envelope: {
+      sessionId: HOST_TEST_SESSION,
+      clientOperationId: hostTestOperationId(),
+      expectedRuntimeFence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+      payloadFingerprint: computeAgentSessionPayloadFingerprint({
+        method: 'agentSession.rewind',
+        sessionId: HOST_TEST_SESSION,
+        fields
+      })
+    }
+  })
+}
+
 describe('rewinding a chat whose agent forks', () => {
-  it('saves the fork, keeps the prefix and rewinds again at rest without starting the agent', async () => {
+  it('commits the fork head with the prefix and rewinds again at rest without starting the agent', async () => {
     const epoch = (await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch
     const fields = { itemId: key('prompt-2'), expectedEpoch: epoch }
     const envelope = {
@@ -151,7 +189,14 @@ describe('rewinding a chat whose agent forks', () => {
     expect(closeSession).toHaveBeenCalled()
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toMatchObject({
       phase: 'completed',
-      providerFork: FORK
+      providerFork: { materialized: true }
+    })
+    const record = store.getRecord(HOST_TEST_SESSION)!
+    const fork = record.rewind!.providerFork!
+    // These are the fields v1.4.233 reads; it ignores providerFork entirely.
+    expect(agentSessionProviderHandleChainHead(record.providerHandleChain)).toMatchObject({
+      origin: 'forked',
+      handle: claudeProviderHandle(fork.sessionId, 'fork-answer-1')
     })
     const snapshot = await host.journalSnapshot(HOST_TEST_SESSION)
     expect(snapshot.items.map((item) => item.itemId)).toEqual([key('prompt-1'), key('answer-1')])
@@ -174,5 +219,61 @@ describe('rewinding a chat whose agent forks', () => {
       })
     ).toMatchObject({ ok: true })
     expect((await host.journalSnapshot(HOST_TEST_SESSION)).items).toEqual([])
+    expect(
+      agentSessionProviderHandleChainHead(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain)
+        ?.handle
+    ).toEqual(claudeProviderHandle('33333333-3333-4333-8333-333333333333', null))
+  })
+
+  it('keeps the original conversation when saving its fork fails', async () => {
+    const before = await host.journalSnapshot(HOST_TEST_SESSION)
+    forkForRewind.mockRejectedValueOnce(new Error('transcript write failed'))
+    await expect(rewindSecondPrompt()).rejects.toThrow('transcript write failed')
+    expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
+    expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toBeUndefined()
+    expect(closeSession).not.toHaveBeenCalled()
+  })
+
+  it('rolls back both history and handle when the receipt fails, then recovers the same fork', async () => {
+    const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    const before = await host.journalSnapshot(HOST_TEST_SESSION)
+    const makeReceipt = store.conversationReceipts.rewind.bind(store.conversationReceipts)
+    const failed = vi
+      .spyOn(store.conversationReceipts, 'rewind')
+      .mockImplementationOnce((...args) => {
+        const receipt = makeReceipt(...args)
+        return {
+          ...receipt,
+          write: (db) => {
+            receipt.write(db)
+            throw new Error('commit failed')
+          }
+        }
+      })
+    await expect(rewindSecondPrompt()).rejects.toThrow('commit failed')
+    expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
+    expect(
+      agentSessionProviderHandleChainHead(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain)
+        ?.handle.nativeId
+    ).toBe(SOURCE)
+    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('provider-succeeded')
+    failed.mockRestore()
+
+    await recoverStructuredRewind(
+      { store, logger: createStructuredAgentSessionLogger() },
+      HOST_TEST_SESSION,
+      journal,
+      store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
+    )
+    expect(journal.snapshot().items.map((item) => item.itemId)).toEqual([
+      key('prompt-1'),
+      key('answer-1')
+    ])
+    expect(
+      agentSessionProviderHandleChainHead(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain)
+        ?.handle.nativeId
+    ).toBe(FORK.sessionId)
+    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
+    expect(forkForRewind).toHaveBeenCalledTimes(1)
   })
 })

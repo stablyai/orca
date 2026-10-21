@@ -18,6 +18,9 @@ export type LayoutFrameApplyObservation = {
   workspaceBuilt: readonly string[]
   /** The window's own fields each new row took (each intent is taken once). */
   rowFieldsTaken: ReadonlyMap<string, Partial<TerminalTab>>
+  /** `state` with the moved tabs selected whose selection the flush wrote with its frame (each
+   *  intent is taken once), as the flush selected them. */
+  selectTakenMovedTabs: (state: AppState) => AppState
 }
 
 type LayoutFrameApplyObserver = (observation: LayoutFrameApplyObservation) => void

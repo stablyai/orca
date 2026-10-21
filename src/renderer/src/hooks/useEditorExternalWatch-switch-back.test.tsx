@@ -48,7 +48,7 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undef
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { useEditorExternalWatch } from './useEditorExternalWatch'
 import { attachRestoredTabConflictScan } from '@/components/editor/editor-restored-tab-conflict-scan'
-import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
+import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import {
   isAutosaveSuspendedForFile,
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT

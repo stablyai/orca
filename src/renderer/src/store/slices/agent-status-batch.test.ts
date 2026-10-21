@@ -271,17 +271,32 @@ describe('setAgentStatuses', () => {
     const outcomes = store.getState().setAgentStatuses(updates)
 
     expect(outcomes).toEqual(Array(paneCount).fill(true))
-    // A layout-owner build shows the titles once main has them: one layout write for the batch.
-    await vi.waitFor(() =>
-      expect(store.getState().tabsByWorktree['wt-99']?.[0]?.generatedTitle).toBe(
-        'Refactor remote startup module 99'
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main takes the batch's titles in one rename; its frame (not modelled here) is their one
+      // store write, so the window writes only the statuses.
+      await vi.waitFor(() =>
+        expect(
+          main.commands.flatMap((command) =>
+            command.type === 'renameTabs' ? command.renames.map((rename) => rename.title) : []
+          )
+        ).toContain('Refactor remote startup module 99')
       )
+      for (let turn = 0; turn < 10; turn += 1) {
+        await Promise.resolve()
+      }
+      unsubscribe()
+      expect(publications).toBe(1)
+      expect(
+        main.commands.map((command) => (command.type === 'renameTabs' ? command.renames.length : 0))
+      ).toEqual([paneCount])
+      return
+    }
+    expect(store.getState().tabsByWorktree['wt-99']?.[0]?.generatedTitle).toBe(
+      'Refactor remote startup module 99'
     )
     unsubscribe()
     expect(publications).toBe(2)
-    expect(
-      main.commands.map((command) => (command.type === 'renameTabs' ? command.renames.length : 0))
-    ).toEqual(ORCA_LAYOUT_OWNER_IS_MAIN ? [paneCount] : [])
+    expect(main.commands).toEqual([])
   })
 
   it('coalesces batch freshness requests while preserving standalone scheduling', async () => {

@@ -330,11 +330,7 @@
 2 src/renderer/src/runtime/web-session-tabs-sync/global-session-subscription.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/tracking-decisions.ts
 3 src/renderer/src/runtime/web-session-tabs-sync/use-web-session-tabs-sync.ts
-1 src/renderer/src/store/github/repository-routing.ts
 2 src/renderer/src/store/github/visible-hosted-review-refresh-targets.ts
-2 src/renderer/src/store/github/work-item-aggregate-actions.ts
-3 src/renderer/src/store/github/work-item-fetch-actions.ts
-2 src/renderer/src/store/github/work-item-routing.ts
 9 src/renderer/src/store/index.ts
 2 src/renderer/src/store/project-groups/project-group-mutations.ts
 1 src/renderer/src/store/repos/all-host-repo-catalog-actions.ts

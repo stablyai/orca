@@ -186,7 +186,7 @@ describe('Claude effort the settings readback cannot report', () => {
         reportedOptions: {},
         optionMutationSequence: 0,
         confirmedOptions: new Set<string>(),
-        reusableOptions: new Map(),
+        appliedInputOptions: new Map(),
         connection: {
           supportedModels: async () => {
             calls.push('list_models')

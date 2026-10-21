@@ -15,7 +15,7 @@ import {
   realClaudeCommand,
   realClaudeLaunchHome
 } from './claude-real-cli-availability-test-support'
-import { readClaudePromptParentUuid } from './claude-rewind-fork'
+import { readClaudePromptParentUuid, resolveClaudeRewindFork } from './claude-rewind-fork'
 import {
   CLAUDE_STRUCTURED_BASE_OPTIONS,
   type ClaudeStructuredSdkOptions
@@ -48,7 +48,6 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI rewind', () =>
     'forks the conversation at the rewound prompt and forgets the undone turn',
     async () => {
       const source = randomUUID()
-      const fork = randomUUID()
       const { claudeConfigDir, env } = realClaudeLaunchHome()
       const cwd = await mkdtemp(join(tmpdir(), 'orca-real-rewind-'))
       const results: string[] = []
@@ -111,14 +110,28 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI rewind', () =>
         claudeConfigDir
       })
 
-      const rewound = adapterFor(fork, {
-        sessionId: fork,
-        resume: source,
-        resumeSessionAt: throughEntryId ?? '',
-        forkSession: true
+      const fork = await resolveClaudeRewindFork({
+        orcaSessionId: SESSION_ID,
+        rewindOperationId: randomUUID(),
+        head: claudeProviderHandle(source, null),
+        prompt: { sessionId: source, uuid: promptUuid ?? '' },
+        claudeConfigDirs: [claudeConfigDir]
       })
+      expect(fork).toMatchObject({ materialized: true, throughEntryId })
+      if (!fork) {
+        throw new Error('rewind fork was not created')
+      }
+      // A rollback resumes the persisted head without knowing about Orca's pending-fork field.
+      const beforeSend = await transcript(fork.sessionId, claudeConfigDir)
+      expect(beforeSend).toContain(throughEntryId)
+      expect(beforeSend).not.toContain(promptUuid)
+      const rewound = adapterFor(fork.sessionId, { resume: fork.sessionId })
       try {
-        await rewound.acquire({ identity: identity(fork), fence: 1, spawnToken: 'rewind-fork' })
+        await rewound.acquire({
+          identity: identity(fork.sessionId),
+          fence: 1,
+          spawnToken: 'rewind-fork'
+        })
         await claudeStartupSettled(rewound, SESSION_ID)
         await send(
           rewound,
@@ -132,9 +145,9 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI rewind', () =>
       const answer = results[2] ?? ''
       expect(answer).toContain('ALPHA')
       expect(answer).not.toContain('BRAVO')
-      // The fork keeps the kept entries' ids, and the rewound conversation is untouched.
-      const forked = await transcript(fork, claudeConfigDir)
-      expect(forked).toContain(`"uuid":"${throughEntryId}"`)
+      // Claude remaps the kept entries' ids and records their provenance; the source is untouched.
+      const forked = await transcript(fork.sessionId, claudeConfigDir)
+      expect(forked).toContain(`"messageUuid":"${throughEntryId}"`)
       expect(forked).not.toContain(promptUuid)
       expect(await transcript(source, claudeConfigDir)).toBe(sourceBefore)
     },

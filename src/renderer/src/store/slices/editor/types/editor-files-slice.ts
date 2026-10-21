@@ -22,6 +22,7 @@ import type {
   OpenFile
 } from './open-file'
 import type { EditorBufferRecords } from '../buffers/editor-buffer-record'
+import type { EditorBufferViewIndex } from '../buffers/editor-buffer-views'
 import type { EditorOpenLinkIntent, EditorOpenResult } from './editor-open-link-intent'
 import type { OpenFilePathRekey, RekeyOpenFilesResult } from './open-file-path-rekey'
 import type {
@@ -45,6 +46,10 @@ export type EditorFilesSlice = {
   openFiles: OpenFile[]
   /** Buffer state per open tab id; the matching OpenFile fields mirror it. */
   editorBuffers: EditorBufferRecords
+  /** View id → record id; maintained with `openFiles` by the record middleware. */
+  editorBufferIdOf: EditorBufferViewIndex['editorBufferIdOf']
+  /** Record id → view ids; maintained with `openFiles` by the record middleware. */
+  editorBufferViews: EditorBufferViewIndex['editorBufferViews']
   activeFileId: string | null
   activeFileIdByWorktree: Record<string, string | null> // worktreeId -> last active file
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType> // worktreeId -> last active tab type

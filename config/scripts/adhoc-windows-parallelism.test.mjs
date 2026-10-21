@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { compileAggregateExpression } from './pr-aggregate-gate-context.mjs'
@@ -7,6 +8,7 @@ const { jobs } = parse(readFileSync('.github/workflows/adhoc-mac-build.yml', 'ut
 const mac = jobs['build-adhoc-mac']
 const windows = jobs['build-adhoc-win']
 const publish = jobs['publish-adhoc-win']
+const bundleWorkflow = parse(readFileSync('.github/workflows/release-javascript.yml', 'utf8'))
 
 function qualification(template = 'success', ships = 'true') {
   return {
@@ -14,16 +16,19 @@ function qualification(template = 'success', ships = 'true') {
     needs: {
       'resolve-ref': { result: 'success', outputs: { sha: 'a'.repeat(40) } },
       'orcad-template-support': { result: 'success', outputs: { ships } },
+      'release-javascript': { result: 'success' },
       'orcad-template': { result: template }
     }
   }
 }
 
 describe('adhoc Windows compilation overlaps Mac without publishing early', () => {
-  it('starts both platforms from the same qualified inputs without a Mac dependency', () => {
+  it('starts both platforms during qualification without a Mac dependency', () => {
     expect(windows.needs).toEqual(mac.needs)
+    expect(mac.needs).not.toContain('orcad-template')
     expect(windows.needs).not.toContain('build-adhoc-mac')
     expect(windows.with.stage_only).toBe(true)
+    expect(windows.with.fast_release).toBe(true)
     expect(windows.with.ref).toBe('${{ needs.resolve-ref.outputs.sha }}')
     expect(windows.with.tag).toBe('v${{ needs.orcad-template-support.outputs.version }}')
     expect(windows.with.version).toBe(mac.outputs.version)
@@ -39,13 +44,67 @@ describe('adhoc Windows compilation overlaps Mac without publishing early', () =
     )
   })
 
+  it('builds portable JavaScript alongside qualification and restores it on both platforms', () => {
+    const bundle = jobs['release-javascript']
+    expect(bundle.needs).not.toContain('orcad-template')
+    expect(bundle.with.ref).toBe('${{ needs.resolve-ref.outputs.sha }}')
+    expect(bundle.with.dev_build).toBe(true)
+    expect(bundle.secrets).toBeUndefined()
+    expect(jobs['orcad-template'].uses).toBe('./.github/workflows/adhoc-orcad-template.yml')
+    for (const job of [mac, windows]) {
+      expect(job.needs).toContain('release-javascript')
+      const evaluate = compileAggregateExpression(job.if, ['needs', 'github'])
+      for (const result of ['failure', 'cancelled', 'skipped']) {
+        const ctx = qualification()
+        ctx.needs['release-javascript'].result = result
+        expect(evaluate(ctx).coerceString()).toBe('false')
+      }
+    }
+    const download = mac.steps.find((step) => step.name === 'Download shared JavaScript')
+    expect(download.with).toEqual({ name: 'release-javascript', path: '.build/release-javascript' })
+    expect(download.if).toBe("needs.release-javascript.outputs.supported == 'true'")
+    expect(mac.steps.find((step) => step.name === 'Build app').run).toContain('build:release:host')
+    expect(windows.with.javascript_source_sha).toContain(
+      'needs.release-javascript.outputs.source_sha'
+    )
+  })
+
+  it('falls back for older refs and retains official bundle support', () => {
+    const source = bundleWorkflow.jobs.bundle.steps.find((step) => step.id === 'source').run
+    const script = source.split('node <<\'NODE\' >> "$GITHUB_OUTPUT"\n')[1].split('\nNODE')[0]
+    const current = JSON.parse(readFileSync('package.json', 'utf8'))
+    for (const [manifest, dev, expected] of [
+      [current, true, true],
+      [current, false, true],
+      [{ scripts: {} }, true, false],
+      [
+        { scripts: { 'build:release:javascript': 'build', 'build:release:host': 'host' } },
+        true,
+        false
+      ],
+      [
+        { scripts: { 'build:release:javascript': 'build', 'build:release:host': 'host' } },
+        false,
+        true
+      ]
+    ]) {
+      const lines = []
+      runInNewContext(script, {
+        require: (name) => (name === 'node:fs' ? { readFileSync } : manifest),
+        process: { env: { DEV_BUILD: String(dev) } },
+        console: { log: (line) => lines.push(line) }
+      })
+      expect(lines).toEqual([`supported=${expected}`])
+    }
+  })
+
   it.each([
     ['success', 'true', true],
-    ['failure', 'true', false],
-    ['cancelled', 'true', false],
-    ['skipped', 'true', false],
+    ['failure', 'true', true],
+    ['cancelled', 'true', true],
+    ['skipped', 'true', true],
     ['skipped', 'false', true]
-  ])('preserves qualification for %s / template=%s', (result, ships, allowed) => {
+  ])('allows preparation before qualification ends: %s / template=%s', (result, ships, allowed) => {
     const run = compileAggregateExpression(windows.if, ['needs', 'github'])
     const context = qualification(result, ships)
     expect(run(context).coerceString()).toBe(String(allowed))
@@ -55,24 +114,21 @@ describe('adhoc Windows compilation overlaps Mac without publishing early', () =
   })
 
   it.each(['success', 'failure', 'cancelled', 'skipped', ''])(
-    'requires successful Mac publication and Windows compilation: %s',
+    'prefetches only after Windows compilation succeeds: %s',
     (result) => {
       const run = compileAggregateExpression(publish.if)
       const needs = {
-        'build-adhoc-mac': { result: 'success', outputs: { published: 'true' } },
+        'orcad-template-support': { result: 'success' },
         'build-adhoc-win': { result: 'success' }
       }
-      expect(publish.needs).toEqual(['build-adhoc-mac', 'build-adhoc-win'])
+      expect(publish.needs).toEqual(['orcad-template-support', 'build-adhoc-win'])
+      expect(publish.with.wait_for_mac_job).toBe('build-adhoc-mac')
       expect(run({ needs }).coerceString()).toBe('true')
       expect(run({ needs }, true).coerceString()).toBe('false')
       for (const job of publish.needs) {
         expect(run({ needs: { ...needs, [job]: { ...needs[job], result } } }).coerceString()).toBe(
           String(result === 'success')
         )
-      }
-      for (const published of ['false', '', undefined]) {
-        needs['build-adhoc-mac'].outputs.published = published
-        expect(run({ needs }).coerceString()).toBe('false')
       }
     }
   )

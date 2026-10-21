@@ -12653,7 +12653,6 @@
         "sshManagedHostRemove": {
           "description": "Orca s’exécute sur {{label}}. Dans Orca sur vos hôtes SSH, utilisez Arrêter… pour retirer Orca de l’hôte, ou Oublier… si l’hôte n’existe plus. Vous pourrez ensuite supprimer cet hôte SSH.",
           "open": "Ouvrir Orca sur vos hôtes SSH",
-          "descriptionServers": "Orca tourne sur {{label}}. Dans Serveurs Orca distants, ouvrez le menu ⋯ d’Orca sur {{label}} et choisissez « Arrêter… » pour retirer Orca de l’hôte, ou « Oublier… » si l’hôte n’existe plus. Vous pourrez ensuite supprimer cet hôte SSH.",
           "openServers": "Ouvrir Serveurs Orca distants"
         },
         "managedServers": {
@@ -12677,7 +12676,6 @@
             "confirmForget": "Oublier sur ce poste",
             "keepLinked": "Garder lié",
             "forgetDescription": "Dissocie ce serveur ici sans contacter son hôte. Si l'hôte revient, le serveur y tourne peut-être encore.",
-            "title": "Orca sur {{host}}",
             "orcaVersion": "Orca sur cet hôte : {{version}}",
             "stopOrcaDescription": "Arrête Orca sur l’hôte SSH et le retire de cette liste.",
             "updateOrcaOnHost": "Mettre à jour Orca sur cet hôte"
@@ -13022,9 +13020,6 @@
           "emptyDescription": "Associez une machine de développement, une machine cloud ou un ordinateur chez vous. Ses sessions continuent de tourner quand cet ordinateur est en veille.",
           "movePaused": "Déplacement en pause",
           "shareTitle": "Partager cet ordinateur",
-          "shareDescriptionNamed": "Permettez à un navigateur, un téléphone ou un autre Orca de travailler sur {{name}}.",
-          "shareDescription": "Permettez à un navigateur, un téléphone ou un autre Orca de travailler sur cet ordinateur.",
-          "shareButton": "Partager…",
           "done": "Terminé",
           "unreachableLead": "Orca n’a pas pu joindre ce serveur.",
           "updateFailedLead": "La dernière mise à jour n’a pas abouti.",
@@ -18704,6 +18699,7 @@
         "permissionFullAccessCodexDescription": "Ne demande jamais ; peut modifier n’importe quel fichier et utiliser le réseau",
         "permissionFullAccessSharedDescription": "Ne demande jamais avant les modifications ou les commandes",
         "pasteFailed": "Échec du collage.",
+        "tooManySkills": "Votre message n’a pas été envoyé à {{agent}}. Gardez au maximum {{limit}} fichiers de compétences sélectionnés et réessayez.",
         "commandAttachmentsUnsupported": "Retirez les pièces jointes avant d'utiliser une commande de session de chat.",
         "optionValueShort": {
           "minimal": "Min.",
@@ -20059,6 +20055,7 @@
       "empty": "Aucun sous-agent trouvé."
     },
     "antigravityReferenceDescription": "Continue dans une nouvelle conversation Antigravity CLI en utilisant cette transcription comme référence.",
+    "searchHitSourceHost": "Trouvée sur {{value0}}",
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → CLI",
     "continueInCli": "Continuer en CLI",
@@ -20477,7 +20474,17 @@
   "tabHoverCard": {
     "browser": "Navigateur",
     "editor": "Éditeur",
-    "terminal": "Terminal"
+    "terminal": "Terminal",
+    "namingFailure": {
+      "regenerating": "Régénération…",
+      "regenerate": "Régénérer le nom",
+      "title": "Impossible de nommer ce chat",
+      "description": "L’agent de nommage des chats s’est arrêté sur une erreur ; le chat garde donc son premier message comme nom.",
+      "viewError": "voir l’erreur",
+      "dialogTitle": "Échec du nommage automatique du chat",
+      "dialogDescriptionStart": "Orca n’a pas pu générer de nom pour",
+      "dialogDescriptionEnd": "à partir de son premier message."
+    }
   },
   "jira": {
     "savedFilters": {

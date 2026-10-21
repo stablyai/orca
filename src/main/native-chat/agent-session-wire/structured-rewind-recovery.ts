@@ -191,7 +191,7 @@ export async function applyStructuredRewindRecovery(
     throw new Error('agent_session_rewind:invalid-target')
   }
   if (rewind.phase === 'prepared' && rewind.providerFork) {
-    // The fork is the next launch's to make, so nothing outside Orca can have half-happened.
+    // New forks are durable already; older records leave the copy to their next launch.
     rewind = { ...rewind, phase: 'provider-succeeded' }
     await persistRewindRecord(store, sessionId, fence, rewind)
   } else if (rewind.phase === 'prepared') {
@@ -222,6 +222,18 @@ export async function applyStructuredRewindRecovery(
     await persistRewindRecord(store, sessionId, fence, rewind)
   }
   if (rewind.phase !== 'provider-succeeded') {
+    return
+  }
+  if (rewind.providerFork?.materialized && !rewind.contextClearOperationId && !alreadyReplaced) {
+    const completed = rewind
+    await journal.replaceEpochItems(
+      'handle_forked',
+      fence,
+      cut!.kept,
+      (cursor) =>
+        receipt?.(completed, fence, cursor) ??
+        store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
+    )
     return
   }
   if (rewind.contextClearOperationId && rewind.contextClearSequence) {

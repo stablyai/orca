@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   acquired,
+  adapterFor,
   claudeFrame,
   fakeClaude,
+  identityFor,
+  recordingJournalSink,
   USER_MESSAGE
 } from './claude-structured-session-test-support'
 import { captureStructuredExecutionOptions } from '../native-chat/agent-session-wire/structured-agent-session-execution-options'
@@ -26,6 +29,85 @@ const MODELS = [
 ]
 
 describe('Claude accepted message choices', () => {
+  it.each([false, true])(
+    'delivers resumed choices despite optional reports (alias listed: %s)',
+    async (listed) => {
+      const saved = { model: 'opus[1m]', effort: 'high', fastMode: 'false' } as const
+      const models = listed ? [...MODELS, { value: saved.model }] : MODELS
+      const claude = fakeClaude({ initModels: models, routes: { list_models: () => models } })
+      const adapter = adapterFor(claude, { resumesTranscript: true })
+      await adapter.acquire({
+        identity: identityFor(),
+        fence: 7,
+        spawnToken: 'resume',
+        options: saved,
+        events: recordingJournalSink()
+      })
+      const connection = claude.connections[0]!
+      claudeFrame(connection, { type: 'system', subtype: 'init', model: 'claude-opus-5' })
+      connection.calls.length = 0
+      for (const clientMessageId of ['restart', 'followup']) {
+        await expect(
+          adapter.dispatch({
+            sessionId: 'session-1',
+            clientMessageId,
+            body: USER_MESSAGE,
+            executionOptions: saved,
+            fence: 7
+          })
+        ).resolves.toMatchObject({ state: 'admitted' })
+        await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
+      }
+      expect(
+        connection.calls.filter((call) =>
+          ['set_model', 'apply_flag_settings'].includes(call.subtype)
+        )
+      ).toEqual([])
+      for (const clientMessageId of ['changed', 'unchanged']) {
+        await expect(
+          adapter.dispatch({
+            sessionId: 'session-1',
+            clientMessageId,
+            body: USER_MESSAGE,
+            executionOptions: { ...saved, model: 'custom[1m]', effort: 'low' },
+            fence: 7
+          })
+        ).resolves.toMatchObject({ state: 'admitted' })
+      }
+      expect(
+        connection.calls.filter((call) =>
+          ['set_model', 'apply_flag_settings'].includes(call.subtype)
+        )
+      ).toEqual([
+        { subtype: 'set_model', params: { model: 'custom[1m]' } },
+        { subtype: 'apply_flag_settings', params: { settings: { effortLevel: 'low' } } }
+      ])
+      const failure = new Error('control refused')
+      connection.setModel = async () => {
+        throw failure
+      }
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        await expect(
+          adapter.dispatch({
+            sessionId: 'session-1',
+            clientMessageId: `refused-${listed}`,
+            body: USER_MESSAGE,
+            executionOptions: { model: 'another' },
+            fence: 7
+          })
+        ).resolves.toMatchObject({ state: 'rejected' })
+        expect(connection.sent).toHaveLength(4)
+        expect(warn).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ error: failure })
+        )
+      } finally {
+        warn.mockRestore()
+      }
+    }
+  )
+
   it.each([
     ['the effort the CLI applied over the settings level', 'low', { effort: 'low' }],
     ['no effort where the CLI applies none, whatever the settings say', null, {}]
@@ -57,7 +139,10 @@ describe('Claude accepted message choices', () => {
       executionOptions: {},
       fence: 7
     })
-    expect(outcome).toEqual({ state: 'admitted', ranOptions })
+    expect(outcome).toEqual({
+      state: 'admitted',
+      ranOptions: applied ? { model: 'claude-sonnet-5', ...ranOptions } : {}
+    })
   })
 
   it('applies a held message A before its prompt, then message B on the existing child', async () => {

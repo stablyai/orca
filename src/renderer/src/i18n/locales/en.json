@@ -12777,7 +12777,7 @@
         "sshManagedHostRemove": {
           "description": "Orca runs on {{label}}. Under Orca on your SSH hosts, use Stop… to remove Orca from the host, or Forget… if the host is gone. Then you can remove this SSH host.",
           "open": "Open Orca on your SSH hosts",
-          "descriptionServers": "Orca runs on {{label}}. In Remote Orca Servers, open the ⋯ menu on Orca on {{label}} and choose Stop… to remove Orca from the host, or Forget… if the host is gone. Then you can remove this SSH host.",
+          "descriptionServerHost": "Orca runs on {{label}}. In Remote Orca Servers, open the ⋯ menu on {{label}} and choose Stop… to remove Orca from the host, or Forget… if the host is gone. Then you can remove this SSH host.",
           "openServers": "Open Remote Orca Servers"
         },
         "managedServers": {
@@ -12801,7 +12801,6 @@
             "confirmForget": "Forget on this desktop",
             "keepLinked": "Keep linked",
             "forgetDescription": "Unlinks this server here without contacting its host. If the host comes back, the server may still be running there.",
-            "title": "Orca on {{host}}",
             "orcaVersion": "Orca on this host: {{version}}",
             "stopOrcaDescription": "Stops Orca on the SSH host and removes it from this list.",
             "updateOrcaOnHost": "Update Orca on this host"
@@ -13186,9 +13185,6 @@
           "emptyDescription": "Pair a dev box, a cloud machine, or a desktop at home. Its sessions keep running there when this computer sleeps.",
           "movePaused": "Move paused",
           "shareTitle": "Share this computer",
-          "shareDescriptionNamed": "Let a browser, phone, or another Orca work on {{name}}.",
-          "shareDescription": "Let a browser, phone, or another Orca work on this computer.",
-          "shareButton": "Share…",
           "done": "Done",
           "unreachableLead": "Orca couldn’t reach this server.",
           "updateFailedLead": "The last update didn’t finish.",
@@ -18951,6 +18947,7 @@
         "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
         "permissionFullAccessSharedDescription": "Never asks before edits or commands",
         "pasteFailed": "Paste failed.",
+        "tooManySkills": "Your message was not sent to {{agent}}. Keep at most {{limit}} selected skill files and try again.",
         "commandAttachmentsUnsupported": "Remove attachments before using a chat-session command.",
         "optionValueShort": {
           "minimal": "Min",
@@ -20199,6 +20196,7 @@
   },
   "aiVault": {
     "antigravityReferenceDescription": "Continues in a new Antigravity CLI conversation using this transcript as a reference.",
+    "searchHitSourceHost": "Found on {{value0}}",
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → CLI",
     "continueInCli": "Continue in CLI",
@@ -20623,7 +20621,17 @@
   "tabHoverCard": {
     "browser": "Browser",
     "editor": "Editor",
-    "terminal": "Terminal"
+    "terminal": "Terminal",
+    "namingFailure": {
+      "regenerating": "Regenerating…",
+      "regenerate": "Regenerate name",
+      "title": "Couldn't name this chat",
+      "description": "The chat-name agent stopped with an error, so the chat keeps its first message as its name.",
+      "viewError": "view error",
+      "dialogTitle": "Chat auto-name failed",
+      "dialogDescriptionStart": "Orca couldn't generate a name for",
+      "dialogDescriptionEnd": "from its first message."
+    }
   },
   "updates": {
     "installBlock": {

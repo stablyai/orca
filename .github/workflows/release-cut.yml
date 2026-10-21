@@ -108,6 +108,8 @@ jobs:
         with:
           ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
+          # Version recovery needs complete history and tags, but not historical file contents.
+          filter: blob:none
           # Why: version math recovers unpublished tags; checkout's default
           # fetch-tags:false hides them, so a patch cut recreates vX.Y.Z and
           # `git push` overwrites the existing tag.
@@ -1181,6 +1183,7 @@ jobs:
     if: needs.cut.outputs.should_release == 'true' && needs.cut.outputs.ships_orcad_template == 'true'
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/node-server-tests.yml
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
@@ -1578,6 +1581,8 @@ jobs:
           command: ${{ matrix.release_command }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The release command prepares and verifies this host's Electron native modules first.
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
           # Why: the NSIS uninstaller only exists inside electron-builder's
           # uninstaller pass, which deletes it right after embedding it. The sign
           # hook in config/scripts/windows-uninstaller-signing.cjs copies it out

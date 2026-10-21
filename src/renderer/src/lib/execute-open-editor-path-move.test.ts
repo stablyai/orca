@@ -15,7 +15,7 @@ vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
 import { useAppStore } from '@/store'
 import { executeOpenEditorPathMove } from './execute-open-editor-path-move'
 import { __activeEditorPathMoveCountForTests } from '@/components/editor/editor-path-move-inflight'
-import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
+import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from '@/hooks/editor-external-watch-event-reconciliation'
 
 const CONTEXT = {

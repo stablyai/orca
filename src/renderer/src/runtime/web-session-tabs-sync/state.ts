@@ -235,6 +235,7 @@ export type WebSessionTabsSyncState = Pick<
   | 'browserPagesByWorkspace'
   | 'browserCertificateFailuresByPageId'
   | 'browserTabsByWorktree'
+  | 'editorBuffers'
   | 'groupsByWorktree'
   | 'layoutByWorktree'
   | 'openFiles'

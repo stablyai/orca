@@ -20,9 +20,7 @@ import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signa
 import { ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT } from '../../../../shared/editor-save-events'
 import { GUARDED_PATH, stubGuardedDisk } from './editor-save-guarded-disk-fixture'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import { rollBackFailedMobileSave } from '@/runtime/mobile-markdown-save-rollback'
 import { toast } from 'sonner'
-import { EDITOR_STALE_SAVE_MESSAGE } from './editor-save-disk-precondition'
 
 const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn() }))
 const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> | null } => ({
@@ -234,24 +232,6 @@ describe('two tabs sharing one model', () => {
     } finally {
       cleanup()
     }
-  })
-
-  it('a refused mobile save that carried desktop edits marks both tabs', () => {
-    const { store, a, b, edit, tab } = openSharedTabs('A')
-    edit(a.id, 'mobile text')
-
-    const error = rollBackFailedMobileSave(new Error(EDITOR_STALE_SAVE_MESSAGE), {
-      fileId: a.id,
-      injectedContent: 'mobile text',
-      previousDraft: 'desktop edits',
-      previousDirty: true,
-      stampedBaseline: null
-    })
-
-    expect(error).toBeInstanceOf(Error)
-    expect(store.getState().editorDrafts[a.id]).toBe('desktop edits')
-    expect(tab(a.id)?.externalMutation).toBe('changed')
-    expect(tab(b.id)?.externalMutation).toBe('changed')
   })
 
   it("never touches a rich-markdown sibling's pending typing; at worst its save is refused", async () => {

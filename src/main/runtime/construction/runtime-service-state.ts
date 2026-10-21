@@ -40,6 +40,8 @@ import { RuntimeMessageWaiters } from '../runtime-message-waiters'
 import type { RuntimeSkillCommands } from '../runtime-skill-command-surface'
 import { RuntimeTerminalStreamConsumers } from '../runtime-terminal-stream-consumers'
 import type { RecentPtyOutputBuffer } from '../recent-pty-output-buffer'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
   protected readonly stopRequestedPtyIds = new Set<string>()
@@ -142,7 +144,9 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
     getTopologyRevision: (worktreeId) => this.getTerminalTopologyRevision(worktreeId),
     buildHostScope: (targetWorktreeId, terminals, worktrees, queriedHostIds) =>
-      this.buildTerminalListHostScope(targetWorktreeId, terminals, worktrees, queriedHostIds)
+      this.buildTerminalListHostScope(targetWorktreeId, terminals, worktrees, queriedHostIds),
+    // Switch point: main lists every saved pane of a workspace it owns.
+    ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { listsEveryPane: (id) => mainListsEveryPane(this, id) } : {})
   })
 
   protected readonly managedWorktreeQueries = new RuntimeManagedWorktreeQueries({

@@ -23,6 +23,7 @@ export type StructuredAgentSessionStatusFeedOwner = {
   activate: () => () => void
   getSnapshot: () => StructuredAgentSessionStatusSnapshot
   getSessionSleepState: (sessionId: string) => number | null | undefined
+  getNamingActive: (sessionId: string) => boolean | null
   getSessionObservation: (sessionId: string) => 'live' | 'unverifiable'
   subscribe: (listener: () => void) => () => void
 }
@@ -40,6 +41,7 @@ export function structuredAgentSessionStatusFeedKey(target: RuntimeClientTarget)
 
 function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   let snapshot: StructuredAgentSessionStatusSnapshot = new Map()
+  let namingActiveSessionIds: Set<string> | null = null
   const confirmedSessions = new Set<string>()
   // Disconnect revokes live execution, but each chat's last Sleep answer still holds.
   const knownSleep = new Map<string, number | null>()
@@ -62,8 +64,12 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   }
   const applyEvent = (event: AgentSessionStatusEvent): void => {
     if (event.type === 'snapshot') {
-      sleepResolved = true
+      // Naming metadata precedes the full status snapshot and says nothing about Sleep.
+      sleepResolved ||= event.namingActiveSessionIds === undefined
       reconnectAttempt = 0
+      if (event.namingActiveSessionIds !== undefined) {
+        namingActiveSessionIds = new Set(event.namingActiveSessionIds)
+      }
       for (const session of event.sessions) {
         confirmedSessions.add(session.sessionId)
         knownSleep.set(
@@ -120,6 +126,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       return
     }
     generation += 1
+    namingActiveSessionIds = null
     confirmedSessions.clear()
     revokeSnapshotOwnership()
     emit()
@@ -204,6 +211,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     reconnectAttempt = 0
     // Teardown only runs once nothing is activated, so re-confirmation is the next
     // subscribe's job and there is no mounted reader left to notify.
+    namingActiveSessionIds = null
     confirmedSessions.clear()
   }
 
@@ -226,6 +234,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       const known = knownSleep.get(sessionId)
       return known !== undefined ? known : sleepResolved ? null : undefined
     },
+    getNamingActive: (sessionId) => namingActiveSessionIds?.has(sessionId) ?? null,
     getSessionObservation: (sessionId) =>
       confirmedSessions.has(sessionId) ? 'live' : 'unverifiable',
     subscribe: (listener) => {

@@ -10,6 +10,7 @@ import { useAppStore } from '../../store'
 import { useTabDragSplit, type TabDragItemData } from '../tab-group/useTabDragSplit'
 import { isFloatingTerminalDragTarget } from './floating-terminal-titlebar-drag-target'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
@@ -111,6 +112,18 @@ function dropTab(from: string, over: string, pointerX: number): void {
   })
 }
 
+/** The reorder the user sees: a layout-owner build sends it to main, whose frame draws it
+ *  (tab-moves-drawn-from-frames.test.ts); otherwise the window reorders the group itself. */
+function expectReorder(tabId: string, order: string[]): void {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    expect(layoutApplyTestTransport.sentOfType('moveTab')).toEqual([
+      expect.objectContaining({ tabId, toGroupId: GROUP_ID, index: order.indexOf(tabId) })
+    ])
+  } else {
+    expect(floatingTabOrder()).toEqual(order)
+  }
+}
+
 function floatingTabOrder(): string[] {
   const groups: TabGroup[] =
     useAppStore.getState().groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
@@ -118,6 +131,7 @@ function floatingTabOrder(): string[] {
 }
 
 beforeEach(() => {
+  layoutApplyTestTransport.reset()
   useAppStore.setState({
     // The floating workspace is never the active worktree; its tabs still reorder.
     activeWorktreeId: 'wt-main',
@@ -156,13 +170,13 @@ describe('floating workspace tab reorder', () => {
   it('moves a tab after the hovered tab when released on its right half', async () => {
     dropTab('tab-a', 'tab-c', 290)
     await layoutApplyTestTransport.settle()
-    expect(floatingTabOrder()).toEqual(['tab-b', 'tab-c', 'tab-a'])
+    expectReorder('tab-a', ['tab-b', 'tab-c', 'tab-a'])
   })
 
   it('moves a tab before the hovered tab when released on its left half', async () => {
     dropTab('tab-c', 'tab-a', 210)
     await layoutApplyTestTransport.settle()
-    expect(floatingTabOrder()).toEqual(['tab-c', 'tab-a', 'tab-b'])
+    expectReorder('tab-c', ['tab-c', 'tab-a', 'tab-b'])
   })
 
   it('leaves the order alone when a tab is dropped on itself', async () => {
@@ -174,6 +188,11 @@ describe('floating workspace tab reorder', () => {
   it('republishes sortOrder so the panel renders the committed order', async () => {
     dropTab('tab-a', 'tab-c', 290)
     await layoutApplyTestTransport.settle()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main's frame draws the order, sortOrder included.
+      expectReorder('tab-a', ['tab-b', 'tab-c', 'tab-a'])
+      return
+    }
     const tabs = useAppStore.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
     expect(tabs.map((tab) => [tab.id, tab.sortOrder])).toEqual([
       ['tab-a', 2],

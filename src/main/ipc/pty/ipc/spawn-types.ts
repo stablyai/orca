@@ -1,3 +1,5 @@
+import type { PaneSpawnReservation } from '../pane/spawn-reservation'
+import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentProviderSessionMetadata,
@@ -72,12 +74,19 @@ export type AdoptStablePaneArgs = {
   rows: number
   cwd?: string
   connectionId?: string | null
-  worktreeId: string
+  worktreeId?: string
   preAllocatedHandle?: string
   tabId: string
   leafId: string
+  onAdopted?: (result: PtySpawnResult) => void
+  completed?: AdoptStablePaneResult
   ownsPaneSpawnReservation?: true
-  /** See StablePaneSpawnContext; only with `ownsPaneSpawnReservation`. */
+  reservation?: PaneSpawnReservation
+  stoppedPtyId?: string
+  renderer?: boolean
+  signal?: AbortSignal
+  spawnFresh?: (operation: PaneSpawnOperation) => Promise<PtySpawnResult>
+  /** See StablePaneSpawnContext; adoption holds the pane's reservation through its fresh launch. */
   keepAbsentBinding?: (dead: ReplacedPaneOwner) => void
 }
 

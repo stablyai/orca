@@ -490,6 +490,15 @@ jobs:
           ORCA_E2E_ORCAD_SERVE: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
         run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
+      # Only this job builds out/orcad, so the spec's orcad case runs here; the e2e shards run its Electron case.
+      - name: Phone Markdown on headless orcad serve
+        if: >-
+          !cancelled() &&
+          (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/headless-serve-mobile-markdown.spec.ts'))
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/headless-serve-mobile-markdown.spec.ts --grep "headless orcad server" --project=electron-headless --workers=1
       # The layout oracle's headless scenarios run on both serve hosts, so they need this job's orcad.
       - name: Layout oracle on headless serve (orcad and Electron)
         if: >-

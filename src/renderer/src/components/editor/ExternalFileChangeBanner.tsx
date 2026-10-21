@@ -10,7 +10,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import { ExternalFileChangeCompareDialog } from './ExternalFileChangeCompareDialog'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
 import { attemptEditorFileSave } from './editor-file-save-attempt'
 import {

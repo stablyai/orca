@@ -121,6 +121,32 @@ describe('useTaskPageGitLabLoading', () => {
     )
   })
 
+  it("stamps each twin row's items with the host that returned them", async () => {
+    const twinOnOtherServer: Repo = { ...serverRepo, executionHostId: 'runtime:other-box' }
+    rpc.call.mockImplementation(async (target: { environmentId: string }) => ({
+      items: [{ id: `issue-on-${target.environmentId}`, updatedAt: '2026-10-01' }]
+    }))
+    const setGitlabItems = vi.fn()
+
+    renderIssuesHook([serverRepo, twinOnOtherServer], setGitlabItems)
+
+    await waitFor(() => expect(setGitlabItems).toHaveBeenCalled())
+    expect(setGitlabItems.mock.lastCall?.[0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'issue-on-build-box',
+          repoId: 'server-repo',
+          repoHostId: 'runtime:build-box'
+        }),
+        expect.objectContaining({
+          id: 'issue-on-other-box',
+          repoId: 'server-repo',
+          repoHostId: 'runtime:other-box'
+        })
+      ])
+    )
+  })
+
   it('stops starting GitLab calls once the selection goes stale (#30133)', async () => {
     const repos = manyServerRepos(20)
     const pending: (() => void)[] = []

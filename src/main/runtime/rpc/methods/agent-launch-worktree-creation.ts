@@ -125,6 +125,7 @@ export function agentLaunchWorkspaceFactory(
           ) ?? result.warning
         return {
           worktreeId: result.worktree.id,
+          workspacePath: result.worktree.path,
           connectionId: repo.connectionId ?? null,
           startupTerminalHandle: result.startupTerminal?.handle,
           ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {}),

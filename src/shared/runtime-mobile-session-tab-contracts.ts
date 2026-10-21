@@ -55,6 +55,8 @@ export type RuntimeMobileSessionMarkdownTab = {
   sourceFileId: string
   sourceFilePath: string
   sourceRelativePath: string
+  /** Set by a desktop for a "New Markdown" document not yet named; hosts and phones before it omit it. */
+  isUntitled?: true
   documentVersion: string
   color?: string | null
   isPinned?: boolean

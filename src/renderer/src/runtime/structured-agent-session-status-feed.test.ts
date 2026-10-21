@@ -4,6 +4,8 @@ import type {
   AgentSessionStatusSummary
 } from '../../../shared/agent-session-wire'
 import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { structuredAgentSessionNamingSnapshot } from '../../../main/native-chat/agent-session-wire/structured-agent-session-status-feed-deps'
+import { createStructuredAgentSessionLogger } from '../../../main/native-chat/agent-session-wire/structured-agent-session-logger'
 
 const mocks = vi.hoisted(() => ({
   subscribeStatus: vi.fn(),
@@ -115,6 +117,28 @@ describe('structured agent session status feed', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(mocks.supportsCapability).not.toHaveBeenCalled()
     expect(mocks.subscribeStatus).toHaveBeenCalledOnce()
+  })
+
+  it('keeps Sleep unknown through naming metadata until the full status answer', async () => {
+    const feed = getStructuredAgentSessionStatusFeed(LOCAL)
+    feed.activate()
+    await vi.advanceTimersByTimeAsync(0)
+    const naming = structuredAgentSessionNamingSnapshot({
+      sessions: new Map(),
+      getRecord: () => null,
+      now: () => 1,
+      logger: createStructuredAgentSessionLogger(),
+      namingActiveSessionIds: () => []
+    })
+    hostEmit()(naming)
+    expect(feed.getNamingActive('session-1')).toBe(false)
+    expect(feed.getSessionSleepState('session-1')).toBeUndefined()
+    hostEmit()({ type: 'snapshot', sessions: [{ ...summary('session-1'), sleptAt: 5 }] })
+    hostEmit()(naming)
+    expect(feed.getSessionSleepState('session-1')).toBe(5)
+    hostEmit()({ type: 'snapshot', sessions: [] })
+    expect(feed.getSessionSleepState('session-2')).toBeNull()
+    expect(feed.getSessionSleepState('session-1')).toBe(5)
   })
 
   it('merges a snapshot over the cached rows instead of retracting them', async () => {

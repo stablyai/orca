@@ -49,12 +49,14 @@ export const AgentSessionRewindRecordSchema = z.object({
   /** Written by older builds only, as is `retained`: rewind now derives both from the journal. */
   hydrationVerified: z.boolean().optional(),
   // A provider that rewinds by forking: the session the chat continues in, copied from `sourceSessionId`
-  // through `throughEntryId` (absent: nothing kept). Its next launch performs the fork.
+  // through `throughEntryId` (absent: nothing kept). Older records defer the copy to launch.
   providerFork: z
     .object({
       sessionId: Key,
       sourceSessionId: Key,
       throughEntryId: Key.optional(),
+      materialized: z.boolean().optional(),
+      resumeCursor: Key.optional(),
       // The chat's session when it was rewound; a later head means the fork no longer applies.
       replacesSessionId: Key
     })

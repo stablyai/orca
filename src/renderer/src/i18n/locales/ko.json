@@ -12545,7 +12545,6 @@
         "sshManagedHostRemove": {
           "description": "{{label}}에서 Orca가 실행 중입니다. SSH 호스트의 Orca에서 중지…를 사용해 호스트에서 Orca를 제거하거나, 호스트가 없어졌다면 잊기…를 사용하세요. 그런 다음 이 SSH 호스트를 제거할 수 있습니다.",
           "open": "SSH 호스트의 Orca 열기",
-          "descriptionServers": "Orca가 {{label}}에서 실행 중입니다. 원격 Orca 서버에서 {{label}}의 Orca ⋯ 메뉴를 열고 '중지…'를 선택해 호스트에서 Orca를 제거하거나, 호스트가 없어졌다면 '삭제…'를 선택하세요. 그런 다음 이 SSH 호스트를 제거할 수 있습니다.",
           "openServers": "원격 Orca 서버 열기"
         },
         "managedServers": {
@@ -12569,7 +12568,6 @@
             "confirmForget": "이 데스크톱에서 잊기",
             "keepLinked": "연결 유지",
             "forgetDescription": "호스트에 연결하지 않고 여기서 이 서버의 연결을 해제합니다. 호스트가 다시 살아나면 서버가 그곳에서 계속 실행 중일 수 있습니다.",
-            "title": "{{host}}의 Orca",
             "orcaVersion": "이 호스트의 Orca: {{version}}",
             "stopOrcaDescription": "SSH 호스트에서 Orca를 중지하고 이 목록에서 제거합니다.",
             "updateOrcaOnHost": "이 호스트의 Orca 업데이트"
@@ -12914,9 +12912,6 @@
           "emptyDescription": "개발 머신, 클라우드 머신 또는 집에 있는 데스크톱을 페어링하세요. 이 컴퓨터가 절전 모드여도 세션은 그곳에서 계속 실행됩니다.",
           "movePaused": "이전 일시 중지됨",
           "shareTitle": "이 컴퓨터 공유",
-          "shareDescriptionNamed": "브라우저, 휴대폰 또는 다른 Orca에서 {{name}}로 작업할 수 있게 합니다.",
-          "shareDescription": "브라우저, 휴대폰 또는 다른 Orca에서 이 컴퓨터로 작업할 수 있게 합니다.",
-          "shareButton": "공유…",
           "done": "완료",
           "unreachableLead": "Orca가 이 서버에 연결하지 못했습니다.",
           "updateFailedLead": "마지막 업데이트가 완료되지 않았습니다.",
@@ -18635,6 +18630,7 @@
         "permissionFullAccessCodexDescription": "묻지 않습니다. 모든 파일을 편집하고 네트워크를 사용할 수 있습니다",
         "permissionFullAccessSharedDescription": "편집이나 명령 전에 묻지 않습니다",
         "pasteFailed": "붙여넣기 실패.",
+        "tooManySkills": "{{agent}}에 메시지를 보내지 못했습니다. 선택한 스킬 파일을 {{limit}}개 이하로 줄인 후 다시 시도하세요.",
         "commandAttachmentsUnsupported": "채팅 세션 명령을 사용하기 전에 첨부 파일을 제거하세요.",
         "optionValueShort": {
           "minimal": "최소",
@@ -20059,6 +20055,7 @@
       "empty": "하위 에이전트를 찾을 수 없습니다."
     },
     "antigravityReferenceDescription": "이 대본을 참고 자료로 사용하여 새로운 Antigravity CLI 대화에서 계속합니다.",
+    "searchHitSourceHost": "{{value0}}에서 찾음",
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → CLI",
     "continueInCli": "CLI에서 계속",
@@ -20477,7 +20474,17 @@
   "tabHoverCard": {
     "browser": "브라우저",
     "editor": "편집기",
-    "terminal": "터미널"
+    "terminal": "터미널",
+    "namingFailure": {
+      "regenerating": "다시 생성 중…",
+      "regenerate": "이름 다시 생성",
+      "title": "이 채팅의 이름을 지정하지 못했습니다",
+      "description": "채팅 이름 에이전트가 오류로 중지되어, 채팅은 첫 메시지를 이름으로 유지합니다.",
+      "viewError": "오류 보기",
+      "dialogTitle": "채팅 자동 이름 지정 실패",
+      "dialogDescriptionStart": "Orca가",
+      "dialogDescriptionEnd": "의 이름을 첫 메시지로부터 생성하지 못했습니다."
+    }
   },
   "jira": {
     "savedFilters": {

@@ -36,7 +36,7 @@ import type {
   PtyControllerInventory,
   RuntimePtyController
 } from '../runtime-pty-controller-contract'
-import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
+import type { RuntimeLeafRecord, PtyRegistrationClaim } from '../runtime-terminal-state-records'
 import type { TerminalHandleRecord } from '../runtime-terminal-contracts'
 import type { PtyIncarnationHandleRecord } from '../orca-runtime-core'
 import { MailPointerRepointScheduler } from '../orchestration/mail-pointer-repoint-scheduler'
@@ -236,10 +236,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   // Why: one watermark per repo replaces per-closed-pane fences while preserving stale-write safety.
   protected terminalTopologyRevisionByRepoId = new Map<string, number>()
 
-  // Why: provider exit can beat surface registration; that exact dead incarnation must never publish.
-  protected earlyExitedPtyIncarnations = new Map<string, PtyIncarnationId | null>()
-
-  protected pendingPtyRegistrationIncarnations = new Map<string, PtyIncarnationId | null>()
+  // The candidate receipt owns its exit evidence until publication or cancellation.
+  protected pendingPtyRegistrationIncarnations = new Map<string, PtyRegistrationClaim>()
 
   // Why public: the PTY IPC layer's stop paths write it and its exit delivery reads it.
   readonly intentionalPtyStops = new TerminalIntentionalStops()

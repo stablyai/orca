@@ -83,6 +83,7 @@ export function structuredHostStub(
       agent: 'codex' as const,
       readable: true
     })),
+    regenerateConversationName: vi.fn(() => true),
     hold: vi.fn(async () => undefined),
     release: vi.fn(() => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),

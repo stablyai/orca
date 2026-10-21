@@ -53,9 +53,12 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     } = {}
   ): void | Promise<void> {
     const pty = this.ptysById.get(ptyId)
-    if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
+    const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
+    const candidateIncarnation = pending ? pending.incarnationId : pty?.incarnationId
+    if (exitIncarnationId && candidateIncarnation && exitIncarnationId !== candidateIncarnation) {
       return
     }
+    pending?.exitedIncarnations.add(exitIncarnationId ?? candidateIncarnation ?? null)
     this.invalidatePtyControllerInventoryForLifecycle(ptyId, pty?.connectionId)
     // A bare exit code is not enough to establish why a process ended: older
     // daemons and SSH relays can report 0 for crashes and wrapper exits.
@@ -139,20 +142,6 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         })
       }
       const exactSurfaces = [...exactSurfaceByKey.values()]
-      const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)
-      const exitMatchesPendingRegistration =
-        this.pendingPtyRegistrationIncarnations.has(ptyId) &&
-        (pendingIncarnation === null ||
-          exitIncarnationId === null ||
-          exitIncarnationId === undefined ||
-          pendingIncarnation === exitIncarnationId)
-      if (exitMatchesPendingRegistration) {
-        // Why: reused surfaces can look registered while their replacement incarnation still awaits admission.
-        this.earlyExitedPtyIncarnations.set(
-          ptyId,
-          exitIncarnationId ?? pendingIncarnation ?? pty?.incarnationId ?? null
-        )
-      }
       // Why both kinds: a sleep keeps its wake hint, and a restart's replacement takes the pane.
       const preservesIntentionallyStoppedSurface =
         this.intentionalPtyStops.claimExit(ptyId, exitIncarnationId ?? pty?.incarnationId).length >

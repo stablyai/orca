@@ -280,8 +280,6 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenFileFromMobile: () => noopUnsubscribe,
     onRevealEditorTabFromRuntime: () => noopUnsubscribe,
     onOpenDiffFromMobile: () => noopUnsubscribe,
-    onMobileMarkdownRequest: () => noopUnsubscribe,
-    respondMobileMarkdownRequest: () => {},
     onCloseTerminal: () => noopUnsubscribe,
     onTerminalTabCloseRequest: () => noopUnsubscribe,
     respondTerminalTabClose: () => {},

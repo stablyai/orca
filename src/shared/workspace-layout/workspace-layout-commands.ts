@@ -62,12 +62,13 @@ const CREATES_WORKSPACE = new Set<LayoutCommand['type']>([
 
 /** A `renameTabs` as the `renameTab` each of its titles is. */
 export function renameTabCommandsOf(command: RenameTabsCommand): CommandOf<'renameTab'>[] {
-  return command.renames.map(({ workspace, tabId, title }) => ({
+  return command.renames.map(({ workspace, tabId, title, replaceExisting }) => ({
     type: 'renameTab',
     workspace,
     tabId,
     kind: command.kind,
-    title
+    title,
+    ...(replaceExisting ? { replaceExisting } : {})
   }))
 }
 

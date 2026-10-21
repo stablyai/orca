@@ -4,7 +4,6 @@
 import { backfillAgentSessionPermissionModes } from './agent-session-permission-backfill'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
-import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
 import {
   agentSessionOperationKey,
@@ -159,16 +158,6 @@ export class AgentSessionRecordStore {
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
     const scope = agentSessionScopeKey(location)
     return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
-  }
-
-  setConversationCommand(
-    sessionId: string,
-    fence: number,
-    command: NonNullable<AgentSessionRecord['conversationCommand']>
-  ): Promise<void> {
-    return this.transact((draft) =>
-      commitConversationCommandRecord(draft, sessionId, fence, command)
-    )
   }
 
   /** Unfenced on purpose: the name is a durable note, so writing it never contends with the

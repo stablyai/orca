@@ -18,18 +18,20 @@ const INITIALIZE_JSON_LIMITS = { structuralTokens: 64 * 1024, nestingDepth: 16 }
 export type ClaudeCommandCatalogProbe = (request: {
   cwd: string
   accountHomePath: string
+  isCurrent?: () => boolean
 }) => Promise<AgentSessionSlashCommand[]>
 
 /** Asks Claude, in the folder a chat launches in, what its `/` menu holds. */
 export function createClaudeCommandCatalogProbe(
   deps: ClaudeModelCatalogProbeDeps
 ): ClaudeCommandCatalogProbe {
-  return async ({ cwd, accountHomePath }) => {
+  return async ({ cwd, accountHomePath, isCurrent }) => {
     const stdout = await runClaudeListing(deps, {
       accountHomePath,
       cwd,
       stdin: CLAUDE_COMMAND_LIST_STDIN,
-      site: 'claude-command-catalog-probe'
+      site: 'claude-command-catalog-probe',
+      isCurrent
     })
     const commands = readInitializeCommands(stdout)
     // A CLI whose `initialize` answers no commands answers nothing the menu can use.

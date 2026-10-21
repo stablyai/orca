@@ -5,6 +5,10 @@ import { withEditorBufferRecords } from './editor-buffer-record-lifecycle'
 import type { EditorBufferRecords } from './slices/editor/buffers/editor-buffer-record'
 import type { OpenFile } from './slices/editor/types/open-file'
 import type { ReactCommitCascadeWriteBoundary } from '@/lib/react-commit-cascade-store-write-samples'
+import {
+  EMPTY_EDITOR_BUFFER_VIEW_INDEX,
+  type EditorBufferViewIndex
+} from './slices/editor/buffers/editor-buffer-views'
 
 const { probe, noteWrite } = vi.hoisted(() => ({
   probe: { armed: false },
@@ -78,7 +82,7 @@ describe('withReactCommitCascadeWriteProbe', () => {
   // Why: composed as in store/index.ts, the buffer middleware must not turn every write into one
   // updater from one frame, or the crash report loses changed keys and distinct write sites.
   it('sees each original partial and caller under the editor buffer middleware', () => {
-    type BufferedState = {
+    type BufferedState = EditorBufferViewIndex & {
       ticks: number
       openFiles: OpenFile[]
       editorBuffers: EditorBufferRecords
@@ -90,6 +94,7 @@ describe('withReactCommitCascadeWriteProbe', () => {
           ticks: 0,
           openFiles: [],
           editorBuffers: {},
+          ...EMPTY_EDITOR_BUFFER_VIEW_INDEX,
           tick: () => set({ ticks: 1 })
         }))
       )

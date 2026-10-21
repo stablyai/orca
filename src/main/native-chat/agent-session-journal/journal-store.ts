@@ -22,7 +22,6 @@ import {
   newestStructuredAgentSessionTurnBySequence,
   runningStructuredAgentSessionTurnItemBySequence
 } from '../../../shared/structured-agent-session-live-turn'
-import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { readJournalSince } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader, type JournalLoad } from './journal-open'
@@ -396,11 +395,9 @@ export class AgentSessionJournal {
   }
 
   replaceEpochItems(
-    reason: AgentJournalEpochReason,
-    fence: number,
-    items: readonly JournalReplacementItem[]
+    ...args: Parameters<JournalEpochController['replace']>
   ): Promise<AgentJournalCursor> {
-    return this.epochController.replace(reason, fence, items)
+    return this.epochController.replace(...args)
   }
 
   private adoptLoadedJournal(loaded: JournalLoad): void {

@@ -12559,7 +12559,6 @@
         "sshManagedHostRemove": {
           "description": "Orca 正在 {{label}} 上运行。请在“SSH 主机上的 Orca”中使用“停止…”从主机移除 Orca；如果主机已不存在，请使用“忘记…”。之后即可移除此 SSH 主机。",
           "open": "打开“SSH 主机上的 Orca”",
-          "descriptionServers": "Orca 正在 {{label}} 上运行。请在“远程 Orca 服务器”中打开 {{label}} 上的 Orca 的 ⋯ 菜单，选择“停止…”从主机上移除 Orca；如果主机已不存在，请选择“忘记…”。之后即可移除此 SSH 主机。",
           "openServers": "打开远程 Orca 服务器"
         },
         "managedServers": {
@@ -12583,7 +12582,6 @@
             "confirmForget": "在此桌面上忘记",
             "keepLinked": "保持关联",
             "forgetDescription": "在此处取消关联此服务器，而不联系其主机。如果主机恢复，服务器可能仍在那里运行。",
-            "title": "{{host}} 上的 Orca",
             "orcaVersion": "此主机上的 Orca：{{version}}",
             "stopOrcaDescription": "停止 SSH 主机上的 Orca，并将其从此列表中移除。",
             "updateOrcaOnHost": "更新此主机上的 Orca"
@@ -12914,9 +12912,6 @@
           "emptyDescription": "配对开发机、云主机或家里的台式机。此电脑休眠时，会话会继续在那里运行。",
           "movePaused": "迁移已暂停",
           "shareTitle": "共享此电脑",
-          "shareDescriptionNamed": "让浏览器、手机或另一个 Orca 在 {{name}} 上工作。",
-          "shareDescription": "让浏览器、手机或另一个 Orca 在此电脑上工作。",
-          "shareButton": "共享…",
           "done": "完成",
           "unreachableLead": "Orca 无法访问此服务器。",
           "updateFailedLead": "上次更新未完成。",
@@ -18600,6 +18595,7 @@
         "permissionFullAccessCodexDescription": "从不询问；可以编辑任何文件并使用网络",
         "permissionFullAccessSharedDescription": "编辑或运行命令前从不询问",
         "pasteFailed": "粘贴失败。",
+        "tooManySkills": "消息未发送给 {{agent}}。请将所选技能文件减少到最多 {{limit}} 个，然后重试。",
         "commandAttachmentsUnsupported": "使用聊天会话命令前，请先移除附件。",
         "optionValueShort": {
           "minimal": "最小",
@@ -20059,6 +20055,7 @@
       "empty": "未找到子智能体。"
     },
     "antigravityReferenceDescription": "使用此记录作为参考继续新的Antigravity CLI 对话。",
+    "searchHitSourceHost": "在 {{value0}} 上找到",
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → 命令行界面",
     "continueInCli": "在 CLI 中继续",
@@ -20477,7 +20474,17 @@
   "tabHoverCard": {
     "browser": "浏览器",
     "editor": "编辑器",
-    "terminal": "终端"
+    "terminal": "终端",
+    "namingFailure": {
+      "regenerating": "正在重新生成…",
+      "regenerate": "重新生成名称",
+      "title": "无法为此聊天命名",
+      "description": "聊天命名代理因错误而停止，因此聊天将保留其第一条消息作为名称。",
+      "viewError": "查看错误",
+      "dialogTitle": "聊天自动命名失败",
+      "dialogDescriptionStart": "Orca 无法根据第一条消息为",
+      "dialogDescriptionEnd": "生成名称。"
+    }
   },
   "jira": {
     "savedFilters": {

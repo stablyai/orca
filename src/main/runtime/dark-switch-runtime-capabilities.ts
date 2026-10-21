@@ -1,7 +1,10 @@
 import type { RuntimeCapability } from '../../shared/protocol-version'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
-import { LAYOUT_INTENTS_RUNTIME_CAPABILITY } from '../../shared/workspace-layout/layout-intents-capability'
+import {
+  LAYOUT_INTENTS_RUNTIME_CAPABILITY,
+  LAYOUT_REOPEN_HELD_PANES_CAPABILITY
+} from '../../shared/workspace-layout/layout-intents-capability'
 import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../shared/workspace-unread-raise-capability'
 
 /** What this host advertises because a dark build switch is on. */
@@ -14,7 +17,7 @@ export function darkSwitchRuntimeCapabilities(): RuntimeCapability[] {
   }
   // Switch point: main here takes a paired desktop's layout intents (layout-intents-capability.ts).
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    capabilities.push(LAYOUT_INTENTS_RUNTIME_CAPABILITY)
+    capabilities.push(LAYOUT_INTENTS_RUNTIME_CAPABILITY, LAYOUT_REOPEN_HELD_PANES_CAPABILITY)
   }
   return capabilities
 }

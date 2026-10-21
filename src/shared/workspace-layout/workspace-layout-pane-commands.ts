@@ -27,6 +27,7 @@ import {
   type WorkspaceLayoutModel
 } from './workspace-layout-model'
 import { retireTerminalPane, withWorkspace } from './workspace-layout-removal'
+import { withPaneSplitRatios } from './split-ratio-intents'
 
 type PaneCommand = { workspace: string; tabId: string }
 
@@ -109,13 +110,15 @@ export function setPaneRatios(
   if (!tab) {
     return refuse('tab_not_found')
   }
-  if (!samePanesIgnoringRatios(tab.panes.root!, command.root)) {
+  const root = command.ratios
+    ? withPaneSplitRatios(tab.panes.root!, command.ratios)
+    : command.root && samePanesIgnoringRatios(tab.panes.root!, command.root)
+      ? command.root
+      : null
+  if (!root) {
     return refuse('pane_structure_changed')
   }
-  return updateTab(model, command.workspace, {
-    ...tab,
-    panes: { ...tab.panes, root: command.root }
-  })
+  return updateTab(model, command.workspace, { ...tab, panes: { ...tab.panes, root } })
 }
 
 export function equalizePanes(

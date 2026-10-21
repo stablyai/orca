@@ -49,7 +49,6 @@ function reservedRecord(): AgentSessionRecord {
       leaseDeadlineAt: NOW + 30_000,
       lastRenewedAt: NOW,
       handoffOperationId: 'op-1',
-      journalCheckpoint: null,
       claimKeyId: 'key-1',
       claimStatus: 'reserved',
       unreconciled: false,

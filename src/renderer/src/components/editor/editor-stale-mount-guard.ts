@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { notifyEditorFileCacheStale } from './editor-autosave'
-import { isEditorModelDirty, isWholeEditorState } from './editor-save-disk-precondition'
+import { isEditorModelDirty } from './editor-save-disk-precondition'
 
 /**
  * A clean tab's text (cache, or a leftover draft) that no longer matches its disk version, such as
@@ -49,9 +49,6 @@ export function settleStaleCacheReload(fileId: string): void {
  */
 export function mayPushTabTextIntoModel(fileId: string): boolean {
   const state = useAppStore.getState()
-  if (!isWholeEditorState(state)) {
-    return true
-  }
   const file = state.openFiles.find((openFile) => openFile.id === fileId)
   if (!file || file.isDirty) {
     // Why: a dirty tab's text is its own edits.

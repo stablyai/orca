@@ -10,7 +10,7 @@ import {
   requireRuntimeTargetForFileOwner
 } from '@/lib/file-owner-runtime-target'
 import { canAutoSaveOpenFile } from './editor-autosave'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { runtimePathsExist } from '@/runtime/runtime-path-existence-batch'
 
@@ -60,6 +60,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
   // Dedupes queued + in-flight verifications; the store's pending flag is the durable "needs verification" signal.
   const inFlightFileIds = new Set<string>()
   const attemptsByFileId = new Map<string, number>()
+  const supersededReadsByFileId = new Map<string, number>()
   const retryTimers = new Set<ReturnType<typeof setTimeout>>()
   // Queue ids, not OpenFile snapshots: a snapshot can go stale (close/reopen or same-path save) while it waits for a slot.
   const verifyQueue: string[] = []
@@ -129,10 +130,18 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
     if (verifyRequestGeneration(fileId) === requestGeneration) {
       return false
     }
-    queueMicrotask(() => {
-      inFlightFileIds.delete(fileId)
-      scan()
-    })
+    // Why back off, not cap: a superseded answer may predate the newer check, so it never resolves; churn only delays the fresh read.
+    const superseded = (supersededReadsByFileId.get(fileId) ?? 0) + 1
+    supersededReadsByFileId.set(fileId, superseded)
+    const timer = setTimeout(
+      () => {
+        retryTimers.delete(timer)
+        inFlightFileIds.delete(fileId)
+        scan()
+      },
+      Math.min((superseded - 1) * VERIFY_RETRY_MS, VERIFY_SLOW_RETRY_MS)
+    )
+    retryTimers.add(timer)
     return true
   }
 
@@ -163,6 +172,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
         return
       }
       attemptsByFileId.delete(file.id)
+      supersededReadsByFileId.delete(file.id)
       // Verification resolved: lift autosave suspension regardless of outcome; wasPending flags a save that already re-baselined.
       const wasPending = liveFile.pendingDiskBaselineVerification === true
       store.getState().clearPendingDiskBaselineVerification(file.id)
@@ -233,6 +243,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
   // Why: still unverifiable after every retry; resume nothing silently — the banner makes the user choose.
   const giveUp = (file: OpenFile): void => {
     attemptsByFileId.delete(file.id)
+    supersededReadsByFileId.delete(file.id)
     const liveFile = store.getState().openFiles.find((f) => f.id === file.id)
     if (!liveFile?.pendingDiskBaselineVerification) {
       return

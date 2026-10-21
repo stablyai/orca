@@ -30,8 +30,9 @@ import {
   keepTabEditsOverExternalChange,
   reloadTabContentFromDisk
 } from './ExternalFileChangeBanner'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { useAppStore } from '@/store'
+import { createTestStore } from '@/store/slices/store-test-helpers'
 
 const file = {
   id: 'file-1',
@@ -52,15 +53,15 @@ describe('ExternalFileChangeBanner', () => {
 
   function mockStoreState(editorDrafts: Record<string, string>, openFiles: OpenFile[] = [file]) {
     vi.mocked(useAppStore.getState).mockReturnValue({
+      ...createTestStore().getState(),
       clearEditorDraft,
       markFileDirty,
       setExternalMutation,
       setEditorDraft,
       setLastKnownDiskSignature,
       editorDrafts,
-      openFiles,
-      settings: {}
-    } as never)
+      openFiles
+    })
   }
 
   beforeEach(() => {

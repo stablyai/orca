@@ -11,6 +11,7 @@ import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { splitTranscriptStreamLines } from '../native-chat/transcript-stream-lines'
 import { claudeSessionIdForRewind } from './claude-structured-session-id'
+import { materializeClaudeRewindTranscript } from './claude-rewind-transcript'
 
 type TranscriptPromptRow = { type: 'user'; uuid: string; parentUuid?: unknown }
 
@@ -77,12 +78,20 @@ export async function resolveClaudeRewindFork(input: {
       claudeConfigDir
     })
     if (parent !== undefined) {
-      return {
+      const fork = {
         sessionId: claudeSessionIdForRewind(input.orcaSessionId, input.rewindOperationId),
         sourceSessionId: input.prompt.sessionId,
         ...(parent ? { throughEntryId: parent } : {}),
         replacesSessionId: input.head.nativeId
       }
+      const sourcePath = await resolveSessionFilePath('claude', input.prompt.sessionId, {
+        claudeProjectsDir: join(claudeConfigDir, 'projects'),
+        strictErrors: true
+      })
+      if (!sourcePath) {
+        return null
+      }
+      return materializeClaudeRewindTranscript(sourcePath, fork)
     }
   }
   return null

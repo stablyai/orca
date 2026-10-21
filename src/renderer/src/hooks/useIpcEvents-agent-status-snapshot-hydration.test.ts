@@ -448,20 +448,28 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
     resolveSnapshot?.(snapshot)
 
+    const renamed = () =>
+      main.commands.map((command) => (command.type === 'renameTabs' ? command.renames.length : 0))
     await vi.waitFor(() => {
       expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
       expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.title).toBe(
         'Pi - action required'
       )
-      expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeTruthy()
+      // A layout-owner build sends main the snapshot's titles as one rename; main's frame (not
+      // modelled here) draws them, so the window writes them in neither case twice.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        expect(renamed()).toEqual([paneCount])
+      } else {
+        expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeTruthy()
+      }
     })
+    for (let turn = 0; turn < 10; turn += 1) {
+      await Promise.resolve()
+    }
 
-    expect(relevantPublications).toBe(3)
+    expect(relevantPublications).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 2 : 3)
     unsubscribe()
-    // A layout-owner build sends main the snapshot's titles as one rename.
-    expect(
-      main.commands.map((command) => (command.type === 'renameTabs' ? command.renames.length : 0))
-    ).toEqual(ORCA_LAYOUT_OWNER_IS_MAIN ? [paneCount] : [])
+    expect(renamed()).toEqual(ORCA_LAYOUT_OWNER_IS_MAIN ? [paneCount] : [])
   })
 
   it('indexes one 100-pane tab and its split tree once per snapshot', async () => {

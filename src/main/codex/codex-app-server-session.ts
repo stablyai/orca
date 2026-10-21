@@ -22,6 +22,7 @@ import { createProviderRecordReader } from '../provider-process/provider-record-
 export type CodexAppServerInvocation = {
   command: string
   args: string[]
+  cwd?: string
   /**
    * The resolved CLI path, used to pair the CLI with the `node` it was installed
    * against — without it a CLI resolved out of a version-manager directory runs
@@ -42,6 +43,10 @@ export type CodexAppServerInvocation = {
   timeoutMs: number
   /** Stops the session and its child early, as the deadline would. */
   signal?: AbortSignal
+  /** Kill the whole tree while the root still lives, before ending its stdin. For a session that
+   *  lets Codex start plugin work: an unsupervised root that exits on stdin end leaves its git
+   *  children behind, and a tree kill after the root exits is refused. */
+  treeKillOnFinish?: boolean
 }
 
 /** Codex-side absence of the requested app-server RPC surface (old CLI without
@@ -118,7 +123,7 @@ export async function runCodexAppServerSession<T>(
     : childEnv
   // The Codex connection's managed process and close policy, so a session closes the same way.
   const managed = spawnManagedProviderProcess(
-    { command: invocation.command, args: invocation.args },
+    { command: invocation.command, args: invocation.args, cwd: invocation.cwd },
     {
       site: CODEX_APP_SERVER_KILL_SITE,
       inheritedEnv: pairedEnv,
@@ -126,6 +131,7 @@ export async function runCodexAppServerSession<T>(
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the managed spec's first three stdio slots are 'pipe', so stdin, stdout and stderr exist.
         spawnImpl(spec.program, [...(spec.args ?? [])], {
           env: spec.env,
+          cwd: spec.cwd,
           // The managed spec's slots, so the supervisor's group-report channel survives.
           stdio: spec.stdio ?? ['pipe', 'pipe', 'pipe'],
           windowsHide: true,
@@ -345,6 +351,9 @@ export async function runCodexAppServerSession<T>(
         // A destroyed stdin still leaves the SIGTERM and the close below.
       }
       child.kill('SIGTERM')
+    }
+    if (invocation.treeKillOnFinish && !managed.supervised && !exited) {
+      await managed.terminateTree()
     }
     // Ends stdin, gives a supervisor its full stop time (a direct child 1.5 s), then the tree.
     await managed.close()
