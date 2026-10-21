@@ -213,6 +213,7 @@ export function createHostKeyVerifier(
       }
       const fingerprint = hostKeyFingerprintOf(key)
       const decision = decideHostKey({
+        fingerprint,
         knownHostsOutcome: matchKnownHosts(deps.entries, {
           host: deps.host,
           port: deps.port,

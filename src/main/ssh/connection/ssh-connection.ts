@@ -57,6 +57,7 @@ import {
   DEFAULT_SERVER_HOST_KEY_ALGORITHMS,
   orderServerHostKeyAlgorithms
 } from '../ssh-host-key-verifier'
+import { writePinnedKnownHosts } from '../system-transport/pinned-known-hosts'
 import {
   HostKeyVerificationError,
   hostKeyPolicyForOwner,
@@ -911,6 +912,8 @@ export class SshConnection {
     if (!this.isCurrentConnectAttempt(connectGeneration)) {
       throw createCancelledConnectAttemptError()
     }
+    // Before the transport flips: a pinned target without usable keys must fail, not fall back.
+    writePinnedKnownHosts(this.target)
     this.useSystemSshTransport = true
     this.client = null
     this.killProxy()

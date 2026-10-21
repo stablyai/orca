@@ -36,7 +36,19 @@ export type SshRemoteRuntimeResolution = {
 }
 
 /** Who created a hidden target as an implementation detail, and so owns its lifecycle. */
-export type SshTargetOwner = { type: 'on-demand-runtime'; runtimeId: string }
+export type SshTargetOwner =
+  | { type: 'on-demand-runtime'; runtimeId: string }
+  | {
+      type: 'machine'
+      // Why: older builds read owner.runtimeId unguarded; it carries the target id for them.
+      runtimeId: string
+      providerKey: string
+      machineId: string
+      /** "SHA256:…" keys the provider read from the machine; a connect must present one of them. */
+      hostKeyFingerprints?: string[]
+      /** The same keys as "<type> <base64>", which system OpenSSH needs to pin them. */
+      hostKeys?: string[]
+    }
 
 export type SshTarget = {
   id: string

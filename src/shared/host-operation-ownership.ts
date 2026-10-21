@@ -36,6 +36,7 @@ export const HOST_OPERATION_OWNERSHIP = {
   jira: 'scope-picked',
   layout: 'host',
   linear: 'scope-picked',
+  machines: 'host',
   managedRuntime: 'host',
   managedServer: 'host',
   markdown: 'host',

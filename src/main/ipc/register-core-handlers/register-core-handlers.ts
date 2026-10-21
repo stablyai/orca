@@ -31,6 +31,7 @@ import {
 import { registerWslHostHandlers } from '../wsl-host-handlers'
 import { registerWslMoveHandlers } from '../wsl-move-handlers'
 import { registerEphemeralVmHandlers } from '../ephemeral-vm'
+import { registerMachineHandlers } from '../machines'
 import { registerAiVaultHandlers } from '../ai-vault'
 import { registerAiVaultSearchHandlers } from '../ai-vault-search'
 import { registerNativeChatHandlers } from '../native-chat'
@@ -267,6 +268,7 @@ export function registerCoreHandlers(
   })
   registerWslMoveHandlers(() => app.getPath('userData'))
   registerEphemeralVmHandlers(store, pluginService)
+  registerMachineHandlers(store, pluginService)
   // Session history and terminal resume are not chats; a refused host leaves nothing to check.
   const ensureStructuredSessionOwnership = () =>
     ensureStructuredAgentSessionHostUnlessRefused(() => runtime.ensureStructuredAgentSessionHost())

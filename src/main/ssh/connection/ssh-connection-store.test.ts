@@ -153,6 +153,25 @@ describe('SshConnectionStore', () => {
     })
   })
 
+  it('clears a recipe VM target ladder decision when its upsert moves the endpoint', () => {
+    const vm = { label: 'Sandbox', host: 'a.example.com', port: 22, username: 'root' }
+    const target = sshStore.upsertRuntimeOwnedTarget('runtime-1', vm)
+    sshStore.updateTarget(target.id, {
+      remoteRuntimeResolution: {
+        rung: 'A',
+        glibc: '2.39',
+        runtimeSha256: 'a'.repeat(64),
+        orcaMajor: 1
+      }
+    })
+
+    sshStore.upsertRuntimeOwnedTarget('runtime-1', vm)
+    expect(mockStore.getSshTarget(target.id)?.remoteRuntimeResolution).toBeDefined()
+
+    sshStore.upsertRuntimeOwnedTarget('runtime-1', { ...vm, host: 'b.example.com' })
+    expect(mockStore.getSshTarget(target.id)?.remoteRuntimeResolution).toBeUndefined()
+  })
+
   describe('importFromSshConfig', () => {
     function candidate(overrides: Partial<SshTarget> & { configHost: string }): SshTarget {
       return {

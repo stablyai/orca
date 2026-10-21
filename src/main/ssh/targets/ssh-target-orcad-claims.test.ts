@@ -92,6 +92,20 @@ describe('managed orcad SSH target claims', () => {
     ).toBe('environment-1')
   })
 
+  it("claims a machine's target: its provider owns the host's lifecycle, not its server", () => {
+    const { claims } = setup({
+      target: {
+        owner: {
+          type: 'machine',
+          runtimeId: 'ssh-1',
+          providerKey: 'plugin:acme.omarchy/omarchy',
+          machineId: 'sbx-1'
+        }
+      }
+    })
+    expect(claims.preflight('ssh-1')).toMatchObject({ claimable: true, blockers: [] })
+  })
+
   it('claims for SSH access without recording a provisioning intent', () => {
     const { claims } = setup({ target: { generation: 1 } })
     expect(

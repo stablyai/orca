@@ -258,6 +258,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/managed-server.js')).MANAGED_SERVER_HANDLERS
   },
   {
+    name: 'machine',
+    keys: ['machine ls', 'machine wake', 'machine sleep'],
+    load: async () => (await import('./handlers/machine.js')).MACHINE_HANDLERS
+  },
+  {
     name: 'vm',
     keys: ['vm recipe doctor'],
     load: async () => (await import('./handlers/vm.js')).VM_HANDLERS

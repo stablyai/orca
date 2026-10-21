@@ -391,6 +391,7 @@ import {
   WorkspaceSelection
 } from './linear-params'
 import { CreateProject } from './linear-project-create-params'
+import { MachineSelector, MachinesList } from './machine-params'
 import {
   ManagedRuntimeAgentParams,
   ManagedRuntimeCancelParams
@@ -1139,6 +1140,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'linear.teamStates': TeamId,
   'linear.testConnection': WorkspaceSelection,
   'linear.updateIssue': IssueUpdateOfLinearParams,
+  'machines.get': MachineSelector,
+  'machines.list': MachinesList,
+  'machines.sleep': MachineSelector,
+  'machines.wake': MachineSelector,
   'managedRuntime.cancel': ManagedRuntimeCancelParams,
   'managedRuntime.install': ManagedRuntimeAgentParams,
   'managedRuntime.remove': ManagedRuntimeAgentParams,

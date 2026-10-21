@@ -7,6 +7,7 @@ import {
   orderServerHostKeyAlgorithms,
   type HostKeyVerifierDeps
 } from './ssh-host-key-verifier'
+import type { HostKeyPolicy } from './ssh-host-key-decision'
 
 const ED_A = 'AAAAC3NzaC1lZDI1NTE5AAAAIKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq'
 const ED_B = 'AAAAC3NzaC1lZDI1NTE5AAAAILu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7'
@@ -43,6 +44,48 @@ function run(
   })
   return { accepted, returned }
 }
+
+const pinnedPolicy = (fingerprints: string[]): HostKeyPolicy => ({
+  kind: 'provider-pinned',
+  fingerprints,
+  hostKeys: []
+})
+
+describe('provider-pinned host keys', () => {
+  const pinned = hostKeyFingerprintOf(blob(ED_A))
+
+  it('accepts and records a key matching a provider fingerprint over a stale known_hosts entry', () => {
+    const rememberHostKey = vi.fn()
+    const entries = parseKnownHosts(`example.com ssh-ed25519 ${ED_B}`)
+    expect(
+      run({ entries, rememberHostKey, isTrusted: () => 'mismatch', policy: pinnedPolicy([pinned]) })
+        .accepted
+    ).toBe(true)
+    expect(rememberHostKey).toHaveBeenCalledWith(expect.objectContaining({ fingerprint: pinned }))
+  })
+
+  it('fails closed on a key the provider did not report, even one known_hosts trusts', () => {
+    const onDecision = vi.fn()
+    const entries = parseKnownHosts(`example.com ssh-ed25519 ${ED_B}`)
+    const result = run(
+      { entries, onDecision, isTrusted: () => 'match', policy: pinnedPolicy([pinned]) },
+      ED_B
+    )
+    expect(result.accepted).toBe(false)
+    expect(onDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'reject', outcome: 'mismatch' })
+    )
+  })
+
+  it('still honours revocation', () => {
+    const entries = parseKnownHosts(`@revoked example.com ssh-ed25519 ${ED_A}`)
+    expect(run({ entries, policy: pinnedPolicy([pinned]) }).accepted).toBe(false)
+  })
+
+  it('accepts padded and unpadded fingerprint spellings alike', () => {
+    expect(run({ policy: pinnedPolicy([`${pinned}=`]) }).accepted).toBe(true)
+  })
+})
 
 describe('the ssh2 host key verifier', () => {
   // The regression that would silently restore accept-everything: ssh2 does

@@ -241,8 +241,13 @@ export function collectTargetCatalogBlockers(
 function targetHolder(
   target: SshTarget
 ): Extract<OrcadMigrationBlocker, { code: 'orcad_migration_target_owned' }>['holder'] | null {
-  // Why: a recipe VM's runtime owns when the host is created and destroyed, not which server runs it.
-  if (target.owner && !isEphemeralRuntimeSshOwner(target.owner)) {
+  // Why: a recipe VM's runtime or a machine provider owns when the host is created and destroyed,
+  // not which server runs it.
+  if (
+    target.owner &&
+    target.owner.type !== 'machine' &&
+    !isEphemeralRuntimeSshOwner(target.owner)
+  ) {
     return { kind: 'runtime', runtimeId: target.owner.runtimeId }
   }
   const environmentId = getManagedOrcadFenceEnvironmentId(target)

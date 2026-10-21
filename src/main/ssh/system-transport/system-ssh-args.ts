@@ -1,5 +1,6 @@
 import type { SshTarget } from '../../../shared/ssh-types'
 import { getControlSocketPath, type SystemSshResolvedConfig } from '../ssh-control-socket'
+import { pinnedKnownHostsArgs } from './pinned-known-hosts'
 
 export type SystemSshBuildArgsOptions = {
   configFile?: string
@@ -37,6 +38,7 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
     args.push('-o', 'GSSAPIAuthentication=yes')
     args.push('-o', 'PreferredAuthentications=gssapi-with-mic')
   }
+  args.push(...pinnedKnownHostsArgs(target))
   // Forward stdin/stdout for relay communication
   args.push('-T')
 

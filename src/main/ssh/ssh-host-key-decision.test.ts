@@ -7,6 +7,7 @@ import {
 
 function input(overrides: Partial<HostKeyDecisionInput> = {}): HostKeyDecisionInput {
   return {
+    fingerprint: 'SHA256:presented',
     knownHostsOutcome: 'unknown',
     storeOutcome: 'unknown',
     strictHostKeyChecking: 'ask',
@@ -397,6 +398,27 @@ describe('deciding what to do with a presented host key', () => {
 })
 
 describe('hostKeyPolicyForOwner', () => {
+  it('pins a machine to its provider fingerprints, and treats one without any as standard', () => {
+    const owner = {
+      type: 'machine' as const,
+      runtimeId: 'machine-1',
+      providerKey: 'plugin:acme.omarchy/omarchy',
+      machineId: 'sbx-1'
+    }
+    expect(hostKeyPolicyForOwner({ ...owner, hostKeyFingerprints: ['SHA256:a'] })).toEqual({
+      kind: 'provider-pinned',
+      fingerprints: ['SHA256:a'],
+      hostKeys: []
+    })
+    // Fingerprints are also derived from full keys, matching `ssh-keygen -lf`.
+    const key = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq'
+    expect(hostKeyPolicyForOwner({ ...owner, hostKeys: [key] })).toMatchObject({
+      fingerprints: [expect.stringMatching(/^SHA256:[A-Za-z0-9+/]{43}$/)],
+      hostKeys: [key]
+    })
+    expect(hostKeyPolicyForOwner(owner)).toEqual({ kind: 'standard' })
+  })
+
   it('trusts first contact only for ephemeral runtime VMs', () => {
     expect(hostKeyPolicyForOwner({ type: 'on-demand-runtime', runtimeId: 'vm-1' })).toEqual({
       kind: 'ephemeral'
