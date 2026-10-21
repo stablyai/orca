@@ -38,6 +38,12 @@ export const PAIRED_DESKTOP_METHODS = [
   'ui.get',
   'ui.recordFeatureInteraction',
   'ui.set',
+  // Machine providers are plugins installed on the desktop, which runs them. Create, archive and
+  // delete are not runtime RPC methods at all, so a phone can only read, wake and sleep.
+  'machines.get',
+  'machines.list',
+  'machines.sleep',
+  'machines.wake',
   // The desktop's accounts pane, Linear and project pickers target its active runtime, not a workspace's host.
   'accounts.consumeCodexResetCredit',
   'accounts.list',

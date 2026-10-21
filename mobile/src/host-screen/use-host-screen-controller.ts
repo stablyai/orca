@@ -13,6 +13,7 @@ import {
   useForceReconnect,
   useHostClient
 } from '../transport/host-client-hooks'
+import { useHostMachinesAvailable } from '../machines/use-host-machines'
 import {
   useLastConnectedAt,
   useReconnectAttempt,
@@ -70,6 +71,7 @@ export function useHostScreenController({
   // One tick drives every visible agent row's relative timestamp.
   const now = useNow(30_000)
   const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
+  const machinesAvailable = useHostMachinesAvailable(client, connState)
   const state = useHostScreenState(hostId, action)
   const settings = useHostViewSettings({ client, connState, state })
   const hostDisplay = useHostDisplay(
@@ -182,6 +184,7 @@ export function useHostScreenController({
     isReadOnly: connState === 'auth-failed',
     isWideLayout,
     lastConnectedAt,
+    machinesAvailable,
     noticeParam,
     now,
     onHideSidebar,

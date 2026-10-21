@@ -5,6 +5,7 @@ import {
 } from '../worktree/workspace-options-copy'
 import { WorkspaceOptionsCountBadge } from './workspace-options-count-badge'
 import {
+  Box,
   ChevronLeft,
   List,
   PanelLeftClose,
@@ -20,6 +21,10 @@ import { colors } from '../theme/mobile-theme'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import type { HostScreenController } from './use-host-screen-controller'
 
+function machinesPath(hostId: string): string {
+  return `/h/${encodeURIComponent(hostId)}/machines`
+}
+
 function isErrorVerdict(v: ConnectionVerdict): boolean {
   return v.kind === 'warning' || v.kind === 'unreachable' || v.kind === 'auth-failed'
 }
@@ -34,6 +39,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
     hostId,
     hostDisplay,
     lastConnectedAt,
+    machinesAvailable,
     onHideSidebar,
     reconnectAttempts,
     relayRecovery,
@@ -104,6 +110,24 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
             </>
           )
         })()}
+        {!embedded && machinesAvailable ? (
+          <Pressable
+            style={[
+              styles.floatingWorkspaceHeaderButton,
+              connState !== 'connected' && styles.toolbarIconDisabled
+            ]}
+            onPress={() => actions.navigateFromHostList(machinesPath(hostId))}
+            disabled={connState !== 'connected'}
+            accessibilityRole="button"
+            accessibilityLabel="Machines"
+            hitSlop={8}
+          >
+            <Box
+              size={18}
+              color={connState === 'connected' ? colors.textPrimary : colors.textMuted}
+            />
+          </Pressable>
+        ) : null}
         {!embedded && floatingWorkspaceEnabled ? (
           <Pressable
             style={[
@@ -196,6 +220,25 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
                 color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
               />
             </Pressable>
+
+            {machinesAvailable ? (
+              <Pressable
+                style={[
+                  styles.embeddedToolbarIconButton,
+                  connState !== 'connected' && styles.toolbarIconDisabled
+                ]}
+                onPress={() => actions.navigateFromHostList(machinesPath(hostId))}
+                disabled={connState !== 'connected'}
+                accessibilityRole="button"
+                accessibilityLabel="Machines"
+                hitSlop={8}
+              >
+                <Box
+                  size={16}
+                  color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
+                />
+              </Pressable>
+            ) : null}
 
             {floatingWorkspaceEnabled ? (
               <Pressable

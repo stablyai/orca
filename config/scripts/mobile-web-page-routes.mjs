@@ -59,6 +59,11 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     pathname: '/h/[hostId]/accounts',
     grants: ['navigate', 'storage', 'externalLink', 'haptics']
   },
+  // The paired desktop's machines, read-only with Wake and Sleep; grants as for accounts.
+  {
+    pathname: '/h/[hostId]/machines',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics']
+  },
   // The file explorer. `navigate` because its Back pops the native stack. `storage` for the shared
   // components the host layout renders above it.
   //
