@@ -81,7 +81,7 @@ export function buildWorktreeIdByFileId(
 export function mergeWorkspaceSessionRecordField(
   out: WorkspaceSessionRecord,
   field: keyof WorkspaceSessionState,
-  slice: WorkspaceSessionState
+  slice: Partial<WorkspaceSessionState>
 ): void {
   const value = slice[field]
   if (!isWorkspaceSessionRecord(value)) {

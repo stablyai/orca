@@ -32,24 +32,13 @@ import {
 import {
   getRepoExecutionHostId,
   isOwnedSshTargetId,
-  parseExecutionHostId,
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
+  parseExecutionHostId
 } from '../../../shared/execution-host'
+import { listRuntimeSessionHostIdsForStartup } from './startup-runtime-session-hosts'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { collectWslMovedWorkspaceKeysFromSession } from '../store/repos/wsl-moved-projects'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import { ensureLocalRuntimeCapabilities } from '../runtime/local-runtime-capabilities'
-
-async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
-  try {
-    return (await window.api.runtimeEnvironments.list()).map((environment) =>
-      toRuntimeExecutionHostId(environment.id)
-    )
-  } catch (err) {
-    console.warn('Failed to list runtime session hosts for startup:', err)
-    return []
-  }
-}
 
 /**
  * Runs the renderer's one-shot boot chain: settings, persisted UI, the local repo catalog,
@@ -140,6 +129,10 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
             actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
           )
+          // Before hydration: a moved project's chats hydrate only once it is known to be moved.
+          await timeRendererStartupStep('fetch-wsl-moved-projects', () =>
+            useAppStore.getState().fetchWslMovedProjects()
+          )
         })()
         const sessionReadPromise = runtimeHostsPromise.then((startupRuntimeHostIds) =>
           // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
@@ -196,7 +189,14 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         )
         if (!cancelled) {
           const sessionHydrationOptions = {
-            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(sessionRead.session)
+            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(
+              sessionRead.session
+            ),
+            wslMovedChatWorkspaceKeys: collectWslMovedWorkspaceKeysFromSession(
+              sessionRead.session,
+              useAppStore.getState().wslMovedProjects,
+              sessionRead.runtimeHostIdByWorkspaceSessionKey
+            )
           }
           timeRendererStartupSyncStep('hydrate-session-stores', () => {
             actions.hydrateWorkspaceSession(sessionRead.session, {

@@ -7,6 +7,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/acp/acp-structured-publish-at-spawn.test.ts',
   'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
   ...SQLITE_DATABASE_RUNTIME_INCLUDE,
+  'src/main/runtime/wsl-moved-project-chat-runtime.test.ts',
   'src/main/ipc/repos/project-host-setup-wsl-move-fence.test.ts',
   'src/main/ipc/repos/repo-ipc-wsl-move-fence.test.ts',
   'src/main/runtime/runtime-managed-worktree-metadata-wsl-move.test.ts',

@@ -24,6 +24,11 @@ export type WslMoveFenceState = {
   hidden: WslMoveScopeIds
   /** Rows already paused, through commit: their session stays as the quiesce left it. */
   sessionFrozen: WslMoveScopeIds
+  /** The distro whose host owns each hidden row, for the retained entry's label. */
+  hostDistro: {
+    repoIds: ReadonlyMap<string, string>
+    folderWorkspaceIds: ReadonlyMap<string, string>
+  }
 }
 
 const phaseIndex = (phase: WslMoveCutoverPhase): number => WSL_MOVE_CUTOVER_PHASES.indexOf(phase)
@@ -43,6 +48,10 @@ export function wslMoveFenceFromCutovers(
   const fenced = { repoIds: new Set<string>(), folderWorkspaceIds: new Set<string>() }
   const hidden = { repoIds: new Set<string>(), folderWorkspaceIds: new Set<string>() }
   const sessionFrozen = { repoIds: new Set<string>(), folderWorkspaceIds: new Set<string>() }
+  const hostDistro = {
+    repoIds: new Map<string, string>(),
+    folderWorkspaceIds: new Map<string, string>()
+  }
   for (const cutover of cutovers) {
     const index = phaseIndex(cutover.phase)
     const target = index >= HIDDEN_FROM ? hidden : index >= FENCED_FROM ? fenced : null
@@ -50,12 +59,17 @@ export function wslMoveFenceFromCutovers(
       continue // `prepared` touches nothing on the source.
     }
     addScope(target, cutover)
+    if (target === hidden) {
+      const { distro, scopeRepoIds, scopeFolderWorkspaceIds } = cutover.manifest.source
+      scopeRepoIds.forEach((id) => hostDistro.repoIds.set(id, distro))
+      scopeFolderWorkspaceIds.forEach((id) => hostDistro.folderWorkspaceIds.set(id, distro))
+    }
     // Through commit too: the retained local rows are what a downgrade restores.
     if (index >= SESSION_FROZEN_FROM) {
       addScope(sessionFrozen, cutover)
     }
   }
-  return { fenced, hidden, sessionFrozen }
+  return { fenced, hidden, sessionFrozen, hostDistro }
 }
 
 function addScope(

@@ -19832,6 +19832,9 @@
       "description": "활성 워크스페이스는 사이드바에 숨겨져 있습니다. 이를 공개하면 이를 숨기는 필터만 조정됩니다.",
       "confirm": "필터 조정 및 공개",
       "cancel": "필터 유지"
+    },
+    "wslMoved": {
+      "movedToHost": "{{distro}} 호스트로 이동됨"
     }
   },
   "editor": {

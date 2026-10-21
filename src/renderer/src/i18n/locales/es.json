@@ -20061,6 +20061,9 @@
       "description": "El espacio de trabajo activo está oculto en la barra lateral. Mostrarlo solo ajustará los filtros que lo ocultan.",
       "confirm": "Ajustar filtros y mostrar",
       "cancel": "Mantener filtros"
+    },
+    "wslMoved": {
+      "movedToHost": "Movido al host de {{distro}}"
     }
   },
   "rendererRecovery": {

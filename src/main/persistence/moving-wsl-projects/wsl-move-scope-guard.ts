@@ -319,6 +319,24 @@ function withoutHidden<T extends HostedRow>(rows: T[], toRef: (row: T) => WslMov
   return rows.filter((row) => !isLocalWslMoveRow(row) || !inScope(hidden, toRef(row)))
 }
 
+/** The distro whose WSL host owns the project, once a move committed it; null otherwise. */
+export function wslMoveHostDistro(ref: WslMoveProjectRef | null): string | null {
+  const fence = loaded?.view
+  if (!ref || !fence?.readable) {
+    return null
+  }
+  const { hostDistro } = fence.state
+  return (
+    ('repoId' in ref
+      ? hostDistro.repoIds.get(ref.repoId)
+      : hostDistro.folderWorkspaceIds.get(ref.folderWorkspaceId)) ?? null
+  )
+}
+
+export function isWslMoveWorkspaceHostOwned(workspaceId: string): boolean {
+  return wslMoveHostDistro(wslMoveProjectRefForWorkspace(workspaceId)) !== null
+}
+
 /** A row on this machine, the only kind a move takes. */
 export function isLocalWslMoveRow(row: HostedRow): boolean {
   return !row.connectionId && isWslMoveSourceHost(row.executionHostId)

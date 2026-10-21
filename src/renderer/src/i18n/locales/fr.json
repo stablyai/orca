@@ -19894,6 +19894,9 @@
       "description": "L'espace de travail actif est masqué dans la barre latérale. Le révéler ajustera uniquement les filtres qui le cachent.",
       "confirm": "Ajustez les filtres et révélez",
       "cancel": "Conserver les filtres"
+    },
+    "wslMoved": {
+      "movedToHost": "Déplacé vers l'hôte {{distro}}"
     }
   },
   "editor": {

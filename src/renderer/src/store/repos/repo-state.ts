@@ -28,6 +28,7 @@ import type {
   FolderWorkspacePathStatusRequest
 } from '../../../../shared/folder-workspace-path-status'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 
 export const ERROR_TOAST_DURATION = 60_000
 
@@ -158,6 +159,9 @@ export type RepoSlice = {
   projectHostSetups: readonly ProjectHostSetup[]
   projectGroups: readonly ProjectGroup[]
   folderWorkspaces: readonly FolderWorkspace[]
+  /** Local projects a WSL host now owns: never in `repos`/`folderWorkspaces`, read-only, chats only. */
+  wslMovedProjects: readonly WslMovedProject[]
+  fetchWslMovedProjects: () => Promise<void>
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   /** Host-resolved floating workspace directory; null until the host has answered. */
   floatingWorkspacePath: string | null

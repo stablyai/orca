@@ -20,6 +20,7 @@ import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { mapReposForWorktreeRefresh } from './worktree-refresh-pool'
+import { findWslMovedProjectForWorkspace } from '../../../repos/wsl-moved-projects'
 
 export function createFetchAllWorktrees(
   set: WorktreeSliceSet,
@@ -193,6 +194,14 @@ export function createFetchAllWorktrees(
     for (const key of Object.keys(get().restoredRuntimeHostIdByWorkspaceSessionKey ?? {})) {
       if (parseWorkspaceKey(key)?.type === 'folder') {
         validIds.add(key)
+      }
+    }
+    // Why: hydration kept only a moved project's chats, which stay on this computer.
+    if ((get().wslMovedProjects ?? []).length > 0) {
+      for (const key of Object.keys(get().unifiedTabsByWorktree)) {
+        if (findWslMovedProjectForWorkspace(get(), key)) {
+          validIds.add(key)
+        }
       }
     }
     for (const result of Object.values(get().detectedWorktreesByRepo)) {

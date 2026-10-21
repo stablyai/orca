@@ -6,6 +6,10 @@ import { useWorktreeMap } from '../store/selectors'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import type { WorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
+import {
+  parseWslMovedSurfacesKey,
+  selectWslMovedSurfacesKey
+} from '@/store/repos/wsl-moved-projects'
 import { useReusedArrayIdentity } from './sidebar/worktree-list/listing/use-reused-array-identity'
 import { selectPairedRuntimeParkingEnvironmentIds } from './terminal-pane/terminal-hidden-view-parking'
 import { createTerminalWorktreeTopologyProjection } from './terminal-pane/terminal-hidden-worktree-retention'
@@ -41,16 +45,24 @@ export function useTerminalWorkspaceFoundation() {
   // truthy resolved host, so without one every active id yields the same surfaces — and a
   // worktree switch must not re-project (and re-identify) every surface to rediscover that.
   const activeFolderSurfaceId = activeFolderSurfaceHostId ? renderedActiveWorktreeId : null
-  const workspaceSurfaces = useMemo(
-    () =>
-      projectWorkspaceSurfaces({
-        worktreesById,
-        folderWorkspaces,
-        activeWorkspaceId: activeFolderSurfaceId,
-        activeWorkspaceResolvedHostId: activeFolderSurfaceHostId
-      }),
-    [worktreesById, folderWorkspaces, activeFolderSurfaceId, activeFolderSurfaceHostId]
-  )
+  const wslMovedSurfacesKey = useAppStore(selectWslMovedSurfacesKey)
+  const workspaceSurfaces = useMemo(() => {
+    const surfaces = projectWorkspaceSurfaces({
+      worktreesById,
+      folderWorkspaces,
+      activeWorkspaceId: activeFolderSurfaceId,
+      activeWorkspaceResolvedHostId: activeFolderSurfaceHostId
+    })
+    // A WSL-moved project's chats mount beside the catalog; it lists none of its workspaces.
+    const moved = parseWslMovedSurfacesKey(wslMovedSurfacesKey)
+    return moved.length > 0 ? [...surfaces, ...moved] : surfaces
+  }, [
+    worktreesById,
+    folderWorkspaces,
+    activeFolderSurfaceId,
+    activeFolderSurfaceHostId,
+    wslMovedSurfacesKey
+  ])
   // Why split the ids out: every mount/park/activation pass reads only `.id`, but
   // the surface array is re-identified on any worktree write. Reusing the previous
   // id-array identity keeps those effects and their per-fire Sets from re-firing
