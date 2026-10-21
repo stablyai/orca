@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createHookListenerState,
+  seedLegacyAgentStatusForTests,
   type HookListenerState
 } from './agent-hook-listener/listener-state'
 import { normalizeHookPayload } from './agent-hook-listener'
@@ -383,6 +384,94 @@ describe('shared agent-hook-listener', () => {
     expect(resolved?.payload).toMatchObject({ state: 'working', toolName: 'bash' })
     expect(resolved?.payload.toolInput).toBeUndefined()
   })
+
+  it.each(['session_start', 'session_switch'])(
+    'clears an old OMP approval when %s starts with active jobs',
+    (eventName) => {
+      const blocked = normalizeHookPayload(
+        state,
+        'omp',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'tool_approval_requested',
+            tool_name: 'bash',
+            reason: 'Approve the old command'
+          }
+        },
+        'production'
+      )
+      if (!blocked) {
+        throw new Error('Missing approval status')
+      }
+      seedLegacyAgentStatusForTests(state, blocked)
+      const changed = normalizeHookPayload(
+        state,
+        'omp',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: eventName,
+            session_id: 'next-session',
+            is_idle: false,
+            has_pending_messages: false,
+            has_active_jobs: true
+          }
+        },
+        'production'
+      )
+      expect(changed?.payload.state).toBe('working')
+      expect(changed?.providerSession?.id).toBe('next-session')
+      expect(changed?.payload.toolName).toBeUndefined()
+      expect(changed?.payload.toolInput).toBeUndefined()
+    }
+  )
+
+  it.each([
+    ['auto_retry_start', 'auto_retry_end', 'working'],
+    ['auto_compaction_start', 'auto_compaction_end', 'working'],
+    ['retry_fallback_applied', 'retry_fallback_succeeded', 'working'],
+    ['ui_prompt_start', 'ui_prompt_end', 'waiting'],
+    ['tool_approval_requested', 'tool_approval_resolved', 'blocked']
+  ])(
+    'marks %s readiness after a completed turn without another completion',
+    (start, end, active) => {
+      const emit = (eventName: string, fields: Record<string, unknown> = {}) => {
+        const event = normalizeHookPayload(
+          state,
+          'omp',
+          {
+            paneKey: PANE_KEY,
+            payload: {
+              hook_event_name: eventName,
+              is_idle: true,
+              has_pending_messages: false,
+              has_active_jobs: false,
+              ...fields
+            }
+          },
+          'production'
+        )
+        if (!event) {
+          throw new Error(`Missing OMP status for ${eventName}`)
+        }
+        seedLegacyAgentStatusForTests(state, event)
+        return event.payload
+      }
+      emit('agent_start')
+      const completed = emit('agent_end', { turn_outcome: 'success' })
+      expect(completed).toMatchObject({ state: 'done', mainAgent: { outcome: 'success' } })
+      expect(completed.sessionBoundary).toBeUndefined()
+      expect(emit(start).state).toBe(active)
+      const restored = emit(end)
+      expect(restored).toMatchObject({ state: 'done', sessionBoundary: true })
+      expect(restored.mainAgent).toEqual(completed.mainAgent)
+      emit('agent_start')
+      const nextCompletion = emit('agent_end', { turn_outcome: 'failure' })
+      expect(nextCompletion).toMatchObject({ state: 'done', mainAgent: { outcome: 'failure' } })
+      expect(nextCompletion.sessionBoundary).toBeUndefined()
+    }
+  )
 
   it.each(['tool_approval_requested', 'tool_approval_resolved'])(
     'ignores %s from Pi-compatible agents that do not emit it',

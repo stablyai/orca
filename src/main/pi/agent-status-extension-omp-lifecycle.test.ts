@@ -4,6 +4,7 @@ import {
   createAgentStatusExtensionHarness,
   type AgentStatusExtensionHarness
 } from './agent-status-extension-test-harness'
+import { normalizedOmpPosts } from './agent-status-subagent-event-fixtures'
 
 function postedHookNames(fetchMock: ReturnType<typeof vi.fn>): string[] {
   return fetchMock.mock.calls.map(
@@ -18,6 +19,34 @@ const OMP_RUNTIME_CASES = [
 ] as const
 
 describe('OMP agent_end contract', () => {
+  it.each(OMP_RUNTIME_CASES)(
+    'publishes %s startup identity before its first turn',
+    async (_name, args) => {
+      const harness = createAgentStatusExtensionHarness(args)
+      await harness.callHook(
+        'session_start',
+        {},
+        {
+          ...ompSession('resumed-session'),
+          isIdle: () => true,
+          hasPendingMessages: () => false,
+          getAsyncJobSnapshot: () => ({ running: [] }),
+          model: { provider: 'test-provider', id: 'test-model' }
+        }
+      )
+      await vi.waitFor(() => {
+        const startup = normalizedOmpPosts(harness).at(-1)
+        expect(startup).toMatchObject({
+          providerSession: {
+            id: 'resumed-session',
+            transcriptPath: '/sessions/resumed-session.jsonl'
+          },
+          payload: { state: 'done', sessionBoundary: true, model: 'test-provider/test-model' }
+        })
+      })
+    }
+  )
+
   it('keeps a Pi pane working until async subagents finish', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
 
@@ -107,7 +136,6 @@ describe('OMP agent_end contract', () => {
         await vi.waitFor(() =>
           expect(postedHookNames(harness.fetchMock)).toEqual(['agent_start', 'agent_end'])
         )
-        expect(context.isIdle).not.toHaveBeenCalled()
       }
     }
   )
@@ -220,10 +248,13 @@ describe('OMP subagent settlement', () => {
       await hook(harness, 'agent_end')
       await hook(harness, 'agent_start')
       await hook(harness, 'agent_end')
-      expect(postedHookNames(harness.fetchMock)).not.toContain('agent_end')
+      expect(normalizedOmpPosts(harness).at(-1)?.payload).toMatchObject({
+        state: 'working',
+        subagents: [{ id: 'helper' }]
+      })
 
       await lifecycle(harness, 'helper', 'completed')
-      expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
+      expect(normalizedOmpPosts(harness).at(-1)?.payload.state).toBe('done')
     }
   )
 
@@ -237,10 +268,13 @@ describe('OMP subagent settlement', () => {
       await lifecycle(harness, 'wake-1', 'started')
       await hook(harness, 'agent_start')
       await hook(harness, 'agent_end')
-      expect(postedHookNames(harness.fetchMock).at(-1)).not.toBe('agent_end')
+      expect(normalizedOmpPosts(harness).at(-1)?.payload).toMatchObject({
+        state: 'working',
+        subagents: [{ id: 'wake-1' }]
+      })
 
       await lifecycle(harness, 'wake-1', 'completed')
-      expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
+      expect(normalizedOmpPosts(harness).at(-1)?.payload.state).toBe('done')
     }
   )
 
@@ -261,7 +295,7 @@ describe('OMP subagent settlement', () => {
     await lifecycle(harness, 'revived', 'started')
     await lifecycle(harness, 'revived', 'completed')
 
-    expect(postedHookNames(harness.fetchMock)).toEqual(['agent_start', 'agent_end'])
+    expect(normalizedOmpPosts(harness).at(-1)?.payload.state).toBe('done')
   })
 
   it("ignores children seen by an OMP task session's copy of the extension", async () => {
@@ -295,10 +329,13 @@ describe('OMP subagent settlement', () => {
     await lifecycle(harness, 'child-1', 'started')
     await hook(harness, 'agent_end')
     harness.reload()
-    expect(postedHookNames(harness.fetchMock)).not.toContain('agent_end')
+    expect(normalizedOmpPosts(harness).at(-1)?.payload).toMatchObject({
+      state: 'working',
+      subagents: [{ id: 'child-1' }]
+    })
 
     await lifecycle(harness, 'child-1', 'completed')
 
-    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
+    expect(normalizedOmpPosts(harness).at(-1)?.payload.state).toBe('done')
   })
 })

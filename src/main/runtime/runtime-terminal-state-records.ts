@@ -72,6 +72,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
+  launchNeedsHookAttestation: boolean
   launchAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
   /** Conversations the `incarnationId` execution reported; a later row can't hide them. In memory only. */

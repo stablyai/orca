@@ -459,20 +459,28 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     expect(dispatchTerminalCommandFinishedEvent).toHaveBeenCalledWith(WORKTREE_ID, 0)
   })
 
-  it('drops a same-turn status row on command finished for SSH PTYs only', async () => {
-    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry()
-    const local = await createPolicy(PTY_ID_LOCAL)
-    local.onCommandFinished(0)
-    // Why: local drops need the mounted pane's foreground process-confirm ladder
-    // (leaked nested-shell 133;D protection), so the watcher must not drop them.
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    local.dispose()
+  it.each(['working', 'done'] as const)(
+    'keeps a parked SSH OMP %s row without execution-host exit evidence',
+    async (state) => {
+      mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
+        agentType: 'omp',
+        state
+      })
+      mockStoreState.dropAgentStatus.mockImplementation((key: string) => {
+        delete mockStoreState.agentStatusByPaneKey[key]
+      })
+      const ssh = await createPolicy(PTY_ID_SSH)
 
-    const ssh = await createPolicy(PTY_ID_SSH)
-    ssh.onCommandFinished(0)
-    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(PANE_KEY)
-    ssh.dispose()
-  })
+      ssh.onCommandFinished(0)
+
+      expect(mockStoreState.agentStatusByPaneKey[PANE_KEY]).toMatchObject({
+        agentType: 'omp',
+        state,
+        prompt: 'build the feature'
+      })
+      ssh.dispose()
+    }
+  )
 
   it('keeps a finished OSC 7501 program result on SSH command finished until dismissed', async () => {
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
@@ -495,13 +503,16 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     ssh.dispose()
   })
 
-  it('clears the launch registry on SSH command finished when no status row exists', async () => {
+  it('keeps the parked SSH launch identity before the first hook', async () => {
+    mockStoreState.agentLaunchConfigByPaneKey[PANE_KEY] = { identity: { agentType: 'omp' } }
+    mockStoreState.clearAgentLaunchConfig.mockImplementation((key: string) => {
+      delete mockStoreState.agentLaunchConfigByPaneKey[key]
+    })
     const ssh = await createPolicy(PTY_ID_SSH)
 
     ssh.onCommandFinished(0)
 
-    expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(PANE_KEY)
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
+    expect(mockStoreState.agentLaunchConfigByPaneKey[PANE_KEY]?.identity.agentType).toBe('omp')
     ssh.dispose()
   })
 

@@ -28,6 +28,6 @@ export function retireLiveAgentRowOnConfirmedProcessExit(
     session.dropCommandFinishedStatusIfSameTurn(entry)
   session.deferredConfirmedShellReconcile = () =>
     session.reconcileEndedProcessIfPaneQuiet(armedAcceptedStatusSeq)
-  // Why: a pane whose owner process the host can verify keeps the host's decision.
+  // The local process monitor proved exit; an unanswered read never reaches this path.
   session.settleDeferredCommandFinishedStatusDrop({ processExitConfirmed: true })
 }

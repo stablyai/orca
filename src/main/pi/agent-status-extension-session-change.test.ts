@@ -13,6 +13,7 @@ import {
   exitRunner,
   idle,
   postedHookNames,
+  normalizedOmpPosts,
   posts,
   startAsync,
   startChild,
@@ -519,6 +520,9 @@ describe('OMP session switches', () => {
   function ompSession() {
     let id = 'A'
     const context = {
+      isIdle: () => true,
+      hasPendingMessages: () => false,
+      getAsyncJobSnapshot: () => ({ running: [] }),
       sessionManager: { getSessionId: () => id, getSessionFile: () => `/sessions/${id}.jsonl` }
     }
     return { context, switchTo: (next: string) => (id = next) }
@@ -535,7 +539,10 @@ describe('OMP session switches', () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
     const { context, switchTo } = ompSession()
     await holdOmpRunOpen(harness, context)
-    expect(agentEndCount(harness)).toBe(0)
+    expect(normalizedOmpPosts(harness).at(-1)?.payload).toMatchObject({
+      state: 'working',
+      subagents: [{ id: 'c1' }]
+    })
 
     switchTo('B')
     await harness.callHook(
@@ -544,8 +551,17 @@ describe('OMP session switches', () => {
       context
     )
     await vi.advanceTimersByTimeAsync(0)
-    expect(posts(harness).at(-1)).toMatchObject({ hook_event_name: 'agent_end', session_id: 'A' })
-    expect(posts(harness).at(-1)?.subagents).toBeUndefined()
+    expect(normalizedOmpPosts(harness)).toContainEqual(
+      expect.objectContaining({
+        providerSession: expect.objectContaining({ id: 'A' }),
+        payload: expect.objectContaining({ state: 'done', sessionBoundary: true })
+      })
+    )
+    expect(normalizedOmpPosts(harness).at(-1)).toMatchObject({
+      providerSession: { id: 'B' },
+      payload: { state: 'done', sessionBoundary: true }
+    })
+    expect(normalizedOmpPosts(harness).at(-1)?.payload.subagents).toBeUndefined()
 
     await harness.callHook('agent_start', {}, context)
     await vi.advanceTimersByTimeAsync(0)
@@ -565,7 +581,16 @@ describe('OMP session switches', () => {
     )
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(posts(harness).at(-1)).toMatchObject({ hook_event_name: 'agent_end', session_id: 'A' })
+    expect(normalizedOmpPosts(harness)).toContainEqual(
+      expect.objectContaining({
+        providerSession: expect.objectContaining({ id: 'A' }),
+        payload: expect.objectContaining({ state: 'done', sessionBoundary: true })
+      })
+    )
+    expect(normalizedOmpPosts(harness).at(-1)).toMatchObject({
+      providerSession: { id: 'B' },
+      payload: { state: 'done', sessionBoundary: true }
+    })
   })
 
   it('keeps the children when OMP reloads the same session', async () => {
@@ -578,11 +603,17 @@ describe('OMP session switches', () => {
       context
     )
     await vi.advanceTimersByTimeAsync(0)
-    expect(agentEndCount(harness)).toBe(0)
+    expect(normalizedOmpPosts(harness).at(-1)?.payload).toMatchObject({
+      state: 'working',
+      subagents: [{ id: 'c1' }]
+    })
 
     harness.emitPiEvent('task:subagent:lifecycle', { id: 'c1', status: 'completed' })
     await vi.advanceTimersByTimeAsync(0)
-    expect(posts(harness).at(-1)).toMatchObject({ hook_event_name: 'agent_end', session_id: 'A' })
+    expect(normalizedOmpPosts(harness).at(-1)).toMatchObject({
+      providerSession: { id: 'A' },
+      payload: { state: 'done' }
+    })
   })
 
   it.each(['fork', 'resume'] as const)(
@@ -598,11 +629,17 @@ describe('OMP session switches', () => {
         context
       )
       await vi.advanceTimersByTimeAsync(0)
-      expect(agentEndCount(harness)).toBe(0)
+      expect(normalizedOmpPosts(harness).at(-1)).toMatchObject({
+        providerSession: { id: 'B' },
+        payload: { state: 'working', subagents: [{ id: 'c1' }] }
+      })
 
       harness.emitPiEvent('task:subagent:lifecycle', { id: 'c1', status: 'completed' })
       await vi.advanceTimersByTimeAsync(0)
-      expect(posts(harness).at(-1)).toMatchObject({ hook_event_name: 'agent_end' })
+      expect(normalizedOmpPosts(harness).at(-1)).toMatchObject({
+        providerSession: { id: 'B' },
+        payload: { state: 'done' }
+      })
     }
   )
 
@@ -614,8 +651,17 @@ describe('OMP session switches', () => {
     await harness.callHook('session_branch', { previousSessionFile: '/sessions/A.jsonl' }, context)
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(posts(harness).at(-1)).toMatchObject({ hook_event_name: 'agent_end', session_id: 'A' })
-    expect(posts(harness).at(-1)?.subagents).toBeUndefined()
+    expect(normalizedOmpPosts(harness)).toContainEqual(
+      expect.objectContaining({
+        providerSession: expect.objectContaining({ id: 'A' }),
+        payload: expect.objectContaining({ state: 'done', sessionBoundary: true })
+      })
+    )
+    expect(normalizedOmpPosts(harness).at(-1)).toMatchObject({
+      providerSession: { id: 'B' },
+      payload: { state: 'done', sessionBoundary: true }
+    })
+    expect(normalizedOmpPosts(harness).at(-1)?.payload.subagents).toBeUndefined()
   })
 
   it('keeps a completion that was still waiting to be sent when OMP starts a new session', async () => {
@@ -674,7 +720,7 @@ describe('OMP session switches', () => {
     }
   )
 
-  it('posts nothing for a resume before any turn has run', async () => {
+  it('resumes an idle session without reporting a completed turn', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
     const { context } = ompSession()
     await harness.callHook(
@@ -684,7 +730,11 @@ describe('OMP session switches', () => {
     )
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(posts(harness)).toEqual([])
+    expect(normalizedOmpPosts(harness).at(-1)).toMatchObject({
+      providerSession: { id: 'A' },
+      payload: { state: 'done', sessionBoundary: true }
+    })
+    expect(normalizedOmpPosts(harness).at(-1)?.payload.mainAgent).toBeUndefined()
   })
 
   it('keeps the next session’s children off the old session’s last post', async () => {
@@ -727,18 +777,21 @@ describe('OMP session switches', () => {
     )
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(posts(harness).at(-1)).toMatchObject({ hook_event_name: 'agent_end', session_id: 'A' })
+    expect(normalizedOmpPosts(harness).at(-1)?.payload).toMatchObject({
+      state: 'done',
+      sessionBoundary: true
+    })
 
     // The turn is over, so a child that starts now re-opens the run.
     harness.emitPiEvent('task:subagent:lifecycle', { id: 'w1', agent: 'task', status: 'started' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(normalizedOmpPosts(harness).at(-1)?.payload).toMatchObject({
+      state: 'working',
+      subagents: [{ id: 'w1' }]
+    })
     harness.emitPiEvent('task:subagent:lifecycle', { id: 'w1', status: 'completed' })
     await vi.advanceTimersByTimeAsync(0)
-    expect(postedHookNames(harness)).toEqual([
-      'agent_start',
-      'agent_end',
-      'agent_start',
-      'agent_end'
-    ])
+    expect(normalizedOmpPosts(harness).at(-1)?.payload.state).toBe('done')
   })
 
   it('keeps describing the lead’s children after a task child registers on its own bus', async () => {

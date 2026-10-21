@@ -40,14 +40,6 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
   // Why: a live process already reports from these panes, so their owner's exit is not the pane's.
   private readonly ownerChallengesByLiveSender = new Map<string, number>()
 
-  /** Whether this pane's owner carries a process identity that its execution host can check. */
-  hasVerifiableAgentProcess(paneKey: string): boolean {
-    const presence = this.state.lastStatusByPaneKey.get(
-      this.resolvePaneKeyAlias(paneKey)
-    )?.agentPresence
-    return presence?.process !== undefined && !presence.ended
-  }
-
   /** A local inspection keeps the exact hook row, rather than probing the pane's next owner. */
   readCliWriterObservation(expected: AgentStatusIpcPayload): CliWriterObservation | null {
     const resolved = this.resolvePaneKeyAlias(expected.paneKey)
@@ -94,7 +86,6 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
       this.agentExitedAtByPaneKey.get(paneKey)
     return exit !== undefined && exit.at >= exitedSince ? 'exited' : null
   }
-
   checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {
     const resolved = this.resolvePaneKeyAlias(paneKey)
     const row = this.state.lastStatusByPaneKey.get(resolved)

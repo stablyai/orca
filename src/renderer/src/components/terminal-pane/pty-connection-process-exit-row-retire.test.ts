@@ -6,7 +6,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import type * as CoordinatorModule from './agent-completion-coordinator'
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
-import { createDeferred, flushAsyncTicks } from './pty-connection-test-async'
+import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   createMockTransport,
   createPane,
@@ -185,10 +185,6 @@ async function seedHookRow(
   return row
 }
 
-function setHostCanVerifyOwner(answer: boolean | Promise<boolean>): void {
-  window.api.agentStatus.hasVerifiableAgentProcess = vi.fn(() => Promise.resolve(answer))
-}
-
 describe('connectPanePty confirmed process exit retires the live agent row', () => {
   beforeEach(async () => {
     vi.resetModules()
@@ -267,43 +263,6 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     await seedHookRow(paneKey, 'claude')
 
     confirmExit('claude')
-    await flushAsyncTicks()
-
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
-  })
-
-  it('keeps the row when the host can verify the owner process itself', async () => {
-    setHostCanVerifyOwner(true)
-    const { paneKey, confirmExit } = await connectAgentPane({ ptyId: 'pty-mac-claude' })
-    await seedHookRow(paneKey, 'claude')
-
-    confirmExit('claude')
-    await flushAsyncTicks()
-
-    expect(window.api.agentStatus.hasVerifiableAgentProcess).toHaveBeenCalledWith(paneKey)
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
-  })
-
-  it('keeps the row when the agent is relaunched before the exit settles', async () => {
-    const hostAnswer = createDeferred<boolean>()
-    setHostCanVerifyOwner(hostAnswer.promise)
-    const { paneKey, confirmExit } = await connectAgentPane({ ptyId: 'pty-cmd-relaunch' })
-    const exitedRow = await seedHookRow(paneKey, 'claude')
-
-    confirmExit('claude')
-    // The relaunched Claude's first hook lands while the host is still answering.
-    vi.setSystemTime(Date.now() + 1_000)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
-      ...exitedRow,
-      state: 'working',
-      prompt: 'next session',
-      updatedAt: Date.now(),
-      stateStartedAt: Date.now(),
-      acceptedStatusSeq: (exitedRow.acceptedStatusSeq ?? 0) + 1
-    }
-    hostAnswer.resolve(false)
     await flushAsyncTicks()
 
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()

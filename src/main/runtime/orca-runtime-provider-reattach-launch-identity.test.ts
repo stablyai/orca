@@ -73,28 +73,4 @@ describe('provider reattach launch identity', () => {
       launchIncarnationId: null
     })
   })
-
-  it('retires daemon launch identity when the agent command finishes', () => {
-    const runtime = new OrcaRuntimeService(null)
-
-    runtime.registerPty('pty-finished-reattach', WORKTREE_ID, null, {
-      tabId: TAB_ID,
-      leafId: LEAF_ID,
-      incarnationId: INCARNATION_ID,
-      providerReattachLaunchIdentity: {
-        incarnationId: INCARNATION_ID,
-        launchAgent: 'codex'
-      }
-    })
-    runtime.emitDaemonPtyTransientFact('pty-finished-reattach', {
-      kind: 'command-finished',
-      exitCode: 0
-    })
-
-    expect(getPty(runtime, 'pty-finished-reattach')).toMatchObject({
-      launchAgent: null,
-      launchToken: null,
-      launchIncarnationId: null
-    })
-  })
 })

@@ -21,16 +21,20 @@ export class RuntimePtyForegroundAgent {
 
   constructor(private readonly deps: Dependencies) {}
 
-  read(ptyId: string, afterTitle = 0): Promise<PtyForegroundProcessRead> | null {
+  read(
+    ptyId: string,
+    afterTitle = 0,
+    afterPendingRead = false
+  ): Promise<PtyForegroundProcessRead> | null {
     const controller = this.deps.getController()
     if (!controller) {
       return null
     }
     const pending = this.reads.get(ptyId)
-    if (pending?.controller === controller && pending.startedAfterTitleObservation >= afterTitle) {
-      return pending.promise
-    }
     if (pending?.controller === controller) {
+      if (!afterPendingRead && pending.startedAfterTitleObservation >= afterTitle) {
+        return pending.promise
+      }
       return pending.promise.then(
         () => this.read(ptyId, afterTitle) ?? { controller, process: null, available: false }
       )

@@ -607,7 +607,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(5)
     })
 
-    it('retires stale routing after unavailable command-finish reads without asserting shell', async () => {
+    it('revokes stale routing but keeps launch identity after unavailable command-finish reads', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(null)
@@ -643,7 +643,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
       await flushAsyncTicks()
 
-      expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
+      expect(mockStoreState.agentLaunchConfigByPaneKey[paneKey]?.identity?.agentType).toBe('droid')
       expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
         agent: null,
         shellForeground: false

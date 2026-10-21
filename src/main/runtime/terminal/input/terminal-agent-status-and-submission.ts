@@ -67,9 +67,10 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
 
   protected readPtyForegroundProcessFromController(
     ptyId: string,
-    afterTitleObservation = 0
+    afterTitleObservation = 0,
+    afterPendingRead = false
   ): Promise<PtyForegroundProcessRead> | null {
-    return this.ptyForegroundAgent.read(ptyId, afterTitleObservation)
+    return this.ptyForegroundAgent.read(ptyId, afterTitleObservation, afterPendingRead)
   }
 
   protected async recheckHookAgentPresenceForPty(

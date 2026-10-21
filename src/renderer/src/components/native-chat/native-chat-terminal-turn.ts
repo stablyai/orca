@@ -70,12 +70,7 @@ export function nativeChatHookTurnStartedAt(
     : entry.stateStartedAt
 }
 
-/**
- * The latest turn's duration by the host, for a turn the pane is not running: a number once the
- * main agent is done (its done stamp minus the host's turn start), null when the host went quiet
- * mid-turn (nothing says the turn ended, so a locally measured end would be a false claim), and
- * undefined to keep what the pane observed (an old host, a session boundary, a pane-side end).
- */
+// Completed main-agent clocks survive readiness updates; unknown turn ends have no duration.
 export function nativeChatHookLatestTurnWorkedSeconds(
   entry: NativeChatHookTurnEntry | undefined,
   hookSilent: boolean
@@ -85,7 +80,7 @@ export function nativeChatHookLatestTurnWorkedSeconds(
   }
   const mainAgent = entry.mainAgent ?? entry
   if (mainAgent.state === 'done') {
-    return entry.sessionBoundary === true || entry.turnStartedAt === undefined
+    return (entry.sessionBoundary === true && !entry.mainAgent) || entry.turnStartedAt === undefined
       ? undefined
       : Math.max(0, Math.floor((mainAgent.stateStartedAt - entry.turnStartedAt) / 1000))
   }
