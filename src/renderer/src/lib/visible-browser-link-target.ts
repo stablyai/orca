@@ -13,6 +13,28 @@ export type VisibleBrowserLinkState = {
 
 export type BrowserLinkPlacement = { targetGroupId: string }
 
+export type BrowserLinkOpenerState = VisibleBrowserLinkState & {
+  createBrowserTab: (
+    worktreeId: string,
+    url: string,
+    opts: { activate: boolean; targetGroupId?: string }
+  ) => unknown
+  focusGroup?: (worktreeId: string, groupId: string) => void
+}
+
+/** Opens url in the on-screen browser group if there is one, else at createBrowserTab's default spot. */
+export function openBrowserLinkInVisibleGroup(
+  state: BrowserLinkOpenerState,
+  worktreeId: string,
+  url: string
+): void {
+  const placement = findVisibleBrowserLinkTarget(state, worktreeId)
+  state.createBrowserTab(worktreeId, url, { activate: true, ...placement })
+  if (placement) {
+    state.focusGroup?.(worktreeId, placement.targetGroupId)
+  }
+}
+
 /** The on-screen group whose active tab is a browser: focused group first, else most recently focused. */
 export function findVisibleBrowserLinkTarget(
   state: VisibleBrowserLinkState,

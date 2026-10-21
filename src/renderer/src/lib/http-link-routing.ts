@@ -11,7 +11,8 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { reselectWorkspaceKeepingHost } from './active-workspace-host'
 import {
   findVisibleBrowserLinkTarget,
-  type VisibleBrowserLinkState
+  openBrowserLinkInVisibleGroup,
+  type BrowserLinkOpenerState
 } from './visible-browser-link-target'
 
 export type OpenHttpLinkOptions = {
@@ -33,7 +34,7 @@ export type HttpLinkSourceOwner =
   | { kind: 'ssh'; connectionId: string }
   | { kind: 'unknown' }
 
-type StoreAccessor = () => VisibleBrowserLinkState & {
+type StoreAccessor = () => BrowserLinkOpenerState & {
   settings?: Partial<
     Pick<
       GlobalSettings,
@@ -46,12 +47,6 @@ type StoreAccessor = () => VisibleBrowserLinkState & {
   setActiveWorktree: (worktreeId: string, executionHostId?: ExecutionHostId) => void
   activeWorktreeId?: string | null
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
-  createBrowserTab: (
-    worktreeId: string,
-    url: string,
-    opts: { activate: boolean; targetGroupId?: string }
-  ) => unknown
-  focusGroup?: (worktreeId: string, groupId: string) => void
   repos?: readonly LocalhostLinkRepo[]
   projects?: readonly LocalhostLinkProject[]
   worktreesByRepo?: Record<string, LocalhostLinkWorktree[]>
@@ -203,14 +198,8 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
       reselectWorkspaceKeepingHost(state, worktreeId)
     }
     // Why fresh state: the labeled-localhost path opens after an await, when the layout may have changed.
-    const openInOrca = (target: string): void => {
-      const current = storeAccessor?.() ?? state
-      const placement = findVisibleBrowserLinkTarget(current, worktreeId)
-      current.createBrowserTab(worktreeId, target, { activate: true, ...placement })
-      if (placement) {
-        current.focusGroup?.(worktreeId, placement.targetGroupId)
-      }
-    }
+    const openInOrca = (target: string): void =>
+      openBrowserLinkInVisibleGroup(storeAccessor?.() ?? state, worktreeId, target)
     const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
     if (!localhostRoute) {
       openInOrca(url)
