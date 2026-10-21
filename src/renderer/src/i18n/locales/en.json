@@ -20612,7 +20612,8 @@
   "mediaPreview": {
     "unavailable": "Unable to play this media file. The file may be unavailable or use an unsupported codec.",
     "openFailed": "Could not open this file in the default app.",
-    "openDefault": "Open in Default App"
+    "openDefault": "Open in Default App",
+    "closeInlinePlayer": "Close player"
   },
   "workspace": {
     "links": {

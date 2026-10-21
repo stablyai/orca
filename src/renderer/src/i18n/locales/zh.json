@@ -20375,7 +20375,8 @@
   "mediaPreview": {
     "unavailable": "无法播放此媒体文件。文件可能不可用或使用了不支持的编解码器。",
     "openFailed": "无法在默认应用中打开此文件。",
-    "openDefault": "在默认应用中打开"
+    "openDefault": "在默认应用中打开",
+    "closeInlinePlayer": "关闭播放器"
   },
   "projectBoard": {
     "noColumnField": "此看板视图没有可用于分组的单选或迭代字段，因此 Orca 改为列出各项。",

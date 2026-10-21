@@ -17,6 +17,15 @@ import { installTerminalLinkifierClickPriming } from './terminal-linkifier-click
 import { installTerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { handleOscLink } from './terminal-osc-link-routing'
+import {
+  closeInlineMediaPlayers,
+  inlineMediaKind,
+  localPathFromFileUrl,
+  toggleInlineMedia
+} from './terminal-inline-media'
+import { isTerminalLinkActionActivation } from './terminal-link-activation'
+import { shouldOpenTerminalFileWithSystemDefault } from './terminal-file-open-routing'
+import { getTerminalFileContext } from './terminal-file-path-mapping'
 import { copyTerminalSelection } from './terminal-selection-copy'
 import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 import { installTerminalNativeCopyGutterTrim } from './terminal-native-copy-gutter'
@@ -77,12 +86,17 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
   } = context
   const linkPointerGesture = installTerminalLinkPointerGesture(pane.terminal)
   refs.linkPointerGesturesRef.current.set(pane.id, linkPointerGesture)
-  refs.linkProviderDisposablesRef.current.set(
-    pane.id,
-    pane.terminal.registerLinkProvider(
-      createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip, fileOpenLinkHint)
-    )
+  const filePathLinkProvider = pane.terminal.registerLinkProvider(
+    createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip, fileOpenLinkHint)
   )
+  // Why here: this disposable is released on pane close and on unmount, so inline players (and
+  // any sound they play) go away with the pane that opened them.
+  refs.linkProviderDisposablesRef.current.set(pane.id, {
+    dispose: () => {
+      filePathLinkProvider.dispose()
+      closeInlineMediaPlayers(pane.terminal)
+    }
+  })
   refs.terminalHandleLinkDisposablesRef.current.set(
     pane.id,
     pane.terminal.registerLinkProvider(
@@ -177,7 +191,32 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
   let oscTooltipHoverToken = 0
   pane.terminal.options.linkHandler = {
     allowNonHttpProtocols: true,
-    activate: (event, text) => {
+    activate: (event, text, range) => {
+      const localPath = localPathFromFileUrl(text)
+      const mediaKind =
+        localPath &&
+        shouldOpenTerminalFileWithSystemDefault(
+          getTerminalFileContext(
+            linkDeps.worktreeId,
+            linkDeps.worktreePath,
+            linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ??
+              linkDeps.runtimeEnvironmentId ??
+              null
+          )
+        )
+          ? inlineMediaKind(localPath)
+          : null
+      // Why before the OSC routing: agents print `[clip](file:///…/clip.mp4)` as an OSC 8 link, and
+      // a plain click on a local video, sound or image plays it under the link (Cmd+click still opens it).
+      if (
+        localPath &&
+        mediaKind &&
+        isTerminalLinkActionActivation(event as MouseEvent | undefined) &&
+        toggleInlineMedia(pane.terminal, range.start.y - 1, localPath, mediaKind)
+      ) {
+        event?.preventDefault?.()
+        return
+      }
       const handled = handleOscLink(text, event as MouseEvent | undefined, {
         ...linkDeps,
         startupCwd: getPaneLinkCwd(pane.id),

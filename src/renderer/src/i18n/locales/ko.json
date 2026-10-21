@@ -20375,7 +20375,8 @@
   "mediaPreview": {
     "unavailable": "미디어 파일을 재생할 수 없습니다. 파일을 사용할 수 없거나 지원하지 않는 코덱일 수 있습니다.",
     "openFailed": "기본 앱에서 파일을 열 수 없습니다.",
-    "openDefault": "기본 앱에서 열기"
+    "openDefault": "기본 앱에서 열기",
+    "closeInlinePlayer": "플레이어 닫기"
   },
   "projectBoard": {
     "noColumnField": "이 보드 보기에는 그룹화할 단일 선택 또는 반복 필드가 없어 Orca가 대신 항목을 나열합니다.",

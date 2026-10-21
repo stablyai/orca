@@ -20375,7 +20375,8 @@
   "mediaPreview": {
     "unavailable": "このメディアファイルを再生できません。ファイルが利用できないか、コーデックが対応していない可能性があります。",
     "openFailed": "既定のアプリでファイルを開けませんでした。",
-    "openDefault": "既定のアプリで開く"
+    "openDefault": "既定のアプリで開く",
+    "closeInlinePlayer": "プレーヤーを閉じる"
   },
   "projectBoard": {
     "noColumnField": "このボードビューにはグループ化に使える単一選択フィールドまたは反復フィールドがないため、代わりに Orca が項目を一覧表示します。",
