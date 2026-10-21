@@ -1,9 +1,13 @@
+import { composeAutomationDispatchPrompt } from '../../shared/automation-webhook'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { buildAutomationWorkspaceProvenance } from '../../shared/automation-workspace-provenance'
 import type { Repo } from '../../shared/repo-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
-type HeadlessAutomationRunForWorkspace = Pick<AutomationRun, 'id' | 'title' | 'scheduledFor'>
+type HeadlessAutomationRunForWorkspace = Pick<
+  AutomationRun,
+  'id' | 'title' | 'scheduledFor' | 'webhookDelivery'
+>
 type RuntimeCreateManagedWorktreeArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
 
 export function buildHeadlessAutomationWorkspaceName(
@@ -40,7 +44,7 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     activate: false,
     createdWithAgent: automation.agentId,
     startupAgent: automation.agentId,
-    startupPrompt: automation.prompt,
+    startupPrompt: composeAutomationDispatchPrompt(automation, run),
     ...(automation.extraAgentArgs ? { startupExtraAgentArgs: automation.extraAgentArgs } : {}),
     telemetrySource: 'unknown',
     automationProvenance: buildAutomationWorkspaceProvenance(automation, run, repo, createdAt)

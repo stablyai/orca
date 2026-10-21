@@ -1,3 +1,4 @@
+import { bindAutomationWebhookLifecycle } from '../webhooks/automation-webhook-lifecycle'
 /**
  * The AutomationService a runtime host executes schedules with. Shared by Electron startup and
  * orcad so both hosts dispatch through the same headless path.
@@ -65,6 +66,7 @@ export function createRuntimeAutomationService(input: {
         }
       : undefined
   })
+  bindAutomationWebhookLifecycle(service, store)
   runtime.setAutomationService(service)
   if (input.headless) {
     bindHeadlessRunTerminalRetention(service, store, runtime)

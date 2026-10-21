@@ -1,3 +1,4 @@
+import { generateWebhookSecret } from '../webhooks/webhook-secret'
 import { parseExecutionHostId } from '../../shared/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { ipcMain } from 'electron'
@@ -59,6 +60,8 @@ function underOrcaPriority<T>(scheduler: ExternalAutomationProbeScheduler, run: 
 }
 
 export function registerAutomationHandlers(store: Store, service: AutomationService): void {
+  ipcMain.handle('automations:webhookEndpoint', () => service.getWebhookEndpoint?.() ?? null)
+  ipcMain.handle('automations:generateWebhookSecret', () => generateWebhookSecret())
   // One long-lived pair per registration: the cache TTL and the probe pool's
   // concurrency ceiling only mean anything if they outlive a single request.
   const probeScheduler = new ExternalAutomationProbeScheduler()

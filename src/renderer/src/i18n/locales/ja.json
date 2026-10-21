@@ -12961,7 +12961,8 @@
           "tailscale": "Tailscale · {{address}}",
           "lan": "ローカルネットワーク · {{address}}",
           "loopback": "このコンピューター · {{address}}"
-        }
+        },
+        "WebhookServerSetting": {}
       },
       "right": {
         "sidebar": {
@@ -17372,7 +17373,8 @@
           "useFreshSessions": "新しいセッションを使用",
           "helper": "新しいセッションごとに、このホストのデフォルト引数に追加されます。",
           "detailLabel": "追加の引数"
-        }
+        },
+        "AutomationWebhookSection": {}
       },
       "agent": {
         "AgentCombobox": {

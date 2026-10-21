@@ -7,7 +7,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
 import { isFinalAutomationRunStatus } from '../../shared/automations-types'
 
-type AutomationStore = Pick<Store, 'listAutomations' | 'listAutomationRuns'>
+type AutomationStore = Pick<Store, 'listAutomations' | 'listAutomationRuns' | 'getSettings'>
 
 let stopScheduler: (() => void) | null = null
 
@@ -31,6 +31,7 @@ export function stopOrcadAutomationScheduler(): void {
 /** Busy while a schedule may fire or a run has not settled; idling out would skip both. */
 export function orcadAutomationsKeepHostBusy(store: AutomationStore): boolean {
   return (
+    store.getSettings().webhookServer?.enabled === true ||
     store.listAutomations().some((automation) => automation.enabled) ||
     store.listAutomationRuns().some((run) => !isFinalAutomationRunStatus(run.status))
   )

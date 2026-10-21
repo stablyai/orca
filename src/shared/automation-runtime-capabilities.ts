@@ -1,3 +1,4 @@
+export const AUTOMATION_WEBHOOK_RUNTIME_CAPABILITY = 'automation.webhook.v1' as const
 // Older hosts drop automation.list's selector and return every host's rows.
 export const AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY =
   'automation.list-host-scope.v1' as const
@@ -14,6 +15,7 @@ export const AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY =
   'automations.extra-agent-args.v1' as const
 
 export const AUTOMATION_RUNTIME_CAPABILITIES = [
+  AUTOMATION_WEBHOOK_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,

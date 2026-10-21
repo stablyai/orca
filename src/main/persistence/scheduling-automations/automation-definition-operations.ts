@@ -1,3 +1,4 @@
+import { normalizeAutomationWebhookConfig } from '../../../shared/automation-webhook'
 import { randomUUID } from 'node:crypto'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import type {
@@ -118,6 +119,7 @@ export function createAutomation(
     nextRunAt: nextAutomationOccurrenceAfter(input.rrule, input.dtstart, now),
     missedRunPolicy: 'run_once_within_grace',
     missedRunGraceMinutes: input.missedRunGraceMinutes ?? 720,
+    webhook: normalizeAutomationWebhookConfig(input.webhook),
     createdAt: now,
     updatedAt: now
   }
@@ -180,6 +182,9 @@ export function updateAutomation(
     precheck: Object.hasOwn(definedUpdates, 'precheck')
       ? normalizeAutomationPrecheck(definedUpdates.precheck)
       : normalizeAutomationPrecheck(current.precheck),
+    webhook: Object.hasOwn(definedUpdates, 'webhook')
+      ? normalizeAutomationWebhookConfig(definedUpdates.webhook)
+      : normalizeAutomationWebhookConfig(current.webhook),
     projectId: repoId,
     // Why the wire object is ignored: contexts are the storing authority's own
     // registry speaking. A move restates them from that registry, anything else

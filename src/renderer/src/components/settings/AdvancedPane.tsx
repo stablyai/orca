@@ -1,3 +1,4 @@
+import { WebhookServerSetting } from './WebhookServerSetting'
 import { useRef, useState } from 'react'
 import { Info, Loader2, RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -146,6 +147,7 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
           )}
         />
         <AdvancedNetworkSettingsSection settings={settings} updateSettings={updateSettings} />
+        <WebhookServerSetting settings={settings} updateSettings={updateSettings} />
       </section>
     </div>
   )

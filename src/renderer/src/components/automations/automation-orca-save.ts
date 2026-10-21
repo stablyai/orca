@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import type {
   Automation,
   AutomationCreateInput,
+  AutomationWebhookConfig,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -79,6 +80,20 @@ export async function saveOrcaAutomation(
         })
   const rawGrace = Number(draft.missedRunGraceMinutes)
   const missedRunGraceMinutes = Number.isFinite(rawGrace) ? Math.max(0, rawGrace) : 720
+  const webhook: AutomationWebhookConfig = {
+    enabled: draft.webhookEnabled ?? false,
+    secretMode: draft.webhookSecretMode ?? 'none',
+    secret: draft.webhookSecret?.trim() || null
+  }
+  if (webhook.enabled && webhook.secretMode !== 'none' && !webhook.secret) {
+    toast.error(
+      translate(
+        'auto.components.automations.AutomationsPage.42677009ba',
+        'Add a secret for token or HMAC verification, or choose No verification.'
+      )
+    )
+    return
+  }
   const precheck = buildDraftPrecheck(draft)
   const reposForDraft = editingAutomationId !== null ? dialogRepos : repos
   const setupResolution =
@@ -170,7 +185,8 @@ export async function saveOrcaAutomation(
     setupDecision,
     reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
     timezone,
-    missedRunGraceMinutes
+    missedRunGraceMinutes,
+    ...(webhook.enabled || currentAutomation?.webhook ? { webhook } : {})
   }
   if (!currentAutomation || currentAutomation.rrule !== rrule) {
     updates.rrule = rrule
@@ -192,7 +208,8 @@ export async function saveOrcaAutomation(
     timezone,
     rrule,
     dtstart: updates.dtstart ?? time.now,
-    missedRunGraceMinutes
+    missedRunGraceMinutes,
+    ...(webhook.enabled || currentAutomation?.webhook ? { webhook } : {})
   }
 
   const destinationResult = resolveAutomationEditDestination({

@@ -93,6 +93,22 @@ function isMigratedAutomation(value: unknown): value is Automation {
   requiredString(record.name, 'orcad_migration_dormant_automation_name_invalid')
   requiredStringOrEmpty(record.prompt, 'orcad_migration_dormant_automation_prompt_invalid')
   parsePrecheck(record.precheck)
+  if (record.webhook !== undefined && record.webhook !== null) {
+    const webhook = requiredRecord(
+      record.webhook,
+      'orcad_migration_dormant_automation_webhook_invalid'
+    )
+    if (
+      webhook.enabled !== false ||
+      !['none', 'token', 'hmac_sha256'].includes(String(webhook.secretMode))
+    ) {
+      throw new Error('orcad_migration_dormant_automation_webhook_invalid')
+    }
+    optionalNullableString(
+      webhook.secret,
+      'orcad_migration_dormant_automation_webhook_secret_invalid'
+    )
+  }
   if (!isTuiAgent(record.agentId)) {
     throw new Error('orcad_migration_dormant_automation_agent_invalid')
   }
@@ -162,7 +178,11 @@ function isMigratedAutomationRun(value: unknown): value is AutomationRun {
   if (!FINAL_RUN_STATUSES.has(record.status)) {
     throw new Error('orcad_migration_dormant_automation_run_status_invalid')
   }
-  if (record.trigger !== 'scheduled' && record.trigger !== 'manual') {
+  if (
+    record.trigger !== 'scheduled' &&
+    record.trigger !== 'manual' &&
+    record.trigger !== 'webhook'
+  ) {
     throw new Error('orcad_migration_dormant_automation_run_trigger_invalid')
   }
   optionalNullableString(

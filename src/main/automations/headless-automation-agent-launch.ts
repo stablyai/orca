@@ -1,3 +1,4 @@
+import { composeAutomationDispatchPrompt } from '../../shared/automation-webhook'
 /**
  * A server-run automation's agent, started through the shared launch executor.
  *
@@ -42,7 +43,7 @@ export async function launchHeadlessAutomationAgent(
   runtime: OrcaRuntimeService,
   request: {
     automation: Automation
-    run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor'>
+    run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor' | 'webhookDelivery'>
     target: Extract<AutomationRunTargetResult, { ok: true }>
     /** This automation's runs, whose idle agent a `reuseSession` run continues. */
     runs: readonly AutomationRun[]
@@ -51,7 +52,7 @@ export async function launchHeadlessAutomationAgent(
   const { automation, run, target } = request
   const agent = automation.agentId
   // The startup plan trims the prompt for every agent; a blank one launches the agent bare.
-  const text = automation.prompt?.trim()
+  const text = composeAutomationDispatchPrompt(automation, run)?.trim()
   if (automation.reuseSession && automation.workspaceMode === 'existing' && text) {
     const reused = await sendToReusableSession(runtime, { ...request, text })
     if (reused) {

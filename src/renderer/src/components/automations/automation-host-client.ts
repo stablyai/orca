@@ -1,3 +1,5 @@
+import { getRuntimeEnvironmentStatus } from '@/runtime/runtime-rpc-client'
+import { AUTOMATION_WEBHOOK_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { assertEnvironmentSupportsExtraAgentArgs } from './automation-capability-probe'
 import type {
@@ -139,6 +141,14 @@ export async function updateAutomationForTarget(
 ): Promise<Automation> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
   if (target.kind === 'environment') {
+    if (updates.webhook !== undefined) {
+      const status = await getRuntimeEnvironmentStatus(target.environmentId, 15_000)
+      if (!status.capabilities?.includes(AUTOMATION_WEBHOOK_RUNTIME_CAPABILITY)) {
+        throw new Error(
+          'Webhook triggers require a newer Orca server. Update the host and try again.'
+        )
+      }
+    }
     await assertEnvironmentSupportsExtraAgentArgs(target.environmentId, updates.extraAgentArgs)
   }
   const result = await callRuntimeRpc<{ automation: Automation }>(

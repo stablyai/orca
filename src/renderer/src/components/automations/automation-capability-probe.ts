@@ -1,3 +1,5 @@
+import { AUTOMATION_WEBHOOK_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
+import type { AutomationWebhookConfig } from '../../../../shared/automations-types'
 import { getRuntimeEnvironmentStatus } from '@/runtime/runtime-rpc-client'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import {
@@ -178,4 +180,18 @@ export {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+}
+
+export async function assertWebhookSupported(
+  authority: AutomationAuthorityRef,
+  webhook: AutomationWebhookConfig | null | undefined
+): Promise<void> {
+  if (webhook === undefined) {
+    return
+  }
+  await assertAuthorityCapability(
+    authority,
+    AUTOMATION_WEBHOOK_RUNTIME_CAPABILITY,
+    'Webhook triggers require a newer Orca server. Update the host and try again.'
+  )
 }

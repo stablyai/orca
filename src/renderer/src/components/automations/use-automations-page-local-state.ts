@@ -139,6 +139,9 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     customSchedule: '',
     missedRunGraceMinutes: '720',
     savedSchedule: null,
+    webhookEnabled: false,
+    webhookSecretMode: 'none',
+    webhookSecret: '',
     scheduleWarning: null
   })
   const draftRef = useRef(draft)

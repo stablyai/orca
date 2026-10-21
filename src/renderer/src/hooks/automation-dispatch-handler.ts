@@ -1,3 +1,4 @@
+import { composeAutomationDispatchPrompt } from '../../../shared/automation-webhook'
 import { listAutomationRunsForTarget } from '@/components/automations/automation-host-client'
 import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
@@ -113,7 +114,7 @@ export async function handleAutomationDispatchRequest({
             const submitted = await submitPromptToAgentPty({
               tabId: reusableSession.tabId,
               ptyId: reusableSession.ptyId,
-              content: automation.prompt
+              content: composeAutomationDispatchPrompt(automation, run)
             })
             if (!submitted) {
               completion.cleanupRunObservers()
@@ -169,7 +170,7 @@ export async function handleAutomationDispatchRequest({
     const result = await launchAgentBackgroundSession({
       agent: automation.agentId,
       worktreeId: worktree.id,
-      prompt: automation.prompt,
+      prompt: composeAutomationDispatchPrompt(automation, run),
       ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
       launchSource: 'unknown',
       title: run.title,
