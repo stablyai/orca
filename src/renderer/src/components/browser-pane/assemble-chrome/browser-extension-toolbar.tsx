@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Pin, Puzzle, Settings2 } from 'lucide-react'
+import { Pin, Puzzle, Settings2, Store } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -21,6 +21,7 @@ import type {
   BrowserExtensionToolbarAction,
   BrowserExtensionToolbarState
 } from '../../../../../shared/browser-extension-toolbar-types'
+import { CHROME_WEB_STORE_HOME_URL } from '../../../../../shared/browser-extension-webstore'
 import {
   BrowserExtensionContextEntries,
   BrowserExtensionDropdownEntries,
@@ -166,6 +167,7 @@ export function BrowserExtensionToolbar({
 }): React.JSX.Element {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const openBrowserProfileTab = useAppStore((s) => s.openBrowserProfileTabInActiveWorkspace)
   const puzzleRef = useRef<HTMLButtonElement>(null)
   const pinnedRefs = useRef(new Map<string, HTMLButtonElement>())
   const pinned = compact ? [] : state.actions.filter((action) => action.pinned)
@@ -244,6 +246,13 @@ export function BrowserExtensionToolbar({
             ))
           )}
           <DropdownMenuSeparator />
+          <DropdownMenuItem
+            // Why this profile: an install from the store page lands where the store was opened.
+            onSelect={() => void openBrowserProfileTab(CHROME_WEB_STORE_HOME_URL, state.profileId)}
+          >
+            <Store className="size-3.5" />
+            {translate('browser.extensions.visitWebStore', 'Visit Chrome Web Store')}
+          </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
               openSettingsPage()

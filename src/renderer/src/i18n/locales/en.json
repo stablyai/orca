@@ -237,6 +237,7 @@
       "unpin": "Unpin from toolbar",
       "remove": "Remove…",
       "empty": "No extensions are on for this profile",
+      "visitWebStore": "Visit Chrome Web Store",
       "manage": "Manage extensions"
     }
   },
