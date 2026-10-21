@@ -189,6 +189,8 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
       return rejectedAcpDispatch(session)
     }
     const { sessionId, fence, signal } = input
+    signal?.throwIfAborted()
+    input.onInputPreparation?.()
     const optionsApplied = await applyAcpMessageOptions(
       session,
       input.executionOptions,

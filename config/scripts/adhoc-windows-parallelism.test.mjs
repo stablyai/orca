@@ -23,8 +23,9 @@ function qualification(template = 'success', ships = 'true') {
 }
 
 describe('adhoc Windows compilation overlaps Mac without publishing early', () => {
-  it('starts both platforms from the same qualified inputs without a Mac dependency', () => {
+  it('starts both platforms during qualification without a Mac dependency', () => {
     expect(windows.needs).toEqual(mac.needs)
+    expect(mac.needs).not.toContain('orcad-template')
     expect(windows.needs).not.toContain('build-adhoc-mac')
     expect(windows.with.stage_only).toBe(true)
     expect(windows.with.fast_release).toBe(true)
@@ -49,7 +50,7 @@ describe('adhoc Windows compilation overlaps Mac without publishing early', () =
     expect(bundle.with.ref).toBe('${{ needs.resolve-ref.outputs.sha }}')
     expect(bundle.with.dev_build).toBe(true)
     expect(bundle.secrets).toBeUndefined()
-    expect(jobs['orcad-template'].with.fast_runners).toBe(true)
+    expect(jobs['orcad-template'].uses).toBe('./.github/workflows/adhoc-orcad-template.yml')
     for (const job of [mac, windows]) {
       expect(job.needs).toContain('release-javascript')
       const evaluate = compileAggregateExpression(job.if, ['needs', 'github'])
@@ -99,11 +100,11 @@ describe('adhoc Windows compilation overlaps Mac without publishing early', () =
 
   it.each([
     ['success', 'true', true],
-    ['failure', 'true', false],
-    ['cancelled', 'true', false],
-    ['skipped', 'true', false],
+    ['failure', 'true', true],
+    ['cancelled', 'true', true],
+    ['skipped', 'true', true],
     ['skipped', 'false', true]
-  ])('preserves qualification for %s / template=%s', (result, ships, allowed) => {
+  ])('allows preparation before qualification ends: %s / template=%s', (result, ships, allowed) => {
     const run = compileAggregateExpression(windows.if, ['needs', 'github'])
     const context = qualification(result, ships)
     expect(run(context).coerceString()).toBe(String(allowed))
@@ -113,24 +114,21 @@ describe('adhoc Windows compilation overlaps Mac without publishing early', () =
   })
 
   it.each(['success', 'failure', 'cancelled', 'skipped', ''])(
-    'requires successful Mac publication and Windows compilation: %s',
+    'prefetches only after Windows compilation succeeds: %s',
     (result) => {
       const run = compileAggregateExpression(publish.if)
       const needs = {
-        'build-adhoc-mac': { result: 'success', outputs: { published: 'true' } },
+        'orcad-template-support': { result: 'success' },
         'build-adhoc-win': { result: 'success' }
       }
-      expect(publish.needs).toEqual(['build-adhoc-mac', 'build-adhoc-win'])
+      expect(publish.needs).toEqual(['orcad-template-support', 'build-adhoc-win'])
+      expect(publish.with.wait_for_mac_job).toBe('build-adhoc-mac')
       expect(run({ needs }).coerceString()).toBe('true')
       expect(run({ needs }, true).coerceString()).toBe('false')
       for (const job of publish.needs) {
         expect(run({ needs: { ...needs, [job]: { ...needs[job], result } } }).coerceString()).toBe(
           String(result === 'success')
         )
-      }
-      for (const published of ['false', '', undefined]) {
-        needs['build-adhoc-mac'].outputs.published = published
-        expect(run({ needs }).coerceString()).toBe('false')
       }
     }
   )

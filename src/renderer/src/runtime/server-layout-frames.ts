@@ -7,12 +7,16 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
-import { LAYOUT_INTENTS_RUNTIME_CAPABILITY } from '../../../shared/workspace-layout/layout-intents-capability'
+import {
+  LAYOUT_INTENTS_RUNTIME_CAPABILITY,
+  LAYOUT_REOPEN_HELD_PANES_CAPABILITY
+} from '../../../shared/workspace-layout/layout-intents-capability'
 import {
   isDisconnectedRuntimeHostState,
   runtimeHostConnectionStateForEntry
 } from './runtime-host-connection-state'
 import { createServerLayoutFrameTranslator } from './server-layout-frame-ids'
+import { serverHeldPanes, showServerLayoutHeldPanes } from './server-held-panes'
 import { createServerViewReport, onServerControlConnected } from './server-layout-view-report'
 import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
 import { mirroredRuntimeEnvironmentIdForWorkspace } from './web-session-tabs-sync/mirrored-workspace-owner'
@@ -81,9 +85,23 @@ function openServerFrames(
     }
     return added
   }
+  /** The banner shows the held panes of the workspaces these frames draw, when the server can reopen them. */
+  const showHeld = (): void => {
+    const status = lastVerifiedRuntimeStatus(
+      store.getState().runtimeStatusByEnvironmentId.get(environmentId)
+    )
+    const reopens = status?.capabilities?.includes(LAYOUT_REOPEN_HELD_PANES_CAPABILITY) === true
+    showServerLayoutHeldPanes(
+      environmentId,
+      live && reopens
+        ? serverHeldPanes([...gated].flatMap((key) => translator.serverLayout(key) ?? []))
+        : []
+    )
+  }
   const handBack = (): void => {
     live = false
     gate(new Set())
+    showHeld()
   }
   const draws = serverDraws(environmentId)
   const viewReport = createServerViewReport(environmentId)
@@ -132,6 +150,7 @@ function openServerFrames(
       }
       // Before the frame shows: the mirror must not write a workspace the frames now draw.
       regate()
+      showHeld()
       return translated
     },
     onStatus: (status) => {
@@ -153,6 +172,7 @@ function openServerFrames(
     }
     routing = next
     const added = live ? regate() : []
+    showHeld()
     if (added.length > 0) {
       // The mirror may have drawn them meanwhile.
       sync.redraw(added)
@@ -174,6 +194,8 @@ function openServerFrames(
       sync.close()
       if (returnWorkspaces) {
         handBack()
+      } else {
+        showServerLayoutHeldPanes(environmentId, [])
       }
     }
   }

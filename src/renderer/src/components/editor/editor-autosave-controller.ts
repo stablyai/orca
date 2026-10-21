@@ -8,7 +8,7 @@ import {
   type EditorSaveFileDetail,
   type EditorSaveQuiesceDetail
 } from './editor-autosave'
-import { flushPendingEditorChange } from './editor-pending-flush'
+import { flushPendingEditorBuffer } from './editor-pending-flush'
 import {
   autosaveSubscriberInputsEqual,
   getAutosaveSubscriberInputs
@@ -51,7 +51,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       return
     }
 
-    flushPendingEditorChange(file.id)
+    flushPendingEditorBuffer(store.getState(), file.id)
     const draft = store.getState().editorDrafts[fileId]
     if (draft !== undefined) {
       try {
@@ -87,7 +87,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         return
       }
 
-      flushPendingEditorChange(file.id)
+      flushPendingEditorBuffer(store.getState(), file.id)
 
       const content = store.getState().editorDrafts[file.id] ?? detail.fallbackContent
       if (content === undefined) {

@@ -22,11 +22,11 @@ import {
   claudeResolvedCatalogListing,
   claudeStructuredSessionOptionsFrom,
   observeClaudeSettingsApplied,
-  observeClaudeSettingsExecutionEffort,
   readClaudeSettingsApplied,
   readClaudeFastModeFacts,
   readClaudeSettingsEffort
 } from './claude-structured-session-options'
+import { claudeExecutionObservations } from './claude-structured-execution-observations'
 import type {
   ClaudeAuthDiagnostic,
   ClaudeSession,
@@ -126,18 +126,14 @@ function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitial
   const { init, initialization } = facts
   // A turn's own init frame may already have reported the running model.
   if (init?.model && session.reportedOptions.model === undefined) {
-    if (session.optionMutationSequence === 0) {
-      session.reusableOptions.set('model', init.model)
-    } else if (session.reusableOptions.get('model') !== init.model) {
-      session.reusableOptions.delete('model')
-      session.reusableOptions.delete('effort')
-      session.reusableOptions.delete('fastMode')
-    }
     session.reportedOptions.model = init.model
     session.reportedModelMutation = session.optionMutationSequence
   }
   const fastModeFacts = readClaudeFastModeFacts(initialization)
-  session.fastModeState ??= fastModeFacts.state
+  if (session.fastModeState === undefined && fastModeFacts.state) {
+    session.fastModeState = fastModeFacts.state
+    session.fastModeReportedMutation = 0
+  }
   session.fastModeDisabledReason ??= fastModeFacts.disabledReason
   session.capabilities = readClaudeCapabilities(session.capabilities, initialization, init?.message)
   // A catalog frame that streamed in after publish is newer than the initialize answer.
@@ -163,7 +159,6 @@ function applyClaudeSettingsFacts(
       ...(!session.options.has('effort') && applied?.effort ? { effort: applied.effort } : {})
     }
   }
-  observeClaudeSettingsApplied(session, settings)
   if (published.fastModePerSessionOptIn !== null) {
     session.fastModePerSessionOptIn = published.fastModePerSessionOptIn
   }
@@ -171,7 +166,7 @@ function applyClaudeSettingsFacts(
     session.events?.publish()
     return
   }
-  observeClaudeSettingsExecutionEffort(session, settings)
+  observeClaudeSettingsApplied(session, settings)
   // The readback vouches for a value the child was launched with only when it reports that value.
   const agrees = (key: string, reported: string): boolean =>
     !session.options.has(key) || session.options.get(key) === reported
@@ -187,8 +182,10 @@ function applyClaudeSettingsFacts(
     session.confirmedOptions.add('effort')
   }
   if (published.fastMode !== null) {
-    session.reusableOptions.set('fastMode', String(published.fastMode))
     session.reportedOptions.fastMode = published.fastMode
+    if (!published.fastMode) {
+      delete session.fastModeReportedMutation
+    }
     if (agrees('fastMode', String(published.fastMode))) {
       session.confirmedOptions.add('fastMode')
     }
@@ -210,10 +207,13 @@ function claudeStartedReportedOptions(
     readMutationSequence
   )
   const listing = catalogListing ? { catalogListing } : {}
+  const { model: _projected, ...rest } = current
+  const model = claudeExecutionObservations(session).model
+  const observed = { ...rest, ...(model ? { model } : {}) }
   if (session.options.has('effort') || session.reportedOptions.effort !== undefined) {
-    return { reportedOptions: current, ...listing }
+    return { reportedOptions: observed, ...listing }
   }
-  const { effort: _displayOnly, ...persisted } = current
+  const { effort: _displayOnly, ...persisted } = observed
   return { reportedOptions: persisted, ...listing }
 }
 

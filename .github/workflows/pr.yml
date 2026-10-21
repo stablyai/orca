@@ -432,6 +432,10 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/check-node-runtime-pin.mjs
 
+      - name: Check root and mobile lock the same shared dependencies
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node config/scripts/check-mobile-shared-dependency-versions.mjs
+
       # Why: extraction writes sorted evidence to an isolated temporary path,
       # so feature PRs need one normalized AST pass rather than a three-OS matrix.
       # Use preflight's pinned Bun even when the optional local pin differs.

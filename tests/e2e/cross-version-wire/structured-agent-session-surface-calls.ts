@@ -166,6 +166,13 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'continueInterrupted',
     result: { sessionId: SESSION, outcome: 'superseded' }
   },
+  // Name a chat again after naming failed. Clients call it only on a host advertising
+  // `agent-session.structured.regenerate-name.v1`; an older host answers `method_not_found`.
+  {
+    method: 'agentSession.regenerateName',
+    hostMethod: 'regenerateConversationName',
+    result: { accepted: true }
+  },
   { method: 'agentSession.release', hostMethod: null, result: { released: true } },
   {
     method: 'agentSession.history',

@@ -7,6 +7,8 @@ import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id
 import type { MainPaneBinding } from './main-pane-verdict'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import { withMainSessionTabRows } from '../../session-tabs/main-session-tab-rows'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import type { WorkspaceLayoutReads } from '../../workspace-layout-stream'
 import {
@@ -22,6 +24,8 @@ export type MainTerminalSurfacesHost = {
   homeHostId: (key: string) => ExecutionHostId | null
   /** Whether the PTY registry holds the terminal. */
   registered: (ptyId: string) => boolean
+  /** Whether the host certified the terminal exited (not merely disconnected or unverifiable). */
+  exited: (ptyId: string) => boolean
   /** Main's start status of a pane, as the layout stream publishes it. */
   paneStartFact: PaneStartFactOf
   /** The graph authority now, when its graph is ready; null otherwise. */
@@ -54,7 +58,23 @@ class MainSurfacePublisher {
     this.index.start()
     this.lastWindowGraph = { windowId, graph }
     this.installed = this.index.surfaces()
-    return composeMainTerminalSurfaces(graph, this.installed, this.host.registered)
+    const composed = composeMainTerminalSurfaces(graph, this.installed, this.host.registered)
+    return graph.mobileSessionTabs
+      ? {
+          ...composed,
+          mobileSessionTabs: graph.mobileSessionTabs.map((rows) => this.withMainRows(rows))
+        }
+      : composed
+  }
+
+  /** A workspace main owns publishes main's terminal and editor rows; any other, the window's. */
+  private withMainRows(
+    published: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
+    const projected = this.installed?.worktreeIds.has(published.worktree)
+      ? this.index.sessionTabsOf(published.worktree)
+      : null
+    return projected ? withMainSessionTabRows(published, projected, this.host.exited) : published
   }
 
   /** The pane main's layout binds a terminal to, read fresh; null when no pane main owns holds it. */
@@ -145,7 +165,7 @@ class MainSurfacePublisher {
     this.schedule({ force: true })
   }
 
-  /** A layout operation may have moved a pane; main's panes are installed once per task. */
+  /** Deferred so a connected flip, noted inside syncWindowGraph's record update, cannot recurse into it. */
   private schedule(opts: { force?: boolean } = {}): void {
     this.forceNext ||= opts.force === true
     if (this.scheduled) {

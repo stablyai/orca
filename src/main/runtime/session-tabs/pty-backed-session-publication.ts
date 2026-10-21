@@ -148,9 +148,6 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       tabs.find((candidate) => candidate.isActive) ??
       (args.selectIfNoActiveTab !== false ? tabs[0] : null) ??
       null
-    const terminalTabs = tabs.filter(
-      (candidate): candidate is RuntimeMobileSessionTerminalTab => candidate.type === 'terminal'
-    )
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
       publicationEpoch:
@@ -163,7 +160,7 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
         mergeMobileSessionTabGroups(
           worktreeId,
           existing?.tabGroups ?? [],
-          terminalTabs,
+          tabs,
           activeTab?.type === 'terminal' ? activeTab : null
         ),
         existing?.tabGroups ?? [],

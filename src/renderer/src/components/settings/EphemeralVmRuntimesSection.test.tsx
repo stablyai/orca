@@ -177,7 +177,7 @@ describe('EphemeralVmRuntimesSection', () => {
     await vi.waitFor(() => expect(toastMocks.success).toHaveBeenCalled())
   })
 
-  it('shows only the setup header when no runtime needs cleanup', async () => {
+  it('hides the section when no runtime needs cleanup', async () => {
     const listRuntimes = vi
       .fn()
       .mockResolvedValue([makeRuntime({ status: 'cleaned', cleanupStatus: 'succeeded' })])
@@ -186,7 +186,7 @@ describe('EphemeralVmRuntimesSection', () => {
     const container = await renderSection()
 
     await vi.waitFor(() => expect(listRuntimes).toHaveBeenCalled())
-    expect(container.textContent).toContain('Cloud VMs')
+    expect(container.textContent).toBe('')
     expect(container.textContent).not.toContain('Fix Login Race')
   })
 

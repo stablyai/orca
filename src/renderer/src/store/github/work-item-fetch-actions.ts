@@ -90,8 +90,8 @@ export const createWorkItemFetchActions = (
     }
     const requestState = get()
     const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
-    const ownerHostId = getGitHubWorkItemSourceHostId(requestState, repo, options?.sourceContext)
-    const cacheScope = getGitHubWorkItemSourceCacheScope(requestState, repo, options?.sourceContext)
+    const ownerHostId = getGitHubWorkItemSourceHostId(repo, options?.sourceContext)
+    const cacheScope = getGitHubWorkItemSourceCacheScope(repo, options?.sourceContext)
     const key = workItemsCacheKey(repoId, limit, query, cacheScope)
     const cached = get().workItemsCache[key]
     if (!options?.force && isFresh(cached, WORK_ITEMS_CACHE_TTL)) {
@@ -167,11 +167,7 @@ export const createWorkItemFetchActions = (
             ? { ...issuesError, source: envelope.sources.issues }
             : undefined
         const currentRepo = findRepoForGitHubOwner(get(), repoId, repoPath)
-        const currentHostId = getGitHubWorkItemSourceHostId(
-          get(),
-          currentRepo,
-          options?.sourceContext
-        )
+        const currentHostId = getGitHubWorkItemSourceHostId(currentRepo, options?.sourceContext)
         // Why: repo ownership changed, so this response belongs to an older execution-host bucket (host focus changes alone are fine).
         if ((currentHostId ?? null) !== (ownerHostId ?? null)) {
           return items

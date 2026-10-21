@@ -114,9 +114,13 @@ jobs:
     environment: adhoc-mac-build
     # The fast image has VS Build Tools 2022; signed release provenance stays separate.
     runs-on: ${{ inputs.fast_release && 'blacksmith-8vcpu-windows-2025' || 'windows-2022' }}
+    permissions:
+      contents: read
+      actions: read
     timeout-minutes: 90
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
+      JOBS: ${{ inputs.fast_release && 'max' || '' }}
       NODE_OPTIONS: --max-old-space-size=4096
       CHANNEL: ${{ inputs.channel }}
       TAG: ${{ inputs.tag }}
@@ -182,7 +186,10 @@ jobs:
       - name: Enable parallel checkout
         if: inputs.fast_release
         shell: bash
-        run: git config --global checkout.workers 0
+        run: |
+          git config --global checkout.workers 0
+          # These fresh native builds do not need MSBuild's incremental file tracking.
+          echo 'TrackFileAccess=false' >> "$GITHUB_ENV"
 
       - name: Checkout the built commit
         uses: actions/checkout@v6
@@ -293,6 +300,31 @@ jobs:
           # 'stable' or 'rc', so leaving it unset keeps dev builds silent — which
           # is correct for unvetted artifacts. Same as the mac dev channels.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+
+      # Inline so refs predating the wait can still use the trusted dispatch workflow.
+      - name: Wait for the qualified orcad template
+        if: inputs.fast_release && inputs.stage_only && inputs.orcad_template
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const deadline = Date.now() + 30 * 60_000
+            while (Date.now() < deadline) {
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100
+              })
+              const lanes = jobs.filter(job => job.name.startsWith('orcad-template / '))
+              const failed = lanes.find(job => job.status === 'completed' &&
+                ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure'].includes(job.conclusion))
+              if (failed) throw new Error(`Template qualification failed: ${failed.name}`)
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                ...context.repo, run_id: context.runId, per_page: 100
+              })
+              const ready = artifacts.some(artifact => artifact.name === 'orcad-template' && !artifact.expired)
+              const completed = lanes.length > 0 && lanes.every(job => job.status === 'completed')
+              if (ready && (process.env.WAIT_FOR_TEMPLATE_COMPLETION !== '1' || completed)) return
+              await new Promise(resolve => setTimeout(resolve, 15_000))
+            }
+            throw new Error('Timed out waiting for the qualified orcad template')
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template

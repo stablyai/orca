@@ -19,8 +19,16 @@ import {
 import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
+import { HeadlessMarkdownDocuments } from '../files/headless-markdown-document'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends RuntimeHeadlessTabGroups {
+  private readonly headlessMarkdown = new HeadlessMarkdownDocuments({
+    requireStore: () => this.requireStore(),
+    resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
+    getSession: (id) => this.getWorkspaceSessionForWorktree(id),
+    updateSession: (id, update) => this.updateHeadlessWorkspaceContent(id, update)
+  })
   protected abstract getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo>
   protected abstract resolveMobileMarkdownWorktreeId(
     ...args: Parameters<
@@ -56,21 +64,34 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
     tabId: string,
     title: string | null
   ): void {
+    this.updateHeadlessWorkspaceContent(worktreeId, (session) => {
+      const tabs = session.tabsByWorktree[worktreeId]
+      if (!tabs?.some((tab) => tab.id === tabId)) {
+        return null
+      }
+      return {
+        ...session,
+        tabsByWorktree: {
+          ...session.tabsByWorktree,
+          [worktreeId]: tabs.map((tab) => (tab.id === tabId ? { ...tab, customTitle: title } : tab))
+        }
+      }
+    })
+  }
+
+  private updateHeadlessWorkspaceContent(
+    worktreeId: string,
+    update: (session: WorkspaceSessionState) => WorkspaceSessionState | null
+  ): void {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
       return
     }
-    const tabs = session.tabsByWorktree[worktreeId]
-    if (!tabs?.some((tab) => tab.id === tabId)) {
-      return
+    const write = this.setWorkspaceSessionForWorktree.bind(this)
+    const next = update(session)
+    if (next) {
+      write(worktreeId, next)
     }
-    this.setWorkspaceSessionForWorktree(worktreeId, {
-      ...session,
-      tabsByWorktree: {
-        ...session.tabsByWorktree,
-        [worktreeId]: tabs.map((tab) => (tab.id === tabId ? { ...tab, customTitle: title } : tab))
-      }
-    })
   }
 
   protected normalizeMobileSessionTabOrder(
@@ -177,7 +198,7 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
   ): Promise<RuntimeMarkdownReadTabResult> {
     const worktreeId = await this.resolveMobileMarkdownWorktreeId(worktreeSelector, tabId)
     if (!this.notifier?.readMobileMarkdownTab) {
-      throw new Error('renderer_unavailable')
+      return this.headlessMarkdown.read(worktreeId, tabId)
     }
     return await this.notifier.readMobileMarkdownTab(worktreeId, tabId)
   }
@@ -190,7 +211,7 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
   ): Promise<RuntimeMarkdownSaveTabResult> {
     const worktreeId = await this.resolveMobileMarkdownWorktreeId(worktreeSelector, tabId)
     if (!this.notifier?.saveMobileMarkdownTab) {
-      throw new Error('renderer_unavailable')
+      return this.headlessMarkdown.save(worktreeId, tabId, baseVersion, content)
     }
     return await this.notifier.saveMobileMarkdownTab(worktreeId, tabId, baseVersion, content)
   }

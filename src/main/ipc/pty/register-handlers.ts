@@ -230,7 +230,10 @@ export function registerPtyHandlers(
   ): ReturnType<typeof prepareCodexResumeHome> =>
     prepareCodexResumeHome(options?.prepareCodexSessionResume, args)
   const adoptStablePaneBound = (args: Parameters<typeof adoptStablePane>[2]) =>
-    adoptStablePane(runtime, store, args)
+    adoptStablePane(runtime, store, {
+      ...args,
+      onAdopted: (result) => session.sendPtySpawnedToRenderer(result.id)
+    })
 
   // Why: route through getProviderForPty() so CLI commands work for remote PTYs too; localProvider would silently fail for them.
   installPtyRuntimeController({

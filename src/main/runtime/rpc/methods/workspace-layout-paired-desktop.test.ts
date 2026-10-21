@@ -5,7 +5,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
-import { LAYOUT_INTENTS_RUNTIME_CAPABILITY } from '../../../../shared/workspace-layout/layout-intents-capability'
+import {
+  LAYOUT_INTENTS_RUNTIME_CAPABILITY,
+  LAYOUT_REOPEN_HELD_PANES_CAPABILITY
+} from '../../../../shared/workspace-layout/layout-intents-capability'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime-client-capabilities'
 import type { RpcRequest, RpcResponse } from '../core'
 import type { RpcCallerScope } from '../rpc-caller-scope'
@@ -16,6 +19,7 @@ const LAYOUT_METHODS = [
   'layout.subscribe',
   'layout.unsubscribe',
   'layout.apply',
+  'layout.reopenHeldPanes',
   'layout.reportView'
 ] as const
 
@@ -56,13 +60,17 @@ afterEach(() => {
 describe('the layout intents capability', () => {
   it('is advertised only by a layout-owner build', async () => {
     const on = await switchedBuild(true)
-    expect(new on.OrcaRuntimeService().getStatus().capabilities).toContain(
-      LAYOUT_INTENTS_RUNTIME_CAPABILITY
+    expect(new on.OrcaRuntimeService().getStatus().capabilities).toEqual(
+      expect.arrayContaining([
+        LAYOUT_INTENTS_RUNTIME_CAPABILITY,
+        LAYOUT_REOPEN_HELD_PANES_CAPABILITY
+      ])
     )
     const off = await switchedBuild(false)
-    expect(new off.OrcaRuntimeService().getStatus().capabilities).not.toContain(
-      LAYOUT_INTENTS_RUNTIME_CAPABILITY
-    )
+    const offCapabilities = new off.OrcaRuntimeService().getStatus().capabilities
+    expect(offCapabilities).not.toContain(LAYOUT_INTENTS_RUNTIME_CAPABILITY)
+    expect(offCapabilities).not.toContain(LAYOUT_REOPEN_HELD_PANES_CAPABILITY)
+    expect(off.ALL_RPC_METHODS.map((method) => method.name)).not.toContain('layout.reopenHeldPanes')
   })
 
   it('comes with the layout methods registered', async () => {
@@ -80,6 +88,7 @@ describe('layout methods on a layout-owner server', () => {
     ['layout.subscribe', 'method_not_supported'],
     ['layout.unsubscribe', 'invalid_argument'],
     ['layout.apply', 'invalid_argument'],
+    ['layout.reopenHeldPanes', 'invalid_argument'],
     ['layout.reportView', 'invalid_argument']
   ] as const)('admits a paired desktop and refuses a phone: %s', async (method, nextCheck) => {
     const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)

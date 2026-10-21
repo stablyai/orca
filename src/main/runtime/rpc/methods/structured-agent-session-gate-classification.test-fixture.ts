@@ -99,5 +99,6 @@ export const WORK_METHODS = [
   { method: 'agentSession.subscribe', params: { sessionId: SESSION } },
   { method: 'agentSession.hold', params: { sessionId: SESSION, holderId: 'surface-1' } },
   { method: 'agentSession.reveal', params: { sessionId: SESSION } },
+  { method: 'agentSession.regenerateName', params: { sessionId: SESSION } },
   { method: 'agentSession.subscribeStatus', params: null }
 ] as const

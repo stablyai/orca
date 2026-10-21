@@ -221,11 +221,9 @@ jobs:
     if: needs.orcad-template-support.outputs.ships == 'true'
     permissions:
       contents: read
-    uses: ./.github/workflows/node-server-tests.yml
+    uses: ./.github/workflows/adhoc-orcad-template.yml
     with:
       ref: ${{ needs.resolve-ref.outputs.sha }}
-      build_template: true
-      fast_runners: true
 
   release-javascript:
     needs: [resolve-ref, orcad-template-support]
@@ -236,15 +234,12 @@ jobs:
       runner: blacksmith-8vcpu-ubuntu-2404
 
   build-adhoc-mac:
-    needs: [resolve-ref, orcad-template-support, orcad-template, release-javascript]
-    # Why not the implicit success(): a ref without the orcad template skips that job on purpose.
+    needs: [resolve-ref, orcad-template-support, release-javascript]
+    # Template qualification gates packaging after desktop preparation.
     if: >-
       !cancelled() && github.repository == 'stablyai/orca' &&
       needs.orcad-template-support.result == 'success' &&
-      needs.release-javascript.result == 'success' &&
-      (needs.orcad-template.result == 'success' ||
-        (needs.orcad-template.result == 'skipped' &&
-          needs.orcad-template-support.outputs.ships == 'false'))
+      needs.release-javascript.result == 'success'
     # Why an environment: it gives the signing/notary/App secrets somewhere to
     # live that a stale copy of this workflow on an old branch cannot reach.
     # Referencing it is a no-op until repo settings give it teeth; the intended
@@ -259,12 +254,16 @@ jobs:
       head_sha: ${{ needs.resolve-ref.outputs.sha }}
       published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
       ships_orcad_template: ${{ needs.orcad-template-support.outputs.ships }}
-    runs-on: blacksmith-6vcpu-macos-15
+    permissions:
+      contents: read
+      actions: read
+    runs-on: blacksmith-12vcpu-macos-15
     # Why 150: it must exceed the worst case the retry budgets below can produce
     # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
     # the job is killed mid-retry and no cleanup step runs at all.
     timeout-minutes: 150
     env:
+      JOBS: max
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
       # Why vet before checkout: everything after this step runs the checked-out
@@ -424,6 +423,30 @@ jobs:
           # silent, which is correct for unvetted branch artifacts.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
 
+      - name: Wait for the qualified orcad template
+        if: needs.orcad-template-support.outputs.ships == 'true'
+        uses: actions/github-script@v8
+        with: &qualified-template-wait
+          script: |
+            const deadline = Date.now() + 30 * 60_000
+            while (Date.now() < deadline) {
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100
+              })
+              const lanes = jobs.filter(job => job.name.startsWith('orcad-template / '))
+              const failed = lanes.find(job => job.status === 'completed' &&
+                ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure'].includes(job.conclusion))
+              if (failed) throw new Error(`Template qualification failed: ${failed.name}`)
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                ...context.repo, run_id: context.runId, per_page: 100
+              })
+              const ready = artifacts.some(artifact => artifact.name === 'orcad-template' && !artifact.expired)
+              const completed = lanes.length > 0 && lanes.every(job => job.status === 'completed')
+              if (ready && (process.env.WAIT_FOR_TEMPLATE_COMPLETION !== '1' || completed)) return
+              await new Promise(resolve => setTimeout(resolve, 15_000))
+            }
+            throw new Error('Timed out waiting for the qualified orcad template')
+
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
         if: needs.orcad-template-support.outputs.ships == 'true'
@@ -543,6 +566,13 @@ jobs:
             exit 1
           fi
 
+      - name: Confirm final template qualification before publication
+        if: needs.orcad-template-support.outputs.ships == 'true'
+        uses: actions/github-script@v8
+        env:
+          WAIT_FOR_TEMPLATE_COMPLETION: '1'
+        with: *qualified-template-wait
+
       # Why this is the last mutating step: publishing the draft is what makes the
       # build visible to listReleaseBuilds. Doing it only after the manifest check
       # means the picker can never offer a release whose assets are incomplete.
@@ -635,14 +665,14 @@ jobs:
 
   # Build unsigned Windows artifacts alongside Mac; publication waits below.
   build-adhoc-win:
-    needs: [resolve-ref, orcad-template-support, orcad-template, release-javascript]
+    needs: [resolve-ref, orcad-template-support, release-javascript]
     if: >-
       !cancelled() && github.repository == 'stablyai/orca' &&
       needs.orcad-template-support.result == 'success' &&
-      needs.release-javascript.result == 'success' &&
-      (needs.orcad-template.result == 'success' ||
-        (needs.orcad-template.result == 'skipped' &&
-          needs.orcad-template-support.outputs.ships == 'false'))
+      needs.release-javascript.result == 'success'
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/dev-channel-win-build.yml
     secrets: inherit
     with:
@@ -655,13 +685,12 @@ jobs:
       fast_release: true
       javascript_source_sha: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
 
-  # Upload only after Mac succeeds; an unsigned build may overlap its notarization.
+  # Prefetch the installer during notarization; the publisher still waits for Mac success.
   publish-adhoc-win:
-    needs: [build-adhoc-mac, build-adhoc-win]
+    needs: [orcad-template-support, build-adhoc-win]
     if: >-
-      !cancelled() && needs.build-adhoc-mac.result == 'success' &&
-      needs.build-adhoc-win.result == 'success' &&
-      needs.build-adhoc-mac.outputs.published == 'true'
+      !cancelled() && needs.orcad-template-support.result == 'success' &&
+      needs.build-adhoc-win.result == 'success'
     permissions:
       contents: read
       actions: read
@@ -669,4 +698,5 @@ jobs:
     secrets: inherit
     with:
       channel: adhoc
-      tag: ${{ needs.build-adhoc-mac.outputs.tag }}
+      tag: v${{ needs.orcad-template-support.outputs.version }}
+      wait_for_mac_job: build-adhoc-mac

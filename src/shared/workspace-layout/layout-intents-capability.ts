@@ -8,3 +8,7 @@
 //   command type is refused by an older server, so it needs a new capability.
 // A desktop without it on the server keeps the session.tabs mirror, which the server still serves.
 export const LAYOUT_INTENTS_RUNTIME_CAPABILITY = 'layout.intents.v1' as const
+
+// A layout-owner server serves `layout.reopenHeldPanes` (a paired desktop's Reopen of panes it holds
+// for a newer build's terminal service); a desktop shows a server's held panes only when it is advertised.
+export const LAYOUT_REOPEN_HELD_PANES_CAPABILITY = 'layout.reopenHeldPanes.v1' as const

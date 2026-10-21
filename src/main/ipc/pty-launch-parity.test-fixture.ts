@@ -1,3 +1,4 @@
+import { createPaneBindingStore } from './pty-launch-race-test-fixture'
 // Test-only: one real OrcaRuntimeService wired into the real pty handlers, so both launch lanes
 // reach the same fake provider. Window lane: pty:spawn. Host lane: createTerminal / createAgentSession
 // through the runtime controller registerPtyHandlers installs. Suites still declare the IPC vi.mock block.
@@ -127,6 +128,7 @@ type ScopeResolver = {
 }
 
 export type ParityLanes = {
+  store: ReturnType<typeof createPaneBindingStore>
   runtime: OrcaRuntimeService
   /** The local daemon provider's spawn mock. */
   provider: Mock
@@ -145,7 +147,8 @@ export function startParityLanes(
   }
 ): ParityLanes {
   const settings = parityMainSettings(args.settings)
-  const persistPtyBinding = vi.fn(async () => true)
+  const bindingStore = createPaneBindingStore()
+  const persistPtyBinding = bindingStore.bindingWrites
   const { repo: scopeRepo, folderWorkspace } = launchScope(args.workspace)
   // A folder's contained repo is saved too, so the host can borrow its runtime if it would.
   const repo =
@@ -154,6 +157,7 @@ export function startParityLanes(
       ? launchScope({ kind: 'repo', path: args.workspace.repoPath }).repo
       : null)
   const store = {
+    ...bindingStore,
     getSettings: () => settings,
     getProjects: () => [
       {
@@ -168,11 +172,9 @@ export function startParityLanes(
     getRepos: () => (repo ? [repo] : []),
     getAllWorktreeMeta: () => ({}),
     getWorktreeMeta: () => undefined,
-    getWorkspaceSession: () => ({ tabsByWorktree: {}, terminalLayoutsByTabId: {} }),
     getFolderWorkspace: () => folderWorkspace ?? undefined,
     getFolderWorkspaces: () => (folderWorkspace ? [folderWorkspace] : []),
-    getProjectGroups: () => [{ id: 'pg-1', name: 'group', parentPath: null, connectionId: null }],
-    persistPtyBinding
+    getProjectGroups: () => [{ id: 'pg-1', name: 'group', parentPath: null, connectionId: null }]
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: launches read only the store members defined above; the rest of the persistence store is unreachable here.
   const runtime = new OrcaRuntimeService(store as never)
@@ -215,6 +217,7 @@ export function startParityLanes(
     terminalDriverChanged: vi.fn()
   })
   return {
+    store,
     runtime,
     provider,
     persistPtyBinding,

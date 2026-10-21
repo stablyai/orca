@@ -1,4 +1,4 @@
-import { Link2, Server, TerminalSquare } from 'lucide-react'
+import { Server } from 'lucide-react'
 import type { ComponentProps } from 'react'
 import {
   getOrcadSshDeployment,
@@ -12,7 +12,6 @@ import { duplicatePairedServerNames } from '@/lib/duplicate-paired-servers'
 import { LoadingSpinner } from '../LoadingSpinner'
 import { Button } from '../ui/button'
 import { migrationPhaseLabel } from './managed-server-copy'
-import { managedServerTitle } from './managed-server-row-parts'
 import type { RuntimeHostDetails } from './runtime-environment-host-details'
 import { RuntimeServerRow } from './runtime-server-row'
 import { ServerListRow } from './runtime-server-list-row'
@@ -45,8 +44,6 @@ type RuntimeServerListProps = {
   removingId: string | null
   isBusy: boolean
   managedCatalog: ManagedServerCatalog
-  onAddServer: () => void
-  onInstallServer: () => void
   onOpenUpdate: () => void
   onConnect: (environment: PublicKnownRuntimeEnvironment) => void
   onDisconnect: (environment: PublicKnownRuntimeEnvironment) => void
@@ -71,8 +68,6 @@ export function RuntimeServerList({
   removingId,
   isBusy,
   managedCatalog,
-  onAddServer,
-  onInstallServer,
   onOpenUpdate,
   onConnect,
   onDisconnect,
@@ -101,21 +96,6 @@ export function RuntimeServerList({
               'Pair a dev box, a cloud machine, or a desktop at home. Its sessions keep running there when this computer sleeps.'
             )}
           </p>
-        </div>
-        <div className="flex flex-wrap justify-center gap-2">
-          <Button type="button" size="sm" onClick={onAddServer}>
-            <Link2 />
-            {translate('auto.components.settings.serverList.pasteAccessLink', 'Paste access link')}
-          </Button>
-          {api ? (
-            <Button type="button" variant="outline" size="sm" onClick={onInstallServer}>
-              <TerminalSquare />
-              {translate(
-                'auto.components.settings.serverList.setUpOnSshHost',
-                'Set up Orca on an SSH host'
-              )}
-            </Button>
-          ) : null}
         </div>
       </div>
     )
@@ -170,9 +150,7 @@ export function RuntimeServerList({
       {pending.map((row) => (
         <ServerListRow
           key={row.migrationId}
-          name={managedServerTitle(
-            targets.find((target) => target.id === row.sshTargetId)?.label ?? row.name
-          )}
+          name={targets.find((target) => target.id === row.sshTargetId)?.label ?? row.name}
           meta={<span className="truncate">{migrationPhaseLabel(row.phase)}</span>}
           status={{
             label: translate('auto.components.settings.serverList.movePaused', 'Move paused'),

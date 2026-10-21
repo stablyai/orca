@@ -73,7 +73,7 @@ export function getEphemeralVmRuntimeStatusLabel(runtime: EphemeralVmRuntimeReco
   return runtime.status
 }
 
-export function EphemeralVmRuntimesSection(): React.JSX.Element {
+export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
   const [runtimes, setRuntimes] = useState<EphemeralVmRuntimeRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [cleaningId, setCleaningId] = useState<string | null>(null)
@@ -249,6 +249,9 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element {
   }
 
   const hasRuntimes = runtimes.length > 0
+  if (!hasRuntimes) {
+    return null
+  }
   return (
     <section
       className="scroll-mt-8 rounded-lg border border-border bg-card"

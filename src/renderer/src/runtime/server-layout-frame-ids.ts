@@ -218,6 +218,8 @@ export type ServerLayoutFrameTranslator = {
   rebind: (key: string) => WorkspaceLayoutRecordsFrame | null
   /** The workspaces the server's stream holds now. */
   keys: () => string[]
+  /** A workspace as the server publishes it, under the server's ids. */
+  serverLayout: (key: string) => PublishedWorkspaceLayout | undefined
 }
 
 /**
@@ -292,6 +294,7 @@ export function createServerLayoutFrameTranslator(
       }
     },
     keys: () => [...server.keys()],
+    serverLayout: (key) => server.get(key),
     rebind: (key) => {
       const layout = server.get(key)
       const workspaces = layout ? changeTo(key, layout) : []

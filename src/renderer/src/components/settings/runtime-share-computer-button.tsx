@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { MonitorSmartphone, Share2 } from 'lucide-react'
+import { Share2 } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -17,7 +17,7 @@ import { RuntimePairingUrlGenerator } from './RuntimePairingUrlGenerator'
 import { usePublishedMachineName } from './use-published-machine-name'
 
 /** Desktop only: lets other devices pair with this computer. */
-export function RuntimeShareComputerCard(): React.JSX.Element {
+export function RuntimeShareComputerButton(): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [editingName, setEditingName] = useState(false)
   const [activeLinkCount, setActiveLinkCount] = useState<number | null>(null)
@@ -48,41 +48,10 @@ export function RuntimeShareComputerCard(): React.JSX.Element {
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
-      <MonitorSmartphone className="size-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium">
-          {translate('auto.components.settings.serverList.shareTitle', 'Share this computer')}
-        </div>
-        <p className="truncate text-xs text-muted-foreground">
-          {publishedMachineName
-            ? translate(
-                'auto.components.settings.serverList.shareDescriptionNamed',
-                'Let a browser, phone, or another Orca work on {{name}}.',
-                { name: publishedMachineName }
-              )
-            : translate(
-                'auto.components.settings.serverList.shareDescription',
-                'Let a browser, phone, or another Orca work on this computer.'
-              )}
-        </p>
-      </div>
-      {activeLinkCount ? (
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {activeLinkCount === 1
-            ? translate('auto.components.settings.serverList.oneActiveLink', '1 active link')
-            : translate(
-                'auto.components.settings.serverList.activeLinks',
-                '{{value0}} active links',
-                {
-                  value0: activeLinkCount
-                }
-              )}
-        </span>
-      ) : null}
-      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+    <>
+      <Button type="button" size="sm" onClick={() => setOpen(true)}>
         <Share2 />
-        {translate('auto.components.settings.serverList.shareButton', 'Share…')}
+        {translate('auto.components.settings.serverList.shareTitle', 'Share this computer')}
       </Button>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-xl" scrollable>
@@ -97,6 +66,17 @@ export function RuntimeShareComputerCard(): React.JSX.Element {
               )}
             </DialogDescription>
           </DialogHeader>
+          {activeLinkCount ? (
+            <p className="text-xs text-muted-foreground">
+              {activeLinkCount === 1
+                ? translate('auto.components.settings.serverList.oneActiveLink', '1 active link')
+                : translate(
+                    'auto.components.settings.serverList.activeLinks',
+                    '{{value0}} active links',
+                    { value0: activeLinkCount }
+                  )}
+            </p>
+          ) : null}
           <RuntimePairingUrlGenerator framed={false} showHeader={false} />
           {editingName ? (
             <MachineNameField id="runtime-share-machine-name" />
@@ -135,6 +115,6 @@ export function RuntimeShareComputerCard(): React.JSX.Element {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }

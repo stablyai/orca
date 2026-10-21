@@ -11,6 +11,10 @@ import type {
 import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-load-types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
 import { bindingOf } from '../../pane-start-statuses'
+import {
+  projectSessionTabs,
+  type ProjectedSessionTabs
+} from '../../../../shared/workspace-layout/old-client/old-client-session-tabs-projection'
 import { projectRuntimeSurfaces } from '../../runtime-leaf-record-projection'
 import type { WorkspaceLayoutReads } from '../../workspace-layout-stream'
 
@@ -173,6 +177,29 @@ export class TerminalSurfaceIndex {
       worktreeIds,
       paneFacts
     }
+  }
+
+  /** A workspace main owns as today's `session.tabs` rows, from its owning partition's layout. */
+  sessionTabsOf(worktreeId: string): ProjectedSessionTabs | null {
+    this.surfaces()
+    const hostIds = this.deps
+      .hostIds()
+      .filter((hostId) => parseExecutionHostId(hostId)?.kind !== 'runtime')
+    for (const [index, partition] of this.projectedFrom.entries()) {
+      const hostId = hostIds[index]
+      for (const [key, workspace] of Object.entries(partition?.layout.workspaces ?? {})) {
+        if (partition && workspace.worktreeId === worktreeId && this.routes.get(key) === hostId) {
+          return projectSessionTabs(
+            key,
+            workspace,
+            partition.desktopView,
+            partition.facts,
+            this.deps.generatedTitlesEnabled()
+          )
+        }
+      }
+    }
+    return null
   }
 
   private homeOf(key: string): ExecutionHostId | null {

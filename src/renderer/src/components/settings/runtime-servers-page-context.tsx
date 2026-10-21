@@ -5,9 +5,6 @@ export type RuntimeServersDialog = 'add' | 'install'
 type RuntimeServersPageState = {
   dialog: RuntimeServersDialog | null
   setDialog: (dialog: RuntimeServersDialog | null) => void
-  /** The list shows its empty state, which carries its own add actions. */
-  listEmpty: boolean
-  setListEmpty: (empty: boolean) => void
 }
 
 const RuntimeServersPageContext = createContext<RuntimeServersPageState | null>(null)
@@ -22,8 +19,7 @@ export function RuntimeServersPageProvider({
   children: React.ReactNode
 }): React.JSX.Element {
   const [dialog, setDialog] = useState<RuntimeServersDialog | null>(null)
-  const [listEmpty, setListEmpty] = useState(false)
-  const value = useMemo(() => ({ dialog, setDialog, listEmpty, setListEmpty }), [dialog, listEmpty])
+  const value = useMemo(() => ({ dialog, setDialog }), [dialog])
   return (
     <RuntimeServersPageContext.Provider value={value}>
       {children}

@@ -152,11 +152,19 @@ jobs:
         os: ${{ fromJSON(needs.changes.outputs.runners || '["ubuntu-22.04","ubuntu-24.04-arm","macos-15","macos-15-intel","windows-2022","windows-11-arm"]') }}
     # Keep platform keys stable for slot names and Windows cross-compilation.
     runs-on: >-
-      ${{ inputs.fast_runners && fromJSON('{"ubuntu-22.04":"blacksmith-8vcpu-ubuntu-2204","ubuntu-24.04-arm":"blacksmith-8vcpu-ubuntu-2404-arm","macos-15":"blacksmith-6vcpu-macos-15","windows-2022":"blacksmith-8vcpu-windows-2025"}')[matrix.os] || matrix.os }}
+      ${{ inputs.fast_runners && fromJSON('{"ubuntu-22.04":"blacksmith-8vcpu-ubuntu-2204","ubuntu-24.04-arm":"blacksmith-8vcpu-ubuntu-2404-arm","macos-15":"blacksmith-6vcpu-macos-15","macos-15-intel":"macos-15-large","windows-2022":"blacksmith-8vcpu-windows-2025","windows-11-arm":"orca-windows-11-arm64-8core"}')[matrix.os] || matrix.os }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
+      JOBS: ${{ inputs.fast_runners && 'max' || '' }}
     steps:
+      - name: Parallelize Windows checkout
+        if: inputs.fast_runners && runner.os == 'Windows'
+        shell: bash
+        run: |
+          git config --global checkout.workers 0
+          # These fresh native builds do not need MSBuild's incremental file tracking.
+          echo 'TrackFileAccess=false' >> "$GITHUB_ENV"
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref }}
@@ -194,10 +202,10 @@ jobs:
         id: orcad-prebuild
         with:
           resolve-windows-cache: >-
-            ${{ !inputs.build_template && inputs.ref == '' &&
+            ${{ inputs.fast_runners || (!inputs.build_template && inputs.ref == '' &&
             (github.event_name == 'pull_request' ||
-            (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name))) }}
-          restore-windows-cache: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+            (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)))) }}
+          restore-windows-cache: ${{ inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'push' }}
       # The template lane cross-compiles arm64 too, as it does for the process-table addon.
       - uses: ./.github/actions/prepare-windows-cli-launcher
         if: runner.os == 'Windows'
@@ -293,11 +301,12 @@ jobs:
           node out/orcad/orcad.js --orcad-smoke-load-check
           node out/orcad/orcad.js --orcad-profile-state-preflight 00000000-0000-4000-8000-000000000018 | tee "$RUNNER_TEMP/preflight.json"
           node -e "const r=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));if(r.runtime!=='node'||!/^24\./.test(r.runtimeVersion))process.exit(1)" "$RUNNER_TEMP/preflight.json"
-      - name: Save the freshly qualified Windows server prebuild on main
+      - name: Save the freshly qualified Windows server prebuild
         if: >-
           success() && runner.os == 'Windows' && (runner.arch == 'X64' || runner.arch == 'ARM64') &&
-          !inputs.build_template && inputs.ref == '' && github.ref == 'refs/heads/main' &&
-          contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) &&
+          ((inputs.fast_runners && github.event_name == 'workflow_dispatch') ||
+          (!inputs.build_template && inputs.ref == '' && github.ref == 'refs/heads/main' &&
+          contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name))) &&
           steps.orcad-prebuild.outputs.cache-identity-outcome == 'success' &&
           steps.orcad-prebuild.outputs.cache-key != ''
         continue-on-error: true

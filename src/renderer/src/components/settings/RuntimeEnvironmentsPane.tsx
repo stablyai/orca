@@ -19,7 +19,6 @@ import { RuntimeDefaultHostRow } from './runtime-default-host-row'
 import { RuntimeInstallServerDialog } from './runtime-install-server-dialog'
 import { RuntimeServerList } from './runtime-server-list'
 import { useRuntimeServersPage } from './runtime-servers-page-context'
-import { RuntimeShareComputerCard } from './runtime-share-computer-card'
 import { WslHostsSection } from './WslHostsSection'
 import { useManagedServerCatalog } from './use-managed-server-catalog'
 import { useRuntimeEnvironmentCatalog } from './use-runtime-environment-catalog'
@@ -55,7 +54,7 @@ export function RuntimeEnvironmentsPane({
   allowLocalRuntime = true,
   addServerIntentSignal
 }: RuntimeEnvironmentsPaneProps): React.JSX.Element {
-  const { dialog, setDialog, setListEmpty } = useRuntimeServersPage()
+  const { dialog, setDialog } = useRuntimeServersPage()
   const [pendingSwitchValue, setPendingSwitchValue] = useState<string | null>(null)
   const [pendingRemove, setPendingRemove] = useState<PublicKnownRuntimeEnvironment | null>(null)
   const remoteServerUpdates = useAppStore((state) => state.remoteServerUpdates)
@@ -152,10 +151,6 @@ export function RuntimeEnvironmentsPane({
       void managedReload().catch(() => {})
     }
   }, [dialog, managedReload])
-  const listEmpty = environments.length === 0 && managedCatalog.pending.length === 0
-  useEffect(() => {
-    setListEmpty(listEmpty)
-  }, [listEmpty, setListEmpty])
 
   const activeValue =
     settings.activeRuntimeEnvironmentId ??
@@ -211,6 +206,14 @@ export function RuntimeEnvironmentsPane({
       keywords={searchEntry.keywords}
       className="max-w-none space-y-6"
     >
+      <RuntimeDefaultHostRow
+        allowLocalRuntime={allowLocalRuntime}
+        activeValue={activeValue}
+        environments={environments}
+        isBusy={isBusy}
+        onValueChange={requestSwitch}
+      />
+
       <RuntimeServerList
         environments={environments}
         detailsByEnvironmentId={detailsByEnvironmentId}
@@ -223,8 +226,6 @@ export function RuntimeEnvironmentsPane({
         removingId={removingId}
         isBusy={isBusy}
         managedCatalog={managedCatalog}
-        onAddServer={() => setDialog('add')}
-        onInstallServer={() => setDialog('install')}
         onOpenUpdate={() => setRemoteServerUpdateDialogOpen(true)}
         onConnect={(environment) => void connectEnvironment(environment)}
         onDisconnect={(environment) => void disconnectEnvironment(environment)}
@@ -254,18 +255,7 @@ export function RuntimeEnvironmentsPane({
       {/* Why gated on the managed API: WSL hosts, like managed servers, need the desktop. */}
       {managedCatalog.api ? <WslHostsSection onChanged={reloadAll} /> : null}
 
-      <RuntimeDefaultHostRow
-        allowLocalRuntime={allowLocalRuntime}
-        activeValue={activeValue}
-        environments={environments}
-        isBusy={isBusy}
-        onValueChange={requestSwitch}
-      />
-
-      <div className="space-y-3 border-t border-border pt-6">
-        {canGeneratePairingUrl ? <RuntimeShareComputerCard /> : null}
-        <EphemeralVmRuntimesSection />
-      </div>
+      <EphemeralVmRuntimesSection />
 
       <RuntimeAddServerDialog
         open={dialog === 'add'}

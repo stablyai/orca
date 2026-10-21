@@ -7,11 +7,7 @@ import {
   NODE_RUNTIME_PIN,
   SERVER_TARGETS
 } from '../../src/shared/node-runtime-pin.ts'
-import {
-  findNodeRuntimePinProblems,
-  lockfileRootImporter,
-  main
-} from './check-node-runtime-pin.mjs'
+import { findNodeRuntimePinProblems, main } from './check-node-runtime-pin.mjs'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
 const HASH = 'a'.repeat(64)
@@ -183,30 +179,6 @@ describe('findNodeRuntimePinProblems', () => {
     expect(findNodeRuntimePinProblems(input)).toEqual([
       'win32-x64: archive node-v24.21.0-win-arm64.zip is not node-v24.21.0-win-x64.zip'
     ])
-  })
-})
-
-describe('lockfileRootImporter', () => {
-  it('merges the root importer across pnpm 12 lockfile documents', () => {
-    const contents = [
-      '---',
-      "lockfileVersion: '9.0'",
-      'importers:',
-      '  .:',
-      '    packageManagerDependencies: {}',
-      '---',
-      "lockfileVersion: '9.0'",
-      'importers:',
-      '  .:',
-      '    devDependencies:',
-      '      electron:',
-      '        specifier: 43.7.5',
-      '        version: 43.7.5(supports-color@7.2.0)',
-      ''
-    ].join('\n')
-    expect(lockfileRootImporter(contents).devDependencies.electron.version).toBe(
-      '43.7.5(supports-color@7.2.0)'
-    )
   })
 })
 

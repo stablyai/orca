@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { useRuntimeServersPage } from './runtime-servers-page-context'
+import { RuntimeShareComputerButton } from './runtime-share-computer-button'
 import { getManagedOrcadApi } from './use-managed-server-catalog'
 
 function AddServerMenuItem({
@@ -41,8 +42,12 @@ function AddServerMenuItem({
 }
 
 /** Section-header actions for Remote Orca Servers: update-all and the Add server split button. */
-export function RuntimeServersHeaderActions(): React.JSX.Element | null {
-  const { setDialog, listEmpty } = useRuntimeServersPage()
+export function RuntimeServersHeaderActions({
+  canGeneratePairingUrl
+}: {
+  canGeneratePairingUrl: boolean
+}): React.JSX.Element {
+  const { setDialog } = useRuntimeServersPage()
   const remoteServerUpdates = useAppStore((state) => state.remoteServerUpdates)
   const remoteServerUpdatesChecking = useAppStore((state) => state.remoteServerUpdatesChecking)
   const remoteServerUpdatesRunning = useAppStore((state) => state.remoteServerUpdatesRunning)
@@ -80,73 +85,72 @@ export function RuntimeServersHeaderActions(): React.JSX.Element | null {
               })}
         </Button>
       ) : null}
-      {listEmpty ? null : (
-        <ButtonGroup>
-          <Button type="button" variant="outline" size="sm" onClick={() => setDialog('add')}>
-            <Plus />
-            {translate('auto.components.settings.serverList.addServer', 'Add server')}
-          </Button>
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                aria-label={translate(
-                  'auto.components.settings.serverList.moreWaysToAdd',
-                  'More ways to add a server'
-                )}
-              >
-                <ChevronDown />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
+      <ButtonGroup>
+        <Button type="button" variant="outline" size="sm" onClick={() => setDialog('add')}>
+          <Plus />
+          {translate('auto.components.settings.serverList.addServer', 'Add server')}
+        </Button>
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label={translate(
+                'auto.components.settings.serverList.moreWaysToAdd',
+                'More ways to add a server'
+              )}
+            >
+              <ChevronDown />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-80">
+            <AddServerMenuItem
+              icon={<Link2 />}
+              label={translate(
+                'auto.components.settings.serverList.pasteAccessLink',
+                'Paste access link'
+              )}
+              description={translate(
+                'auto.components.settings.serverList.pasteAccessLinkHelp',
+                'Pair with Orca already running on another machine.'
+              )}
+              onSelect={() => setDialog('add')}
+            />
+            {canInstall ? (
               <AddServerMenuItem
-                icon={<Link2 />}
+                icon={<TerminalSquare />}
                 label={translate(
-                  'auto.components.settings.serverList.pasteAccessLink',
-                  'Paste access link'
+                  'auto.components.settings.serverList.setUpOnSshHost',
+                  'Set up Orca on an SSH host'
                 )}
                 description={translate(
-                  'auto.components.settings.serverList.pasteAccessLinkHelp',
-                  'Pair with Orca already running on another machine.'
+                  'auto.components.settings.managedServers.description',
+                  'Orca installs itself on an empty SSH host and keeps itself up to date.'
                 )}
-                onSelect={() => setDialog('add')}
+                onSelect={() => setDialog('install')}
               />
-              {canInstall ? (
-                <AddServerMenuItem
-                  icon={<TerminalSquare />}
-                  label={translate(
-                    'auto.components.settings.serverList.setUpOnSshHost',
-                    'Set up Orca on an SSH host'
-                  )}
-                  description={translate(
-                    'auto.components.settings.managedServers.description',
-                    'Orca installs itself on an empty SSH host and keeps itself up to date.'
-                  )}
-                  onSelect={() => setDialog('install')}
-                />
-              ) : null}
-              <AddServerMenuItem
-                icon={<Cloud />}
-                label={translate('auto.components.settings.serverList.cloudVm', 'Cloud VM')}
-                trailing={<ArrowUpRight className="ml-auto" />}
-                description={translate(
-                  'auto.components.settings.serverList.cloudVmHelp',
-                  'Created per workspace from an environment recipe.'
-                )}
-                onSelect={() =>
-                  openSettingsTarget({
-                    pane: 'experimental',
-                    repoId: null,
-                    sectionId: 'ephemeral-vms'
-                  })
-                }
-              />
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </ButtonGroup>
-      )}
+            ) : null}
+            <AddServerMenuItem
+              icon={<Cloud />}
+              label={translate('auto.components.settings.serverList.cloudVm', 'Cloud VM')}
+              trailing={<ArrowUpRight className="ml-auto" />}
+              description={translate(
+                'auto.components.settings.serverList.cloudVmHelp',
+                'Created per workspace from an environment recipe.'
+              )}
+              onSelect={() =>
+                openSettingsTarget({
+                  pane: 'experimental',
+                  repoId: null,
+                  sectionId: 'ephemeral-vms'
+                })
+              }
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </ButtonGroup>
+      {canGeneratePairingUrl ? <RuntimeShareComputerButton /> : null}
     </div>
   )
 }

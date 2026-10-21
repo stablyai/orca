@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
+import { TerminalIntentionalStops } from '../../../runtime/terminal-intentional-stops'
 import { admitPtySpawnOwnership, discardUnpersistedPtySpawn } from './spawn-registration'
 
+type MarkUnverifiable = (ptyId: string, reason: string) => void
 const PTY_ID = 'unpersisted-spawn'
 const result: PtySpawnResult = { id: PTY_ID, incarnationId: 'inc-1' }
 
@@ -21,7 +23,10 @@ describe('discarding a spawn whose binding failed to save', () => {
 
   function discard(
     shutdown: () => Promise<void>,
-    runtime = { markPtyLivenessUnverifiable: vi.fn() }
+    runtime: {
+      markPtyLivenessUnverifiable: Mock<MarkUnverifiable>
+      intentionalPtyStops?: TerminalIntentionalStops
+    } = { markPtyLivenessUnverifiable: vi.fn<MarkUnverifiable>() }
   ): Promise<typeof runtime> {
     admitPtySpawnOwnership(undefined, result)
     return discardUnpersistedPtySpawn(providerWhoseShutdown(shutdown), result, runtime).then(
@@ -40,11 +45,17 @@ describe('discarding a spawn whose binding failed to save', () => {
     )
   })
 
-  it('retires the PTY once the host acknowledged the shutdown', async () => {
-    const runtime = await discard(() => Promise.resolve())
+  // QA687: an unmarked discard's exit read as the agent ending and removed the user's tab.
+  it('retires the PTY once the host acknowledged the shutdown, as a stop that keeps the tab', async () => {
+    const intentionalPtyStops = new TerminalIntentionalStops()
+    const runtime = await discard(() => Promise.resolve(), {
+      markPtyLivenessUnverifiable: vi.fn<MarkUnverifiable>(),
+      intentionalPtyStops
+    })
 
     expect(ptyOwnership.has(PTY_ID)).toBe(false)
     expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalled()
+    expect(intentionalPtyStops.claimExit(PTY_ID, 'inc-1')).toEqual(['replaced'])
   })
 
   it('leaves a same-id replacement that arrived during the shutdown alone', async () => {

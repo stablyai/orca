@@ -4,7 +4,7 @@ import {
   requestEditorSaveQuiesce,
   type EditorFileSavedDetail
 } from '@/components/editor/editor-autosave'
-import { flushPendingEditorChange } from '@/components/editor/editor-pending-flush'
+import { flushPendingEditorBuffer } from '@/components/editor/editor-pending-flush'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import { useAppStore } from '@/store'
@@ -259,7 +259,7 @@ async function readFileContent(file: OpenFile): Promise<string> {
 function flushEditorState(fileId: string): void {
   // Why: rich markdown serializes through a debounce. Mobile reads/saves must
   // observe desktop-visible text, not a stale draft from before that debounce.
-  flushPendingEditorChange(fileId)
+  flushPendingEditorBuffer(useAppStore.getState(), fileId)
 }
 
 async function waitForPositiveSave(file: OpenFile, content: string): Promise<void> {

@@ -109,5 +109,9 @@ describe('a window spawn for a pane main took back while it waited', () => {
       })
     ).rejects.toThrow('terminal_pane_closed')
     expect(spawnMock).not.toHaveBeenCalled()
+    expect(current.value.terminalLayoutsByTabId?.[TAB]?.root).toEqual({
+      type: 'leaf',
+      leafId: KEPT
+    })
   })
 })

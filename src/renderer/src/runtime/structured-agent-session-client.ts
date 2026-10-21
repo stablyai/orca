@@ -18,6 +18,7 @@ import {
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
@@ -210,6 +211,33 @@ export function subscribeStructuredAgentSessionStatus(
     onError,
     onClose
   )
+}
+
+export function supportsStructuredAgentSessionRegenerateName(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(
+    target,
+    STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY
+  )
+}
+
+/** Asks the owning host to name the chat again; the status feed carries the outcome. */
+export async function regenerateStructuredAgentSessionName(
+  target: RuntimeClientTarget,
+  sessionId: string
+): Promise<boolean> {
+  try {
+    const result = await callRuntimeRpc<{ accepted: boolean }>(
+      target,
+      'agentSession.regenerateName',
+      { sessionId }
+    )
+    return result.accepted
+  } catch (error) {
+    console.warn('[structured-session-naming] regenerate failed', error)
+    return false
+  }
 }
 
 /** The user read this chat: the owning host withdraws the phone alerts it pushed for it. An older
