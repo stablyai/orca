@@ -1,5 +1,6 @@
 import type { Cookie, Cookies } from 'electron'
 import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
+import type { CdpCookie } from './browser-cdp-cookie'
 import type { ImportedDomainScope } from './browser-cookie-import-policy'
 import {
   cookieRemovalUrl,
@@ -42,6 +43,11 @@ export type CookieClearStore = Pick<Cookies, 'get' | 'remove'> & {
 // cookie imported through it is downgraded on the success path with nothing to report it.
 export type CookieImportWriteStore = Pick<Cookies, 'get' | 'remove'> & {
   writeCookieIdentity(identity: CookieClearIdentity): Promise<void>
+}
+
+// Why: cookies.get() leaves out partitionKey, so a whole-jar copy reads through CDP too.
+export type CookieJarCdpReadStore = {
+  readAllCdpCookies(): Promise<CdpCookie[]>
 }
 
 // Why (STA-4061): 'set' stays out so the lossy partition-dropping reconstruction cannot return.

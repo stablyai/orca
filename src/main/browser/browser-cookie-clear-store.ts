@@ -5,29 +5,12 @@ import type {
   CookieClearIdentity,
   CookieClearPartitionKey,
   CookieClearStore,
-  CookieImportWriteStore
+  CookieImportWriteStore,
+  CookieJarCdpReadStore
 } from './browser-cookie-import-clear'
 import { restoreEveryCookieIdentity } from './browser-cookie-identity-restore'
 import { normalizeCookiePartitionSite } from './browser-cookie-source-partition'
-
-type CdpCookiePartitionKey = {
-  topLevelSite?: string
-  hasCrossSiteAncestor?: boolean
-}
-
-type CdpCookie = {
-  name: string
-  value: string
-  domain?: string
-  path?: string
-  secure?: boolean
-  httpOnly?: boolean
-  session?: boolean
-  expires?: number
-  sameSite?: string
-  partitionKey?: CdpCookiePartitionKey | null
-  partitionKeyOpaque?: boolean
-}
+import type { CdpCookie } from './browser-cdp-cookie'
 
 type CookieClearDebugger = {
   sendCommand: (method: string, params?: Record<string, unknown>) => Promise<unknown>
@@ -108,7 +91,7 @@ function indexCdpCookies(cookies: readonly CdpCookie[]): Map<string, CdpCookie[]
   return index
 }
 
-function identityFromCdpCookie(url: string, cdpCookie: CdpCookie): CookieClearIdentity {
+export function identityFromCdpCookie(url: string, cdpCookie: CdpCookie): CookieClearIdentity {
   const partitionKey = partitionKeyFromCdp(cdpCookie)
   return {
     url,
@@ -271,7 +254,7 @@ async function writeIdentityWithCdp(
 
 export function openCookieClearStore(
   targetSession: Session
-): CookieClearStore & CookieImportWriteStore & { dispose: () => void } {
+): CookieClearStore & CookieImportWriteStore & CookieJarCdpReadStore & { dispose: () => void } {
   let attached: CookieClearSession | null = null
   let pendingAttach: Promise<CookieClearSession> | null = null
   let disposed = false
@@ -315,6 +298,8 @@ export function openCookieClearStore(
     },
     writeCookieIdentity: async (identity) =>
       writeIdentityWithCdp((await attach()).debugger, identity, 'import'),
+    readAllCdpCookies: async () =>
+      cdpCookiesFromCommand(await (await attach()).debugger.sendCommand('Network.getAllCookies')),
     dispose: () => {
       disposed = true
       pendingAttach = null

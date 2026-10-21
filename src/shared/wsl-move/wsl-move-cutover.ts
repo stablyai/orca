@@ -9,6 +9,7 @@ import type {
   OrcadMigrationManifest
 } from '../orcad-migration/orcad-migration-manifest'
 import { isOrcadMigrationLocalWslSource } from '../orcad-migration/orcad-migration-source-kind'
+import { WslMoveBrowserCookieCopySchema } from './wsl-move-browser-cookie-copy'
 
 export const WSL_MOVE_CUTOVER_VERSION = 1
 
@@ -43,6 +44,9 @@ const WslMoveCutoverSchema = z.object({
   rewrittenStores: z.array(z.string().min(1).max(128)).max(256),
   // Workspaces the host partition was seeded with, so a re-run never revives a closed tab.
   seededHostWorkspaceIds: z.array(z.string().min(1).max(4_096)).max(10_000).optional(),
+  // What the move did with the desktop's browser logins. Lenient: a newer build's reason must not
+  // make the whole journal unreadable here.
+  browserCookieCopy: WslMoveBrowserCookieCopySchema.optional().catch(undefined),
   supersedesMigrationId: z.string().min(1).max(128).optional(),
   manifest: z.unknown()
 })

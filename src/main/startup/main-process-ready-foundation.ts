@@ -19,6 +19,10 @@ import { registerWslMoveMainRewriteStores } from '../persistence/moving-wsl-proj
 import { registerWslMoveRendererRewriteStores } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
 import { registerWslMoveOrchestrationHistoryStore } from '../persistence/moving-wsl-projects/wsl-move-orchestration-history-rewrite'
 import { orchestrationDbFile } from '../runtime/orchestration/db/orchestration-db-file'
+import {
+  productionWslMoveBrowserCookieCopyDependencies,
+  registerWslMoveBrowserCookieStore
+} from '../persistence/moving-wsl-projects/wsl-move-browser-cookie-store'
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
 import { initializeBrowserClientHostId } from '../browser/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
@@ -165,6 +169,8 @@ export async function initializeReadyFoundation(): Promise<void> {
     orchestrationDbFile(getAppEnvironment().getPath('userData'))
   )
   registerWslMoveRendererRewriteStores()
+  // Last among main-side stores: it throws until browser sessions exist, pausing any store after it.
+  registerWslMoveBrowserCookieStore(productionWslMoveBrowserCookieCopyDependencies(userDataPath))
   // Resets a move interrupted before commit, then finishes one that committed; main-process-ready
   // waits on both, bounded. Gated off, neither runs.
   state.wslMoveStartupRewriteReady = runWslMoveStartupRewrite({ userDataPath }, () =>
