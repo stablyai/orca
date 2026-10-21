@@ -77,7 +77,7 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   // keepalive as check --wait or the 30 s socket idle timer tears it down. It
   // also relies on the abort signal (only wired for long-polls) to release the
   // waiter when the asking client disconnects.
-  if (request.method === 'orchestration.ask') {
+  if (request.method === 'orchestration.ask' || request.method === 'workInbox.ask') {
     return 'ask'
   }
   if (request.method === 'orchestration.check') {

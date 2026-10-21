@@ -18540,6 +18540,51 @@
         "copyFailed": "Could not copy the link.",
         "signingIn": "Signing in…",
         "cancel": "Cancel"
+      },
+      "work-inbox": {
+        "status": {
+          "open": "Unanswered",
+          "answered": "Answered",
+          "cancelled": "Closed without an answer",
+          "delivered": "Agent received",
+          "awaitingReceipt": "Waiting for agent"
+        },
+        "error": {
+          "conflict": "This question changed before your answer was saved. Your draft is kept; review the current state above.",
+          "notFound": "This question no longer exists on this host. Your draft is kept.",
+          "unreachable": "Could not confirm the answer was saved. Editing is locked until the host confirms it; Retry sends the same answer, so it is not duplicated."
+        },
+        "closeQuestion": "Close without answering",
+        "reopen": "Reopen question",
+        "statusFailed": "Could not confirm the change. Refresh to check its status before trying again.",
+        "yourAnswer": "Your answer",
+        "options": "Answer options",
+        "selectionHint": "Choose one option, then send your answer.",
+        "addNote": "Add a note (optional)",
+        "answerLabel": "Answer",
+        "noAnswerShape": "This question has no options and does not accept text.",
+        "retry": "Retry",
+        "send": "Send answer",
+        "emptyOpen": "No agent is waiting on you. When an agent needs your decision, its question appears here.",
+        "emptyHistory": "No answered or closed questions yet.",
+        "title": "Work Inbox",
+        "description": "Questions agents asked you. The asking agent continues after it receives your answer.",
+        "tabOpen": "Unanswered",
+        "tabHistory": "History",
+        "filterProject": "Filter by project",
+        "allProjects": "All projects",
+        "filterAgent": "Filter by agent",
+        "allAgents": "All agents",
+        "refresh": "Refresh",
+        "unsupported": "The Orca version on this host does not support Work Inbox yet.",
+        "loadFailed": "Could not load the inbox. Drafts are kept.",
+        "loading": "Loading questions…",
+        "showMore": "Show more",
+        "capped": "Showing the first 200 questions. Filter by project or agent to see the rest.",
+        "sidebarLabel": "Work Inbox",
+        "pin": "Pin to right",
+        "unpin": "Unpin inbox",
+        "resize": "Resize inbox"
       }
     },
     "i18n": {

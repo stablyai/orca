@@ -243,6 +243,7 @@ export function AppWorkspaceShell(props: {
             <RightSidebar />
           </RecoverableRenderErrorBoundary>
         ) : null}
+        <div id="work-inbox-dock" className="contents" />
       </div>
     </RecoverableRenderErrorBoundary>
   )

@@ -23,6 +23,7 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@anthropic-ai/claude-agent-sdk',
   '@electron-toolkit/utils',
   '@linear/sdk',
+  '@modelcontextprotocol/sdk',
   '@orca/process-host',
   '@parcel/watcher',
   'electron-updater',
