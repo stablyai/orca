@@ -1,13 +1,15 @@
 import type { BrowserWindow } from 'electron'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { dock: { hide: vi.fn() }, setActivationPolicy: vi.fn() } }))
 
 const {
+  acceptUserForegroundRequest,
   applyBackgroundActivationPolicy,
   isBackgroundLaunch,
   isOrcadSidecarLaunch,
   isWindowlessLaunch,
+  resetAcceptedUserForegroundForTests,
   showWindowWithoutStealingFocus
 } = await import('./foreground-activation-policy')
 
@@ -62,6 +64,30 @@ describe('isWindowlessLaunch', () => {
         ORCA_E2E_FOREGROUND: '1'
       })
     ).toBe(true)
+  })
+})
+
+describe('acceptUserForegroundRequest', () => {
+  afterEach(() => {
+    resetAcceptedUserForegroundForTests()
+    vi.unstubAllEnvs()
+  })
+
+  it('lets this process present after the user asks, without changing an explicit background env', () => {
+    vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
+    const window = makeWindow()
+    expect(isWindowlessLaunch()).toBe(true)
+    expect(isBackgroundLaunch()).toBe(true)
+    showWindowWithoutStealingFocus(window)
+    expect(window.show).not.toHaveBeenCalled()
+
+    acceptUserForegroundRequest()
+
+    expect(isWindowlessLaunch()).toBe(false)
+    expect(isBackgroundLaunch()).toBe(false)
+    expect(isWindowlessLaunch({ ORCA_BACKGROUND_LAUNCH: '1' })).toBe(true)
+    showWindowWithoutStealingFocus(window)
+    expect(window.show).toHaveBeenCalledOnce()
   })
 })
 

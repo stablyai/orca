@@ -20,6 +20,26 @@ type ActivationPolicyApp = {
 /** Reads ORCA_BACKGROUND_LAUNCH, ORCA_ORCAD_SIDECAR, ORCA_E2E_FOREGROUND, ORCA_E2E_HEADLESS, ORCA_E2E_HEADFUL. */
 type PolicyEnv = Readonly<Record<string, string | undefined>>
 
+/**
+ * A background process stays hidden until the user asks for it (a later desktop
+ * launch or the tray). The flag clears that latch for this process only.
+ */
+let userForegroundAccepted = false
+
+/** Lets this process show and take focus after an explicit user request. */
+export function acceptUserForegroundRequest(): void {
+  userForegroundAccepted = true
+}
+
+/** Test isolation: the latch is process-global. */
+export function resetAcceptedUserForegroundForTests(): void {
+  userForegroundAccepted = false
+}
+
+function userForegroundOverrides(env: PolicyEnv): boolean {
+  return userForegroundAccepted && env === process.env
+}
+
 /** orcad's headless browser provider: a serve process on a throwaway profile that no user drives. */
 export function isOrcadSidecarLaunch(env: PolicyEnv = process.env): boolean {
   return env.ORCA_ORCAD_SIDECAR === '1'
@@ -31,6 +51,9 @@ function isExplicitBackgroundLaunch(env: PolicyEnv): boolean {
 
 /** True when this process must not steal focus, raise windows, or activate the app. */
 export function isBackgroundLaunch(env: PolicyEnv = process.env): boolean {
+  if (userForegroundOverrides(env)) {
+    return false
+  }
   if (isExplicitBackgroundLaunch(env)) {
     return true
   }
@@ -42,6 +65,9 @@ export function isBackgroundLaunch(env: PolicyEnv = process.env): boolean {
 
 /** Suppresses automatic presentation on launch; this is not a query of current window visibility. */
 export function isWindowlessLaunch(env: PolicyEnv = process.env): boolean {
+  if (userForegroundOverrides(env)) {
+    return false
+  }
   return (
     isExplicitBackgroundLaunch(env) ||
     (isBackgroundLaunch(env) && env.ORCA_E2E_HEADLESS === '1' && env.ORCA_E2E_HEADFUL !== '1')

@@ -26,9 +26,14 @@ vi.mock('./windows-install-dir-acl-recovery', () => ({
 vi.mock('../window/renderer-recovery-prompt', () => ({ presentRendererRecoveryPrompt: vi.fn() }))
 vi.mock('../window/renderer-launch-failure-probe', () => ({ probeRendererLaunchCapacity: vi.fn() }))
 
-import { quitFromUserCommand } from './main-window-actions'
+import { quitFromUserCommand, showMainWindowFromTray } from './main-window-actions'
 import { mainProcessState as state } from './main-process-state'
 import { consumeUserQuitWindowClose } from '../window/user-quit-window-close'
+import { safelyRevealWindow } from '../window/focus-existing-window'
+import {
+  isWindowlessLaunch,
+  resetAcceptedUserForegroundForTests
+} from '../window/foreground-activation-policy'
 
 function fakeWindow() {
   return { isDestroyed: () => false, close: vi.fn<() => void>() }
@@ -39,6 +44,8 @@ describe('quitFromUserCommand', () => {
     electron.quit.mockReset()
     state.isQuitting = false
     popout.window = null
+    resetAcceptedUserForegroundForTests()
+    vi.unstubAllEnvs()
   })
 
   it('only closes the desktop windows of an `orca serve` host (#15537)', () => {
@@ -56,6 +63,19 @@ describe('quitFromUserCommand', () => {
     expect(dashboard.close).toHaveBeenCalledOnce()
     // The main window's close carries the user-Quit intent that arms the frozen-renderer deadline.
     expect(consumeUserQuitWindowClose(main)).toBe(true)
+  })
+
+  it('tray open presents a background launch before revealing the window', () => {
+    vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
+    resetAcceptedUserForegroundForTests()
+    const main = fakeWindow()
+    Object.assign(state, { mainWindow: main })
+    expect(isWindowlessLaunch()).toBe(true)
+
+    showMainWindowFromTray()
+
+    expect(isWindowlessLaunch()).toBe(false)
+    expect(safelyRevealWindow).toHaveBeenCalledWith(main)
   })
 
   it('quits a desktop app as before', () => {
