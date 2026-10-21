@@ -92,7 +92,15 @@ export function cutVisualLine(
     lineRange.to
   ).text
   const slice = view.state.doc.slice(lineRange.from, lineRange.to)
-  if (!writeRichMarkdownSliceToClipboard(clipboardEvent.clipboardData, view, slice, lineText)) {
+  if (
+    !writeRichMarkdownSliceToClipboard(
+      clipboardEvent.clipboardData,
+      view,
+      slice,
+      lineText,
+      lineRange
+    )
+  ) {
     return true
   }
 
