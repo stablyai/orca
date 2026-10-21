@@ -18,6 +18,9 @@ vi.mock('react', async () => {
     useEffect() {
       return undefined
     },
+    useId() {
+      return 'image-viewer-test-id'
+    },
     useRef<T>(initial: T) {
       return { current: initial }
     },
@@ -39,6 +42,9 @@ vi.mock('react', async () => {
 })
 
 vi.mock('lucide-react', () => ({
+  Copy: function Copy(props: Record<string, unknown>) {
+    return { type: 'Copy', props }
+  },
   Image: function Image(props: Record<string, unknown>) {
     return { type: 'Image', props }
   },
@@ -68,6 +74,12 @@ vi.mock('@/components/ui/dialog', () => ({
   },
   DialogTitle: function DialogTitle(props: { children?: unknown }) {
     return { type: 'DialogTitle', props }
+  }
+}))
+
+vi.mock('./ImageViewerContextMenu', () => ({
+  default: function ImageViewerContextMenu(props: { children?: unknown }) {
+    return props.children
   }
 }))
 

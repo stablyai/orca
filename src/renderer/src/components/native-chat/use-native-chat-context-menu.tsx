@@ -17,11 +17,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import {
-  copyNativeChatImage,
-  readNativeChatCopyImage,
-  type NativeChatCopyImage
-} from './native-chat-image-copy'
+import { readNativeChatCopyImage, type NativeChatCopyImage } from './native-chat-image-copy'
+import { copyImageToClipboard } from '@/lib/copy-image-to-clipboard'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shortcut'
 import { TabWorkspaceLayoutMenuSection } from '@/components/tab-bar/TabWorkspaceLayoutMenuSection'
 import { canMoveTabToNewPaneColumn } from '@/components/tab-bar/tab-move-to-pane-column'
@@ -260,7 +257,7 @@ export function useNativeChatContextMenu({
           }}
         >
           {image ? (
-            <DropdownMenuItem onSelect={() => void copyNativeChatImage(image)}>
+            <DropdownMenuItem onSelect={() => void copyImageToClipboard(image)}>
               <ImageIcon />
               {translate('components.native-chat.composer.copyImage', 'Copy image')}
             </DropdownMenuItem>
