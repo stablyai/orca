@@ -335,6 +335,11 @@ export function MobileNativeChatView({
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
 
   const lockReason = useSettledMobileNativeChatInputLock(inputLockReason)
+  const composerPlaceholder = mobileNativeChatComposerPlaceholder(
+    lockReason,
+    turnIndicator?.afterStop,
+    agent
+  )
   // Why only Send, terminal-backed only: that send types into the agent's prompt and can answer it,
   // while drafting never does; the host queues a structured send behind it.
   const expandedPromptOwnsSend =
@@ -392,6 +397,11 @@ export function MobileNativeChatView({
         {...{ permission, onRespondPermission, question, onAnswerQuestion, onCollapsePrompt }}
         collapsedPrompt={collapsedPrompt}
       />
+      {lockReason === 'waiting' ? (
+        <Text style={styles.inputLockStatus} accessibilityLiveRegion="polite">
+          {composerPlaceholder}
+        </Text>
+      ) : null}
       {sendErrorMessage ? (
         // This banner is the only channel for a send failure — announce it.
         <View
@@ -424,11 +434,7 @@ export function MobileNativeChatView({
         onMicPressOut={onMicPressOut}
         disabled={lockReason !== null}
         sendDisabled={expandedPromptOwnsSend}
-        placeholder={mobileNativeChatComposerPlaceholder(
-          lockReason,
-          turnIndicator?.afterStop,
-          agent
-        )}
+        placeholder={composerPlaceholder}
         filePaths={filePaths}
         onNeedFiles={onNeedFiles}
         stop={

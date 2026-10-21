@@ -8,6 +8,12 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bgBase
   },
+  inputLockStatus: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xs
+  },
   sendError: {
     alignItems: 'center',
     paddingHorizontal: spacing.md,

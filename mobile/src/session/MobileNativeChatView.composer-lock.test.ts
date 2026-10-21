@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   installChatViewHooks,
   composer,
+  hostType,
   render,
+  root,
   update
 } from './MobileNativeChatView.harness.test-fixture'
 
@@ -38,6 +40,38 @@ vi.mock('./MobileNativeChatComposer', async () => {
 describe('MobileNativeChatView: composer lock and prompt cards', () => {
   installChatViewHooks()
 
+  const waitingStatus = () =>
+    root().findAll(
+      (node) => hostType(node) === 'Text' && node.props.children === 'Waiting for terminal…'
+    )
+
+  it('explains a settled waiting lock outside the placeholder while a draft is present', async () => {
+    vi.useFakeTimers()
+    try {
+      await render({ inputLockReason: 'waiting', composerText: 'run the tests' })
+      await act(async () => {
+        vi.advanceTimersByTime(599)
+      })
+      expect(waitingStatus()).toHaveLength(0)
+      await act(async () => {
+        vi.advanceTimersByTime(1)
+      })
+
+      expect(composer().props.value).toBe('run the tests')
+      expect(composer().props.disabled).toBe(true)
+      expect(waitingStatus()).toHaveLength(1)
+      expect(waitingStatus()[0].props.accessibilityLiveRegion).toBe('polite')
+
+      await update({ inputLockReason: 'waiting', composerText: 'run the tests again' })
+      expect(waitingStatus()).toHaveLength(1)
+      await update({ inputLockReason: 'disconnected', composerText: 'run the tests again' })
+      expect(waitingStatus()).toHaveLength(0)
+      expect(composer().props.placeholder).toBe('Reconnecting…')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps a visible lock through a subscribed-end lease blip', async () => {
     vi.useFakeTimers()
     try {
@@ -59,6 +93,7 @@ describe('MobileNativeChatView: composer lock and prompt cards', () => {
 
       expect(composer().props.disabled).toBe(true)
       expect(composer().props.placeholder).toBe('Waiting for terminal…')
+      expect(waitingStatus()).toHaveLength(1)
     } finally {
       vi.useRealTimers()
     }
@@ -67,15 +102,16 @@ describe('MobileNativeChatView: composer lock and prompt cards', () => {
   it('unlocks after the lease stays ready', async () => {
     vi.useFakeTimers()
     try {
-      await render({ inputLockReason: 'waiting' })
+      await render({ inputLockReason: 'waiting', composerText: 'retained draft' })
       await act(async () => {
         vi.advanceTimersByTime(600)
       })
-      await update({ inputLockReason: null })
+      await update({ inputLockReason: null, composerText: 'retained draft' })
       await act(async () => {
         vi.advanceTimersByTime(599)
       })
       expect(composer().props.disabled).toBe(true)
+      expect(waitingStatus()).toHaveLength(1)
 
       await act(async () => {
         vi.advanceTimersByTime(1)
@@ -83,6 +119,8 @@ describe('MobileNativeChatView: composer lock and prompt cards', () => {
 
       expect(composer().props.disabled).toBe(false)
       expect(composer().props.placeholder).toBe('Message, @files, /commands')
+      expect(composer().props.value).toBe('retained draft')
+      expect(waitingStatus()).toHaveLength(0)
     } finally {
       vi.useRealTimers()
     }
