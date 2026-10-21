@@ -304,4 +304,31 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchend', [])
     expect(posted.find((m) => m.type === 'open-url')).toBeUndefined()
   })
+
+  it('does not post terminal-tap when touch movement routes scroll lines', async () => {
+    const { posted } = boot('plain prompt', undefined, 'vt200')
+    await settle()
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'write', data: '\u001b[?1006l' })
+      })
+    )
+
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchmove', [{ x: 20, y: tapY + 25 }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'terminal-tap')).toBeUndefined()
+  })
+
+  it('does not post terminal-tap when touch press exceeds tap max duration', async () => {
+    const { posted } = boot('plain prompt')
+    await settle()
+
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    await new Promise((r) => setTimeout(r, 400))
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'terminal-tap')).toBeUndefined()
+  })
 })

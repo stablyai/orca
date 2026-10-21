@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { pathToFileURL } from 'node:url'
 
 /**
  * A WebView document bundle, built from somewhere else entirely, as a digest.
@@ -13,11 +14,12 @@ import { execFileSync } from 'node:child_process'
  * change its own working directory, so a case run from `mobile/` can only see the one answer.
  */
 export function bundleDigestBuiltFrom(cwd: string, generator: string, member: string): string {
+  const generatorUrl = pathToFileURL(generator).href
   return execFileSync(
     process.execPath,
     [
       '-e',
-      `Promise.all([import('node:crypto'), import(${JSON.stringify(generator)})]).then(` +
+      `Promise.all([import('node:crypto'), import(${JSON.stringify(generatorUrl)})]).then(` +
         `async ([crypto, generator]) => {` +
         `const { script } = await generator.${member}();` +
         `process.stdout.write(crypto.createHash('sha256').update(script).digest('hex'))` +

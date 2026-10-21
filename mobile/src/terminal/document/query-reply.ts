@@ -55,6 +55,7 @@ export function attachTerminalQueryReplyBridge(
       term.textarea.readOnly = true
       term.textarea.tabIndex = -1
       term.textarea.setAttribute('inputmode', 'none')
+      term.textarea.setAttribute('disabled', 'true')
     }
   } catch {}
   try {

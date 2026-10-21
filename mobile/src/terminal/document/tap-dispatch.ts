@@ -3,6 +3,7 @@ import { cancelSelect, enterSelect } from './selection-mode'
 import { notify } from './host-notify'
 import { viewportToCell } from './viewport-cell'
 import type { TerminalDocumentScope } from './document-scope'
+import { shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import { notifyTerminalSurfaceTap } from './surface-tap'
 import {
   eventTargetInRoot,
@@ -17,10 +18,10 @@ const LONG_PRESS_MS = 500
 const LONG_PRESS_SLOP = 10
 
 /** The travel that disqualifies a tap, in pixels; the mouse drag path holds itself to the same. */
-export const TAP_SLOP = 24
+export const TAP_SLOP = 18
 
 /** The longest press still counted as a tap, in milliseconds. */
-const TAP_MAX_MS = 700
+const TAP_MAX_MS = 350
 
 // ============================================================
 // LATCHING TOUCH DISPATCHER (document-level)
@@ -125,6 +126,7 @@ function onDocumentTouchStart(scope: TerminalDocumentScope, e: TouchEvent) {
 
   if (touches.length === 2) {
     // pinch latch
+    e.preventDefault()
     if (scope.selMode === 'select') {
       notify(scope, { type: 'mobile-clip-cancel-by-pinch' })
       cancelSelect(scope)
@@ -150,6 +152,10 @@ function onDocumentTouchStart(scope: TerminalDocumentScope, e: TouchEvent) {
     return
   }
 
+  // Why: prevent Chromium from synthesizing a default focus/mousedown change that blurs the
+  // active command input (collapsing the open soft keyboard) when touching or scrolling the TUI.
+  e.preventDefault()
+
   if (inSurface && scope.selMode === 'select') {
     // Why: tap-to-dismiss matches native iOS/Android — touching outside the
     // selection clears it. We cancel immediately and latch to 'surface' so
@@ -163,6 +169,10 @@ function onDocumentTouchStart(scope: TerminalDocumentScope, e: TouchEvent) {
   if (inSurface) {
     scope.touchDispatch.mode = 'surface'
     scope.touchDispatch.touchId = t.identifier
+    if (scope.touchGesture.momentumId !== null) {
+      // Touching during momentum scroll brakes the scroll; do not treat as a tap or long press.
+      return
+    }
     scope.tapCandidate = { x: t.clientX, y: t.clientY, t: Date.now(), identifier: t.identifier }
     armLongPress(scope, t)
   }
@@ -197,7 +207,8 @@ function onDocumentTouchMove(scope: TerminalDocumentScope, e: TouchEvent) {
       if (mt.identifier === scope.tapCandidate.identifier) {
         const dx = Math.abs(mt.clientX - scope.tapCandidate.x)
         const dy = Math.abs(mt.clientY - scope.tapCandidate.y)
-        if (dx + dy > TAP_SLOP) {
+        const slop = shouldRouteScrollToTerminalInput(scope) ? 4 : TAP_SLOP
+        if (dx + dy > slop) {
           scope.tapCandidate = null
         }
       }
@@ -239,6 +250,7 @@ function onDocumentTouchEnd(scope: TerminalDocumentScope, e: TouchEvent) {
     if (
       touches.length === 0 &&
       scope.tapCandidate &&
+      !scope.touchGesture.hasMoved &&
       scope.selMode !== 'select' &&
       Date.now() - scope.tapCandidate.t <= TAP_MAX_MS
     ) {

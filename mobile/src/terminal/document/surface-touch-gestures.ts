@@ -11,7 +11,7 @@ import {
   enqueueNormalBufferScrollDelta,
   resetSmoothScrollOffset
 } from './normal-buffer-smooth-scroll'
-import { dispatcherShouldBlockSurface } from './tap-dispatch'
+import { clearLongPress, dispatcherShouldBlockSurface } from './tap-dispatch'
 import {
   applyTextScale,
   MAX_TEXT_SCALE,
@@ -27,6 +27,8 @@ type TerminalGestureSurface = HTMLElement & { __orcaSurfaceHandlersAttached?: bo
 
 /** The live touch gesture: the last point, the velocity, and the pinch it may be in. */
 export type TerminalTouchState = {
+  startX: number
+  startY: number
   lastX: number
   lastY: number
   lastTime: number
@@ -38,6 +40,7 @@ export type TerminalTouchState = {
   pinchScale: number
   pinchSurfX: number
   pinchSurfY: number
+  hasMoved: boolean
 }
 
 export function updateTouchVelocity(scope: TerminalDocumentScope, deltaY: number, dt: number) {
@@ -106,6 +109,8 @@ export function attachSurfaceEventHandlers(
       if (scope.touchGesture.momentumId) {
         cancelAnimationFrame(scope.touchGesture.momentumId)
         scope.touchGesture.momentumId = null
+        scope.tapCandidate = null
+        clearLongPress(scope)
       }
       const touches = touchesInRoot(scope.root, e.touches)
       if (touches.length === 2) {
@@ -119,11 +124,14 @@ export function attachSurfaceEventHandlers(
         scope.touchGesture.pinchSurfY = (mid.y - scope.panY) / total
       } else if (touches.length === 1) {
         scope.touchGesture.isPinching = false
+        scope.touchGesture.startX = touches[0].clientX
+        scope.touchGesture.startY = touches[0].clientY
         scope.touchGesture.lastX = touches[0].clientX
         scope.touchGesture.lastY = touches[0].clientY
         scope.touchGesture.lastTime = Date.now()
         scope.touchGesture.velY = 0
         scope.touchGesture.accumDelta = 0
+        scope.touchGesture.hasMoved = false
       }
     },
     { capture: true, passive: true }
@@ -167,6 +175,13 @@ export function attachSurfaceEventHandlers(
           y = touches[0].clientY
         const now = Date.now(),
           dt = now - scope.touchGesture.lastTime
+        const moveDist = Math.hypot(x - scope.touchGesture.lastX, y - scope.touchGesture.lastY)
+        const totalDist = Math.hypot(x - scope.touchGesture.startX, y - scope.touchGesture.startY)
+        if (moveDist > 2 || totalDist > 5) {
+          scope.touchGesture.hasMoved = true
+          scope.tapCandidate = null
+          clearLongPress(scope)
+        }
 
         // Why: pan horizontally only when content overflows the viewport (larger
         // than fit) — same check clampPan() uses. Vertical always drives buffer
@@ -180,6 +195,8 @@ export function attachSurfaceEventHandlers(
           scope.panX += x - scope.touchGesture.lastX
           clampPan(scope)
           updateTransform(scope)
+          scope.tapCandidate = null
+          clearLongPress(scope)
         }
 
         const deltaY = scope.touchGesture.lastY - y
@@ -193,12 +210,26 @@ export function attachSurfaceEventHandlers(
           if (lines !== 0) {
             scope.touchGesture.accumDelta -= lines * effectiveCellH
             routeScrollLines(scope, lines, x, y)
+            scope.touchGesture.hasMoved = true
+          }
+          if (Math.abs(deltaY) > 1 || Math.abs(scope.touchGesture.accumDelta) > 2) {
+            scope.touchGesture.hasMoved = true
+            scope.tapCandidate = null
+            clearLongPress(scope)
           }
         } else {
           if (enqueueNormalBufferScrollDelta(scope, deltaY)) {
             updateTouchVelocity(scope, deltaY, dt)
+            scope.touchGesture.hasMoved = true
+            scope.tapCandidate = null
+            clearLongPress(scope)
           } else {
             scope.touchGesture.velY = 0
+            if (Math.abs(deltaY) > 2) {
+              scope.touchGesture.hasMoved = true
+              scope.tapCandidate = null
+              clearLongPress(scope)
+            }
           }
         }
         scope.touchGesture.lastX = x

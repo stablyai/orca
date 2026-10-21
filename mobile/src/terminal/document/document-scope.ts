@@ -333,6 +333,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
     scheduledFrames: [],
     framesStopped: false,
     touchGesture: {
+      startX: 0,
+      startY: 0,
       lastX: 0,
       lastY: 0,
       lastTime: 0,
@@ -343,7 +345,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
       pinchDist: 0,
       pinchScale: 0,
       pinchSurfX: 0,
-      pinchSurfY: 0
+      pinchSurfY: 0,
+      hasMoved: false
     }
   }
 }
