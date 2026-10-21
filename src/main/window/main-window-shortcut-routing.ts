@@ -1,3 +1,4 @@
+import { matchesSpatialPaneFocusShortcut } from '../../shared/spatial-pane-shortcut-policy'
 import type { BrowserWindow } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import {
@@ -6,6 +7,7 @@ import {
 } from '../../shared/modifier-double-tap-detector'
 import {
   normalizeTerminalShortcutPolicy,
+  keybindingMatchesAction,
   type KeybindingMatchOptions
 } from '../../shared/keybindings'
 import {
@@ -35,6 +37,7 @@ export function installMainWindowShortcutRouting(args: {
     event: Electron.Event,
     action: WindowShortcutAction,
     options: {
+      spatialPaneConflict?: boolean
       isAutoRepeat: boolean
       focusedShortcutContext: KeybindingMatchOptions
     }
@@ -58,6 +61,15 @@ export function installMainWindowShortcutRouting(args: {
     // While the floating panel owns the keyboard, yield indexed switch chords to the renderer
     // so L2 selects a floating tab instead of switching the main workspace behind the panel.
     if (focus.isFloatingPanelFocused() && isIndexJump) {
+      return false
+    }
+
+    // Yield only physical chords the terminal can own as spatial navigation.
+    if (
+      action.type === 'worktreeHistoryNavigate' &&
+      focusedShortcutContext.context === 'terminal' &&
+      options.spatialPaneConflict
+    ) {
       return false
     }
 
@@ -221,6 +233,15 @@ export function installMainWindowShortcutRouting(args: {
     }
 
     dispatchResolvedWindowShortcutAction(event, action, {
+      spatialPaneConflict: matchesSpatialPaneFocusShortcut((actionId) =>
+        keybindingMatchesAction(
+          actionId,
+          input,
+          process.platform,
+          keybindings,
+          terminalShortcutContext
+        )
+      ),
       isAutoRepeat: Boolean(input.isAutoRepeat),
       focusedShortcutContext: terminalShortcutContext
     })

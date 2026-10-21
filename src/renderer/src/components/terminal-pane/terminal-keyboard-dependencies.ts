@@ -19,6 +19,7 @@ export type KeyboardHandlersDeps = {
   fallbackCwd: string
   expandedPaneIdRef: React.RefObject<number | null>
   setExpandedPane: (paneId: number | null) => void
+  readUnexpandedLayout: (find: () => number | null) => number | null
   restoreExpandedLayout: () => void
   refreshPaneSizes: (focusActive: boolean) => void
   persistLayoutSnapshot: () => void
