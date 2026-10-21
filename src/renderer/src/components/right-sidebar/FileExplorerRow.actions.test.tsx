@@ -51,11 +51,10 @@ function setDownloadPlatform(platform: NodeJS.Platform): void {
 }
 
 function replaceGlobalWindowForTest(windowValue: unknown): () => void {
-  const target = globalThis as { window?: unknown }
-  const original = target.window
-  target.window = windowValue
+  const original = Reflect.get(globalThis, 'window')
+  Reflect.set(globalThis, 'window', windowValue)
   return () => {
-    target.window = original
+    Reflect.set(globalThis, 'window', original)
   }
 }
 
