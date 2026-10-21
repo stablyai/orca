@@ -137,8 +137,8 @@ export function AppWorkspaceShell(props: {
                         : ''
                     }`}
                     style={{
-                      // Why: custom sidebar appearances are scoped to the sidebar root; mirror those vars onto the header in the same left-column panel.
-                      ...(layout.sidebarOpen ? layout.leftSidebarStyle : undefined),
+                      // Why: appearance vars are scoped inline; the header needs them open or floating over the themed tab strip.
+                      ...layout.leftSidebarStyle,
                       // Why: size from the wrapper's live width so the header tracks in-flight drag resizes (persisted to Zustand only on mouseup).
                       width: layout.sidebarOpen ? '100%' : undefined
                     }}
