@@ -91,6 +91,19 @@ export async function listWorkItems(
     localGitOptions
   )
   if (!projectRef) {
+    // Why: issues need a project ref, but local MRs keep listMergeRequests' cwd fallback for hosts glab doesn't list.
+    if (!connectionId) {
+      return listMergeRequests(
+        repoPath,
+        state,
+        page,
+        perPage,
+        preference,
+        query,
+        connectionId,
+        localGitOptions
+      )
+    }
     return {
       items: [],
       page,

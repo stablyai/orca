@@ -161,10 +161,46 @@ describe('gitlab client — combined listWorkItems', () => {
     ])
   })
 
-  it('returns a not_found error envelope when project ref is unresolved', async () => {
+  it('falls back to cwd-inferred MRs for an unresolved local project', async () => {
+    resolveIssueSourceMock.mockResolvedValue({ source: null, fellBack: false })
+    glabExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          id: 300,
+          iid: 3,
+          title: 'fallback mr',
+          state: 'opened',
+          web_url: 'https://gitlab.example.test/g/p/-/merge_requests/3',
+          updated_at: '2026-05-05',
+          source_project_id: 5,
+          target_project_id: 5
+        }
+      ])
+    })
+
+    const result = await listWorkItems('/repo', 'opened', 1, 20, undefined, 'fix login')
+    expect(result.error).toBeUndefined()
+    expect(result.items).toMatchObject([{ type: 'mr', title: 'fallback mr' }])
+    expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+      expect.arrayContaining(['mr', 'list', '--search', 'fix login']),
+      { cwd: '/repo' }
+    )
+  })
+
+  it('returns a not_found error envelope when an SSH project ref is unresolved', async () => {
     resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
 
-    const result = await listWorkItems('/repo', 'opened')
+    const result = await listWorkItems(
+      '/remote/repo',
+      'opened',
+      1,
+      20,
+      undefined,
+      undefined,
+      'conn-1'
+    )
     expect(result.error?.type).toBe('not_found')
     expect(result.items).toEqual([])
     expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
