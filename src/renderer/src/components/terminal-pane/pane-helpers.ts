@@ -1,6 +1,7 @@
 import { quotePosixShellUnlessPlain } from '../../../../shared/shell-argument-quoting'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
+import { terminalHelperAwaitingImeRefocus } from './terminal-ime-input-context-refresh'
 
 export function fitPanes(manager: PaneManager): void {
   manager.fitAllPanes()
@@ -65,6 +66,31 @@ export function shouldPreserveEditableFocus(element: Element | null): boolean {
     element.tagName === 'TEXTAREA' ||
     element.tagName === 'SELECT'
   )
+}
+
+type PaneContainerOwner = {
+  getPanes: () => readonly { container: Pick<HTMLElement, 'contains'> }[]
+}
+
+/**
+ * True while keyboard focus sits in a terminal this manager does not own: another tab's pane
+ * or the floating workspace. The user put it there, so layout maintenance must leave it alone.
+ * A helper mid IME refresh counts as the owner even though the document reports body.
+ */
+export function anotherTerminalOwnsFocus(manager: PaneContainerOwner): boolean {
+  if (typeof document === 'undefined') {
+    return false
+  }
+  const active = document.activeElement
+  const owner =
+    active === null || active === document.body ? terminalHelperAwaitingImeRefocus() : active
+  if (!(owner instanceof HTMLElement)) {
+    return false
+  }
+  if (!owner.classList.contains('xterm-helper-textarea') && !owner.closest('.xterm')) {
+    return false
+  }
+  return !manager.getPanes().some((pane) => pane.container.contains(owner))
 }
 
 // Why: escape rules are a property of the *target* shell receiving the path,

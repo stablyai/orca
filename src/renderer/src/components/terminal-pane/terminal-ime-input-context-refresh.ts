@@ -10,9 +10,37 @@ export type TerminalImeInputContextRefreshOptions = {
 }
 
 const refreshingHelpers = new WeakSet<HTMLElement>()
+// Why: between the refresh blur and its refocus frame the document reports body as active, yet
+// the helper still owns keyboard focus; other panes' recovery must not read that gap as free.
+// Only the newest refresh request counts: an older callback must neither clear it nor refocus.
+type PendingImeRefocus = { helper: HTMLElement; token: number }
+let pendingRefocus: PendingImeRefocus | null = null
+let refocusTokens = 0
 
 export function isTerminalImeInputContextRefreshing(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && refreshingHelpers.has(target)
+}
+
+/** The helper whose refresh blurred it and whose refocus frame has not run yet. */
+export function terminalHelperAwaitingImeRefocus(): HTMLElement | null {
+  // Why: a hidden window defers the refocus frame; a helper unmounted meanwhile owns nothing.
+  if (pendingRefocus && !pendingRefocus.helper.isConnected) {
+    pendingRefocus = null
+  }
+  return pendingRefocus?.helper ?? null
+}
+
+/** Body/null focus that no terminal is about to take back (`except` ignores one helper's refresh). */
+export function isTerminalFocusUnclaimed(
+  activeElement: Element | null,
+  ownerDocument: Document,
+  except: HTMLElement | null = null
+): boolean {
+  if (!isDocumentBodyOrNull(activeElement, ownerDocument)) {
+    return false
+  }
+  const awaiting = terminalHelperAwaitingImeRefocus()
+  return awaiting === null || awaiting === except
 }
 
 function isMacUserAgent(): boolean {
@@ -52,9 +80,28 @@ export function refreshTerminalImeInputContext(
   } finally {
     refreshingHelpers.delete(helper)
   }
+  const token = ++refocusTokens
+  pendingRefocus = { helper, token }
 
   const schedule = options.scheduleRefocus ?? scheduleNextFrame
   schedule(() => {
+    if (pendingRefocus?.token !== token) {
+      // Why: a newer refresh owns the refocus; this request is stale. This helper's own newer
+      // gap is not a lost focus, but another helper's pending refocus is: report that helper as
+      // the settled owner so consumers (floating focus reporting) release this one.
+      const active = ownerDocument.activeElement
+      const newer = terminalHelperAwaitingImeRefocus()
+      if (isDocumentBodyOrNull(active, ownerDocument)) {
+        if (newer === helper) {
+          return
+        }
+        options.onRefocusSkipped?.(newer ?? active)
+        return
+      }
+      options.onRefocusSkipped?.(active)
+      return
+    }
+    pendingRefocus = null
     if (!helper.isConnected) {
       options.onRefocusSkipped?.(ownerDocument.activeElement)
       return

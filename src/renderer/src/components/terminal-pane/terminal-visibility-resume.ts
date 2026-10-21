@@ -13,7 +13,7 @@ import {
   isTerminalLinkifierHoverActive,
   resetTerminalLinkifierHoverState
 } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
-import { focusActivePane } from './pane-helpers'
+import { anotherTerminalOwnsFocus, focusActivePane } from './pane-helpers'
 import { useAppStore } from '@/store'
 import { auditPaneWeightParity } from './terminal-render-desync-weight-probe'
 import { flushDeferredPaneMetricOptionsIfMeasurable } from '@/lib/pane-manager/pane-fit'
@@ -205,7 +205,10 @@ export function recoverVisibleTerminalWindowWake({
   manager.resumeRendering()
   // Why: wake re-attaches WebGL — same transient cell-metric wobble guard as the heavy resume.
   manager.fitAllRevealedPanes()
-  if (isActive && !isChatViewMode) {
+  // Why: the click that activated the window may already have focused another terminal (the
+  // floating workspace). Every visible pane runs this recovery, so without the check the last
+  // one pulls focus away from where the user clicked (#18655).
+  if (isActive && !isChatViewMode && !anotherTerminalOwnsFocus(manager)) {
     focusActivePane(manager)
   }
   enforceTerminalViewportIntents(manager)

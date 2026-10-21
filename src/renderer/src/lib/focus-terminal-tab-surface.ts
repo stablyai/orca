@@ -1,4 +1,7 @@
-import { refreshTerminalImeInputContext } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
+import {
+  isTerminalFocusUnclaimed,
+  refreshTerminalImeInputContext
+} from '@/components/terminal-pane/terminal-ime-input-context-refresh'
 import { UNCOVERED_TERMINAL_LEAF_SELECTOR } from '@/components/terminal-pane/native-chat-covered-pane'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 
@@ -24,7 +27,8 @@ type FocusTerminalTabSurfaceOptions = {
 function focusTerminalHelper(helper: HTMLElement, options: FocusTerminalTabSurfaceOptions): void {
   if (options.onlyIfFocusUnclaimed) {
     const active = document.activeElement
-    if (active !== helper && active !== null && active !== document.body) {
+    // Why: body is not free while another helper waits for its IME refocus frame.
+    if (active !== helper && !isTerminalFocusUnclaimed(active, document, helper)) {
       return
     }
   }
@@ -75,7 +79,10 @@ export function focusTerminalTabSurface(
       const tabElement = document.querySelector(`[data-terminal-tab-id="${escapedTabId}"]`)
       if (tabElement?.getAttribute('data-terminal-chat-view') === 'true') {
         // The chat over this terminal takes the focus in its composer instead.
-        if (!options.onlyIfFocusUnclaimed || document.activeElement === document.body) {
+        if (
+          !options.onlyIfFocusUnclaimed ||
+          isTerminalFocusUnclaimed(document.activeElement, document)
+        ) {
           requestNativeChatComposerFocus(tabId)
         }
         return

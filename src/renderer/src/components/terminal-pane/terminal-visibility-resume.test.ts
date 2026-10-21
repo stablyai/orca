@@ -24,6 +24,7 @@ vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
   syncTerminalScrollIntentFromViewport: vi.fn()
 }))
 vi.mock('./pane-helpers', () => ({
+  anotherTerminalOwnsFocus: vi.fn(() => false),
   fitAndFocusPanes: vi.fn(),
   fitPanes: vi.fn(),
   focusActivePane: vi.fn()
@@ -280,6 +281,36 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     })
 
     expect(focusActivePane).not.toHaveBeenCalled()
+  })
+
+  it('leaves focus in a terminal this manager does not own during window-wake recovery', async () => {
+    const manager = createManager()
+    const { anotherTerminalOwnsFocus, focusActivePane } = vi.mocked(await import('./pane-helpers'))
+    anotherTerminalOwnsFocus.mockReturnValueOnce(true)
+
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: true,
+      isChatViewMode: false,
+      clearGlyphAtlases: false
+    })
+
+    expect(anotherTerminalOwnsFocus).toHaveBeenCalledWith(manager)
+    expect(focusActivePane).not.toHaveBeenCalled()
+  })
+
+  it('focuses the active terminal on window-wake recovery when no other terminal holds focus', async () => {
+    const manager = createManager()
+    const { focusActivePane } = vi.mocked(await import('./pane-helpers'))
+
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: true,
+      isChatViewMode: false,
+      clearGlyphAtlases: false
+    })
+
+    expect(focusActivePane).toHaveBeenCalledWith(manager)
   })
 
   it('repairs WebGL canvas backing-store dpr on window wake', () => {

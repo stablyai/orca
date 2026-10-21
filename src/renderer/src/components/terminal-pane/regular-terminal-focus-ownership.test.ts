@@ -8,6 +8,7 @@ import {
   resyncTerminalFocusForWindowFocus,
   setRegularTerminalInputFocusAttribute
 } from './regular-terminal-focus-ownership'
+import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
 
 function appendPane(): HTMLDivElement {
   const pane = document.createElement('div')
@@ -235,6 +236,50 @@ describe('regular terminal focus ownership', () => {
     expect(document.activeElement).toBe(document.body)
     expect(syncFocused).toHaveBeenCalledOnce()
     expect(syncFocused).toHaveBeenCalledWith(false)
+  })
+
+  it('does not reclaim while another terminal is mid IME refresh during reactivation', () => {
+    // Why: the refresh blurs the other helper to body for one frame; reading that gap as free
+    // focus would pull the user's click in the floating workspace back into this pane (#18655).
+    const pane = appendPane()
+    const helper = appendHelper(pane)
+    const otherPane = appendPane()
+    const otherHelper = appendHelper(otherPane)
+    const syncFocused = vi.fn()
+    helper.focus()
+
+    const releasedHelper = releaseTerminalFocusForWindowBlur({
+      container: pane,
+      activeElement: helper,
+      syncFocused
+    })
+    // The user clicks the other terminal; on window focus its own resync refreshes its IME context.
+    otherHelper.focus()
+    const otherScheduled: (() => void)[] = []
+    refreshTerminalImeInputContext(otherHelper, {
+      isMac: true,
+      scheduleRefocus: (callback) => otherScheduled.push(callback)
+    })
+    expect(document.activeElement).toBe(document.body)
+    syncFocused.mockClear()
+    const scheduled: (() => void)[] = []
+
+    const resynced = resyncTerminalFocusForWindowFocus({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused,
+      releasedHelper,
+      isMac: true,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+    for (const run of [...otherScheduled, ...scheduled]) {
+      run()
+    }
+
+    expect(resynced).toBe(false)
+    expect(scheduled).toHaveLength(0)
+    expect(syncFocused).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(otherHelper)
   })
 
   it('does not yank focus back into the terminal if the user clicked elsewhere during reactivation', () => {

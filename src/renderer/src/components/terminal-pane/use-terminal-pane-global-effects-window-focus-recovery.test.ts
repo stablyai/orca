@@ -59,6 +59,7 @@ vi.mock('react', async (importOriginal) => {
 })
 
 vi.mock('./pane-helpers', () => ({
+  anotherTerminalOwnsFocus: vi.fn(() => false),
   fitAndFocusPanes: mocks.fitAndFocusPanes,
   fitPanes: mocks.fitPanes,
   focusActivePane: mocks.focusActivePane
