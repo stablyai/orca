@@ -6,6 +6,9 @@ import {
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import { normalizeChatMathDelimiters } from './chat-markdown-math'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
 import remend from 'remend'
@@ -174,7 +177,7 @@ export function remarkGitHubReferences(
   return () => (tree) => transformGitHubReferenceChildren(tree, defaultRepo)
 }
 
-const commentMarkdownSanitizeSchema = {
+const commentMarkdownSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
   tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'sub', 'sup', 'ins', 'kbd'],
   attributes: {
@@ -187,6 +190,10 @@ const commentMarkdownSanitizeSchema = {
     details: [...(defaultSchema.attributes?.details ?? []), 'open'],
     img: [...(defaultSchema.attributes?.img ?? []), 'src', 'alt', 'title', 'width', 'height'],
     input: [...(defaultSchema.attributes?.input ?? []), 'type', 'checked', 'disabled'],
+    code: [
+      ...(defaultSchema.attributes?.code ?? []),
+      ['className', 'language-math', 'math-inline', 'math-display']
+    ],
     td: [...(defaultSchema.attributes?.td ?? []), 'align'],
     th: [...(defaultSchema.attributes?.th ?? []), 'align']
   },
@@ -226,6 +233,7 @@ function extensionRehypePlugins(extension: CommentMarkdownExtension): MarkdownPl
 
 type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   content: string
+  math?: boolean
   variant?: 'compact' | 'document'
   githubRepo?: GitHubRepoReference | null
   onLinkClick?: CommentMarkdownLinkClickHandler
@@ -250,7 +258,11 @@ const MemoizedMarkdown = React.memo(Markdown)
 
 /** The content as the blocks to render. Cut into blocks from the first time it is growing, and
  *  from then on, so the stream ending does not redraw what is already there. */
-function useMarkdownBlocks(content: string, growing: boolean): readonly MarkdownBlock[] {
+function useMarkdownBlocks(
+  content: string,
+  growing: boolean,
+  math: boolean
+): readonly MarkdownBlock[] {
   const [previous, setPrevious] = React.useState<MarkdownBlockSplit | null>(null)
   if (!growing && previous === null) {
     return [{ start: 0, line: 1, text: content }]
@@ -258,7 +270,7 @@ function useMarkdownBlocks(content: string, growing: boolean): readonly Markdown
   if (previous?.source === content) {
     return previous.blocks
   }
-  const next = splitMarkdownTopLevelBlocks(content, previous)
+  const next = splitMarkdownTopLevelBlocks(content, previous, math)
   setPrevious(next)
   return next.blocks
 }
@@ -270,6 +282,7 @@ const CommentMarkdown = React.memo(
   React.forwardRef<HTMLDivElement, CommentMarkdownProps>(function CommentMarkdown(
     {
       content,
+      math = false,
       className,
       variant = 'compact',
       githubRepo,
@@ -305,18 +318,25 @@ const CommentMarkdown = React.memo(
       () => ({ ...components, span: CommentMarkdownWords }),
       [components]
     )
-    const activeRehypePlugins = React.useMemo(
-      () => (extension ? extensionRehypePlugins(extension) : rehypePlugins),
-      [extension]
-    )
+    const activeRehypePlugins = React.useMemo<MarkdownPlugins>(() => {
+      const plugins = extension ? extensionRehypePlugins(extension) : rehypePlugins
+      return math ? [...plugins, [rehypeKatex, { trust: false }]] : plugins
+    }, [extension, math])
     const activeRemarkPlugins = React.useMemo(() => {
       const plugins = fileLinkExists
         ? [...remarkPlugins, remarkNativeChatFileLinks(fileLinkExists)]
         : remarkPlugins
-      const withExtension = extension ? [...plugins, ...extension.remarkPlugins] : plugins
+      const withMath: RemarkPlugins = math
+        ? [...plugins, [remarkMath, { singleDollarTextMath: false }]]
+        : plugins
+      const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
-    }, [extension, fileLinkExists, githubRepo])
-    const blocks = useMarkdownBlocks(content, growing)
+    }, [extension, fileLinkExists, githubRepo, math])
+    const normalizedContent = React.useMemo(
+      () => (math ? normalizeChatMathDelimiters(content) : content),
+      [content, math]
+    )
+    const blocks = useMarkdownBlocks(normalizedContent, growing, math)
     const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
     if (fadeWords && !hadWordFade) {
       setHadWordFade(true)

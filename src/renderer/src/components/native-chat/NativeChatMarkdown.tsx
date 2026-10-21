@@ -50,6 +50,7 @@ export function NativeChatMarkdown({
         content={
           extension && streaming ? withoutPendingNativeChatVisualDirectiveTail(content) : content
         }
+        math
         extension={extension}
         fileLinkExists={fileLinkExists}
         fadeWords={fadeWords}

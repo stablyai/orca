@@ -9,6 +9,7 @@
 import type { Nodes } from 'mdast'
 import remarkGfm from 'remark-gfm'
 import remarkParse from 'remark-parse'
+import remarkMath from 'remark-math'
 import { unified } from 'unified'
 
 export type MarkdownBlock = {
@@ -31,6 +32,7 @@ export type MarkdownBlockSplit = {
 const UNSETTLED_BLOCKS = 2
 
 const blockParser = unified().use(remarkParse).use(remarkGfm)
+const mathBlockParser = blockParser().use(remarkMath, { singleDollarTextMath: false })
 
 /** Tags that cannot hold anything, so cannot hold a later block. */
 const VOID_TAG_PATTERN = /^<(?:br|hr|wbr|img)\b[^>]*>$/i
@@ -54,7 +56,8 @@ function wholeDocument(source: string): MarkdownBlockSplit {
 
 export function splitMarkdownTopLevelBlocks(
   source: string,
-  previous: MarkdownBlockSplit | null
+  previous: MarkdownBlockSplit | null,
+  math = false
 ): MarkdownBlockSplit {
   const grewFromPrevious = previous !== null && source.startsWith(previous.source)
   if (grewFromPrevious && previous.whole) {
@@ -65,7 +68,7 @@ export function splitMarkdownTopLevelBlocks(
   const base = reparsed?.start ?? 0
   const baseLine = reparsed?.line ?? 1
   const tail = source.slice(base)
-  const tree = blockParser.parse(tail)
+  const tree = (math ? mathBlockParser : blockParser).parse(tail)
   if (reachesAcrossBlocks(tree)) {
     return wholeDocument(source)
   }
