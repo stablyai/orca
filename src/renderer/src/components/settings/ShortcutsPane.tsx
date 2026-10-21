@@ -54,6 +54,7 @@ const platform: NodeJS.Platform = isMac
     ? 'win32'
     : 'linux'
 
+/** Coordinates shortcut filtering, recording and persisted overrides for the current platform. */
 export function ShortcutsPane(): React.JSX.Element {
   useTranslation()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
@@ -162,6 +163,7 @@ export function ShortcutsPane(): React.JSX.Element {
     ]
   )
 
+  /** Rejects invalid or conflicting chords and persists overrides, returning false on save failure. */
   const saveBindings = async (
     actionId: KeybindingActionId,
     normalized: string[]

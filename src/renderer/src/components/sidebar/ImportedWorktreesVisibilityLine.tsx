@@ -78,6 +78,7 @@ export function groupWorktreesByParentPath(
   return groups
 }
 
+/** Previews hidden worktrees by parent path and host, leaving visibility changes to caller actions. */
 export default function ImportedWorktreesVisibilityLine({
   repoDisplayName,
   hostContextLabel,

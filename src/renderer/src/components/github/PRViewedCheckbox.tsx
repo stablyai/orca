@@ -4,6 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
+/** Isolates viewed-state toggles from file-row clicks and blocks duplicate changes while pending. */
 export function PRViewedCheckbox({
   checked,
   pending,

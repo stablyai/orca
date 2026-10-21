@@ -60,11 +60,12 @@ export function isSettingsSearchQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
+/** Folds both Turkish I variants so translated labels and English keywords remain searchable. */
 export function normalizeSettingsSearchQuery(query: string): string {
-  // Fold both Turkish I variants so translated labels and English keywords remain searchable.
   return query.trim().toLowerCase().replaceAll('i\u0307', 'i').replaceAll('ı', 'i')
 }
 
+/** Ranks exact, prefix and substring matches within the caller's field-specific score tier. */
 function scoreSettingsSearchText(
   normalizedQuery: string,
   value: string | undefined,

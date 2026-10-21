@@ -44,6 +44,7 @@ type ShortcutCommandBlockProps = {
   onEnableAction: (actionId: KeybindingActionId) => void
 }
 
+/** Edits one prefiltered command, including multiple bindings, disabled state and conflict feedback. */
 export function ShortcutCommandBlock({
   item,
   groupTitle,
@@ -91,6 +92,7 @@ export function ShortcutCommandBlock({
         : ''
   const helperTone = error || (!isRecording && warnings.length > 0) ? 'error' : 'muted'
 
+  /** Binds each recorder slot to its index while sharing the command's localized title. */
   const recorderFor = (binding: string | null, index: number): React.JSX.Element => (
     <ShortcutRecorderButton
       actionId={item.id}

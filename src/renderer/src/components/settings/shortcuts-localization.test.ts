@@ -19,6 +19,7 @@ describe('Turkish shortcut search', () => {
     await i18n.changeLanguage('en')
   })
 
+  /** Uses the real definition to exercise translated search without matching a configured chord. */
   const browserForwardRow = (): ShortcutRowModel => {
     const item = getKeybindingDefinition('browser.forward')
     if (!item) {

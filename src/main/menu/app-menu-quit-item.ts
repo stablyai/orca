@@ -1,6 +1,7 @@
 import { translateMain } from '../i18n/main-i18n'
 import { nativeRoleLabel } from './native-role-label'
 
+/** Builds the non-macOS File menu while preserving the host's optional Quit handler. */
 export function createAppFileMenu(
   settingsItem: Electron.MenuItemConstructorOptions,
   onQuit?: () => void

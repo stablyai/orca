@@ -11,6 +11,7 @@ type Props = {
   timestamp?: React.ReactNode
 }
 
+/** Toggles child agents without activating the parent row; absent children render no control. */
 export function DashboardAgentChildDisclosure({
   childAgentCount,
   childAgentsExpanded,

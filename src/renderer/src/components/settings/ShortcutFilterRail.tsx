@@ -33,6 +33,7 @@ export type ShortcutRowsByGroup = {
   rows: ShortcutRowModel[]
 }
 
+/** Resolves labels on render so stable filter IDs survive language changes. */
 function getShortcutFilterLabel(filter: ShortcutFilter): string {
   switch (filter) {
     case 'all':
@@ -57,6 +58,7 @@ export function isShortcutLocalSearchQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
+/** Uses the shared text folding, returning null for queries beyond the local byte limit. */
 export function normalizeShortcutLocalSearchQuery(query: string): string | null {
   if (isShortcutLocalSearchQueryTooLarge(query)) {
     return null
@@ -64,6 +66,7 @@ export function normalizeShortcutLocalSearchQuery(query: string): string | null 
   return normalizeSettingsSearchQuery(query)
 }
 
+/** Combines translated labels with English keywords so either language can find a shortcut. */
 export function getShortcutSearchEntry(row: ShortcutRowModel): SettingsSearchEntry {
   return {
     title: translateKeybindingTitle(row.item),
@@ -100,6 +103,7 @@ export function matchesShortcutFilter(row: ShortcutRowModel, filter: ShortcutFil
   }
 }
 
+/** Matches a normalized query against translated labels, English aliases and platform key chords. */
 export function matchesShortcutLocalSearch(
   row: ShortcutRowModel,
   query: string,
@@ -123,6 +127,7 @@ export function matchesShortcutLocalSearch(
   return searchableText.some((value) => normalizeSettingsSearchQuery(value).includes(query))
 }
 
+/** Presents controlled search and status filters with counts computed by the parent pane. */
 export function ShortcutFilterRail({
   query,
   onQueryChange,

@@ -7,6 +7,7 @@ import { resolveUiLocale } from './supported-languages'
 import { isPluginUiLanguage } from '../../../shared/ui-language'
 import { usePluginLanguagePacks } from '../store/plugin-language-packs'
 
+/** Applies loaded language preferences and plugin packs without racing the initial settings load. */
 export function I18nProvider({ children }: { children: ReactNode }): React.JSX.Element {
   // Why: settings arrive async over IPC; until they load we must not apply any
   // language. Falling back to 'system' here used to kick off an OS-locale
@@ -28,10 +29,7 @@ export function I18nProvider({ children }: { children: ReactNode }): React.JSX.E
   }, [pluginLanguagePacks])
 
   useEffect(() => {
-    // Why: CSS text-transform: uppercase/lowercase only applies Turkish-correct
-    // dotted/dotless I casing when an ancestor's lang attribute says tr/az —
-    // without this, "değişiklikler" uppercases to "DEĞIŞIKLIKLER" instead of
-    // "DEĞİŞİKLİKLER". Sync <html lang> to the active locale on every change.
+    /** Syncs the document language so CSS casing follows the active locale's Turkish I rules. */
     const applyDocumentLang = (): void => {
       document.documentElement.lang = getIntlLocale()
     }

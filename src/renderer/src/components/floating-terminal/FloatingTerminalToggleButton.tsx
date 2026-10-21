@@ -56,6 +56,7 @@ function readInitialTriggerPosition(): FloatingTerminalTriggerPositionState {
       }
 }
 
+/** Keeps a draggable workspace toggle with persisted placement and closed-workspace activity cues. */
 export function FloatingTerminalToggleButton({
   open,
   onToggle

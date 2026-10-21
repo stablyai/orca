@@ -222,6 +222,7 @@ function PreflightBanner({
   )
 }
 
+/** Offers workspace entry points using the loaded projects and active runtime's preflight state. */
 export default function Landing(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)

@@ -53,6 +53,7 @@ type RegisterAppMenuOptions = {
   onQuit?: () => void
 }
 
+/** Rebuilds native menus from the current locale, appearance and effective keybindings. */
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const {
     onOpenSettings,

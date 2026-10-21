@@ -1,6 +1,7 @@
 import { nativeRoleLabel } from './native-role-label'
 import { createAppMenuQuitItem } from './app-menu-quit-item'
 
+/** Combines macOS role items with host-provided Settings, update and Quit behavior. */
 export function buildMacAppMenu(
   appDisplayName: string,
   checkForUpdatesItem: Electron.MenuItemConstructorOptions,

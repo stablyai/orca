@@ -2,13 +2,13 @@ import type { TOptions } from 'i18next'
 import { mainI18n, translateMain } from '../i18n/main-i18n'
 import { isPseudoLocalizationLocale } from '../../shared/pseudo-localization'
 
+/** Preserves Electron's native label when a non-English, non-pseudo catalog lacks the key. */
 export function nativeRoleLabel(
   key: string,
   fallback: string,
   options?: TOptions
 ): string | undefined {
   const locale = mainI18n.language
-  // Let Electron supply its native label when a partial catalog has no translation.
   if (
     locale &&
     locale !== 'en' &&

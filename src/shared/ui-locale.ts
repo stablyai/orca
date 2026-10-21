@@ -34,6 +34,7 @@ export function normalizeSupportedUiLocale(locale: string | undefined): Supporte
     : DEFAULT_UI_LOCALE
 }
 
+/** Resolves built-in preferences or the system locale while preserving plugin language IDs. */
 export function resolveUiLocale(
   language: UiLanguage,
   systemLocale: string | undefined = DEFAULT_UI_LOCALE

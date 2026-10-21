@@ -1,6 +1,7 @@
 import { translateMain } from '../i18n/main-i18n'
 import { nativeRoleLabel } from './native-role-label'
 
+/** Resolves labels when constructing the Window menu so language changes reach native roles. */
 export function createLocalizedAppWindowMenu(isMac: boolean): Electron.MenuItemConstructorOptions {
   return createAppWindowMenu(translateMain('menu.window', 'Window'), isMac, {
     minimize: nativeRoleLabel('menu.minimize', 'Minimize'),
@@ -8,6 +9,7 @@ export function createLocalizedAppWindowMenu(isMac: boolean): Electron.MenuItemC
   })
 }
 
+/** Keeps native window actions without letting non-macOS Minimize capture terminal Ctrl+M. */
 export function createAppWindowMenu(
   label: string,
   isMac: boolean,

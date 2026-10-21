@@ -8,6 +8,7 @@ import { translateKeybindingGroupTitle } from '@/i18n/keybinding-catalog-labels'
 
 const EMPTY_BINDINGS: readonly string[] = []
 
+/** Renders prefiltered groups with localized headings and recorder state scoped to one action. */
 export function ShortcutRowsList({
   className,
   groups,
