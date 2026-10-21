@@ -186,6 +186,45 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
     .poll(() => readFileSync(indexPath, 'utf8'), { timeout: 10_000 })
     .toMatch(/^\s+export const hello = "world"/m)
 
+  // Emacs windows are Orca split groups: `C-x 3` shows the file in a second group and moves point
+  // there, `C-x o` walks between them, `C-x 0` closes that view and leaves the first one.
+  const editorViewIds = (): Promise<(string | null)[]> =>
+    orcaPage.evaluate(() =>
+      [...document.querySelectorAll('[data-orca-file-editor][data-orca-editor-view]')].map((el) =>
+        el.getAttribute('data-orca-editor-view')
+      )
+    )
+  const focusedViewId = (): Promise<string | null> =>
+    orcaPage.evaluate(
+      () =>
+        document.activeElement
+          ?.closest('[data-orca-editor-view]')
+          ?.getAttribute('data-orca-editor-view') ?? null
+    )
+  // Each view has its own echo area; the prefix shows in whichever view holds point.
+  const pendingPrefix = orcaPage.locator('[data-orca-emacs-statusbar]').filter({ hasText: 'C-x' })
+  const pressWindowCommand = async (key: string): Promise<void> => {
+    await kb.press('Control+x')
+    await expect(pendingPrefix).toHaveCount(1, { timeout: 5_000 })
+    await kb.press(key)
+  }
+  const firstView = await focusedViewId()
+  expect(firstView).not.toBeNull()
+  await pressWindowCommand('3')
+  await expect.poll(editorViewIds, { timeout: 10_000 }).toHaveLength(2)
+  await expect.poll(focusedViewId, { timeout: 10_000 }).not.toBe(firstView)
+  const secondView = await focusedViewId()
+  expect(secondView).not.toBeNull()
+  await pressWindowCommand('o')
+  await expect.poll(focusedViewId, { timeout: 5_000 }).toBe(firstView)
+  await pressWindowCommand('o')
+  await expect.poll(focusedViewId, { timeout: 5_000 }).toBe(secondView)
+  await pressWindowCommand('0')
+  await expect.poll(editorViewIds, { timeout: 10_000 }).toEqual([firstView])
+  // The surviving view takes the keyboard back before the app-focus check below.
+  await orcaPage.locator('[data-orca-file-editor] .view-lines').click()
+  await expect.poll(focusedViewId, { timeout: 5_000 }).toBe(firstView)
+
   // Outside the editor the same chord is Orca's again: quick open opens from app focus.
   await orcaPage.evaluate(() => {
     const active = document.activeElement

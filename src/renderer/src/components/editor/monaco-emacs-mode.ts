@@ -3,12 +3,31 @@ import type * as MonacoEmacs from 'monaco-emacs'
 
 // monaco-emacs is a keymap layer over Monaco commands, not an Emacs engine. Verified against the
 // monaco-editor 0.55.1 Orca ships: movement, mark (`C-SPC`), kill ring (`C-k`/`C-w`/`M-w`/`C-y`/
-// `M-y`), undo, `C-u` numeric arguments and the `C-x`/`M-g` prefixes. Its `C-s`/`C-r` open Monaco's
-// find widget; the isearch-style keys inside the widget, `C-g` closing it, and `C-x C-s` are Orca's.
+// `M-y`), undo and the `C-x`/`M-g` prefixes. `C-u` numeric arguments do not work upstream (it
+// expects digit keys named `4`, Monaco names them `Digit4`). Its `C-s`/`C-r` open Monaco's find
+// widget; the isearch-style keys inside the widget, `C-g` closing it, `C-x C-s` and the window
+// commands are Orca's.
 export type EmacsModeController = { dispose: () => void }
 
+export type EmacsWindowSplitDirection = 'right' | 'down'
+
 /** What the Emacs table routes to Orca for the editor that received the key. */
-export type EmacsEditorHooks = { onSave: () => void }
+export type EmacsEditorHooks = {
+  onSave: () => void
+  onSplitWindow: (direction: EmacsWindowSplitDirection) => void
+  onOtherWindow: () => void
+  onDeleteWindow: () => void
+}
+
+// Window commands have no Monaco equivalent; Orca answers them with its split groups.
+// Why `Digit2`: monaco-emacs names keys after Monaco's KeyCode and only strips the `Key` prefix,
+// so the chord Emacs calls `C-x 2` reaches the table as `C-x Digit2`.
+const WINDOW_COMMANDS: readonly [string, string, (hooks: EmacsEditorHooks) => void][] = [
+  ['C-x Digit2', 'Split window below', (hooks) => hooks.onSplitWindow('down')],
+  ['C-x Digit3', 'Split window right', (hooks) => hooks.onSplitWindow('right')],
+  ['C-x o', 'Other window', (hooks) => hooks.onOtherWindow()],
+  ['C-x Digit0', 'Delete window', (hooks) => hooks.onDeleteWindow()]
+]
 
 type MonacoEmacsModule = typeof MonacoEmacs
 
@@ -46,6 +65,17 @@ function ensureCommandTable(mod: MonacoEmacsModule): void {
     description: 'Save file',
     run: (editorInstance) => hooksByEditor.get(editorInstance)?.onSave()
   })
+  for (const [key, description, invoke] of WINDOW_COMMANDS) {
+    mod.registerGlobalCommand(key, {
+      description,
+      run: (editorInstance) => {
+        const hooks = hooksByEditor.get(editorInstance)
+        if (hooks) {
+          invoke(hooks)
+        }
+      }
+    })
+  }
   // Why: keyboard-quit ends an isearch in Emacs; upstream leaves the find widget open.
   const keyboardQuit = new mod.Actions.KeyBoardQuit()
   mod.registerGlobalCommand('C-g', {
@@ -75,7 +105,7 @@ function ensureCommandTable(mod: MonacoEmacsModule): void {
 
 /**
  * Enable Emacs keybindings on a Monaco editor, mirroring the echo area into `statusBarNode`: the
- * pending prefix or `C-u` argument, and whether the mark is active. monaco-emacs is imported
+ * pending prefix and whether the mark is active. monaco-emacs is imported
  * lazily so loading the editor on the default keymap never pulls in the adapter.
  */
 export async function installMonacoEmacsMode(
@@ -89,6 +119,7 @@ export async function installMonacoEmacsMode(
   const keymapContext = editorInstance.createContextKey<boolean>(EMACS_KEYMAP_CONTEXT_KEY, true)
   const extension = new mod.EmacsExtension(editorInstance)
 
+  let disposed = false
   let keyState = ''
   let markActive = false
   const render = (): void => {
@@ -99,6 +130,14 @@ export async function installMonacoEmacsMode(
   const keySub = extension.onDidChangeKey((state) => {
     keyState = state
     render()
+    // Why: upstream echoes before it runs the command and never fires after the reset, so a finished
+    // `C-x …` would stay on screen; re-read once its keydown handler has returned.
+    queueMicrotask(() => {
+      if (!disposed) {
+        keyState = extension.state.getReadableState()
+        render()
+      }
+    })
   })
   const markSub = extension.onDidMarkChange((active) => {
     markActive = active
@@ -107,7 +146,6 @@ export async function installMonacoEmacsMode(
   extension.start()
   render()
 
-  let disposed = false
   return {
     dispose: (): void => {
       if (disposed) {
