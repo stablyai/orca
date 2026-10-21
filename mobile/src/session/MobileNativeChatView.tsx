@@ -397,11 +397,12 @@ export function MobileNativeChatView({
         {...{ permission, onRespondPermission, question, onAnswerQuestion, onCollapsePrompt }}
         collapsedPrompt={collapsedPrompt}
       />
-      {lockReason === 'waiting' ? (
-        <Text style={styles.inputLockStatus} accessibilityLiveRegion="polite">
-          {composerPlaceholder}
-        </Text>
-      ) : null}
+      <Text
+        style={lockReason === 'waiting' ? styles.inputLockStatus : undefined}
+        accessibilityLiveRegion="polite"
+      >
+        {lockReason === 'waiting' ? composerPlaceholder : null}
+      </Text>
       {sendErrorMessage ? (
         // This banner is the only channel for a send failure — announce it.
         <View
