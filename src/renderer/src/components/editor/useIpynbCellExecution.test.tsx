@@ -3,8 +3,12 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseIpynb } from './ipynb-parse'
 import type { KernelFrameEvent } from '../../../../shared/notebook-kernel-types'
+import type {
+  WorktreeOperationOwnerRecord,
+  WorktreeOperationRouteState
+} from '@/lib/worktree-operation-route'
 
-const { getConnectionIdMock, notebookApi, toastError, frameListener } = vi.hoisted(() => {
+const { storeState, notebookApi, toastError, frameListener } = vi.hoisted(() => {
   const frameListener = { current: (_event: KernelFrameEvent): void => {} }
   const notebookApi = {
     listPythonEnvironments: vi.fn(),
@@ -18,22 +22,41 @@ const { getConnectionIdMock, notebookApi, toastError, frameListener } = vi.hoist
   }
   // The kernel session subscribes to kernel frames when it loads.
   Object.defineProperty(window, 'api', { configurable: true, value: { notebook: notebookApi } })
+  const storeState: { current: WorktreeOperationRouteState } = { current: {} }
   return {
-    getConnectionIdMock: vi.fn((): string | null => null),
+    storeState,
     notebookApi,
     toastError: vi.fn(),
     frameListener
   }
 })
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: getConnectionIdMock }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
-vi.mock('@/store', () => ({ useAppStore: { subscribe: () => () => {} } }))
+vi.mock('@/store', () => ({
+  useAppStore: { subscribe: () => () => {}, getState: () => storeState.current }
+}))
 
 import { useIpynbCellExecution } from './useIpynbCellExecution'
 import { runCells, trustNotebook } from './ipynb-kernel-session'
 import { getSession } from './ipynb-kernel-store'
+
+const WORKTREE_ID = 'repo-1::/repo'
+
+function ownerRows(
+  repo: Pick<
+    NonNullable<WorktreeOperationRouteState['repos']>[number],
+    'connectionId' | 'executionHostId'
+  >,
+  worktree: Pick<WorktreeOperationOwnerRecord, 'hostId' | 'runtimeOwnerEnvironmentId'> = {}
+): WorktreeOperationRouteState {
+  return {
+    repos: [{ id: 'repo-1', ...repo }],
+    worktreesByRepo: { 'repo-1': [{ id: WORKTREE_ID, repoId: 'repo-1', ...worktree }] }
+  }
+}
+
+const LOCAL_ROWS = ownerRows({}, { hostId: 'local' })
 
 function notebookContent(withIds: boolean): string {
   return JSON.stringify({
@@ -62,7 +85,7 @@ function renderExecution(filePath: string, applyContent = vi.fn(), withIds = tru
   const hook = renderHook(() =>
     useIpynbCellExecution({
       filePath,
-      worktreeId: 'worktree-a',
+      worktreeId: WORKTREE_ID,
       rootPath: '/repo',
       flushSourceDrafts: () => content,
       applyContent
@@ -73,7 +96,7 @@ function renderExecution(filePath: string, applyContent = vi.fn(), withIds = tru
 
 beforeEach(() => {
   vi.clearAllMocks()
-  getConnectionIdMock.mockReturnValue(null)
+  storeState.current = LOCAL_ROWS
   notebookApi.listPythonEnvironments.mockResolvedValue({
     workspace: [{ path: '/repo/.venv/bin/python', name: '.venv', version: '3.12.1' }],
     path: []
@@ -106,9 +129,22 @@ describe('notebook cell execution', () => {
     })
   })
 
-  it('refuses to run in SSH workspaces without touching the notebook or starting a kernel', () => {
-    getConnectionIdMock.mockReturnValue('ssh-connection')
-    const { hook, applyContent } = renderExecution('/remote/notebook.ipynb')
+  it.each([
+    ['a direct SSH workspace', ownerRows({ connectionId: 'box' }, { hostId: 'ssh:box' })],
+    [
+      'a managed SSH workspace owned by its server',
+      ownerRows(
+        { executionHostId: 'runtime:env-orcad' },
+        { hostId: 'runtime:env-orcad', runtimeOwnerEnvironmentId: 'env-orcad' }
+      )
+    ],
+    [
+      'an SSH target behind a paired server',
+      ownerRows({}, { hostId: 'ssh:t', runtimeOwnerEnvironmentId: 'env-a' })
+    ]
+  ])('refuses to run %s without touching the notebook or starting a kernel', (_name, rows) => {
+    storeState.current = rows
+    const { hook, applyContent } = renderExecution('/repo/notebook.ipynb')
 
     act(() => hook.result.current.runCell(1))
     expect(toastError).toHaveBeenCalledWith(
@@ -117,6 +153,32 @@ describe('notebook cell execution', () => {
     expect(applyContent).not.toHaveBeenCalled()
     expect(hook.result.current.pendingRun).toBeNull()
     expect(notebookApi.startKernel).not.toHaveBeenCalled()
+  })
+
+  it.each<[string, WorktreeOperationRouteState]>([
+    ['rows that have not loaded', {}],
+    [
+      'two hosts publishing the same workspace',
+      {
+        repos: [{ id: 'repo-1' }, { id: 'repo-1', executionHostId: 'runtime:env-a' }],
+        worktreesByRepo: {
+          'repo-1': [
+            { id: WORKTREE_ID, repoId: 'repo-1', hostId: 'local' },
+            { id: WORKTREE_ID, repoId: 'repo-1', hostId: 'runtime:env-a' }
+          ]
+        }
+      }
+    ]
+  ])('refuses to run with %s instead of reading them as local', (_name, rows) => {
+    storeState.current = rows
+    const { hook, applyContent } = renderExecution('/repo/notebook.ipynb')
+
+    act(() => hook.result.current.runCell(1))
+    expect(toastError).toHaveBeenCalledWith(
+      "Orca can't tell which computer this notebook is on yet, so its cells can't run."
+    )
+    expect(applyContent).not.toHaveBeenCalled()
+    expect(hook.result.current.pendingRun).toBeNull()
   })
 
   it('gives id-less cells ids before queueing, so output follows a moved cell', () => {
@@ -185,7 +247,7 @@ function mountFinishedNotebook(filePath: string, content: string) {
   const hook = renderHook(() =>
     useIpynbCellExecution({
       filePath,
-      worktreeId: 'worktree-a',
+      worktreeId: WORKTREE_ID,
       rootPath: '/repo',
       flushSourceDrafts,
       applyContent

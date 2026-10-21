@@ -72,6 +72,7 @@ describe('web preload API composition', () => {
       'pty',
       'ssh',
       'wsl',
+      'wslMove',
       'pwsh',
       'gitBash',
       'agentStatus',

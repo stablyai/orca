@@ -1,10 +1,10 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
-import {
-  getRemoteRuntimeTerminalMultiplexer,
-  type RemoteRuntimeMultiplexedTerminal,
-  type RemoteRuntimeMultiplexedTerminalCallbacks
-} from '@/runtime/remote-runtime-terminal-multiplexer'
+import { getRemoteRuntimeTerminalMultiplexer } from '@/runtime/remote-runtime-terminal-multiplexer'
+import type {
+  RemoteRuntimeMultiplexedTerminal,
+  RemoteRuntimeMultiplexedTerminalCallbacks
+} from '@/runtime/remote-runtime-terminal-multiplexer-types'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import type {
   TerminalPreviewConnectResult,

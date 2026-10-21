@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { FeatureInteractionId } from '../../../../shared/feature-interaction-catalog'
 import type {
   ClaudeRateLimitAccountsState,
@@ -29,7 +29,8 @@ import {
   isClaudeAccountCancellation,
   isCodexAccountCancellation
 } from './accounts-pane-action-errors'
-import { getClaudeAccountLabel } from './accounts-pane-runtime'
+import { getClaudeAccountLabel } from '@/lib/claude-account-label'
+import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/claude-account-switch-sessions'
 
 type CodexActionContext = {
   settings: GlobalSettings
@@ -150,7 +151,8 @@ export function createCodexAccountActionRunner(
 }
 
 type ClaudeActionContext = {
-  settings: GlobalSettings
+  /** Host whose roster the action writes. */
+  accountOwner: RuntimeClientTarget
   accountRuntime: LocalAccountRuntime
   isRemoteAccountScope: boolean
   claudeAccounts: ClaudeRateLimitAccountsState
@@ -166,6 +168,7 @@ export function createClaudeAccountActionRunner(
   context: ClaudeActionContext
 ): ClaudeAccountActionRunner {
   const {
+    accountOwner,
     accountRuntime,
     claudeAccounts,
     fetchSettings,
@@ -192,27 +195,41 @@ export function createClaudeAccountActionRunner(
       await syncClaudeAccounts(next)
       recordFeatureInteraction('claude-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
-      // Why: switching reaches the next `claude` started in any terminal, so nothing restarts.
-      if (action === 'adding' || previousActiveAccountId !== nextActiveAccountId) {
+      const switched = previousActiveAccountId !== nextActiveAccountId
+      const showUpdatedToast = (): void => {
         toast.info(
           translate('auto.components.settings.AccountsPane.f921d32606', 'Claude account updated.'),
           {
-            description:
-              previousActiveAccountId === nextActiveAccountId
-                ? translate(
-                    'accounts.claude.added',
-                    'Account added. Select it to use it for the next Claude you start.'
-                  )
-                : translate(
-                    'accounts.claude.nextLaunch',
-                    '{{value0}} → {{value1}}. The next Claude you start uses it. Running sessions keep their account.',
-                    {
-                      value0: getClaudeAccountLabel(claudeAccounts, previousActiveAccountId),
-                      value1: getClaudeAccountLabel(next, nextActiveAccountId)
-                    }
-                  )
+            description: switched
+              ? translate(
+                  'accounts.claude.nextLaunch',
+                  '{{value0}} → {{value1}}. The next Claude you start uses it. Running sessions keep their account.',
+                  {
+                    value0: getClaudeAccountLabel(claudeAccounts, previousActiveAccountId),
+                    value1: getClaudeAccountLabel(next, nextActiveAccountId)
+                  }
+                )
+              : translate(
+                  'accounts.claude.added',
+                  'Account added. Select it to use it for the next Claude you start.'
+                )
           }
         )
+      }
+      if (switched) {
+        // Why: the restart dialog and confirmation already name the new account.
+        void handleRunningClaudeSessionsAfterSwitch({
+          owner: accountOwner,
+          target: actionRuntime,
+          before: { state: claudeAccounts, accountId: previousActiveAccountId },
+          after: { state: next, accountId: nextActiveAccountId }
+        }).then((outcome) => {
+          if (outcome === 'show-confirmation') {
+            showUpdatedToast()
+          }
+        })
+      } else if (action === 'adding') {
+        showUpdatedToast()
       }
     } catch (error) {
       if (isClaudeAccountCancellation(error)) {

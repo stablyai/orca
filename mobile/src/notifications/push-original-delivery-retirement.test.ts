@@ -44,7 +44,7 @@ async function captureHostRetirement(directory: string) {
   ) {
     throw new Error('host retirement fixture did not load')
   }
-  const captured: unknown = fixture.captureOriginalDeliveryRetirement(directory)
+  const captured: unknown = await fixture.captureOriginalDeliveryRetirement(directory)
   return retirementSchema.parse(captured)
 }
 

@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   prepare: vi.fn(),
   toastError: vi.fn()
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))

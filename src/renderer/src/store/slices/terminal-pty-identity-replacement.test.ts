@@ -38,13 +38,13 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
           [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: replacementPtyId })]
         },
         ptyIdsByTabId: { 'tab-1': [replacementPtyId] },
-        pendingCodexPaneRestartIds: { [stalePtyId]: true }
+        pendingPaneAccountRestarts: { [stalePtyId]: 'codex' }
       })
 
       store.getState().updateTabPtyId('tab-1', replacementPtyId, stalePtyId)
 
       expect(store.getState().ptyIdsByTabId['tab-1']).toEqual([replacementPtyId])
-      expect(store.getState().pendingCodexPaneRestartIds).toEqual({ [replacementPtyId]: true })
+      expect(store.getState().pendingPaneAccountRestarts).toEqual({ [replacementPtyId]: 'codex' })
     })
 
     it('publishes pane and tab replacement identities in one store commit', () => {
@@ -284,7 +284,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
       const normalized = store.getState().terminalLayoutsByTabId['tab-1']
       expect(normalized.ptyIdsByLeafId).not.toEqual(duplicate.ptyIdsByLeafId)
 
-      store.getState().markTerminalPaneUnread('tab-1:leaf-a', 'terminal-bell')
+      store.setState({ unreadTerminalPanes: { 'tab-1:leaf-a': 'terminal-bell' } })
       const beforeUnread = { ...store.getState().unreadTerminalPanes }
 
       for (let i = 0; i < REPEATS; i += 1) {

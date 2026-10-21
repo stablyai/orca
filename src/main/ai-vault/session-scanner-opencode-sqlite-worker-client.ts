@@ -102,6 +102,7 @@ export class OpenCodeSqliteWorkerClient {
     limit: number
     issues: AiVaultScanIssue[]
     agent?: 'opencode2' | 'zcode'
+    scopePaths?: readonly string[]
     signal?: AbortSignal
   }): Promise<SessionFileCandidate[]> {
     if (args.dbPaths.length === 0) {
@@ -115,7 +116,8 @@ export class OpenCodeSqliteWorkerClient {
           kind: 'list',
           dbPaths: args.dbPaths,
           limit: Number.isFinite(args.limit) ? args.limit : null,
-          ...(args.agent ? { agent: args.agent } : {})
+          ...(args.agent ? { agent: args.agent } : {}),
+          ...(args.scopePaths?.length ? { scopePaths: args.scopePaths } : {})
         }),
         LIST_TIMEOUT_MS,
         args.signal,

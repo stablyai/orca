@@ -1,23 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   bulkDiscardRuntimeGitPaths,
-  bulkStageRuntimeGitPaths,
+  bulkStageRuntimeGitPaths
+} from './runtime-git-working-tree-client'
+import {
   cancelRuntimeGenerateCommitMessage,
-  commitRuntimeGit,
   discoverRuntimeCommitMessageModels,
+  generateRuntimeCommitMessage,
+  generateRuntimePullRequestFields
+} from './runtime-git-generation-client'
+import {
+  commitRuntimeGit,
   fastForwardRuntimeGit,
   fetchRuntimeGit,
-  generateRuntimeCommitMessage,
-  generateRuntimePullRequestFields,
-  getRuntimeGitBranchCompare,
-  getRuntimeGitDiff,
+  pushRuntimeGit,
+  rebaseRuntimeGitFromBase
+} from './runtime-git-sync-client'
+import { getRuntimeGitBranchCompare, getRuntimeGitDiff } from './runtime-git-diff-client'
+import {
   getRuntimeGitHistory,
   getRuntimeGitIgnoredPaths,
   getRuntimeGitStatus,
-  getRuntimeGitSubmoduleStatus,
-  pushRuntimeGit,
-  rebaseRuntimeGitFromBase
-} from './runtime-git-client'
+  getRuntimeGitSubmoduleStatus
+} from './runtime-git-status-client'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest

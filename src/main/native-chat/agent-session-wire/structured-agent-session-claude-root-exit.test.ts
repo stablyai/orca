@@ -112,7 +112,7 @@ describe('Claude root-exit stop', () => {
           journal,
           params,
           child: {
-            generation: acquisition.acquisitionGeneration ?? null,
+            generation: acquisition.acquisitionGeneration,
             fence,
             phase: 'ready'
           }
@@ -145,7 +145,7 @@ describe('Claude root-exit stop', () => {
                 store,
                 sessions,
                 flushLifecycle: (id) => runtimeState.lifecycleBarrier(id),
-                publishFence: () => undefined,
+                generationEnded: () => undefined,
                 publishStatus,
                 serialize: (_sessionId, task) => task(),
                 now: () => NOW + 30 * 60_000,

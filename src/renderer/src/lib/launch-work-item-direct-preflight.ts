@@ -1,9 +1,9 @@
 import { getSetupConfig } from '@/lib/new-workspace'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { runtimeTargetForOwnerHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import type { Repo } from '../../../shared/repo-types'
 import type { OrcaHooks, RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
 import type { SetupDecision } from '../../../shared/worktree/create-types'
@@ -79,6 +79,6 @@ export function resolveDirectLaunchOwnerRow(
     return null
   }
   const executionHostId = getRepoExecutionHostId(rows[0])
-  const target = runtimeTargetForOwnerHostId(executionHostId)
+  const target = ipcOrRuntimeTargetForHostId(executionHostId)
   return target ? { repo: rows[0], executionHostId, target } : null
 }

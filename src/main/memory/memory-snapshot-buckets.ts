@@ -5,10 +5,10 @@ import type { Store } from '../persistence'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
 
-export type MemorySnapshotStore = Pick<
-  Store,
-  'getRepo' | 'getWorktreeMeta' | 'getFolderWorkspace' | 'getProjectGroups'
->
+export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'> &
+  Partial<Pick<Store, 'getFolderWorkspace'>> & {
+    getProjectGroups?: () => Pick<ReturnType<Store['getProjectGroups']>[number], 'id' | 'name'>[]
+  }
 
 const APP_HISTORY_KEY = '__app__'
 const HISTORY_CAPACITY = 60
@@ -75,10 +75,13 @@ export function resolveWorktreeMemoryNames(
   repoName: string
 } {
   const scope = parseWorkspaceKey(worktreeId)
-  const folder = scope?.type === 'folder' ? store.getFolderWorkspace(scope.folderWorkspaceId) : null
+  // SAFETY: Missing optional capabilities keep the original direct-call failure.
+  const folder =
+    scope?.type === 'folder' ? store.getFolderWorkspace!(scope.folderWorkspaceId) : null
   if (folder) {
     const worktree = folderWorkspaceToWorktree(folder)
-    const group = store.getProjectGroups().find((item) => item.id === folder.projectGroupId)
+    // SAFETY: Missing optional capabilities keep the original direct-call failure.
+    const group = store.getProjectGroups!().find((item) => item.id === folder.projectGroupId)
     return {
       worktreeName: worktree.displayName,
       repoId: worktree.repoId,

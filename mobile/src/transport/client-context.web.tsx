@@ -7,15 +7,6 @@ import { BRIDGE_PAGE_CLIENT_ID } from '../mobile-web-shell/bridge/bridge-page-cl
 import type { ConnectionState, HostProfile } from './types'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
 
-export {
-  useDisconnectHostClient,
-  useForceReconnect,
-  useForgetHostClient,
-  useHostClient,
-  usePrimeHosts,
-  useRefreshHostClient
-} from './host-client-hooks'
-
 const Ctx = createContext<RpcClientContextValue | null>(null)
 /** The page's own client, which is more than an `RpcClient`: the route seam reads the session off
  *  it to decide which screens are this document's. Separate from `Ctx` so the shared contract above

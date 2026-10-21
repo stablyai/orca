@@ -121,7 +121,6 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
   fill(loaded, 'tab.quickCommandLabel', 'build', terminal)
   fill(loaded, 'tab.isPreview', true, (holder) => holder.kind === 'editor')
   fill(loaded, 'tab.terminal.forceHostRuntime', true)
-  fill(loaded, 'tab.terminal.agentLaunchPane', { leafId: leaf(1) })
   fill(loaded, 'file.externalSshTargetId', 'box')
   fill(loaded, 'file.runtimeEnvironmentId', 'env')
   fill(loaded, 'file.readOnly', true)
@@ -130,6 +129,7 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
   fill(loaded, 'viewPane.activeLeafId', leaf(2), (holder) => holder.activeLeafId === leaf(1))
   fill(loaded, 'viewPane.expandedLeafId', leaf(2), (holder) => holder.activeLeafId === leaf(2))
   fill(loaded, 'scrollback.buffer', 'buffer')
+  fill(loaded, 'leaf.lastGrid', { cols: 91, rows: 33 })
   fill(loaded, 'browserTab.sessionProfileId', 'profile-1')
   fill(loaded, 'browserTab.sessionPartition', 'persist:p')
   fill(loaded, 'browserTab.pageIds', ['page-1', 'page-2'])
@@ -155,6 +155,9 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
   fill(loaded, 'carried.workspaceDocHistory', [{ path: 'a' }, { path: 'b' }])
   fill(loaded, 'carried.clientHostedBrowserCloseIntentsByEnvironment', {
     env: ['page-1', 'page-2']
+  })
+  fill(loaded, 'carried.pairedTerminalTabCloseIntentsByEnvironment', {
+    env: ['host-tab-1', 'host-tab-2']
   })
   const sleeping = (field: keyof LayoutSleepingRecord, value: unknown) =>
     fill(loaded, `leaf.sleeping.${field}` as const, value)

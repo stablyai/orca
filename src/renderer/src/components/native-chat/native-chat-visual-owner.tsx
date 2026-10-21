@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
 
 /** The structured chat a transcript belongs to: where its visuals are read and what owns them. */

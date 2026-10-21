@@ -3,7 +3,7 @@ import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-se
 import {
   createMockStore,
   registerWorktreeActivationReset
-} from './worktree-activation-test-harness'
+} from './worktree-activation.test-fixture'
 import {
   CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS,
   MAX_CLOSED_TERMINAL_TAB_TOMBSTONES,

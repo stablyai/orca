@@ -75,7 +75,7 @@ describe('registerPtyHandlers', () => {
       spawn: vi.fn(async () => {
         runtime.onPtySpawned(ptyId, incarnationId)
         runtime.onPtyExit(ptyId, 0, incarnationId)
-        return { id: ptyId, incarnationId }
+        return { id: ptyId, incarnationId, exitedBeforeSpawnReply: true }
       }),
       authoritativeOwnerListings: false
     })
@@ -105,10 +105,8 @@ describe('registerPtyHandlers', () => {
     expect(store.persistPtyBinding).not.toHaveBeenCalled()
     expect(registerRuntimePty).not.toHaveBeenCalled()
     const internals = runtime as unknown as {
-      earlyExitedPtyIncarnations: Map<string, string | null>
       pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
-    expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
     expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
     clearProviderPtyState(ptyId)
   })
@@ -392,9 +390,9 @@ describe('registerPtyHandlers', () => {
     ).rejects.toThrow('agent_session_exited_during_start')
 
     const internals = runtime as unknown as {
-      earlyExitedPtyIncarnations: Map<string, string | null>
+      pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
-    expect(internals.earlyExitedPtyIncarnations.has(owner.ptyId)).toBe(false)
+    expect(internals.pendingPtyRegistrationIncarnations.has(owner.ptyId)).toBe(false)
   })
   it('rejects stale exits immediately after SSH reconnect restores an incarnation', () => {
     const ptyId = 'ssh:target-1@@pty-reconnected'

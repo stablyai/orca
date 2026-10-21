@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect } from 'react'
 import { useAppStore } from '../../store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   applyTerminalPaneAttentionToManager,
   subscribeTerminalPaneAttention
@@ -26,22 +25,15 @@ import type { TerminalPaneCloseController } from './use-terminal-pane-close-acti
 
 export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseController): void {
   const {
-    clearTerminalPaneUnread,
-    clearTerminalTabUnread,
-    clearWorktreeUnread,
-    chatLeafId,
     clearedScrollbackLeafIdsRef,
     containerRef,
     expandedPaneId,
-    expandedPaneIdRef,
-    isChatViewMode,
     isolatedPaneKey,
     isVisible,
     managerRef,
     paneCount,
     paneLayoutRevision,
     paneTitles,
-    paneTitlesRef,
     paneTransportsRef,
     renamingPaneId,
     renameInputRef,
@@ -55,26 +47,6 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     tabId,
     worktreeId
   } = controller
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) {
-      return
-    }
-    const onPointerDown = (event: PointerEvent): void => {
-      clearTerminalTabUnread(tabId)
-      clearWorktreeUnread(worktreeId)
-      const paneElement =
-        event.target instanceof Element ? event.target.closest('.pane[data-leaf-id]') : null
-      const leafId = paneElement?.getAttribute('data-leaf-id')
-      if (leafId) {
-        clearTerminalPaneUnread(makePaneKey(tabId, leafId))
-      }
-    }
-    container.addEventListener('pointerdown', onPointerDown, { capture: true })
-    return () => container.removeEventListener('pointerdown', onPointerDown, { capture: true })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [tabId, worktreeId, clearTerminalTabUnread, clearTerminalPaneUnread, clearWorktreeUnread])
 
   const applyTerminalPaneAttention = useCallback(() => {
     const manager = managerRef.current
@@ -196,28 +168,24 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
   useEffect(() => {
     const captureBuffers = (options?: ShutdownBufferCaptureOptions): void => {
       const manager = managerRef.current
-      const container = containerRef.current
-      if (!manager || !container) {
+      const state = useAppStore.getState()
+      const existing = state.terminalLayoutsByTabId[tabId]
+      // Mounting stores the layout; only closing the tab or its workspace removes it.
+      if (!manager || !existing) {
         return
       }
       const panes = manager.getPanes()
       if (panes.length === 0) {
         return
       }
-      const state = useAppStore.getState()
-      const existing = state.terminalLayoutsByTabId[tabId]
       const includeLocalBuffers = options?.includeLocalBuffers ?? true
       const shouldCaptureScrollbackBuffers = includeLocalBuffers
         ? true
         : shouldPreserveTerminalScrollbackBuffers(worktreeId, state.repos)
       const layout = captureTerminalShutdownLayout({
         manager,
-        container,
-        expandedPaneId: expandedPaneIdRef.current,
         paneTransports: paneTransportsRef.current,
-        paneTitlesByPaneId: paneTitlesRef.current,
         existingLayout: existing,
-        chatLeafId: isChatViewMode ? chatLeafId : null,
         // Why resolved: a pane that serializes empty mid-replay must fall back to whichever home
         // holds its last good copy, not only the shared one.
         priorBuffersByLeafId: resolveLeafScrollbackBuffers({
@@ -250,7 +218,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
       }
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [chatLeafId, isChatViewMode, tabId, worktreeId, setTabLayout, setTabLocalOnlyScrollback])
+  }, [tabId, worktreeId, setTabLayout, setTabLocalOnlyScrollback])
 
   useEffect(() => {
     if (renamingPaneId === null) {

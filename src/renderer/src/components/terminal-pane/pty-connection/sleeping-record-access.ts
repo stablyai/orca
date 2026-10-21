@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { PtyConnectResult } from '../pty-transport'
+import type { PtyConnectResult } from '../pty-transport-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { parseLegacyNumericPaneKey } from '../../../../../shared/stable-pane-id'
 import { neutralTerminalTitle } from '../../../../../shared/terminal-pane-title-reset'

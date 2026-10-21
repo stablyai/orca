@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import { AI_VAULT_VIEW_OPTIONS_STORAGE_KEY } from './ai-vault-view-options-persistence'
@@ -11,6 +11,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  // Mounted hooks share one copy of the options until the last one unmounts.
+  cleanup()
   vi.restoreAllMocks()
   window.localStorage.removeItem(AI_VAULT_VIEW_OPTIONS_STORAGE_KEY)
 })
@@ -34,6 +36,25 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(restored.result.current.group).toBe('folder')
     expect(restored.result.current.hideEmptySessions).toBe(true)
     expect(restored.result.current.sessionLimit).toBe('unlimited')
+  })
+
+  it("shares view options between panels but keeps a dialog's agent filter to itself", () => {
+    const sidebar = renderHook(() => usePersistedAiVaultViewOptions())
+    const dialog = renderHook(() => usePersistedAiVaultViewOptions(['claude']))
+    expect(dialog.result.current.agents).toEqual(['claude'])
+
+    act(() => sidebar.result.current.setAgentEnabled('codex', false))
+    act(() => dialog.result.current.setSort('created'))
+    act(() => dialog.result.current.setAllAgentsEnabled(true))
+    expect(dialog.result.current.agents).toEqual(AI_VAULT_AGENTS)
+    expect(sidebar.result.current.agents).not.toContain('codex')
+    expect(sidebar.result.current.sort).toBe('created')
+
+    dialog.unmount()
+    sidebar.unmount()
+    const restored = renderHook(() => usePersistedAiVaultViewOptions())
+    expect(restored.result.current.agents).not.toContain('codex')
+    expect(restored.result.current.sort).toBe('created')
   })
 
   it('allows clearing every agent so a single agent can be re-enabled', () => {

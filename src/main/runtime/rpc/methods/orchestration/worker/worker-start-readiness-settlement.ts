@@ -40,7 +40,10 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   setupReceipt: WorkerSetupReceipt
   launchReceipt: OrchestrationWorkerLaunchReceipt
   mode: WorkerStartModeReceipt
+  /** The caller's timeout, as the receipt reports it. */
   timeoutMs: number
+  /** When the caller's timeout runs out; a structured preamble waits on its agent until then. */
+  readinessDeadline: number
   effects: WorkerEffect[]
   terminalRevealWarning: string | undefined
   /** Keeps the caller's failure receipt naming the stage that actually failed. */
@@ -62,7 +65,8 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     coordinatorHandle: args.coordinatorHandle,
     devMode: args.devMode,
     requestId: args.requestId,
-    launchedAgent: args.launchedAgent
+    launchedAgent: args.launchedAgent,
+    readinessTimeoutMs: Math.max(0, args.readinessDeadline - Date.now())
   })
   effects.push({
     kind: 'dispatch_input',

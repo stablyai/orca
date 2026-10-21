@@ -1,5 +1,6 @@
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import { projectStructuredAgentSessionStatusState } from '../../../../shared/structured-agent-session-projection'
+import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/structured-agent-session-live-turn'
 
 const observations = new WeakMap<StructuredAgentSessionState, string>()
 
@@ -16,7 +17,10 @@ export function structuredAttentionReadObservation(state: StructuredAgentSession
   const request = projection.latestRequest
   const key = JSON.stringify([
     state.cursor?.epoch,
-    projection.pendingPromptIds,
+    // The host's answer where it gives one: a prompt an agent that ended raised waits on no one.
+    projection.pendingPromptIds.filter((itemId) =>
+      isActionableStructuredAgentSessionPrompt(itemId, state.actionablePromptIds)
+    ),
     request?.turnState !== 'running' ? [request?.kind, request?.id, request?.outcome] : null
   ])
   observations.set(state, key)

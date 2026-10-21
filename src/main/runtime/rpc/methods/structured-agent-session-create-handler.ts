@@ -1,3 +1,4 @@
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
 import type { z } from 'zod'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { agentSessionFingerprintConflict } from '../../../../shared/agent-session-mutation-envelope'
@@ -17,6 +18,11 @@ import {
   structuredAgentSessionCreateIntentFingerprint
 } from './structured-agent-session-create'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  structuredAgentSessionClosedBeforeCreate,
+  structuredAgentSessionClosedBeforeCreateRefusal
+} from './structured-agent-session-close-before-create'
 
 /**
  * The attach-shaped entries take the location from the client instead of resolving it from a
@@ -32,7 +38,16 @@ async function resolveClientSuppliedAttach(params: z.infer<typeof AttachParams>,
       reason: 'hostUnsupported'
     })
   }
-  const attachParams: AgentSessionAttachParams = params
+  // Reservation applies options only to a record it creates, so an existing chat is never reseeded.
+  const permissionMode = ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)?.[
+    AGENT_CHAT_PERMISSION_MODE_OPTION_ID
+  ]
+  const attachParams: AgentSessionAttachParams = {
+    ...params,
+    ...(permissionMode
+      ? { options: { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode } }
+      : {})
+  }
   return { host, attachParams }
 }
 
@@ -75,6 +90,7 @@ export async function handleStructuredAgentSessionCreate(
         worktree: params.worktree,
         agent: params.agent,
         caller: callerFor(ctx),
+        structuredAgentCliSourceEvidence: ctx.structuredAgentCliSourceEvidence,
         ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
         ...(params.tabId ? { tabId: params.tabId } : {}),
         ...(params.options ? { options: params.options } : {}),
@@ -90,6 +106,13 @@ export async function handleStructuredAgentSessionCreate(
   })
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
+  }
+  // Nothing is created yet, so a close that came first refuses the create outright.
+  if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)
+  ) {
+    return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
   }
   return commitStructuredAgentSessionCreate({
     runtime: ctx.runtime,

@@ -6,11 +6,10 @@ import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   wrapPosixHookCommand,
-  wrapWindowsHookCommand,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
 import { readManagedHookEventsFromJson } from '../agent-hooks/managed-hooks-json-events'
-import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { parseMuseSettingsText } from './hook-config-json'
 
@@ -68,7 +67,7 @@ export function getMuseRemoteManagedHooksPath(remoteHome: string): string {
 
 export function getMuseManagedCommand(scriptPath: string): string {
   return process.platform === 'win32'
-    ? (wrapWindowsDirectCmdHookCommand(scriptPath) ?? wrapWindowsHookCommand(scriptPath))
+    ? wrapWindowsBatchHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
 }
 

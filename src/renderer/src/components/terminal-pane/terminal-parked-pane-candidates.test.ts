@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fallbackParkedPaneCandidates } from './terminal-parked-tab-watchers'
+import { fallbackParkedPaneCandidates } from './terminal-parked-watcher-reconciliation'
 
 const TAB_ID = 'tab-1'
 const PTY_ID = 'repo::/worktree@@session-1'

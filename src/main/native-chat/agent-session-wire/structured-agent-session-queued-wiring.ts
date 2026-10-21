@@ -8,6 +8,7 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { StructuredAgentSessionQueuedMessageDrain } from './structured-agent-session-queued-messages'
 import {
   deleteQueuedStructuredAgentMessage,
@@ -36,6 +37,8 @@ export function wireStructuredAgentSessionQueuedMessages(
     serialize: (sessionId, task) => context().serialize(sessionId, task),
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(context().deps.store, sessionId),
+    currentWork: (sessionId) =>
+      hostStructuredAgentSessionCurrentWork({ store: context().deps.store, sessions }, sessionId),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
     // Read lazily, like the rest of this wiring: the host's deps are not assigned yet.
     logger: deferredStructuredAgentSessionLogger(() => context().deps.logger)
@@ -72,8 +75,11 @@ export function wireStructuredAgentSessionQueuedMessages(
     ) => holdQueuedStructuredAgentMessageEdit(context(), caller, params),
     /** Every journal publish: turn, submission, prompt, command and Stop
      *  settlements are all commits, and each re-derives the drain's gates. */
-    onJournalActivity: (sessionId: string) => {
-      sessions.touch(sessionId)
+    /** `activity`: false for a generation's end, which wakes the drain but is no activity. */
+    onJournalActivity: (sessionId: string, activity = true) => {
+      if (activity) {
+        sessions.touch(sessionId)
+      }
       drain.schedule(sessionId)
     },
     queuedMessageSend: (

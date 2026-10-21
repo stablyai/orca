@@ -4,7 +4,7 @@ import { act, createElement } from 'react'
 import { fireEvent, screen, within } from '@testing-library/react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import {
   invalidateLocalImageSrcCacheForTests,
   loadLocalImageSrc,
@@ -12,6 +12,17 @@ import {
 } from '@/components/editor/useLocalImageSrc'
 import { chatImageAccess } from '@/lib/local-file-access'
 import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'
+
+// Chat images carry their runtime owner without resolving an editor connection.
+const mocks = vi.hoisted(() => ({
+  getConnectionIdForFile: vi.fn(() => {
+    throw new Error('Chat image fixtures must not resolve editor file connections')
+  })
+}))
+
+vi.mock('@/lib/connection-context', () => ({
+  getConnectionIdForFile: mocks.getConnectionIdForFile
+}))
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -49,7 +60,12 @@ beforeEach(() => {
 afterEach(() => {
   resetLocalImageSrcStateForTests()
   vi.unstubAllGlobals()
-  vi.restoreAllMocks()
+  try {
+    expect(mocks.getConnectionIdForFile).not.toHaveBeenCalled()
+  } finally {
+    mocks.getConnectionIdForFile.mockClear()
+    vi.restoreAllMocks()
+  }
 })
 
 describe('NativeChatImageAttachments', () => {
@@ -135,7 +151,10 @@ describe('NativeChatImageAttachments', () => {
         fireEvent.click(thumbnail)
         const preview = screen.getByRole('dialog', { name: 'Sent image' })
         expect(
-          within(preview).getByRole('img').getAttribute('data-native-chat-copy-image-src')
+          within(preview)
+            .getByTestId('pan-zoom-image-canvas')
+            .closest('[data-native-chat-copy-image-src]')
+            ?.getAttribute('data-native-chat-copy-image-src')
         ).toBe(src)
         expect(window.api.fs.readFile).not.toHaveBeenCalled()
         fireEvent.click(within(preview).getByRole('button', { name: 'Close' }))

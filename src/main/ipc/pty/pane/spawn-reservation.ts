@@ -1,5 +1,5 @@
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
-import type { PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { isWorktreeTerminalsSleepingError } from '../../../runtime/worktree-terminals-sleeping-error'
 
 export type PaneSpawnReservation = {
@@ -49,7 +49,10 @@ export async function joinPaneSpawn(
   try {
     return await reservation.promise
   } catch (error) {
-    if (isWorktreeTerminalsSleepingError(error)) {
+    if (
+      isWorktreeTerminalsSleepingError(error) ||
+      (error instanceof Error && error.message === 'terminal_pane_unbound')
+    ) {
       return null
     }
     throw error
@@ -80,6 +83,17 @@ export function clearPaneSpawnReservation(
   if (paneSpawnReservationsByOwnerKey.get(paneKey) === reservation) {
     paneSpawnReservationsByOwnerKey.delete(paneKey)
   }
+}
+
+/** Whether a window or runtime spawn of this pane has begun and not yet bound or failed. */
+export function isPaneSpawnInFlight(worktreeId: string, paneKey: string): boolean {
+  for (const ownerKey of paneSpawnReservationsByOwnerKey.keys()) {
+    const parsed: unknown = JSON.parse(ownerKey)
+    if (Array.isArray(parsed) && parsed[1] === worktreeId && parsed[2] === paneKey) {
+      return true
+    }
+  }
+  return false
 }
 
 export function makePaneSpawnReservationKey(

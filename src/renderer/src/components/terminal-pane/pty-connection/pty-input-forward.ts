@@ -94,7 +94,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     }
     // Why xterm's provenance: its own focus reports reach onData too, and no person typed them.
     const inputKind = wasUserInput ? 'driving' : 'query-reply'
-    const intent = session.pendingTerminalInputIntent
+    const intent = session.pendingTerminalInputIntentFor(data)
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to
     // infer for local/remote acknowledged writes; SSH fire-and-forget remains
@@ -109,7 +109,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
         session.interruptStatusBaselineSequence += 1
       }
       const capturedBaselineSequence = session.interruptStatusBaselineSequence
-      session.claimViewportForUserActivity()
+      session.claimViewportForUserActivity(data)
       if (acknowledgedIntent === 'ctrl-c') {
         // Why: the accepted-write callback is async; let the next command be
         // inferred if the user cancelled an oversized line and immediately typed.
@@ -145,7 +145,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       return
     }
     if (intent) {
-      session.claimViewportForUserActivity()
+      session.claimViewportForUserActivity(data)
       if (session.transport.sendInput(data, inputKind)) {
         session.markAcceptedTerminalInputSent()
         session.observeAcceptedShellCommandInput(data)
@@ -156,7 +156,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.clearPendingTerminalInputIntent()
       return
     }
-    session.claimViewportForUserActivity()
+    session.claimViewportForUserActivity(data)
     if (session.transport.sendInput(data, inputKind)) {
       session.markAcceptedTerminalInputSent()
       session.observeAcceptedShellCommandInput(data)

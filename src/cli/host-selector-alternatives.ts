@@ -1,4 +1,5 @@
 import type { RuntimeClient } from './runtime-client'
+import { normalizeTypedName, stripWrappingQuotes } from '../shared/typed-name-normalization'
 
 export type SshTargetSummary = {
   id: string
@@ -8,6 +9,9 @@ export type SshTargetSummary = {
   connectionStatus?: string
 }
 export type EnvironmentSummary = { id: string; name: string }
+
+/** The name `orca host list` prints for its own `--host local` row. */
+export const LOCAL_HOST_LIST_NAME = 'this machine'
 
 export type HostAlternatives = {
   sshTargets: readonly SshTargetSummary[]
@@ -32,9 +36,13 @@ export function findSshTargetByName(
   return byLabel.length === 1 ? byLabel[0] : undefined
 }
 
+// Why: cmd.exe passes single quotes through literally, so `--host 'my box'` from a POSIX habit
+// arrives quoted; a host or project name never legitimately starts and ends with the same quote.
+export { normalizeTypedName, stripWrappingQuotes }
+
 function matchesByLabel(targets: readonly SshTargetSummary[], name: string): SshTargetSummary[] {
-  const wanted = name.trim().toLowerCase()
-  return targets.filter((target) => target.label.trim().toLowerCase() === wanted)
+  const wanted = normalizeTypedName(name)
+  return targets.filter((target) => normalizeTypedName(target.label) === wanted)
 }
 
 export function ambiguousSshTargets(
@@ -63,8 +71,8 @@ function matchesByEnvironmentName(
   environments: readonly EnvironmentSummary[],
   name: string
 ): EnvironmentSummary[] {
-  const wanted = name.trim().toLowerCase()
-  return environments.filter((environment) => environment.name.trim().toLowerCase() === wanted)
+  const wanted = normalizeTypedName(name)
+  return environments.filter((environment) => normalizeTypedName(environment.name) === wanted)
 }
 
 export function ambiguousEnvironments(
@@ -99,24 +107,33 @@ export function crossKindNextSteps(
   return steps
 }
 
+/**
+ * The host's SSH target summaries; throws what the host reports. Why the fallback: hosts
+ * predating listTargetSummaries still answer listTargets from the same summariser, and without it
+ * an old host looks like one with no SSH targets, rejecting a target id that is valid there.
+ */
+export async function fetchSshTargetSummaries<T extends { id: string }>(
+  client: RuntimeClient
+): Promise<{ targets: T[]; legacy: boolean }> {
+  try {
+    const result = await client.call<{ targets: T[] }>('ssh.listTargetSummaries')
+    return { targets: result.result.targets, legacy: false }
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'method_not_found')) {
+      throw error
+    }
+    const legacy = await client.call<{ targets: T[] }>('ssh.listTargets')
+    return { targets: legacy.result.targets, legacy: true }
+  }
+}
+
 // Why: only display identity crosses this boundary — the RPC deliberately withholds addresses
 // and credentials — and an enumeration failure must never mask the error we are explaining.
 export async function listSshTargets(client: RuntimeClient): Promise<SshTargetSummary[]> {
   try {
-    const result = await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargetSummaries')
-    return result.result.targets
-  } catch (error) {
-    // Why: hosts predating listTargetSummaries still answer listTargets, and both are served by
-    // the same summariser. Without this an old host looks like one with no SSH targets at all,
-    // which would reject a target id that is actually valid there.
-    if (error instanceof Error && 'code' in error && error.code === 'method_not_found') {
-      try {
-        const legacy = await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargets')
-        return await enrichLegacySshTargetStates(client, legacy.result.targets)
-      } catch {
-        return []
-      }
-    }
+    const { targets, legacy } = await fetchSshTargetSummaries<SshTargetSummary>(client)
+    return legacy ? await enrichLegacySshTargetStates(client, targets) : targets
+  } catch {
     return []
   }
 }
@@ -154,10 +171,15 @@ async function enrichLegacySshTargetStates(
 // target ids are machine-generated (`ssh-<timestamp>-<random>`), the label a caller actually
 // knows never matches one, so this fires on the common spelling rather than a rare typo.
 // Resolving the label and naming the alternative is what makes the failure recoverable.
+// `flagSpelling` names the flag the way the caller typed it, so a bare `--host trader-local`
+// is not echoed back as `--host ssh:trader-local` — a spelling they did not use.
 export async function resolveSshHostTargetId(
   client: RuntimeClient,
   targetId: string,
-  environments: readonly EnvironmentSummary[]
+  environments: readonly EnvironmentSummary[],
+  flagSpelling = `--host ssh:${targetId}`,
+  // A bare name was also tried as this machine and as a paired server, so say "host".
+  bareName = false
 ): Promise<string> {
   const targets = await listSshTargets(client)
   const matched = findSshTargetByName(targets, targetId)
@@ -169,7 +191,7 @@ export async function resolveSshHostTargetId(
   if (ambiguous.length > 0) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `Ambiguous SSH target in --host ssh:${targetId}: ${ambiguous.length} targets share that label. Use the target id.`,
+      `Ambiguous SSH target in ${flagSpelling}: ${ambiguous.length} targets share that label. Use the target id.`,
       {
         knownSshTargets: ambiguous,
         nextSteps: ambiguous.map((target) => `Use --host ssh:${target.id} for ${target.label}.`)
@@ -178,7 +200,9 @@ export async function resolveSshHostTargetId(
   }
   throw new RuntimeClientError(
     'invalid_argument',
-    `Unknown SSH target in --host ssh:${targetId}: this Orca host has no SSH target named or with id ${targetId}.`,
+    bareName
+      ? `Unknown host in ${flagSpelling}: it is not this machine or a paired Orca server the command can use, and the connected Orca host has no SSH target named ${targetId}. Run \`orca host list\` to see every name.`
+      : `Unknown SSH target in ${flagSpelling}: this Orca host has no SSH target named or with id ${targetId}.`,
     {
       knownSshTargets: targets,
       knownEnvironments: environments,

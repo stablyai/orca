@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
-import { setRuntimeGitStatusUpstreamRefWatch } from '@/runtime/runtime-git-client'
+import { setRuntimeGitStatusUpstreamRefWatch } from '@/runtime/runtime-git-status-client'
 import type { GitStatusResult } from '../../../../shared/git-status-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { getWorktreeGitOwnerTarget } from './worktree-git-owner-target'

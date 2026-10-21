@@ -47,6 +47,24 @@ describe('classifyRuntimeHostRePair', () => {
     ).toEqual({ kind: 'same-host', pin: next, descriptor: 'moved' })
   })
 
+  it('does not call a macOS host moved when an upgrade first adds its binding, or a downgrade drops it', () => {
+    // Older Orca read no macOS machine id, so its descriptor carried no binding (#29259).
+    const unbound = { installationId: INSTALL_A }
+    const bound = { installationId: INSTALL_A, machineBinding: BIND_1 }
+    expect(
+      classifyRuntimeHostRePair(
+        { publicKeys: ['key-a'], pin: unbound },
+        { publicKeyB64: 'key-a', hostDescriptor: bound }
+      )
+    ).toEqual({ kind: 'same-host', pin: bound, descriptor: 'pinned' })
+    expect(
+      classifyRuntimeHostRePair(
+        { publicKeys: ['key-a'], pin: bound },
+        { publicKeyB64: 'key-a', hostDescriptor: unbound }
+      )
+    ).toEqual({ kind: 'same-host', pin: unbound, descriptor: 'pinned' })
+  })
+
   it('never learns from a downgraded server that stopped sending a descriptor', () => {
     const pin = { installationId: INSTALL_A, machineBinding: BIND_1 }
     expect(

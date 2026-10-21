@@ -293,6 +293,12 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     statusSchedulerRef.current?.signal()
   }, [])
 
+  const getRepoWorktreePathsForSignal = useCallback(
+    (repoId: string) =>
+      (useAppStore.getState().worktreesByRepo[repoId] ?? []).map((worktree) => worktree.path),
+    []
+  )
+
   useGitStatusFileWatchRefresh({
     activeConnectionId,
     activeRepoSupportsGit,
@@ -311,8 +317,10 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   useGitStatusPushSignalRefresh({
     activeRepoId,
     activeWorktreeId,
+    activeWorktreePath: worktreePath,
     enabled: canFetchActiveWorktreeGitStatus,
-    fetchStatus: fetchStatusOnChangeSignal
+    fetchStatus: fetchStatusOnChangeSignal,
+    getRepoWorktreePaths: getRepoWorktreePathsForSignal
   })
 
   useStaleConflictOperationPolling({

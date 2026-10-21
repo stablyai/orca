@@ -1,4 +1,4 @@
-import type { ChildProcess, SpawnOptions } from 'node:child_process'
+import type { ChildProcessHandle, ProcessSpec } from '@orca/process-host/process-spec'
 import { readFileSync } from 'node:fs'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import {
@@ -32,10 +32,9 @@ export const SERVE_CHILD_FORCE_KILL_GRACE_MS =
   SERVE_CHILD_FORCE_KILL_SCHEDULING_MARGIN_MS
 
 type ServeSupervisorArgs = {
-  executable: string
-  childArgs: string[]
-  spawnOptions: SpawnOptions
-  spawnChild: (program: string, args: string[], options: SpawnOptions) => ChildProcess
+  /** Respawned on update; `program` is also the bundle whose installed version a handoff awaits. */
+  spec: ProcessSpec
+  spawnChild: (spec: ProcessSpec) => ChildProcessHandle
   handoffPath: string | null
 }
 
@@ -43,14 +42,14 @@ export async function resumeInterruptedServeUpdate(
   args: ServeSupervisorArgs & { handoffPath: string; handoff: InstallRequestedHandoff }
 ): Promise<number> {
   const expectedHandoff = await awaitInstalledHandoff(
-    args.executable,
+    args.spec.program,
     args.handoffPath,
     args.handoff
   )
   if (!(await mayRespawn())) {
     return 0
   }
-  const child = args.spawnChild(args.executable, args.childArgs, args.spawnOptions)
+  const child = args.spawnChild(args.spec)
   return superviseForegroundServe({ ...args, child, expectedHandoff })
 }
 
@@ -77,7 +76,7 @@ async function awaitInstalledHandoff(
 
 export async function superviseForegroundServe(
   args: ServeSupervisorArgs & {
-    child: ChildProcess
+    child: ChildProcessHandle
     expectedHandoff: InstallRequestedHandoff | null
   }
 ): Promise<number> {
@@ -117,20 +116,20 @@ export async function superviseForegroundServe(
           return 1
         }
         expectedHandoff = await awaitInstalledHandoff(
-          args.executable,
+          args.spec.program,
           args.handoffPath,
           decision.handoff
         )
         if (!(await mayRespawn())) {
           return 0
         }
-        child = args.spawnChild(args.executable, args.childArgs, args.spawnOptions)
+        child = args.spawnChild(args.spec)
     }
   }
 }
 
 function waitForForegroundChild(
-  child: ChildProcess,
+  child: ChildProcessHandle,
   expected: { handoffPath: string; handoff: InstallRequestedHandoff } | null
 ): Promise<{
   code: number | null

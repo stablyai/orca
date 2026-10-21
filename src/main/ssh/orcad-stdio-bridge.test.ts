@@ -5,17 +5,23 @@ import type { Server } from 'node:net'
 import type { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { OrcadStdioBridgeUnavailableError } from './orcad-host-unavailable'
+import { OrcadStdioBridgeUnavailableError } from '../orcad/orcad-host-unavailable'
 import { checkOrcadStdioBridge, type OrcadStdioBridge } from './orcad-stdio-bridge'
 import {
   orcadPosixStdioBridgeCommand,
   type OrcadStdioBridgeMode
-} from './orcad-stdio-bridge-script'
-import { OrcadStdioBridgeBase64Encoder, OrcadStdioBridgeDecoder } from './orcad-stdio-bridge-stream'
-import { spawnLocalBridgeChannel, startEchoServer } from './orcad-stdio-bridge-test-channel'
-import { ORCAD_WINDOWS_HOST_SCRIPT } from './orcad-windows-host-script'
+} from '../managed-server/lifecycle/orcad-stdio-bridge-script'
+import {
+  OrcadStdioBridgeBase64Encoder,
+  OrcadStdioBridgeDecoder
+} from '../managed-server/lifecycle/orcad-stdio-bridge-stream'
+import {
+  spawnLocalBridgeChannel,
+  startEchoServer
+} from '../managed-server/lifecycle/orcad-stdio-bridge-test-channel'
+import { ORCAD_WINDOWS_HOST_SCRIPT } from '../managed-server/host-state/orcad-windows-host-script'
 import type { OrcadHostTransport } from './orcad-host-transport'
-import type { RemoteCommandChannel } from './remote-install-transport'
+import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
 
 const POSIX = process.platform !== 'win32'
 let echo: { server: Server; port: number }
@@ -106,6 +112,26 @@ describe.runIf(POSIX)('the POSIX stdio bridge command', () => {
       })
     )
     await expect(checkOrcadStdioBridge(conn, posixBridge(closed.port))).resolves.toBe('running')
+  })
+
+  it('runs on a machine home’s Node, skipping a store runtime that cannot start here', async () => {
+    const home = posixHome(false)
+    // Another machine's runtime on the shared home, e.g. built for another architecture.
+    const foreign = join(home, '.orca-remote', 'runtimes', 'node-abc', 'bin')
+    mkdirSync(foreign, { recursive: true })
+    writeFileSync(join(foreign, 'node'), '#!/bin/sh\nexit 126\n', {
+      mode: 0o755
+    })
+    const own = join(home, '.orca-remote', 'hosts', '0123456789abcdef', '.orca-remote')
+    const bin = join(own, 'runtimes', 'node-def', 'bin')
+    mkdirSync(bin, { recursive: true })
+    symlinkSync(process.execPath, join(bin, 'node'))
+    const channel = spawnLocalBridgeChannel(
+      '/bin/sh',
+      ['-c', orcadPosixStdioBridgeCommand(echo.port)],
+      { ...process.env, HOME: home }
+    )
+    expect((await roundTrip(channel, 'raw')).equals(PAYLOAD)).toBe(true)
   })
 
   it('reports a host with no pinned Node as one the bridge cannot run on', async () => {

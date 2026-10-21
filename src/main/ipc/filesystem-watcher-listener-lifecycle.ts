@@ -2,6 +2,8 @@ import type { WebContents } from 'electron'
 import { isWatcherProcessFailure } from './parcel-watcher-process-failure'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import {
+  type CancelledInstallWaiter,
+  type CancelledInstallWaiters,
   type LocalWatcherInstallToken,
   type RemoteWatcherInstallToken,
   UNWATCHABLE_ROOT_CACHE_MAX,
@@ -173,6 +175,44 @@ export function releaseRemoteWatchListener(key: string, senderId: number): void 
   watcherLifecycleState.remoteWatchers.delete(key)
 }
 
+export function addCancelledInstallWaiter(
+  waitersByKey: CancelledInstallWaiters,
+  key: string,
+  sender: WebContents
+): symbol {
+  const token = Symbol('cancelled-install-wait')
+  const waiters = waitersByKey.get(key) ?? new Map<number, CancelledInstallWaiter>()
+  waiters.set(sender.id, { token, sender })
+  waitersByKey.set(key, waiters)
+  return token
+}
+
+/** Removes the waiter and reports whether it was still `token`'s, i.e. not withdrawn meanwhile. */
+export function takeCancelledInstallWaiter(
+  waitersByKey: CancelledInstallWaiters,
+  key: string,
+  senderId: number,
+  token: symbol
+): boolean {
+  if (waitersByKey.get(key)?.get(senderId)?.token !== token) {
+    return false
+  }
+  forgetCancelledInstallWaiter(waitersByKey, key, senderId)
+  return true
+}
+
+export function forgetCancelledInstallWaiter(
+  waitersByKey: CancelledInstallWaiters,
+  key: string,
+  senderId: number
+): void {
+  const waiters = waitersByKey.get(key)
+  waiters?.delete(senderId)
+  if (waiters?.size === 0) {
+    waitersByKey.delete(key)
+  }
+}
+
 export function registerWatcherSenderCleanup(sender: WebContents): AbortSignal {
   return captureWatcherSenderLifetime(sender, () => {
     cleanupLocalWatchersForSender(sender.id)
@@ -181,6 +221,9 @@ export function registerWatcherSenderCleanup(sender: WebContents): AbortSignal {
 }
 
 function cleanupLocalWatchersForSender(senderId: number): void {
+  for (const key of Array.from(watcherLifecycleState.cancelledLocalInstallWaiters.keys())) {
+    forgetCancelledInstallWaiter(watcherLifecycleState.cancelledLocalInstallWaiters, key, senderId)
+  }
   for (const [rootKey, suspended] of watcherLifecycleState.suspendedLocalWatcherListeners) {
     suspended.listeners.delete(senderId)
     if (suspended.listeners.size === 0) {
@@ -208,6 +251,9 @@ function cleanupLocalWatchersForSender(senderId: number): void {
 }
 
 function cleanupRemoteWatchersForSender(senderId: number): void {
+  for (const key of Array.from(watcherLifecycleState.cancelledRemoteInstallWaiters.keys())) {
+    forgetCancelledInstallWaiter(watcherLifecycleState.cancelledRemoteInstallWaiters, key, senderId)
+  }
   for (const key of Array.from(watcherLifecycleState.desiredRemoteWatchers.keys())) {
     forgetDesiredRemoteWatcher(key, senderId)
   }

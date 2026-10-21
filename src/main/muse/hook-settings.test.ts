@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { wrapWindowsHookCommand } from '../agent-hooks/windows-hook-command'
+import {
+  isSafeUnicodeWindowsBatchHookPath,
+  wrapWindowsHookCommand
+} from '../agent-hooks/windows-hook-command'
 import { wrapPosixHookCommand } from '../agent-hooks/posix-hook-command'
 import { getMuseManagedCommand, getMuseRemoteManagedCommand } from './hook-settings'
 
@@ -22,7 +25,9 @@ describe('Muse hook commands', () => {
     '\\\\server\\share\\.orca\\agent-hooks\\muse-hook.cmd'
   ])('retains the established quoting fallback for %s', (path) => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    expect(getMuseManagedCommand(path)).toBe(wrapWindowsHookCommand(path))
+    // Guarded Unicode .cmd paths take the cheaper policy switch (#26382).
+    const policy = { useProcessPolicyEnvironment: isSafeUnicodeWindowsBatchHookPath(path) }
+    expect(getMuseManagedCommand(path)).toBe(wrapWindowsHookCommand(path, {}, policy))
   })
 
   it.each(['darwin', 'linux'] as const)('keeps local %s commands POSIX', (platform) => {

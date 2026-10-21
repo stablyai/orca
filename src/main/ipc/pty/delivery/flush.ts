@@ -2,7 +2,7 @@ import {
   recordHiddenRendererPtyDataDrop,
   shouldDropHiddenRendererPtyData
 } from '../../pty-hidden-delivery-gate'
-import type { PendingPtyData } from '../../pty-pending-data-drain-queue'
+import type { PendingPtyData } from '../../pty-pending-data-drain-contract'
 import { activeRendererPtys } from './visibility-state'
 import {
   PTY_BATCH_DRAIN_CONTINUE_MS,
@@ -115,7 +115,8 @@ export function flushPendingData(session: PtyIpcSession): void {
             session,
             id,
             'hidden-drop',
-            session.runtime?.getPtyOutputSequence(id)
+            session.runtime?.getPtyOutputSequence(id),
+            drop.hiddenDropEpisode
           )
         }
         continue

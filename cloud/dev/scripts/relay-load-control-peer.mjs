@@ -20,7 +20,7 @@ const REPORTABLE_ASSIGNMENT_ERRORS = [
   'relay_home_cell_unavailable'
 ]
 
-function waitForOpen(socket, timeoutMs = 10_000) {
+export function waitForOpen(socket, timeoutMs = 10_000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => finish(new Error('control open timeout')), timeoutMs)
     const finish = (error) => {
@@ -40,7 +40,7 @@ function waitForOpen(socket, timeoutMs = 10_000) {
   })
 }
 
-function nextJson(socket, timeoutMs = 10_000) {
+export function nextJson(socket, timeoutMs = 10_000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => finish(new Error('control response timeout')), timeoutMs)
     const finish = (error, value) => {
@@ -66,7 +66,7 @@ function nextJson(socket, timeoutMs = 10_000) {
   })
 }
 
-function nextFrame(socket, timeoutMs = 10_000) {
+export function nextFrame(socket, timeoutMs = 10_000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => finish(new Error('relay frame timeout')), timeoutMs)
     const finish = (error, value) => {

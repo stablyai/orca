@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeWithRuntimeId } from '../../../runtime/orca-runtime-runtime-id'
+import { OrcaRuntimeWithRuntimeId } from '../../../runtime/construction/runtime-identity-state'
 import { TerminalIntentionalStops } from '../../../runtime/terminal-intentional-stops'
 import { TerminalRunFactsRegister } from '../../../runtime/terminal-run-facts'
 import { ptySizes } from '../delivery/visibility-state'
@@ -74,6 +74,6 @@ describe('renderer spawn commit: run facts', () => {
     expect(outcome).toBe('discarded')
     expect(persistPtyBinding).toHaveBeenCalledOnce()
     expect(facts.read(PTY_ID, INCARNATION_ID).freshSpawn).toBe(false)
-    expect(stops.claimExit(PTY_ID, INCARNATION_ID)).toEqual(['reversible'])
+    expect(stops.claimExit(PTY_ID, INCARNATION_ID)).toEqual(['replaced'])
   })
 })

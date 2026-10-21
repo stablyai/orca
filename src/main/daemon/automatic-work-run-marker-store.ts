@@ -49,6 +49,7 @@ export class AutomaticWorkRunMarker {
   private opened = false
   private armRequested = false
   private armed = false
+  private stopRequested = false
   private boot: BootIdentity | null = null
 
   constructor(
@@ -113,6 +114,16 @@ export class AutomaticWorkRunMarker {
     }
   }
 
+  /** Durably ends this run's crash candidacy as soon as a stop is requested from outside.
+   *  Why: a systemd scope stop signals the daemon and its AppImage mount together, so the
+   *  teardown can die before `markCleanExit`; that death is the stop, not a crash. */
+  recordStopRequested(): void {
+    this.stopRequested = true
+    if (this.opened) {
+      this.writeSync('clean-exit')
+    }
+  }
+
   private writeSync(state: AutomaticWorkRunMarkerFile['state']): void {
     if (!this.path || !this.boot || !this.ownsEndpoint()) {
       return
@@ -120,7 +131,7 @@ export class AutomaticWorkRunMarker {
     const marker: AutomaticWorkRunMarkerFile = {
       schemaVersion: 1,
       boot: this.boot,
-      state,
+      state: this.stopRequested ? 'clean-exit' : state,
       mode: this.currentMode
     }
     try {

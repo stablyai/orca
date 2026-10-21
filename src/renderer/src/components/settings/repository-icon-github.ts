@@ -2,7 +2,8 @@ import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-re
 import type { Repo } from '../../../../shared/repo-types'
 import { githubAvatarIcon, githubAvatarSlug, type RepoIcon } from '../../../../shared/repo-icon'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
-import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 type ResolveRepositoryGitHubAvatarOptions = {
   forceLive?: boolean

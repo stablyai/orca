@@ -4,6 +4,7 @@
 // sealed environment; it only adds what is that agent's.
 
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { isNativeLocalLocation } from '../../shared/execution-host'
 import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
@@ -30,6 +31,9 @@ export type StructuredAgentLaunchSources = {
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   prepareVisuals?: PrepareNativeChatVisuals
+  /** Rereads the base environment after a lookup that started at `askedAt` found no program in
+   *  it; absent never retries. */
+  refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
 }
 
 /** What an agent's part reads. Each read runs once, when the part first asks, so every agent keeps
@@ -47,16 +51,25 @@ export type StructuredAgentLaunchBasis = {
   /** Null when the chat gets no visuals. */
   visuals(): Promise<NativeChatVisualsLaunch | null>
   commandSettings(): StructuredAgentCommandSettings
+  /** For a part that found no program: refreshes the environment, after which both environment
+   *  reads return the refreshed one. Absent when the runtime never retries. */
+  refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
+  /** The permission mode the host decided this start runs with; absent asks. */
+  permissionMode?: AgentChatPermissionMode
 }
 
 export type StructuredLaunchRequest = {
   identity: AgentSessionJournalIdentity
   /** The reservation's token, which the seal hands the child. */
   spawnToken: string
+  permissionMode?: AgentChatPermissionMode
 }
 
+/** What the composition sets on a launch; an agent's part never does. */
+type ComposedLaunchFields = 'cwd' | 'env' | 'envToDelete' | 'commandEnv'
+
 export type StructuredAgentLaunchPart<L> = {
-  launch: Omit<L, 'cwd' | 'env' | 'envToDelete'>
+  launch: Omit<L, ComposedLaunchFields>
   /** The agent's environment, before the seal names the child. */
   env: Record<string, string>
   /** Inherited keys this agent's child must not keep; required, so an agent states even none. */
@@ -71,10 +84,12 @@ export type StructuredAgentLaunchPartResolver<L> = (
   identity: AgentSessionJournalIdentity
 ) => Promise<StructuredAgentLaunchPart<L>>
 
-export type ComposedStructuredLaunch<L> = Omit<L, 'cwd' | 'env' | 'envToDelete'> & {
+export type ComposedStructuredLaunch<L> = Omit<L, ComposedLaunchFields> & {
   cwd: string
   env: Record<string, string>
   envToDelete: string[]
+  /** See `SealedStructuredSessionChild`; absent from a read, which seals no child. */
+  commandEnv?: Record<string, string>
 }
 
 /** The child to spawn, sealed with the reservation's token. */
@@ -126,18 +141,34 @@ async function composedPart<L>(
   definition: StructuredAgentDefinition,
   sources: StructuredAgentLaunchSources,
   part: StructuredAgentLaunchPartResolver<L>,
-  identity: AgentSessionJournalIdentity
+  identity: AgentSessionJournalIdentity,
+  permissionMode?: AgentChatPermissionMode
 ): Promise<StructuredAgentLaunchPart<L> & { cwd: string }> {
   const record = admittedRecord(definition, sources.store, identity.sessionId)
   const launchEnv = once(() => sources.resolveAgentLaunchEnv?.(definition.agent) ?? {})
+  const readEnvironments = () => ({
+    base: once(sources.resolveBaseEnvironment),
+    agent: once(() => sources.resolveAgentEnvironment(definition.agent))
+  })
+  let environments = readEnvironments()
+  const refresh = sources.refreshAfterMissingProgram
   const basis: StructuredAgentLaunchBasis = {
     record,
     launchDirectory: once(() => resolveAgentSessionLaunchDirectory(sources, record)),
-    baseEnvironment: once(sources.resolveBaseEnvironment),
+    baseEnvironment: () => environments.base(),
     launchEnv,
-    environment: once(() => sources.resolveAgentEnvironment(definition.agent)),
+    environment: () => environments.agent(),
     visuals: once(async () => (await sources.prepareVisuals?.(record.sessionId)) ?? null),
-    commandSettings: once(() => sources.resolveCommandSettings?.() ?? {})
+    commandSettings: once(() => sources.resolveCommandSettings?.() ?? {}),
+    ...(refresh
+      ? {
+          refreshAfterMissingProgram: async (askedAt) => {
+            await refresh(askedAt)
+            environments = readEnvironments()
+          }
+        }
+      : {}),
+    ...(permissionMode ? { permissionMode } : {})
   }
   const composed = await part(basis, identity)
   return { ...composed, cwd: await basis.launchDirectory() }
@@ -148,12 +179,13 @@ export function composeStructuredLaunch<L>(
   sources: StructuredAgentLaunchSources,
   part: StructuredAgentLaunchPartResolver<L>
 ): StructuredAgentLaunchResolver<L> {
-  return async ({ identity, spawnToken }) => {
+  return async ({ identity, spawnToken, permissionMode }) => {
     const { launch, cwd, env, inheritedEnvToDelete, cliRuntimeCommand } = await composedPart(
       definition,
       sources,
       part,
-      identity
+      identity,
+      permissionMode
     )
     const child = sealStructuredSessionChild({
       sessionId: identity.sessionId,
@@ -162,7 +194,13 @@ export function composeStructuredLaunch<L>(
       inheritedEnvToDelete,
       ...(cliRuntimeCommand ? { cliRuntimeCommand } : {})
     })
-    return { ...launch, cwd, env: child.env, envToDelete: child.envToDelete }
+    return {
+      ...launch,
+      cwd,
+      env: child.env,
+      envToDelete: child.envToDelete,
+      commandEnv: child.commandEnv
+    }
   }
 }
 
@@ -192,6 +230,7 @@ export function structuredAgentLaunchSources(
     resolveWorkspacePath: deps.resolveWorkspacePath,
     resolveBaseEnvironment: context.environment.resolveBaseEnvironment,
     resolveAgentEnvironment: context.environment.resolveAgentEnvironment,
+    refreshAfterMissingProgram: context.environment.refreshAfterMissingProgram,
     ...(deps.resolveAgentLaunchEnv ? { resolveAgentLaunchEnv: deps.resolveAgentLaunchEnv } : {}),
     ...(deps.resolveAgentCommandSettings
       ? { resolveCommandSettings: deps.resolveAgentCommandSettings }

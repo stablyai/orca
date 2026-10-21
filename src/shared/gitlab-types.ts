@@ -1,5 +1,6 @@
 /* GitLab-specific shared types, split from `./types` to avoid merge conflicts on upstream syncs; re-exported from `./types` for import stability. */
 import type { ClassifiedError } from './classified-error'
+import type { ExecutionHostId } from './execution-host'
 import type {
   CheckStatus,
   PRConflictSummary,
@@ -178,6 +179,9 @@ export type GitLabWorkItem = {
   isCrossRepository?: boolean
   /** Stamped by the renderer so cross-project views can attribute rows. Mirrors GitHubWorkItem.repoId. */
   repoId: string
+  /** Why: mirrors GitHubWorkItem.repoHostId; the renderer stamps the host whose row returned it,
+   *  so a twin's item resolves its own row (`getWorkItemRepo`), never the other host's. */
+  repoHostId?: ExecutionHostId
   /** Exact GitLab project that produced this row — mutations/details use it instead of re-resolving the repo preference. */
   projectRef?: GitLabProjectRef
   checksSummary?: ProviderCheckSummary

@@ -1,3 +1,4 @@
+import { claudeBackgroundArgs } from './claude-background-run-isolation'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   COMMIT_MESSAGE_AGENT_SPECS,
@@ -227,7 +228,8 @@ describe('buildArgs (Claude)', () => {
       '--model',
       'haiku',
       '--permission-mode',
-      'plan'
+      'plan',
+      ...claudeBackgroundArgs()
     ])
   })
 
@@ -246,7 +248,8 @@ describe('buildArgs (Claude)', () => {
       '--permission-mode',
       'plan',
       '--effort',
-      'high'
+      'high',
+      ...claudeBackgroundArgs()
     ])
   })
 
@@ -395,7 +398,8 @@ describe('model discovery parsers', () => {
       'stream-json',
       '--output-format',
       'stream-json',
-      '--verbose'
+      '--verbose',
+      ...claudeBackgroundArgs()
     ])
     const payload = JSON.parse(discovery?.stdinPayload ?? '') as {
       type?: string

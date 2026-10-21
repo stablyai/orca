@@ -1,6 +1,7 @@
 import {
-  AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS,
+  agentSessionAttachmentAppends,
   agentSessionPastedImageName,
+  base64DecodedByteLength,
   type AgentSessionAttachmentUploadCommitResult,
   type AgentSessionAttachmentUploadTarget
 } from '../../../../shared/agent-session-attachments'
@@ -48,32 +49,18 @@ export async function saveClipboardImageAsWebAgentSessionAttachment(
   contentBase64: string,
   target: AgentSessionAttachmentUploadTarget
 ): Promise<string> {
-  const padding = contentBase64.endsWith('==') ? 2 : contentBase64.endsWith('=') ? 1 : 0
-  const byteLength = (contentBase64.length / 4) * 3 - padding
   const { uploadId } = await callPinned<{ uploadId: string }>(
     target,
     'agentSessionAttachment.uploadStart',
     {
       sessionId: target.sessionId,
       name: agentSessionPastedImageName(Date.now(), createBrowserUuid()),
-      byteLength
+      byteLength: base64DecodedByteLength(contentBase64)
     }
   )
   try {
-    // Chunks are a multiple of 4 base64 characters, so each starts on a byte boundary.
-    for (
-      let charOffset = 0;
-      charOffset < Math.max(contentBase64.length, 1);
-      charOffset += AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS
-    ) {
-      await callPinned(target, 'agentSessionAttachment.uploadAppend', {
-        uploadId,
-        offset: (charOffset / 4) * 3,
-        contentBase64: contentBase64.slice(
-          charOffset,
-          charOffset + AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS
-        )
-      })
+    for (const chunk of agentSessionAttachmentAppends(contentBase64)) {
+      await callPinned(target, 'agentSessionAttachment.uploadAppend', { uploadId, ...chunk })
     }
     const stored = await callPinned<AgentSessionAttachmentUploadCommitResult>(
       target,

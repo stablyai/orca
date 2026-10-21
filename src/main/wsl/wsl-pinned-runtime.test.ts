@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
       'C:/cache/pinned.tar.gz'
   )
 }))
-vi.mock('../ssh/pinned-runtime-materializer', () => ({
+vi.mock('../node-runtime/pinned-runtime-materializer', () => ({
   materializeNodeRuntimeArchive: mocks.download
 }))
 function runner(present = false, libc = 'glibc 2.31', promoted = 'ORCA_NODE_RUNTIME_READY') {
@@ -18,7 +18,7 @@ function runner(present = false, libc = 'glibc 2.31', promoted = 'ORCA_NODE_RUNT
     if (spec.program === 'wslpath') {
       return '/mnt/c/cache/pinned.tar.gz'
     }
-    if (spec.script?.startsWith('getconf')) {
+    if (spec.script?.includes('getconf GNU_LIBC_VERSION')) {
       return libc
     }
     if (spec.script?.startsWith('printf')) {
@@ -54,6 +54,32 @@ describe('shared WSL pinned runtime', () => {
     ).toBe(false)
     expect(run.mock.calls.some(([spec]) => spec.script?.includes('sha256sum'))).toBe(true)
   })
+  it('falls through missing tools and uses the GNU loader for a minimal distro', async () => {
+    mocks.download.mockClear()
+    const run = runner(true)
+      .mockResolvedValueOnce('aarch64')
+      .mockResolvedValueOnce('ldd: not found')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('ld.so (GNU libc) stable release version 2.36.')
+    await expect(
+      ensureWslPinnedRuntime(run, '/fake/cache', new AbortController().signal)
+    ).resolves.toContain(NODE_RUNTIME_ASSETS['linux-arm64-glibc'].executableSha256)
+    expect(mocks.download).not.toHaveBeenCalled()
+    expect(run.mock.calls.slice(1, 4).every(([spec]) => spec.loginPath === 'none')).toBe(true)
+  })
+  it('retains the glibc floor when only the executable library can report a version', async () => {
+    mocks.download.mockClear()
+    const run = runner()
+      .mockResolvedValueOnce('x86_64')
+      .mockResolvedValueOnce('ldd: not found')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('GNU C Library (GNU libc) stable release version 2.26.')
+    await expect(
+      ensureWslPinnedRuntime(run, '/fake/cache', new AbortController().signal)
+    ).rejects.toThrow('glibc 2.26 is older than 2.28')
+    expect(mocks.download).not.toHaveBeenCalled()
+  })
   it('refuses download and guest verification failures without a system-node fallback', async () => {
     mocks.download.mockRejectedValueOnce(new Error('offline'))
     await expect(
@@ -64,7 +90,7 @@ describe('shared WSL pinned runtime', () => {
       if (spec.program === 'uname') {
         return 'x86_64'
       }
-      if (spec.script?.startsWith('getconf')) {
+      if (spec.script?.includes('getconf GNU_LIBC_VERSION')) {
         return 'glibc 2.31'
       }
       if (spec.script?.startsWith('printf')) {

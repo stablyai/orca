@@ -6,7 +6,6 @@ import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../src/shared/agent-ses
 import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session-wire'
 import {
   mobileQueueHasResumableCard,
-  mobileQueuePauseLabel,
   mobileQueuedMessageCards
 } from './mobile-structured-queued-message-cards'
 
@@ -170,15 +169,6 @@ describe('mobileQueuedMessageCards', () => {
     expect(resumable([failed])).toBe(false)
     expect(resumable([failed, waiting])).toBe(true)
     expect(resumable([waiting, { ...returned, position: 3 }])).toBe(true)
-  })
-
-  it('words the paused queue by reason, and one this build does not know as a plain pause', () => {
-    expect(mobileQueuePauseLabel({ reason: 'stopped' })).toBe(
-      'Queue paused because you interrupted'
-    )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a reason newer than this build's union, as a newer host would send it.
-    const newer = { reason: 'later_reason' } as never
-    expect(mobileQueuePauseLabel(newer)).toBe('Queue paused')
   })
 
   it('captions a reasonless pause as a plain pause, promising no release rule', () => {

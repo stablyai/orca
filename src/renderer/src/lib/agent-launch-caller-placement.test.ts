@@ -12,6 +12,7 @@ import {
   createdTabOptions,
   createLaunchFunnelStore,
   hostLaunchRequest,
+  queuedStartupCommand,
   queuedStartupPayload,
   resetLaunchFunnelStore
 } from './agent-launch-funnel-test-harness'
@@ -25,10 +26,12 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => nul
 vi.mock('@/lib/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
-vi.mock('@/runtime/web-runtime-session', () => ({ isWebRuntimeSessionActive: () => false }))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: () => false
+}))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => 'local',
-  getRuntimeEnvironmentIdForWorktree: () => null
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null
 }))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
   reconcileTabOrder: (_stored: unknown, terminalIds: string[]) => terminalIds
@@ -49,12 +52,14 @@ vi.mock('@/runtime/local-runtime-capabilities', () => ({
 }))
 // A launch the host delivers waits on its reply; these tests read only what was sent.
 const callRuntimeRpc = vi.hoisted(() => vi.fn(() => new Promise(() => {})))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc, RuntimeRpcCallError: Error }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
+vi.mock('@/runtime/runtime-rpc-result', () => ({ RuntimeRpcCallError: Error }))
 
 function launchesThroughHost(profile: AgentLaunchCallerProfile): boolean {
   return newTabPromptLaunchesThroughHost({
     promptDelivery: profile.args.promptDelivery ?? 'auto-submit',
-    pastesPrompt: (profile.args.prompt?.trim() ?? '').length > 0
+    pastesPrompt: (profile.args.prompt?.trim() ?? '').length > 0,
+    isRemote: false
   })
 }
 
@@ -122,19 +127,22 @@ describe('agent launch caller placement and telemetry', () => {
       await launch(profile)
 
       if (launchesThroughHost(profile)) {
-        // The host starts the agent where the request names, so nothing waits on the tab.
-        expect(store.queueTabInitialCwd).not.toHaveBeenCalled()
-        expect(hostLaunchRequest(callRuntimeRpc)?.cwd).toBe(profile.args.initialCwd)
+        // The host plans the agent where the request names; the pane's spawn starts there too.
+        expect(hostLaunchRequest(store)?.cwd).toBe(profile.args.initialCwd)
+        if (profile.args.initialCwd?.trim()) {
+          expect(store.queueTabInitialCwd).toHaveBeenCalledExactlyOnceWith(
+            createdTabOptions(store)?.id,
+            profile.args.initialCwd
+          )
+        } else {
+          expect(store.queueTabInitialCwd).not.toHaveBeenCalled()
+        }
         return
       }
       if (profile.args.initialCwd) {
         expect(store.queueTabInitialCwd).toHaveBeenCalledExactlyOnceWith(
           'tab-1',
           profile.args.initialCwd
-        )
-        // Ordering matters: the pane snapshots the queued cwd on first render.
-        expect(store.queueTabInitialCwd.mock.invocationCallOrder[0]).toBeLessThan(
-          store.queueTabStartupCommand.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER
         )
         return
       }
@@ -148,7 +156,7 @@ describe('agent launch caller placement and telemetry', () => {
     if (launchesThroughHost(profile)) {
       // The host stamps `agent_started` from the request; the window queues no command of its own.
       expect(queuedStartupPayload(store)).toBeUndefined()
-      expect(hostLaunchRequest(callRuntimeRpc)).toMatchObject({
+      expect(hostLaunchRequest(store)).toMatchObject({
         agent: profile.args.agent,
         launchSource: profile.args.launchSource ?? 'tab_bar_quick_launch'
       })
@@ -162,16 +170,15 @@ describe('agent launch caller placement and telemetry', () => {
     })
   })
 
-  it('creates the tab before queueing its startup command', async () => {
+  it('publishes the tab together with its startup command', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({ requestId: 'request-2', agent: 'codex', worktreeId: 'wt-1' })
 
-    // Why: the terminal pane snapshots pending startup in useState on first render, so a startup
-    // queued after mount is never seen.
-    expect(store.createTab.mock.invocationCallOrder[0]).toBeLessThan(
-      store.queueTabStartupCommand.mock.invocationCallOrder[0] ?? 0
-    )
+    // Why: the terminal pane snapshots pending startup in useState on first render, so the tab
+    // must never exist without its startup command.
+    expect(store.createTab).toHaveBeenCalledTimes(1)
+    expect(queuedStartupCommand(store)).toEqual(expect.any(String))
   })
 
   it('seeds working status for a Command Code prompt that rides argv', async () => {

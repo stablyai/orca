@@ -5,15 +5,11 @@ import type {
   GitHubPRRefreshReason
 } from '../../../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../../../shared/repo-types'
-import {
-  runtimeTargetForOwnerEnvironment,
-  type RuntimeClientTarget
-} from '../../runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  getRepoExecutionHostId,
-  getSettingsFocusedExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId
 } from '../../../../shared/execution-host'
@@ -105,14 +101,4 @@ export function findRepoForGitHubOwner(
   return state.repos
     ? getGitHubRepoLookupIndex(state.repos).findByIdOrPath(repoId, repoPath)
     : undefined
-}
-
-export function getGitHubFocusedRepoOwnerHostId(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): string {
-  if (repo?.executionHostId || repo?.connectionId) {
-    return getRepoExecutionHostId(repo)
-  }
-  return getSettingsFocusedExecutionHostId(settings)
 }

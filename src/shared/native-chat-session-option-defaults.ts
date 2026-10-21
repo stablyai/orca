@@ -1,4 +1,10 @@
 import type { AgentType } from './agent-status-types'
+import {
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
+  isAgentChatPermissionMode,
+  newChatPermissionModeForSettings
+} from './agent-chat-permission-mode'
+import type { GlobalSettings } from './global-settings-types'
 import { sessionOptionValueIsValid } from './agent-session-option-catalog'
 import type {
   NativeChatSessionOptionSettingsMutation,
@@ -40,6 +46,12 @@ export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = [
   'effort',
   'fastMode',
   'serviceTier'
+] as const
+
+/** What a launch may hold and a create may seed; the permission mode never rewrites the selection. */
+export const STRUCTURED_LAUNCH_OPTION_IDS = [
+  ...STRUCTURED_LAUNCH_SEED_OPTION_IDS,
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID
 ] as const
 
 /** Any chosen option set narrowed to what a structured create may seed: the seedable ids only,
@@ -88,6 +100,10 @@ export function parseStructuredLaunchSeedOptions(
       parsed[id] = encoded
     }
   }
+  const permissionMode = entries.get(AGENT_CHAT_PERMISSION_MODE_OPTION_ID)
+  if (isAgentChatPermissionMode(permissionMode)) {
+    parsed[AGENT_CHAT_PERMISSION_MODE_OPTION_ID] = permissionMode
+  }
   return Object.keys(parsed).length > 0 ? parsed : undefined
 }
 
@@ -97,6 +113,24 @@ export function resolveStructuredLaunchSeedOptions(
   agent: AgentType
 ): Record<string, string> | undefined {
   return narrowStructuredLaunchSeedOptions(resolveNativeChatSessionOptionDefaults(persisted, agent))
+}
+
+/** A new chat's seed: the saved selection plus the permission default narrowed to the agent. */
+export function structuredLaunchSeedOptions(
+  settings:
+    | Pick<
+        GlobalSettings,
+        'nativeChatSessionOptions' | 'nativeChatPermissionMode' | 'agentNativeChatPermissionModes'
+      >
+    | null
+    | undefined,
+  agent: AgentType
+): Record<string, string> | undefined {
+  const selection = resolveStructuredLaunchSeedOptions(settings?.nativeChatSessionOptions, agent)
+  const permissionMode = newChatPermissionModeForSettings(agent, settings)
+  return permissionMode
+    ? { ...selection, [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode }
+    : selection
 }
 
 /** Fold a settled batch of picks onto the durable record. A surface that must send the

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, vi } from 'vitest'
-import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'
-import { resetSshConnectionGenerations } from '../ssh/ssh-connection-generation'
+import { awaitRuntimeFileWatcherUnsubscribes } from './files/watch/file-watcher-leases'
+import { RuntimeFileCommands } from './orca-runtime-files'
+import { resetSshConnectionGenerations } from '../ssh/connection/ssh-connection-generation'
 import { resetRuntimeFileMocks } from './orca-runtime-files-mock-registry'
 import {
   getConnectionExecutionHostId,

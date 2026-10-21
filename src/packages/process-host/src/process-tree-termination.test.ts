@@ -105,6 +105,71 @@ describe('forceTerminateProcessTree', () => {
     })
   })
 
+  it('allows a slow Windows taskkill to verify tree termination', async () => {
+    await withWindows(async () => {
+      vi.useFakeTimers()
+      const child = mockProcess(1234)
+      const taskkill = mockProcess(5678)
+      spawnMock.mockReturnValue(taskkill)
+      let settled = false
+      const pending = forceTerminateProcessTree(child)
+      void pending.then(() => {
+        settled = true
+      })
+
+      await vi.advanceTimersByTimeAsync(3_000)
+
+      expect(settled).toBe(false)
+      expect(taskkill.kill).not.toHaveBeenCalled()
+      expect(child.kill).not.toHaveBeenCalled()
+      taskkill.emit('close', 0)
+      await expect(pending).resolves.toBe(true)
+    })
+  })
+
+  it('stops waiting on a slow Windows taskkill without abandoning it', async () => {
+    await withWindows(async () => {
+      vi.useFakeTimers()
+      const child = mockProcess(1234)
+      const taskkill = mockProcess(5678)
+      spawnMock.mockReturnValue(taskkill)
+      const pending = forceTerminateProcessTree(child)
+
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(pending).resolves.toBe(false)
+      // Killing either now would orphan the descendants taskkill has not reached.
+      expect(taskkill.kill).not.toHaveBeenCalled()
+      expect(child.kill).not.toHaveBeenCalled()
+
+      // A retry joins the same taskkill and sees its late success.
+      const retry = forceTerminateProcessTree(child)
+      taskkill.emit('close', 0)
+      await expect(retry).resolves.toBe(true)
+      expect(spawnMock).toHaveBeenCalledOnce()
+      expect(child.kill).not.toHaveBeenCalled()
+    })
+  })
+
+  it('abandons a wedged Windows taskkill at its deadline and kills the root', async () => {
+    await withWindows(async () => {
+      vi.useFakeTimers()
+      const child = mockProcess(1234)
+      const taskkill = mockProcess(5678)
+      spawnMock.mockReturnValue(taskkill)
+      void forceTerminateProcessTree(child)
+
+      await vi.advanceTimersByTimeAsync(29_999)
+      expect(taskkill.kill).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(taskkill.kill).toHaveBeenCalledOnce()
+      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+      taskkill.emit('close', 0)
+      expect(child.kill).toHaveBeenCalledOnce()
+    })
+  })
+
   it.skipIf(process.platform === 'win32')(
     'stops waiting when a POSIX process group cannot become quiescent',
     async () => {

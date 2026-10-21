@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { Suspense } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -71,6 +71,10 @@ import {
   selectClientHostedBrowserRow
 } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import BrowserPaneOverlayLayer, { RetainedBrowserPaneOverlayLayer } from './BrowserPaneOverlayLayer'
+import {
+  admitBrowserPageMount,
+  releaseBrowserPageMount
+} from '../host-guest/browser-page-mount-admission'
 
 const HOST_ROW = {
   browserPageId: 'page-hosted',
@@ -410,6 +414,39 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).not.toContain('data-browser-pane-id="browser-a"')
     expect(markup).toContain('data-browser-pane-id="browser-b"')
     expect(markup).toContain('data-browser-pane-active="false"')
+  })
+
+  // STA-7435: a background-opened page's admission starts its guest; once released (first load
+  // settled) the slot must fall back to the normal rules instead of staying laid out forever.
+  it('mounts an admitted page in a hidden worktree and parks it once the admission ends', () => {
+    admitBrowserPageMount('page-b')
+    try {
+      const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={false} />)
+      expect(view.container.querySelector('[data-browser-pane-id="browser-b"]')).not.toBeNull()
+
+      act(() => releaseBrowserPageMount('page-b'))
+
+      expect(view.container.querySelector('[data-browser-pane-id="browser-b"]')).toBeNull()
+    } finally {
+      releaseBrowserPageMount('page-b')
+    }
+  })
+
+  it('keeps an admitted page mounted in the visible worktree but stops laying out its slot', () => {
+    admitBrowserPageMount('page-b')
+    try {
+      const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={true} />)
+      const slot = (): HTMLElement | null =>
+        view.container.querySelector<HTMLElement>('[data-browser-overlay-tab-id="browser-b"]')
+      expect(slot()?.style.display).toBe('flex')
+
+      act(() => releaseBrowserPageMount('page-b'))
+
+      expect(slot()?.style.display).toBe('none')
+      expect(view.container.querySelector('[data-browser-pane-id="browser-b"]')).not.toBeNull()
+    } finally {
+      releaseBrowserPageMount('page-b')
+    }
   })
 
   // Why the style and not just mountedness: paintability drives the slot's `display`, and

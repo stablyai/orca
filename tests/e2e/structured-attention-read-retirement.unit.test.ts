@@ -184,6 +184,7 @@ describe('Explicit desktop read acknowledgements', () => {
     const delivery = createStructuredAttentionMobileDelivery({
       readNotificationSettings: () => ({ ...NOTIFICATION_SETTINGS, suppressWhenFocused: false }),
       readWorkspaceLabels: () => ({}),
+      isWorkspaceMuted: () => false,
       dispatch: (event) => fixture.controller.dispatch(event),
       reconcile: (state) => fixture.controller.reconcileStructuredPromptAttention(state),
       now: () => 42
@@ -542,13 +543,13 @@ describe('Accepted structured history read retirement', () => {
 
   it('retries a failed local desktop relay withdrawal on a later explicit read', async () => {
     const relayDirectory = mkdtempSync(join(tmpdir(), 'orca-relay-read-retry-'))
+    const relay = new RuntimeMobileNotificationController()
     try {
       addPrompt('A')
       const sent = fixture.events.find((event) => event.type === 'notification')
       if (!sent?.notificationId || sent.type !== 'notification') {
         throw new Error('prompt not sent')
       }
-      const relay = new RuntimeMobileNotificationController()
       relay.configureDismissalStore(relayDirectory)
       relay.dispatch(sent)
       const withdrawals: string[] = []
@@ -584,6 +585,7 @@ describe('Accepted structured history read retirement', () => {
         transport.dismiss.mock.calls.filter(([, , reads]) => Array.isArray(reads))
       ).toHaveLength(2)
     } finally {
+      await relay.closeDismissals()
       rmSync(relayDirectory, { recursive: true, force: true })
     }
   })

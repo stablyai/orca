@@ -6,6 +6,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
+import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -39,9 +40,18 @@ function createHarness(
     enabled?: boolean
     composerScopeKey?: string | undefined
     mutateResult?: (call: MutateCall) => unknown
+    clearPending?: Promise<void>
+    sending?: StructuredAgentSessionPendingSend[]
   } = {}
 ) {
   const mutateCalls: MutateCall[] = []
+  const writeCalls: MutateCall[] = []
+  const clearWrite: StructuredAgentSessionWrite = async <T,>(...call: MutateCall) => {
+    writeCalls.push(call)
+    await overrides.clearPending
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Clear calls this test writer only for queuedMessageDelete.
+    return { kind: 'done', value: { deleted: true, messageId: call[2].messageId } as T }
+  }
   const mutate = vi.fn(async (...call: MutateCall) => {
     mutateCalls.push(call)
     return overrides.mutateResult ? overrides.mutateResult(call) : null
@@ -53,14 +63,20 @@ function createHarness(
       queuePause: null,
       submissions: [],
       hasPendingPrompt: false,
-      isWorking: false,
+      isWorking: (overrides.sending?.length ?? 0) > 0,
+      sending: overrides.sending,
       composerScopeKey: 'composerScopeKey' in overrides ? overrides.composerScopeKey : SCOPE,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each scripted answer is the result shape of the one mutate it responds to; generic erasure cannot express that.
       mutate: mutate as StructuredAgentSessionMutate,
-      editTransport: { target: { kind: 'local' }, sessionId: 'session', capable: false, write }
+      editTransport: {
+        target: { kind: 'local' },
+        sessionId: 'session',
+        capable: false,
+        write: clearWrite
+      }
     })
   )
-  return { ...rendered, mutate, mutateCalls }
+  return { ...rendered, mutate, mutateCalls, writeCalls, clearWrite }
 }
 
 beforeEach(() => {
@@ -72,6 +88,46 @@ afterEach(() => {
 })
 
 describe('queued message actions', () => {
+  it('Clear deletes eight at a time and a repeated Clear sends nothing more', async () => {
+    const ids = Array.from({ length: 10 }, (_, index) => `draft-${index + 1}`)
+    const release = Promise.withResolvers<void>()
+    const harness = createHarness({
+      clearPending: release.promise,
+      queuedMessages: ids.map((id, index) => draft(id, index + 1))
+    })
+    let pending: Promise<boolean> = Promise.resolve(false)
+    await act(async () => {
+      pending = harness.result.current.clear()
+      expect(await harness.result.current.clear()).toBe(false)
+      expect(await harness.result.current.resume()).toBe(false)
+    })
+    expect(harness.mutateCalls).toEqual([])
+    expect(harness.writeCalls.map(([, , fields]) => fields.messageId)).toEqual(ids.slice(0, 8))
+    expect(harness.result.current.queuePending).toBe('clear')
+    release.resolve()
+    await act(async () => expect(await pending).toBe(true))
+    expect(harness.writeCalls).toHaveLength(ids.length)
+    expect(harness.result.current.queuePending).toBeNull()
+  })
+
+  it('keeps Clear all unavailable while a local send has no host card', async () => {
+    const pending: StructuredAgentSessionPendingSend = {
+      clientMessageId: 'pending',
+      sessionId: 'session',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'pending' }] },
+      previewUris: [],
+      queuedAt: 1,
+      delivery: 'queue-if-active',
+      phase: 'sending',
+      issued: true
+    }
+    const harness = createHarness({ sending: [pending] })
+    expect(harness.result.current.cards.map((card) => card.messageId)).toContain('pending')
+    expect(harness.result.current.clearCapable).toBe(false)
+    await act(async () => expect(await harness.result.current.clear()).toBe(false))
+    expect(harness.mutate).not.toHaveBeenCalled()
+  })
+
   it('Steer sends the named draft through queuedMessageSend', async () => {
     const harness = createHarness()
     await act(() => harness.result.current.steer('draft-1'))

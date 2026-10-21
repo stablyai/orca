@@ -30,8 +30,8 @@ import {
   WORKTREE_OWNER_UNREACHABLE_ERROR
 } from '@/components/editor/editor-panel-content-types'
 import { shouldRetryFileLoadError } from '@/components/editor/useEditorPanelFileLoadRetry'
-import { readRuntimeFileContent } from './runtime-file-client'
-import type { RuntimeClientTarget } from './runtime-client-target'
+import { readRuntimeFileContent } from './runtime-file-read-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 // Mirrors src/main/ipc/filesystem-auth.ts PATH_ACCESS_DENIED_MESSAGE.
 const PATH_ACCESS_DENIED_MESSAGE =

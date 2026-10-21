@@ -9,6 +9,7 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   // Its hostKey names authorities only the writing client can resolve — a paired
   // client's `desktop` is a different machine — and old hosts reject the unknown key.
   'automationHostFilter',
+  // Except for the host's own phone, which shows the host's view (isHostOwnPhone, client-ui.ts).
   'hideWorkspacesFromOtherDevices',
   'manualRepoOrder',
   'workspaceHostOrder',

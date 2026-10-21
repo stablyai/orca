@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import React, { useState } from 'react'
 import { Send } from 'lucide-react'
 import { toast } from 'sonner'

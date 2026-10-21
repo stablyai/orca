@@ -1,12 +1,6 @@
-import { RuntimeRpcCallError } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { getRemoteRuntimeTerminalMultiplexer } from './remote-runtime-terminal-multiplexer'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
-
-export {
-  parseRemoteRuntimePtyId,
-  toRemoteRuntimePtyId,
-  type RemoteRuntimePtyIdParts
-} from '../../../shared/remote-runtime-pty-id'
 
 const LIVE_TAIL_SUBSCRIPTION_TIMEOUT_MS = 10_000
 

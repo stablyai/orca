@@ -16,7 +16,7 @@ import {
   findIndexedProjectGroupOwner,
   getCatalogOwnerHostId
 } from '@/lib/worktree-runtime-owner-index'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 
 type SubjectOwnerState = WorktreeRuntimeOwnerState &
   Partial<

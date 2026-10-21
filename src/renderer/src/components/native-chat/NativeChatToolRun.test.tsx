@@ -322,22 +322,6 @@ describe('NativeChatToolRun', () => {
       expect(runHeader(container)).toHaveTextContent('Ran 2 commands and read 1 file')
     })
 
-    it('keeps the run in the transcript type, not a monospace dump', () => {
-      const { container } = render(<NativeChatToolRun blocks={batch} expandSignal={false} />)
-
-      const label = runHeader(container).querySelector('span.line-clamp-2')
-      expect(label).toHaveClass('text-sm')
-      expect(label).not.toHaveClass('font-mono')
-    })
-
-    it('indents opened members so the run has a visible end', () => {
-      const { container } = render(<NativeChatToolRun blocks={batch} expandSignal />)
-
-      const members = runHeader(container).parentElement?.querySelector('.border-l')
-      expect(members).toBeInTheDocument()
-      expect(members?.querySelectorAll('button').length).toBe(batch.length)
-    })
-
     // The split MCP name still appears on the row beneath; only the header has
     // stopped naming calls at all.
     it('prints the split MCP name on the opened row', () => {

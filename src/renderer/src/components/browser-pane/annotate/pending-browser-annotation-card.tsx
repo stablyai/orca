@@ -1,5 +1,5 @@
 import { ImeTextarea } from '@/lib/ime-text-field'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CornerDownLeft, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -19,17 +19,30 @@ import {
 
 export function PendingBrowserAnnotationCard({
   payload,
-  anchor,
+  resolveAnchor,
   portalContainer,
   onAdd,
   onCancel
 }: {
   payload: BrowserGrabPayload
-  anchor: BrowserOverlayAnchor
+  /** Anchor for a card of the given measured height; null until the card has rendered once. */
+  resolveAnchor: (cardHeight: number | null) => BrowserOverlayAnchor
   portalContainer: HTMLElement | null
   onAdd: (comment: string, intent: BrowserAnnotationIntent) => void
   onCancel: () => void
 }): React.JSX.Element {
+  const [card, setCard] = useState<HTMLDivElement | null>(null)
+  const [cardHeight, setCardHeight] = useState<number | null>(null)
+  useEffect(() => {
+    if (!card || typeof ResizeObserver === 'undefined') {
+      return
+    }
+    // offsetHeight, not the bounding box: the open animation scales the card.
+    const observer = new ResizeObserver(() => setCardHeight(card.offsetHeight || null))
+    observer.observe(card)
+    return () => observer.disconnect()
+  }, [card])
+  const anchor = resolveAnchor(cardHeight)
   const [comment, setComment] = useState('')
   const [intent, setIntent] = useState<BrowserAnnotationIntent>('change')
   const trimmed = comment.trim()
@@ -51,6 +64,7 @@ export function PendingBrowserAnnotationCard({
         />
       </PopoverAnchor>
       <PopoverContent
+        ref={setCard}
         side={anchor.side}
         align="center"
         sideOffset={10}

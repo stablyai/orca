@@ -4,7 +4,7 @@ import {
   getActiveWorkspaceOwnerTarget,
   getResolvedExecutionHostIdForWorktree
 } from './resolved-worktree-execution-host'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 describe('getResolvedExecutionHostIdForWorktree', () => {
   it('keeps missing workspace ownership unresolved', () => {

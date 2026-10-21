@@ -1,5 +1,5 @@
 import type { AppState } from '../../../types'
-import type { RuntimeClientTarget } from '../../../../runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { getRuntimeEnvironmentRevision } from '../../../../runtime/runtime-environment-revision'
 import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status-connection-generation'
 

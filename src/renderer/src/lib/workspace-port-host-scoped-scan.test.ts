@@ -10,7 +10,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   runtimeEnvironmentSupportsCapability: supportsCapability
 }))
 
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import {
   killWorkspacePortOnExecutionHost,
   scanWorkspacePortsOnExecutionHost,

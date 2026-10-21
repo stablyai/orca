@@ -9,7 +9,9 @@ import {
 import { sharesResolvedWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
 import type { OrchestrationDb } from './orchestration/db'
 import type { RuntimeStore } from './runtime-store-contract'
+import { worktreeRowTarget } from '../persistence/host-qualified-worktree-meta'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
   RuntimeLineageError,
   enforceCreateLineageHostBoundary,
@@ -96,15 +98,18 @@ export class RuntimeWorktreeLineageController {
     if (!sharesResolvedWorktreeLineageBoundary(child, parent)) {
       throw new RuntimeLineageError(
         'LINEAGE_PARENT_CONTEXT_CONFLICT',
-        'Parent worktree must belong to the same repository, execution host, and project.'
+        'Parent worktree must be on the same execution host.'
       )
     }
+    const hostId = child.hostId ?? parent.hostId
     const instanceById = new Map(
-      this.deps.getCachedWorktrees()?.map((worktree) => [worktree.id, worktree.instanceId]) ?? [
-        [child.id, child.instanceId],
-        [parent.id, parent.instanceId]
-      ]
+      this.deps
+        .getCachedWorktrees()
+        ?.filter((worktree) => !hostId || !worktree.hostId || worktree.hostId === hostId)
+        .map((worktree) => [worktree.id, worktree.instanceId]) ?? []
     )
+    instanceById.set(child.id, child.instanceId)
+    instanceById.set(parent.id, parent.instanceId)
     let cursor: string | undefined = parent.id
     const visited = new Set<string>([child.id])
     while (cursor) {
@@ -154,7 +159,11 @@ export class RuntimeWorktreeLineageController {
       return
     }
     for (const worktree of await this.deps.listResolvedWorktrees()) {
-      if (store.getWorktreeLineage(worktree.id) || !worktree.instanceId) {
+      if (
+        store.getWorktreeLineage(worktree.id) ||
+        !worktree.instanceId ||
+        isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)
+      ) {
         continue
       }
       const taskId = worktree.comment?.match(/\btask_[A-Za-z0-9]+\b/)?.[0]
@@ -174,7 +183,11 @@ export class RuntimeWorktreeLineageController {
       } catch {
         continue
       }
-      store.setWorktreeLineage(worktree.id, {
+      const target = worktreeRowTarget(store, worktree)
+      if (!target) {
+        continue
+      }
+      store.setWorktreeLineage(target, {
         worktreeId: worktree.id,
         worktreeInstanceId: worktree.instanceId,
         parentWorktreeId: candidate.parent.worktree.id,

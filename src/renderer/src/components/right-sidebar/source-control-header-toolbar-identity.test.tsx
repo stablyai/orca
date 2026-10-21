@@ -5,7 +5,7 @@ import { SourceControlHeaderToolbar } from './source-control/panel/header-toolba
 import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import type { WorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
 import type { PrimaryAction } from './source-control-primary-action'
 
 vi.mock('@/components/ui/tooltip', () => ({

@@ -24,6 +24,8 @@ export type CliInstallerOptions = {
   appImagePath?: string | null
   appImageCacheRootPath?: string
   appImageExtractRunner?: (appImagePath: string, cwd: string) => Promise<void>
+  /** Absolute time (ms) by which AppImage extraction and its lock wait must finish. */
+  appImageDeadlineAt?: number
 }
 
 export type InstallSpec = {

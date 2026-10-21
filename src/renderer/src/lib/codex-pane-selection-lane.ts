@@ -1,6 +1,6 @@
 import type { AppState } from '@/store'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import {
   getCodexSelectionLaneKey,
   normalizeCodexAccountSelectionTarget,
@@ -19,6 +19,7 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
+import { wslHostDistroForTarget } from './wsl-host-account-owner'
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
@@ -32,6 +33,7 @@ type CodexPaneLaneState = Pick<
   | 'folderWorkspaces'
   | 'projects'
   | 'repos'
+  | 'runtimeEnvironments'
   | 'settings'
   | 'worktreesByRepo'
 >
@@ -176,9 +178,17 @@ export function resolveCodexPaneSelectionLaneKey(args: {
   if (remoteParts !== null) {
     // Why: mirror inspectRuntimeTerminalProcess — an owner-less remote id reaches no server.
     const environmentId = remoteParts.environmentId?.trim()
-    return environmentId
-      ? `${RUNTIME_ENVIRONMENT_LANE_PREFIX}${environmentId}`
-      : UNATTRIBUTED_REMOTE_LANE_KEY
+    if (!environmentId) {
+      return UNATTRIBUTED_REMOTE_LANE_KEY
+    }
+    // A WSL host's Codex home is this desktop's selection for its distro (the accounts shim).
+    const wslHostDistro = wslHostDistroForTarget(
+      { kind: 'environment', environmentId },
+      args.state.runtimeEnvironments ?? []
+    )
+    return wslHostDistro
+      ? getCodexSelectionLaneKey({ runtime: 'wsl', wslDistro: wslHostDistro })
+      : `${RUNTIME_ENVIRONMENT_LANE_PREFIX}${environmentId}`
   }
   if (parseAppSshPtyId(args.ptyId) !== null) {
     return SSH_CONNECTION_LANE_KEY

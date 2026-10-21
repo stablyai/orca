@@ -8,21 +8,31 @@ const SETUP_DECISION_NEXT_STEP =
 
 /** Why here, not on the host: desktop and phone choose setup in their own UI, so the host's
  *  shared refusal names no flag; only the CLI user answers it with --setup. */
-export async function withSetupDecisionRecovery<T>(create: Promise<T>): Promise<T> {
+export async function withSetupDecisionRecovery<T>(
+  create: Promise<T>,
+  replayingLaunch = false
+): Promise<T> {
   try {
     return await create
   } catch (error) {
-    throw attachSetupDecisionRecovery(error)
+    throw attachSetupDecisionRecovery(error, replayingLaunch)
   }
 }
 
-function attachSetupDecisionRecovery(error: unknown): unknown {
+function attachSetupDecisionRecovery(error: unknown, replayingLaunch: boolean): unknown {
   if (!(error instanceof RuntimeClientError) || error.message !== SETUP_DECISION_REQUIRED) {
     return error
   }
   const data = {
     ...(error.data && typeof error.data === 'object' ? error.data : {}),
-    nextSteps: [SETUP_DECISION_NEXT_STEP]
+    nextSteps: [
+      SETUP_DECISION_NEXT_STEP,
+      ...(replayingLaunch && error instanceof RuntimeRpcFailureError
+        ? [
+            'This launch was refused before creation. Remove --retry-launch for the changed request so Orca uses a new launch ID.'
+          ]
+        : [])
+    ]
   }
   if (error instanceof RuntimeRpcFailureError) {
     return new RuntimeRpcFailureError({

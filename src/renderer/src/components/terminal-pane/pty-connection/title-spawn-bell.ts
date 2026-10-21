@@ -9,6 +9,7 @@ import {
 import { canCommandCodeOutputOwnPane } from '../command-code-output-ownership'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -20,6 +21,9 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     rawTitle: string,
     meta?: { staleWorkingTitleClear?: boolean }
   ): void => {
+    if (!meta?.staleWorkingTitleClear && resolveCommittedTitleAgentType(rawTitle)) {
+      session.paneForegroundAgentTracker.onAgentStartupObserved()
+    }
     // Why: one owner-aware decision drives the display label, the runtime/tab
     // title, task-completion tracking, and the renderer gate, so raw title text
     // can no longer disable GPU behind stronger owner evidence (#7428/#7447).

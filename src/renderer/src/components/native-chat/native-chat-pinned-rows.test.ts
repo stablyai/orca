@@ -15,6 +15,12 @@ describe('pinned transcript rows', () => {
       .toEqual([3, 39])
   })
 
+  // A reveal can stand for as long as its diff stays open; the marker's row must not wait on it.
+  it("pins the new-rows marker's row alongside a reveal, not in its place", () => {
+    const pinned = nativeChatPinnedRowIndexes({ count: 40, revealIndex: 3, newRowsMarkerIndex: 20 })
+    expect([...pinned].sort((a, b) => a - b)).toEqual([3, 20, 39])
+  })
+
   it('ignores a reveal target that is no longer in the transcript', () => {
     expect([...nativeChatPinnedRowIndexes({ count: 5, revealIndex: -1 })]).toEqual([4])
     expect([...nativeChatPinnedRowIndexes({ count: 5, revealIndex: 99 })]).toEqual([4])

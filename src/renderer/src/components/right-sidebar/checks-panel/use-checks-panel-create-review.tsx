@@ -47,7 +47,10 @@ type ChecksPanelCreateReviewInput = ChecksPanelCreatedReviewInput &
   > &
   Pick<ChecksPanelComposerState, 'prBase' | 'prBody' | 'prDraft' | 'prGenerating' | 'prTitle'> &
   Pick<ChecksPanelComposerState, 'handleGeneratePullRequestFields' | 'prAiGenerationEnabled'> &
-  Pick<ChecksPanelComposerState, 'prFieldsAreSeedPlaceholders'> &
+  Pick<
+    ChecksPanelComposerState,
+    'prFieldRevisions' | 'prFieldsAreSeedPlaceholders' | 'pullRequestFieldsInitialized'
+  > &
   Pick<ChecksPanelBranchActionsState, 'pushBeforeCreatePullRequest'>
 
 export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) {
@@ -73,9 +76,11 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
     prBody,
     prCreationDefaults,
     prDraft,
+    prFieldRevisions,
     prFieldsAreSeedPlaceholders,
     prGenerating,
     prTitle,
+    pullRequestFieldsInitialized,
     pushBeforeCreatePullRequest,
     repo,
     setCreatePrError,
@@ -292,6 +297,9 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
     aiGenerationEnabled: prAiGenerationEnabled,
     canCreate: createComposerOpen,
     createPullRequest,
+    fields: { base: prBase, title: prTitle, body: prBody, draft: prDraft },
+    fieldRevisions: prFieldRevisions,
+    fieldsInitialized: pullRequestFieldsInitialized,
     fieldsAreSeedPlaceholders: prFieldsAreSeedPlaceholders,
     generatePullRequestFields: handleGeneratePullRequestFields,
     generationKey: activePullRequestGenerationKey,

@@ -36,9 +36,8 @@ export class StarNagAgentValueMoment {
       this.deps.isCooldownActive(ui.starNagDeferredUntil) ||
       this.deps.isPromptVisible()
     ) {
-      // Why: each app version gets at most one completion-moment attempt, even if
-      // an existing prompt/cooldown blocks the extra agent-finished trigger.
-      this.consumeVersion()
+      // Existing prompts and cooldowns also spend the one-time completion ask.
+      this.consumeMoment()
       return { status: 'skipped' }
     }
     this.deps.setEvaluating(true)
@@ -54,9 +53,7 @@ export class StarNagAgentValueMoment {
       if (starred) {
         this.deps.trackAlreadyStarredSuppressed()
         this.deps.markCompleted()
-        // Why: already-starred users should not be rechecked on every agent
-        // completion after this version has been resolved.
-        this.consumeVersion()
+        this.consumeMoment()
         return { status: 'skipped' }
       }
       this.pendingMode = 'gh'
@@ -78,17 +75,14 @@ export class StarNagAgentValueMoment {
       this.deps.isPromptVisible() ||
       this.deps.isEvaluating()
     ) {
-      // Why: the prepared moment can go stale before display; consuming prevents
-      // repeated prompts from the same app-version completion moment.
-      this.consumeVersion()
+      // A prepared moment can go stale while eligibility is being checked.
+      this.consumeMoment()
       this.pendingMode = null
       return
     }
     const delivered = this.deps.broadcastShow(mode)
     if (delivered || this.deps.store.getUI().starNagCompleted) {
-      // Why: once a prompt is delivered or completion wins the race, this app
-      // version's agent-value moment has been spent.
-      this.consumeVersion()
+      this.consumeMoment()
     }
     if (delivered) {
       this.pendingMode = null
@@ -99,11 +93,11 @@ export class StarNagAgentValueMoment {
     this.pendingMode = null
   }
 
-  private consumeVersion(): void {
+  private consumeMoment(): void {
     this.deps.store.updateUI({ starNagAgentValueMomentAppVersion: app.getVersion() })
   }
 
   private wasConsumed(): boolean {
-    return this.deps.store.getUI().starNagAgentValueMomentAppVersion === app.getVersion()
+    return Boolean(this.deps.store.getUI().starNagAgentValueMomentAppVersion)
   }
 }

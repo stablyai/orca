@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { operationGitContext } from '../listing/operation-target'
-import { generateRuntimeCommitMessage } from '@/runtime/runtime-git-client'
+import { generateRuntimeCommitMessage } from '@/runtime/runtime-git-generation-client'
 import { useAppStore } from '@/store'
 import { isCustomAgentId } from '../../../../../../shared/commit-message-agent-spec'
 import type { CreatePrIntentRunToken } from './create-pr-intent-flow'

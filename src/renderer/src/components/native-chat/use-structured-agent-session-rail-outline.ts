@@ -10,8 +10,10 @@
 
 import { useEffect, useState } from 'react'
 import type { AgentSessionConversationOutline } from '../../../../shared/agent-session-conversation-outline'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
+import { agentSessionContextFloorSequence } from '../../../../shared/agent-session-context-clear'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { readStructuredAgentSessionConversationOutline } from '@/runtime/structured-agent-session-client'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
 import { selectStructuredRailOutline } from './structured-agent-session-rail-outline'
@@ -24,11 +26,14 @@ export function useStructuredAgentSessionRailOutline({
   sessionId,
   target,
   state,
+  contextFloor,
   enabled
 }: {
   sessionId: string
   target: RuntimeClientTarget
   state: Pick<StructuredAgentSessionState, 'epoch' | 'items' | 'hasOlder'>
+  /** The host's latest `/clear`; the transcript shows nothing before it, so neither does the rail. */
+  contextFloor?: AgentJournalCursor
   enabled: boolean
 }): readonly NativeChatRailOutlineEntry[] | null {
   const [outline, setOutline] = useState<AgentSessionConversationOutline | null>(null)
@@ -36,7 +41,8 @@ export function useStructuredAgentSessionRailOutline({
   const view = selectStructuredRailOutline(current, {
     epoch: state.epoch,
     oldestLoadedSequence: state.items[0]?.sequence ?? null,
-    hasOlder: state.hasOlder
+    hasOlder: state.hasOlder,
+    contextFloor: agentSessionContextFloorSequence(contextFloor, state.epoch)
   })
   const requestKey = enabled && view.kind === 'stale' ? `${sessionId}:${state.epoch}` : null
   const [retry, setRetry] = useState<{ key: string | null; attempt: number }>({

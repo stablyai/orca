@@ -11,6 +11,8 @@ import {
   withoutRecord
 } from './mobile-web-shell-session-test-fixtures'
 
+const DOWNLOAD_FAILED = { kind: 'failed', reason: 'download-failed', retriedOnce: false }
+
 /**
  * The host is up, it serves a generation this shell could not take, and one that works is on disk.
  *
@@ -74,10 +76,9 @@ describe('an update this shell refused falls back to the generation that already
     expect(ready.session.updateNotice).toBe('update-failed')
   })
 
-  it('leaves the refused generation out of the cache and writes nothing beside it', () => {
+  it('leaves the refused generation out of the cache and keeps the cached one', () => {
     const step = refused()
     expect(step.session.cached).toEqual(CACHED)
-    expect(step.effects.map((effect) => effect.kind)).not.toContain('persist-manifest')
     expect(step.effects.map((effect) => effect.kind)).not.toContain('delete-cache')
   })
 
@@ -127,21 +128,20 @@ describe('an update this shell refused falls back to the generation that already
     expect(refused().session.updateNotice).toBe('update-failed')
   })
 
-  it('leaves the route native when the cached bundle never carried it, before any wall', () => {
-    // The order `onManifestRead` takes, and the one the compat wall broke: a route this bundle
-    // does not serve is not a screen to refuse. Below the host's floor as well, so the only thing
-    // that can produce `native-route` here is the route question being asked first.
+  it('shows the download failure when the cached bundle never carried the route, before any wall', () => {
+    // The newer manifest claimed the route, so the cache lacking it is this download's failure.
+    // Below the host's floor as well: the wall judges bytes about to be shown, and these are not.
     const fetching = run(afterCacheRead({ ...CACHED_BELOW_HOST_FLOOR, routes: [] }).session, {
       type: 'manifest-read',
       manifest: NEWER
     })
     const step = run(fetching.session, { type: 'download-failed', cause: BUNDLE_REFUSED })
-    expect(step.session.state).toEqual({ kind: 'native-route' })
+    expect(step.session.state).toEqual(DOWNLOAD_FAILED)
     expect(step.session.updateNotice).toBeNull()
     expect(withoutRecord(step.effects)).toEqual([])
   })
 
-  it('leaves it native for a generation from before routes were listed at all', () => {
+  it('shows the download failure for a generation from before routes were listed at all', () => {
     // `routes: undefined` is every generation cached by a desktop older than the field. It claims
     // no route, so it cannot claim this one, and it must not be walled for that.
     const fetching = run(
@@ -149,7 +149,7 @@ describe('an update this shell refused falls back to the generation that already
       { type: 'manifest-read', manifest: NEWER }
     )
     const step = run(fetching.session, { type: 'download-failed', cause: BUNDLE_REFUSED })
-    expect(step.session.state).toEqual({ kind: 'native-route' })
+    expect(step.session.state).toEqual(DOWNLOAD_FAILED)
   })
 })
 
@@ -172,11 +172,13 @@ describe('the fallback answers each gate verdict the way the rest of the shell d
     return run(moved.session, { type: 'download-failed', cause: BUNDLE_REFUSED })
   }
 
-  it('answers native-route when the host has stopped serving a bundle at all', () => {
-    // Not a wall and not the cached page: a desktop that ships no bundle declares no page route,
-    // so this route is the native screen's, which is what `gateVerdict` answers everywhere else.
+  it('walls the host when it has stopped serving a bundle at all', () => {
+    // Not the cached page: the gate's own answer, which is what `gateVerdict` answers elsewhere.
     const step = refusedUnder({ hostCapabilities: [] })
-    expect(step.session.state).toEqual({ kind: 'native-route' })
+    expect(step.session.state).toEqual({
+      kind: 'wall',
+      verdict: { kind: 'blocked', reason: 'bundle-unavailable' }
+    })
     expect(step.session.updateNotice).toBeNull()
     expect(withoutRecord(step.effects)).toEqual([])
   })

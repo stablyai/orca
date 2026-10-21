@@ -8,7 +8,7 @@ import {
   type WorktreeOperationRoute,
   type WorktreeOperationRouteState
 } from '@/lib/worktree-operation-route'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,

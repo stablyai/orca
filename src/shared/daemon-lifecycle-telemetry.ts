@@ -9,7 +9,8 @@ export const DAEMON_REPLACE_REASONS = [
   'stale_bundle',
   'different_app_path',
   'failed_health_check',
-  'severed_tcc_attribution'
+  'severed_tcc_attribution',
+  'severed_host_image'
 ] as const
 export type DaemonReplaceReason = (typeof DAEMON_REPLACE_REASONS)[number]
 

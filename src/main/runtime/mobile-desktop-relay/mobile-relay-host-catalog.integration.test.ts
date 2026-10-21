@@ -142,7 +142,10 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
           params,
           5_000
         ),
-      onEnvironmentRetired: () => () => {}
+      hostsBrowserPage: () => false,
+      onEnvironmentRetired: () => () => {},
+      onStatusChanged: () => () => {},
+      watchChanges: () => ({ close: () => {}, current: () => true })
     }
     desktop.setMobileDesktopRelayHosts(hosts)
     const session = await authenticateMobileWsSession(pairingUrl(desktop, 'mobile'))

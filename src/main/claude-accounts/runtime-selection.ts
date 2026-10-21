@@ -27,9 +27,8 @@ export function normalizeClaudeAccountSelectionTarget(
 }
 
 export function normalizeClaudeRuntimeSelection(
-  settings: Pick<
-    GlobalSettings,
-    'activeClaudeManagedAccountId' | 'activeClaudeManagedAccountIdsByRuntime'
+  settings: Partial<
+    Pick<GlobalSettings, 'activeClaudeManagedAccountId' | 'activeClaudeManagedAccountIdsByRuntime'>
   >
 ): ClaudeManagedAccountRuntimeSelection {
   return {
@@ -42,9 +41,8 @@ export function normalizeClaudeRuntimeSelection(
 }
 
 export function getSelectedClaudeAccountIdForTarget(
-  settings: Pick<
-    GlobalSettings,
-    'activeClaudeManagedAccountId' | 'activeClaudeManagedAccountIdsByRuntime'
+  settings: Partial<
+    Pick<GlobalSettings, 'activeClaudeManagedAccountId' | 'activeClaudeManagedAccountIdsByRuntime'>
   >,
   target?: ClaudeAccountSelectionTarget | null
 ): string | null {

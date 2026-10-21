@@ -33,7 +33,7 @@ function durationBucket(durationMs: number): DurationBucket {
   return durationMs < 60_000 ? '15s_60s' : 'gte_60s'
 }
 
-function hostProps(facts: SshHostPlatformFacts | null): HostProps {
+export function hostProps(facts: SshHostPlatformFacts | null): HostProps {
   return facts
     ? { host_os: facts.os, host_arch: facts.arch, host_libc: facts.libc }
     : { host_os: 'unknown', host_arch: 'unknown', host_libc: 'unknown' }

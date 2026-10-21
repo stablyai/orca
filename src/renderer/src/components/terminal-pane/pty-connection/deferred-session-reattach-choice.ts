@@ -1,7 +1,7 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
-import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
+import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
 import { getEagerPtyBufferHandle } from '../pty-dispatcher'
 
 import {
@@ -13,7 +13,7 @@ import {
   canRestorePairedParkedTerminal,
   isSessionOwnedByWorktree
 } from './paired-parked-terminal-restore'
-import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
+import { startDeferredSessionReattachUnlessHiddenAgentResume } from './hidden-agent-resume-deferral'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -118,7 +118,7 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
   )
 
   if (deferredReattachSessionId) {
-    startDeferredSessionReattach(session, deferredReattachSessionId)
+    startDeferredSessionReattachUnlessHiddenAgentResume(session, deferredReattachSessionId)
   } else if (detachedRemoteLeafPtyId || detachedLivePtyId || eagerLivePtyId) {
     // Why: mirrored web-leaf panes must attach to their exact remote PTY, not spawn a replacement host tab.
     // eagerLivePtyId covers a still-live background PTY (e.g. an automation agent) with a live eager buffer to adopt.

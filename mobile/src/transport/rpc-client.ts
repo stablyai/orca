@@ -39,6 +39,8 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
    * implementation growing a counter it does not have.
    */
   getGeneration?: () => number
+  /** False when this transport would refuse an `envelope`; absent means it carries one. */
+  carriesRpcEnvelope?: () => boolean
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   notifyForeground: (reason?: ForegroundNudgeReason) => void
   /**

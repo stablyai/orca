@@ -1,11 +1,11 @@
-import { RELAY_BUILD_PLATFORMS, type RelayBuildPlatform } from './relay-artifacts'
+import { REMOTE_BUNDLE_PLATFORMS, type RemoteBundlePlatform } from './remote-bundle-artifacts'
 
 /**
  * Orca ships its own ripgrep for every relay platform (from @vscode/ripgrep-universal), so local,
  * WSL, and SSH searches never depend on the user having installed `rg`.
  */
-export const BUNDLED_RIPGREP_PLATFORMS: readonly RelayBuildPlatform[] = RELAY_BUILD_PLATFORMS
-export type BundledRipgrepPlatform = RelayBuildPlatform
+export const BUNDLED_RIPGREP_PLATFORMS: readonly RemoteBundlePlatform[] = REMOTE_BUNDLE_PLATFORMS
+export type BundledRipgrepPlatform = RemoteBundlePlatform
 /** Directory under the packaged resources root holding `<platform>/rg[.exe]`. */
 export const BUNDLED_RIPGREP_RESOURCE_DIR = 'ripgrep'
 /** Package directory holding the same layout in development checkouts. */

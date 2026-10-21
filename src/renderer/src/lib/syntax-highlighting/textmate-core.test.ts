@@ -19,6 +19,13 @@ describe('tokenizeLineWithinLimits', () => {
     expect(tokenize).toHaveBeenCalledTimes(3)
   })
 
+  it('allows a cold grammar more attempts to finish compiling', () => {
+    const tokenize = vi.fn(() => ({ stoppedEarly: tokenize.mock.calls.length < 6 }))
+
+    expect(tokenizeLineWithinLimits('x', tokenize, 10)).toEqual({ stoppedEarly: false })
+    expect(tokenize).toHaveBeenCalledTimes(6)
+  })
+
   it('skips a line too long to scan without tokenizing it', () => {
     const tokenize = vi.fn(() => ({ stoppedEarly: false }))
 

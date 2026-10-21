@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readRuntimeFileContent } from './runtime-file-client'
+import { readRuntimeFileContent } from './runtime-file-read-client'
 import {
   runtimeEnvironmentCall,
   installRuntimeFileClientEnvironment

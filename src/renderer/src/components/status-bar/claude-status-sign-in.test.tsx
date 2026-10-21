@@ -47,7 +47,7 @@ vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
   })),
   selectClaudeProviderAccount
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({}))
+
 vi.mock('@/lib/windows-terminal-capabilities', () => ({
   useWindowsTerminalCapabilities: () => ({ wslDistros: [], isLoading: false }),
   getWindowsTerminalCapabilityOwnerKey: () => 'local'

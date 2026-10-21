@@ -12,7 +12,7 @@ const runtime = vi.hoisted(() => ({
   payloads: new Array<(payload: FsChangedPayload) => void>(),
   errors: new Array<(error: Error) => void>()
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-watch-client', () => ({
   subscribeRuntimeFileChanges: runtime.subscribe
 }))
 vi.mock('@/runtime/runtime-host-contact-regained', () => ({
@@ -77,6 +77,7 @@ describe('editor runtime file watch recovery', () => {
         connectionId: undefined
       },
       expect.any(Function),
+      expect.any(Function),
       expect.any(Function)
     )
     expect(onPayload).not.toHaveBeenCalled()
@@ -105,11 +106,13 @@ describe('editor runtime file watch recovery', () => {
         connectionId: undefined
       },
       expect.any(Function),
+      expect.any(Function),
       expect.any(Function)
     )
     expect(onPayload).toHaveBeenCalledWith({
       worktreePath: '/notes',
-      events: [{ kind: 'overflow', absolutePath: '/notes' }]
+      events: [{ kind: 'overflow', absolutePath: '/notes' }],
+      resync: true
     })
     stop()
   })
@@ -132,7 +135,8 @@ describe('editor runtime file watch recovery', () => {
     expect(onPayload).toHaveBeenCalledOnce()
     expect(onPayload).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      events: [{ kind: 'overflow', absolutePath: '/repo' }]
+      events: [{ kind: 'overflow', absolutePath: '/repo' }],
+      resync: true
     })
     stop()
     expect(stopFresh).toHaveBeenCalledOnce()

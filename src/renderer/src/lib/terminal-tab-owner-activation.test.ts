@@ -2,16 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   activateWebRuntimeSessionTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: vi.fn(),
   resolveWebSessionVisibleTabId: vi.fn()
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin:
+    mocks.runtimeEnvironmentIdWithLegacyFallbackUnlessTwin
 }))
-vi.mock('@/runtime/web-runtime-session', () => ({
-  activateWebRuntimeSessionTab: mocks.activateWebRuntimeSessionTab,
+vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
+  activateWebRuntimeSessionTab: mocks.activateWebRuntimeSessionTab
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: (environmentId: string | null | undefined) =>
     Boolean(environmentId?.trim())
 }))
@@ -28,12 +31,12 @@ describe('activateTerminalTabOnOwner', () => {
   })
 
   it('tells the paired server that owns the workspace, not the focused one', () => {
-    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-owner')
+    mocks.runtimeEnvironmentIdWithLegacyFallbackUnlessTwin.mockReturnValue('env-owner')
     mocks.resolveWebSessionVisibleTabId.mockReturnValue('unified-visible')
 
     activateTerminalTabOnOwner('wt-1', 'web-terminal-host-tab', 'leaf-b')
 
-    expect(mocks.getRuntimeEnvironmentIdForWorktree).toHaveBeenCalledWith({}, 'wt-1')
+    expect(mocks.runtimeEnvironmentIdWithLegacyFallbackUnlessTwin).toHaveBeenCalledWith({}, 'wt-1')
     expect(mocks.activateWebRuntimeSessionTab).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab',
@@ -45,7 +48,7 @@ describe('activateTerminalTabOnOwner', () => {
   })
 
   it('makes no owner round trip for a workspace this client runs', () => {
-    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
+    mocks.runtimeEnvironmentIdWithLegacyFallbackUnlessTwin.mockReturnValue(null)
 
     activateTerminalTabOnOwner('wt-local', 'tab-1', null)
 

@@ -7,13 +7,20 @@ import type { Repo } from '../../../../shared/repo-types'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { useAppStore } from '@/store'
 import { McpConfigSection } from './McpConfigSection'
+import { toast } from 'sonner'
 
 const runtimeFiles = vi.hoisted(() => ({
   readRuntimeDirectory: vi.fn(),
   readRuntimeFileContent: vi.fn(),
   writeRuntimeFile: vi.fn()
 }))
-vi.mock('@/runtime/runtime-file-client', () => runtimeFiles)
+vi.mock('@/runtime/runtime-file-mutation-client', () => ({
+  readRuntimeDirectory: runtimeFiles.readRuntimeDirectory,
+  writeRuntimeFile: runtimeFiles.writeRuntimeFile
+}))
+vi.mock('@/runtime/runtime-file-read-client', () => ({
+  readRuntimeFileContent: runtimeFiles.readRuntimeFileContent
+}))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
@@ -33,7 +40,7 @@ const desktopFs = { readDir: vi.fn(), readFile: vi.fn(), writeFile: vi.fn() }
 beforeEach(() => {
   vi.clearAllMocks()
   runtimeFiles.readRuntimeDirectory.mockResolvedValue([])
-  runtimeFiles.writeRuntimeFile.mockResolvedValue(undefined)
+  runtimeFiles.writeRuntimeFile.mockResolvedValue({ ok: true })
   desktopFs.readDir.mockResolvedValue([{ name: '.mcp.json', isDirectory: false }])
   desktopFs.readFile.mockResolvedValue({ content: '{"mcpServers":{}}', isBinary: false })
   Object.defineProperty(window, 'api', {
@@ -91,7 +98,9 @@ it('inspects and creates a managed-host repo config on that host, never the desk
   expect(runtimeFiles.writeRuntimeFile).toHaveBeenCalledWith(
     expect.objectContaining({ target: { kind: 'environment', environmentId: 'host-a' } }),
     `${root}/.mcp.json`,
-    expect.any(String)
+    expect.any(String),
+    undefined,
+    expect.objectContaining({ allowMissing: true })
   )
   expect(desktopFs.writeFile).not.toHaveBeenCalled()
 })
@@ -121,4 +130,15 @@ it('does not offer the starter over a listed config the host refuses to read', a
 
   await screen.findByText('Remote file is too large')
   expect(screen.queryByRole('button', { name: /Add MCP config/ })).toBeNull()
+})
+
+it('does not replace a config another process created after the listing', async () => {
+  runtimeFiles.writeRuntimeFile.mockResolvedValue({ ok: false, diskConflict: 'changed' })
+  render(<McpConfigSection repo={repo} />)
+
+  fireEvent.click(await screen.findByRole('button', { name: /Add MCP config/ }))
+  fireEvent.click(await screen.findByRole('button', { name: /Create empty config/ }))
+
+  await waitFor(() => expect(toast.error).toHaveBeenCalled())
+  expect(toast.success).not.toHaveBeenCalled()
 })

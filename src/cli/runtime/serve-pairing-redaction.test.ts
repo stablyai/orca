@@ -64,8 +64,9 @@ describe('supervised pairing redaction', () => {
       written.push(String(chunk))
       return true
     })
-    redactingSpawn(spawn)('orca', [], { stdio: ['inherit', 'inherit', 'inherit', 'ipc'] })
-    expect(spawn).toHaveBeenCalledWith('orca', [], {
+    redactingSpawn(spawn)({ program: 'orca', stdio: ['inherit', 'inherit', 'inherit', 'ipc'] })
+    expect(spawn).toHaveBeenCalledWith({
+      program: 'orca',
       stdio: ['inherit', 'pipe', 'inherit', 'ipc']
     })
     stdout.end(`${READY.join('\n')}\n`)

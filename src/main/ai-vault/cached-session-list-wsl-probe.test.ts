@@ -1,15 +1,15 @@
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as childProcess from 'node:child_process'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 
-const { execFileMock, scanAiVaultSessionsInService } = vi.hoisted(() => ({
-  execFileMock: vi.fn(),
+const { runProcessMock, scanAiVaultSessionsInService } = vi.hoisted(() => ({
+  runProcessMock: vi.fn(),
   scanAiVaultSessionsInService: vi.fn()
 }))
 
-vi.mock('child_process', async (importOriginal) => ({
-  ...(await importOriginal<typeof childProcess>()),
-  execFile: execFileMock
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  runProcess: runProcessMock
 }))
 vi.mock('./session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -31,10 +31,16 @@ import {
 const NATIVE_CODEX_HOME = 'C:\\Users\\ada\\.codex'
 const WSL_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
 
+function exited(stdout: string, code: number | null = 0): ProcessResult {
+  return { code, signal: null, stdout, stderr: '', timedOut: false }
+}
+
+const FAILED = exited('', 1)
+
 function wslSpawns(): string[][] {
-  return execFileMock.mock.calls
-    .filter(([command]) => command === 'wsl.exe')
-    .flatMap(([, args]) => (Array.isArray(args) ? [args.map(String)] : []))
+  return runProcessMock.mock.calls
+    .filter(([spec]) => spec.program === 'wsl.exe')
+    .map(([spec]) => spec.args.map(String))
 }
 
 // Why the real wsl module: the point is the wsl.exe spawn count across the WHOLE
@@ -47,7 +53,7 @@ describe('AI Vault listing wsl.exe probes', () => {
     scanAiVaultSessionsInService.mockResolvedValue({ sessions: [], issues: [], scannedAt: 'scan' })
   })
   afterEach(() => {
-    execFileMock.mockReset()
+    runProcessMock.mockReset()
     _resetWslCachesForTests()
     resetAiVaultSessionListCacheForTests()
     vi.restoreAllMocks()
@@ -64,15 +70,23 @@ describe('AI Vault listing wsl.exe probes', () => {
         additionalCodexSessionsDirs: [join(NATIVE_CODEX_HOME, 'sessions')],
         wslHomeDirs: []
       }),
-      expect.anything()
+      expect.anything(),
+      expect.objectContaining({
+        work: expect.any(Function),
+        finish: expect.any(Function),
+        fail: expect.any(Function)
+      })
     )
   })
 
   it('still probes running distros when one is installed, so a later outage keeps the last-known-good list', async () => {
     _setWslCachesForTests({ distros: ['Ubuntu'] })
-    execFileMock.mockImplementation((_command, args, _options, callback) => {
-      callback(null, args.includes('--running') ? 'Ubuntu\n' : '/home/ada\n')
-    })
+    runProcessMock.mockImplementation(
+      ({ args }: { args: string[] }) =>
+        new Promise<ProcessResult>((resolve) => {
+          resolve(exited(args.includes('--running') ? 'Ubuntu\n' : '/home/ada\n'))
+        })
+    )
 
     await listAiVaultSessions()
 
@@ -82,12 +96,15 @@ describe('AI Vault listing wsl.exe probes', () => {
     ])
     expect(scanAiVaultSessionsInService).toHaveBeenCalledWith(
       expect.objectContaining({ wslHomeDirs: [WSL_HOME] }),
-      expect.anything()
+      expect.anything(),
+      expect.objectContaining({
+        work: expect.any(Function),
+        finish: expect.any(Function),
+        fail: expect.any(Function)
+      })
     )
 
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      callback(new Error('wsl unavailable'), '')
-    })
+    runProcessMock.mockResolvedValue(FAILED)
     await expect(filterPathsToRunningWslDistrosAsync([`${WSL_HOME}\\.codex`])).resolves.toEqual([
       `${WSL_HOME}\\.codex`
     ])
@@ -96,15 +113,18 @@ describe('AI Vault listing wsl.exe probes', () => {
   // Why: a rejected `--list --quiet` yields [] without caching. Treating that as "no distro
   // installed" would narrow the allowed roots delete/subagent validation trusts.
   it('still discovers WSL homes after the installed-distro probe was rejected', async () => {
-    execFileMock.mockImplementation((_command, args, _options, callback) => {
-      if (args.includes('--running')) {
-        callback(null, 'Ubuntu\n')
-      } else if (args.includes('--list')) {
-        callback(new Error('wsl.exe transient failure'), '')
-      } else {
-        callback(null, '/home/ada\n')
-      }
-    })
+    runProcessMock.mockImplementation(
+      ({ args }: { args: string[] }) =>
+        new Promise<ProcessResult>((resolve) => {
+          if (args.includes('--running')) {
+            resolve(exited('Ubuntu\n'))
+          } else if (args.includes('--list')) {
+            resolve(FAILED)
+          } else {
+            resolve(exited('/home/ada\n'))
+          }
+        })
+    )
     await expect(listWslDistrosAsync()).resolves.toEqual([])
 
     await expect(getAiVaultWslHomeDirs()).resolves.toEqual([WSL_HOME])

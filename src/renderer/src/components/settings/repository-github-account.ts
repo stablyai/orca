@@ -5,7 +5,8 @@ import type {
   GhAccountBindingValidationResult
 } from '../../../../shared/github/auth-types'
 import { ghAccountBindingsEqual } from '../../../../shared/github/account-binding'
-import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const LOCAL_GH_ACCOUNT_IPC_TIMEOUT_MS = 30_000
 

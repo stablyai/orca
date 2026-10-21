@@ -25,6 +25,10 @@
     {
       "name": "native-chat-design-tokens",
       "specifier": "./config/oxlint-plugins/native-chat-design-tokens.mjs"
+    },
+    {
+      "name": "ime-enter-guard",
+      "specifier": "./config/oxlint-plugins/ime-enter-guard.mjs"
     }
   ],
   "categories": {
@@ -176,6 +180,7 @@
       "files": ["src/renderer/src/**/*.{ts,tsx}"],
       "rules": {
         "renderer-scrollbar-style/require-styled-vertical-scrollbar": "error",
+        "ime-enter-guard/require-ime-guard": "error",
         "no-restricted-properties": [
           "error",
           {
@@ -211,6 +216,7 @@
         "react/globals": "off",
         "quadratic-buffer-concat/no-loop-carried-concat": "off",
         "renderer-scrollbar-style/require-styled-vertical-scrollbar": "off",
+        "ime-enter-guard/require-ime-guard": "off",
         "native-chat-design-tokens/no-arbitrary-font-size": "off",
         "native-chat-design-tokens/no-softened-foreground": "off",
         "native-chat-design-tokens/no-weakened-focus-ring": "off"

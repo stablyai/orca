@@ -15,6 +15,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
@@ -61,14 +62,14 @@ describe('foreground commands in the background-task channel', () => {
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
-      openCodexConnection: codex.openConnection,
-      readProcessStartTime: async () => 1_700_000_000_000,
+      ...scriptedCodexTransport(codex.openConnection),
       statusSink: {
         publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
         forget: (subject) => server.dropStructuredStatus(subject),
         publishChildWork: (subject, evidence, provider) =>
           server.ingestStructuredChildWork(subject, evidence, provider),
-        readChildWork: (subject) => server.getStructuredChildWorkViews(subject)
+        readChildWork: (subject) => server.getStructuredChildWorkViews(subject),
+        readChildWorkHandles: (subject) => server.getStructuredChildWorkHandles(subject)
       }
     })
     const params = hostTestAttachParams(null, { providerHandle: undefined })
@@ -211,7 +212,15 @@ describe('foreground commands in the background-task channel', () => {
     expect(rosters.at(-1)).toBeNull()
   })
 
-  it('refuses a Stop whose command still runs, and keeps the row stoppable', async () => {
+  /** The words of every note a Stop wrote, oldest first. */
+  async function stopNotes(host: StripHost): Promise<string[]> {
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    return page.page.items.flatMap((item) =>
+      item.body.kind === 'status' && item.body.failure ? [item.body.text] : []
+    )
+  }
+
+  it('notes a Stop whose command still runs, and keeps the row stoppable', async () => {
     const { host, rosters, turn, command, fence } = await rig({
       'thread/backgroundTerminals/list': () => ({
         data: [{ processId: '4242' }],
@@ -224,15 +233,16 @@ describe('foreground commands in the background-task channel', () => {
     await turn('turn/completed', 'turn-1')
 
     await expect(stopFromStrip(host, fence, '3')).resolves.toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_invalid' }
+      ok: true,
+      value: { cancelled: false }
     })
+    expect(await stopNotes(host)).toEqual(["The background task wasn't stopped."])
     expect(rosters.at(-1)).toMatchObject({
       children: [{ providerId: 'codex-command:primary:server', stoppable: true }]
     })
   })
 
-  it('answers a Stop that lost contact with Codex as unconfirmed, and keeps the row stoppable', async () => {
+  it('notes a Stop that lost contact with Codex as unconfirmed, and keeps the row stoppable', async () => {
     const { host, rosters, turn, command, fence } = await rig({
       'thread/backgroundTerminals/list': () => ({
         data: [{ processId: '4242' }],
@@ -247,9 +257,10 @@ describe('foreground commands in the background-task channel', () => {
     await turn('turn/completed', 'turn-1')
 
     await expect(stopFromStrip(host, fence, '4')).resolves.toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
+      ok: true,
+      value: { cancelled: false }
     })
+    expect(await stopNotes(host)).toEqual(['Cancellation was not confirmed.'])
     expect(rosters.at(-1)).toMatchObject({
       children: [{ providerId: 'codex-command:primary:server', stoppable: true }]
     })

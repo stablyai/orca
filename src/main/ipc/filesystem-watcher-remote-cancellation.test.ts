@@ -18,7 +18,10 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   onSshFilesystemProviderRegistered: () => () => {}
 }))
 
-import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
+import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
+import { getRemoteWatcherKey } from './filesystem-watcher-paths'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -119,6 +122,41 @@ describe('remote filesystem watcher cancellation', () => {
 
     handlers['fs:unwatchWorktree']({ sender: { id: 2 } }, args)
     expect(secondUnwatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops a re-watch that was unwatched while waiting out a cancelled SSH install', async () => {
+    let resolveFirst: ((unwatch: () => void) => void) | undefined
+    let firstSignal: AbortSignal | undefined
+    const lateUnwatch = vi.fn()
+    const watchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        (_rootPath, _callback, options?: { signal?: AbortSignal }) =>
+          new Promise<() => void>((resolve) => {
+            firstSignal = options?.signal
+            resolveFirst = resolve
+          })
+      )
+      .mockImplementation(() => Promise.resolve(vi.fn()))
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
+    const args = { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    const sender = createWatcherSender(1)
+    const first = Promise.resolve(handlers['fs:watchWorktree']({ sender }, args))
+    await Promise.resolve()
+    handlers['fs:unwatchWorktree']({ sender }, args)
+    await vi.waitFor(() => expect(firstSignal?.aborted).toBe(true))
+    const second = Promise.resolve(handlers['fs:watchWorktree']({ sender }, args))
+    await Promise.resolve()
+    handlers['fs:unwatchWorktree']({ sender }, args)
+
+    resolveFirst?.(lateUnwatch)
+    await Promise.all([first, second])
+
+    expect(watchMock).toHaveBeenCalledTimes(1)
+    expect(lateUnwatch).toHaveBeenCalledTimes(1)
+    expect(
+      watcherLifecycleState.remoteWatchers.get(getRemoteWatcherKey('conn-1', args.worktreePath))
+    ).toBeUndefined()
   })
 
   it('aborts pending SSH setup on sender destruction and watcher shutdown', async () => {

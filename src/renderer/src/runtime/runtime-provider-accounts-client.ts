@@ -4,7 +4,9 @@ import type {
 } from '../../../shared/managed-account-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { callRuntimeRpc, RuntimeRpcCallError, type RuntimeClientTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 // Mirrors OrcaRuntime.getAccountsSnapshot() / the accounts.subscribe payload.
 export type ProviderAccountsSnapshot = {
@@ -69,6 +71,8 @@ export function watchProviderAccounts(
   handlers: {
     onSnapshot: (snapshot: ProviderAccountsSnapshot) => void
     onError: (error: unknown) => void
+    /** Remote only: the stream ended after its first snapshot, so later usage is unverifiable. */
+    onClosedAfterSnapshot?: () => void
   }
 ): ProviderAccountsWatcher {
   if (target.kind === 'local') {
@@ -164,8 +168,13 @@ export function watchProviderAccounts(
           }
         },
         onClose: () => {
-          if (!closed && !receivedSnapshot) {
+          if (closed) {
+            return
+          }
+          if (!receivedSnapshot) {
             handlers.onError(new Error('Remote provider account subscription closed.'))
+          } else {
+            handlers.onClosedAfterSnapshot?.()
           }
         }
       }

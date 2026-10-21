@@ -1,26 +1,28 @@
 /** User-facing words for whether an SSH host's managed server serves it; all go through the catalog. */
 import type {
-  SSH_MANAGED_SERVER_PHASES,
   SshConnectionState,
-  SshManagedServerUpdateNote,
-  SshOldRelayProcesses,
+  SshManagedServerLinkedProject,
   SshTarget
 } from '../../../shared/ssh-types'
-import { oldRelayStopCommand } from '../../../shared/ssh-old-relay-stop-command'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { launchSessionEndedLine } from './ssh-host-launch-session-copy'
+import { bridgedTerminalsLine } from './ssh-host-bridged-terminals-copy'
+import { managedUpdateLine, withDetail } from './ssh-host-server-update-copy'
+import { blockedNodeDownload, nodeDownloadBlockedText } from './ssh-host-node-download-copy'
+import { settingUpLabel, sshHostServerReassurance } from './ssh-host-server-setup-copy'
 
 export type SshHostServerStatusLine = {
   text: string
   tone: 'muted' | 'warning' | 'destructive'
   /** Main's untranslated cause, with the host's orcad.log tail when there is one; shown on request. */
   detail?: string
-  /** How to end an older Orca's terminals on the host by hand: a lead-in and the exact command. */
-  stopHint?: { lead: string; command: string }
+  /** A muted second line, e.g. what moving onto the host does and doesn't touch. */
+  hint?: string
 }
 
 export function sshHostServerStatusLine(
-  target: Pick<SshTarget, 'orcadFence' | 'managedServerUnavailable'>,
+  target: Pick<SshTarget, 'label' | 'orcadFence' | 'managedServerUnavailable'>,
   state: Pick<SshConnectionState, 'managedServer'> | undefined
 ): SshHostServerStatusLine | null {
   const status = state?.managedServer
@@ -32,23 +34,40 @@ export function sshHostServerStatusLine(
       tone: 'warning',
       text: translate(
         'auto.components.settings.sshHostServer.notServing',
-        'Orca couldn’t confirm that the managed server is answering.'
+        'Orca couldn’t confirm that its server on {{host}} is answering.',
+        { host: target.label }
       ),
       detail: status.serving.detail
     }
   }
+  if (status?.kind === 'managed' && status.launchSessionEnded) {
+    return launchSessionEndedLine()
+  }
   if (status?.kind === 'managed' && status.update) {
     return managedUpdateLine(status.update)
+  }
+  if (status?.kind === 'managed' && status.linked?.length) {
+    return linkedProjectsLine(status.linked)
   }
   // A healthy managed server is the default; the card stays quiet unless something needs attention.
   if (status?.kind === 'managed' || (!status && target.orcadFence)) {
     return null
   }
   if (status?.kind === 'setting-up') {
-    return { tone: 'muted', text: settingUpLabel(status.phase) }
+    return {
+      tone: 'muted',
+      text: settingUpLabel(status.phase, target.label),
+      // Why only these phases: `starting` and `connecting` run on every reconnect, when nothing moves.
+      ...(status.phase === 'deploying' || status.phase === 'converting'
+        ? { hint: sshHostServerReassurance(target.label) }
+        : {})
+    }
   }
   if (status?.kind === 'relay') {
-    return unservedLine(status)
+    // An unverifiable bridged terminal keeps the unverifiable line: nothing proves it still answers.
+    return status.bridged && status.reason === 'relay_terminals_live'
+      ? bridgedTerminalsLine(status.detail)
+      : unservedLine(status)
   }
   if (target.managedServerUnavailable) {
     return unavailableLine(target.managedServerUnavailable.reason)
@@ -62,24 +81,7 @@ export function sshConnectFailureText(
   fallback: string
 ): string {
   const status = state?.managedServer
-  if (status?.kind !== 'relay') {
-    return fallback
-  }
-  const line = unservedLine(status)
-  return line.stopHint ? `${line.text} ${line.stopHint.lead} ${line.stopHint.command}` : line.text
-}
-
-/** Orca can end them itself only on a POSIX host whose census proved them live and named them. */
-export function canEndOldRelayTerminals(
-  state: Pick<SshConnectionState, 'managedServer'> | undefined
-): boolean {
-  const status = state?.managedServer
-  return (
-    status?.kind === 'relay' &&
-    status.reason === 'relay_terminals_live' &&
-    status.oldRelays?.hostOs === 'posix' &&
-    status.oldRelays.pids.length > 0
-  )
+  return status?.kind === 'relay' ? unservedLine(status).text : fallback
 }
 
 export function sshTargetConnectFailureText(
@@ -101,7 +103,7 @@ function sourceChangedLine(): SshHostServerStatusLine {
     tone: 'warning',
     text: translate(
       'auto.components.settings.sshHostServer.sourceChanged',
-      'An older version of Orca changed this host’s projects. Move those changes to its managed server, or keep the server’s version, to connect again.'
+      'An older version of Orca changed this host’s projects. Move those changes to this host’s Orca server, or keep the server’s version, to connect again.'
     )
   }
 }
@@ -110,6 +112,15 @@ function sourceChangedLine(): SshHostServerStatusLine {
 function unavailableLine(reason: string | undefined): SshHostServerStatusLine {
   if (reason === TUNNEL_UNAVAILABLE) {
     return tunnelUnavailableLine()
+  }
+  if (reason === 'runtime_noexec') {
+    return {
+      tone: 'destructive',
+      text: translate(
+        'auto.components.settings.sshHostServer.runtimeNoexec',
+        'This host doesn’t allow running programs from ~/.orca-remote, so Orca can’t start its server there. This usually means the home folder is mounted with noexec. Ask the host’s administrator to allow running programs there, then connect again.'
+      )
+    }
   }
   const cause = reason ? unavailableCause(reason) : null
   if (cause) {
@@ -189,64 +200,46 @@ function retryLine(): SshHostServerStatusLine {
   }
 }
 
-function managedUpdateLine(update: SshManagedServerUpdateNote): SshHostServerStatusLine {
-  switch (update.state) {
-    case 'host-newer':
-      return {
-        tone: 'muted',
-        text: translate(
-          'auto.components.settings.sshHostServer.hostNewer',
-          'Runs a managed Orca server from a newer Orca; it keeps that version.'
-        )
-      }
-    case 'deferred':
-      return {
-        tone: 'muted',
-        text: translate(
-          'auto.components.settings.sshHostServer.updateDeferredLater',
-          'Runs a managed Orca server; it updates on a later connect.'
-        ),
-        ...withDetail(update.detail)
-      }
-    case 'failed':
-      return {
-        tone: 'warning',
-        text: translate(
-          'auto.components.settings.sshHostServer.updateFailedPrevious',
-          'Runs a managed Orca server on its previous version; updating it failed.'
-        ),
-        ...withDetail(update.detail)
-      }
+function contactLostLine(): SshHostServerStatusLine {
+  return {
+    tone: 'warning',
+    text: translate(
+      'auto.components.settings.sshHostServer.setupContactLost',
+      'Orca lost contact with this host while setting up its server. Nothing on the host was stopped. Connect again to continue.'
+    )
   }
 }
 
-function settingUpLabel(phase: (typeof SSH_MANAGED_SERVER_PHASES)[number]): string {
-  switch (phase) {
-    case 'deploying':
-      return translate(
-        'auto.components.settings.sshHostServer.deploying',
-        'Setting up a managed Orca server…'
-      )
-    case 'converting':
-      return translate(
-        'auto.components.settings.sshHostServer.converting',
-        'Moving this host’s projects to its managed Orca server…'
-      )
-    case 'connecting':
-      return translate(
-        'auto.components.settings.sshHostServer.connecting',
-        'Connecting to the managed Orca server…'
-      )
-    case 'updating':
-      return translate(
-        'auto.components.settings.sshHostServer.updating',
-        'Updating managed server…'
-      )
-    case 'starting':
-      return translate(
-        'auto.components.settings.sshHostServer.starting',
-        'Starting managed server…'
-      )
+function heldMoveLine(): SshHostServerStatusLine {
+  return {
+    tone: 'warning',
+    text: translate(
+      'auto.components.settings.sshHostServer.moveHeld',
+      'Orca paused moving this host’s projects to its Orca server because it couldn’t confirm the server’s copy. Nothing is lost: the host keeps its projects and stays locked until the move finishes. Connect again to resume. If the server can’t come back, stop or forget it in Settings > Orca on your SSH hosts.'
+    )
+  }
+}
+
+/** Projects the server already had: this desktop's own tabs and automations for them stayed behind. */
+function linkedProjectsLine(
+  linked: readonly SshManagedServerLinkedProject[]
+): SshHostServerStatusLine {
+  const paths = linked.map((project) => project.path).join(', ')
+  const count = linked.reduce((total, project) => total + project.automations, 0)
+  return {
+    tone: 'warning',
+    text:
+      count > 0
+        ? translate(
+            'auto.components.settings.sshHostServer.linkedProjects',
+            'This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automations there were not moved, and worktrees it created there show as external worktrees.',
+            { paths, count }
+          )
+        : translate(
+            'auto.components.settings.sshHostServer.linkedProjectsNoAutomations',
+            'This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs there were not moved, and worktrees it created there show as external worktrees.',
+            { paths }
+          )
   }
 }
 
@@ -257,7 +250,6 @@ function unservedLine(
     case 'relay_terminals_live':
       return {
         tone: 'warning',
-        ...oldRelayStopHint(status.oldRelays),
         // Why: an absent count is unreported, never zero open terminals.
         text: status.terminals
           ? translate(
@@ -273,7 +265,6 @@ function unservedLine(
     case 'relay_terminals_unverifiable':
       return {
         tone: 'warning',
-        ...oldRelayStopHint(status.oldRelays),
         text: translate(
           'auto.components.settings.sshHostServer.olderTerminalsUnverifiable',
           'Orca couldn’t confirm that terminals started by an older version of Orca have exited. Reconnect to try again.'
@@ -289,36 +280,23 @@ function unservedLine(
         tone: 'destructive',
         text: translate(
           'auto.components.settings.sshHostServer.refusedBlocked',
-          'Not moved to a managed server: something on this host stops the move.'
+          'Orca isn’t set up on this host yet: something on the host stops the move.'
         ),
         ...withDetail(status.detail)
       }
     case 'deferred':
-    case 'failed':
-      return { ...retryLine(), ...withDetail(status.detail) }
+    case 'failed': {
+      const blocked = blockedNodeDownload(status)
+      return {
+        ...(blocked
+          ? { tone: 'destructive' as const, text: nodeDownloadBlockedText(blocked) }
+          : status.held
+            ? heldMoveLine()
+            : status.contactLost
+              ? contactLostLine()
+              : retryLine()),
+        ...withDetail(status.detail)
+      }
+    }
   }
-}
-
-function oldRelayStopHint(
-  oldRelays: SshOldRelayProcesses | undefined
-): Pick<SshHostServerStatusLine, 'stopHint'> {
-  if (!oldRelays) {
-    return {}
-  }
-  const lead =
-    oldRelays.pids.length > 0
-      ? translate(
-          'auto.components.settings.sshHostServer.oldTerminalsStopLeadPids',
-          'To end them on the host (process IDs {{pids}}), run:',
-          { pids: oldRelays.pids.join(', ') }
-        )
-      : translate(
-          'auto.components.settings.sshHostServer.oldTerminalsStopLead',
-          'To end them on the host, run:'
-        )
-  return { stopHint: { lead, command: oldRelayStopCommand(oldRelays.hostOs) } }
-}
-
-function withDetail(detail: string | undefined): Pick<SshHostServerStatusLine, 'detail'> {
-  return detail ? { detail } : {}
 }

@@ -2,6 +2,27 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
+export const getTerminalWindowsAdministratorSearchEntry = createLocalizedCatalog(() => [
+  {
+    title: translate('settings.terminal.windows.administratorLabel', 'Administrator mode'),
+    description: translate(
+      'settings.terminal.windows.administratorSearchDescription',
+      'See Orca’s Windows permissions or restart with administrator approval.'
+    ),
+    keywords: [
+      ...getTerminalWindowsShellSearchEntry()[0].keywords,
+      ...translateSearchKeyword('settings.terminal.windows.keywordAdmin', 'admin'),
+      ...translateSearchKeyword('settings.terminal.windows.keywordAdministrator', 'administrator'),
+      ...translateSearchKeyword('settings.terminal.windows.keywordElevated', 'elevated'),
+      ...translateSearchKeyword('settings.terminal.windows.keywordPermissions', 'permissions'),
+      ...translateSearchKeyword('settings.terminal.windows.keywordRestart', 'restart'),
+      ...translateSearchKeyword('settings.terminal.windows.keywordUac', 'uac', {
+        englishOnly: true
+      })
+    ]
+  }
+])
+
 export const getTerminalWindowsShellSearchEntry = createLocalizedCatalog(() => [
   {
     title: translate(

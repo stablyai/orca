@@ -95,6 +95,27 @@ describe('daemon launch through the AppImage file', () => {
   })
 })
 
+describe('daemon launch on the extracted AppImage copy', () => {
+  const extractedGeneration = {
+    generationRoot: '/cache/ns/gen',
+    nodePath: '/cache/ns/gen/resources/node-runtime/bin/node',
+    entryPath: '/cache/ns/gen/resources/app.asar.unpacked/out/main/daemon-entry.js',
+    identityPath: '/apps/Orca.AppImage/resources/app.asar.unpacked/out/main/daemon-entry.js'
+  }
+
+  it.each([false, true])('runs the bundled Node on the copy (scoped=%s)', (scoped) => {
+    spawnDaemonChildProcess({ ...options, extractedGeneration }, scoped)
+    expect(fork).not.toHaveBeenCalled()
+    const { program, args, env, stdio } = spawn.mock.calls[0][0]
+    expect(program).toBe(scoped ? 'systemd-run' : extractedGeneration.nodePath)
+    const node = args.indexOf(extractedGeneration.nodePath)
+    expect(args[node + 1]).toBe(extractedGeneration.entryPath)
+    expect(args[args.indexOf('--entry-path') + 1]).toBe(extractedGeneration.identityPath)
+    expect(env).not.toHaveProperty('ELECTRON_RUN_AS_NODE')
+    expect(stdio).toEqual(['ignore', 'ignore', 'pipe', 'ipc'])
+  })
+})
+
 describe('daemon launch environment', () => {
   const originalBus = process.env.DBUS_SESSION_BUS_ADDRESS
   afterEach(() => {

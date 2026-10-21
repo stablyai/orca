@@ -34,9 +34,13 @@ vi.mock('@/lib/client-creation-action-policy', () => ({
   })
 }))
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
-vi.mock('@/runtime/web-runtime-session', () => ({
-  createWebRuntimeSessionBrowserTab: vi.fn(),
-  createWebRuntimeSessionTerminal: vi.fn(),
+vi.mock('@/runtime/web-runtime-browser-creation', () => ({
+  createWebRuntimeSessionBrowserTab: vi.fn()
+}))
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: vi.fn()
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: () => false
 }))
 vi.mock('@/lib/open-mobile-emulator-tab', () => ({
@@ -128,12 +132,16 @@ describe('useTerminalCreateActions creation gates', () => {
       tabBarOrderByWorktree: { [WORKTREE_ID]: ['browser-1', 'term-a', 'browser-1'] },
       setTabBarOrder
     }
-    mocks.createTab.mockImplementation(() => {
-      terminals.push({ id: 'term-new' })
-      return { id: 'term-new' }
-    })
+    mocks.createTab.mockImplementation(
+      (_worktreeId: string, _groupId: undefined, _shell: string, options: { id: string }) => {
+        terminals.push({ id: options.id })
+      }
+    )
     renderActions().handleNewTab('/bin/zsh')
-    expect(mocks.createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, '/bin/zsh')
-    expect(setTabBarOrder).toHaveBeenCalledWith(WORKTREE_ID, ['browser-1', 'term-a', 'term-new'])
+    expect(mocks.createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, '/bin/zsh', {
+      id: expect.any(String)
+    })
+    const tabId = mocks.createTab.mock.calls[0][3].id
+    expect(setTabBarOrder).toHaveBeenCalledWith(WORKTREE_ID, ['browser-1', 'term-a', tabId])
   })
 })

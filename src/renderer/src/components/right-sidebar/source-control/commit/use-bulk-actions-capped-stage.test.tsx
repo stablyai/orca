@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({ bulkStage: vi.fn(), stageScope: vi.fn(), toast
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => 'ssh-1' }))
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-working-tree-client', () => ({
   bulkStageRuntimeGitPaths: (...args: unknown[]) => mocks.bulkStage(...args),
   stageRuntimeGitWorktreeScope: (...args: unknown[]) => mocks.stageScope(...args),
   bulkUnstageRuntimeGitPaths: vi.fn()

@@ -8,14 +8,7 @@ import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
-import type { RuntimeClientTarget } from './runtime-client-target'
-
-export { type RuntimeClientTarget } from './runtime-client-target'
-export {
-  hasRuntimeRpcErrorCode,
-  RuntimeRpcCallError,
-  unwrapRuntimeRpcResult
-} from './runtime-rpc-result'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const RUNTIME_COMPATIBILITY_CACHE_MAX = 32
 const RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS = 60_000
@@ -45,6 +38,7 @@ export async function callRuntimeRpc<TResult>(
     signal?: AbortSignal
     expectedEnvironmentPairingRevision?: number
     expectedEnvironmentRuntimeId?: string
+    beforeSend?: () => void
   } = {}
 ): Promise<TResult> {
   if (options.signal?.aborted) {
@@ -76,6 +70,7 @@ export async function callRuntimeRpc<TResult>(
   const nextParams = options.suppressFeatureInteraction
     ? withBrowserPaneUiRuntimeRpcSource(params)
     : params
+  options.beforeSend?.()
   const response =
     target.kind === 'local'
       ? await window.api.runtime.call({ method, params: nextParams })
@@ -275,6 +270,16 @@ export async function getRuntimeEnvironmentStatus(
     throw new Error('Runtime status probe resolved without a status.')
   }
   return entry.status
+}
+
+/** The capability as last probed, without waiting (for synchronous terminal replies); null before
+ *  the environment's first status probe. */
+export function readCachedRuntimeEnvironmentCapability(
+  environmentId: string,
+  capability: RuntimeCapability
+): boolean | null {
+  const status = runtimeCompatibilityChecks.get(environmentId.trim())?.status
+  return status ? status.capabilities?.includes(capability) === true : null
 }
 
 export async function runtimeEnvironmentSupportsCapability(

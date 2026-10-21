@@ -20,7 +20,7 @@ vi.mock('@/store', () => ({
   })
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => null }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-metadata-client', () => ({
   listRuntimeMarkdownDocuments: runtime.list,
   statRuntimePath: runtime.stat
 }))
@@ -189,15 +189,16 @@ describe('Markdown metadata from the existing worktree watcher', () => {
   )
 
   it('coalesces bursts and shares a fresh pending scan across split panes', async () => {
-    await render('host-a', 2)
+    const owner = 'host-split'
+    await render(owner, 2)
     let resolve: (documents: MarkdownDocument[]) => void = () => {}
     runtime.list.mockReturnValueOnce(
       new Promise<MarkdownDocument[]>((done) => {
         resolve = done
       })
     )
-    change([{ kind: 'create', absolutePath: target.filePath }])
-    change([{ kind: 'delete', absolutePath: '/repo/old.markdown' }])
+    change([{ kind: 'create', absolutePath: target.filePath }], owner)
+    change([{ kind: 'delete', absolutePath: '/repo/old.markdown' }], owner)
     await settle()
     expect(runtime.list).toHaveBeenCalledTimes(2)
     await act(async () => resolve([target]))
@@ -205,6 +206,34 @@ describe('Markdown metadata from the existing worktree watcher', () => {
       [target],
       [target]
     ])
+  })
+
+  it('keeps refreshing while membership changes never stop', async () => {
+    const owner = 'host-sustained'
+    await render(owner)
+    const initialCalls = runtime.list.mock.calls.length
+    // Watch batches arrive every 100 ms under sustained writes, faster than the 125 ms debounce.
+    for (let i = 0; i < 10; i++) {
+      change([{ kind: 'create', absolutePath: `/repo/n${i}.md` }], owner)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100)
+      })
+    }
+    expect(runtime.list.mock.calls.length).toBeGreaterThan(initialCalls)
+  })
+
+  it('does not let a remount join a scan that started before the latest change', async () => {
+    const owner = 'host-remount'
+    await render(owner)
+    runtime.list.mockImplementation(() => new Promise<MarkdownDocument[]>(() => {}))
+    change([{ kind: 'create', absolutePath: target.filePath }], owner)
+    await settle()
+    const callsWithScanInFlight = runtime.list.mock.calls.length
+    // A second change lands while that scan runs; the tab is then switched away and back.
+    change([{ kind: 'create', absolutePath: '/repo/second.md' }], owner)
+    await act(async () => root.render(null))
+    await render(owner)
+    expect(runtime.list.mock.calls.length).toBeGreaterThan(callsWithScanInFlight)
   })
 
   it.each(['unmount', 'owner change'])('cancels scheduled scans on %s', async (reason) => {

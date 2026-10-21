@@ -9,7 +9,8 @@
  * that would attribute other hosts' automations to the selected one.
  */
 
-import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   Automation,
   AutomationCreateInput,

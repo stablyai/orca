@@ -32,7 +32,7 @@ import {
   removeSettingsProjectFromAllHosts
 } from './settings-project-list'
 import { resolveSettingsHostScope } from './settings-host-scope'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 
 export function useSettingsStoreModel() {

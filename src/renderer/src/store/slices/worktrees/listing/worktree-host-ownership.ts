@@ -6,13 +6,14 @@ import { reuseEqualCatalogRows } from '../../worktree-catalog-reconciliation'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import {
   getRepoExecutionHostId,
-  getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
+  toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { toVisibleWorktree } from './worktree-catalog-visibility'
+import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
 import type { WorktreeHostMatchOptions, RepoHostSummary } from './worktree-slice-types'
 
 export function withRepoHostOwnership<
@@ -53,7 +54,7 @@ export function withRepoHostOwnership<
 }
 
 export function repoHostId(
-  state: Pick<AppState, 'repos' | 'settings'>,
+  state: Pick<AppState, 'repos' | 'settings' | 'runtimeEnvironments'>,
   repoId: string,
   hostId?: ExecutionHostId | null
 ): ExecutionHostId {
@@ -61,9 +62,12 @@ export function repoHostId(
   if (repo) {
     return getRepoExecutionHostId(repo)
   }
-  return hostId && parseExecutionHostId(hostId)
-    ? hostId
-    : getSettingsFocusedExecutionHostId(state.settings)
+  if (hostId && parseExecutionHostId(hostId)) {
+    return hostId
+  }
+  // Why: no row (or twins) names a host, so this app (a web client's only server), never focus.
+  const webHost = getPairedWebClientEnvironmentId(state)
+  return webHost ? toRuntimeExecutionHostId(webHost) : LOCAL_EXECUTION_HOST_ID
 }
 
 export function repoHasExactlyOneExecutionHostOwner(

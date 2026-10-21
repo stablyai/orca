@@ -1,9 +1,10 @@
 import { expect, it, vi } from 'vitest'
 import {
-  flushPendingEditorChange,
-  hasPendingEditorChange,
+  flushPendingEditorBuffer,
+  hasPendingEditorBufferChange,
   registerPendingEditorFlush
 } from './editor-pending-flush'
+import { EMPTY_EDITOR_BUFFER_VIEW_INDEX as NO_SHARING } from '@/store/slices/editor/buffers/editor-buffer-views'
 
 it('retains legacy replacement semantics and independently cleans up registrations', () => {
   const earlier = vi.fn()
@@ -11,17 +12,17 @@ it('retains legacy replacement semantics and independently cleans up registratio
   const removeEarlier = registerPendingEditorFlush('legacy', earlier)
   const removeLater = registerPendingEditorFlush('legacy', later)
   try {
-    flushPendingEditorChange('legacy')
+    flushPendingEditorBuffer(NO_SHARING, 'legacy')
     expect(earlier).not.toHaveBeenCalled()
     expect(later).toHaveBeenCalledTimes(1)
     removeEarlier()
-    flushPendingEditorChange('legacy')
+    flushPendingEditorBuffer(NO_SHARING, 'legacy')
     expect(later).toHaveBeenCalledTimes(2)
   } finally {
     removeEarlier()
     removeLater()
   }
-  flushPendingEditorChange('legacy')
+  flushPendingEditorBuffer(NO_SHARING, 'legacy')
   expect(later).toHaveBeenCalledTimes(2)
 })
 
@@ -31,14 +32,14 @@ it('checks pending changes across panes and retains the remaining registration o
   const removeEarlier = registerPendingEditorFlush('panes', earlier, () => true)
   const removeLater = registerPendingEditorFlush('panes', later, () => false)
   try {
-    expect(hasPendingEditorChange('panes')).toBe(true)
+    expect(hasPendingEditorBufferChange(NO_SHARING, 'panes')).toBe(true)
     removeLater()
-    flushPendingEditorChange('panes')
+    flushPendingEditorBuffer(NO_SHARING, 'panes')
     expect(earlier).toHaveBeenCalledTimes(1)
     expect(later).not.toHaveBeenCalled()
   } finally {
     removeEarlier()
     removeLater()
   }
-  expect(hasPendingEditorChange('panes')).toBe(false)
+  expect(hasPendingEditorBufferChange(NO_SHARING, 'panes')).toBe(false)
 })

@@ -1,11 +1,8 @@
 import { useCallback } from 'react'
 import { Loader2, Server, ServerOff } from 'lucide-react'
-import {
-  endOldRelayTerminalsLabel,
-  useEndOldRelayTerminalsAction,
-  useSshConnectFailureToast
-} from '@/ssh/ssh-old-relay-terminals-action'
+import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { Button } from '@/components/ui/button'
+import { SshHostNodeMirrorAction } from '@/components/settings/SshHostNodeMirrorAction'
 import { useAppStore } from '@/store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -89,6 +86,9 @@ export function TerminalSshReconnectOverlay({
   sshOwnerEnvironmentId = null
 }: TerminalSshReconnectOverlayProps): React.JSX.Element {
   const setSshConnectionState = useAppStore((store) => store.setSshConnectionState)
+  const managedServer = useAppStore(
+    (store) => store.sshConnectionStates.get(targetId)?.managedServer
+  )
   // Why: shared registry, not local state — the sidebar card control can dial the same
   // target, and the store status lags a click by one IPC hop.
   const connecting = useSshConnectInFlight(targetId)
@@ -99,10 +99,6 @@ export function TerminalSshReconnectOverlay({
     ? toRuntimeExecutionHostId(sshOwnerEnvironmentId)
     : toSshExecutionHostId(targetId)
 
-  const showConnectFailure = useSshConnectFailureToast()
-  const endOldTerminals = useEndOldRelayTerminalsAction(targetId, {
-    local: !sshOwnerEnvironmentId
-  })
   const handleConnect = useCallback(async () => {
     if (isSshConnectInFlight(targetId) || isConnectingSshStatus(status)) {
       return
@@ -129,14 +125,14 @@ export function TerminalSshReconnectOverlay({
         }
       }
     } catch (err) {
-      showConnectFailure(
+      toastSshConnectFailure(
         targetId,
         err,
         translate(
           'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectFailed',
           'SSH connection failed'
         ),
-        { local: !sshOwnerEnvironmentId }
+        sshOwnerEnvironmentId
       )
       // Why: a failed connect usually means the renderer's target metadata is
       // stale (target removed, or re-added under a new id). Resync it so the
@@ -154,7 +150,7 @@ export function TerminalSshReconnectOverlay({
         })().catch(() => {})
       }
     }
-  }, [setSshConnectionState, showConnectFailure, sshOwnerEnvironmentId, status, targetId])
+  }, [setSshConnectionState, sshOwnerEnvironmentId, status, targetId])
 
   // Why: z-40 clears pane-local chrome (focus rim z-30); bg-card is fully opaque so terminal text cannot paint through.
   return (
@@ -207,6 +203,15 @@ export function TerminalSshReconnectOverlay({
               {error}
             </div>
           ) : null}
+          {!targetRemoved ? (
+            <div className="mt-2 empty:hidden">
+              <SshHostNodeMirrorAction
+                targetId={targetId}
+                status={managedServer}
+                ownerEnvironmentId={sshOwnerEnvironmentId}
+              />
+            </div>
+          ) : null}
         </div>
         {targetRemoved ? (
           <Button
@@ -226,34 +231,21 @@ export function TerminalSshReconnectOverlay({
             )}
           </Button>
         ) : (
-          <>
-            {endOldTerminals && !targetRemoved ? (
-              <Button
-                className="shrink-0"
-                size="sm"
-                variant="outline"
-                onClick={endOldTerminals}
-                disabled={isConnecting}
-              >
-                {endOldRelayTerminalsLabel()}
-              </Button>
-            ) : null}
-            <Button
-              className="shrink-0"
-              size="sm"
-              onClick={showConnect ? () => void handleConnect() : undefined}
-              disabled={!showConnect || isConnecting}
-            >
-              {!showConnect || isConnecting ? (
-                <>
-                  <Loader2 className="size-3.5 animate-spin" />
-                  {sshConnectingLabel()}
-                </>
-              ) : (
-                sshConnectVerb(status)
-              )}
-            </Button>
-          </>
+          <Button
+            className="shrink-0"
+            size="sm"
+            onClick={showConnect ? () => void handleConnect() : undefined}
+            disabled={!showConnect || isConnecting}
+          >
+            {!showConnect || isConnecting ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                {sshConnectingLabel()}
+              </>
+            ) : (
+              sshConnectVerb(status)
+            )}
+          </Button>
         )}
       </div>
     </div>

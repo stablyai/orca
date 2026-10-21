@@ -110,7 +110,7 @@ describe('per-job path classification', () => {
   })
 
   it('skips every expensive job for docs-only diffs', () => {
-    expectClassification(['README.md', 'docs/readme/README.zh-CN.md'], {})
+    expectClassification(['docs/assets/wechat-qr-group8.jpg', 'LICENSE'], {})
   })
 
   it('runs packaging and always-on jobs for product source, not git/xterm/shell lanes', () => {
@@ -141,6 +141,7 @@ describe('per-job path classification', () => {
   })
 
   it('runs the Codex index-heal contract only when the heal or its transport changes', () => {
+    expectClassification(['src/main/codex/codex-app-server-session.test.ts'], {})
     expectClassification(['src/main/codex/codex-session-index-heal.ts'], {
       codex_index_heal_contract: true,
       package: true,
@@ -202,11 +203,19 @@ describe('per-job path classification', () => {
     })
   })
 
-  it('runs native package jobs only for the platform that ships the changed native', () => {
-    expectClassification(['native/windows-cli-launcher/src/main.rs'], {
-      package_windows: true
+  it('runs dependency isolation only when what packages may resolve changes', () => {
+    expectClassification(['config/scripts/undeclared-dependency-resolution.test.ts'], {
+      dependency_isolation: true
     })
-    expectClassification(['native/computer-use-linux/runtime.py'], {
+    expect(classifyPrJobs(['pnpm-workspace.yaml']).dependency_isolation).toBe(true)
+    expect(classifyPrJobs(['config/pnpmfile.cjs']).dependency_isolation).toBe(true)
+    expect(classifyPrJobs(['src/renderer/src/App.tsx']).dependency_isolation).toBe(false)
+  })
+
+  it('runs native package jobs only for the platform that ships the changed native', () => {
+    expectClassification(['native/windows-cli-launcher/src/main.rs'], { package_windows: true })
+    expectClassification(['native/computer-use-linux/runtime.py'], { package: true })
+    expectClassification(['native/wayland-clipboard/wayland-clipboard.c'], {
       package: true
     })
     expectClassification(['native/computer-use-macos/Package.swift'], {})
@@ -219,6 +228,7 @@ describe('per-job path classification', () => {
       'config/scripts/process-failure-message.mjs',
       'config/scripts/space-sharing-copy.mjs',
       '.github/actions/prepare-linux-package-fixture/action.yml',
+      '.github/actions/prepare-wayland-clipboard/action.yml',
       'config/docker/cli-launch-contract/Dockerfile',
       'config/docker/cli-launch-contract/run-cli-case.sh',
       'config/docker/headless-pairing/Dockerfile',
@@ -476,7 +486,7 @@ describe('per-job path classification', () => {
   })
 
   it('leaves diffs the audits never read out of static analysis', () => {
-    expect(classifyPrJobs(['README.md']).static_analysis).toBe(false)
+    expect(classifyPrJobs(['docs/assets/logo.png']).static_analysis).toBe(false)
     expect(classifyPrJobs(['cloud/apps/relay/src/index.ts']).static_analysis).toBe(false)
   })
 
@@ -612,18 +622,6 @@ describe('PR Checks skip wiring', () => {
     const [installStep] = action.runs.steps
     expect(installStep['working-directory']).toBe('mobile')
     expect(installStep.run).toContain('--frozen-lockfile')
-  })
-
-  it('keeps the root and README guards on docs-only PRs without another runner', () => {
-    const detector = prWorkflow.jobs.code_paths
-    expect(detector.if).toBeUndefined()
-    expect(detector.needs).toBeUndefined()
-    for (const name of ['Reject new root-level files and folders', 'Check README local links']) {
-      const step = detector.steps.find((candidate) => candidate.name === name)
-      expect(step).toBeDefined()
-      expect(step.if).toBeUndefined()
-    }
-    expect(prWorkflow.jobs.root_directory_guard).toBeUndefined()
   })
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {

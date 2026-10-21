@@ -4,7 +4,7 @@ import {
   resolveRecentWorkspaceTabStatus,
   type RecentWorkspaceTabRow
 } from './recent-workspace-tab-rows'
-import type { TabPaneInputSources } from '@/components/sidebar/smart-attention'
+import type { TabPaneInputSources } from '../../../shared/sidebar-list/smart-attention'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,

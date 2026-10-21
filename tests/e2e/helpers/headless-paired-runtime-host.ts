@@ -187,7 +187,14 @@ export async function launchHeadlessPairedRuntimeHost(
       },
       dispose: async () => {
         await cleanupHeadlessHostResources([
-          ...(serveProcessOpen ? [() => closeElectronAppForE2E(serveProcess)] : []),
+          ...(serveProcessOpen
+            ? [
+                () =>
+                  closeElectronAppForE2E(serveProcess, {
+                    cleanupDaemonsForUserDataDir: userDataDir
+                  })
+              ]
+            : []),
           () => cleanupE2EDaemons(userDataDir),
           () => preserveProfileLogs(userDataDir),
           () => rmSync(userDataDir, PROFILE_REMOVAL),
@@ -206,7 +213,9 @@ export async function launchHeadlessPairedRuntimeHost(
   } catch (error) {
     try {
       await cleanupHeadlessHostResources([
-        ...(app ? [() => closeElectronAppForE2E(app)] : []),
+        ...(app
+          ? [() => closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })]
+          : []),
         () => cleanupE2EDaemons(userDataDir),
         () => preserveProfileLogs(userDataDir),
         () => rmSync(userDataDir, PROFILE_REMOVAL),

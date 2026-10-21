@@ -4,6 +4,7 @@ import {
   ProfileStateIndeterminateWriteError,
   withProfileStateWriteTransaction
 } from './profile-state-write-transaction'
+import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
 
 describe('profile state write transaction ownership', () => {
   it('preserves SQLITE_FULL after SQLite rolls back the transaction itself', () => {
@@ -22,6 +23,67 @@ describe('profile state write transaction ownership', () => {
       withProfileStateWriteTransaction(db, () => db.exec("INSERT INTO writes VALUES ('small')"))
       expect(db.prepare('SELECT COUNT(*) AS count FROM writes').get()).toMatchObject({ count: 1 })
     } finally {
+      db.close()
+    }
+  })
+
+  // What a WAL commit on a full disk reports: node:sqlite's SQLITE_FULL after SQLite rolled back
+  // (reproduced on a 2 MB tmpfs: COMMIT throws errcode 13, isTransaction is false, rows unchanged).
+  function failCommitAfterAutoRollback(db: Database, failure: Error): () => void {
+    const exec = db.exec.bind(db)
+    const injected = vi.spyOn(db, 'exec').mockImplementation((sql) => {
+      if (sql === 'COMMIT') {
+        exec('ROLLBACK')
+        throw failure
+      }
+      exec(sql)
+    })
+    return () => injected.mockRestore()
+  }
+
+  it('reports a commit that ran out of disk as a failed write the next write can follow', () => {
+    const db = new Database(':memory:')
+    db.exec('CREATE TABLE writes (id INTEGER)')
+    const full = Object.assign(new Error('database or disk is full'), {
+      code: 'ERR_SQLITE_ERROR',
+      errcode: 13
+    })
+    const restore = failCommitAfterAutoRollback(db, full)
+    let thrown: unknown
+    try {
+      withProfileStateWriteTransaction(db, () => db.exec('INSERT INTO writes VALUES (1)'))
+    } catch (error) {
+      thrown = error
+    } finally {
+      restore()
+    }
+    try {
+      expect(thrown).toBe(full)
+      expect(profileStateWriterFailureOutcome(thrown)).toBe('known-failure')
+      expect(db.isTransaction).toBe(false)
+      expect(db.prepare('SELECT COUNT(*) AS count FROM writes').get()).toMatchObject({ count: 0 })
+      withProfileStateWriteTransaction(db, () => db.exec('INSERT INTO writes VALUES (2)'))
+      expect(db.prepare('SELECT COUNT(*) AS count FROM writes').get()).toMatchObject({ count: 1 })
+    } finally {
+      db.close()
+    }
+  })
+
+  it('keeps any other failed commit indeterminate even after SQLite rolled back', () => {
+    const db = new Database(':memory:')
+    db.exec('CREATE TABLE writes (id INTEGER)')
+    // e.g. a failed fsync: the commit frame may already be on disk.
+    const ioerr = Object.assign(new Error('disk I/O error'), {
+      code: 'ERR_SQLITE_ERROR',
+      errcode: 1034
+    })
+    const restore = failCommitAfterAutoRollback(db, ioerr)
+    try {
+      expect(() =>
+        withProfileStateWriteTransaction(db, () => db.exec('INSERT INTO writes VALUES (1)'))
+      ).toThrow(ProfileStateIndeterminateWriteError)
+    } finally {
+      restore()
       db.close()
     }
   })

@@ -15,11 +15,13 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveCodexShellLaunchPreflightCommand } from './codex-shell-launch-preflight'
 import {
+  CODEX_COMMAND_IDENTITY_ENV_KEYS,
   getFishCodexShellLaunchPreflight,
   getPosixCodexShellLaunchPreflight,
   getPowerShellCodexShellLaunchPreflight
 } from '../../shared/codex-shell-function'
 import { fishRequirementViolation, resolveFishBinary } from '../../shared/fish-binary-requirement'
+import { getPowerShellAgentWrappers } from '../../shared/powershell-agent-wrappers'
 
 const roots: string[] = []
 const zshAvailable = existsSync('/bin/zsh')
@@ -177,7 +179,9 @@ function expectNamedAliasSurvives(shell: string, enableAliases: string): void {
       env: {
         ...process.env,
         PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-        ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test')
+        ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test'),
+        // Why: a run inside an Orca terminal inherits its identity, which the wrapper forwards.
+        ...Object.fromEntries(CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => [key, '']))
       }
     }
   )
@@ -392,7 +396,7 @@ describe('PowerShell Codex shell launch preflight', () => {
         [
           '$ErrorActionPreference = "Stop"',
           '$PSNativeCommandUseErrorActionPreference = $true',
-          getPowerShellCodexShellLaunchPreflight(),
+          getPowerShellAgentWrappers(),
           'codex'
         ].join('\n')
       ],
@@ -563,7 +567,7 @@ describe.skipIf(process.platform === 'win32')('Codex preflight paths containing 
 
       const result = spawnSync(
         'pwsh',
-        ['-NoLogo', '-NoProfile', '-Command', `${getPowerShellCodexShellLaunchPreflight()}\ncodex`],
+        ['-NoLogo', '-NoProfile', '-Command', `${getPowerShellAgentWrappers()}\ncodex`],
         {
           encoding: 'utf-8',
           env: {

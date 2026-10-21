@@ -1,3 +1,4 @@
+import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
   markStructuredAgentSessionLaunchesPublished,
@@ -21,7 +22,8 @@ import {
 import { clearWebSessionCloseIntent, recordWebSessionCloseIntent } from './web-session-close-intent'
 import type { WebSessionIntentOwner } from './web-session-intent-owner'
 import { captureWebSessionIntentOwner } from './web-runtime-session-environment'
-import { callRuntimeRpc, type RuntimeClientTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 const inFlightRetirements = new Map<string, Promise<boolean>>()
@@ -110,13 +112,15 @@ export function beginStructuredAgentSessionTabClose(args: {
   worktreeId: string
   sessionId: string
   provisional: boolean
+  layoutOwner: StructuredLaunchSlotOwner
   onError?: (error: unknown) => void
 }): void {
   if (args.provisional) {
     markStructuredAgentSessionLaunchCancelled(
       args.worktreeId,
       args.sessionId,
-      executionHostIdForStructuredTarget(args.target)
+      executionHostIdForStructuredTarget(args.target),
+      args.layoutOwner
     )
     discardStructuredAgentSessionChatSends(args.sessionId)
   } else {

@@ -4,7 +4,7 @@ import {
   getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff,
   getRuntimeGitDiff
-} from '@/runtime/runtime-git-client'
+} from '@/runtime/runtime-git-diff-client'
 import type { OpenFile } from '@/store/slices/editor'
 import type {
   GitBranchChangeEntry,

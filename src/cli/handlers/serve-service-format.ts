@@ -1,3 +1,4 @@
+import { SERVE_GAVE_UP_ADVICE } from '../runtime/serve-supervisor-brake'
 import type { ServeServiceStatus } from './serve-service'
 
 export function formatServeServiceInstall(result: Record<string, unknown>): string {
@@ -30,9 +31,7 @@ export function formatServeServiceStatus(status: ServeServiceStatus): string {
     `Unit: ${status.unitPath}${status.installed ? '' : ' (missing)'}`
   ]
   if (status.gaveUp) {
-    lines.push(
-      `Gave up: ${status.gaveUp} Run \`orca serve service install\` again after fixing the cause.`
-    )
+    lines.push(`Gave up: ${status.gaveUp} ${SERVE_GAVE_UP_ADVICE}`)
   }
   return lines.join('\n')
 }

@@ -65,6 +65,7 @@ export async function publishMultiplexInitialSnapshot(
     ...((stream.supportsOutputPause || stream.inputSessionId !== null) && {
       capabilities: {
         ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {}),
+        ...(stream.supportsOutputPauseDropNotice ? { outputPauseDropNotice: 1 as const } : {}),
         ...(stream.inputSessionId !== null ? { inputAck: 1 as const } : {})
       }
     }),

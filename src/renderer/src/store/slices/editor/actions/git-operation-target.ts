@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import type { AppState } from '../../../types'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { GitRuntimeOperationOptions } from '../types/git-runtime-operation'
 
 export const UNRESOLVED_GIT_HOST_ERROR =

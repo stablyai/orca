@@ -33,6 +33,7 @@ import {
   makeFolderWorkspace,
   makeHeadlessTerminalLayout,
   makeWorkspaceSessionWithHeadlessTerminal,
+  spawnedPtyEnv,
   store
 } from '../orca-runtime-test-fixtures.spec'
 
@@ -392,7 +393,11 @@ describe('OrcaRuntimeService', () => {
       spawnIntent: 'automatic-restore'
     })
     expect(spawn).toHaveBeenLastCalledWith(
-      expect.objectContaining({ spawnIntent: 'automatic-restore' })
+      expect.objectContaining({
+        spawnIntent: 'automatic-restore',
+        // The spawn names the session it resumes, so the host can publish it before a hook.
+        resumeProviderSession: expect.objectContaining({ id: 'provider-session-intent' })
+      })
     )
 
     await runtime.ensureAgentSession({
@@ -493,7 +498,7 @@ describe('OrcaRuntimeService', () => {
       | { command?: string; launchAgent?: string; env?: Record<string, string> }
       | undefined
     expect(spawnCall?.command).toBe("codex '--dangerously-bypass-approvals-and-sandbox'")
-    expect(spawnCall?.env).toMatchObject({
+    expect(spawnedPtyEnv(spawnCall)).toMatchObject({
       CODEX_PROFILE: 'captured',
       ORCA_WORKTREE_ID: TEST_WORKTREE_ID
     })
@@ -706,9 +711,9 @@ describe('OrcaRuntimeService', () => {
       })
     })
 
-    await expect(
-      runtime.createTerminal(undefined, { startupAgent: 'cursor', rendererBacked: true })
-    ).rejects.toThrow(/requires a workspace selector/)
+    await expect(runtime.createTerminal(undefined, { startupAgent: 'cursor' })).rejects.toThrow(
+      /requires a workspace selector/
+    )
   })
 
   // Why: folder workspaces have no repo, so command sniffing skipped them entirely

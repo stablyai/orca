@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
-import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { finalizeHostTerminalSnapshot } from './__fixtures__/web-session-terminal-host-finalization'
 import {
   makeState as makeTabsSyncState,
@@ -607,10 +607,7 @@ describe('web session terminal orphan adoption regressions', () => {
         verdict === 'pending-without-proof'
           ? {
               ...projected,
-              tabs: [
-                projected.tabs[0],
-                { ...snapshot.tabs[1], status: 'ready', terminal: 'term-hold' }
-              ]
+              tabs: [projected.tabs[0], snapshot.tabs[1]]
             }
           : projected
       )

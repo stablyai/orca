@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { OrcadMigrationClientStatePayload } from '../../../shared/orcad-migration-client-state'
+import type { OrcadMigrationClientStatePayload } from '../../../shared/orcad-migration/orcad-migration-client-state'
 import {
   applyPreparedOrcadMigrationClientState,
   prepareOrcadMigrationClientState

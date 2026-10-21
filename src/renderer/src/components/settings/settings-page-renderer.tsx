@@ -94,7 +94,7 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
         onSelectSection={actions.scrollToSection}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {!model.isWebClient &&
         shouldShowSettingsHostScopePicker(model.settingsHostScope, model.runtimeEnvironments) ? (
           <SettingsHostScopePicker

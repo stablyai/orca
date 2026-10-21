@@ -1,6 +1,6 @@
+import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
-import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport-types'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import type { ReplayingPanesRef } from './replay-guard'
 import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'
@@ -10,15 +10,14 @@ import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
-import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
-import type { PtyTransportRecoveryState } from './pty-transport-types'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
 
 export type PtyPaneStartup = {
   command: string
@@ -32,6 +31,8 @@ export type PtyPaneStartup = {
   resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
+  /** The agent launch the pane's own spawn starts, instead of `command`. */
+  agentLaunch?: AgentPaneLaunchRequest
   /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
   agentArgsOverride?: string | null
   draftPrompt?: string
@@ -43,8 +44,6 @@ export type PtyPaneStartup = {
   initialAgentStatus?: { agent: TuiAgent; prompt: string }
   /** Show the restored-session banner when this startup command mounts. */
   showSessionRestoredBanner?: boolean
-  /** Initial startup may be paired with a setup split that changes its grid. */
-  waitForSetupSplitDirection?: SetupSplitDirection
 } | null
 
 export type PaneProcessExit = {
@@ -106,12 +105,7 @@ export type PtyConnectionDeps = {
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void
-  markWorktreeUnread: (worktreeId: string) => void
-  markTerminalTabUnread: (tabId: string, reason: AgentAttentionUnreadReason) => void
-  markTerminalPaneUnread: (paneKey: string, reason: AgentAttentionUnreadReason) => void
-  clearWorktreeUnread: (worktreeId: string) => void
-  clearTerminalTabUnread: (tabId: string) => void
-  clearTerminalPaneUnread: (paneKey: string) => void
+  markTerminalBell: WorkspaceAttentionSlice['markTerminalBell']
   onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
   // Why: the renderer dispatches two notification sources — BEL from the PTY
   // byte stream and agent-task-complete on the working→idle title transition.

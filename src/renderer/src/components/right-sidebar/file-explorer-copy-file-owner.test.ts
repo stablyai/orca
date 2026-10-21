@@ -9,7 +9,7 @@ const { writeClipboardFile, toastError } = vi.hoisted(() => ({
 }))
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-file-client', () => ({ downloadRuntimeFile: vi.fn() }))
+vi.mock('@/runtime/runtime-file-read-client', () => ({ downloadRuntimeFile: vi.fn() }))
 
 const file: TreeNode = {
   name: 'file.txt',

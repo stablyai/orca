@@ -1,7 +1,6 @@
 import type { ComponentProps, JSX, ReactNode } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
 
 /** Shared two-column tip layout: copy and actions on the left, a feature visual on the right. */
 export function FeatureTipDialogFrame({
@@ -9,25 +8,19 @@ export function FeatureTipDialogFrame({
   onOpenChange,
   onOpenAutoFocus,
   visual,
-  tall = false,
   children
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onOpenAutoFocus: ComponentProps<typeof DialogContent>['onOpenAutoFocus']
   visual: ReactNode
-  /** Room for an extra row of copy without scrolling. */
-  tall?: boolean
   children: ReactNode
 }): JSX.Element {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         surface="feature-tip"
-        className={cn(
-          '!flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-4xl md:!flex-row',
-          tall ? 'md:!h-[min(33rem,calc(100vh-2rem))]' : 'md:!h-[min(27rem,calc(100vh-2rem))]'
-        )}
+        className="!flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-4xl md:!h-[min(27rem,calc(100vh-2rem))] md:!flex-row"
         showCloseButton
         onOpenAutoFocus={onOpenAutoFocus}
       >

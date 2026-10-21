@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'
 import {
   createTestStore,
@@ -9,6 +10,10 @@ import {
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { resolveAgentAttention } from '@/attention/agent-attention-policy'
+
+// The user is present unless a test says otherwise.
+beforeEach(() => setPresenceGated(false))
+afterEach(() => setPresenceGated(true))
 
 const WORKSPACE = 'wt-1'
 const TAB = 'tab-1'
@@ -126,30 +131,7 @@ describe('createTerminalAttentionSurface', () => {
     expect(surfaceFor(store).resolveViewedSubjectKey(TAB)).toBeNull()
   })
 
-  it('counts only this workspace tabs when collecting outstanding attention', () => {
-    const store = seedLiveTab()
-    const foreignPane = makePaneKey('tab-elsewhere', OTHER_LEAF)
-    store.setState({
-      unreadAgentCompletionPanes: { [PANE]: 'agent-completion', [foreignPane]: 'agent-completion' },
-      unreadTerminalTabs: { [TAB]: 'terminal-bell', 'tab-elsewhere': 'terminal-bell' }
-    })
-    expect(surfaceFor(store).collectWorkspaceAttentionRemainder(WORKSPACE)).toEqual({
-      hasSurfaces: true,
-      unreadSubjectKeys: [PANE],
-      unreadGroupIds: [TAB]
-    })
-  })
-
-  it('reports a workspace with no tabs as owning no surfaces', () => {
-    const store = createTestStore()
-    expect(surfaceFor(store).collectWorkspaceAttentionRemainder(WORKSPACE)).toEqual({
-      hasSurfaces: false,
-      unreadSubjectKeys: [],
-      unreadGroupIds: []
-    })
-  })
-
-  it('treats only the active leaf of the active tab as viewed', () => {
+  it('treats every split pane of the tab on screen as viewed', () => {
     const store = seedLiveTab()
     store.setState({ activeWorktreeId: WORKSPACE, activeTabId: TAB })
     const hidden = createTerminalAttentionSurface(store.getState())
@@ -160,7 +142,7 @@ describe('createTerminalAttentionSurface', () => {
         workspaceId: WORKSPACE,
         surfaceKey: makePaneKey(TAB, OTHER_LEAF)
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 
   describe('unread on a settled turn', () => {
@@ -173,8 +155,7 @@ describe('createTerminalAttentionSurface', () => {
           subject: { workspaceId, surfaceKey },
           reason: 'agent-completion',
           settlesTurn: true,
-          hasFreshActivityEvidence: false,
-          groupAttentionEnabled: true
+          hasFreshActivityEvidence: false
         },
         createTerminalAttentionSurface(store.getState())
       )
@@ -281,8 +262,8 @@ describe('createTerminalAttentionSurface', () => {
       expect(unreadFor(seedMainSplit(), WORKSPACE, PANE)).toBe(false)
     })
 
-    it('marks an inactive split leaf of the viewed main tab unread', () => {
-      expect(unreadFor(seedMainSplit(), WORKSPACE, makePaneKey(TAB, OTHER_LEAF))).toBe(true)
+    it('does not mark an inactive split leaf of the viewed main tab unread', () => {
+      expect(unreadFor(seedMainSplit(), WORKSPACE, makePaneKey(TAB, OTHER_LEAF))).toBe(false)
     })
   })
 })

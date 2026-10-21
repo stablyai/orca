@@ -42,4 +42,29 @@ describe('getExternalEditorOpenCapability', () => {
       ).toEqual({ allowed: false, reason: 'remote-runtime' })
     }
   )
+
+  it('opens a server workspace through the SSH host that holds it, and only that server', () => {
+    const runtimeSshHost = { environmentId: 'managed', sshTargetId: 'box' }
+    expect(
+      getExternalEditorOpenCapability({
+        command: 'code',
+        runtimeEnvironmentId: 'managed',
+        runtimeSshHost
+      })
+    ).toEqual({ allowed: true, remote: true, sshTargetId: 'box' })
+    expect(
+      getExternalEditorOpenCapability({
+        command: 'zed',
+        runtimeEnvironmentId: 'managed',
+        runtimeSshHost
+      })
+    ).toEqual({ allowed: false, reason: 'local-only-editor' })
+    expect(
+      getExternalEditorOpenCapability({
+        command: 'code',
+        runtimeEnvironmentId: 'other',
+        runtimeSshHost
+      })
+    ).toEqual({ allowed: false, reason: 'remote-runtime' })
+  })
 })

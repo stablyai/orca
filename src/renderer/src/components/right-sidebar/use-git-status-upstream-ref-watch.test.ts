@@ -7,7 +7,7 @@ const { runtimeState, setWatch } = vi.hoisted(() => ({
 }))
 let cleanup: (() => void) | undefined
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-status-client', () => ({
   setRuntimeGitStatusUpstreamRefWatch: setWatch
 }))
 

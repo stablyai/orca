@@ -4,19 +4,6 @@ import { agentSessionOperationKey } from '../../shared/agent-session-operation-l
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import type { AgentSessionConversationCommandRecord } from '../../shared/agent-session-conversation-command'
 
-export function commitConversationCommandRecord(
-  state: AgentSessionStoreState,
-  sessionId: string,
-  fence: number,
-  command: AgentSessionConversationCommandRecord
-): void {
-  const record = state.records.get(sessionId)
-  if (!record || record.lease.runtimeFence !== fence) {
-    throw agentSessionRefusalError('agent_session_checkpoint_stale', { reason: 'leaseMoved' })
-  }
-  state.records.set(sessionId, { ...record, conversationCommand: command })
-}
-
 export type AgentSessionConversationClear = {
   sessionId: string
   fence: number

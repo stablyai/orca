@@ -40,9 +40,8 @@ export function getWindowsPowerShellExecutablePath(): string {
  * AV host for a flicker. The answer is to shorten the interpreter chain — the
  * shipped doctrine of #15520 and #15595 — or a launcher that owns no console.
  *
- * #18875 took that answer for the Claude lifecycle hook, which now registers the
- * managed `.cmd` path directly (`windows-direct-cmd-hook-command.ts`) and reaches
- * this launcher only when the profile path is not cmd-safe. Every other caller still comes through here on every event.
+ * #18875 took that answer for the Claude lifecycle hook, and `wrapWindowsBatchHookCommand`
+ * extends it to other `.cmd` hooks: they reach this launcher only when the profile path is not cmd-safe.
  */
 export const WINDOWS_POWERSHELL_HOOK_SWITCHES = '-NoProfile'
 
@@ -59,8 +58,7 @@ const HOOK_PROGRESS_SILENCER = "$ProgressPreference='SilentlyContinue'; "
  *
  * Equivalent by construction: the switch sets the Process scope too, and both
  * lose to a Group Policy scope. `-EncodedCommand` itself is never policy-gated,
- * so this always gets to run; it is what lets the managed `.ps1` hooks (Copilot)
- * execute under a Restricted or AllSigned machine policy.
+ * so this always gets to run, even under a Restricted or AllSigned machine policy.
  *
  * try/catch as well as `-ErrorAction SilentlyContinue`: under a MachinePolicy or
  * UserPolicy GPO the cmdlet reports that the process scope did not take, and

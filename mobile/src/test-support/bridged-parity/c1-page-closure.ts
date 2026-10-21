@@ -42,6 +42,7 @@ export const C1_PAGE_CLOSURE: PageClosurePins = {
   },
   'settings.workspace-context': {
     'lifecycle-settings-workspace-context-fulfilled': 'identical',
+    'matrix-settings.workspace-context-jira.status-1': 'result-absent-settlement',
     'matrix-settings.workspace-context-linear.status-1': 'result-absent-settlement',
     'matrix-settings.workspace-context-preflight.check-1': 'result-absent-settlement',
     'matrix-settings.workspace-context-settings.get-1': 'result-absent-settlement',
@@ -130,6 +131,7 @@ export const C1_PAGE_CLOSURE: PageClosurePins = {
   },
   'host.view-settings': {
     'host-view-settings-sync': 'identical',
+    'matrix-host.view-settings-settings.get-1': 'result-absent-settlement',
     'matrix-host.view-settings-ui.get-1': 'result-absent-settlement',
     'matrix-host.view-settings-ui.set-1': 'result-absent-settlement'
   },

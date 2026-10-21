@@ -13,6 +13,7 @@ import {
   store,
   withPlatform
 } from '../orca-runtime-test-fixtures.spec'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
   it('hides agent scratch created inside a linked checkout from runtime listings', async () => {
@@ -235,7 +236,7 @@ describe('OrcaRuntimeService', () => {
       [firstId]: { sortOrder: 200 },
       [secondId]: { sortOrder: 100 }
     }
-    const setWorktreeMeta = vi.fn((id: string, updates: Partial<WorktreeMeta>) => {
+    const setWorktreeMeta = vi.fn(({ id }: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => {
       metaById[id] = { ...metaById[id], ...updates }
     })
     const runtime = new OrcaRuntimeService({
@@ -255,7 +256,15 @@ describe('OrcaRuntimeService', () => {
 
     expect(setWorktreeMeta).toHaveBeenCalledTimes(2)
     expect(events).toEqual([
-      { type: 'worktreesChanged', repoId: TEST_REPO_ID, sortOrderOnly: true }
+      {
+        type: 'worktreesChanged',
+        repoId: TEST_REPO_ID,
+        sortOrderOnly: true,
+        sortOrders: [
+          { worktreeId: secondId, sortOrder: metaById[secondId].sortOrder },
+          { worktreeId: firstId, sortOrder: metaById[firstId].sortOrder }
+        ]
+      }
     ])
   })
 
@@ -445,7 +454,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
         return metaById[worktreeId]
       },
@@ -491,7 +500,7 @@ describe('OrcaRuntimeService', () => {
         createdAt: 1
       }
     }
-    const removeWorktreeLineage = vi.fn((worktreeId: string) => {
+    const removeWorktreeLineage = vi.fn(({ id: worktreeId }: HostWorktreeTarget) => {
       delete lineageById[worktreeId]
     })
     const runtimeStore = {
@@ -500,10 +509,12 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [remoteRepo],
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
-        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
-        return metaById[worktreeId]
-      }),
+      setWorktreeMeta: vi.fn(
+        ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+          metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+          return metaById[worktreeId]
+        }
+      ),
       getAllWorktreeLineage: () => lineageById,
       removeWorktreeLineage
     }

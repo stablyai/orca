@@ -2,6 +2,7 @@
 // it, so resolver tests exercise the shared launch path rather than a copy of it.
 
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import {
@@ -40,6 +41,7 @@ export type LaunchTestSources = Pick<StructuredAgentLaunchSources, 'store'> & {
   resolveLaunchEnv?: (agent: string) => Record<string, string>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   prepareVisuals?: PrepareNativeChatVisuals
+  refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
 }
 
 function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
@@ -61,7 +63,10 @@ function launchSources(deps: LaunchTestSources): StructuredAgentLaunchSources {
     }),
     ...(deps.resolveLaunchEnv ? { resolveAgentLaunchEnv: deps.resolveLaunchEnv } : {}),
     ...(deps.resolveCommandSettings ? { resolveCommandSettings: deps.resolveCommandSettings } : {}),
-    ...(deps.prepareVisuals ? { prepareVisuals: deps.prepareVisuals } : {})
+    ...(deps.prepareVisuals ? { prepareVisuals: deps.prepareVisuals } : {}),
+    ...(deps.refreshAfterMissingProgram
+      ? { refreshAfterMissingProgram: deps.refreshAfterMissingProgram }
+      : {})
   }
 }
 
@@ -74,11 +79,19 @@ function withTestSpawnToken<L>(
 ) {
   const resolve = composeStructuredLaunch(definition, sources, part)
   const read = composeStructuredLaunchRead(definition, sources, part)
-  return (input: { identity: AgentSessionJournalIdentity; spawnToken?: string | null }) => {
+  return (input: {
+    identity: AgentSessionJournalIdentity
+    spawnToken?: string | null
+    permissionMode?: AgentChatPermissionMode
+  }) => {
     const spawnToken = input.spawnToken === undefined ? defaultToken : input.spawnToken
     return spawnToken === null
       ? read(input.identity)
-      : resolve({ identity: input.identity, spawnToken })
+      : resolve({
+          identity: input.identity,
+          spawnToken,
+          ...(input.permissionMode ? { permissionMode: input.permissionMode } : {})
+        })
   }
 }
 
@@ -97,12 +110,14 @@ export function createCodexStructuredLaunchResolver(
 /** Unsealed unless a token is passed: the env an agent part produced, before the seal. */
 export function createAcpStructuredLaunchResolver(
   spec: AcpLaunchSpec,
-  deps: LaunchTestSources & AcpStructuredLaunchPartDeps
+  deps: LaunchTestSources &
+    Omit<AcpStructuredLaunchPartDeps, 'dataDirectory'> &
+    Partial<Pick<AcpStructuredLaunchPartDeps, 'dataDirectory'>>
 ) {
   return withTestSpawnToken(
     acpStructuredAgentDefinition(spec),
     launchSources(deps),
-    acpStructuredLaunchPart(spec, deps),
+    acpStructuredLaunchPart(spec, { dataDirectory: '/orca-data', ...deps }),
     null
   )
 }

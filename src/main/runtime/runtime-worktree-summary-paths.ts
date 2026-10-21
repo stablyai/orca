@@ -1,6 +1,6 @@
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
-import { worktreePathComparisonKey } from '../ipc/worktree-path-comparison'
+import { worktreePathComparisonKey } from '../worktree-path-comparison-key'
 import { parseRuntimeWorktreeId } from './runtime-worktree-path-identity'
 
 type ResolvedWorktreePath = { id: string; repoId: string; path: string }

@@ -1,5 +1,6 @@
 import { pathToFileURL } from 'node:url'
 import { fetchAdminOnceMore } from './relay-admin-transient-retry.mjs'
+import { isReserveCellRefusal, reserveCellRollRefusal } from './relay-reserve-cell-refusal.mjs'
 
 // Drained hosts that find no free slot keep redialling and pin the drained cell (c28,
 // 2026-10-01). Hosts are counted as controls, but each moved host also brings its splices;
@@ -57,6 +58,8 @@ async function adminJson(fetchImpl, url, token, body, wait) {
     { wait }
   )
   const json = await response.json().catch(() => ({}))
+  // null: the director refused the read because the cell is reserve.
+  if (isReserveCellRefusal(response.status, json)) return null
   if (!response.ok) throw new Error(`${new URL(url).pathname} returned ${response.status}`)
   return json
 }
@@ -89,15 +92,18 @@ export async function checkSameCapHeadroom(config, overrides = {}) {
   const token = overrides.token ?? process.env.ORCA_RELAY_ADMIN_ID_TOKEN
   if (!token || token.length > 8_192) throw new Error('admin identity token is unavailable')
   const cellStatus = async (cellId) => {
-    const { status } = await adminJson(
+    const answer = await adminJson(
       fetchImpl,
       `${config.directorOrigin}/v1/admin/cell-status`,
       token,
       { v: 1, cellId },
       wait
     )
-    if (status?.cellId !== cellId) throw new Error('director status does not match the cell')
-    return status
+    if (answer === null) return null
+    if (answer.status?.cellId !== cellId) {
+      throw new Error('director status does not match the cell')
+    }
+    return answer.status
   }
   const runtime = await adminJson(
     fetchImpl,
@@ -106,16 +112,23 @@ export async function checkSameCapHeadroom(config, overrides = {}) {
     { v: 1 },
     wait
   )
-  if (runtime.role !== 'cell' || runtime.cellId !== config.cellId) {
+  if (runtime?.role !== 'cell' || runtime.cellId !== config.cellId) {
     throw new Error('runtime status does not match the cell')
   }
   const targetHosts = count(runtime.runtime?.controls, 'target host controls')
-  const targetRegion = (await cellStatus(config.cellId)).region ?? null
+  const targetStatus = await cellStatus(config.cellId)
+  if (targetStatus === null) throw reserveCellRollRefusal(config.cellId)
+  const targetRegion = targetStatus.region ?? null
   const cells = []
   for (const cellId of config.generalCells) {
     if (cellId === config.cellId) continue
     const status = await cellStatus(cellId)
-    cells.push({ cellId, region: status.region ?? null, freeSlots: freeSlots(status) })
+    // A reserve cell's free seats are not in the database: counted as none, never guessed.
+    cells.push(
+      status === null
+        ? { cellId, region: null, freeSlots: 0, reserve: true }
+        : { cellId, region: status.region ?? null, freeSlots: freeSlots(status) }
+    )
   }
   const total = (filter) =>
     cells.filter(filter).reduce((sum, cell) => sum + cell.freeSlots, 0)

@@ -2,7 +2,7 @@ import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { useAppStore } from '@/store'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'

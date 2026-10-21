@@ -17,23 +17,25 @@ const mocks = vi.hoisted(() => ({
   getState: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-routing', () => ({
   getRuntimeFileReadScope: vi.fn(
     (
       target: { kind: 'local' } | { kind: 'environment'; environmentId: string },
       connectionId?: string
     ) => connectionId ?? (target.kind === 'environment' ? target.environmentId : null)
-  ),
-  readRuntimeFileContent: mocks.readRuntimeFileContent,
-  subscribeRuntimeFileChanges: vi.fn()
+  )
 }))
+vi.mock('@/runtime/runtime-file-read-client', () => ({
+  readRuntimeFileContent: mocks.readRuntimeFileContent
+}))
+vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: mocks.getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff: vi.fn(),
-  getRuntimeGitDiff: mocks.getRuntimeGitDiff,
-  getRuntimeGitScope: vi.fn(() => null)
+  getRuntimeGitDiff: mocks.getRuntimeGitDiff
 }))
+vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: mocks.getConnectionId,
@@ -66,7 +68,8 @@ vi.mock('@/store', () => ({
 }))
 
 import { useEditorPanelContentState } from './useEditorPanelContentState'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import { createTestStore } from '@/store/slices/store-test-helpers'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
 
 type Deferred<T> = {
@@ -164,6 +167,7 @@ describe('useEditorPanelContentState', () => {
     mocks.isWorktreeConnectionResolved.mockReturnValue(true)
     mocks.getState.mockReset()
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: null,
       openFiles: [],
       setLastKnownDiskSignature: vi.fn()
@@ -313,6 +317,7 @@ describe('useEditorPanelContentState', () => {
     })
     mocks.getConnectionIdForFile.mockReturnValue(undefined)
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
       openFiles: [],
       setLastKnownDiskSignature: vi.fn()
@@ -881,6 +886,7 @@ describe('useEditorPanelContentState', () => {
     const activeFile = createOpenFile()
     const setLastKnownDiskSignature = vi.fn()
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: null,
       openFiles: [activeFile],
       setLastKnownDiskSignature
@@ -909,6 +915,7 @@ describe('useEditorPanelContentState', () => {
     const activeFile = createOpenFile({ isDirty: true })
     const setLastKnownDiskSignature = vi.fn()
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: null,
       openFiles: [activeFile],
       setLastKnownDiskSignature

@@ -15,7 +15,7 @@ vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-terminal-actions', () => ({
   setWebRuntimeTabProps: mocks.setWebRuntimeTabProps
 }))
 

@@ -86,6 +86,9 @@ function loadLeaf(
     ...(stored.titlesByLeafId?.[leafId] !== undefined
       ? { title: stored.titlesByLeafId[leafId] }
       : {}),
+    ...(stored.lastGridsByLeafId?.[leafId] !== undefined
+      ? { lastGrid: stored.lastGridsByLeafId[leafId] }
+      : {}),
     ...(sleeping
       ? { sleeping: omitStoredFields(sleeping, ['paneKey', 'tabId', 'worktreeId']) }
       : {})
@@ -135,6 +138,11 @@ export function loadLeaves(
       if (leafId !== storedId) {
         // A pane given a new id starts unbound: its terminal was started for the old one.
         delete leaf.ptyId
+      } else {
+        const generation = context.ptyGenerationOf?.(leafId)
+        if (generation !== undefined) {
+          leaf.ptyGeneration = generation
+        }
       }
       if (Object.keys(leaf).length > 0) {
         workspace.leaves = { ...workspace.leaves, [leafId]: leaf }

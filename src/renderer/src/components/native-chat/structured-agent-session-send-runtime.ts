@@ -1,4 +1,7 @@
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import {
   agentSessionWriteNoticeParts,
   agentSessionWriteNotDoneParts
@@ -6,7 +9,7 @@ import {
 import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session-write-notice-copy'
 import type { AgentSessionWriteFailure } from '../../../../shared/agent-session-write-failure'
 import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { nativeChatRewindReasonCopy } from './native-chat-rewind-copy'
 import { handBackStructuredAgentSessionMessage } from './structured-agent-session-message-hand-back'
@@ -88,7 +91,8 @@ export function handBack(
 export function settleRecorded(
   entry: StructuredAgentSessionPendingSend,
   submission: AgentJournalSubmission | null,
-  from: 'reply' | 'journal'
+  from: 'reply' | 'journal',
+  cursor?: AgentJournalCursor | null
 ): void {
   // A message a Stop took back stays in the chat with its stop row, drawn by the host's row; the
   // composer is left alone. An open chat draws a recorded one until its row arrives, which can
@@ -97,7 +101,13 @@ export function settleRecorded(
     from === 'reply' &&
     !(submission && dispatchWasWithdrawn(submission)) &&
     structuredAgentSessionSendsWatched(entry.sessionId)
-  finish(entry, 'recorded', keep ? { phase: 'recorded', issued: true } : undefined)
+  finish(
+    entry,
+    'recorded',
+    keep
+      ? { phase: 'recorded', issued: true, ...(cursor ? { recordedCursor: cursor } : {}) }
+      : undefined
+  )
 }
 
 /** Why the host turned the send away. Behind a rewind whose outcome is unknown it was not sent: the

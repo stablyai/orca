@@ -76,7 +76,9 @@ export const WorktreePsParams = z.object({
 })
 
 export const WorktreeSortOrder = z.object({
-  orderedIds: z.array(z.string())
+  orderedIds: z.array(z.string()),
+  // Parallel to orderedIds: the copy each id names, so a same-id twin keeps its own order.
+  hostIds: z.array(z.string()).optional()
 })
 
 export const WorktreeSelector = z.object({

@@ -6,6 +6,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from './browser-workspace-types'
 import type { WorkspaceDocHistoryEntry } from './workspace-doc-history'
 import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'
+import type { PairedTerminalTabCloseIntent } from './paired-terminal-tab-close-intent'
 import type { PersistedClientHostedBrowserPage } from './client-hosted-browser-page-record'
 import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
 
@@ -93,6 +94,11 @@ export type WorkspaceSessionState = {
    * the user deliberately closed while the host was down.
    */
   clientHostedBrowserCloseIntentsByEnvironment?: Record<string, ClientHostedBrowserCloseIntent[]>
+  /**
+   * Client-authored: user closes of a paired runtime host's session tabs that never reached it,
+   * keyed by runtime environment ID. Replayed when a host snapshot still lists the tab.
+   */
+  pairedTerminalTabCloseIntentsByEnvironment?: Record<string, PairedTerminalTabCloseIntent[]>
   /** Per-worktree active tab type (terminal vs editor vs browser) at shutdown. */
   activeTabTypeByWorktree?: Record<string, WorkspaceVisibleTabType>
   /** Global browser URL history for address bar autocomplete. */

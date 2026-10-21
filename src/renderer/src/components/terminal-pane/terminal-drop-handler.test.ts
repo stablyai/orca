@@ -63,7 +63,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importExternalPathsToRuntime
 }))
 
@@ -168,7 +168,7 @@ describe('handleTerminalFileDrop', () => {
       },
       ['/Users/me/logo.png'],
       '/remote/repo/.orca/drops',
-      { assertCurrent: expect.any(Function) }
+      { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
     )
     expect(sendInput).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('/remote/repo/.orca/drops/logo.png'),
@@ -271,7 +271,7 @@ describe('handleTerminalFileDrop', () => {
       },
       ['/Users/me/logo.png'],
       '\\\\server\\share\\repo\\.orca\\drops',
-      { assertCurrent: expect.any(Function) }
+      { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
     )
     expect(sendInput).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('\\\\server\\share\\repo\\.orca\\drops\\logo.png'),
@@ -335,7 +335,7 @@ describe('handleTerminalFileDrop', () => {
       },
       ['/Users/me/spec.pdf'],
       '/remote/repo/.orca/drops',
-      { assertCurrent: expect.any(Function) }
+      { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
     )
     expect(sendInput).toHaveBeenCalledWith('/remote/repo/.orca/drops/spec.pdf ', 'driving')
   })

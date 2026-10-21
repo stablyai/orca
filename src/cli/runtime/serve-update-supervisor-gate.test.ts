@@ -25,9 +25,7 @@ describe('supervised update replacement spawns', () => {
     const spawnChild = vi.fn()
     try {
       const code = await resumeInterruptedServeUpdate({
-        executable: join(root, 'orca'),
-        childArgs: [],
-        spawnOptions: {},
+        spec: { program: join(root, 'orca') },
         spawnChild,
         handoffPath: join(root, 'handoff.json'),
         handoff: HANDOFF

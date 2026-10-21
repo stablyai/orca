@@ -27,10 +27,12 @@ const replacementAuthority: BrowserClientHostLeaseAuthority = {
 
 const initialInput = {
   authorityConnectionIdentity: 'authority-record-a',
+  pairingAuthorityConnectionIdentity: 'pairing-authority-record-a',
   legacyAuthorityConnectionIdentity: 'legacy-authority-record-a'
 }
 const replacementInput = {
   authorityConnectionIdentity: 'authority-record-b',
+  pairingAuthorityConnectionIdentity: 'pairing-authority-record-b',
   legacyAuthorityConnectionIdentity: 'legacy-authority-record-b'
 }
 
@@ -518,6 +520,7 @@ function createRig(
       return true
     }),
     hasUnresolvedPage: vi.fn(() => false),
+    hostsPage: vi.fn(() => false),
     beginAuthorityTransition: vi.fn(() => {
       order.push('fence-authority-transition')
     }),

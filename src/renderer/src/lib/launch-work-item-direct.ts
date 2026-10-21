@@ -32,7 +32,10 @@ import {
   resolveDirectSetupDecision
 } from '@/lib/launch-work-item-direct-preflight'
 import type { LaunchWorkItemDirectArgs } from '@/lib/launch-work-item-direct-types'
-import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
+import {
+  refineLocalLaunchPlatform,
+  resolveRepoExecutionHostPlatform
+} from '@/lib/execution-host-facts'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { beginDirectWorkItemStructuredLaunch } from '@/lib/launch-work-item-direct-agent-routing'
 import { prepareDirectWorkItemAgentLaunch } from '@/lib/launch-work-item-direct-route-preparation'
@@ -41,6 +44,7 @@ import {
   type AgentSessionLaunchPlan
 } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { ensureDetectedAgentsForRepo } from '@/lib/agent-detection-target-inventory'
 
 /**
  * "Use" flow: create the workspace, activate it, launch the default agent,
@@ -89,14 +93,14 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   const repoProjectRuntime = repoConnectionId
     ? undefined
     : getLocalRepoProjectExecutionRuntimeContext(store, repoId, CLIENT_PLATFORM)
-  const preflightLaunchPlatform =
-    args.launchPlatform ??
-    resolveSourceControlLaunchPlatform({
-      connectionId: repoConnectionId,
-      worktreePath: repo.path,
-      projectRuntime: repoProjectRuntime
-    })
-  const shell = preflightLaunchPlatform === 'win32' ? 'powershell' : 'posix'
+  // Why: the agent runs on the repo's execution host, so its OS decides quoting, not this client's (#27971).
+  const repoLaunchFact = resolveRepoExecutionHostPlatform(store, repo, () => repoProjectRuntime)
+  if (repoLaunchFact.kind === 'withheld') {
+    toast.error(repoLaunchFact.reason)
+    return false
+  }
+  const repoLaunchHost = refineLocalLaunchPlatform(repoLaunchFact, args.launchPlatform)
+  const shell = repoLaunchHost.platform === 'win32' ? 'powershell' : 'posix'
   const agentArgsPlan = planAgentCliArgsSuffix(agentArgs, shell)
   if (!agentArgsPlan.ok) {
     // Why: direct launches may create a worktree before the agent startup plan
@@ -106,11 +110,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   }
   // Why: agent detection shells out and can be cold/slow. Start it now, but
   // don't let it serialize setup-policy resolution or git worktree creation.
-  const detectedAgentsPromise = agentOverride
-    ? null
-    : repoConnectionId
-      ? store.ensureRemoteDetectedAgents(repoConnectionId)
-      : store.ensureDetectedAgents()
+  const detectedAgentsPromise = agentOverride ? null : ensureDetectedAgentsForRepo(store, repo)
 
   const setupResolution = await resolveDirectSetupDecision(repoId, repo, repoOwnerHostId)
   if (setupResolution.kind === 'needs-modal') {
@@ -212,12 +212,14 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       agentOverride,
       agentArgs,
       repoConnectionId,
+      repoHost: repo,
       detectedAgentsPromise,
       latestStore,
       settings,
       draftContent,
       promptDelivery,
       launchPlatform: args.launchPlatform,
+      repoLaunchHost,
       repoProjectRuntime,
       planLaunch: planAgentSessionLaunch,
       requestId: newAgentLaunchRequestId()

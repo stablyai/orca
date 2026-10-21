@@ -73,37 +73,33 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it.each([
     { partialAuthority: { providerEpoch: 'epoch-current' } },
     { partialAuthority: { connectionGeneration: 7 } }
-  ])(
-    'fills a same-watermark partial SSH authority and clears its bindings once',
-    async ({ partialAuthority }) => {
-      const harness = buildSshAuthorityReconciliationHarness({
-        partialAuthority,
-        latestAuthority: {
-          providerEpoch: 'epoch-current',
-          connectionGeneration: 7
-        }
-      })
-      stubDirectSshModules({ storeState: harness.storeState })
-      const { useIpcEvents } = await import('./useIpcEvents')
-      useIpcEvents()
-
-      harness.emitPartialState()
-
-      await vi.waitFor(() => {
-        expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith('target-reconciliation')
-      })
-      expect(harness.getState).toHaveBeenCalledOnce()
-      expect(harness.setSshConnectionState).toHaveBeenCalledTimes(2)
-      expect(harness.storedState()).toEqual({
-        targetId: 'target-reconciliation',
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 0,
+  ])('fills a same-watermark partial SSH authority', async ({ partialAuthority }) => {
+    const harness = buildSshAuthorityReconciliationHarness({
+      partialAuthority,
+      latestAuthority: {
         providerEpoch: 'epoch-current',
         connectionGeneration: 7
-      })
-    }
-  )
+      }
+    })
+    stubDirectSshModules({ storeState: harness.storeState })
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+
+    harness.emitPartialState()
+
+    await vi.waitFor(() => {
+      expect(harness.setSshConnectionState).toHaveBeenCalledTimes(2)
+    })
+    expect(harness.getState).toHaveBeenCalledOnce()
+    expect(harness.storedState()).toEqual({
+      targetId: 'target-reconciliation',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'epoch-current',
+      connectionGeneration: 7
+    })
+  })
 
   it.each([
     { partialAuthority: { providerEpoch: 'epoch-conflict' } },
@@ -128,7 +124,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
         expect(harness.getState).toHaveBeenCalledOnce()
       })
       await Promise.resolve()
-      expect(harness.clearBindings).not.toHaveBeenCalled()
       expect(harness.setSshConnectionState).toHaveBeenCalledOnce()
       expect(harness.storedState()).toEqual(
         expect.objectContaining({
@@ -291,7 +286,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
       fetchRuntimeEnvironmentRepos: vi.fn(async () => []),
       fetchWorktreeLineage: vi.fn(async () => undefined),
       clearRemoteDetectedAgents: vi.fn(),
-      clearDirectSshTargetPtyBindings: vi.fn(),
       clearRemovedSshTargetState: vi.fn()
     })
     let partialTargetStateCalls = 0

@@ -64,7 +64,8 @@ it('changes the launcher identity when the server is rebuilt', async () => {
 })
 
 afterAll(async () => {
-  await rm(root, { recursive: true, force: true })
+  // Windows can hold an exited node.exe image open briefly (EBUSY).
+  await rm(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 })
 })
 
 it('keeps the server and profile-state graph outside the compatibility launcher', async () => {
@@ -72,6 +73,7 @@ it('keeps the server and profile-state graph outside the compatibility launcher'
     'src/main/orcad/orcad-app-paths.ts',
     'src/main/orcad/orcad-configuration-exit.ts',
     'src/main/orcad/orcad-bundled-runtime.ts',
+    'src/main/orcad/orcad-compile-cache.ts',
     'src/main/orcad/launcher.ts'
   ])
   expect(inputs.some((path) => path.startsWith('node_modules/'))).toBe(false)

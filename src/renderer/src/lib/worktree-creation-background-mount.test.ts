@@ -19,11 +19,34 @@ vi.mock('sonner', () => ({
 }))
 
 import { useAppStore } from '@/store'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { runBackgroundWorktreeCreation } from './worktree-creation-flow'
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
-} from './worktree-activation-created-agent-test-state'
+} from './worktree-activation-created-agent.test-fixture'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
+/** Whether the user sees the terminal titled Setup: a layout-owner build sends the title to main,
+ *  whose frame (not modelled here) draws it; otherwise the window titles the row itself. */
+function titledSetup(terminal: { id: string; customTitle?: string | null }): boolean {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return terminal.customTitle === 'Setup'
+  }
+  const tabBarId = useAppStore
+    .getState()
+    .unifiedTabsByWorktree[worktree.id]?.find((tab) => tab.entityId === terminal.id)?.id
+  return layoutApplyTestTransport
+    .sentOfType('renameTab')
+    .some((rename) => rename.tabId === tabBarId && rename.title === 'Setup')
+}
 
 const initialAppStoreState = useAppStore.getState()
 const worktree = makeCreatedAgentWorktree()
@@ -117,11 +140,7 @@ describe('a create finishing after the user switched away', () => {
     expect(requestMount).toHaveBeenCalledWith({ worktreeId: worktree.id, tabIds: [setupTab?.id] })
   })
 
-  it('mounts a plain terminal whose only work is a queued setup split', async () => {
-    useAppStore.setState((current) => ({
-      settings: current.settings && { ...current.settings, setupScriptLaunchMode: 'split-vertical' }
-    }))
-
+  it('mounts the dedicated Setup tab beside an idle primary terminal', async () => {
     await createAfterUserSwitchedAway(
       {
         worktree,
@@ -129,15 +148,41 @@ describe('a create finishing after the user switched away', () => {
       },
       makeBlankTerminalRequest()
     )
-
     const next = useAppStore.getState()
     const tabs = next.tabsByWorktree[worktree.id] ?? []
-    expect(tabs).toHaveLength(1)
-    const tabId = tabs[0]?.id ?? ''
-    expect(next.pendingStartupByTabId[tabId]).toBeUndefined()
-    expect(next.pendingSetupSplitByTabId[tabId]).toBeDefined()
-    expect(requestMount).toHaveBeenCalledWith({ worktreeId: worktree.id, tabIds: [tabId] })
+    expect(tabs).toHaveLength(2)
+    const setupTab = tabs.find(titledSetup)
+    expect(setupTab).toBeDefined()
+    expect(requestMount).toHaveBeenCalledExactlyOnceWith({
+      worktreeId: worktree.id,
+      tabIds: [setupTab?.id]
+    })
+    expect(next.activeWorktreeId).toBeNull()
   })
+
+  it.each(['split-vertical', 'split-horizontal', 'new-tab'] as const)(
+    'keeps setup-only creation to one tab with retired location %s',
+    async (setupScriptLaunchMode) => {
+      const currentSettings = useAppStore.getState().settings
+      if (!currentSettings) {
+        throw new Error('missing creation settings')
+      }
+      const settings = { ...currentSettings, setupScriptLaunchMode }
+      useAppStore.setState({ settings })
+      await createAfterUserSwitchedAway(
+        {
+          worktree,
+          setup: { runnerScriptPath: '/workspace/setup.sh', envVars: {} },
+          defaultTabs: { tabs: [{ title: 'Dev', command: 'pnpm dev' }], runCommands: true }
+        },
+        makeBlankTerminalRequest({ setupOnly: true })
+      )
+      const next = useAppStore.getState()
+      expect(next.tabsByWorktree[worktree.id]).toHaveLength(1)
+      expect(titledSetup(next.tabsByWorktree[worktree.id]![0]!)).toBe(true)
+      expect(next.activeWorktreeId).toBeNull()
+    }
+  )
 
   it('mounts a plain terminal whose only work is a queued issue-command split', async () => {
     await createAfterUserSwitchedAway(

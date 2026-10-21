@@ -1,4 +1,5 @@
 import type {
+  AsyncIoHealthRequest,
   FullDiskAccessStatusRequest,
   PingRequest,
   PtySpawnHealthRequest,
@@ -316,6 +317,7 @@ export type DaemonRequest =
   | PingRequest
   | SystemResolverHealthRequest
   | PtySpawnHealthRequest
+  | AsyncIoHealthRequest
   | FullDiskAccessStatusRequest
   | GetSnapshotRequest
   | GetSizeRequest

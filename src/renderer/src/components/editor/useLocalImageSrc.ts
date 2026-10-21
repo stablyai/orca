@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useState } from 'react'
 import { resolveImageAbsolutePath } from './markdown-preview-links'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { readLocalImagePreview } from './local-image-src-reader'
 import type { LocalFileAccess } from '../../../../shared/local-file-access'
 import {

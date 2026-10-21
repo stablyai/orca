@@ -171,8 +171,8 @@ describe.skipIf(process.platform === 'win32')('lsof supervisor lifecycle', () =>
  * exits 1 with no stdout and no stderr. Measured on Debian 12: a live relay owned by root,
  * probed as `nobody`, produced `exit=1 stdout=[] stderr=[]` — byte-identical to a genuinely
  * stale socket, so no amount of inspecting lsof's answer can separate the two. That answer
- * reaches `verdict: exited / evidence: no-holder`, which `classifySupersededRelay` turns into
- * `rm -f` on an inode a live relay still holds.
+ * reaches `verdict: exited / evidence: no-holder`, which the host census reads as an idle
+ * endpoint a live relay still holds.
  *
  * The stub reproduces that exact shape rather than switching uid, which needs root and two
  * accounts. What separates the cases is /proc/net/unix, which is world-readable.

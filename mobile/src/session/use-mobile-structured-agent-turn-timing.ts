@@ -21,11 +21,14 @@ export function useMobileStructuredAgentTurnTiming(
     items,
     submissions,
     latestTurn,
+    working,
     hostClock
   }: {
     items: readonly AgentJournalRenderItem[]
     submissions: readonly AgentJournalSubmission[]
     latestTurn?: AgentSessionLatestTurn | null
+    /** The host's working answer, which places rows waiting behind the live turn. */
+    working?: boolean
     hostClock?: StructuredAgentHostClock | null
   },
   turnId: string | null
@@ -40,8 +43,8 @@ export function useMobileStructuredAgentTurnTiming(
     [items, submissions, turnId, latestTurn]
   )
   const turnJournal = useMemo(
-    () => ({ items, submissions, latestTurn }),
-    [items, submissions, latestTurn]
+    () => ({ items, submissions, latestTurn, ...(working !== undefined ? { working } : {}) }),
+    [items, submissions, latestTurn, working]
   )
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
   // Stamp during render (React's derive-from-props pattern) so the first paint of

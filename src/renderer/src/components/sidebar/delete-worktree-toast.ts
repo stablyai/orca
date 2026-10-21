@@ -11,6 +11,13 @@ export type DeleteWorktreeToastCopy = {
   isDestructive: boolean
 }
 
+export function getSubmoduleRemovalRefusalCopy(): string {
+  return translate(
+    'auto.components.sidebar.delete.worktree.toast.submodules',
+    'This workspace contains submodules, so Git deletes it only with Force Delete. Force Delete also permanently removes anything in those submodules that was never pushed: commits, local branches and stashes.'
+  )
+}
+
 export function getDeleteWorktreeToastCopy(
   worktreeName: string,
   forceDeleteReason: WorktreeForceDeleteReason | null,
@@ -95,6 +102,17 @@ export function getDeleteWorktreeToastCopy(
               'auto.components.sidebar.delete.worktree.toast.runningAgentSession',
               'Orca could not confirm every agent session in this workspace has closed, so it stopped before deleting any files. Use Force Delete to remove it anyway.'
             ),
+        isDestructive: false
+      }
+    }
+    if (forceDeleteReason === 'submodules') {
+      return {
+        title: translate(
+          'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+          'Failed to delete workspace {{value0}}',
+          { value0: worktreeName }
+        ),
+        description: getSubmoduleRemovalRefusalCopy(),
         isDestructive: false
       }
     }

@@ -2,14 +2,15 @@ import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session-
 import { agentSessionOwnerBindingsEqual } from '../../../../shared/claimed-agent-pty-owner'
 import { addNodePtyRecoveryHint } from '../../../daemon/node-pty-error-hints'
 import type { Store } from '../../../persistence'
-import type { IPtyProvider } from '../../../providers/types'
-import { ptyIncarnationById, ptyOwnership } from './ownership-state'
+import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import { isCurrentPtyExit, ptyIncarnationById, ptyOwnership } from './ownership-state'
 import { getRelayPtyId } from './registry'
 import {
   KEEP_HISTORY_STOP_POLL_MS,
   KEEP_HISTORY_STOP_SETTLE_MS
 } from '../delivery/visibility-state'
 import { clearProviderPtyState } from './state-cleanup'
+import { PtyExitProof, type PtyRetirementEvidence } from '../../../pty-exit-proof'
 
 export function normalizeNodePtySpawnError(err: unknown): Error {
   const rawMessage = err instanceof Error ? err.message : String(err)
@@ -99,16 +100,27 @@ export async function verifyPtyStopped(
   return true
 }
 
+/** Returns the retired incarnation, or `null` when the proof names a different incarnation than
+ *  the record's: a same-id respawn owns it now, so nothing is retired. A proof naming none still
+ *  retires: owner reconciliation can stamp the same process's incarnation mid-stop. */
 export function finishPtyShutdown(
   id: string,
   connectionId: string | null | undefined,
-  store: Store | undefined
-): string | undefined {
+  store: Store | undefined,
+  evidence: PtyRetirementEvidence
+): string | undefined | null {
+  if (
+    evidence instanceof PtyExitProof &&
+    evidence.incarnationId !== undefined &&
+    !isCurrentPtyExit({ id, incarnationId: evidence.incarnationId })
+  ) {
+    return null
+  }
   const incarnationId = ptyIncarnationById.get(id)
   clearProviderPtyState(id)
   if (connectionId) {
     // Keeps any relay-era undelivered stop on the lease: only host evidence may retire it.
-    store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
+    store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), evidence)
   }
   ptyOwnership.delete(id)
   return incarnationId

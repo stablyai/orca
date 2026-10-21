@@ -8,11 +8,12 @@ import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
-import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 import type {
   CreateWorktreeArgs,
+  CreateWorktreeProgressEvent,
   CreateWorktreeResult,
+  WorktreeCheckoutProgress,
   WorktreeCreateBaseFallback
 } from '../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
@@ -20,6 +21,7 @@ import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
   GitPushTarget,
+  GitStatusMetadataChangedEvent,
   Worktree,
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
@@ -61,19 +63,27 @@ type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
 }
 import {
   sanitizeWorktreeName,
-  resolveWorktreeCreateDisplayNameRequest,
-  resolveWorktreeCreateDisplayNameMeta,
-  computeValidatedBranchName,
   computeWorktreePath,
   computeWorkspaceRootAsync,
   ensurePathWithinWorkspace,
   getWorktreeCreationLayout,
-  getWorktreePathSettings,
-  mergeWorktree
+  getWorktreePathSettings
 } from './worktree-logic'
+import {
+  resolveWorktreeCreateDisplayNameRequest,
+  resolveWorktreeCreateDisplayNameMeta
+} from './worktree-display-name'
+import { computeValidatedBranchName } from './worktree-branch-name'
+import { mergeWorktree } from './worktree-metadata-merge'
 import { resolveCreatedWorktree } from './created-worktree-reconciliation'
-import type { BranchPrefixSettings } from '../../shared/branch-prefix'
+import { notifyLineageRepos } from '../worktree-lineage-change-notification'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import {
+  getConnectionExecutionHostId,
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
+import type { BranchPrefixSettings } from '../../shared/branch-prefix'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
 import {
@@ -138,6 +148,17 @@ import {
 } from '../worktree-name-retirement'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
 import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
+import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
+import {
+  hostWorktreeTargetForRepo,
+  readAllWorktreeMetaForHost,
+  readWorktreeMetaForHost,
+  worktreeRowTarget
+} from '../persistence/host-qualified-worktree-meta'
 // Why: bound the fallback `git fetch origin` so a Windows credential-manager GUI hang (STA-1292) can't wedge worktree creation forever.
 const CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS = 60_000
 // Why (#17828 CodeRabbit follow-up): the deferred materialize fetch runs off the main
@@ -209,20 +230,6 @@ const NO_CREATED_WORKTREE_LINEAGE: CreatedWorktreeLineageRecords = {
   workspaceLineage: null
 }
 
-/** Mirrors the projection's edge rule so we never persist a row the sidebar would silently drop.
- *  WorktreeMeta has no repoId, so the parent's comes from its `<repoId>::<path>` id. */
-function createdWorktreeSharesParentLineageBoundary(
-  worktree: Worktree,
-  parentWorktreeId: string,
-  parentMeta: WorktreeMeta
-): boolean {
-  return sharesWorktreeLineageBoundary(worktree, {
-    repoId: getRepoIdFromWorktreeId(parentWorktreeId),
-    hostId: parentMeta.hostId,
-    projectId: parentMeta.projectId
-  })
-}
-
 export function recordWorkspaceLineageForCreatedWorktree(
   store: Store,
   args: CreateWorktreeArgs,
@@ -247,7 +254,11 @@ export function recordWorkspaceLineageForCreatedWorktree(
     return NO_CREATED_WORKTREE_LINEAGE
   }
   const parentWorktreeMeta =
-    parentScope.type === 'worktree' ? store.getWorktreeMeta(parentScope.worktreeId) : null
+    parentScope.type === 'worktree'
+      ? ((worktree.hostId
+          ? readWorktreeMetaForHost(store, parentScope.worktreeId, worktree.hostId)
+          : undefined) ?? store.getWorktreeMeta(parentScope.worktreeId))
+      : null
   if (parentScope.type === 'worktree' && !parentWorktreeMeta) {
     console.warn(`[worktree-create] parent worktree workspace disappeared: ${args.parentWorkspace}`)
     return NO_CREATED_WORKTREE_LINEAGE
@@ -256,37 +267,38 @@ export function recordWorkspaceLineageForCreatedWorktree(
   // Why: only a worktree parent produces sidebar nesting; a folder parent has no WorktreeLineage row.
   let lineage: CreateWorktreeResult['lineage'] = null
   let parentOutsideLineageBoundary = false
+  let lineageOwnedByTwin = false
   if (parentScope.type === 'worktree' && parentWorktreeMeta) {
     if (!parentWorktreeMeta.instanceId) {
       console.warn(
         `[worktree-create] parent ${parentScope.worktreeId} has no instance identity; skipping lineage`
       )
-    } else if (
-      !createdWorktreeSharesParentLineageBoundary(
-        worktree,
-        parentScope.worktreeId,
-        parentWorktreeMeta
-      )
-    ) {
+    } else if (!sharesWorktreeLineageBoundary(worktree, parentWorktreeMeta)) {
       parentOutsideLineageBoundary = true
       console.warn(
-        `[worktree-create] parent ${parentScope.worktreeId} is outside ${worktree.id}'s repo/host/project boundary; skipping lineage`
+        `[worktree-create] parent ${parentScope.worktreeId} is outside ${worktree.id}'s execution host; skipping lineage`
       )
     } else {
-      lineage = store.setWorktreeLineage(worktree.id, {
-        worktreeId: worktree.id,
-        worktreeInstanceId: worktree.instanceId,
-        parentWorktreeId: parentScope.worktreeId,
-        parentWorktreeInstanceId: parentWorktreeMeta.instanceId,
-        origin: 'manual',
-        capture: { source: 'manual-action', confidence: 'explicit' },
-        createdAt
-      })
+      const target = worktreeRowTarget(store, worktree)
+      lineage =
+        (target &&
+          store.setWorktreeLineage(target, {
+            worktreeId: worktree.id,
+            worktreeInstanceId: worktree.instanceId,
+            parentWorktreeId: parentScope.worktreeId,
+            parentWorktreeInstanceId: parentWorktreeMeta.instanceId,
+            origin: 'manual',
+            capture: { source: 'manual-action', confidence: 'explicit' },
+            createdAt
+          })) ??
+        null
+      lineageOwnedByTwin = lineage === null
     }
   }
 
   // Why: a workspace row for an out-of-boundary worktree parent is a cross-host link that survives restarts.
-  if (parentOutsideLineageBoundary) {
+  // A twin-owned bucket keeps the twin's workspace row too.
+  if (parentOutsideLineageBoundary || lineageOwnedByTwin) {
     return NO_CREATED_WORKTREE_LINEAGE
   }
 
@@ -306,16 +318,15 @@ export function recordWorkspaceLineageForCreatedWorktree(
 }
 
 async function spawnLocalStartupAndSetupTerminals(args: {
-  runtime: OrcaRuntimeService | undefined
+  runtime: OrcaRuntimeService
   worktree: Worktree
   startup: CreateWorktreeArgs['startup']
   setup: CreateWorktreeResult['setup']
   defaultTabs: CreateWorktreeResult['defaultTabs']
-  settings: GlobalSettings
   createdWithAgent: CreateWorktreeArgs['createdWithAgent']
 }): Promise<StagedStartupResult> {
-  const { runtime, worktree, startup, setup, defaultTabs, settings, createdWithAgent } = args
-  if (!runtime || !startup || defaultTabs?.tabs.length) {
+  const { runtime, worktree, startup, setup, defaultTabs, createdWithAgent } = args
+  if (!startup || defaultTabs?.tabs.length) {
     return { didSpawnSetup: false }
   }
 
@@ -387,37 +398,17 @@ async function spawnLocalStartupAndSetupTerminals(args: {
           ),
           setup.shell
         )
-      const setupLaunchMode =
-        (settings as Partial<Pick<GlobalSettings, 'setupScriptLaunchMode'>>)
-          .setupScriptLaunchMode ?? 'new-tab'
-      if (setupLaunchMode === 'split-vertical' || setupLaunchMode === 'split-horizontal') {
-        if (!startupTerminalHandle) {
-          throw new Error('startup_terminal_missing')
-        }
-        await runtime.splitTerminal(
-          startupTerminalHandle,
-          {
-            direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
-            command: setupCommand,
-            env: setup.envVars,
-            activate: false,
-            surfaceOwner: false
-          },
-          worktree
-        )
-      } else {
-        await runtime.createTerminal(
-          `id:${worktree.id}`,
-          {
-            title: 'Setup',
-            command: setupCommand,
-            env: setup.envVars,
-            activate: false,
-            surfaceOwner: false
-          },
-          worktree
-        )
-      }
+      await runtime.createTerminal(
+        `id:${worktree.id}`,
+        {
+          title: 'Setup',
+          command: setupCommand,
+          env: setup.envVars,
+          activate: false,
+          surfaceOwner: false
+        },
+        worktree
+      )
       didSpawnSetup = true
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -639,9 +630,11 @@ async function getSelectedHostedReviewForBranch(
 export async function prepareWorktreePushTarget(
   repoPath: string,
   target: GitPushTarget,
-  store?: WorktreePushTargetStore,
+  store?: WorktreePushTargetStore | null,
   repoId?: string,
-  gitOptions: { wslDistro?: string } = {}
+  gitOptions: { wslDistro?: string } = {},
+  // Ownership evidence comes only from the host this git runs on.
+  hostId?: ExecutionHostId
 ): Promise<GitPushTarget> {
   await validateGitPushTarget(repoPath, target, gitOptions)
   const prepared = await prepareWorktreePushTargetWithExec(
@@ -662,7 +655,8 @@ export async function prepareWorktreePushTarget(
         ? isPushTargetRemoteCreatedByKnownWorktree(
             store,
             { ...target, remoteName: existingRemote },
-            repoId
+            repoId,
+            hostId
           )
         : false
   )
@@ -681,13 +675,27 @@ export async function prepareWorktreePushTarget(
 // first one down to a handful of extra subprocesses (probe, refspec-widen,
 // upstream-restore) instead of repeating the O(remotes) scan
 // `prepareWorktreePushTargetWithExec` does when it must add.
+/** The copy an IPC git handler ran on: the route it already required names the host. */
+export function ipcGitWorktreeTarget(args: {
+  worktreeId?: string
+  connectionId?: string
+}): HostWorktreeTarget | undefined {
+  return args.worktreeId
+    ? hostWorktreeTarget({
+        id: args.worktreeId,
+        hostId: getConnectionExecutionHostId(args.connectionId)
+      })
+    : undefined
+}
+
 export async function materializeWorktreePushTargetRemote(
   repoPath: string,
   target: GitPushTarget,
-  store?: WorktreePushTargetStore,
+  store?: WorktreePushTargetStore | null,
   repoId?: string,
   gitOptions: { wslDistro?: string } = {},
-  worktreeId?: string
+  // The copy whose git ran here: an id alone cannot name one of two hosts' twins.
+  worktree?: HostWorktreeTarget
 ): Promise<GitPushTarget> {
   if (!target.remoteUrl || target.remoteCreated) {
     return target
@@ -702,7 +710,7 @@ export async function materializeWorktreePushTargetRemote(
         gitOptions,
         store,
         repoId,
-        worktreeId
+        worktree
       )
     )
   }
@@ -727,14 +735,21 @@ export async function materializeWorktreePushTargetRemote(
         gitOptions,
         store,
         repoId,
-        worktreeId
+        worktree
       )
     )
   }
-  const promise = prepareWorktreePushTarget(repoPath, target, store, repoId, gitOptions)
+  const promise = prepareWorktreePushTarget(
+    repoPath,
+    target,
+    store,
+    repoId,
+    gitOptions,
+    worktree?.hostId
+  )
     .then((prepared) => restoreUpstreamAfterMaterialize(execGit, repoPath, prepared))
     .then((prepared) => {
-      persistMaterializedPushTargetIfCreated(store, worktreeId, prepared)
+      persistMaterializedPushTargetIfCreated(store, worktree, prepared)
       return prepared
     })
     .finally(() => {
@@ -755,9 +770,9 @@ async function adoptExistingForkRemoteForBranch(
   repoPath: string,
   target: GitPushTarget,
   gitOptions: { wslDistro?: string },
-  store: WorktreePushTargetStore | undefined,
+  store: WorktreePushTargetStore | null | undefined,
   repoId: string | undefined,
-  worktreeId: string | undefined
+  worktree: HostWorktreeTarget | undefined
 ): Promise<GitPushTarget> {
   await ensureRemoteTracksBranchNarrowly(execGit, repoPath, target.remoteName, target.branchName)
   // Why: widening only rewrites config -- it never imports anything. For a sibling worktree's
@@ -785,13 +800,14 @@ async function adoptExistingForkRemoteForBranch(
   // #17842's sweep -- which gates solely on `remoteCreated` -- can never reclaim the remote.
   // Why derive: no caller supplies both -- IPC handlers pass a store with no repo id, runtime
   // commands pass a repo id with no store -- so requiring both made this branch unreachable.
-  const ownerRepoId = repoId ?? (worktreeId ? getRepoIdFromWorktreeId(worktreeId) : undefined)
+  const ownerRepoId = repoId ?? (worktree ? getRepoIdFromWorktreeId(worktree.id) : undefined)
   const owned =
     store !== undefined &&
     ownerRepoId !== undefined &&
-    isPushTargetRemoteCreatedByKnownWorktree(store, restored, ownerRepoId)
+    // SAFETY: Legacy null keeps this branch's original failure rather than introducing a fallback.
+    isPushTargetRemoteCreatedByKnownWorktree(store!, restored, ownerRepoId, worktree?.hostId)
   const adopted = owned ? { ...restored, remoteCreated: true } : restored
-  persistMaterializedPushTargetIfCreated(store, worktreeId, adopted)
+  persistMaterializedPushTargetIfCreated(store, worktree, adopted)
   return adopted
 }
 
@@ -829,22 +845,38 @@ function runForkRemoteAdoption<T>(
 // predates `markRemoteOrcaCreated` (no git-config marker either). `setWorktreeMeta` is
 // optional on `WorktreePushTargetStore` so narrow test/reconciliation stores keep compiling.
 function persistMaterializedPushTargetIfCreated(
-  store: WorktreePushTargetStore | undefined,
-  worktreeId: string | undefined,
+  store: WorktreePushTargetStore | null | undefined,
+  worktree: HostWorktreeTarget | undefined,
   target: GitPushTarget
 ): void {
-  if (!target.remoteCreated || !worktreeId || !store?.setWorktreeMeta) {
+  if (!target.remoteCreated || !worktree || !store?.setWorktreeMeta) {
     return
   }
-  store.setWorktreeMeta(worktreeId, { pushTarget: target })
+  const repoId = getRepoIdFromWorktreeId(worktree.id)
+  const repos = store.getRepos?.()
+  // A copy whose repo this host no longer has gets no new row.
+  if (
+    repos &&
+    !repos.some((repo) => repo.id === repoId && getRepoExecutionHostId(repo) === worktree.hostId)
+  ) {
+    return
+  }
+  // Bookkeeping incidental to the push: a project a WSL move is taking skips it, not the push.
+  if (isWslMoveWorktreeBlocked(worktree.id, worktree.hostId)) {
+    return
+  }
+  store.setWorktreeMeta(worktree, { pushTarget: target })
 }
 
 function isPushTargetRemoteCreatedByKnownWorktree(
   store: WorktreePushTargetStore,
   target: GitPushTarget,
-  repoId?: string
+  repoId?: string,
+  // A same-id twin's remote on another host proves nothing about this host's remote.
+  hostId?: ExecutionHostId
 ): boolean {
-  return Object.entries(store.getAllWorktreeMeta()).some(([worktreeId, meta]) => {
+  const rows = hostId ? readAllWorktreeMetaForHost(store, hostId) : store.getAllWorktreeMeta()
+  return Object.entries(rows).some(([worktreeId, meta]) => {
     if (repoId && getRepoIdFromWorktreeId(worktreeId) !== repoId) {
       return false
     }
@@ -918,11 +950,15 @@ export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string
 
 export function notifyWorktreeGitStatusMetadataChanged(
   mainWindow: BrowserWindow,
-  repoId: string
+  repoId: string,
+  worktreePaths: readonly string[] | null = null
 ): void {
   // Why: index churn is a Source Control freshness hint, not a graph mutation; leave structural caches and runtime/mobile events untouched.
   if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('worktrees:gitStatusMetadataChanged', { repoId })
+    const payload: GitStatusMetadataChangedEvent = worktreePaths
+      ? { repoId, worktreePaths: [...worktreePaths] }
+      : { repoId }
+    mainWindow.webContents.send('worktrees:gitStatusMetadataChanged', payload)
   }
 }
 
@@ -938,13 +974,20 @@ export function notifyWorktreeHeadIdentitiesChanged(
 }
 
 // Why: two-phase spinner — fire 'fetching' before pre-create fetch and 'creating' before git worktree add so the renderer can swap its label.
+// `checkout` carries git's checkout meter during 'creating'; null means the checkout finished.
 export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
   phase: 'fetching' | 'creating',
-  creationId?: string
+  creationId?: string,
+  checkout?: WorktreeCheckoutProgress | null
 ): void {
   if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('createWorktree:progress', { creationId, phase })
+    const event: CreateWorktreeProgressEvent = {
+      creationId,
+      phase,
+      ...(checkout !== undefined ? { checkout } : {})
+    }
+    mainWindow.webContents.send('createWorktree:progress', event)
   }
 }
 
@@ -953,15 +996,27 @@ export function createLocalWorktree(
   repo: Repo,
   store: Store,
   mainWindow: BrowserWindow,
-  runtime?: OrcaRuntimeService,
-  timing: WorktreeCreateTimingRecorder = createWorktreeCreateTimingRecorder()
+  runtime: OrcaRuntimeService,
+  timing: WorktreeCreateTimingRecorder = createWorktreeCreateTimingRecorder(),
+  onWorkspaceCreated?: (worktreeId: string) => void
 ): Promise<CreateWorktreeResult> {
   // Why a holder fired in `finally`: consuming a prepared checkout leaves the pool one short, so a
   // create that fails after that point — include copy, push target, terminal startup — must still
   // arm the replacement. Fires exactly once, after startup on the success path.
   const rearm: PreparationRearmHolder = { fire: () => {} }
   return worktreeCreateGit
-    .run(() => performLocalWorktreeCreate(args, repo, store, mainWindow, rearm, timing, runtime))
+    .run(() =>
+      performLocalWorktreeCreate(
+        args,
+        repo,
+        store,
+        mainWindow,
+        rearm,
+        timing,
+        runtime,
+        onWorkspaceCreated
+      )
+    )
     .finally(() => {
       // Closes the create's measured window first, so its own re-arm is not counted against it.
       timing.finish()
@@ -976,7 +1031,8 @@ async function performLocalWorktreeCreate(
   mainWindow: BrowserWindow,
   rearm: PreparationRearmHolder,
   timing: WorktreeCreateTimingRecorder,
-  runtime?: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  onWorkspaceCreated?: (worktreeId: string) => void
 ): Promise<CreateWorktreeResult> {
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(
@@ -991,9 +1047,17 @@ async function performLocalWorktreeCreate(
   const localWorktreeGitOptionArgs: [] | [{ wslDistro?: string }] = hasLocalWorktreeGitOptions
     ? [localWorktreeGitOptions]
     : []
+  const creationId = args.creationId
+  // Why: only `git worktree add` reads onCheckoutProgress; a prepared-checkout claim never reports.
   const addProjectGitOptions = (options?: AddWorktreeOptions): AddWorktreeOptions => ({
     ...options,
-    ...localWorktreeGitOptions
+    ...localWorktreeGitOptions,
+    ...(creationId
+      ? {
+          onCheckoutProgress: (checkout: WorktreeCheckoutProgress | null) =>
+            emitCreateWorktreeProgress(mainWindow, 'creating', creationId, checkout)
+        }
+      : {})
   })
 
   const requestedName = args.name
@@ -1568,9 +1632,10 @@ async function performLocalWorktreeCreate(
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
   }
   const { worktree } = timing.timeSync('persist_metadata', () => {
-    const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
+    const meta = store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), metaUpdates)
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
+  onWorkspaceCreated?.(worktreeId)
   const { lineage: worktreeLineage, workspaceLineage } = recordWorkspaceLineageForCreatedWorktree(
     store,
     args,
@@ -1686,12 +1751,33 @@ async function performLocalWorktreeCreate(
       startup: args.startup,
       setup,
       defaultTabs,
-      settings,
       createdWithAgent: args.createdWithAgent
     })
   )
 
-  notifyWorktreesChanged(mainWindow, repo.id)
+  // Why: an automation's terminals start in main, so the window is handed none to launch.
+  const provisionedByHost = Boolean(args.automationProvenance)
+  if (provisionedByHost && (setup || defaultTabs?.tabs.length)) {
+    void runtime.provisionManagedWorktreeTerminals(
+      {
+        worktreeSelector: `id:${worktree.id}`,
+        worktreeId: worktree.id,
+        worktreePath: worktree.path,
+        ...(setup ? { setup } : {}),
+        ...(defaultTabs ? { defaultTabs } : {}),
+        hasStartupTerminal: false,
+        setupCommandPlatform: getSetupRunnerCommandPlatformForLaunch(setup, 'posix'),
+        surfaceOwner: false
+      },
+      worktree
+    )
+  }
+
+  notifyLineageRepos(
+    (repoId) => notifyWorktreesChanged(mainWindow, repoId),
+    repo.id,
+    worktreeLineage?.parentWorktreeId
+  )
   return {
     worktree: {
       ...worktree,
@@ -1702,12 +1788,16 @@ async function performLocalWorktreeCreate(
     },
     ...(worktreeLineage ? { lineage: worktreeLineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
-    ...(stagedStartup.activationSetup
-      ? { setup: stagedStartup.activationSetup }
-      : setup && !stagedStartup.didSpawnSetup
-        ? { setup }
-        : {}),
-    ...(defaultTabs ? { defaultTabs } : {}),
+    ...(provisionedByHost
+      ? {}
+      : {
+          ...(stagedStartup.activationSetup
+            ? { setup: stagedStartup.activationSetup }
+            : setup && !stagedStartup.didSpawnSetup
+              ? { setup }
+              : {}),
+          ...(defaultTabs ? { defaultTabs } : {})
+        }),
     ...(addResult.localBaseRefRefresh
       ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
       : {}),

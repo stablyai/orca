@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import {
   notifyEditorExternalFileChange,
   requestEditorSaveQuiesce
@@ -12,9 +12,9 @@ import {
   bulkUnstageRuntimeGitPaths,
   discardRuntimeGitPath,
   stageRuntimeGitPath,
-  unstageRuntimeGitPath,
-  type RuntimeGitContext
-} from '@/runtime/runtime-git-client'
+  unstageRuntimeGitPath
+} from '@/runtime/runtime-git-working-tree-client'
+import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast

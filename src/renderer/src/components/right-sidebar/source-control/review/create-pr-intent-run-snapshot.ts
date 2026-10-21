@@ -1,4 +1,4 @@
-import { bulkStageRuntimeGitPaths } from '@/runtime/runtime-git-client'
+import { bulkStageRuntimeGitPaths } from '@/runtime/runtime-git-working-tree-client'
 import { operationGitContext } from '../listing/operation-target'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import {

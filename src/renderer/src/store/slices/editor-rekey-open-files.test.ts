@@ -205,11 +205,7 @@ describe('rekeyOpenFilesForPathChange', () => {
     const oldId = useAppStore.getState().openFiles[0]!.id
     // A dirty tab that already conflicts with disk: autosave is suspended by the
     // banner; gating it would strand the gate (verification skips a 'changed' tab).
-    useAppStore.setState((s) => ({
-      openFiles: s.openFiles.map((f) =>
-        f.id === oldId ? { ...f, externalMutation: 'changed' as const } : f
-      )
-    }))
+    useAppStore.getState().setExternalMutation(oldId, 'changed')
 
     useAppStore.getState().rekeyOpenFilesForPathChange({
       rekeys: [rekeyFor(oldId, '/repo/sub/a.md', 'sub/a.md')],

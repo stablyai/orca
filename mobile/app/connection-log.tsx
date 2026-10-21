@@ -4,7 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import { loadHosts } from '../src/transport/host-store'
 import { connectionLogStore } from '../src/transport/persisted-connection-log-store'
-import { useHostClient, useRpcClientContext } from '../src/transport/client-context'
+import { useRpcClientContext } from '../src/transport/client-context'
+import { useHostClient } from '../src/transport/host-client-hooks'
 import {
   useConnectionPathStatus,
   useReconnectAttempt

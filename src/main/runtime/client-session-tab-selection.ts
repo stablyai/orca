@@ -193,7 +193,6 @@ export class ClientSessionTabSelectionStore {
     const statesByWorktree = this.getStatesByWorktree(clientNavigationId)
     const existingState = statesByWorktree.get(snapshot.worktree)
     const state = existingState ?? {
-      // Why: host focus is private navigation; a new paired device starts from deterministic topology instead of inheriting it.
       selection: emptyClientSessionTabSelection(),
       revision: 0,
       shouldPersist: false,
@@ -214,14 +213,18 @@ export class ClientSessionTabSelectionStore {
         snapshotVersion: snapshot.snapshotVersion + state.revision
       }
     }
-    const projected = projectClientSessionTabSelection(closed.snapshot, state.selection)
+    // Why: until the device picks a tab here, opening the worktree lands on what the host shows;
+    // clients keep their own tab while open, so this never moves a device mid-visit.
+    const selection = state.shouldPersist
+      ? state.selection
+      : deriveClientSessionTabSelection(closed.snapshot)
+    const projected = projectClientSessionTabSelection(closed.snapshot, selection)
     // Why: a browser guest process swap drops its tab for one snapshot; the topology fallback
     // must not overwrite (and persist) the device's explicit pick, or focus never returns.
     const selectionSurvived =
-      !state.selection.activeTabId ||
-      closed.snapshot.tabs.some((tab) => tab.id === state.selection.activeTabId)
+      !selection.activeTabId || closed.snapshot.tabs.some((tab) => tab.id === selection.activeTabId)
     statesByWorktree.set(snapshot.worktree, {
-      selection: selectionSurvived ? projected.selection : state.selection,
+      selection: selectionSurvived ? projected.selection : selection,
       revision: state.revision,
       shouldPersist: state.shouldPersist,
       closedTabIds: closed.retainedClosedTabIds

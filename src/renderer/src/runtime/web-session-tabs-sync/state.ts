@@ -89,6 +89,23 @@ export type VisibilityResumeOmission = {
 
 export const latestSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 export const replayableSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
+
+export function sessionTabsFreshnessKey(environmentId: string, worktreeId: string): string {
+  return `${environmentId}:${worktreeId}`
+}
+
+// Why: a replay may repeat the current epoch/version; permit only that exact
+// identity once so an older concurrent frame cannot bypass monotonic ordering.
+export function acceptReplayedWebSessionTabsSnapshot(
+  environmentId: string,
+  worktreeId: string
+): void {
+  const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  const current = latestSessionTabsSnapshotByWorktree.get(key)
+  if (current) {
+    replayableSessionTabsSnapshotByWorktree.set(key, current)
+  }
+}
 export const latestReceivedSessionTabsSnapshotByWorktree = new Map<
   string,
   ReceivedSessionTabsSnapshot
@@ -218,6 +235,7 @@ export type WebSessionTabsSyncState = Pick<
   | 'browserPagesByWorkspace'
   | 'browserCertificateFailuresByPageId'
   | 'browserTabsByWorktree'
+  | 'editorBuffers'
   | 'groupsByWorktree'
   | 'layoutByWorktree'
   | 'openFiles'

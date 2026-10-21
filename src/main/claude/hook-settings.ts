@@ -14,6 +14,7 @@ import {
   type HooksConfig
 } from '../agent-hooks/installer-utils'
 import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
+import { getWindowsNativeHookAgent } from '../agent-hooks/windows-native-hook-executable'
 import {
   wrapRuntimeHomeHookCommand,
   wrapRuntimeHomePosixHookCommand
@@ -102,10 +103,11 @@ export function getManagedCommand(
 export function getManagedEventHook(
   eventName: string,
   scriptPath: string,
-  settings = CLAUDE_HOOK_SETTINGS
+  settings = CLAUDE_HOOK_SETTINGS,
+  nativeHookPath: string | null = null
 ): HookCommandConfig {
   return process.platform === 'win32'
-    ? getManagedLifecycleHook(scriptPath, settings)
+    ? getManagedLifecycleHook(scriptPath, settings, nativeHookPath)
     : buildManagedCommandHook(getRemoteManagedEventCommand(eventName, scriptPath))
 }
 
@@ -116,12 +118,25 @@ export function getRemoteManagedEventCommand(eventName: string, scriptPath: stri
     : getRemoteManagedCommand(scriptPath)
 }
 
+/** `nativeHookPath` is the installed orca-agent-hook.exe, or null to keep the `.cmd` form. */
 export function getManagedLifecycleHook(
   scriptPath: string,
-  settings = CLAUDE_HOOK_SETTINGS
+  settings = CLAUDE_HOOK_SETTINGS,
+  nativeHookPath: string | null = null
 ): HookCommandConfig {
   if (process.platform !== 'win32' || !settings.usesWindowsCompatLauncher) {
     return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
+  }
+  // Why a bare exe path plus a plain word: Git Bash, PowerShell and CreateProcess all start
+  // `<exe> claude` the same way, without cmd.exe.
+  const nativeCommand = nativeHookPath ? wrapWindowsDirectCmdHookCommand(nativeHookPath) : null
+  if (nativeCommand) {
+    const agent = getWindowsNativeHookAgent(scriptPath)
+    return {
+      type: 'command',
+      command: `${nativeCommand} ${agent}`,
+      timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+    }
   }
   if (settings.windowsHookShell === 'powershell') {
     return {
@@ -168,6 +183,31 @@ export function hasSameManagedHookInvocation(
     actual.shell === expected.shell &&
     JSON.stringify(actual.args ?? []) === JSON.stringify(expected.args ?? [])
   )
+}
+
+/** Per planned event, the index of the first of `formsFor(event)` it carries; unmatched are missing. */
+export function findManagedEventHookForms(
+  config: HooksConfig,
+  eventNames: string[],
+  formsFor: (eventName: string) => HookCommandConfig[]
+): { missing: string[]; matchedForms: number[] } {
+  const missing: string[] = []
+  const matchedForms: number[] = []
+  for (const eventName of eventNames) {
+    const definitions = config.hooks?.[eventName]
+    const hooks = Array.isArray(definitions)
+      ? definitions.flatMap((definition) => definition.hooks ?? [])
+      : []
+    const form = formsFor(eventName).findIndex((expected) =>
+      hooks.some((hook) => hasSameManagedHookInvocation(hook, expected))
+    )
+    if (form === -1) {
+      missing.push(eventName)
+    } else {
+      matchedForms.push(form)
+    }
+  }
+  return { missing, matchedForms }
 }
 
 export function getRemoteManagedCommand(scriptPath: string): string {

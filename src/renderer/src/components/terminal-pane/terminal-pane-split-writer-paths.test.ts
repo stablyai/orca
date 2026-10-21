@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { recordKeyboardCreatedTerminalPaneSplit } from './keyboard-handlers'
+import { recordKeyboardCreatedTerminalPaneSplit } from './terminal-keyboard-shortcut-matching'
 import { recordContextMenuCreatedTerminalPaneSplit } from './use-terminal-pane-split-actions'
-import { recordRuntimeCreatedTerminalPaneSplit } from './use-terminal-pane-lifecycle'
+import { recordRuntimeCreatedTerminalPaneSplit } from './terminal-pane-lifecycle-primitives'
 
 const mocks = vi.hoisted(() => ({
   recordFeatureInteraction: vi.fn(),

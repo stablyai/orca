@@ -4,7 +4,11 @@ import { defineMethod } from '../../../core'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
 import { readExactWorkerOutput } from '../worker/worker-output'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
-import { inspectRemoteAttachment, requireHomeAttachment } from './federation-attachment-observation'
+import {
+  inspectRemoteAttachment,
+  observeRemoteAttachmentLiveness,
+  requireHomeAttachment
+} from './federation-attachment-observation'
 import {
   readRemoteAttachmentArchive,
   releaseRemoteAttachment
@@ -24,7 +28,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const items = await mapWithConcurrency(params.dispatchIds, 16, async (dispatchId) => {
         requireHomeAttachment(runtime, dispatchId, authenticatedCallerFingerprint)
-        const observation = await inspectRemoteAttachment(runtime, dispatchId)
+        const observation = await observeRemoteAttachmentLiveness(runtime, dispatchId)
         return {
           dispatchId,
           observation: {
@@ -64,7 +68,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
         params.dispatchId,
         authenticatedCallerFingerprint
       )
-      const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
+      const observation = await observeRemoteAttachmentLiveness(runtime, params.dispatchId)
       return {
         dispatchId: params.dispatchId,
         runtimeEpoch: runtime.getRuntimeId(),

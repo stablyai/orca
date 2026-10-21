@@ -2,11 +2,12 @@ import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
 import { callRuntimeRpc } from './runtime-rpc-client'
-import { runtimeTargetForOwnerHostId, type RuntimeClientTarget } from './runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 /** The repo's own host: a server's runtime, or this app (with `hostId`) for local and SSH repos. */
 function getHookInspectionTarget(hostId: ExecutionHostId): RuntimeClientTarget {
-  const target = runtimeTargetForOwnerHostId(hostId)
+  const target = ipcOrRuntimeTargetForHostId(hostId)
   if (!target) {
     throw new Error('The project host is unresolved.')
   }

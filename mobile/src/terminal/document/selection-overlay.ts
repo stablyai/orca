@@ -1,10 +1,9 @@
+import { getCellHeight, getTotalScale } from './cell-metrics'
 import { cellToViewportPx } from './cell-geometry'
 import type { TerminalDocumentScope } from './document-scope'
-import { getCellHeight } from './fit-scale'
 import { notify } from './host-notify'
 import { applyXtermSelection, selRange } from './selection-range'
 import { viewportPoint, viewportToCell } from './viewport-cell'
-import { getTotalScale } from './viewport-transform'
 
 /** How close to an edge a handle drag starts scrolling, in pixels. */
 const EDGE_SCROLL_PX = 40

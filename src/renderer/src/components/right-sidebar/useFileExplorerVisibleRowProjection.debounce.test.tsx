@@ -12,7 +12,7 @@ vi.mock('./worktree-git-owner-target', () => ({
   getWorktreeGitOwnerTarget: () => ({ kind: 'local' })
 }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-status-client', () => ({
   getRuntimeGitIgnoredPaths: getRuntimeGitIgnoredPathsMock
 }))
 

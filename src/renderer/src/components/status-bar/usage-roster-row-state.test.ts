@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
+  translate: (_key: string, fallback: string, values?: Record<string, string>) =>
+    Object.entries(values ?? {}).reduce(
+      (text, [name, value]) => text.replace(`{{${name}}}`, value),
+      fallback
+    )
 }))
 
 import { getUsageRosterRowState } from './usage-roster-row-state'
@@ -99,6 +103,30 @@ describe('getUsageRosterRowState', () => {
     expect(getUsageRosterRowState(provider({ status: 'error' }), true)).toEqual({
       kind: 'usage',
       statusLabel: null
+    })
+  })
+
+  it('names the host for a provider set up only on this computer, with the key note', () => {
+    expect(
+      getUsageRosterRowState(
+        provider({
+          provider: 'minimax',
+          status: 'error',
+          error: 'Not configured on devbox',
+          usageMetadata: {
+            ownerNotSetUp: {
+              kind: 'not-configured',
+              ownerLabel: 'devbox',
+              signInSavedHereOnly: true
+            }
+          }
+        }),
+        false
+      )
+    ).toEqual({
+      kind: 'unavailable',
+      statusLabel: 'Not configured on devbox',
+      detail: 'Its sign-in is saved on this computer only.'
     })
   })
 })

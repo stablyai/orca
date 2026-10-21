@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  applyJiraIssueKeyCasing,
   getLinearIssueWorkspaceName,
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
@@ -79,6 +80,90 @@ describe('getLinkedWorkItemWorkspaceName', () => {
       displayName: 'PROJ-7 Fix flaky import',
       seedName: 'proj-7-fix-flaky-import'
     })
+  })
+
+  it('keeps the canonical uppercase Jira key when the casing policy preserves it', () => {
+    const item = {
+      type: 'issue' as const,
+      provider: 'jira' as const,
+      number: 0,
+      title: 'PROJ-7 Fix flaky import',
+      jiraIdentifier: 'PROJ-7'
+    }
+    expect(getLinkedWorkItemWorkspaceName(item, { jiraIssueKeyCasing: 'preserve' })).toEqual({
+      displayName: 'PROJ-7 Fix flaky import',
+      seedName: 'PROJ-7-fix-flaky-import'
+    })
+    expect(
+      getLinkedWorkItemWorkspaceName(item, { jiraIssueKeyCasing: 'lowercase' })?.seedName
+    ).toBe('proj-7-fix-flaky-import')
+  })
+
+  it('ignores the Jira casing policy for non-Jira work items', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName(
+        {
+          type: 'issue',
+          provider: 'linear',
+          number: 0,
+          title: 'Fix it',
+          linearIdentifier: 'ENG-1'
+        },
+        { jiraIssueKeyCasing: 'preserve' }
+      )?.seedName
+    ).toBe('eng-1-fix-it')
+  })
+})
+
+describe('Jira generated-name source identity', () => {
+  it('ignores a stale Jira identifier on an explicitly different provider', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName(
+        {
+          type: 'issue',
+          provider: 'github',
+          number: 7,
+          title: 'PROJ-7 Fix login',
+          jiraIdentifier: 'PROJ-7'
+        },
+        { jiraIssueKeyCasing: 'preserve' }
+      )?.seedName
+    ).toBe('proj-7-fix-login')
+    expect(
+      getLinkedWorkItemWorkspaceName(
+        {
+          type: 'issue',
+          provider: 'linear',
+          number: 0,
+          title: 'Fix login',
+          jiraIdentifier: 'PROJ-7',
+          linearIdentifier: 'ENG-1'
+        },
+        { jiraIssueKeyCasing: 'preserve' }
+      )?.seedName
+    ).toBe('eng-1-fix-login')
+  })
+})
+
+describe('applyJiraIssueKeyCasing', () => {
+  it('uppercases any Jira project key shape without an allowlist', () => {
+    expect(applyJiraIssueKeyCasing('alt-42-title', 'ALT-42', 'preserve')).toBe('ALT-42-title')
+    expect(applyJiraIssueKeyCasing('team_alpha9-7-title', 'TEAM_ALPHA9-7', 'preserve')).toBe(
+      'TEAM_ALPHA9-7-title'
+    )
+    expect(applyJiraIssueKeyCasing('proj-123', 'proj-123', 'preserve')).toBe('PROJ-123')
+  })
+
+  it('leaves the seed alone for the default policy or a non-leading key', () => {
+    expect(applyJiraIssueKeyCasing('proj-123-title', 'PROJ-123', undefined)).toBe('proj-123-title')
+    expect(applyJiraIssueKeyCasing('proj-123-title', 'PROJ-123', 'lowercase')).toBe(
+      'proj-123-title'
+    )
+    expect(applyJiraIssueKeyCasing('proj-1234-title', 'PROJ-123', 'preserve')).toBe(
+      'proj-1234-title'
+    )
+    expect(applyJiraIssueKeyCasing('fix-proj-123', 'PROJ-123', 'preserve')).toBe('fix-proj-123')
+    expect(applyJiraIssueKeyCasing('title', 'not a key', 'preserve')).toBe('title')
   })
 })
 

@@ -176,11 +176,9 @@ describe('Antigravity raw captured readiness', () => {
       foregroundProcess: ANTIGRAVITY_COMMAND,
       data: transcript
     })
+    await runtime.readTerminal(handle, { screen: true })
     try {
-      const result = (await runtime.waitForTerminal(handle, {
-        condition: 'tui-idle',
-        timeoutMs
-      })) as { satisfied?: boolean; blockedReason?: unknown }
+      const result = await waitForTranscriptIdle({ runtime, handle }, timeoutMs)
       return {
         ready: result.satisfied === true,
         blockedReason: result.blockedReason ?? null,

@@ -1,4 +1,4 @@
-// Self-contained relay protocol — mirrors src/main/ssh/relay-protocol.ts
+// Self-contained relay protocol — mirrors src/main/ssh/remote-exec/remote-frame-protocol.ts
 // but has no Electron dependencies. Deployed standalone to remote hosts.
 
 import {

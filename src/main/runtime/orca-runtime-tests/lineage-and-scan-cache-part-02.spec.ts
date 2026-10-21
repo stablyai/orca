@@ -8,6 +8,10 @@ import {
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../../shared/worktree/host-qualified-identity'
 
 const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
 
@@ -16,10 +20,12 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ instanceId: 'child-instance' })
     }
-    const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
-      metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
-      return metaById[worktreeId]
-    })
+    const setWorktreeMeta = vi.fn(
+      ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      }
+    )
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
@@ -35,7 +41,10 @@ describe('OrcaRuntimeService', () => {
       orcaCreationWorkspaceLayout: { path: '/tmp', nestWorkspaces: false }
     })
 
-    expect(setWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, { comment: 'keep me' })
+    expect(setWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: TEST_WORKTREE_ID, hostId: 'local' }),
+      { comment: 'keep me' }
+    )
   })
 
   it('ignores stale instance-mismatched lineage when validating manual cycle repairs', async () => {
@@ -47,12 +56,12 @@ describe('OrcaRuntimeService', () => {
       [parentId]: makeWorktreeMeta({ instanceId: 'new-parent-instance' }),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
     }
-    const setWorktreeLineage = vi.fn((_worktreeId, lineage) => lineage)
+    const setWorktreeLineage = vi.fn((_target: HostWorktreeTarget, lineage) => lineage)
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
         return metaById[worktreeId]
       },
@@ -93,7 +102,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(setWorktreeLineage).toHaveBeenCalledWith(
-      childId,
+      hostWorktreeTarget({ id: childId, hostId: 'local' }),
       expect.objectContaining({
         worktreeId: childId,
         worktreeInstanceId: 'child-instance',
@@ -116,12 +125,12 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
         return metaById[worktreeId]
       },
       getWorktreeLineage: () => undefined,
-      setWorktreeLineage: vi.fn((_worktreeId: string, lineage) => lineage)
+      setWorktreeLineage: vi.fn((_target: HostWorktreeTarget, lineage) => lineage)
     }
     vi.mocked(listWorktrees).mockResolvedValue([
       {
@@ -170,18 +179,18 @@ describe('OrcaRuntimeService', () => {
         createdAt: 1
       }
     }
-    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+    const setWorktreeLineage = vi.fn((_target: HostWorktreeTarget, lineage) => lineage)
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
         return metaById[worktreeId]
       },
       getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId],
       getAllWorktreeLineage: () => lineageById,
-      removeWorktreeLineage: vi.fn((worktreeId: string) => {
+      removeWorktreeLineage: vi.fn(({ id: worktreeId }: HostWorktreeTarget) => {
         delete lineageById[worktreeId]
       }),
       setWorktreeLineage
@@ -227,7 +236,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(setWorktreeLineage).toHaveBeenCalledWith(
-      childId,
+      hostWorktreeTarget({ id: childId, hostId: 'local' }),
       expect.objectContaining({
         worktreeInstanceId: 'child-instance',
         parentWorktreeInstanceId: rotatedParentInstance
@@ -255,17 +264,19 @@ describe('OrcaRuntimeService', () => {
         createdAt: 1
       }
     }
-    const removeWorktreeLineage = vi.fn((worktreeId: string) => {
+    const removeWorktreeLineage = vi.fn(({ id: worktreeId }: HostWorktreeTarget) => {
       delete lineageById[worktreeId]
     })
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
-        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
-        return metaById[worktreeId]
-      }),
+      setWorktreeMeta: vi.fn(
+        ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+          metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+          return metaById[worktreeId]
+        }
+      ),
       getAllWorktreeLineage: () => lineageById,
       removeWorktreeLineage
     }
@@ -549,13 +560,14 @@ describe('OrcaRuntimeService', () => {
         createdAt: 1
       }
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
     const runtime = new OrcaRuntimeService({
       ...store,
       getRepos: () => [folderRepo],
       getRepo: (id: string) => (id === folderRepo.id ? folderRepo : undefined),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       },

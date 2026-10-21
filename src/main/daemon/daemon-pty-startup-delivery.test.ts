@@ -73,14 +73,19 @@ describe('DaemonPtyAdapter startup delivery', () => {
       const missingShell = join(dir, 'missing-fish')
       const fallbackName = basename(localPtyUtils.resolveUnixShellPath(missingShell))
       context.skip(!['bash', 'zsh'].includes(fallbackName), 'Requires a Bash/zsh fallback')
-      await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        command: 'codex',
-        env: { SHELL: source === 'environment' ? missingShell : '/bin/sh' },
-        ...(source === 'override' ? { shellOverride: missingShell } : {})
-      })
-      await new Promise((resolve) => setTimeout(resolve, 350))
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          command: 'codex',
+          env: { SHELL: source === 'environment' ? missingShell : '/bin/sh' },
+          ...(source === 'override' ? { shellOverride: missingShell } : {})
+        })
+        await vi.advanceTimersByTimeAsync(350)
+      } finally {
+        vi.useRealTimers()
+      }
       expect(lastSubprocess.write).not.toHaveBeenCalled()
       expect(lastSpawnOpts).toEqual(
         expect.objectContaining({ startupCommandDelivery: 'shell-ready' })
@@ -96,9 +101,13 @@ describe('DaemonPtyAdapter startup delivery', () => {
     { command: 'codex', startupCommandDelivery: 'fast' as const },
     { command: "codex 'linked issue context'", startupCommandDelivery: 'shell-ready' as const }
   ])('waits past 300ms and submits once after readiness: %j', async (startup) => {
-    await adapter.spawn({ cols: 80, rows: 24, ...startup, env: { SHELL: '/bin/zsh' } })
-
-    await new Promise((resolve) => setTimeout(resolve, 350))
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      await adapter.spawn({ cols: 80, rows: 24, ...startup, env: { SHELL: '/bin/zsh' } })
+      await vi.advanceTimersByTimeAsync(350)
+    } finally {
+      vi.useRealTimers()
+    }
     expect(lastSubprocess.write).not.toHaveBeenCalled()
     expect(lastSpawnOpts).toEqual(
       expect.objectContaining({ startupCommandDelivery: 'shell-ready' })

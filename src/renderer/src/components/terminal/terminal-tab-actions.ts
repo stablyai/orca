@@ -1,13 +1,9 @@
 import { useAppStore } from '@/store'
-import {
-  closeWebRuntimeSessionTab,
-  isWebRuntimeSessionActive,
-  toHostSessionTabId
-} from '@/runtime/web-runtime-session'
-import {
-  getLatestWebSessionTabsPublicationEpoch,
-  resolveHostSessionTabIdForWebSessionTab
-} from '@/runtime/web-session-tabs-sync'
+import { closeWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { toHostSessionTabId } from '../../../../shared/terminal-surface-id'
+import { getLatestWebSessionTabsPublicationEpoch } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
+import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync/tracking-mappings'
 import { resolveTerminalCloseRoute } from '@/lib/terminal-close-route'
 import {
   guardPinnedTabClose,
@@ -24,6 +20,7 @@ import {
   shouldConfirmRunningTerminalClose
 } from './running-terminal-close-guard'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
+import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import { getTerminalIncarnationHandle } from './terminal-close-incarnation'
 import {
   getWorktreeTerminalTabIds,
@@ -247,6 +244,8 @@ export function closeTerminalTab(
           if (browserTab) {
             current.setActiveBrowserTab(browserTab.id)
             current.setActiveTabType('browser', owningWorktreeId)
+          } else if (options?.reason === 'pty-exit') {
+            runAsAutomaticDeselection(() => current.setActiveWorktree(null))
           } else {
             current.setActiveWorktree(null)
           }

@@ -306,4 +306,48 @@ describe('orca cli agent launch', () => {
     expect(output).toContain('cannot start agents from the CLI')
     expect(launchCalls()).toEqual([])
   })
+
+  it('refuses a model on a host older than agent.launch rather than dropping it', async () => {
+    queueFixtures(callMock, okFixture('req_status', { capabilities: [] }))
+
+    const output = await runRefused([
+      'worktree',
+      'create',
+      '--repo',
+      'id:repo-1',
+      '--name',
+      'design',
+      '--no-parent',
+      '--agent',
+      'codex',
+      '--model',
+      'gpt-5.5',
+      '--json'
+    ])
+
+    expect(output).toContain('cannot start an agent on a chosen model or effort')
+    expect(launchCalls()).toEqual([])
+  })
+
+  it.each([
+    [['--agent', 'codex', '--effort', 'high'], '--effort requires --model'],
+    [['--model', 'gpt-5.5'], '--model requires --agent'],
+    [['--agent', 'codex', '--model', 'gpt-5.5', '--effort', 'turbo'], 'does not support effort'],
+    [['--surface', 'terminal'], '--surface requires --agent']
+  ])('refuses %j before creating anything', async (flags, message) => {
+    const output = await runRefused([
+      'worktree',
+      'create',
+      '--repo',
+      'id:repo-1',
+      '--name',
+      'design',
+      '--no-parent',
+      ...flags,
+      '--json'
+    ])
+
+    expect(output).toContain(message)
+    expect(callMock).not.toHaveBeenCalled()
+  })
 })

@@ -170,8 +170,12 @@ describe('the page keeps its own capture buffer', () => {
     const posted: Array<Record<string, unknown>> = []
     const mounted = mountTerminalWebDocument(host, (message) => posted.push(message))
 
-    window.dispatchEvent(new ErrorEvent('error', { message: 'first failure' }))
-    window.dispatchEvent(new ErrorEvent('error', { message: 'second failure' }))
+    window.dispatchEvent(
+      new ErrorEvent('error', { message: 'first failure', error: new Error('first failure') })
+    )
+    window.dispatchEvent(
+      new ErrorEvent('error', { message: 'second failure', error: new Error('second failure') })
+    )
 
     const messages = posted.filter((message) => message.type === 'error').map((m) => m.message)
     expect(messages[0]).toContain('captured: first failure')
@@ -182,11 +186,26 @@ describe('the page keeps its own capture buffer', () => {
     const nextHost = plantHost()
     const nextPosted: Array<Record<string, unknown>> = []
     const next = mountTerminalWebDocument(nextHost, (message) => nextPosted.push(message))
-    window.dispatchEvent(new ErrorEvent('error', { message: 'third failure' }))
+    window.dispatchEvent(
+      new ErrorEvent('error', { message: 'third failure', error: new Error('third failure') })
+    )
     const nextMessages = nextPosted.filter((m) => m.type === 'error').map((m) => m.message)
     expect(nextMessages[0]).toContain('captured: third failure')
     expect(nextMessages[0]).not.toContain('first failure')
     next.dispose()
+  })
+
+  it("leaves a browser notice from elsewhere on the page out, so it can't fail a terminal", () => {
+    // The chat list's resize observer can make the browser raise its loop notice; no error is behind it.
+    const host = plantHost()
+    const posted: Array<Record<string, unknown>> = []
+    const mounted = mountTerminalWebDocument(host, (message) => posted.push(message))
+
+    const message = 'ResizeObserver loop completed with undelivered notifications.'
+    window.dispatchEvent(new ErrorEvent('error', { message }))
+
+    expect(posted.filter((m) => m.type === 'error')).toEqual([])
+    mounted.dispose()
   })
 })
 

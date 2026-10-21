@@ -1,3 +1,4 @@
+import { createPaneBindingStore } from './pty-launch-race-test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
@@ -113,9 +114,7 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding?: boolean
       }): Promise<{ id: string }>
     }
-    const store = {
-      persistPtyBinding: vi.fn()
-    }
+    const store = createPaneBindingStore()
     let controller: RuntimeSpawnController | null = null
     const runtime = {
       setPtyController: vi.fn((value) => {
@@ -141,6 +140,12 @@ describe('registerPtyHandlers', () => {
     )
     const spawnController = controller as unknown as RuntimeSpawnController
     const leafId = '11111111-1111-4111-8111-111111111111'
+    await store.admitTerminalPane({
+      type: 'createTerminalTab',
+      workspace: 'wt-1',
+      tabId: 'tab-headless',
+      leafId
+    })
     await spawnController.spawn({
       cols: 80,
       rows: 24,
@@ -151,7 +156,7 @@ describe('registerPtyHandlers', () => {
       persistHostSessionBinding: true
     })
 
-    expect(store.persistPtyBinding).toHaveBeenCalledWith({
+    expect(store.bindingWrites).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       tabId: 'tab-headless',
       leafId,
@@ -195,7 +200,7 @@ describe('registerPtyHandlers', () => {
       pid: 12345
     }
     spawnMock.mockReturnValue(proc)
-    const store = { persistPtyBinding: vi.fn(() => false) }
+    const store = createPaneBindingStore()
     let controller: RuntimeSpawnController | null = null
     const runtime = {
       setPtyController: vi.fn((value) => {
@@ -242,7 +247,7 @@ describe('registerPtyHandlers', () => {
       error.mockRestore()
     }
 
-    expect(store.persistPtyBinding).toHaveBeenCalledWith(
+    expect(store.bindingWrites).toHaveBeenCalledWith(
       expect.objectContaining({ expectedSourceBinding })
     )
     expect(killSpy).toHaveBeenCalledOnce()
@@ -277,6 +282,7 @@ describe('registerPtyHandlers', () => {
         return {
           id: 'pty-early-exit',
           incarnationId: 'incarnation-early-exit',
+          exitedBeforeSpawnReply: true,
           providerSequence: { value: 17, generation: 'reset' as const },
           wslDistro: 'Ubuntu'
         }
@@ -312,20 +318,21 @@ describe('registerPtyHandlers', () => {
 
     expect(onPtySpawnCommitted).toHaveBeenCalledOnce()
     expect(persistPtyBinding).not.toHaveBeenCalled()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test reads existing private maps only to verify rejected admission leaves no state.
     const internals = runtime as unknown as {
       handleByPtyId: Map<string, string>
       providerSequenceInitializedPtys: Set<string>
       ptyOutputSequenceById: Map<string, number>
       ptysById: Map<string, { connected: boolean }>
       wslDistroByPtyId: Map<string, string>
-      earlyExitedPtyIncarnations: Map<string, string | null>
+      pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
     expect(internals.handleByPtyId.has('pty-early-exit')).toBe(false)
     expect(internals.providerSequenceInitializedPtys.has('pty-early-exit')).toBe(false)
     expect(internals.ptyOutputSequenceById.has('pty-early-exit')).toBe(false)
     expect(internals.ptysById.get('pty-early-exit')?.connected).not.toBe(true)
     expect(internals.wslDistroByPtyId.has('pty-early-exit')).toBe(false)
-    expect(internals.earlyExitedPtyIncarnations.has('pty-early-exit')).toBe(false)
+    expect(internals.pendingPtyRegistrationIncarnations.has('pty-early-exit')).toBe(false)
     clearProviderPtyState('pty-early-exit')
   })
   it('does not retain a claimed owner when its PTY exits before controller admission', async () => {
@@ -451,9 +458,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
-    const store = {
-      persistPtyBinding: vi.fn()
-    }
+    const store = createPaneBindingStore()
     let controller: RuntimeSpawnController | null = null
     const runtime = {
       setPtyController: vi.fn((value) => {
@@ -479,6 +484,12 @@ describe('registerPtyHandlers', () => {
     const spawnController = controller as unknown as RuntimeSpawnController
     const leafId = '22222222-2222-4222-8222-222222222222'
     const paneKey = makePaneKey('tab-race', leafId)
+    await store.admitTerminalPane({
+      type: 'createTerminalTab',
+      workspace: 'repo-1::/tmp',
+      tabId: 'tab-race',
+      leafId
+    })
     const runtimeSpawn = spawnController.spawn({
       cols: 80,
       rows: 24,
@@ -511,7 +522,7 @@ describe('registerPtyHandlers', () => {
       { id: 'pty-shared', isReattach: true }
     ])
     expect(providerSpawn).toHaveBeenCalledTimes(1)
-    expect(store.persistPtyBinding).toHaveBeenCalledWith({
+    expect(store.bindingWrites).toHaveBeenCalledWith({
       worktreeId: 'repo-1::/tmp',
       tabId: 'tab-race',
       leafId,

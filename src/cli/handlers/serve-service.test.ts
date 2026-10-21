@@ -6,10 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   installServeService,
   readServeServiceStatus,
-  resolveServiceCommand,
   uninstallServeService,
   type ServeServiceDeps
 } from './serve-service'
+import { resolveServiceCommand } from '../runtime/serve-app-launcher'
 import { serveSupervisorBrakePath } from '../runtime/serve-supervisor-brake'
 
 describe('orca serve service', () => {
@@ -36,7 +36,11 @@ describe('orca serve service', () => {
 
   const deps = (platform: NodeJS.Platform): ServeServiceDeps => ({
     platform,
-    env: { PATH: `/nonexistent:${bin}`, ORCA_USER_DATA_PATH: join(home, 'profile') },
+    env: {
+      PATH: `/nonexistent:${bin}`,
+      ORCA_USER_DATA_PATH: join(home, 'profile'),
+      ELECTRON_RUN_AS_NODE: '1'
+    },
     homeDir: home,
     uid: 501,
     run: async (program, args) => {
@@ -146,5 +150,47 @@ describe('orca serve service', () => {
     expect(() =>
       resolveServiceCommand(null, { platform: 'darwin', env: { PATH: '/nonexistent' } })
     ).toThrow(/PATH/)
+  })
+  it('names the command to run when only a server-only orca exists here', async () => {
+    // The `orca` an SSH-launched Orca server puts on a remote host runs on plain Node.
+    const serverCli = (platform: NodeJS.Platform, path: string): ServeServiceDeps => {
+      const base = deps(platform)
+      const { ELECTRON_RUN_AS_NODE: _electron, ...env } = base.env
+      return { ...base, env: { ...env, PATH: path } }
+    }
+    const scoped = join(home, 'profile', 'cli', 'bin')
+    await mkdir(scoped, { recursive: true })
+    await writeFile(join(scoped, 'orca'), '#!/bin/sh\n')
+    await chmod(join(scoped, 'orca'), 0o755)
+    await expect(
+      installServeService({ command: null, dryRun: false }, serverCli('linux', scoped))
+    ).rejects.toThrow(/install the Orca app.*`orca-ide serve service install`/i)
+    await expect(
+      installServeService({ command: null, dryRun: true }, serverCli('darwin', scoped))
+    ).rejects.toThrow(/`orca serve service install`/)
+    expect(calls).toEqual([])
+    // An installed app's launcher on PATH (or named by --command) still works from that terminal.
+    await expect(
+      installServeService({ command: null, dryRun: true }, serverCli('linux', `${scoped}:${bin}`))
+    ).resolves.toMatchObject({ dryRun: true })
+    await expect(
+      installServeService(
+        { command: join(bin, 'orca-ide'), dryRun: true },
+        serverCli('linux', scoped)
+      )
+    ).resolves.toMatchObject({ dryRun: true })
+  })
+
+  it('refuses a --command tied to one Orca version', async () => {
+    const scoped = join(home, 'profile', 'cli', 'bin')
+    await mkdir(scoped, { recursive: true })
+    await writeFile(join(scoped, 'orca'), '#!/bin/sh\n')
+    await chmod(join(scoped, 'orca'), 0o755)
+    expect(() =>
+      resolveServiceCommand(join(scoped, 'orca'), {
+        platform: 'darwin',
+        env: { ORCA_USER_DATA_PATH: join(home, 'profile') }
+      })
+    ).toThrow(/one Orca version/)
   })
 })

@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
-import { View, Pressable, StyleSheet, Platform, useWindowDimensions, Keyboard } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { View, Pressable, StyleSheet, Platform, Keyboard } from 'react-native'
+import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   useSharedValue,
@@ -78,7 +78,7 @@ function MountedRightDrawer({
 }: MountedRightDrawerProps) {
   const translateX = useSharedValue(0)
   const progress = useSharedValue(0)
-  const { width: screenWidth } = useWindowDimensions()
+  const { width: screenWidth } = useSafeAreaFrame()
   const insets = useSafeAreaInsets()
   const { isWideLayout } = useResponsiveLayout()
   const panelWidth = resolveRightDrawerPanelWidth(screenWidth, isWideLayout, widthPx)

@@ -4,13 +4,15 @@ import {
   getRegisteredSshTargetMutations,
   getSshConnectionManager,
   listRegisteredRemovedSshTargetLabels,
-  listRegisteredSshTargets
-} from '../../../ssh/ssh-target-registry'
-import { isManagedOrcadSshTarget } from '../../../ssh/ssh-connection-store'
+  listRegisteredSshTargets,
+  SshTargetManagementUnservedError
+} from '../../../ssh/targets/ssh-target-registry'
+import { isManagedOrcadSshTarget } from '../../../ssh/connection/ssh-connection-store'
 import { browseSshDirectory } from '../../../ssh/ssh-remote-directory-browse'
 import { defineMethod } from '../core'
 import { getPublicSshError, getPublicSshState } from '../../public-ssh-state'
 import type { SshTarget as SshTargetRecord, SshTargetSummary } from '../../../../shared/ssh-types'
+import { isRemoteCliControlAllowed } from '../../../../shared/ssh-remote-cli-control'
 import type {
   SshEditableTarget,
   SshEditableTargetField,
@@ -18,6 +20,7 @@ import type {
 } from '../../../../shared/ssh-target-management'
 import {
   SshBrowseDir,
+  SshConnect,
   SshTarget,
   SshTargetAdd,
   SshTargetUpdate
@@ -63,9 +66,16 @@ function pickSshEditableFields(source: SshEditableTargetInput): SshEditableTarge
   } satisfies Record<SshEditableTargetField, unknown>
 }
 
+// Why: clients from before the default flip omit the switch when it shows off and read absent as
+// off, so this boundary sends and saves it explicitly; current clients always send a boolean.
+function withExplicitRemoteCliControl(input: SshEditableTargetInput): SshEditableTargetInput {
+  return { ...input, allowRemoteCliControl: input.allowRemoteCliControl ?? false }
+}
+
 function toSshEditableTarget(target: SshTargetRecord): SshEditableTarget {
   return {
     ...pickSshEditableFields(target),
+    allowRemoteCliControl: isRemoteCliControlAllowed(target),
     ...toSshTargetSummary(target),
     ...(target.source === undefined ? {} : { source: target.source }),
     ...(isManagedOrcadSshTarget(target) ? { managedServer: true as const } : {})
@@ -84,10 +94,13 @@ export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.connect',
     permission: 'host-admin',
-    params: SshTarget,
+    params: SshConnect,
     handler: async (params) => {
       try {
-        return { state: getPublicSshState(await connectRegisteredSshTarget(params.targetId)) }
+        const state = await connectRegisteredSshTarget(params.targetId, {
+          automatic: params.automatic === true
+        })
+        return { state: getPublicSshState(state) }
       } catch {
         const state = getRegisteredSshState(params.targetId)
         throw new Error(getPublicSshError(state?.status ?? 'error'))
@@ -127,7 +140,10 @@ export const SSH_METHODS = [
     permission: 'workspace',
     params: SshTargetAdd,
     handler: (params) => {
-      const result = getRegisteredSshTargetMutations().add({ ...params.target, source: 'manual' })
+      const result = getRegisteredSshTargetMutations().add({
+        ...withExplicitRemoteCliControl(params.target),
+        source: 'manual'
+      })
       return {
         target: toSshEditableTarget(result.target),
         repoReadoptions: result.repoReadoptions
@@ -141,7 +157,7 @@ export const SSH_METHODS = [
     handler: (params) => {
       // Why: replace semantics, so an omitted optional field is cleared, as SSH settings do.
       const updated = getRegisteredSshTargetMutations().update(params.targetId, {
-        ...pickSshEditableFields(params.target),
+        ...pickSshEditableFields(withExplicitRemoteCliControl(params.target)),
         source: 'manual'
       })
       if (!updated) {
@@ -163,7 +179,12 @@ export const SSH_METHODS = [
     name: 'ssh.browseDir',
     permission: 'workspace',
     params: SshBrowseDir,
-    handler: (params) =>
-      browseSshDirectory(getSshConnectionManager(), params.targetId, params.dirPath)
+    handler: (params) => {
+      const manager = getSshConnectionManager()
+      if (!manager) {
+        throw new SshTargetManagementUnservedError()
+      }
+      return browseSshDirectory(manager, params.targetId, params.dirPath)
+    }
   })
 ]

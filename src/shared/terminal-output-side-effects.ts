@@ -6,6 +6,7 @@
 
 import {
   type AgentStatus,
+  type AgentIdleStatus,
   clearWorkingIndicators,
   createAgentStatusTracker,
   detectAgentStatusFromTitle,
@@ -14,6 +15,9 @@ import {
   normalizeTerminalTitle,
   shouldSuppressCursorNativeTitle
 } from './agent-detection'
+import type { ProgramActivityChange } from './agent-status-osc'
+import { extractAllOscTitleEntries } from './osc-title-extraction'
+import { placeProgramActivityAmongTitles } from './program-status/title-activity-order'
 import { createBellDetector } from './terminal-bell-detector'
 import {
   INITIAL_MODE_2031_REPLY_SCAN_STATE,
@@ -33,17 +37,24 @@ export type TerminalTitleFactMeta = {
   staleWorkingTitleClear?: boolean
 }
 
+/** An idle edge's provenance plus the status the tracker classified, so readers need not re-read the title. */
+export type AgentIdleEdgeMeta = TerminalTitleFactMeta & { status?: AgentIdleStatus }
+
 type TerminalTitleTrackerChunkOptions = {
   titleScanData?: string
   mode2031PendingSubscribe?: boolean
+  /** The chunk's OSC 7501 activity changes, offsets in `data`; applied in byte order with its titles. */
+  programActivity?: readonly ProgramActivityChange[]
 }
 
 export type TerminalTitleTrackerCallbacks = {
   /** Fired once per observed OSC title, in byte order — including the synthesized cleared title when the stale-working timer fires. */
   onTitle?: (normalizedTitle: string, rawTitle: string, meta?: TerminalTitleFactMeta) => void
-  onAgentBecameIdle?: (title: string, meta?: TerminalTitleFactMeta) => void
+  onAgentBecameIdle?: (title: string, meta?: AgentIdleEdgeMeta) => void
   onAgentBecameWorking?: () => void
   onAgentExited?: () => void
+  /** Fired per change in the program's OSC 7501 activity (see applyProgramActivity). */
+  onProgramActivity?: (activity: AgentStatus | null) => void
   /** Fired once per chunk containing a real BEL (OSC-aware, cross-chunk escape state), after the chunk's titles (renderer drain order). */
   onBell?: () => void
   /**
@@ -82,6 +93,8 @@ export type TerminalTitleTracker = {
    * No-ops once any title has been observed or seeded (live state wins); fires no callbacks.
    */
   seedInitialTitle: (rawTitle: string) => void
+  /** The stream lost the program's OSC 7501 reports (a data gap): titles classify again. */
+  endProgramActivity: () => void
   /** Restore the status consumed by the latest exit candidate when process evidence disproves it. */
   restoreLastAgentExit: (confirmedStatus?: AgentStatus) => AgentStatus | null
   /** Last title surfaced through onTitle, after normalization. */
@@ -107,6 +120,7 @@ export function createTerminalTitleTracker(
     onAgentBecameIdle,
     onAgentBecameWorking,
     onAgentExited,
+    onProgramActivity,
     onBell,
     onCommandFinished,
     onCommandStarted,
@@ -140,11 +154,11 @@ export function createTerminalTitleTracker(
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
-          (title) => {
-            onAgentBecameIdle?.(
-              title,
-              applyingStaleWorkingTitleClear ? { staleWorkingTitleClear: true } : undefined
-            )
+          (title, status) => {
+            onAgentBecameIdle?.(title, {
+              status,
+              ...(applyingStaleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
+            })
           },
           onAgentBecameWorking,
           onAgentExited,
@@ -176,6 +190,11 @@ export function createTerminalTitleTracker(
     agentTracker?.handleTitle(rawTitle)
   }
 
+  function applyProgramActivity(activity: AgentStatus | null): void {
+    agentTracker?.handleProgramActivity(activity)
+    onProgramActivity?.(activity)
+  }
+
   function handleChunk(data: string, options: TerminalTitleTrackerChunkOptions = {}): void {
     const titleScanData = options.titleScanData ?? data
     // Why: hot path — scan for the OSC introducer once and share it with the bell detector's fast-path gate.
@@ -186,13 +205,32 @@ export function createTerminalTitleTracker(
         ? bellDetector.chunkContainsBell(data, { containsOscIntroducer })
         : false
     // Why: feed every OSC title in byte order; a last-title reader drops intra-chunk working→idle transitions in coalesced payloads (issue #1083).
-    const titles = titleScanData.includes('\x1b]') ? extractAllOscTitles(titleScanData) : []
+    const titles = titleScanData.includes('\x1b]') ? extractAllOscTitleEntries(titleScanData) : []
+    // Title ends move into `data`'s offsets: titleScanData is the previous scan tail plus `data`.
+    const tailLength = titleScanData.length - data.length
+    const activity = options.programActivity
+      ? placeProgramActivityAmongTitles(
+          titles.map((entry) => entry.end - tailLength),
+          options.programActivity
+        )
+      : []
+    let activityIndex = 0
+    const applyActivityBefore = (titleIndex: number): void => {
+      while (activityIndex < activity.length && activity[activityIndex].beforeTitle <= titleIndex) {
+        applyProgramActivity(activity[activityIndex].activity)
+        activityIndex += 1
+      }
+    }
     if (titles.length > 0) {
       clearStaleTitleTimer()
-      for (const title of titles) {
-        applyObservedTitle(title)
-      }
-    } else if (
+      titles.forEach((entry, index) => {
+        applyActivityBefore(index)
+        applyObservedTitle(entry.title)
+      })
+    }
+    applyActivityBefore(titles.length)
+    if (
+      titles.length === 0 &&
       // Why: an agent exiting without resetting its title leaves a stale spinner; title-less output while working arms the 3s clear timer.
       data.length > 0 &&
       lastEmittedTitle !== null &&
@@ -264,6 +302,7 @@ export function createTerminalTitleTracker(
   return {
     handleChunk,
     applySyntheticTitleFrame,
+    endProgramActivity: () => applyProgramActivity(null),
     seedInitialTitle(rawTitle: string): void {
       if (lastEmittedTitle !== null || !rawTitle) {
         return

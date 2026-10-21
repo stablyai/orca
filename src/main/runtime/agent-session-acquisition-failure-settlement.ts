@@ -81,8 +81,7 @@ export function settleFailedAgentSessionPostAcquisitionAttachment(
     record.lease.claimStatus !== 'live' ||
     record.lease.handoffStage !== null ||
     record.lease.ownerProcess?.spawnToken !== args.spawnToken ||
-    record.lease.reservedSpawnToken !== args.spawnToken ||
-    record.lease.provenHandleLinkId === null
+    record.lease.reservedSpawnToken !== args.spawnToken
   ) {
     throw new Error('agent_session_ownership_unknown')
   }

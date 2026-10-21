@@ -2,7 +2,16 @@ import { materializeWorktreePushTargetRemote } from '../ipc/worktree-remote'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
-import type { Store } from '../persistence'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../shared/execution-host'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import type { WorktreePushTargetStore } from '../ipc/worktree-push-target-cleanup'
+import type { ProjectRuntimeResolutionStore } from '../local-project-runtime-resolution'
+
+type TerminalPushTargetStore = WorktreePushTargetStore & ProjectRuntimeResolutionStore
 
 // Why (#17828): a fork-PR remote deferred at worktree-create time must exist before an
 // autonomous agent's raw git commands run in a freshly opened terminal -- "sync through
@@ -13,12 +22,18 @@ export function triggerTerminalSpawnPushTargetMaterialization(
   worktreePath: string,
   pushTarget: GitPushTarget | undefined,
   repo: Repo | null | undefined,
-  store: Store | undefined,
+  store: TerminalPushTargetStore | null | undefined,
   repoId?: string,
   worktreeId?: string
 ): void {
-  // Why: an `ssh:` repo is not served here; its next sync action reports that itself.
-  if (!pushTarget?.remoteUrl || pushTarget.remoteCreated || repo?.connectionId) {
+  // A server's own `runtime:` stamp runs here too; only an `ssh:` row's git runs elsewhere.
+  const hostId = repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+  if (
+    !pushTarget?.remoteUrl ||
+    pushTarget.remoteCreated ||
+    repo?.connectionId ||
+    parseExecutionHostId(hostId)?.kind === 'ssh'
+  ) {
     return
   }
   materializeWorktreePushTargetRemote(
@@ -27,7 +42,7 @@ export function triggerTerminalSpawnPushTargetMaterialization(
     store,
     repoId,
     localGitOptionsForTerminalSpawn(store, repo),
-    worktreeId
+    worktreeId ? hostWorktreeTarget({ id: worktreeId, hostId }) : undefined
   ).catch((error: unknown) => {
     console.warn(
       `[terminal-spawn] failed to materialize push target remote for ${worktreePath}:`,
@@ -37,7 +52,7 @@ export function triggerTerminalSpawnPushTargetMaterialization(
 }
 
 function localGitOptionsForTerminalSpawn(
-  store: Store | undefined,
+  store: ProjectRuntimeResolutionStore | null | undefined,
   repo: Repo | null | undefined
 ): { wslDistro?: string } {
   if (!store || !repo) {

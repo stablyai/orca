@@ -5,13 +5,12 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { Tab } from '../../../shared/tab-types'
-import {
-  getExecutionHostIdForWorktree,
-  type WorktreeRuntimeOwnerState
-} from '@/lib/worktree-runtime-owner'
-import { resolveIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import { isTwinWorkspace, namedHostForOwnerRef } from '@/lib/resolve-owner'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
-import { runtimeTargetForExecutionHostId, type RuntimeClientTarget } from './runtime-client-target'
+import { runtimeRpcTargetForAuthorityKey } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 /**
  * The one mapping from a chat's owning host to the runtime that serves it. Null for an owner no
@@ -21,7 +20,7 @@ export function structuredAgentSessionTargetForHost(
   executionHostId: string | null | undefined
 ): RuntimeClientTarget | null {
   const host = parseExecutionHostId(executionHostId)
-  return host ? runtimeTargetForExecutionHostId(host.id) : null
+  return host ? runtimeRpcTargetForAuthorityKey(host.id) : null
 }
 
 /**
@@ -34,9 +33,11 @@ export function resolveStructuredAgentSessionOwner(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string
 ): ExecutionHostId | null {
+  // Why resolveOwner's twin rule: an id-only check missed folder twins and an active twin with no
+  // host picked, and the fallback below reads both as this machine.
   if (
-    state.activeWorktreeId !== worktreeId &&
-    resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind === 'ambiguous'
+    !namedHostForOwnerRef(state, { workspaceId: worktreeId }) &&
+    isTwinWorkspace(state, worktreeId)
   ) {
     return null
   }

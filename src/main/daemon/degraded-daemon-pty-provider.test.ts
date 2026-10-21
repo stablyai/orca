@@ -479,7 +479,7 @@ describe('DegradedDaemonPtyProvider', () => {
       exitedBeforeSpawnReply: true
     })
 
-    expect(provider.getCurrentDaemonSessionIds()).toEqual([])
+    expect(provider.getSessionIdsRoutedTo('current-daemon')).toEqual([])
   })
 
   it('routes a previously daemon-backed id to fallback after daemon exit removes the mapping', async () => {
@@ -666,11 +666,15 @@ describe('DegradedDaemonPtyProvider', () => {
     provider.onExit(exitSpy)
 
     await provider.discoverDaemonSessions()
-    provider.fanoutCurrentDaemonSyntheticExits(-1)
+    provider.fanoutCurrentDaemonSyntheticExits(-1, { replacedByRestart: true })
 
     expect(exitSpy).toHaveBeenCalledOnce()
-    expect(exitSpy).toHaveBeenCalledWith({ id: 'current-session', code: -1 })
-    expect(provider.getCurrentDaemonSessionIds()).toEqual([])
+    expect(exitSpy).toHaveBeenCalledWith({
+      id: 'current-session',
+      code: -1,
+      replacedByRestart: true
+    })
+    expect(provider.getSessionIdsRoutedTo('current-daemon')).toEqual([])
     expect(provider.hasPty('legacy-session')).toBe(true)
   })
 

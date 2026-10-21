@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserPage } from '../../../../shared/browser-workspace-types'
-import type { WorktreeRuntimeOwnerState } from '../../lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '../../lib/worktree-runtime-owner-state'
 import { buildBrowserPage } from '../slices/browser-page-records'
 import { preserveConvertedSshBrowserPages } from './converted-ssh-browser-pages'
 

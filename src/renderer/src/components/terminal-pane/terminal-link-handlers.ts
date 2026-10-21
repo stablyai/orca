@@ -52,6 +52,8 @@ export type LinkHandlerDeps = {
   /** The pane's terminal on its paired server, which may grant files it printed. */
   getRuntimeTerminalHandleForPane?: (paneId: number) => string | null
   getLinkActionContext?: (paneId: number) => TerminalLinkActionContext | null
+  /** The terminal tab whose panes print these links; editor opens place beside its group. */
+  sourceTabId?: string
 }
 
 type ProvidedFileLink = {
@@ -110,7 +112,8 @@ export function createFilePathLinkProvider(
       }
 
       const pathExists = createTerminalPathExistenceBatch()
-      void Promise.all(
+      // A rejected wrapped-path guess must not hide verified sibling paths.
+      void Promise.allSettled(
         logicalLines.flatMap((logicalLine) =>
           extractTerminalFileLinkCandidates(logicalLine.text).map(
             async (parsed): Promise<ProvidedFileLink | null> => {
@@ -153,7 +156,8 @@ export function createFilePathLinkProvider(
                           worktreePath,
                           runtimeEnvironmentId,
                           wslDistro: deps.wslDistro,
-                          terminalHandle
+                          terminalHandle,
+                          sourceTabId: deps.sourceTabId
                         },
                         deps.getLinkActionContext?.(paneId)
                       )
@@ -190,30 +194,23 @@ export function createFilePathLinkProvider(
           )
         )
       )
-        .then(
-          (resolvedLinks) => {
-            const latestFingerprints = new Set(
-              buildCandidateLogicalLinesForBufferPosition(buffer, bufferLineNumber).map(
-                (logicalLine) => logicalLine.fingerprint
-              )
+        .then((settledLinks) => {
+          const latestFingerprints = new Set(
+            buildCandidateLogicalLinesForBufferPosition(buffer, bufferLineNumber).map(
+              (logicalLine) => logicalLine.fingerprint
             )
-            const providedLinks = resolvedLinks.filter(
-              (link): link is ProvidedFileLink => link !== null
-            )
-            const links = preferLongestNonOverlappingLinks(providedLinks)
-              .filter(({ logicalLine }) => latestFingerprints.has(logicalLine.fingerprint))
-              .map(({ link }) => link)
-            if (providedLinks.length > 0 && links.length === 0) {
-              return
-            }
-            callback(links.length > 0 ? links : undefined)
-          },
-          () => {
-            // Why: remote probes reject during SSH teardown; using the rejection
-            // arm avoids treating a consumer callback failure as a probe failure.
-            callback(undefined)
+          )
+          const providedLinks = settledLinks.flatMap((result) =>
+            result.status === 'fulfilled' && result.value !== null ? [result.value] : []
+          )
+          const links = preferLongestNonOverlappingLinks(providedLinks)
+            .filter(({ logicalLine }) => latestFingerprints.has(logicalLine.fingerprint))
+            .map(({ link }) => link)
+          if (providedLinks.length > 0 && links.length === 0) {
+            return
           }
-        )
+          callback(links.length > 0 ? links : undefined)
+        })
         .catch(() => {
           // Link discovery is best-effort; a stale xterm callback must not
           // recreate the unhandled rejection this path is meant to contain.
@@ -255,7 +252,8 @@ export function installFilePathLinkClickFallback(
         wslDistro: deps.wslDistro,
         terminalHandle: deps.getRuntimeTerminalHandleForPane?.(paneId) ?? null,
         pathExistsCache: deps.pathExistsCache,
-        openWithSystemDefault: Boolean(event.shiftKey)
+        openWithSystemDefault: Boolean(event.shiftKey),
+        sourceTabId: deps.sourceTabId
       }
     )
     if (opened) {

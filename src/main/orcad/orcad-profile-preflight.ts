@@ -16,6 +16,7 @@ import { ORCAD_SERVER_ENTRY_FILENAME, ORCAD_VERSION_FILENAME } from '../../share
 import { ORCAD_NODE_RUNTIME_IDENTITY } from '../../shared/orcad-node-runtime-identity'
 import { runProcess } from '@orca/process-host'
 import { preflightOrcadNativeRuntime } from './orcad-runtime-native-preflight'
+import { orcadCompileCacheEnv } from './orcad-compile-cache'
 import {
   isRunningAsBundledOrcadRuntime,
   OrcadBundledRuntimeError,
@@ -34,7 +35,8 @@ export async function preflightBundledOrcadStartup(): Promise<void> {
   const result = await runProcess({
     program: process.execPath,
     args: [join(directory, ORCAD_SERVER_ENTRY_FILENAME), ORCAD_STARTUP_PREFLIGHT_FLAG, nonce],
-    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
+    // The preflight compiles the same bundle again, so it shares the server's code cache.
+    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1', ...orcadCompileCacheEnv(directory) },
     timeoutMs: ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
     maxOutputBytes: 64 * 1024,
     terminationBarrier: true

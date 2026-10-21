@@ -7,7 +7,7 @@
 // Files, Checks, and review-thread tabs hidden. This component is that
 // simplified surface; it also routes every write through slug-addressed
 // mutation helpers and patches the Project table cache on success.
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import React from 'react'
 import * as VisuallyHidden from 'radix-ui/visually-hidden'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'

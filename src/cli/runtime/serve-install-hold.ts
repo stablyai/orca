@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { runProcess } from '@orca/process-host'
+import { dirname } from 'node:path'
+import { isShipItRunningForBundle, listProcessCommands } from '../../shared/shipit-process-listing'
 
 export type ServeInstallEvidence =
   | { kind: 'clear' }
@@ -21,33 +21,6 @@ export const SERVE_INSTALL_HOLD_REASON_TEXT: Record<
 }
 
 type ListProcesses = () => Promise<string | null>
-
-/** `ps` is one short-lived fork with no interpreter; a failure is reported as unknown, not clear. */
-const listProcessCommands: ListProcesses = async () => {
-  try {
-    const result = await runProcess({
-      program: '/bin/ps',
-      args: ['-axww', '-o', 'command='],
-      timeoutMs: 5_000,
-      maxOutputBytes: 8 * 1024 * 1024,
-      killOnOutputLimit: true
-    })
-    return result.code === 0 && !result.timedOut && !result.outputTruncated ? result.stdout : null
-  } catch {
-    return null
-  }
-}
-
-/** ShipIt runs from inside the bundle it replaces, so its command line names that bundle. */
-export function isShipItRunningForBundle(listing: string, bundlePath: string): boolean {
-  const prefix = `${join(bundlePath, 'Contents', 'Frameworks', 'Squirrel.framework')}/`
-  return listing.split('\n').some((line) => {
-    const command = line.trimStart()
-    return (
-      command.startsWith(prefix) && command.slice(prefix.length).split(' ')[0].endsWith('/ShipIt')
-    )
-  })
-}
 
 /**
  * Whether a supervised serve may spawn from `executable` right now. Never spawn from a bundle an

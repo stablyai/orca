@@ -147,6 +147,15 @@ describe('workspaceMayOverrideDefaultModel', () => {
     expect(await mayOverride('opencode', worktree, null)).toBe(false)
   })
 
+  // `opencode2` is the same program under its other name, so it reads the same project files.
+  it('reads OpenCode 2 project config through the same layers as OpenCode', async () => {
+    const worktree = join(root, 'oc2-plain')
+    write(join(worktree, '.git'), 'gitdir: /elsewhere')
+    expect(await mayOverride('opencode2', worktree, null)).toBe(false)
+    write(join(worktree, 'opencode.json'), '{"model":"x/y"}')
+    expect(await mayOverride('opencode2', worktree, null)).toBe(true)
+  })
+
   it.each([
     ['a model', 'opencode.json', { model: 'anthropic/claude-sonnet-5' }],
     ['a default agent', 'opencode.json', { default_agent: 'plan' }],

@@ -10,6 +10,7 @@ import type { Repo } from '../../../src/shared/repo-types'
 import type { SshTarget, SshTargetCreateInput } from '../../../src/shared/ssh-types'
 import { getDefaultWorkspaceSession } from '../../../src/shared/constants'
 import { toSshExecutionHostId } from '../../../src/shared/execution-host'
+import { toAppSshPtyId } from '../../../src/shared/ssh-pty-id'
 import { normalizeSshTarget } from '../../../src/main/persistence/leasing-ssh-ptys/ssh-normalization'
 import { mutateStoppedProfileState } from './persisted-profile-state'
 
@@ -22,6 +23,9 @@ export type RelayEraProfile = {
   sessionFilePath: string
   /** Set only when the seed asked for a relay-era terminal tab. */
   terminalTabId: string | null
+  terminalLeafId: string
+  /** Each parked pane's local-only scrollback, by leaf; empty unless the seed asked for it. */
+  parkedScrollbackByLeafId: Record<string, string>
 }
 
 function pushRow(state: Record<string, unknown>, field: string, row: unknown): void {
@@ -81,10 +85,19 @@ export function seedRelayEraProfile(
   userDataDir: string,
   input: SshTargetCreateInput,
   paths: { repoPath: string; folderPath: string },
-  options: { terminalTab?: boolean } = {}
+  options: {
+    terminalTab?: boolean
+    /** #30126: two split panes whose parked scrollback together outgrows the 768 KB manifest. */
+    parkedScrollback?: boolean
+    targetId?: string
+    /** COMPAT(legacy-relay-bridge): the terminal tab still runs this PTY in the host's relay. */
+    relayPtyId?: string
+    /** An unsaved buffer on the editor tab, as hot exit persists it. */
+    draftContent?: string
+  } = {}
 ): RelayEraProfile {
   const now = Date.now()
-  const targetId = `ssh-upgrade-${now}`
+  const targetId = options.targetId ?? `ssh-upgrade-${now}`
   const hostId = toSshExecutionHostId(targetId)
   const repo: Repo = {
     id: `repo-upgrade-${now}`,
@@ -127,8 +140,20 @@ export function seedRelayEraProfile(
   const sessionFilePath = `${paths.repoPath}/README.md`
   const tabId = `tab-upgrade-${now}`
   const groupId = `tab-group-upgrade-${now}`
-  const terminalTabId = options.terminalTab ? `terminal-upgrade-${now}` : null
+  const terminalTabId = options.terminalTab || options.relayPtyId ? `terminal-upgrade-${now}` : null
   const terminalLeafId = '00000000-0000-4000-8000-000000000001'
+  const parkedLeafId = '00000000-0000-4000-8000-000000000002'
+  // Under the 512 KB per-pane session cap, so the profile load keeps every byte.
+  const parkedOutput = (leafId: string): string =>
+    Array.from({ length: 9_000 }, (_, line) => `${leafId} parked ${line}\r\n`).join('')
+  const parkedScrollbackByLeafId: Record<string, string> =
+    terminalTabId && options.parkedScrollback
+      ? {
+          [terminalLeafId]: parkedOutput(terminalLeafId),
+          [parkedLeafId]: parkedOutput(parkedLeafId)
+        }
+      : {}
+  const appPtyId = options.relayPtyId ? toAppSshPtyId(targetId, options.relayPtyId) : null
   // The shape the relay-era renderer persisted for one open editor (CI capture of a live profile).
   const session = {
     ...getDefaultWorkspaceSession(),
@@ -139,7 +164,8 @@ export function seedRelayEraProfile(
           relativePath: 'README.md',
           worktreeId,
           language: 'markdown',
-          runtimeEnvironmentId: null
+          runtimeEnvironmentId: null,
+          ...(options.draftContent === undefined ? {} : { dirtyDraftContent: options.draftContent })
         }
       ]
     },
@@ -184,12 +210,12 @@ export function seedRelayEraProfile(
     },
     ...(terminalTabId
       ? {
-          // The relay PTY is gone by the time this build runs; the tab names no live session.
+          // Without a relay PTY the tab names no live session by the time this build runs.
           tabsByWorktree: {
             [worktreeId]: [
               {
                 id: terminalTabId,
-                ptyId: null,
+                ptyId: appPtyId,
                 worktreeId,
                 title: 'Terminal 1',
                 defaultTitle: 'Terminal 1',
@@ -200,12 +226,23 @@ export function seedRelayEraProfile(
               }
             ]
           },
-          ptyIdsByTabId: { [terminalTabId]: [] },
+          ptyIdsByTabId: { [terminalTabId]: appPtyId ? [appPtyId] : [] },
+          ...(options.parkedScrollback
+            ? { localOnlyScrollbackByTabId: { [terminalTabId]: parkedScrollbackByLeafId } }
+            : {}),
           terminalLayoutsByTabId: {
             [terminalTabId]: {
-              root: { type: 'leaf', leafId: terminalLeafId },
+              root: options.parkedScrollback
+                ? {
+                    type: 'split',
+                    direction: 'vertical',
+                    first: { type: 'leaf', leafId: terminalLeafId },
+                    second: { type: 'leaf', leafId: parkedLeafId }
+                  }
+                : { type: 'leaf', leafId: terminalLeafId },
               activeLeafId: terminalLeafId,
-              expandedLeafId: null
+              expandedLeafId: null,
+              ...(appPtyId ? { ptyIdsByLeafId: { [terminalLeafId]: appPtyId } } : {})
             }
           }
         }
@@ -229,6 +266,20 @@ export function seedRelayEraProfile(
     pushRow(state, 'repos', repo)
     pushRow(state, 'projectGroups', group)
     pushRow(state, 'folderWorkspaces', folder)
+    if (options.relayPtyId && terminalTabId) {
+      // As the relay-era client recorded the shell it left running when it quit.
+      pushRow(state, 'sshRemotePtyLeases', {
+        targetId,
+        ptyId: options.relayPtyId,
+        worktreeId,
+        tabId: terminalTabId,
+        leafId: terminalLeafId,
+        state: 'detached',
+        createdAt: now,
+        updatedAt: now,
+        lastDetachedAt: now
+      })
+    }
     const partitions = state.workspaceSessionsByHostId
     state.workspaceSessionsByHostId = {
       ...(partitions && typeof partitions === 'object' ? partitions : {}),
@@ -242,6 +293,8 @@ export function seedRelayEraProfile(
     repoPath: paths.repoPath,
     folderPath: paths.folderPath,
     sessionFilePath,
-    terminalTabId
+    terminalTabId,
+    terminalLeafId,
+    parkedScrollbackByLeafId
   }
 }

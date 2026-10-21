@@ -32,7 +32,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
   callRuntimeRpc: mocks.call,
   runtimeEnvironmentSupportsCapability: mocks.supports
 }))
-vi.mock('@/runtime/local-structured-session-tabs-sync', async (original) => ({
+vi.mock('@/runtime/local-structured-session-tabs-sync/snapshot-apply', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   applyStructuredSessionTabSnapshots: mocks.apply
 }))

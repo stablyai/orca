@@ -25,7 +25,8 @@ vi.mock('electron', () => ({
   ipcMain: { handle: handleMock }
 }))
 
-import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 import {
   createAliasedWatcherRoot,
   removeAliasedWatcherRoot,

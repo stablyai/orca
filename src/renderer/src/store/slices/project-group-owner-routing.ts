@@ -8,9 +8,10 @@ import {
 } from '../../../../shared/execution-host'
 import { findIndexedProjectGroupOwner } from '@/lib/worktree-runtime-owner-index'
 import {
-  runtimeTargetForOwnerHostId,
-  type RuntimeClientTarget
+  getRuntimeTargetHostId,
+  ipcOrRuntimeTargetForHostId
 } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 type ProjectGroupHostParts = Pick<ProjectGroup, 'connectionId' | 'executionHostId'>
 type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
@@ -74,5 +75,25 @@ export function runtimeTargetForProjectGroupOwner(
   hostId?: ExecutionHostId
 ): RuntimeClientTarget | null {
   const owner = findIndexedProjectGroupOwner(state.projectGroups, groupId, hostId)
-  return owner ? runtimeTargetForOwnerHostId(hostId ?? getProjectGroupHostId(owner)) : null
+  return owner ? ipcOrRuntimeTargetForHostId(hostId ?? getProjectGroupHostId(owner)) : null
+}
+
+/**
+ * False only when `groupId` is known and every copy sits in another catalog than `catalog`: the
+ * project's host clears a group id it does not hold, so sending it would only ungroup the project.
+ */
+export function isProjectGroupJoinableFromCatalog(
+  projectGroups: readonly ProjectGroupOwnerRecord[],
+  groupId: string,
+  catalog: RuntimeClientTarget
+): boolean {
+  const catalogHostId = getRuntimeTargetHostId(catalog)
+  const copies = projectGroups.filter((group) => group.id === groupId)
+  return (
+    copies.length === 0 ||
+    copies.some((group) => {
+      const groupCatalog = ipcOrRuntimeTargetForHostId(getProjectGroupHostId(group))
+      return groupCatalog !== null && getRuntimeTargetHostId(groupCatalog) === catalogHostId
+    })
+  )
 }

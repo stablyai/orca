@@ -265,10 +265,12 @@ describe('what the surface offers a screen', () => {
     // `ungranted` check every member already makes before a frame is sent. A flag no screen reads
     // is a capability negotiation that exists only in this file.
     expect(Object.keys(verbs).sort()).toEqual([
+      'canNameMedia',
       'canPickMedia',
       'canReadClipboardText',
       'canWriteClipboardText',
       'granted',
+      'nameMedia',
       'pickMedia',
       'readAudio',
       'readClipboardText',

@@ -5,6 +5,7 @@ import {
   CLAUDE_PROFILE_MISSING_MESSAGE,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
 } from './claude-profile-routing'
+import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
 
 /** Sentences a refusal notice shows too, so a chat says them one way. */
 export const TERMINAL_AGENT_HOLDS_CHAT = 'This chat is still open in a terminal agent.'
@@ -27,6 +28,11 @@ export const AGENT_SESSION_FAILURE_COPY = {
   sendAgainToTryOnceMore: 'Send your message again to try once more.',
   couldNotStart: "{{agent}} couldn't start.",
   couldNotRestart: "{{agent}} couldn't restart.",
+  startTimedOut: '{{agent}} took too long to start (no response to {{method}} after {{seconds}}s).',
+  startTimedOutKeepsHappening:
+    'If this keeps happening, the computer running this chat may be overloaded.',
+  codexCliTooOld:
+    'Codex {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.',
   argumentsUnsupportedOption: 'Saved Arguments contain an unsupported option ({{option}}).',
   argumentsMissingValue: 'Saved Arguments need a value for {{option}}.',
   argumentsMultipleValues: 'Saved Arguments give {{option}} more than one value.',
@@ -43,6 +49,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   codexSystemNotSignedIn: "Codex isn't signed in. Run `{{loginCommand}}`.",
   codexManagedNotSignedIn:
     "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
+  antigravityNotSignedIn:
+    "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
   agentCommandNotSignedIn:
     'Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.',
   interactiveAgentNotSignedIn:
@@ -57,7 +65,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   historyTooLarge: "This conversation's history is too large to restore here.",
   managedAccountEnvOverride:
     'This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.',
-  accountSwitchInProgress: 'A Claude account switch is in progress. Try again after it finishes.',
+  accountSwitchInProgress:
+    "{{agent}}'s setup is changing on this host. Try again after it finishes.",
   managedAccountUnsupported:
     'While a Claude account is added in WSL, Claude chats need a Windows Claude account.',
   launchFolderMissing:
@@ -68,6 +77,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   claudeAccountSetupFailed: CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
   agentCommandNotRunnable:
     "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
+  runtimeNotInstalled:
+    "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
   chooseClaudeAccount: 'Choose or add one in Claude Accounts settings.',
   chooseClaudeAccountThenRunCommand:
     'Choose or add one in Claude Accounts settings, then run /{{command}} again.',
@@ -76,8 +87,10 @@ export const AGENT_SESSION_FAILURE_COPY = {
   providerExitedRow:
     '{{agent}} stopped while this response was in progress. You can continue in this conversation.',
   providerExitedRejection: '{{agent}} stopped before this message was sent.',
-  providerRejected: 'The provider did not accept this message.',
-  providerRejectedQuoted: 'The provider did not accept this message: {{detail}}.',
+  providerExitedAnswer:
+    '{{agent}} has stopped, so your answer was not sent. Send a message to continue.',
+  providerRejected: "{{agent}} didn't accept this message.",
+  providerRejectedQuoted: "{{agent}} didn't accept this message: {{detail}}.",
   attachmentEmpty: 'An image on this message is empty, so the message was not sent.',
   attachmentTooLarge: 'An image on this message is too large, so the message was not sent.',
   attachmentLargerThan:
@@ -97,6 +110,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   attachmentUnreadable:
     "An attachment on this message couldn't be read, so the message was not sent.",
   emptyMessage: 'This message is empty, so it was not sent.',
+  commandUnavailable: "This command isn't available in {{agent}} chats, so it was not sent.",
   queueFull: 'Too many messages were waiting for the agent, so this one was not sent.',
   writeFailed: "Orca couldn't hand this message to the agent, so it was not sent.",
   cancelled: 'This message was withdrawn before the agent started it.',
@@ -120,7 +134,11 @@ export const AGENT_SESSION_FAILURE_COPY = {
   cancelUnconfirmed: 'Cancellation was not confirmed.',
   stopRefused: "{{agent}} didn't stop.",
   stopRefusedQuoted: "{{agent}} didn't stop: {{detail}}.",
+  couldNotStop: "Couldn't stop {{agent}}.",
+  couldNotStopTheAgent: "Couldn't stop the agent.",
   noTurnToStop: '{{agent}} had no turn running to stop.',
+  backgroundTaskNotStopped: "The background task wasn't stopped.",
+  backgroundTasksNotStopped: "The background tasks weren't stopped.",
   answerUnconfirmed: 'Your answer was recorded but the agent did not confirm it.',
   hostFault: "Orca ran into a problem, so this didn't go through.",
   hostFaultTryAgain: "Orca ran into a problem, so this didn't go through. Try again.",
@@ -131,6 +149,14 @@ export const AGENT_SESSION_FAILURE_COPY = {
   providerRetryNumber: 'Retry {{attempt}}.',
   providerRetryNumberOf: 'Retry {{attempt}} of {{maxRetries}}.',
   providerRetryLastError: 'Last error: {{detail}}.',
+  usageLimitReached: '{{agent}} hit its usage limit.',
+  usageLimitReachedNamed: '{{agent}} hit its {{window}} limit.',
+  usageLimitWindowSession: 'session',
+  usageLimitWindowWeekly: 'weekly',
+  usageLimitWindowWeeklyModel: 'weekly model',
+  usageLimitWindowCredits: 'extra usage',
+  usageLimitResetsAt: 'It resets at {{when}}.',
+  usageLimitSendAfterReset: 'Send a message once it resets to continue.',
   previousExitUnverifiable: "Couldn't stop {{agent}} from before.",
   sessionNotRestored:
     "{{agent}} couldn't reopen its earlier session, so this chat continues in a new one. {{agent}} doesn't remember the earlier messages."
@@ -140,16 +166,25 @@ export type AgentSessionFailureCopyId = keyof typeof AGENT_SESSION_FAILURE_COPY
 
 /** What a piece's `{{name}}` placeholders stand for. */
 export type AgentSessionFailureCopyValues = {
+  installedVersion?: string
+  minimumVersion?: string
   agent?: string
   command?: string
   loginCommand?: string
   slashCommand?: string
   detail?: string
+  /** A usage limit's name, from the `usageLimitWindow*` pieces. */
+  window?: string
+  /** When a usage limit resets, in the reader's clock. */
+  when?: string
   option?: string
   limit?: string
   size?: string
   attempt?: string
   maxRetries?: string
+  /** A provider protocol method that got no answer, e.g. `thread/start`. */
+  method?: string
+  seconds?: string
 }
 
 /** One piece in the reader's language, placeholders filled. */
@@ -157,6 +192,23 @@ export type AgentSessionFailureSay = (
   id: AgentSessionFailureCopyId,
   values?: AgentSessionFailureCopyValues
 ) => string
+
+export function codexInstallationFailureWords(
+  refusal: AgentSessionRefusalReference | undefined,
+  say: AgentSessionFailureSay
+): string | null {
+  const installation =
+    refusal?.code === 'agent_session_operation_invalid'
+      ? refusal.details?.codexInstallation
+      : undefined
+  return installation
+    ? say(installation.installedVersion === null ? 'cliMissing' : 'codexCliTooOld', {
+        agent: 'Codex',
+        installedVersion: installation.installedVersion ?? '',
+        minimumVersion: installation.minimumVersion
+      })
+    : null
+}
 
 /** The host's words, and any surface without translations. */
 export const sayAgentSessionFailureEnglish: AgentSessionFailureSay = (id, values = {}) => {

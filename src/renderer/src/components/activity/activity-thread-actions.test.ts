@@ -158,6 +158,19 @@ describe('activity thread host routing', () => {
     )
   })
 
+  it('opens the floating panel on a floating chat row once its tab is activated', () => {
+    state.settings = { floatingTerminalEnabled: true }
+    state.floatingWorkspacePanelOpen = false
+    mocks.activateStructuredAgentSessionTab.mockReturnValue(true)
+
+    makeActions().selectThread(makeFloatingThread())
+
+    expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
+    expect(mocks.dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: TOGGLE_FLOATING_TERMINAL_EVENT })
+    )
+  })
+
   it('does not open the floating panel for a retained thread whose tab was closed', () => {
     makeActions().selectThread(makeFloatingThread())
 

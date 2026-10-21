@@ -173,7 +173,10 @@ describe('a pane on an unconverted SSH row', () => {
     await flushAsyncTicks(10)
 
     expect(createdTransportOptions).toEqual([])
-    expect(sshApi().connect).toHaveBeenCalledExactlyOnceWith({ targetId: 'conn-1' })
+    expect(sshApi().connect).toHaveBeenCalledExactlyOnceWith({
+      targetId: 'conn-1',
+      automatic: true
+    })
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
   })
 

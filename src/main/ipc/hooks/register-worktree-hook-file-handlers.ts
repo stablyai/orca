@@ -7,6 +7,7 @@ import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
 import { readIssueCommand, writeIssueCommand } from '../../issue-command-file'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 /** Route private command overrides to the owning host without changing shared hook settings. */
 export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): void {
@@ -49,6 +50,7 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
       if (!repo || isFolderRepo(repo)) {
         return
       }
+      assertWslMoveRepoWritable(store, repo)
       if (getStoredRepoSshConnectionId(repo)) {
         throw new Error('Remote filesystem unavailable. Reconnect the SSH target before retrying.')
       }

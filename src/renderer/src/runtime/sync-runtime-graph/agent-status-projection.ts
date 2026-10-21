@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { AgentMainAgentStatus } from '../../../../shared/main-agent-status'
+import { programStatusFacetContent } from '../../../../shared/program-status/facet'
 
 const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = 30_000
 
@@ -49,7 +50,8 @@ function serializeAgentStatusEntry(
     lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
     interrupted: entry.interrupted ?? null,
     // A failure changes the verdict and leaves `interrupted` as it was.
-    mainAgent: mainAgentKey(entry.mainAgent)
+    mainAgent: mainAgentKey(entry.mainAgent),
+    programStatus: entry.programStatus ? programStatusFacetContent(entry.programStatus) : null
   })
 }
 

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { setClaudeStructuredOption } from './claude-structured-options'
-import { readClaudeSettingsEffort } from './claude-structured-session-options'
+import {
+  readClaudeStructuredSessionOptions,
+  readClaudeSettingsEffort
+} from './claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-adapter'
 import { USER_MESSAGE, acquired, fakeClaude } from './claude-structured-session-test-support'
@@ -26,7 +29,7 @@ function sessionWith(
       optionMutationSequence: 0,
       reportedModelMutation: 0,
       confirmedOptions: new Set<string>(),
-      restoreSkippedOptions: new Set<string>(),
+      appliedInputOptions: new Map(),
       connection: {
         supportedModels: async () => {
           calls.push('list_models')
@@ -192,13 +195,15 @@ describe('Claude effort against the model that must run it', () => {
   })
 
   it('sends `max`, which the readback cannot report, when the model advertises it', async () => {
-    // UNREPORTED_EFFORTS still governs: no get_settings, so no false disagreement.
+    // The underlying setting may differ from a transient execution effort.
     const { session, calls } = sessionWith('high', [], { model: 'sonnet', catalog: [SONNET] })
 
     await expect(
       setClaudeStructuredOption(session, { key: 'effort', value: 'max' }, undefined)
     ).resolves.toEqual({ model: 'sonnet', effort: 'max' })
     expect(calls).toEqual(['list_models', 'apply:max'])
+    await readClaudeStructuredSessionOptions(session, undefined)
+    expect(session.appliedInputOptions.get('effort')).toBe('max')
     expect(session.confirmedOptions.has('effort')).toBe(false)
   })
 

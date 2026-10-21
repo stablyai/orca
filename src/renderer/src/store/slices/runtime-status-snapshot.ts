@@ -2,8 +2,11 @@ import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
 } from '../../../../shared/runtime-host-status'
-import type { AppState } from '../types'
-import type { RuntimeEnvironmentStatus } from './runtime-status-types'
+import type {
+  RuntimeEnvironmentStatus,
+  RuntimeStatusSlice,
+  RuntimeStatusStoreState
+} from './runtime-status-types'
 import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
 
@@ -13,7 +16,7 @@ import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-b
  */
 export function snapshotOutrunsCatalog(
   snapshot: RuntimeHostStatusSnapshot,
-  state: Pick<AppState, 'runtimeEnvironments'>
+  state: Pick<RuntimeStatusSlice, 'runtimeEnvironments'>
 ): boolean {
   const environment = state.runtimeEnvironments.find((entry) => entry.id === snapshot.environmentId)
   return (
@@ -24,7 +27,7 @@ export function snapshotOutrunsCatalog(
 
 export function applyRuntimeHostStatusSnapshot(
   snapshot: RuntimeHostStatusSnapshot,
-  state: AppState,
+  state: RuntimeStatusStoreState,
   publishEvidence: (entry: RuntimeEnvironmentStatus) => void
 ): void {
   const environment = state.runtimeEnvironments.find((entry) => entry.id === snapshot.environmentId)

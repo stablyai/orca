@@ -1,3 +1,4 @@
+import { deriveCliWriterTopology } from './cli-writer-observation'
 import {
   admitLegacyAgentStatus,
   movePaneCacheState
@@ -14,6 +15,11 @@ import { AgentHookServerAuthorityEvidence } from './server-authority-evidence'
 export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAuthorityEvidence {
   setPaneKeyAliasPersistenceListener(listener: PaneKeyAliasPersistenceListener | null): void {
     this.paneKeyAliasPersistenceListener = listener
+  }
+
+  /** The pane key that owns `paneKey`'s agent status once aliases are followed. */
+  resolvePaneAuthorityOwner(paneKey: string): string {
+    return this.resolvePaneKeyAlias(paneKey)
   }
 
   protected getPersistedPaneKeyAliases(): LegacyPaneKeyAliasEntry[] {
@@ -170,11 +176,15 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       admitLegacyAgentStatus(
         this.state,
         'main-pane-alias-transfer',
-        {
-          ...movedStatus,
-          paneKey: toPaneKey,
-          tabId: owner?.tabId
-        },
+        deriveCliWriterTopology(
+          {
+            ...movedStatus,
+            paneKey: toPaneKey,
+            tabId: owner?.tabId
+          },
+          previousStatus,
+          this.cliWriterExecutionMatches
+        ),
         AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
       )
     }
@@ -209,11 +219,19 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     if (restartedTokenHash) {
       this.restartedStatusLaunchTokenHashByPaneKey.set(toPaneKey, restartedTokenHash)
     }
+    const agentExit = this.agentExitedAtByPaneKey.get(previousOwnerPaneKey)
+    if (agentExit) {
+      agentExit.paneKeys.add(toPaneKey)
+      this.agentExitedAtByPaneKey.set(toPaneKey, agentExit)
+    }
     const activeTurnCompletedAt = this.activeHookTurnCompletedAtByPaneKey.get(previousOwnerPaneKey)
     if (activeTurnCompletedAt !== undefined) {
       this.activeHookTurnCompletedAtByPaneKey.delete(previousOwnerPaneKey)
       this.activeHookTurnCompletedAtByPaneKey.set(toPaneKey, activeTurnCompletedAt)
     }
+    this.programStatusFacets.move(previousOwnerPaneKey, toPaneKey)
+    this.hookSilenceRechecks.move(previousOwnerPaneKey, toPaneKey)
+    this.programStatusFacetRepublishes.move(previousOwnerPaneKey, toPaneKey)
     const evidenceObservedAt = this.evidenceObservedAtByPaneKey.get(previousOwnerPaneKey)
     if (evidenceObservedAt !== undefined) {
       this.evidenceObservedAtByPaneKey.delete(previousOwnerPaneKey)

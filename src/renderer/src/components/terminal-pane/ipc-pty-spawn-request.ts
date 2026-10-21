@@ -90,7 +90,8 @@ export async function spawnIpcPty(
     projectRuntime,
     terminalColorQueryReplies,
     terminalKittyKeyboardProtocol,
-    telemetry
+    telemetry,
+    agentLaunch
   } = transportOptions
   const shouldSendLocalCwdFallback =
     cwdFallback === 'worktree' && !connectionId && !admittedSessionId
@@ -142,6 +143,7 @@ export async function spawnIpcPty(
     ...(projectRuntime ? { projectRuntime } : {}),
     ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
     ...(terminalKittyKeyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),
-    ...(telemetry ? { telemetry } : {})
+    ...(telemetry ? { telemetry } : {}),
+    ...(agentLaunch && !admittedSessionId ? { agentLaunch } : {})
   })
 }

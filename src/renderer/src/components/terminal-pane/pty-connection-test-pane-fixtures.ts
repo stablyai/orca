@@ -21,10 +21,12 @@ export type ConnectCallbacks = {
   onError?: (msg: string) => void
   onErrorCleared?: (msg: string) => void
   onWriteUnavailable?: () => void
-  onOutputPauseChanged?: (paused: boolean, supported: boolean) => void
+  onOutputPauseChanged?: (paused: boolean, supported: boolean, dropsReported?: boolean) => void
+  onPausedOutputDropped?: () => void
 }
 
 export type MockTransport = {
+  retryRecovery?: () => boolean
   attach: ReturnType<typeof vi.fn>
   connect: ReturnType<typeof vi.fn> & {
     mockImplementation: (
@@ -237,6 +239,7 @@ export type MockPaneManager = {
   closePane: Mock
   getActivePane: Mock<() => { id: number; leafId?: string } | null>
   getNumericIdForLeaf: Mock<(leafId: string) => number | null>
+  getLeafId: Mock<(paneId: number) => string | null>
   setActivePane: Mock<(paneId: number) => void>
 }
 
@@ -263,6 +266,9 @@ export function createManager(
     ),
     getNumericIdForLeaf: vi.fn((leafId: string) => {
       return panes.find((candidate) => candidate.leafId === leafId)?.id ?? null
+    }),
+    getLeafId: vi.fn((paneId: number) => {
+      return panes.find((candidate) => candidate.id === paneId)?.leafId ?? null
     }),
     setActivePane: vi.fn((paneId: number) => {
       activePaneId = paneId

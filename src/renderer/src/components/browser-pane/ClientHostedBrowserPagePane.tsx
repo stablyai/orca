@@ -16,7 +16,6 @@ import {
   startBrowserClientPageMetadataPublisher
 } from './browser-client-page-metadata-reporting'
 import { attachBrowserClientPageToViewport } from './browser-client-page-renderer-installation'
-import { useBrowserClientHostedDownloadNotices } from './browser-client-hosted-download-notices'
 import { useBrowserClientHostedPopupNotices } from './browser-client-hosted-popup-notices'
 import { useBrowserClientHostedPermissionNotices } from './browser-client-hosted-permission-notices'
 import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-intro-tour'
@@ -139,7 +138,6 @@ export function ClientHostedBrowserPagePane({
     onUpdatePageStateRef
   })
 
-  useBrowserClientHostedDownloadNotices(browserTab.id)
   useBrowserClientHostedPopupNotices(browserTab.id)
   useBrowserClientHostedPermissionNotices(browserTab.id)
   // Why: the tour points at controls that cannot work yet, and recording the interaction is a

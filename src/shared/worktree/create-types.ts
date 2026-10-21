@@ -111,6 +111,8 @@ export type CreateWorktreeArgs = {
    *  legitimately contains `/` while the worktree directory must not. */
   branchNameOverride?: string
   setupDecision?: SetupDecision
+  /** Per-create choice; omitted callers use the execution host's saved default. */
+  setupOnly?: boolean
   sparseCheckout?: CreateSparseCheckoutRequest
   linkedIssue?: number
   linkedPR?: number
@@ -153,6 +155,21 @@ export type CreateWorktreeArgs = {
   creationId?: string
   /** Authorizes the host to mint system-owned automation provenance. */
   automationProvenanceRequest?: AutomationWorkspaceProvenanceRequest
+}
+
+/** Git's checkout meter during a local create: files written out of the total. */
+export type WorktreeCheckoutProgress = {
+  percent: number
+  completed: number
+  total: number
+}
+
+/** `createWorktree:progress` payload. `checkout` rides the 'creating' phase;
+ *  null means git finished writing files. */
+export type CreateWorktreeProgressEvent = {
+  creationId?: string
+  phase: 'fetching' | 'creating'
+  checkout?: WorktreeCheckoutProgress | null
 }
 
 export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {

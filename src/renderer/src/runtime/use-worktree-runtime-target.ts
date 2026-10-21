@@ -4,11 +4,16 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { getActiveWorkspaceOwnerTarget } from '@/lib/resolved-worktree-execution-host'
 import {
-  runtimeTargetForExecutionHostId,
+  runtimeRpcTargetForAuthorityKey,
   runtimeTargetEnvironmentId,
-  runtimeTargetForOwnerEnvironment,
-  type RuntimeClientTarget
+  runtimeTargetForOwnerEnvironment
 } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import {
+  accountOwnerFor,
+  wslHostDistroForTarget,
+  type AccountOwner
+} from '@/lib/wsl-host-account-owner'
 
 /**
  * Runtime target that owns `worktreeId`, which is not always the globally
@@ -19,7 +24,7 @@ export function useWorktreeRuntimeTarget(
   worktreeId: string | null | undefined
 ): RuntimeClientTarget | null {
   const executionHostId = useAppStore((state) => getExecutionHostIdForWorktree(state, worktreeId))
-  return useMemo(() => runtimeTargetForExecutionHostId(executionHostId), [executionHostId])
+  return useMemo(() => runtimeRpcTargetForAuthorityKey(executionHostId), [executionHostId])
 }
 
 /**
@@ -50,4 +55,13 @@ export function useActiveWorkspaceOwnerTarget(fallback: RuntimeClientTarget): Ru
   })
   const environmentId = ownerKey === null ? runtimeTargetEnvironmentId(fallback) : ownerKey || null
   return useMemo(() => runtimeTargetForOwnerEnvironment(environmentId), [environmentId])
+}
+
+/** Who owns the focused workspace's provider accounts (see {@link resolveAccountOwner}). */
+export function useActiveAccountOwner(fallback: RuntimeClientTarget): AccountOwner {
+  const ownerTarget = useActiveWorkspaceOwnerTarget(fallback)
+  const wslHostDistro = useAppStore((state) =>
+    wslHostDistroForTarget(ownerTarget, state.runtimeEnvironments)
+  )
+  return useMemo(() => accountOwnerFor(ownerTarget, wslHostDistro), [ownerTarget, wslHostDistro])
 }

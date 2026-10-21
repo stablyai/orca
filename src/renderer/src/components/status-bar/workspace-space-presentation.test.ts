@@ -115,6 +115,7 @@ function worktreeRecord(overrides: Partial<Worktree> = {}): Worktree {
     head: 'abc123',
     isBare: false,
     isMainWorktree: false,
+    hostId: 'local',
     comment: '',
     linkedIssue: null,
     linkedPR: null,
@@ -171,7 +172,7 @@ describe('workspace space presentation helpers', () => {
     )
     const ssh = getWorkspaceDecisionDetails(
       row({ worktreeId: 'wt', executionHostId: 'ssh:builder' }),
-      inputs
+      { ...inputs, worktreeRecord: worktreeRecord({ hostId: 'ssh:builder' }) }
     )
 
     expect(local.isActive).toBe(true)
@@ -336,6 +337,9 @@ describe('workspace space presentation helpers', () => {
     const workspace = row({ worktreeId: 'with-browser', canDelete: true, status: 'ok' })
 
     expect(isWorkspaceSpaceRowReadyToDelete(workspace, ready())).toBe(true)
+    expect(isWorkspaceSpaceRowReadyToDelete(workspace, ready({ canOpenWorkspace: false }))).toBe(
+      false
+    )
     expect(isWorkspaceSpaceRowReadyToDelete(workspace, ready({ browserTabCount: 1 }))).toBe(false)
   })
 

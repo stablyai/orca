@@ -12,7 +12,7 @@ import { createAgentStatusOscProcessor } from '../../../../shared/agent-status-o
 import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
 import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
-import { createPtyOutputProcessor } from './pty-transport'
+import { createPtyOutputProcessor } from './pty-output-processor'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 
 const ESC = '\x1b'

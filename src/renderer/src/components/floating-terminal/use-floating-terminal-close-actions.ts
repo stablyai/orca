@@ -20,8 +20,6 @@ export function useFloatingTerminalCloseActions({
   const scope = useTabGroupCloseScopeCommands({
     groupId: activeGroup?.id ?? '',
     worktreeId,
-    group: activeGroup,
-    groupTabs,
     closeItem,
     closeMany
   })

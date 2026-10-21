@@ -28,10 +28,16 @@ const createUntitledMarkdownFileWithTemplateSelectionMock = vi.hoisted(() => vi.
 const focusTerminalTabSurfaceMock = vi.hoisted(() => vi.fn())
 const isWebRuntimeSessionActiveMock = vi.hoisted(() => vi.fn())
 
-vi.mock('@/runtime/web-runtime-session', () => ({
-  activateWebRuntimeSessionTab: activateWebRuntimeSessionTabMock,
-  createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock,
-  createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock,
+vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
+  activateWebRuntimeSessionTab: activateWebRuntimeSessionTabMock
+}))
+vi.mock('@/runtime/web-runtime-browser-creation', () => ({
+  createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock
+}))
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
 }))
 
@@ -445,49 +451,49 @@ describe('createFloatingWorkspaceTerminalTab', () => {
   })
 
   it('creates and focuses a local floating workspace terminal in the active floating group', async () => {
-    const tab = makeTab('floating-tab-1')
     const store = {
       activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
       settings: { activeRuntimeEnvironmentId: null },
-      createTab: vi.fn().mockReturnValue(tab),
+      createTab: vi.fn(),
       activateTab: vi.fn()
     }
     createWebRuntimeSessionTerminalMock.mockResolvedValue(false)
 
-    await expect(createFloatingWorkspaceTerminalTab(store as never)).resolves.toBe(tab)
+    await createFloatingWorkspaceTerminalTab(store)
 
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
     expect(store.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
-      undefined
+      undefined,
+      { id: expect.any(String) }
     )
     // Why: createTab itself activates the new tab within the floating group.
     expect(store.activateTab).not.toHaveBeenCalled()
-    expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('floating-tab-1')
+    expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith(store.createTab.mock.calls[0][3].id)
   })
 
   it('ignores the active runtime and keeps floating workspace terminals local', async () => {
-    const tab = makeTab('floating-tab-runtime')
     const store = {
       activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
       settings: { activeRuntimeEnvironmentId: 'env-1' },
-      createTab: vi.fn().mockReturnValue(tab),
+      createTab: vi.fn(),
       activateTab: vi.fn()
     }
     createWebRuntimeSessionTerminalMock.mockResolvedValue(true)
 
-    await expect(createFloatingWorkspaceTerminalTab(store as never, 'pwsh')).resolves.toBe(tab)
+    await createFloatingWorkspaceTerminalTab(store, 'pwsh')
 
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
     expect(store.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
-      'pwsh'
+      'pwsh',
+      { id: expect.any(String) }
     )
     // Why: createTab itself activates the new tab within the floating group.
     expect(store.activateTab).not.toHaveBeenCalled()
-    expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('floating-tab-runtime')
+    expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith(store.createTab.mock.calls[0][3].id)
   })
 })
 
@@ -497,16 +503,15 @@ describe('createFloatingWorkspaceBrowserTab', () => {
   })
 
   it('creates floating browser tabs in the active floating group', async () => {
-    const browserTab = { id: 'browser-1' }
     const store = {
       activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
       browserDefaultUrl: 'about:blank',
       settings: { activeRuntimeEnvironmentId: null },
-      createBrowserTab: vi.fn().mockReturnValue(browserTab)
+      createBrowserTab: vi.fn()
     }
     createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
 
-    await expect(createFloatingWorkspaceBrowserTab(store as never)).resolves.toBe(browserTab)
+    await createFloatingWorkspaceBrowserTab(store)
 
     expect(createWebRuntimeSessionBrowserTabMock).not.toHaveBeenCalled()
     expect(store.createBrowserTab).toHaveBeenCalledWith(

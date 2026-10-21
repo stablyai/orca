@@ -59,7 +59,7 @@ vi.mock('@/runtime/use-worktree-runtime-target', () => ({
       ? { kind: 'environment', environmentId: runtimeEnvironmentId }
       : { kind: 'local' }
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-metadata-client', () => ({
   statRuntimePath: vi.fn(async () => ({ isDirectory: false }))
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))

@@ -13,9 +13,7 @@ import { collectMobileWebAppRoutes } from './mobile-web-app-route-manifest.mjs'
  * reaches it through `use-mobile-session-tab-reconciliation.ts`, and there it works: it sends
  * `status.get`, a read with no client identity that the shell forwards like any non-`native.`
  * request (`bridge-host-requests.ts`) and the desktop's mobile allowlist admits. Its other importer,
- * `codex-reset-credit-capability.ts`, hangs off `app/h/[hostId]/accounts.tsx`, which the bundle
- * carries and the page never serves: it hands `/accounts` to the native screen. It left the C1
- * layout closure with push and stayed in the bundle, which is why it is pinned nowhere here.
+ * `codex-reset-credit-capability.ts`, is the Accounts page route's, and works there the same way.
  *
  * `expo-notifications` first, and why no page route may import it.
  *

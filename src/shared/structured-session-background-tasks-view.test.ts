@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { AgentSessionBackgroundTaskState } from './agent-session-wire'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import {
   structuredSessionBackgroundTasksView,
@@ -91,6 +92,36 @@ describe('structuredSessionBackgroundTasksView', () => {
     }
   })
 
+  // Absence of a row never reads as idle when the host says some work went unrecorded; commands
+  // and rewind still follow the records, as the host's own admission does.
+  it('keeps the strip and its Stop when the host could not record some work', () => {
+    expect(
+      structuredSessionBackgroundTasksView(
+        { state: 'monitoring', children: [], supportsTaskStop: true, incomplete: true },
+        null
+      )
+    ).toMatchObject({ show: true, isMonitoring: false, incomplete: true, offersStopAll: true })
+  })
+
+  it('offers the untargeted Stop only where no row stop reaches the work, and the host has one', () => {
+    const offers = (
+      state: Partial<AgentSessionBackgroundTaskState>,
+      turnId: string | null = null
+    ) =>
+      structuredSessionBackgroundTasksView({ state: 'monitoring', ...state }, turnId).offersStopAll
+    expect(offers({ supportsTaskStop: true })).toBe(false)
+    expect(offers({ supportsTaskStop: false })).toBe(true)
+    expect(offers({ supportsTaskStop: false }, 'turn-1')).toBe(true)
+    expect(offers({ supportsTaskStop: false, supportsStopAll: false })).toBe(false)
+    expect(offers({ supportsTaskStop: true, incomplete: true })).toBe(true)
+    // Unlisted work is reached by ending the agent: no untargeted provider stop is needed, as on an
+    // ACP agent, and none is offered under a running turn the agent would end with it.
+    const acp = { supportsTaskStop: true, supportsStopAll: false, incomplete: true } as const
+    expect(offers(acp)).toBe(true)
+    expect(offers(acp, 'turn-1')).toBe(false)
+    expect(offers({ ...acp, supportsTaskStop: false })).toBe(true)
+  })
+
   it('reads live work beneath an idle session as monitoring, and a running turn as its own', () => {
     const roster = {
       state: 'monitoring' as const,
@@ -121,7 +152,8 @@ describe('structuredSessionBackgroundTasksView', () => {
       tasks,
       settledTasks: [],
       supportsStop: false,
-      supportsStopAll: true
+      offersStopAll: true,
+      incomplete: false
     })
     expect(structuredSessionBackgroundTasksView(null, null)).toMatchObject({
       show: false,

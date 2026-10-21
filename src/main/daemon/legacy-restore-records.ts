@@ -1,13 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { durableWriteTempPath, writeFileDurableSync } from '../durable-file-write'
 import type { LegacyRestoreRecord } from '../../shared/host-spawn-admission'
+import { DEFAULT_MAX_HOST_TERMINALS } from './host-terminal-ledger'
 
 // COMPAT(legacy-restore-intent): added 2026-10-11 (v1.4.214) for clients that predate
 // `spawnIntent` (#27452). Remove after 2027-04-11, with the gate's undeclared-caller branches.
 
 export type LegacyRestoreDetails = Omit<LegacyRestoreRecord, 'reason' | 'refusedAt'>
 
-const MAX_RECORDS = 32
+// Why the host terminal cap: a storm refusing every restore the host could run keeps each handle.
+const MAX_RECORDS = DEFAULT_MAX_HOST_TERMINALS
 const MAX_AGE_MS = 14 * 24 * 60 * 60_000
 const PRIVATE_FILE_MODE = 0o600
 

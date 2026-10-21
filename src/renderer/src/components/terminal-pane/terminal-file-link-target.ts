@@ -6,7 +6,7 @@ import {
 } from '@/lib/terminal-links'
 import { normalizeAbsolutePath } from '@/lib/terminal-path-normalization'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-client'
+import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-routing'
 import {
   getTerminalFileContext,
   mapTerminalFilePath,

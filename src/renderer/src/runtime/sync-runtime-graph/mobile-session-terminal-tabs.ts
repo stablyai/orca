@@ -1,5 +1,5 @@
 import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/layout-serialization'
-import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/terminal-pane-title-sanitization'
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
@@ -105,6 +105,8 @@ export function buildMobileTerminalSurfaceTabs(
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
       title,
+      // Why every surface: the name is tab-wide, and a paired desktop reads its active surface.
+      customTitle: terminal.customTitle?.trim() || null,
       ...(tabWideFallbackSafe && terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
         : {}),

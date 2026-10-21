@@ -2,12 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   cancelRuntimeFileList,
   listRuntimeFiles,
+  searchRuntimeFilePaths,
+  searchRuntimeFiles
+} from './runtime-file-search-client'
+import {
   listRuntimeMarkdownDocuments,
   runtimePathExists,
-  searchRuntimeFilePaths,
-  searchRuntimeFiles,
   statRuntimePath
-} from './runtime-file-client'
+} from './runtime-file-metadata-client'
 import {
   fsStat,
   fsPathExists,

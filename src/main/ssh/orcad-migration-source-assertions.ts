@@ -3,13 +3,13 @@ import { createHash } from 'node:crypto'
 import {
   serializeOrcadMigrationValue,
   type OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
-import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration-source-cutover'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
 import { resolveOrcadMigrationFence } from './orcad-migration-source-fence'
 import { confirmOrcadMigrationTerminalsUnderFence } from './orcad-migration-terminal-gate'
-import { collectUntransferredDependentBlockers } from './ssh-target-orcad-dependents'
-import type { OrcadMigrationPreflightStore } from './ssh-target-orcad-preflight'
+import { collectUntransferredDependentBlockers } from './targets/ssh-target-orcad-dependents'
+import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-preflight'
 
 export function assertOrcadMigrationSourceUnchanged(
   context: { userDataPath: string; store: OrcadMigrationPreflightStore },
@@ -32,11 +32,19 @@ export function assertOrcadMigrationSourceUnchanged(
   if (collectUntransferredDependentBlockers(context.store, cutover.manifest).length > 0) {
     throw new Error('orcad_migration_source_dependencies_present')
   }
-  const terminals = confirmOrcadMigrationTerminalsUnderFence(context.store, target.id, {
-    verdict: 'exited',
-    provenPtyIds: cutover.provenPtyIds
-  })
-  if (terminals.verdict !== 'exited') {
+  const terminals = confirmOrcadMigrationTerminalsUnderFence(
+    context.store,
+    target.id,
+    cutover.bridgedPtyIds
+      ? {
+          verdict: 'bridged',
+          relayVerdict: 'unverifiable',
+          bridgedPtyIds: cutover.bridgedPtyIds,
+          hostTerminals: 0
+        }
+      : { verdict: 'exited', provenPtyIds: cutover.provenPtyIds }
+  )
+  if (terminals.verdict === 'live' || terminals.verdict === 'unverifiable') {
     throw new Error(`orcad_migration_source_terminals_${terminals.verdict}`)
   }
 }

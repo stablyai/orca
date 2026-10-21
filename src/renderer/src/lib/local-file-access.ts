@@ -3,7 +3,7 @@ import type { LocalFileAccess } from '../../../shared/local-file-access'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile } from './connection-context'
 import { getRuntimeTargetForFileOwner } from './file-owner-runtime-target'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 const USER_FILE_ACCESS: LocalFileAccess = { kind: 'user-file' }
 const CHAT_IMAGE_ACCESS: LocalFileAccess = { kind: 'chat-image' }

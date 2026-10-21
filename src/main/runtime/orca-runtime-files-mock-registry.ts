@@ -46,7 +46,9 @@ export function enoent(): Error {
   return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 }
 
-export async function fsModuleMock() {
+export async function fsModuleMock(): Promise<
+  Omit<typeof Fs, 'watch'> & { watch: typeof watchMock }
+> {
   const actual = await vi.importActual<typeof Fs>('fs')
   return {
     ...actual,

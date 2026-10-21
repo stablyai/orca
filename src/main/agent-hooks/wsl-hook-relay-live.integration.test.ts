@@ -45,7 +45,7 @@ describe.skipIf(process.platform === 'win32')(
 
     beforeAll(() => {
       if (!existsSync(BUNDLE_JS)) {
-        execFileSync(process.execPath, [join('config', 'scripts', 'build-relay.mjs')], {
+        execFileSync(process.execPath, [join('config', 'scripts', 'build-wsl-guest.mjs')], {
           cwd: process.cwd(),
           stdio: 'ignore'
         })

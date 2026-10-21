@@ -1,8 +1,8 @@
 import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-types'
-import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { parseWorkerTerminalHostScope } from '../../../../orchestration/worker-terminal-process-liveness'
+import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
 import { observeChatAssignee } from '../../../../orchestration/chat-assignee'
@@ -12,14 +12,15 @@ import type {
   FederatedDispatchRow,
   WorkerDispatchRow
 } from '../../../../orchestration/types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
 /** Observe a worker terminal, re-minting a live handle from the recorded process incarnation when the durable handle went stale, so a still-running worker is never reported missing and leaked. */
 export async function inspectWorkerTerminal(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
   dispatchId: string
 ): Promise<{
-  terminal: Awaited<ReturnType<OrcaRuntimeService['showTerminal']>> | null
+  terminal: Awaited<ReturnType<WorkerTerminalReleaseRuntime['showTerminal']>> | null
   exact: boolean
   status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
   /** Set with `unverifiable`; names what we lost contact with. */
@@ -114,10 +115,26 @@ export async function inspectWorkerTerminal(
         terminalHandle: effectiveHandle
       }
     }
+    // Switch point: main's rows carry the host's verdict; `connected` alone is the old word.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && terminal.verdict === 'unverifiable') {
+      return {
+        terminal,
+        exact,
+        status: 'unverifiable',
+        reason: 'missing_liveness_verdict',
+        agentWait,
+        terminalHandle: effectiveHandle
+      }
+    }
     return {
       terminal,
       exact,
-      status: terminal.connected === false ? 'exited' : 'live',
+      status:
+        ORCA_LAYOUT_OWNER_IS_MAIN && terminal.verdict
+          ? terminal.verdict
+          : terminal.connected === false
+            ? 'exited'
+            : 'live',
       agentWait,
       terminalHandle: effectiveHandle
     }
@@ -195,7 +212,7 @@ export function exposeDispatchContext(dispatch: DispatchContextRow) {
 }
 
 export async function showContextOnlyWorker(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
   dispatch: DispatchContextRow
 ) {
@@ -239,7 +256,7 @@ export function exposeWorker(worker: WorkerDispatchRow) {
  * `worker-list` — and `worker-list`'s own `nextAction` pointed back at this command.
  */
 export function projectFleetWorkerPage(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
   dispatchId: string
 ): ReturnType<typeof projectWorkerFleet> | null {
@@ -259,7 +276,7 @@ export function projectFleetWorkerPage(
 }
 
 export function projectFleetWorker(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
   dispatchId: string
 ): OrchestrationFleetWorker | null {
@@ -271,7 +288,11 @@ export function exposeFederatedWorkerObservation(
   projected: boolean
 ) {
   if (!projected) {
-    return { status: 'unverifiable' as const, exactWorker: false, reason: 'observation_superseded' }
+    return {
+      status: 'unverifiable' as const,
+      exactWorker: false,
+      reason: 'observation_superseded'
+    }
   }
   // Legacy `running` maps to live; an absent peer verdict remains unverifiable.
   return {
@@ -281,7 +302,7 @@ export function exposeFederatedWorkerObservation(
 }
 
 export function resolvePinnedFederatedServer(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   federated: FederatedDispatchRow
 ) {
   const server = runtime.resolveOrchestrationWorkerServer(federated.environment_id)
@@ -295,7 +316,7 @@ export function resolvePinnedFederatedServer(
 }
 
 export async function callFederatedWorkerShow(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   federated: FederatedDispatchRow
 ): Promise<{
   runtimeEpoch: string

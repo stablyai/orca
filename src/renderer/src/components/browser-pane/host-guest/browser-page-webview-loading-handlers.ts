@@ -7,6 +7,7 @@ import type { BrowserLoadError } from '../../../../../shared/browser-workspace-t
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
+import { releaseBrowserPageMount } from './browser-page-mount-admission'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
 import { resolveBrowserWebviewLoadFailure } from '../navigate/browser-webview-load-failure'
@@ -82,6 +83,9 @@ export function createBrowserPageWebviewLoadingHandlers({
   }
 
   const handleDidStopLoading = (): void => {
+    // Why every stop, success or failure: admission only starts a background-opened guest; once its
+    // first load settles, the normal active/paint-retention rules own whether it stays laid out.
+    releaseBrowserPageMount(browserTabId)
     const currentUrl = webview.getURL() || webview.src || 'about:blank'
     const browserModelUrl = redactKagiSessionToken(currentUrl)
     const activeLoadFailure = activeLoadFailureRef.current

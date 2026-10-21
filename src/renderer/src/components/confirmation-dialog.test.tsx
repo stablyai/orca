@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -114,6 +114,39 @@ describe('ConfirmationDialogProvider', () => {
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
   })
 
+  it('dismisses a prompt its caller aborts and shows the next one', async () => {
+    const first = new AbortController()
+    const settled: [string, boolean][] = []
+    function TwoPrompts(): React.JSX.Element {
+      const confirm = useConfirmationDialog()
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            void confirm({ title: 'First?', signal: first.signal }).then((c) =>
+              settled.push(['first', c])
+            )
+            void confirm({ title: 'Second?' }).then((c) => settled.push(['second', c]))
+          }}
+        >
+          ask both
+        </button>
+      )
+    }
+    render(
+      <ConfirmationDialogProvider>
+        <TwoPrompts />
+      </ConfirmationDialogProvider>
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask both' }))
+    expect(await screen.findByText('First?')).toBeInTheDocument()
+    act(() => first.abort())
+
+    expect(await screen.findByText('Second?')).toBeInTheDocument()
+    expect(settled).toEqual([['first', false]])
+  })
+
   it('does not carry a checked box into the next prompt', async () => {
     const onConfirmed = vi.fn()
     renderDialog({
@@ -131,5 +164,33 @@ describe('ConfirmationDialogProvider', () => {
       'data-state',
       'unchecked'
     )
+  })
+
+  it('confirms typed fields with Enter and clears them for the next prompt', async () => {
+    const onConfirmed = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 'Sign in',
+      fields: {
+        inputs: [
+          { id: 'username', label: 'Username' },
+          { id: 'password', label: 'Password', type: 'password' }
+        ],
+        onConfirmed
+      }
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await waitFor(() => expect(screen.getByLabelText('Username')).toHaveFocus())
+    await userEvent.keyboard('qa')
+    await userEvent.type(screen.getByLabelText('Password'), 'hunter2{Enter}')
+
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
+    expect(onConfirmed).toHaveBeenCalledWith({ username: 'qa', password: 'hunter2' })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    expect(await screen.findByLabelText('Password')).toHaveValue('')
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(onSettled).toHaveBeenLastCalledWith(false))
+    expect(onConfirmed).toHaveBeenCalledTimes(1)
   })
 })

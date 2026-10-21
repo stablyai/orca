@@ -40,3 +40,26 @@ it('holds the same facts while the start rows state nothing new', () => {
   rerender({ items: [row, startFailureRow('other-start', { kind: 'providerStartFailed' })] })
   expect(result.current).toBe(second)
 })
+
+it('re-derives a changed Codex installation refusal instead of retaining its old facts', () => {
+  function failure(installedVersion: string | null): AgentSessionFailureFact {
+    return {
+      kind: 'startFailed',
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: {
+          reason: 'attachFailed',
+          codexInstallation: { installedVersion, minimumVersion: '0.136.0' }
+        }
+      }
+    }
+  }
+  const { result, rerender } = renderHook(
+    ({ items }) => useStructuredAgentSessionStartFailureFacts(items, true),
+    { initialProps: { items: [startFailureRow('gen-1', failure(null))] } }
+  )
+  const initial = result.current
+  rerender({ items: [startFailureRow('gen-1', failure('0.135.0'))] })
+  expect(result.current).not.toBe(initial)
+  expect(result.current).toEqual([failure('0.135.0')])
+})
