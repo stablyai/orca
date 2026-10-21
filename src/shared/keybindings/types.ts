@@ -11,7 +11,7 @@ export type KeybindingScope =
   | 'chat'
   | 'settings'
 
-export type KeybindingContext = 'app' | 'terminal' | 'browser'
+export type KeybindingContext = 'app' | 'terminal' | 'browser' | 'editor'
 
 export type KeybindingPlatform = 'darwin' | 'linux' | 'win32'
 

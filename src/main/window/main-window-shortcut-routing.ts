@@ -30,6 +30,13 @@ export function installMainWindowShortcutRouting(args: {
 }): void {
   const { focus, mainWindow, opts, store } = args
   const doubleTapDetector = new ModifierDoubleTapDetector()
+  // Why: terminal wins over editor so a terminal inside the floating panel keeps its own carve-out.
+  const focusedKeybindingContext = (): KeybindingMatchOptions['context'] =>
+    focus.isTerminalInputFocused() || focus.isFloatingTerminalInputFocused()
+      ? 'terminal'
+      : focus.isEditorKeymapFocused()
+        ? 'editor'
+        : 'app'
 
   const dispatchResolvedWindowShortcutAction = (
     event: Electron.Event,
@@ -133,10 +140,7 @@ export function installMainWindowShortcutRouting(args: {
 
     const keybindings = opts?.getKeybindings?.()
     const terminalShortcutContext: KeybindingMatchOptions = {
-      context:
-        focus.isTerminalInputFocused() || focus.isFloatingTerminalInputFocused()
-          ? 'terminal'
-          : 'app',
+      context: focusedKeybindingContext(),
       terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
         store?.getSettings().terminalShortcutPolicy
       )
@@ -237,10 +241,7 @@ export function installMainWindowShortcutRouting(args: {
         process.platform,
         opts?.getKeybindings?.(),
         {
-          context:
-            focus.isTerminalInputFocused() || focus.isFloatingTerminalInputFocused()
-              ? 'terminal'
-              : 'app',
+          context: focusedKeybindingContext(),
           terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
             store?.getSettings().terminalShortcutPolicy
           )

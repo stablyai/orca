@@ -31,6 +31,7 @@ export type MainWindowFocusLifecycle = {
   dispose: () => void
   isFloatingPanelFocused: () => boolean
   isFloatingTerminalInputFocused: () => boolean
+  isEditorKeymapFocused: () => boolean
   isMarkdownEditorFocused: () => boolean
   isRendererProcessGone: () => boolean
   isShortcutRecorderFocused: () => boolean
@@ -51,6 +52,8 @@ export function installMainWindowFocusLifecycle(args: {
   const rendererWebContents = mainWindow.webContents
   // Mirror TipTap focus before main shortcut resolution so bare Cmd/Ctrl+B remains bold (docs/markdown-cmd-b-bold-design.md).
   let markdownEditorFocused = false
+  // Why: an Emacs-preset editor owns its Ctrl/Alt chords; before-input-event must know it has focus to yield them.
+  let editorKeymapFocused = false
   let terminalInputFocused = false
   // Terminal-input focus selects keybinding context; panel focus is the broader routing owner.
   let floatingTerminalInputFocused = false
@@ -66,6 +69,14 @@ export function installMainWindowFocusLifecycle(args: {
     markdownEditorFocused = focused === true
   }
   ipcMain.on(markdownFocusChannel, onMarkdownEditorFocused)
+  const editorKeymapFocusChannel = 'ui:setEditorKeymapFocused'
+  const onEditorKeymapFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
+    if (event.sender !== rendererWebContents) {
+      return
+    }
+    editorKeymapFocused = focused === true
+  }
+  ipcMain.on(editorKeymapFocusChannel, onEditorKeymapFocused)
   const terminalInputFocusChannel = 'ui:setTerminalInputFocused'
   // Main resolves before renderer keydown; mirror xterm focus so Terminal-first leaves shell chords alone.
   const onTerminalInputFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
@@ -137,6 +148,7 @@ export function installMainWindowFocusLifecycle(args: {
   // Dead renderers cannot clear focus mirrors; reset carve-outs so later lifecycles retain app shortcuts.
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
+    editorKeymapFocused = false
     pendingRichMarkdownContextMenuTableTarget = null
     pendingPlainTextContextMenuTarget = false
   }
@@ -299,6 +311,7 @@ export function installMainWindowFocusLifecycle(args: {
     clearRendererRecoveryTimer()
     recoveryReloadWatchdog.clear()
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
+    ipcMain.removeListener(editorKeymapFocusChannel, onEditorKeymapFocused)
     ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)
     ipcMain.removeListener(floatingFocusChannel, onFloatingFocus)
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
@@ -309,6 +322,7 @@ export function installMainWindowFocusLifecycle(args: {
     dispose,
     isFloatingPanelFocused: () => floatingPanelFocused,
     isFloatingTerminalInputFocused: () => floatingTerminalInputFocused,
+    isEditorKeymapFocused: () => editorKeymapFocused,
     isMarkdownEditorFocused: () => markdownEditorFocused,
     isRendererProcessGone: () => rendererProcessGone,
     isShortcutRecorderFocused: () => shortcutRecorderFocused,

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Ban, Plus, RotateCcw, Terminal } from 'lucide-react'
+import { Ban, Keyboard, Plus, RotateCcw, Terminal } from 'lucide-react'
 import {
   isDigitIndexActionId,
   type KeybindingActionId,
@@ -15,6 +15,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { ShortcutBindingSubRow } from './ShortcutBindingSubRow'
 import { ShortcutRecorderButton } from './ShortcutRecorderButton'
 import { ShortcutRemoveButton } from './ShortcutRemoveButton'
+import type { ShortcutEditorStatus } from './shortcut-editor-status'
 import type { ShortcutTerminalStatus } from './shortcut-terminal-status'
 import { translate } from '@/i18n/i18n'
 
@@ -27,6 +28,7 @@ type ShortcutCommandBlockProps = {
   error?: string
   warnings: readonly string[]
   terminalStatus?: ShortcutTerminalStatus
+  editorStatus?: ShortcutEditorStatus
   // Retain pre-disable bindings for one-click Enable; empty means nothing to restore.
   previousBindings: readonly string[]
   // Index being recorded, or effective.length for append; null means idle.
@@ -51,6 +53,7 @@ export function ShortcutCommandBlock({
   error,
   warnings,
   terminalStatus,
+  editorStatus,
   previousBindings,
   recordingBindingIndex,
   onStartRecordingAt,
@@ -148,6 +151,22 @@ export function ShortcutCommandBlock({
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
                 {terminalStatus.description}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+          {editorStatus && hasBinding ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="outline"
+                  className="shrink-0 gap-1 border-border/70 text-[11px] text-muted-foreground"
+                >
+                  <Keyboard className="size-3" />
+                  {editorStatus.label}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {editorStatus.description}
               </TooltipContent>
             </Tooltip>
           ) : null}

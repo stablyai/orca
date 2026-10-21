@@ -1,4 +1,5 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { getKeybindingContext } from '@/lib/keybinding-context'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction, type KeybindingActionId } from '../../../../shared/keybindings'
@@ -7,11 +8,13 @@ export function editorShortcutMatches(
   actionId: KeybindingActionId,
   event: KeyboardEvent | ReactKeyboardEvent
 ): boolean {
+  // Why: Ctrl+S / Ctrl+F are Emacs search and forward-char; the preset owns them while the editor has focus.
   return keybindingMatchesAction(
     actionId,
     event,
     getShortcutPlatform(),
-    useAppStore.getState().keybindings
+    useAppStore.getState().keybindings,
+    { context: getKeybindingContext(event.target) }
   )
 }
 
