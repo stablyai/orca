@@ -107,6 +107,21 @@ describe('web repositories API add-script opt-in', () => {
     })
   })
 
+  it('still registers when the capability probe fails', async () => {
+    mocks.getRemoteRuntimeStatus.mockRejectedValue(new Error('status unavailable'))
+    mocks.callRuntimeResultWithOwner.mockResolvedValue(owned({ repo }))
+
+    const result = await reposApi().add({
+      path: '/work/r1',
+      repositoryAddScriptPreview: { hostId: REMOTE }
+    })
+
+    expect(mocks.callRuntimeResultWithOwner.mock.calls[0]?.[1]).not.toHaveProperty(
+      'repositoryAddScriptPreview'
+    )
+    expect(result).not.toHaveProperty('repositoryAddScriptPreview')
+  })
+
   it('registers on an older host exactly as before and never falls back to this machine', async () => {
     supportedHost(false)
     mocks.callRuntimeResultWithOwner.mockResolvedValue(owned({ repo }))
@@ -314,6 +329,18 @@ describe('web repositories API add-script opt-in', () => {
         reposApi().getAddScriptOutcome({ ...decision, hostId: 'runtime:env-2' })
       ).rejects.toThrow('Unknown Orca runtime environment')
 
+      expect(mocks.callEnvironmentEnvelope).not.toHaveBeenCalled()
+    })
+
+    it('reports a failed capability probe instead of calling a current host outdated', async () => {
+      mocks.getRemoteRuntimeStatus.mockRejectedValue(new Error('status probe failed'))
+
+      const failure = await reposApi()
+        .decideAddScript(decision)
+        .catch((error: unknown) => error)
+
+      expect(failure).toBeInstanceOf(RepositoryAddScriptNotSentError)
+      expect(failure).toHaveProperty('message', 'status probe failed')
       expect(mocks.callEnvironmentEnvelope).not.toHaveBeenCalled()
     })
 

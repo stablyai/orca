@@ -26,9 +26,9 @@ const UNSUPPORTED_MESSAGE = 'Update this Orca server to run a repository add scr
 const WRONG_ROUTE_MESSAGE = 'This repository add script belongs to a different host.'
 
 async function activeHostSupportsAddScript(environmentId: string): Promise<boolean> {
-  const status = await getRemoteRuntimeStatus().catch(() => null)
+  const status = await getRemoteRuntimeStatus()
   assertActiveEnvironment(environmentId)
-  return status?.capabilities?.includes(REPOSITORY_ADD_SCRIPT_RUNTIME_CAPABILITY) === true
+  return status.capabilities?.includes(REPOSITORY_ADD_SCRIPT_RUNTIME_CAPABILITY) === true
 }
 
 /**
@@ -45,7 +45,13 @@ export async function resolveWebRepositoryAddScriptRequest(
   if (requested.hostId !== toRuntimeExecutionHostId(environment.id)) {
     throw new RepositoryAddScriptNotSentError(WRONG_ROUTE_MESSAGE)
   }
-  return (await activeHostSupportsAddScript(environment.id)) ? requested : undefined
+  try {
+    return (await activeHostSupportsAddScript(environment.id)) ? requested : undefined
+  } catch {
+    // Why: the offer is optional, so an unprovable capability must not fail the registration.
+    assertActiveEnvironment(environment.id)
+    return undefined
+  }
 }
 
 // The host named by the token's alias is the only one asked; a client with no such host fails.
