@@ -1,12 +1,10 @@
-import { Check, Ellipsis, FileCode2, Import, Monitor, Plus, Settings } from 'lucide-react'
+import { Check, Ellipsis, FileCode2, Import, Plus, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuPortal,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -28,7 +26,7 @@ type DetectedBrowserEntry = {
   profiles: { name: string; directory: string }[]
   selectedProfile: string
 }
-import { BROWSER_VIEWPORT_PRESETS } from '../../../../../shared/browser-viewport-presets'
+import { BrowserViewportPresetMenu } from './browser-viewport-preset-menu'
 import { translate } from '@/i18n/i18n'
 import {
   BrowserChromeFoldedMenuItems,
@@ -212,43 +210,10 @@ export function BrowserToolbarMenuDropdown({
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <Monitor className="mr-2 size-3.5" />
-            {translate(
-              'auto.components.browser.pane.BrowserToolbarMenu.e5d31de1a9',
-              'Viewport Size'
-            )}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuPortal>
-            <DropdownMenuSubContent>
-              {/* Why: Viewport is a "pick one of N" control, so use a radio group
-                  for proper a11y semantics (role="menuitemradio", aria-checked).
-                  The "Default" option represents a null preset (no override),
-                  encoded as the sentinel string 'default' because
-                  DropdownMenuRadioGroup values must be strings. */}
-              <DropdownMenuRadioGroup
-                value={viewportPresetId ?? 'default'}
-                onValueChange={(v) =>
-                  onApplyViewportPreset(v === 'default' ? null : (v as BrowserViewportPresetId))
-                }
-              >
-                <DropdownMenuRadioItem value="default">
-                  {translate(
-                    'auto.components.browser.pane.BrowserToolbarMenu.ed8f54509d',
-                    'Default'
-                  )}
-                </DropdownMenuRadioItem>
-                <DropdownMenuSeparator />
-                {BROWSER_VIEWPORT_PRESETS.map((preset) => (
-                  <DropdownMenuRadioItem key={preset.id} value={preset.id}>
-                    <span className="truncate">{preset.label}</span>
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuPortal>
-        </DropdownMenuSub>
+        <BrowserViewportPresetMenu
+          viewportPresetId={viewportPresetId}
+          onApplyViewportPreset={onApplyViewportPreset}
+        />
 
         <DropdownMenuSeparator />
 
