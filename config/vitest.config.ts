@@ -7,6 +7,8 @@ import RuntimeSequencer from './scripts/vitest-runtime-sequencer.mjs'
 import { getNodeRuntimeInclude } from './scripts/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 import { createWorkspaceSourceResolver } from './scripts/workspace-source-exports.mjs'
+import { createSourceCachePlugin } from './scripts/vitest-source-cache.mjs'
+import { createViteCacheRetentionPlugin } from './build-plugins/vite-cache-retention'
 
 const nodeRuntimeInclude = process.versions.bun ? getNodeRuntimeInclude() : []
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
@@ -15,6 +17,7 @@ const paletteMeasurementFile =
   'src/renderer/src/lib/palette-match/palette-match-performance.test.ts'
 const measurementFiles = [measurementFile, paletteMeasurementFile]
 const transforms = {
+  plugins: [createSourceCachePlugin(), createViteCacheRetentionPlugin()],
   define: {
     ORCA_FEATURE_WALL_ENABLED: 'true',
     // Why: tests only interpolate it; they must not depend on the checkout's HEAD.
@@ -37,11 +40,8 @@ const testOptions = {
   environment: 'node',
   clearMocks: false,
   ...(balancedShards ? { silent: 'passed-only' as const } : {}),
-  // Persistent transforms can miss source additions; only explicit cache experiments opt in.
-  fsModuleCache: Boolean(process.env.ORCA_UNIT_MODULE_CACHE_PATH),
-  ...(process.env.ORCA_UNIT_MODULE_CACHE_PATH
-    ? { fsModuleCachePath: process.env.ORCA_UNIT_MODULE_CACHE_PATH }
-    : {}),
+  fsModuleCache: Boolean(process.env.ORCA_UNIT_MODULE_CACHE_PATH) || !process.env.CI,
+  fsModuleCachePath: process.env.ORCA_UNIT_MODULE_CACHE_PATH || resolve('.cache/vite/unit-modules'),
   env: { ORCA_VITEST_RUNTIME: 'node' },
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.

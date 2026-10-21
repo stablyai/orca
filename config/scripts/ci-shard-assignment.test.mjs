@@ -118,18 +118,25 @@ describe('timing-weighted shard selection', () => {
   })
 
   it.each([
-    { name: 'absent', path: undefined, enabled: false },
-    { name: 'empty', path: '', enabled: false },
-    { name: 'explicit', path: join(tmpdir(), 'orca-unit-cache-experiment'), enabled: true }
+    { name: 'local', ci: undefined, path: undefined, enabled: true },
+    { name: 'CI', ci: 'true', path: undefined, enabled: false },
+    { name: 'empty CI override', ci: 'true', path: '', enabled: false },
+    {
+      name: 'explicit CI override',
+      ci: 'true',
+      path: join(tmpdir(), 'orca-unit-cache-experiment'),
+      enabled: true
+    }
   ])(
-    'uses persistent transforms only with an explicit cache path ($name)',
-    async ({ path, enabled }) => {
+    'uses guarded local transforms and preserves explicit CI caches ($name)',
+    async ({ ci, path, enabled }) => {
+      vi.stubEnv('CI', ci)
       vi.stubEnv('ORCA_UNIT_MODULE_CACHE_PATH', path)
       vi.resetModules()
       const { default: config } = await import('../vitest.config')
       for (const test of [config.test, ...config.test.projects.map((project) => project.test)]) {
         expect(test.fsModuleCache).toBe(enabled)
-        expect(test.fsModuleCachePath).toBe(enabled ? path : undefined)
+        expect(test.fsModuleCachePath).toBe(path || resolve('.cache/vite/unit-modules'))
       }
     }
   )
