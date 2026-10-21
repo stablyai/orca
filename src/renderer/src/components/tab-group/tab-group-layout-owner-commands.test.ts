@@ -41,7 +41,8 @@ function seeded(): { left: string; right: string } {
     worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] }
   })
   for (const id of ['a', 'b', 'c']) {
-    store().getState().createTab(WT, undefined, undefined, { id })
+    // Why: seeds tabs of one pane; the lone-pane auto-split would open b beside a.
+    store().getState().createTab(WT, undefined, undefined, { id, placementFixed: true })
   }
   const left = store().getState().groupsByWorktree[WT]![0]!.id
   store().getState().dropUnifiedTab('c', { groupId: left, splitDirection: 'right' })
